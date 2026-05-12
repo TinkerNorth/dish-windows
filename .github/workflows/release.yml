@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (must already exist)"
+        required: true
+
+# Builds a release `dish.exe` + Qt runtime bundle and uploads it to the
+# GitHub Releases page for the tag.
+#
+# This Windows release pipeline starts intentionally smaller than the
+# dish-linux one (which produces .deb / AppImage with cosign keyless sigs,
+# SBOMs, and SLSA L3 provenance). Once the basic exe-bundle flow is
+# proven to ship, the dish-linux `harden` job structure can be ported
+# wholesale — see HANDOFF.md item 6.
+#
+# Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
+#   actions/checkout                @ v4.2.2  → 11bd71901bbe5b1630ceea73d27597364c9af683
+#   actions/upload-artifact         @ v4.4.3  → b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+#   anchore/sbom-action             @ v0.17.4 → 8d0a6505bf28ced3e85154d13dc6af83299e13f1
+#   softprops/action-gh-release     @ v2.0.8  → c062e08bd532815e2082a85e87e3ef29c3e6d191
+#   ilammy/msvc-dev-cmd             @ v1.13.0 → a102174a2b586eec2ea151a69e6fd14404a8ce7c
+#   jurplel/install-qt-action       @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
+#   lukka/run-vcpkg                 @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gates:
+    name: PR-time gates against tag
+    uses: ./.github/workflows/_security.yml
+    with:
+      osv_scan_paths: |
+        .
+      gitleaks_enabled: true
+      dependency_review_enabled: false
+      action_pin_lint_enabled: true
+      allowlist_expiry_enabled: true
+
+  release:
+    name: Build Windows release
+    needs: [gates]
+    runs-on: windows-2022
+
+    env:
+      VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+      QT_VERSION: "6.7.3"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c # v1.13.0
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja --no-progress --yes
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          modules: ""
+          cache: true
+
+      - name: Set up vcpkg + install dependencies
+        uses: lukka/run-vcpkg@5e0cab206a5ea620130caf672fce3e4a6b5666a1 # v11.5
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMITID }}
+
+      - name: Configure (Release)
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DDISH_BUILD_TESTS=OFF `
+            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build --parallel --target Dish
+
+      - name: Bundle Qt runtime DLLs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dish-windows | Out-Null
+          Copy-Item build/dish.exe dish-windows/
+          & "$env:Qt6_DIR/../../../bin/windeployqt.exe" --release --no-translations dish-windows/dish.exe
+
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@8d0a6505bf28ced3e85154d13dc6af83299e13f1 # v0.17.4
+        with:
+          path: dish-windows
+          format: spdx-json
+          artifact-name: dish-windows-sbom.spdx.json
+          output-file: dish-windows.spdx.json
+
+      - name: Compute SHA256SUMS
+        shell: pwsh
+        run: |
+          Get-ChildItem dish-windows -Recurse -File |
+            ForEach-Object { "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
+            Out-File -FilePath dish-windows/SHA256SUMS -Encoding ascii
+
+      - name: Zip release bundle
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dish-windows/* -DestinationPath dish-windows.zip -Force
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: dish-windows-x86_64
+          path: |
+            dish-windows.zip
+            dish-windows.spdx.json
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          files: |
+            dish-windows.zip
+            dish-windows.spdx.json
+          fail_on_unmatched_files: true
+          generate_release_notes: true
