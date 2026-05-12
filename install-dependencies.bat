@@ -91,25 +91,63 @@ REM installer produces. We pin %QT_VERSION% so subsequent runs of this script
 REM don't quietly upgrade to a newer Qt that the CI workflow hasn't seen.
 REM ----------------------------------------------------------------------------
 echo === [4/5] Python 3 + Qt %QT_VERSION% ===
-where python >nul 2>&1
-if %ERRORLEVEL% neq 0 (
+
+REM On Windows 11 `where python` resolves to a WindowsApps "App Execution
+REM Alias" stub at %LOCALAPPDATA%\Microsoft\WindowsApps\python.exe that
+REM does NOT run Python — it opens the Microsoft Store. The stub fools
+REM ERRORLEVEL into thinking Python is installed when only the alias is.
+REM
+REM Workaround: use the Python launcher (`py.exe`). The launcher is
+REM installed by the official Python installer (which is what winget
+REM Python.Python.3.12 uses) and is NOT subject to the App Execution
+REM Alias mechanism. If `py -3` doesn't work, we know Python is genuinely
+REM missing, install it, then look in the documented launcher install
+REM locations so we don't depend on the new PATH propagating into this
+REM running script.
+set "PY_EXE="
+py -3 --version >nul 2>&1
+if %ERRORLEVEL% equ 0 set "PY_EXE=py"
+
+if not defined PY_EXE (
+    echo [INFO] Installing Python 3.12 via winget ^(the `python` on PATH is the WindowsApps stub^)
     winget install --id Python.Python.3.12 --silent --accept-source-agreements --accept-package-agreements
-    echo [WARN] Python installed; PATH won't update until you close this terminal.
-    echo        Close this window, open a new cmd / PowerShell, and re-run this script.
+    REM Re-probe via py.exe after install. winget Python adds it to PATH
+    REM but the change won't propagate into this batch process; try
+    REM standard install locations directly.
+    py -3 --version >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        set "PY_EXE=py"
+    ) else if exist "%LOCALAPPDATA%\Programs\Python\Launcher\py.exe" (
+        set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Launcher\py.exe"
+    ) else if exist "%ProgramFiles%\Python Launcher\py.exe" (
+        set "PY_EXE=%ProgramFiles%\Python Launcher\py.exe"
+    ) else if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+        REM Last-ditch: skip the launcher and point at python.exe directly.
+        set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    )
+)
+
+if not defined PY_EXE (
+    echo [WARN] Python installed but neither py.exe nor python.exe found at
+    echo        the standard launcher / per-user install locations. Close
+    echo        this terminal, open a new one, and re-run this script.
     exit /b 1
 )
+echo [OK]  Python launcher: !PY_EXE!
 
 if exist "%QT_ROOT%\%QT_VERSION%\msvc2019_64\bin\Qt6Core.dll" (
     echo [OK]  Qt %QT_VERSION% already installed at %QT_ROOT%
 ) else (
     echo [INFO] Installing aqtinstall ^(pip --user^)
-    python -m pip install --user --upgrade aqtinstall
+    REM Quote PY_EXE in case it expanded to a path containing spaces
+    REM (e.g. "C:\Program Files\Python Launcher\py.exe").
+    "!PY_EXE!" -3 -m pip install --user --upgrade aqtinstall
     if !ERRORLEVEL! neq 0 (
         echo [FAIL] pip install aqtinstall
         exit /b 1
     )
     echo [INFO] Downloading Qt %QT_VERSION% %QT_ARCH% to %QT_ROOT% ^(~3 GB^)
-    python -m aqt install-qt windows desktop %QT_VERSION% %QT_ARCH% --outputdir "%QT_ROOT%"
+    "!PY_EXE!" -3 -m aqt install-qt windows desktop %QT_VERSION% %QT_ARCH% --outputdir "%QT_ROOT%"
     if !ERRORLEVEL! neq 0 (
         echo [FAIL] aqt install-qt
         exit /b 1
