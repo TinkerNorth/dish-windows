@@ -132,9 +132,15 @@ $toolchain = if ($vcpkgRoot) {
     "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake"
 } else { '' }
 
-# Configure if the build dir doesn't exist; otherwise rely on CMake's
-# incremental-regeneration to pick up CMakeLists.txt changes.
-if (-not (Test-Path $buildDir)) {
+# Re-configure when the generator output is missing. `build-release/`
+# (or `build-debug/`) gets created the moment CMake starts, even when
+# configure later aborts — testing for the directory's existence isn't
+# enough. `build.ninja` is the actual generator output, so its absence
+# is a reliable "previous configure failed, redo it" signal. CMake's
+# incremental regeneration handles the no-op case in well under a
+# second, so re-checking on every invocation is cheap.
+$ninjaFile = Join-Path $buildDir 'build.ninja'
+if (-not (Test-Path $ninjaFile)) {
     Write-Output "==> Configuring ($cmakeBuildType, $buildDir)"
     $cmakeArgs = @(
         '-S', '.',
@@ -145,7 +151,12 @@ if (-not (Test-Path $buildDir)) {
     )
     if ($toolchain) { $cmakeArgs += $toolchain }
     & cmake @cmakeArgs
-    if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
+    if ($LASTEXITCODE -ne 0) {
+        # Wipe the half-configured directory so the next invocation
+        # starts clean instead of inheriting more poisoned state.
+        Remove-Item -Recurse -Force $buildDir -ErrorAction SilentlyContinue
+        throw "cmake configure failed"
+    }
 }
 
 Write-Output "==> Building $buildDir"
