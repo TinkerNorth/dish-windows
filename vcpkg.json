@@ -7,13 +7,7 @@
   "license": "LGPL-3.0-or-later",
   "builtin-baseline": "6f29f12e82a8293156836ad81cc9bf5af41fe836",
   "dependencies": [
-    {
-      "name": "libsodium",
-      "version>=": "1.0.18"
-    },
-    {
-      "name": "sdl2",
-      "version>=": "2.30.0"
-    }
+    "libsodium",
+    "sdl2"
   ]
 }
