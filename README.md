@@ -126,34 +126,53 @@ user-visible behaviour stays predictable across platforms:
 
 ### Install build dependencies
 
-The fastest path is winget + vcpkg in manifest mode:
+The fastest path is the bundled installer — same idea as
+`satellite/install-dependencies.bat`. From an elevated cmd / PowerShell:
+
+```cmd
+install-dependencies.bat
+```
+
+That runs five idempotent steps via winget + aqtinstall + a vcpkg
+bootstrap:
+
+1. Visual Studio 2022 Build Tools (Desktop C++ workload + Win11 SDK)
+2. CMake + Ninja
+3. LLVM (clang-format + clang-tidy)
+4. Python 3 + aqtinstall + Qt 6.7.3 to `C:\Qt`
+5. vcpkg cloned to `%USERPROFILE%\vcpkg`, with `VCPKG_ROOT` +
+   `CMAKE_PREFIX_PATH` persisted to your user env
+
+Total ~12 GB download, ~30–60 min wall-clock on a clean Win11 box.
+Some installers (VS Build Tools in particular) trigger a UAC prompt —
+approve them when asked.
+
+If you'd rather drive the install by hand:
 
 ```powershell
-# 1) Toolchain
 winget install Microsoft.VisualStudio.2022.BuildTools `
-    --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.CMake.Project"
+    --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
 winget install Kitware.CMake
 winget install Ninja-build.Ninja
-winget install LLVM.LLVM            # clang-format + clang-tidy for the pre-commit hook
-
-# 2) Qt 6 (any 6.2+ build; the offline installer at qt.io works,
-#    or aqt-install can fetch a specific version):
-pip install aqtinstall
-aqt install-qt windows desktop 6.7.3 win64_msvc2019_64
-
-# 3) vcpkg (the build system reads vcpkg.json — manifest mode):
+winget install LLVM.LLVM
+winget install Python.Python.3.12
+python -m pip install --user --upgrade aqtinstall
+python -m aqt install-qt windows desktop 6.7.3 win64_msvc2019_64 --outputdir C:\Qt
 git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
-& $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+& $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 [Environment]::SetEnvironmentVariable('VCPKG_ROOT', "$env:USERPROFILE\vcpkg", 'User')
+[Environment]::SetEnvironmentVariable('CMAKE_PREFIX_PATH', 'C:\Qt\6.7.3\msvc2019_64', 'User')
 ```
 
 `vcpkg.json` pins `libsodium` and `sdl2`; the CMake toolchain file
-(`$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake`) will resolve and build
-them on first configure.
+(`$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake`) resolves and builds
+them on the first `cmake` configure.
 
 ## Build & Run
 
-From an MSVC developer prompt (or after running `vcvarsall.bat x64`):
+After `install-dependencies.bat` has finished, open a fresh PowerShell
+window (any window — the build script auto-finds MSVC via `vswhere` and
+sources `vcvars64.bat` for you):
 
 ```powershell
 cd dish-windows
@@ -198,6 +217,7 @@ unpack anywhere on `%PATH%`.
 dish-windows/
 ├── CMakeLists.txt
 ├── vcpkg.json                 # libsodium + SDL2 deps for vcpkg manifest mode
+├── install-dependencies.bat   # one-shot toolchain installer (mirrors satellite)
 ├── scripts/build.ps1
 ├── packaging/
 │   ├── dish.ico               # embedded into dish.exe via dish.rc

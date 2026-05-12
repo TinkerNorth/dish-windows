@@ -34,4 +34,22 @@ target_link_libraries(DishTests
         dish_warnings)
 
 # Tests don't need -Werror on the third-party header path; keep our own at -Werror.
-catch_discover_tests(DishTests)
+#
+# On Windows, Catch2's test-discovery step launches DishTests.exe to
+# enumerate cases for ctest. The exe transitively depends on Qt6Core.dll
+# and Qt6Network.dll via dish_core; vcpkg's applocal.ps1 already drops
+# libsodium.dll and SDL2.dll next to the exe at link time, but Qt isn't
+# vcpkg-managed — its DLLs live at <qt-prefix>/bin and are nowhere near
+# the runtime search path that catch_discover_tests inherits. Without
+# DL_PATHS the discovery step exits with STATUS_DLL_NOT_FOUND (0xc0000135).
+# Catch2 prepends DL_PATHS entries to PATH for both discovery and the
+# test runs themselves, so ctest works regardless of whether the user
+# launched it from cmd, PowerShell, or an IDE.
+if(WIN32)
+    catch_discover_tests(DishTests
+        DL_PATHS
+            $<TARGET_FILE_DIR:Qt6::Core>
+            $<TARGET_FILE_DIR:Qt6::Network>)
+else()
+    catch_discover_tests(DishTests)
+endif()
