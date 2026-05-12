@@ -48,21 +48,39 @@ REM the reboot prompt (none of the components installed require one, but the
 REM installer asks anyway).
 REM ----------------------------------------------------------------------------
 echo === [1/5] Visual Studio 2022 Build Tools ===
-where cl.exe >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo [OK]  cl.exe already on PATH — skipping VS Build Tools install
+
+REM Detect any Visual Studio install (Community / Pro / Enterprise /
+REM BuildTools) carrying the VC++ x86/x64 tools workload via vswhere.
+REM vswhere ships with every VS install >= 2017 and is the canonical
+REM lookup — it doesn't depend on the install being at a default path
+REM or on the package having a current "upgrade available" winget status.
+set "VS_INSTALL="
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" (
+    for /f "delims=" %%I in ('"%VSWHERE%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul') do set "VS_INSTALL=%%I"
+)
+
+if defined VS_INSTALL (
+    echo [OK]  Visual Studio with VC++ tools found at: !VS_INSTALL!
 ) else (
-    if exist "%ProgramFiles%\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC" (
-        echo [OK]  Build Tools already installed at %ProgramFiles%\Microsoft Visual Studio\2022\BuildTools
-    ) else (
-        winget install --id Microsoft.VisualStudio.2022.BuildTools --silent ^
-            --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621 --quiet --wait --norestart" ^
-            --accept-source-agreements --accept-package-agreements
-        if !ERRORLEVEL! neq 0 (
-            echo [FAIL] VS Build Tools install failed. Re-run after handling any UAC prompt.
-            exit /b 1
-        )
+    echo [INFO] Installing Microsoft.VisualStudio.2022.BuildTools via winget
+    winget install --id Microsoft.VisualStudio.2022.BuildTools --silent ^
+        --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621 --quiet --wait --norestart" ^
+        --accept-source-agreements --accept-package-agreements
+    REM winget returns non-zero for many benign outcomes — "already
+    REM installed at latest version" (0x8A150085) being the most common.
+    REM Don't gate on the exit code; re-probe with vswhere instead.
+    if exist "%VSWHERE%" (
+        for /f "delims=" %%I in ('"%VSWHERE%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul') do set "VS_INSTALL=%%I"
     )
+    if not defined VS_INSTALL (
+        echo [FAIL] Visual Studio with VC++ tools not detected after install attempt.
+        echo        If a UAC prompt was canceled, approve it and re-run.
+        echo        Otherwise launch the Visual Studio Installer and add the
+        echo        "Desktop development with C++" workload to your VS instance.
+        exit /b 1
+    )
+    echo [OK]  Visual Studio with VC++ tools found at: !VS_INSTALL!
 )
 echo.
 
