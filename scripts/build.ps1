@@ -109,6 +109,17 @@ $qtPrefix = Find-QtPrefix
 if ($qtPrefix) {
     $env:CMAKE_PREFIX_PATH = $qtPrefix
     Write-Output "==> Qt prefix: $qtPrefix"
+    # Add Qt's bin to PATH so anything that runs from this shell (the
+    # built dish.exe, catch_discover_tests when invoked directly, etc.)
+    # can find Qt6Core.dll / Qt6Network.dll. tests/CMakeLists.txt already
+    # carries the same path through DL_PATHS for ctest, but a direct
+    # `.\build-release\dish.exe` from this shell also benefits.
+    $qtBin = Join-Path $qtPrefix 'bin'
+    if (Test-Path $qtBin) {
+        if (-not (($env:PATH -split ';') -contains $qtBin)) {
+            $env:PATH = "$qtBin;$env:PATH"
+        }
+    }
 } else {
     Write-Warning 'No Qt install found under C:\Qt and CMAKE_PREFIX_PATH not set. Run install-dependencies.bat.'
 }
