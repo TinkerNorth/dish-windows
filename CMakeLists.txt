@@ -169,6 +169,30 @@ target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui dish_warnings
 # that forwards into the standard `int main(int, char**)` we use everywhere
 # else. AUTOLINK on Qt6 wires it in automatically since Qt 6.0.
 
+# Qt isn't vcpkg-managed, so Qt6Core/Gui/Widgets/Network.dll + the
+# `platforms\qwindows.dll` plugin live at <qt>/bin and aren't next to
+# dish.exe. windeployqt copies everything Qt needs into the output
+# directory so dish.exe runs from a fresh shell / Explorer double-click.
+if(WIN32)
+    get_target_property(_qt_qmake Qt6::qmake IMPORTED_LOCATION)
+    get_filename_component(_qt_bin_dir "${_qt_qmake}" DIRECTORY)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${_qt_bin_dir}")
+    if(WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET Dish POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+                    --no-translations
+                    --no-system-d3d-compiler
+                    --no-opengl-sw
+                    --no-compiler-runtime
+                    "$<IF:$<CONFIG:Debug>,--debug,--release>"
+                    "$<TARGET_FILE:Dish>"
+            COMMENT "Deploying Qt runtime next to $<TARGET_FILE_NAME:Dish>"
+            VERBATIM)
+    else()
+        message(WARNING "windeployqt not found under ${_qt_bin_dir}; dish.exe will need Qt's bin/ on PATH at runtime.")
+    endif()
+endif()
+
 install(TARGETS Dish RUNTIME DESTINATION bin)
 # Headless service-like deployments don't need the resource file, but the
 # .exe already embeds it via the AUTORCC pipeline above.
