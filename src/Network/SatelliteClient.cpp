@@ -198,9 +198,8 @@ void SatelliteClient::receiveLoop() {
         if (sock_ == INVALID_SOCKET) { break; }
         sockaddr_in from{};
         int fl = static_cast<int>(sizeof(from));
-        const int n =
-            ::recvfrom(sock_, reinterpret_cast<char*>(buf), static_cast<int>(sizeof(buf)), 0,
-                       reinterpret_cast<sockaddr*>(&from), &fl);
+        const int n = ::recvfrom(sock_, reinterpret_cast<char*>(buf), static_cast<int>(sizeof(buf)),
+                                 0, reinterpret_cast<sockaddr*>(&from), &fl);
         if (n <= 0) {
             continue; // WSAEWOULDBLOCK / WSAETIMEDOUT on SO_RCVTIMEO
         }
