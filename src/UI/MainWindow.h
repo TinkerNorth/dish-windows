@@ -7,7 +7,6 @@
 #include <QMainWindow>
 
 class QLabel;
-class QListWidget;
 class QPushButton;
 class QTimer;
 class QVBoxLayout;
