@@ -1,0 +1,13 @@
+<!--
+  Qt resource bundle for the in-app window icon (title bar, taskbar-while-
+  running, Alt-Tab, dialog icons). The same dish.ico is *also* embedded
+  into the .exe binary via dish.rc for Explorer / Task Manager; that
+  resource is invisible to Qt, so we ship the icon twice — once for the
+  Win32 PE resource section, once for the Qt resource system. The .ico
+  format is multi-resolution; QIcon picks the best size for each DPI.
+-->
+<RCC>
+  <qresource prefix="/">
+    <file>dish.ico</file>
+  </qresource>
+</RCC>

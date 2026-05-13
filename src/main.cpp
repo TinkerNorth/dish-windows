@@ -7,6 +7,7 @@
 #include "UI/Theme.h"
 
 #include <QApplication>
+#include <QIcon>
 
 #include <sodium.h>
 
@@ -33,6 +34,13 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.dev"));
     QCoreApplication::setApplicationName(QStringLiteral("Dish"));
     // No setDesktopFileName on Windows — that's an XDG/Linux concept.
+
+    // dish.rc embeds the icon into the PE resource section (Explorer / Task
+    // Manager / taskbar-from-pinned). That's invisible to Qt — without
+    // setWindowIcon every QWidget shows Qt's generic icon in the title
+    // bar, Alt-Tab, and taskbar-while-running. dish.qrc ships the same
+    // multi-resolution .ico via AUTORCC; QIcon picks the best size per DPI.
+    app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
 
     dish::ui::applyDishTheme(app);
 

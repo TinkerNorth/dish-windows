@@ -158,7 +158,10 @@ set(DISH_UI_SOURCES
     src/main.cpp
     # Windows resource file embeds the application icon + version metadata
     # so the .exe shows a real Dish icon in Explorer / taskbar.
-    packaging/dish.rc)
+    packaging/dish.rc
+    # Qt resource bundle — embeds dish.ico for QApplication::setWindowIcon
+    # in main.cpp. AUTORCC compiles this at build time.
+    packaging/dish.qrc)
 
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
