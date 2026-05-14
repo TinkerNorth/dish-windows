@@ -14,8 +14,8 @@ TEST_CASE("WinsockInit reports ok() on a healthy host", "[net]") {
     REQUIRE(w.ok());
 }
 
-TEST_CASE("WinsockInit unblocks socket() — pre-init this would fail with WSANOTINITIALISED",
-         "[net]") {
+TEST_CASE("WinsockInit unblocks socket() (pre-init this would fail with WSANOTINITIALISED)",
+          "[net]") {
     const WinsockInit w;
     REQUIRE(w.ok());
 
@@ -24,7 +24,7 @@ TEST_CASE("WinsockInit unblocks socket() — pre-init this would fail with WSANO
     REQUIRE(::closesocket(s) == 0);
 }
 
-TEST_CASE("WinsockInit is reference-counted — nested instances are safe", "[net]") {
+TEST_CASE("WinsockInit is reference-counted (nested instances are safe)", "[net]") {
     // WSAStartup / WSACleanup are reference-counted by Winsock itself. The
     // dtor of an inner instance must NOT tear the stack down underneath an
     // outer instance still in scope — otherwise the second AppModel started

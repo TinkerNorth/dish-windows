@@ -15,9 +15,11 @@ using dish::util::ScreenWakeController;
 
 namespace {
 
-// A fake inhibitor that records the acquire/release lifecycle. The real
-// FreedesktopScreenSaverInhibitor requires a running session bus, which is
-// usually unavailable in CI containers — a fake keeps the tests self-contained.
+// A fake inhibitor that records the acquire/release lifecycle. The production
+// SetThreadExecutionStateInhibitor is exercised separately in
+// test_set_thread_execution_state_inhibitor.cpp; here we use a fake so the
+// controller's transition contract can be pinned without flipping a real OS
+// power-management flag on the runner.
 class FakeInhibitor : public DisplaySleepInhibitor {
   public:
     void acquire(const QString& reason) override {
@@ -100,7 +102,7 @@ TEST_CASE("update: first stream acquires inhibitor", "[wake]") {
     REQUIRE(fake.lastReason() == "test reason");
 }
 
-TEST_CASE("update: 1 → 2 slots does not re-acquire", "[wake]") {
+TEST_CASE("update: 1 -> 2 slots does not re-acquire", "[wake]") {
     FakeInhibitor fake;
     ScreenWakeController c(&fake);
     c.update(1);
@@ -108,7 +110,7 @@ TEST_CASE("update: 1 → 2 slots does not re-acquire", "[wake]") {
     REQUIRE(fake.acquires() == 1);
 }
 
-TEST_CASE("update: positive → 0 releases", "[wake]") {
+TEST_CASE("update: positive -> 0 releases", "[wake]") {
     FakeInhibitor fake;
     ScreenWakeController c(&fake);
     c.update(2);

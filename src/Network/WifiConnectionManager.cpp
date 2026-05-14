@@ -29,7 +29,7 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* pa
     : QObject(parent), store_(store), http_(new HTTPClient(this)) {
     deviceId_ = store_->getOrCreateDeviceId();
     deviceName_ = QHostInfo::localHostName();
-    if (deviceName_.isEmpty()) { deviceName_ = QStringLiteral("Linux"); }
+    if (deviceName_.isEmpty()) { deviceName_ = QStringLiteral("Windows"); }
 }
 
 WifiConnectionManager::~WifiConnectionManager() {
@@ -118,8 +118,8 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
                         if (pin.isEmpty()) {
                             emit connectionEvent(pairingRequired(server));
                         } else {
-                            emit connectionEvent(makeError(
-                                pair.error.value_or(QStringLiteral("Pairing failed"))));
+                            emit connectionEvent(
+                                makeError(pair.error.value_or(QStringLiteral("Pairing failed"))));
                         }
                     } else if constexpr (std::is_same_v<T, PairingClient::Unreachable>) {
                         conn->markDisconnected();

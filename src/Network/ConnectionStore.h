@@ -15,8 +15,10 @@
 namespace dish::net {
 
 // Persistent registry of remembered connections + per-server shared keys.
-// Backed by QSettings (XDG: ~/.config/Dish/Dish.conf), the Linux analogue of
-// SharedPreferences / UserDefaults. Mirrors dish-mac/Network/ConnectionStore.
+// Backed by QSettings, which on Windows writes to HKCU\Software\Dish\Dish — the
+// OS-native analogue of dish-android's SharedPreferences, dish-mac's
+// UserDefaults, and dish-linux's ~/.config/Dish/Dish.conf. Mirrors
+// dish-mac/Network/ConnectionStore.
 class ConnectionStore {
   public:
     explicit ConnectionStore(std::unique_ptr<QSettings> settings = nullptr);
