@@ -102,9 +102,21 @@ jobs:
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           # Build first so generated mocs exist for clang-tidy.
           cmake --build build-tidy --parallel
-          $files = git ls-files 'src/*.cpp' 'src/*.h' | Where-Object { $_ -notlike 'src/UI/*' }
+          # Only run clang-tidy on .cpp files. Headers are analyzed
+          # transitively via HeaderFilterRegex in .clang-tidy. Passing
+          # .h files directly trips clang-diagnostic-pragma-once-outside-header
+          # because the header has no enclosing translation unit.
+          # --extra-arg-before=-Wno-unused-command-line-argument silences
+          # clang's complaints about MSVC-style flags (/Zc:preprocessor,
+          # /utf-8 etc.) that CMake puts into compile_commands.json when
+          # the configure step picks up MSVC cl.exe on PATH; clang-tidy
+          # uses the GNU-style clang driver and would otherwise treat
+          # them as fatal under the project's -Werror equivalent.
+          $files = git ls-files 'src/*.cpp' | Where-Object { $_ -notlike 'src/UI/*' }
           foreach ($f in $files) {
-            clang-tidy -p build-tidy --quiet $f
+            clang-tidy -p build-tidy --quiet `
+              --extra-arg-before=-Wno-unused-command-line-argument `
+              $f
           }
 
       - name: Configure (Release)
