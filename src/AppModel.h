@@ -14,6 +14,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 
@@ -82,6 +83,10 @@ class AppModel : public QObject {
     void onHubChanged();
     void onBridgeDevicesChanged();
     void onWifiEvent(const net::ConnectionEvent& evt);
+    // Walk the WifiConnectionManager pool and install our rumble handler on
+    // any connection that doesn't already have one. Idempotent — invoked on
+    // every poolChanged signal so newly-created connections get wired.
+    void installRumbleHandlers();
 
     std::unique_ptr<net::ConnectionStore> store_;
     net::WifiConnectionManager* wifi_;
@@ -89,6 +94,11 @@ class AppModel : public QObject {
     input::GamepadInputProcessor processor_;
     input::SDLGamepadBridge* bridge_;
     QTimer* autoReconnectTimer_;
+
+    // Set of connection ids we've already attached rumble handlers to, so we
+    // don't reinstall on every pool churn. WifiConnections live until
+    // application teardown so this set never gets pruned.
+    QSet<QString> rumbleWiredConnections_;
     // Owned in unique_ptr so we can swap a FakeDisplaySleepInhibitor in
     // tests. ScreenWakeController holds a raw back-pointer; lifetime is
     // tied to the AppModel.

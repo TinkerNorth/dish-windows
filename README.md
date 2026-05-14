@@ -74,6 +74,44 @@ SDL thread publishes lock-free.
   disconnect, so `MSG_NOSIGNAL` is `#define`d to 0 and we get the same
   "send to a closed peer survives" guarantee for free.
 
+## Rumble (return path)
+
+Rumble flows the opposite direction to the input hot path: a game on the
+satellite host writes to the virtual controller's vibration channel, the
+satellite forwards a `MSG_RUMBLE = 0x0009` packet back over the encrypted
+UDP socket, and the dish actuates the matching SDL controller via XInput.
+
+```
+  ┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐
+  │ SatelliteClient      │ ───► │ WifiConnection       │ ───► │ SDLGamepadBridge     │
+  │  • receive thread    │      │  • per-conn handler  │      │  • applyRumble(...)  │
+  │  • parseRumbleMsg    │      │    (installed by     │      │    → SDL_Game-       │
+  │  • dispatch to       │      │     AppModel via     │      │      ControllerRumble│
+  │    handler           │      │     poolChanged)     │      │    → ...SetLED       │
+  └──────────────────────┘      └──────────────────────┘      └──────────┬───────────┘
+                                                                         │
+                                                                         ▼
+                                                              XInputSetState (Xbox)
+                                                              or HID rumble report
+```
+
+The wire format is documented in
+[`satellite/README.md`](https://github.com/TinkerNorth/satellite#rumble-return-path).
+On the dish-windows side:
+
+* **Parser** — `SatelliteClient::parseRumbleMessage` is a pure static
+  decoder so unit tests can exercise byte layouts without a live socket
+  (see `tests/test_satellite_client_rumble.cpp`).
+* **Routing** — `AppModel::installRumbleHandlers` walks the `WifiConnection`
+  pool on every `poolChanged` and attaches a handler that resolves
+  `connId → slotId → deviceId` via the `ConnectionHub` bindings, then
+  calls `SDLGamepadBridge::applyRumble`.
+* **Actuation** — `SDL_GameControllerRumble(strong, weak, durMs)` for the
+  motors; for Xbox-class controllers SDL routes that straight through to
+  XInput's native dual-motor API. `SDL_GameControllerSetLED(R, G, B)` is
+  used when the satellite published a DS4 lightbar colour. Both calls are
+  silent no-ops on pads that don't expose the corresponding feature.
+
 ## Cross-platform behaviour parity
 
 The following behaviours mirror dish-android, dish-mac, and dish-linux, so
