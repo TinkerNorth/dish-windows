@@ -235,8 +235,8 @@ QList<models::DiscoveredServer> MdnsDiscovery::discover(int timeoutMs) {
     std::uint8_t buf[2048];
 
     while (steady_clock::now() < deadline) {
-        const int n = ::recvfrom(sock, reinterpret_cast<char*>(buf), sizeof(buf), 0, nullptr,
-                                 nullptr);
+        const int n =
+            ::recvfrom(sock, reinterpret_cast<char*>(buf), sizeof(buf), 0, nullptr, nullptr);
         if (n <= 0) { continue; } // timeout / transient
         const auto server = parseResponse(buf, static_cast<size_t>(n));
         if (!server) { continue; }
