@@ -47,6 +47,7 @@ class SatelliteClient {
     static constexpr std::uint16_t kMsgServerStatus = 0x0007;
     static constexpr std::uint16_t kMsgControllerType = 0x0008;
     static constexpr std::uint16_t kMsgRumble = 0x0009;
+    static constexpr std::uint16_t kMsgLightbar = 0x000D;
 
     static constexpr std::uint32_t kHeartbeatIntervalMs = 2000;
     static constexpr int kHeartbeatMissMax = 5;
@@ -110,6 +111,25 @@ class SatelliteClient {
     static std::optional<RumbleMessage> parseRumbleMessage(const std::uint8_t* payload,
                                                            std::size_t len);
 
+    // Decoded lightbar message from the satellite (Task 1.4 dedicated stream).
+    // Independent from MSG_RUMBLE so games that only change colour drive
+    // the LED on the dish.
+    struct LightbarMessage {
+        int controllerIndex = 0;
+        std::uint8_t r = 0;
+        std::uint8_t g = 0;
+        std::uint8_t b = 0;
+    };
+
+    using LightbarHandler = std::function<void(const LightbarMessage&)>;
+    void setLightbarHandler(LightbarHandler handler);
+
+    // Pure decoder for the MSG_LIGHTBAR inner payload (after the 4-byte
+    // type+length header has been stripped). Wire layout: ctrlIdx + r + g + b
+    // = 4 bytes. Test-only seam — same pattern as parseRumbleMessage.
+    static std::optional<LightbarMessage> parseLightbarMessage(const std::uint8_t* payload,
+                                                               std::size_t len);
+
     void startHeartbeat();
     void stopHeartbeat();
     void startReceiveLoop();
@@ -159,6 +179,10 @@ class SatelliteClient {
     // section (handler copy under lock) keeps the hot-path call unlocked.
     std::mutex rumbleHandlerMtx_;
     RumbleHandler rumbleHandler_;
+
+    // Same shape as rumbleHandlerMtx_/rumbleHandler_ but for MSG_LIGHTBAR.
+    std::mutex lightbarHandlerMtx_;
+    LightbarHandler lightbarHandler_;
 };
 
 } // namespace dish::net

@@ -25,7 +25,8 @@ set(DISH_TEST_SOURCES
     test_screen_wake_controller.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
-    test_satellite_client_rumble.cpp)
+    test_satellite_client_rumble.cpp
+    test_satellite_client_lightbar.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests
