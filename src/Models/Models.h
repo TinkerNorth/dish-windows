@@ -11,6 +11,7 @@
 #include <QJsonObject>
 #include <QString>
 
+#include <cstdint>
 #include <optional>
 
 namespace dish::models {
@@ -65,14 +66,22 @@ enum class ConnectionLive { Idle, Connecting, Connected };
 // SDLGamepadBridge. Distinct from any user "forward this feature?" preference —
 // this is purely a hardware-capability statement. The slot card surfaces it as
 // a chip so the player can tell apart "my pad has no gyro" (an Xbox pad) from
-// "gyro is switched off". Mirrors dish-mac's `ControllerCapabilities`; only the
-// motion field is carried today (Task 1.x) — touchpad/rumble/battery chips can
-// follow the same shape when those reach the Windows UI.
+// "gyro is switched off". Mirrors dish-mac's `ControllerCapabilities`.
 struct ControllerCapabilities {
     // True iff SDL reported an IMU (gyro and/or accelerometer) for the device
     // — DualSense / DualShock 4 / Switch Pro / Joy-Con. False for Xbox 360 /
     // Xbox One pads, which have no motion hardware.
     bool hasMotion = false;
+
+    // Most recent battery sample for the pad — the same (level, status) pair
+    // forwarded on MSG_BATTERY. For a wireless pad this is the controller's
+    // own charge; for a wired/unknown pad it is the host machine's battery
+    // (the laptop's percentage, or 100 % / WIRED on a desktop). The slot card
+    // renders it as a battery chip. `batteryLevel` is 0..100 percent or 0xFF
+    // (unknown); `batteryStatus` is a SatelliteClient::kBatteryStatus*
+    // constant. 0xFF / 0 until the first 30 s poll completes.
+    std::uint8_t batteryLevel = 0xFF;
+    std::uint8_t batteryStatus = 0;
 };
 
 struct ConnectionSummary {

@@ -38,6 +38,10 @@ class SlotCard : public QFrame {
     // and "not available" states so the absence of motion is explicit, never
     // just an absent indicator.
     QLabel* motionChip_;
+    // Battery chip: charge for this pad — the controller's own for a wireless
+    // pad, the host machine's for a wired/unknown one. Hidden until the first
+    // battery sample arrives (level 0xFF / unknown).
+    QLabel* batteryChip_;
 
     models::ControllerSlot slot_;
     QList<models::ConnectionSummary> available_;

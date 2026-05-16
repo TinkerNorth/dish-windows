@@ -173,6 +173,11 @@ void AppModel::rebuild() {
         // Carry the SDL-detected motion capability through to the UI so the
         // slot card can show whether this pad has an IMU.
         s.capabilities.hasMotion = d.hasMotion;
+        // Carry the latest battery sample through so the slot card's battery
+        // chip can show charge — controller's own for a wireless pad, the
+        // host machine's for a wired/unknown one.
+        s.capabilities.batteryLevel = d.batteryLevel;
+        s.capabilities.batteryStatus = d.batteryStatus;
         next.append(s);
     }
 

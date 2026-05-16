@@ -44,10 +44,19 @@ class SDLGamepadBridge : public QObject {
     // `hasMotion` mirrors membership of motionCapable_ — true iff SDL reported
     // a gyro and/or accelerometer for the device. The UI uses it to show a
     // motion-capability indicator per controller.
+    //
+    // `batteryLevel` / `batteryStatus` carry the most recent battery sample
+    // for the device — the same (level, status) pair pollBatteries() forwards
+    // onto the wire (the controller's own charge for a wireless pad, the host
+    // machine's for a wired/unknown one). They drive the SlotCard battery
+    // chip. `batteryLevel` is 0..100 or 0xFF (unknown); `batteryStatus` is a
+    // kBatteryStatus* constant. 0xFF / 0 until the first poll completes.
     struct Device {
         QString id;
         QString name;
         bool hasMotion = false;
+        std::uint8_t batteryLevel = 0xFF;
+        std::uint8_t batteryStatus = 0;
     };
     QList<Device> devices() const;
 
@@ -114,6 +123,15 @@ class SDLGamepadBridge : public QObject {
     // Per-device last battery poll wall-clock. The runLoop polls battery on
     // every iteration but the per-device gate collapses it to 30 s.
     std::unordered_map<int, std::chrono::steady_clock::time_point> lastBatteryPoll_;
+
+    // Per-device most recent battery sample (level, status). Updated by
+    // pollBatteries() and surfaced through devices() so the SlotCard can
+    // render a battery chip. Guarded by mtx_ like the other device maps.
+    struct BatterySnapshot {
+        std::uint8_t level = 0xFF;
+        std::uint8_t status = 0;
+    };
+    std::unordered_map<int, BatterySnapshot> lastBattery_;
 
     // Per-device touchpad finger state. SDL delivers per-finger down/move/up
     // events; we accumulate them here and emit the full two-finger snapshot
