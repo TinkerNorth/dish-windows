@@ -78,9 +78,10 @@ void WifiConnection::markDisconnected() {
     emit changed();
 }
 
-void WifiConnection::attachSlot(const QString& slotId, int controllerType) {
+void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool hasLightbar) {
     boundSlotId_ = slotId;
     pendingControllerType_ = controllerType;
+    lightbarCapable_ = hasLightbar;
     if (state_ == WifiState::Connected && !controllerAdded_) { registerController(controllerType); }
     emit changed();
 }
@@ -99,7 +100,13 @@ void WifiConnection::registerController(int type) {
     auto c = clientRef_.get();
     if (!c) { return; }
     c->resetControllerAck();
-    c->controllerAdd(kDefaultCtrlIndex, kDefaultCaps);
+    // Per-controller capability word: the static base (analog triggers,
+    // rumble, motion) plus CAP_LIGHTBAR only when the bound pad has an
+    // addressable RGB LED. Mirrors the spec's
+    //   caps = existingDefault | (hasLed ? 0x0008 : 0)
+    const std::uint16_t caps =
+        SatelliteClient::withLightbarCapability(kDefaultCaps, lightbarCapable_);
+    c->controllerAdd(kDefaultCtrlIndex, caps);
     // Spin briefly waiting for the server's controller ACK; same shape as the
     // Mac client. This blocks the calling (main) thread for up to ~2s in the
     // worst case, but the satellite normally responds within a few ms.

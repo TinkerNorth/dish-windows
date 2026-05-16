@@ -33,6 +33,7 @@ class MainWindow : public QMainWindow {
     void onError(const QString& msg);
     void onTelemetryTick();
     void onManageClicked();
+    void onSettingsClicked();
     void onBindRequested(const QString& slotId, const QString& connectionId);
     void onUnbindRequested(const QString& slotId);
 
@@ -41,6 +42,7 @@ class MainWindow : public QMainWindow {
     QLabel* statusDot_;
     QLabel* statusText_;
     QLabel* summaryText_;
+    QPushButton* settingsButton_;
     QPushButton* manageButton_;
     QVBoxLayout* slotsLayout_;
     QLabel* slotsEmpty_;

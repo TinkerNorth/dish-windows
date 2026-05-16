@@ -8,6 +8,7 @@
 #include "Network/ConnectionHub.h"
 #include "Network/WifiConnectionManager.h"
 #include "PairingDialog.h"
+#include "SettingsDialog.h"
 #include "SlotCard.h"
 #include "Theme.h"
 
@@ -39,9 +40,11 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     statusDot_->setStyleSheet(dotQss(Theme::muted));
     statusText_ = new QLabel(central);
     statusText_->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));
+    settingsButton_ = new QPushButton(QStringLiteral("Settings"), central);
     manageButton_ = new QPushButton(QStringLiteral("Manage"), central);
     headerRow->addWidget(statusDot_, 0, Qt::AlignVCenter);
     headerRow->addWidget(statusText_, 1, Qt::AlignVCenter);
+    headerRow->addWidget(settingsButton_, 0, Qt::AlignVCenter);
     headerRow->addWidget(manageButton_, 0, Qt::AlignVCenter);
 
     summaryText_ = new QLabel(central);
@@ -96,6 +99,7 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     setCentralWidget(central);
 
     QObject::connect(manageButton_, &QPushButton::clicked, this, &MainWindow::onManageClicked);
+    QObject::connect(settingsButton_, &QPushButton::clicked, this, &MainWindow::onSettingsClicked);
     // Single observer on the canonical state slice — rebuild header + slot list
     // and react to any pending pairing prompt every time state changes.
     QObject::connect(model_, &AppModel::stateChanged, this, &MainWindow::onStateChanged);
@@ -209,6 +213,11 @@ void MainWindow::onTelemetryTick() {
 
 void MainWindow::onManageClicked() {
     ConnectionsDialog dlg(model_, this);
+    dlg.exec();
+}
+
+void MainWindow::onSettingsClicked() {
+    SettingsDialog dlg(model_->featureSettings(), this);
     dlg.exec();
 }
 

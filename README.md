@@ -85,9 +85,9 @@ UDP socket, and the dish actuates the matching SDL controller via XInput.
   ┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐
   │ SatelliteClient      │ ───► │ WifiConnection       │ ───► │ SDLGamepadBridge     │
   │  • receive thread    │      │  • per-conn handler  │      │  • applyRumble(...)  │
-  │  • parseRumbleMsg    │      │    (installed by     │      │    → SDL_Game-       │
-  │  • dispatch to       │      │     AppModel via     │      │      ControllerRumble│
-  │    handler           │      │     poolChanged)     │      │    → ...SetLED       │
+  │  • parseRumbleMsg    │      │    (installed by     │      │  • queue → SDL thread│
+  │  • dispatch to       │      │     AppModel via     │      │    → SDL_Game-       │
+  │    handler           │      │     poolChanged)     │      │      ControllerRumble│
   └──────────────────────┘      └──────────────────────┘      └──────────┬───────────┘
                                                                          │
                                                                          ▼
@@ -108,9 +108,39 @@ On the dish-windows side:
   calls `SDLGamepadBridge::applyRumble`.
 * **Actuation** — `SDL_GameControllerRumble(strong, weak, durMs)` for the
   motors; for Xbox-class controllers SDL routes that straight through to
-  XInput's native dual-motor API. `SDL_GameControllerSetLED(R, G, B)` is
-  used when the satellite published a DS4 lightbar colour. Both calls are
-  silent no-ops on pads that don't expose the corresponding feature.
+  XInput's native dual-motor API. A no-op on pads without rumble.
+
+The SDL output calls run on the SDL thread, not the receive thread that
+decoded the packet: `applyRumble` pushes an `OutputCommand` onto a
+thread-safe `OutputCommandQueue` and `SDLGamepadBridge::runLoop` drains it,
+resolving the `SDL_GameController*` on the SDL thread. That closes a
+use-after-close race — the SDL thread is also the only thread allowed to
+`SDL_GameControllerClose` a controller on device removal.
+
+## Light bar (return path)
+
+The DualSense / DualShock 4 light bar has its own return path, **decoupled
+from rumble** (Task 1.4): a game that only changes the LED colour — with no
+vibration — still drives the pad. The satellite emits a dedicated
+`MSG_LIGHTBAR = 0x000D` packet whose inner payload is
+`controller_index(1) + r(1) + g(1) + b(1)`.
+
+* **Parser** — `SatelliteClient::parseLightbarMessage`, a pure static
+  decoder (see `tests/test_satellite_client_lightbar.cpp`).
+* **Routing** — `AppModel` installs a lightbar handler alongside the rumble
+  handler; it resolves the bound device the same way and calls
+  `SDLGamepadBridge::applyLightbar`, which queues an `OutputCommand` so
+  `SDL_GameControllerSetLED(R, G, B)` runs on the SDL thread. A no-op on
+  pads without an LED.
+* **Capability** — when a bound pad reports `SDL_GameControllerHasLED`, the
+  `MSG_CONTROLLER_ADD` capability word carries `CAP_LIGHTBAR = 0x0008`
+  (`caps = analogTriggers | rumble | motion | CAP_LIGHTBAR`). The satellite
+  sends colour over `MSG_LIGHTBAR` only.
+* **Setting** — a *Light bar* preference (**Settings** button → *Follow
+  game* / *Off*) gates the apply. *Off* suppresses the host colour; it does
+  not affect rumble. The choice is persisted via `FeatureSettings`. The pure
+  routing rule lives in `LightbarRouting.h` and is unit-tested in
+  `tests/test_lightbar_routing.cpp`.
 
 ## Cross-platform behaviour parity
 
@@ -157,6 +187,12 @@ user-visible behaviour stays predictable across platforms:
   unambiguous. The capability comes from `SDL_GameControllerHasSensor` and
   is plumbed `SDLGamepadBridge → ControllerSlot.capabilities → SlotCard`.
   Mirrors the capability chip in dish-mac's slot card.
+- **Lightbar-capability chip in the controller list.** A pad with an
+  addressable RGB LED (DualSense / DualShock 4 — detected via
+  `SDL_GameControllerHasLED`) also gets a *"Lightbar"* chip. Unlike the
+  motion chip this is shown only when the LED is present — most pads have
+  none and a *"no lightbar"* callout would just be noise. Same plumbing
+  path as the motion chip.
 
 ## Requirements
 

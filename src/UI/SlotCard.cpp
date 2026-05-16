@@ -52,13 +52,16 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     textLayout->addWidget(boundLabel_);
 
     // Capability chip row. Mirrors dish-mac's capabilityRow under the name +
-    // status lines. Carries the motion chip and the battery chip; touchpad /
-    // rumble chips can join the same row when those reach the Windows UI.
+    // status lines. Carries the motion chip, the lightbar chip and the
+    // battery chip; touchpad / rumble chips can join the same row when those
+    // reach the Windows UI.
     auto* chipRow = new QHBoxLayout;
     chipRow->setSpacing(6);
     chipRow->setContentsMargins(0, 4, 0, 0);
     motionChip_ = new QLabel(this);
     chipRow->addWidget(motionChip_, 0, Qt::AlignVCenter);
+    lightbarChip_ = new QLabel(this);
+    chipRow->addWidget(lightbarChip_, 0, Qt::AlignVCenter);
     batteryChip_ = new QLabel(this);
     chipRow->addWidget(batteryChip_, 0, Qt::AlignVCenter);
     chipRow->addStretch(1);
@@ -98,6 +101,23 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
                              "and motion aiming is being forwarded.")
             : QStringLiteral("Motion not available — this controller has no gyro/accelerometer, "
                              "so motion aiming can't be forwarded."));
+
+    // Lightbar-capability chip. Unlike the motion chip, this is shown ONLY
+    // when the pad actually has an addressable RGB LED (DualSense / DS4) —
+    // most pads have no lightbar and a "no lightbar" callout would be noise.
+    // Styled with the filled "present" pill, matching the motion/battery
+    // chips. The host game drives the colour over MSG_LIGHTBAR; the "Light
+    // bar" setting can switch that off without changing this hardware chip.
+    const bool hasLightbar = slot_.capabilities.hasLightbar;
+    lightbarChip_->setVisible(hasLightbar);
+    if (hasLightbar) {
+        lightbarChip_->setText(QStringLiteral("Lightbar"));
+        lightbarChip_->setStyleSheet(capabilityChipQss(true));
+        lightbarChip_->setToolTip(
+            QStringLiteral("Lightbar available — this controller has an RGB LED. "
+                           "It follows the host game's colour unless the Light bar "
+                           "setting is Off."));
+    }
 
     // Battery chip. The (level, status) pair comes off the same MSG_BATTERY
     // sample the satellite receives: a wireless pad's own charge, or — for a
