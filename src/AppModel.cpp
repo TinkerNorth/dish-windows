@@ -170,6 +170,9 @@ void AppModel::rebuild() {
         models::ControllerSlot s;
         s.id = d.id;
         s.name = d.name;
+        // Carry the SDL-detected motion capability through to the UI so the
+        // slot card can show whether this pad has an IMU.
+        s.capabilities.hasMotion = d.hasMotion;
         next.append(s);
     }
 

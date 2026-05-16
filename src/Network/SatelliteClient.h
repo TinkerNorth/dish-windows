@@ -58,6 +58,7 @@ class SatelliteClient {
     // on the virtual device where the backend supports a motion surface.
     static constexpr std::uint16_t kCapAnalogTriggers = 0x0001;
     static constexpr std::uint16_t kCapRumble = 0x0002;
+    // Set when the client speaks the MSG_MOTION (0x000A) gyro/accel stream.
     static constexpr std::uint16_t kCapMotion = 0x0004;
 
     // Battery wire constants (satellite/src/core/types.h mirrors).

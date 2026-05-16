@@ -78,4 +78,22 @@ QString dotQss(QRgb color) {
     return QStringLiteral("background-color: %1; border-radius: 4px;").arg(hex(color));
 }
 
+QString capabilityChipQss(bool present) {
+    // Mirrors dish-mac's CapabilityChip: a filled primary-tinted pill when the
+    // capability is present, a dimmed outlined pill when it is not. The cyan
+    // fill is `Theme::primary` at ~14 % alpha — kept as a literal rgba() since
+    // QSS background-color needs the alpha inline and there is no half-alpha
+    // primary token. The border colour reuses `Theme::outline`.
+    if (present) {
+        return QStringLiteral("color: %1; background-color: rgba(79,227,255,0.14); "
+                              "border: 1px solid transparent; border-radius: 5px; "
+                              "padding: 2px 7px; font-size: 10px; font-weight: 500;")
+            .arg(hex(Theme::primary));
+    }
+    return QStringLiteral("color: %1; background-color: transparent; "
+                          "border: 1px solid %2; border-radius: 5px; "
+                          "padding: 2px 7px; font-size: 10px; font-weight: 500;")
+        .arg(hex(Theme::muted), hex(Theme::outline));
+}
+
 } // namespace dish::ui

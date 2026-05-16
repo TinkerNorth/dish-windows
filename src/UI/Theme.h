@@ -42,4 +42,9 @@ QString sectionHeaderQss();
 QString outlinedButtonQss();
 QString dotQss(QRgb color);
 
+// Small capability-chip pill used in SlotCard. `present` renders the active
+// (filled, primary-tinted) chip; otherwise a dimmed, outlined "not available"
+// chip. Mirrors dish-mac's CapabilityChip. Colours come from Theme tokens.
+QString capabilityChipQss(bool present);
+
 } // namespace dish::ui

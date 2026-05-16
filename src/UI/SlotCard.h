@@ -33,6 +33,11 @@ class SlotCard : public QFrame {
     QLabel* boundLabel_;
     QLabel* dot_;
     QPushButton* bindButton_;
+    // Capability chip: motion (gyro/accelerometer) availability for this pad.
+    // Always visible — its text/style/tooltip switch between the "available"
+    // and "not available" states so the absence of motion is explicit, never
+    // just an absent indicator.
+    QLabel* motionChip_;
 
     models::ControllerSlot slot_;
     QList<models::ConnectionSummary> available_;

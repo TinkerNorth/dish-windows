@@ -61,6 +61,20 @@ struct ConnectResponse {
 
 enum class ConnectionLive { Idle, Connecting, Connected };
 
+// What a physical controller's *hardware* exposes, detected once at attach by
+// SDLGamepadBridge. Distinct from any user "forward this feature?" preference —
+// this is purely a hardware-capability statement. The slot card surfaces it as
+// a chip so the player can tell apart "my pad has no gyro" (an Xbox pad) from
+// "gyro is switched off". Mirrors dish-mac's `ControllerCapabilities`; only the
+// motion field is carried today (Task 1.x) — touchpad/rumble/battery chips can
+// follow the same shape when those reach the Windows UI.
+struct ControllerCapabilities {
+    // True iff SDL reported an IMU (gyro and/or accelerometer) for the device
+    // — DualSense / DualShock 4 / Switch Pro / Joy-Con. False for Xbox 360 /
+    // Xbox One pads, which have no motion hardware.
+    bool hasMotion = false;
+};
+
 struct ConnectionSummary {
     QString id;
     QString label;
@@ -79,6 +93,9 @@ struct ControllerSlot {
     QString name;
     std::optional<QString> boundConnectionId;
     std::optional<ConnectionSummary> boundStatus;
+    // Hardware capabilities detected by SDLGamepadBridge when the device
+    // attached. Drives the capability indicator in SlotCard.
+    ControllerCapabilities capabilities;
 };
 
 struct RememberedWifi {

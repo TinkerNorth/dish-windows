@@ -178,9 +178,18 @@ class GamepadInputProcessor {
     BatterySender batterySender_;
     TouchpadSender touchpadSender_;
 
-    // Per-device last-emit timestamp (in microseconds, steady_clock basis,
-    // or test-supplied) used to rate-limit motion. 0 = no prior emission.
-    std::unordered_map<DeviceId, std::uint64_t> lastMotionUs_;
+    // Per-device motion rate-limit gate. `lastUs` is the timestamp of the
+    // last *emitted* sample (microseconds, steady_clock basis or test-
+    // supplied). `hasEmitted` is a distinct flag rather than a `lastUs == 0`
+    // sentinel: a monotonic clock — or a test clock — can legitimately read
+    // 0, and treating that as "never emitted" would mis-handle the second
+    // sample as another first sample. dish-android's MotionRateLimiter uses
+    // the same explicit-flag shape.
+    struct MotionGate {
+        std::uint64_t lastUs = 0;
+        bool hasEmitted = false;
+    };
+    std::unordered_map<DeviceId, MotionGate> lastMotionUs_;
 
     // Per-device last battery sample. Used for change-coalescing so a
     // controller sitting at full charge doesn't keep pushing identical

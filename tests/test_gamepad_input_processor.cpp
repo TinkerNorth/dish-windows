@@ -303,6 +303,41 @@ TEST_CASE("publishMotionAt rate-limits each device independently", "[motion]") {
     REQUIRE(bCalls == 1);
 }
 
+TEST_CASE("publishMotionAt rate-limits correctly when the clock starts at 0", "[motion]") {
+    // Regression for the "0 doubles as the never-emitted sentinel" bug. A
+    // monotonic / test clock can legitimately read 0 for the first sample.
+    // The gate now tracks an explicit hasEmitted flag, so the first sample
+    // at nowUs=0 still counts as "emitted" and a second sample inside the
+    // 4 ms window must be dropped (rather than mis-treated as another first
+    // sample, which would forward it with delta 0 and no rate-limit).
+    GamepadInputProcessor p;
+    int calls = 0;
+    std::uint32_t lastDt = 99;
+    p.setMotionSender([&](const std::string&, std::int16_t, std::int16_t, std::int16_t,
+                          std::int16_t, std::int16_t, std::int16_t, std::uint32_t dt) {
+        ++calls;
+        lastDt = dt;
+    });
+
+    GamepadInputProcessor::MotionSample s{};
+    // First sample exactly at clock zero — forwarded, delta 0 (first packet).
+    REQUIRE(p.publishMotionAt("pad-1", s, 0));
+    REQUIRE(calls == 1);
+    REQUIRE(lastDt == 0U);
+
+    // Second sample 2 000 µs later — well inside the 4 000 µs gate. With the
+    // old `prev != 0` sentinel, prev would still read 0 here and this sample
+    // would be wrongly emitted. With hasEmitted it is correctly dropped.
+    REQUIRE_FALSE(p.publishMotionAt("pad-1", s, 2'000));
+    REQUIRE(calls == 1);
+
+    // Once the gate elapses (4 000 µs from the first emit) the next sample
+    // flows again, and its delta is measured from the last *emitted* sample.
+    REQUIRE(p.publishMotionAt("pad-1", s, 4'000));
+    REQUIRE(calls == 2);
+    REQUIRE(lastDt == 4'000U);
+}
+
 TEST_CASE("remove resets the motion rate-limit for that device", "[motion]") {
     GamepadInputProcessor p;
     int calls = 0;

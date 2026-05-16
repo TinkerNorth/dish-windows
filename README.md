@@ -148,6 +148,15 @@ user-visible behaviour stays predictable across platforms:
   `SDL_GameControllerType` enum), USB VID / PID, and the SDL GUID. Aimed
   at users reporting *"my pad doesn't work"* — same idea as Android's
   SatelliteJNI `DEVCAPS` log.
+- **Motion-capability chip in the controller list.** Each controller row
+  carries a small chip showing whether that pad has a gyro/accelerometer:
+  a cyan *"Gyro"* chip when motion aiming is available and being forwarded
+  (DualSense / DualShock 4 / Switch-class pads), or a dimmed *"No gyro"*
+  chip when the pad has no motion hardware (Xbox pads). The state is always
+  drawn — never just an absent indicator — so *"motion not available"* is
+  unambiguous. The capability comes from `SDL_GameControllerHasSensor` and
+  is plumbed `SDLGamepadBridge → ControllerSlot.capabilities → SlotCard`.
+  Mirrors the capability chip in dish-mac's slot card.
 
 ## Requirements
 

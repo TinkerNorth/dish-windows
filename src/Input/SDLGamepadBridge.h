@@ -41,9 +41,13 @@ class SDLGamepadBridge : public QObject {
     void stop();
 
     // List of currently-attached devices in (deviceId, displayName) form.
+    // `hasMotion` mirrors membership of motionCapable_ — true iff SDL reported
+    // a gyro and/or accelerometer for the device. The UI uses it to show a
+    // motion-capability indicator per controller.
     struct Device {
         QString id;
         QString name;
+        bool hasMotion = false;
     };
     QList<Device> devices() const;
 
