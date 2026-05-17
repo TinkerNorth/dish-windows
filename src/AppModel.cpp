@@ -89,6 +89,24 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
         return false;
     });
 
+    // Same lookup for the per-device motion capability — gates CAP_MOTION in
+    // the controller-add so an Xbox pad never advertises it.
+    hub_->setMotionCapabilityFn([this](const QString& slotId) {
+        for (const auto& d : bridge_->devices()) {
+            if (d.id == slotId) { return d.motionCapable; }
+        }
+        return false;
+    });
+
+    // And the controller type (Xbox / PlayStation) so the controller-add can
+    // send the right MSG_CONTROLLER_TYPE hint — a DualSense → virtual DS4.
+    hub_->setControllerTypeFn([this](const QString& slotId) -> int {
+        for (const auto& d : bridge_->devices()) {
+            if (d.id == slotId) { return d.controllerType; }
+        }
+        return 0; // CONTROLLER_TYPE_XBOX
+    });
+
     rebuild();
 }
 
@@ -188,7 +206,7 @@ void AppModel::rebuild() {
         s.name = d.name;
         // Carry the SDL-detected motion capability through to the UI so the
         // slot card can show whether this pad has an IMU.
-        s.capabilities.hasMotion = d.hasMotion;
+        s.capabilities.hasMotion = d.motionCapable;
         // Likewise the addressable-LED capability — drives the lightbar chip
         // and tells the hub when to advertise CAP_LIGHTBAR on bind.
         s.capabilities.hasLightbar = d.hasLightbar;
@@ -210,6 +228,18 @@ void AppModel::rebuild() {
         }
     }
     state_.slotList = std::move(next);
+
+    // Surface "a controller registration is in flight" so the dashboard can
+    // show an indeterminate spinner. The ACK poll is non-blocking, so this
+    // flag (not a frozen UI) is how the user learns the add is pending.
+    bool busy = false;
+    for (auto* conn : wifi_->connections()) {
+        if (conn->isRegisteringController()) {
+            busy = true;
+            break;
+        }
+    }
+    state_.busy = busy;
 
     // Update the routing tables to mirror the new slot/binding shape.
     QHash<QString, net::ConnectionHub::ReportSender> nextRouting;

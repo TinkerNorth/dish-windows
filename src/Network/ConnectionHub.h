@@ -63,6 +63,21 @@ class ConnectionHub : public QObject {
     using LightbarCapabilityFn = std::function<bool(const QString& slotId)>;
     void setLightbarCapabilityFn(LightbarCapabilityFn fn) { lightbarCapabilityFn_ = std::move(fn); }
 
+    // Predicate answering "does the physical pad behind this slot have a
+    // motion sensor (gyro/accelerometer)?". Same shape / install path as
+    // LightbarCapabilityFn — bind() consults it so MSG_CONTROLLER_ADD
+    // advertises CAP_MOTION per-device. Unset → treated as no motion.
+    using MotionCapabilityFn = std::function<bool(const QString& slotId)>;
+    void setMotionCapabilityFn(MotionCapabilityFn fn) { motionCapabilityFn_ = std::move(fn); }
+
+    // Resolver answering "what satellite controller type is the pad behind
+    // this slot?" (CONTROLLER_TYPE_XBOX / _PLAYSTATION). Installed by AppModel
+    // off the SDL bridge's per-device classification; bind() threads the
+    // result into the MSG_CONTROLLER_TYPE (0x0008) hint so a DualSense
+    // registers as a virtual DS4. Unset → CONTROLLER_TYPE_XBOX.
+    using ControllerTypeFn = std::function<int(const QString& slotId)>;
+    void setControllerTypeFn(ControllerTypeFn fn) { controllerTypeFn_ = std::move(fn); }
+
     void bind(const QString& slotId, const QString& connectionId);
     void unbind(const QString& slotId);
     std::optional<models::ConnectionSummary> boundConnection(const QString& slotId) const;
@@ -79,6 +94,8 @@ class ConnectionHub : public QObject {
     QList<models::ConnectionSummary> summaries_;
     QHash<QString, QString> bindings_; // slotId -> connectionId
     LightbarCapabilityFn lightbarCapabilityFn_;
+    MotionCapabilityFn motionCapabilityFn_;
+    ControllerTypeFn controllerTypeFn_;
 };
 
 } // namespace dish::net

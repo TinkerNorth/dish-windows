@@ -15,6 +15,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStatusBar>
@@ -56,6 +57,19 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     headerBox->addLayout(headerRow);
     headerBox->addWidget(summaryText_);
     root->addLayout(headerBox);
+
+    // Indeterminate "registering a controller" spinner. range(0,0) makes Qt
+    // render it as a busy bar; retainSizeWhenHidden keeps the layout from
+    // jumping when it shows / hides. Hidden until state().busy goes true.
+    dashboardSpinner_ = new QProgressBar(central);
+    dashboardSpinner_->setRange(0, 0);
+    dashboardSpinner_->setTextVisible(false);
+    dashboardSpinner_->setFixedHeight(4);
+    auto dashSp = dashboardSpinner_->sizePolicy();
+    dashSp.setRetainSizeWhenHidden(true);
+    dashboardSpinner_->setSizePolicy(dashSp);
+    dashboardSpinner_->setVisible(false);
+    root->addWidget(dashboardSpinner_);
 
     auto* divider = new QFrame(central);
     divider->setFrameShape(QFrame::HLine);
@@ -117,6 +131,7 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
 void MainWindow::onStateChanged() {
     rebuildHeader();
     rebuildSlotList();
+    dashboardSpinner_->setVisible(model_->state().busy);
     if (model_->state().pairingTarget.has_value()) { showPairingPrompt(); }
 }
 

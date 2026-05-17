@@ -49,15 +49,18 @@ void applyDishTheme(QApplication& app) {
             "QPushButton:disabled { color: %6; border-color: %6; }"
             "QPushButton#primary { background-color: %5; color: %7; border: none; }"
             "QPushButton#primary:hover { background-color: %8; }"
+            "QPushButton#primary:disabled { background-color: %9; color: %6; border: none; }"
             "QListWidget, QTreeWidget { background-color: %3; border: 1px solid %4; "
             "                          border-radius: 8px; padding: 4px; }"
             "QStatusBar { background-color: %3; color: %6; }"
             "QLineEdit { background-color: %3; color: %2; border: 1px solid %4; "
             "           border-radius: 6px; padding: 6px 8px; }"
-            "QLineEdit:focus { border-color: %5; }")
+            "QLineEdit:focus { border-color: %5; }"
+            "QProgressBar { background-color: %3; border: 1px solid %4; border-radius: 2px; }"
+            "QProgressBar::chunk { background-color: %5; border-radius: 2px; }")
             .arg(hex(Theme::background), hex(Theme::onSurface), hex(Theme::surface),
                  hex(Theme::outline), hex(Theme::primary), hex(Theme::muted), hex(Theme::onPrimary),
-                 hex(Theme::primaryDark));
+                 hex(Theme::primaryDark), hex(Theme::surfaceDim));
     app.setStyleSheet(qss);
 }
 
@@ -83,7 +86,8 @@ QString capabilityChipQss(bool present) {
     // capability is present, a dimmed outlined pill when it is not. The cyan
     // fill is `Theme::primary` at ~14 % alpha — kept as a literal rgba() since
     // QSS background-color needs the alpha inline and there is no half-alpha
-    // primary token. The border colour reuses `Theme::outline`.
+    // primary token. The "off" pill's text and border both reuse
+    // `Theme::muted` so the chip reads as a single dimmed unit.
     if (present) {
         return QStringLiteral("color: %1; background-color: rgba(79,227,255,0.14); "
                               "border: 1px solid transparent; border-radius: 5px; "
@@ -91,9 +95,9 @@ QString capabilityChipQss(bool present) {
             .arg(hex(Theme::primary));
     }
     return QStringLiteral("color: %1; background-color: transparent; "
-                          "border: 1px solid %2; border-radius: 5px; "
+                          "border: 1px solid %1; border-radius: 5px; "
                           "padding: 2px 7px; font-size: 10px; font-weight: 500;")
-        .arg(hex(Theme::muted), hex(Theme::outline));
+        .arg(hex(Theme::muted));
 }
 
 QString batteryChipQss(bool lowBattery) {

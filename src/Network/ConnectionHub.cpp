@@ -12,6 +12,11 @@ namespace dish::net {
 ConnectionHub::ConnectionHub(WifiConnectionManager* wifi, ConnectionStore* store, QObject* parent)
     : QObject(parent), wifi_(wifi), store_(store) {
     QObject::connect(wifi_, &WifiConnectionManager::poolChanged, this, &ConnectionHub::rebuild);
+    // A controller-add the server rejected leaves a phantom local binding —
+    // the slot card would claim it is bound while the satellite has no
+    // controller for it. Roll the binding back so the UI reflects reality.
+    QObject::connect(wifi_, &WifiConnectionManager::slotRegistrationFailed, this,
+                     &ConnectionHub::unbind);
     rebuild();
 }
 
@@ -133,12 +138,14 @@ void ConnectionHub::bind(const QString& slotId, const QString& connectionId) {
     current.insert(slotId, connectionId);
     bindings_ = current;
     rebuild();
-    // Resolve whether the slot's pad has an LED so the controller-add can
-    // advertise CAP_LIGHTBAR. The predicate is absent in tests / before the
-    // bridge is wired — treat that as "no lightbar".
+    // Resolve the bound pad's hardware so the controller-add advertises the
+    // right type + capabilities. Each predicate is absent in tests / before
+    // the bridge is wired — fall back to "Xbox, no lightbar, no motion".
     const bool hasLightbar = lightbarCapabilityFn_ && lightbarCapabilityFn_(slotId);
+    const bool hasMotion = motionCapabilityFn_ && motionCapabilityFn_(slotId);
+    const int controllerType = controllerTypeFn_ ? controllerTypeFn_(slotId) : 0;
     if (auto* c = wifi_->get(connectionId)) {
-        c->attachSlot(slotId, /*controllerType=*/0, hasLightbar);
+        c->attachSlot(slotId, controllerType, hasLightbar, hasMotion);
     }
 }
 

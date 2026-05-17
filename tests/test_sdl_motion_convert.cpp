@@ -2,102 +2,90 @@
 // Copyright (C) 2026 Dish contributors.
 
 // Coverage for the SDL → wire conversion helpers in SdlMotionConvert.{h,cpp}.
-// These translate SDL2's physical sensor units (gyro rad/s, accel m/s²,
-// touchpad 0..1) into the int16 wire values defined by
-// satellite/src/core/types.h. The conversion factors are a hard contract with
-// the satellite receiver, so the full-scale anchor points are pinned here.
-// The helpers used to live in an anonymous namespace inside
-// SDLGamepadBridge.cpp; they were lifted into their own translation unit
-// purely so this test could reach them without bringing up SDL.
+// SDL hands gyro/accel/touchpad data out in physical units; these helpers map
+// them to the resolution-independent signed int16 the Satellite wire format
+// expects (scale defined in satellite/src/core/types.h). The arithmetic is the
+// only branching logic here worth pinning — it lives in its own TU precisely
+// so it can be exercised without bringing up SDL or Qt.
+//
+// Reference scale:
+//   gyro:  full scale ±2000 deg/s ↦ ±32767 (int16 LSB = 2000/32767 deg/s)
+//   accel: full scale ±4 g        ↦ ±32767 (int16 LSB = 4/32767 g)
+//
+// The conversions run in single-precision float, but every anchor below lands
+// on an exact integer after std::lround, so the values are pinned exactly —
+// matching the dish-linux test file byte-for-byte.
 
 #include "Input/SdlMotionConvert.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
-#include <cstdlib>
 
 using dish::input::accelMps2ToInt16;
 using dish::input::gyroRadPerSecToInt16;
 using dish::input::touchpadCoordToInt16;
 
-namespace {
+// ── Gyro: rad/s → wire int16 ────────────────────────────────────────────────
 
-// Helper: assert two int16s are within `tol` LSB of each other. The
-// conversions run in single-precision float, so a full-scale value can land
-// ±1 LSB off the ideal double-precision result; ±2 is a comfortable margin.
-bool near16(std::int16_t actual, std::int16_t expected, int tol = 2) {
-    return std::abs(static_cast<int>(actual) - static_cast<int>(expected)) <= tol;
+TEST_CASE("gyroRadPerSecToInt16 maps +2000 deg/s to full positive scale", "[motionconvert]") {
+    // 2000 deg/s in rad/s = 2000 / (180/π) ≈ 34.9066. The wire's positive
+    // full scale is +32767.
+    REQUIRE(gyroRadPerSecToInt16(34.9066f) == 32767);
 }
 
-} // namespace
-
-// ── Gyro: rad/s → int16, full scale ±2000 deg/s ─────────────────────────────
-
-TEST_CASE("gyroRadPerSecToInt16 maps +2000 deg/s to +full scale", "[motionconvert]") {
-    // 34.9066 rad/s == 2000 deg/s == the positive full-scale anchor.
-    REQUIRE(near16(gyroRadPerSecToInt16(34.9066f), 32767));
+TEST_CASE("gyroRadPerSecToInt16 maps -2000 deg/s to negative full scale", "[motionconvert]") {
+    // Negative full-scale. clampInt16's floor is -32768, but -2000 deg/s lands
+    // at raw ≈ -32767.01, which clamps to -32767 (not -32768).
+    REQUIRE(gyroRadPerSecToInt16(-34.9066f) == -32767);
 }
 
-TEST_CASE("gyroRadPerSecToInt16 maps -2000 deg/s to -full scale", "[motionconvert]") {
-    // -2000 deg/s lands on -32767 (not -32768) — the scale is symmetric
-    // about zero with 32767 LSB per 2000 deg/s.
-    REQUIRE(near16(gyroRadPerSecToInt16(-34.9066f), -32767));
-}
-
-TEST_CASE("gyroRadPerSecToInt16 maps zero to zero exactly", "[motionconvert]") {
+TEST_CASE("gyroRadPerSecToInt16 maps zero to zero", "[motionconvert]") {
     REQUIRE(gyroRadPerSecToInt16(0.0f) == 0);
 }
 
 TEST_CASE("gyroRadPerSecToInt16 clamps beyond +/-2000 deg/s", "[motionconvert]") {
-    // Anything past the full-scale range saturates rather than wrapping.
+    // A pad spun far past the ±2000 deg/s range must not wrap — it pins to
+    // the int16 extremes.
     REQUIRE(gyroRadPerSecToInt16(100.0f) == 32767);
     REQUIRE(gyroRadPerSecToInt16(-100.0f) == -32768);
-    // Just past the +full-scale anchor still saturates at the int16 max.
-    REQUIRE(gyroRadPerSecToInt16(40.0f) == 32767);
-    REQUIRE(gyroRadPerSecToInt16(-40.0f) == -32768);
 }
 
-// ── Accel: m/s² → int16, full scale ±4 g ────────────────────────────────────
+// ── Accel: m/s² → wire int16 ────────────────────────────────────────────────
 
-TEST_CASE("accelMps2ToInt16 maps +1 g to ~8192", "[motionconvert]") {
-    // 9.80665 m/s² == 1 g; with 32767 LSB per 4 g that is 32767/4 ≈ 8192.
-    REQUIRE(near16(accelMps2ToInt16(9.80665f), 8192));
+TEST_CASE("accelMps2ToInt16 maps +1 g to one quarter of full scale", "[motionconvert]") {
+    // +1 g = 9.80665 m/s². Wire scale is ±4 g ↦ ±32767, so +1 g ≈ 8192.
+    REQUIRE(accelMps2ToInt16(9.80665f) == 8192);
 }
 
-TEST_CASE("accelMps2ToInt16 maps +4 g to +full scale", "[motionconvert]") {
-    // 39.2266 m/s² == 4 g == the positive full-scale anchor.
-    REQUIRE(near16(accelMps2ToInt16(39.2266f), 32767));
+TEST_CASE("accelMps2ToInt16 maps +4 g to full positive scale", "[motionconvert]") {
+    // +4 g = 4 * 9.80665 = 39.2266 m/s² ↦ +32767.
+    REQUIRE(accelMps2ToInt16(39.2266f) == 32767);
 }
 
-TEST_CASE("accelMps2ToInt16 maps zero to zero exactly", "[motionconvert]") {
+TEST_CASE("accelMps2ToInt16 maps zero to zero", "[motionconvert]") {
     REQUIRE(accelMps2ToInt16(0.0f) == 0);
 }
 
 TEST_CASE("accelMps2ToInt16 clamps beyond +/-4 g", "[motionconvert]") {
+    // A hard knock past ±4 g pins to the int16 extremes rather than wrapping.
     REQUIRE(accelMps2ToInt16(100.0f) == 32767);
     REQUIRE(accelMps2ToInt16(-100.0f) == -32768);
-    // Just past the 4 g anchor saturates.
-    REQUIRE(accelMps2ToInt16(50.0f) == 32767);
-    REQUIRE(accelMps2ToInt16(-50.0f) == -32768);
 }
 
-TEST_CASE("accelMps2ToInt16 keeps sign symmetry around -1 g", "[motionconvert]") {
-    REQUIRE(near16(accelMps2ToInt16(-9.80665f), -8192));
-}
+// ── Touchpad: SDL 0..1 → wire int16 ─────────────────────────────────────────
 
-// ── Touchpad: 0..1 normalised coord → int16 spanning the pad ────────────────
-
-TEST_CASE("touchpadCoordToInt16 maps the 0..1 span to the full int16 range", "[motionconvert]") {
+TEST_CASE("touchpadCoordToInt16 maps the 0..1 SDL range across the int16 span", "[motionconvert]") {
     REQUIRE(touchpadCoordToInt16(0.0f) == -32768);
     REQUIRE(touchpadCoordToInt16(1.0f) == 32767);
-    // Mid-pad sits at the origin.
-    REQUIRE(near16(touchpadCoordToInt16(0.5f), 0));
+    // Midpoint: 0.5 * 65535 - 32768 = -0.5, and std::lround rounds half away
+    // from zero, so the centre of the pad lands on -1. The int16 range
+    // [-32768, 32767] has no exact midpoint at 0 — pin the real value rather
+    // than the intuitive-but-wrong 0.
+    REQUIRE(touchpadCoordToInt16(0.5f) == -1);
 }
 
-TEST_CASE("touchpadCoordToInt16 clamps out-of-range coordinates", "[motionconvert]") {
-    // SDL should always report 0..1, but a value outside that span must
-    // saturate at the pad edge rather than wrap.
-    REQUIRE(touchpadCoordToInt16(-0.5f) == -32768);
+TEST_CASE("touchpadCoordToInt16 clamps coordinates outside 0..1", "[motionconvert]") {
+    REQUIRE(touchpadCoordToInt16(-1.0f) == -32768);
     REQUIRE(touchpadCoordToInt16(2.0f) == 32767);
 }

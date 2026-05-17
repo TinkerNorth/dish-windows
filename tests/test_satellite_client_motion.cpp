@@ -4,10 +4,11 @@
 // Coverage for SatelliteClient::encodeMotionPayload / encodeBatteryPayload —
 // the pure encoders for MSG_MOTION (0x000A) and MSG_BATTERY (0x000B). The
 // wire layout these produce must match satellite/src/core/types.h::MotionReport
-// and BatteryReport byte-for-byte (the receiver decodes via memcpy onto the
-// host-LE struct). Same pattern as test_satellite_client_rumble.cpp — the
-// encoders are public + static so we can pin the byte order without driving
-// a live socket.
+// and BatteryReport byte-for-byte. The receiver decodes the motion payload
+// with decodeMotionReport() — explicit little-endian byte-shifts, NOT a
+// struct memcpy — so the wire is byte-order- and struct-layout-independent.
+// Same pattern as test_satellite_client_rumble.cpp — the encoders are
+// public + static so we can pin the byte order without driving a live socket.
 
 #include "Network/SatelliteClient.h"
 
@@ -114,4 +115,72 @@ TEST_CASE("MSG constants match the wire-protocol spec (types.h)", "[constants]")
     REQUIRE(SatelliteClient::kBatteryStatusCharging == 2);
     REQUIRE(SatelliteClient::kBatteryStatusFull == 3);
     REQUIRE(SatelliteClient::kBatteryStatusWired == 4);
+}
+
+// ---------------------------------------------------------------------------
+// CAP_MOTION — the per-controller capability bit advertised in
+// MSG_CONTROLLER_ADD only when the bound pad actually has an IMU. An Xbox pad
+// has no gyro/accelerometer and must NOT advertise it; the receiver still
+// accepts best-effort motion either way, but the bit drives the web UI's
+// motionCapable flag. Mirrors the withLightbarCapability tests.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("withMotionCapability sets bit 0x0004 iff the pad has an IMU", "[motion][caps]") {
+    // The static base word dish advertises today: analog triggers | rumble.
+    const std::uint16_t base = SatelliteClient::kCapAnalogTriggers | SatelliteClient::kCapRumble;
+    REQUIRE(base == 0x0003);
+
+    SECTION("controller has an IMU -> CAP_MOTION is OR-ed in") {
+        const std::uint16_t caps = SatelliteClient::withMotionCapability(base, true);
+        REQUIRE(caps == 0x0007);
+        REQUIRE((caps & SatelliteClient::kCapMotion) != 0);
+    }
+    SECTION("controller has no IMU -> word is unchanged") {
+        const std::uint16_t caps = SatelliteClient::withMotionCapability(base, false);
+        REQUIRE(caps == 0x0003);
+        REQUIRE((caps & SatelliteClient::kCapMotion) == 0);
+    }
+}
+
+TEST_CASE("withMotionCapability leaves the other capability bits intact", "[motion][caps]") {
+    // Whatever the base word is, CAP_MOTION must only ever add bit 0x0004 —
+    // never clear or change another bit.
+    for (std::uint16_t base : {std::uint16_t{0x0000}, std::uint16_t{0x0003}, std::uint16_t{0x0008},
+                               std::uint16_t{0xFFFB}}) {
+        const std::uint16_t with = SatelliteClient::withMotionCapability(base, true);
+        const std::uint16_t without = SatelliteClient::withMotionCapability(base, false);
+        // "without" is a pure identity.
+        REQUIRE(without == base);
+        // "with" differs from the base only in bit 0x0004.
+        REQUIRE((with & ~static_cast<std::uint16_t>(0x0004)) == base);
+        REQUIRE((with | static_cast<std::uint16_t>(0x0004)) == with);
+    }
+}
+
+TEST_CASE("withMotionCapability is idempotent when the bit is already set", "[motion][caps]") {
+    const std::uint16_t base = 0x0003 | SatelliteClient::kCapMotion;
+    REQUIRE(SatelliteClient::withMotionCapability(base, true) == base);
+    REQUIRE(SatelliteClient::withMotionCapability(base, false) == base);
+}
+
+TEST_CASE("withMotionCapability and withLightbarCapability compose independently",
+          "[motion][caps]") {
+    // registerController folds both bits; the two must be orthogonal so an
+    // IMU pad without an LED gets exactly CAP_MOTION and vice versa.
+    const std::uint16_t base = SatelliteClient::kCapAnalogTriggers | SatelliteClient::kCapRumble;
+    SECTION("IMU only") {
+        const std::uint16_t caps = SatelliteClient::withLightbarCapability(
+            SatelliteClient::withMotionCapability(base, true), false);
+        REQUIRE(caps == 0x0007); // 0x0003 | CAP_MOTION
+    }
+    SECTION("LED only") {
+        const std::uint16_t caps = SatelliteClient::withLightbarCapability(
+            SatelliteClient::withMotionCapability(base, false), true);
+        REQUIRE(caps == 0x000B); // 0x0003 | CAP_LIGHTBAR
+    }
+    SECTION("both (DualSense)") {
+        const std::uint16_t caps = SatelliteClient::withLightbarCapability(
+            SatelliteClient::withMotionCapability(base, true), true);
+        REQUIRE(caps == 0x000F); // 0x0003 | CAP_MOTION | CAP_LIGHTBAR
+    }
 }

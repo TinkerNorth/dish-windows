@@ -88,8 +88,10 @@ TEST_CASE("CAP_LIGHTBAR constant pins the wire value", "[lightbar][caps]") {
 }
 
 TEST_CASE("withLightbarCapability sets bit 0x0008 iff the pad has an LED", "[lightbar][caps]") {
-    // The static base word dish advertises today: analog triggers | rumble |
-    // motion == 0x0007.
+    // An example base word for the fold: analog triggers | rumble | motion ==
+    // 0x0007. (The real registerController base is per-device — CAP_MOTION
+    // and CAP_LIGHTBAR are both OR-ed in only for a pad with the hardware —
+    // but withLightbarCapability is a pure function tested over any base.)
     const std::uint16_t base = SatelliteClient::kCapAnalogTriggers | SatelliteClient::kCapRumble |
                                SatelliteClient::kCapMotion;
     REQUIRE(base == 0x0007);

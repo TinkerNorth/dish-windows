@@ -43,13 +43,20 @@ class SDLGamepadBridge : public QObject {
     void stop();
 
     // List of currently-attached devices in (deviceId, displayName) form.
-    // `hasMotion` mirrors membership of motionCapable_ — true iff SDL reported
-    // a gyro and/or accelerometer for the device. The UI uses it to show a
-    // motion-capability indicator per controller.
+    // `motionCapable` mirrors membership of motionCapable_ — true iff SDL
+    // reported a gyro and/or accelerometer for the device. The UI uses it to
+    // show a motion-capability indicator per controller.
     //
     // `hasLightbar` is true iff SDL_GameControllerHasLED reported an
     // addressable RGB LED for the device (DualSense / DualShock 4). It drives
     // the SlotCard lightbar chip and the CAP_LIGHTBAR bit in MSG_CONTROLLER_ADD.
+    //
+    // `controllerType` is the satellite virtual-device kind for this pad:
+    // CONTROLLER_TYPE_PLAYSTATION (1) for a PS3/PS4/PS5 pad as classified by
+    // SDL_GameControllerGetType, CONTROLLER_TYPE_XBOX (0) for everything else.
+    // It feeds the MSG_CONTROLLER_TYPE (0x0008) hint so a DualSense registers
+    // as a virtual DS4 (touchpad / IMU / lightbar surface) instead of an Xbox
+    // 360 pad. Values mirror satellite/src/core/types.h CONTROLLER_TYPE_*.
     //
     // `batteryLevel` / `batteryStatus` carry the most recent battery sample
     // for the device — the same (level, status) pair pollBatteries() forwards
@@ -60,10 +67,11 @@ class SDLGamepadBridge : public QObject {
     struct Device {
         QString id;
         QString name;
-        bool hasMotion = false;
+        bool motionCapable = false;
         bool hasLightbar = false;
         std::uint8_t batteryLevel = 0xFF;
         std::uint8_t batteryStatus = 0;
+        std::uint8_t controllerType = 0; // CONTROLLER_TYPE_XBOX
     };
     QList<Device> devices() const;
 
@@ -128,6 +136,14 @@ class SDLGamepadBridge : public QObject {
     // advertise CAP_LIGHTBAR. Same lifecycle / locking as motionCapable_.
     std::unordered_set<int> lightbarCapable_;
 
+    // Per-device satellite controller type (CONTROLLER_TYPE_XBOX /
+    // CONTROLLER_TYPE_PLAYSTATION), classified once at attach from
+    // SDL_GameControllerGetType. Surfaced through devices() as
+    // Device::controllerType so the connection layer can send the right
+    // MSG_CONTROLLER_TYPE hint. Same lifecycle / locking as motionCapable_;
+    // a device absent from the map defaults to CONTROLLER_TYPE_XBOX.
+    std::unordered_map<int, std::uint8_t> controllerType_;
+
     // Latest accelerometer reading per device (m/s²). Updated when an accel
     // SDL_CONTROLLERSENSORUPDATE arrives; merged with the next gyro update
     // into a single MotionSample. Input-thread-only.
@@ -155,8 +171,15 @@ class SDLGamepadBridge : public QObject {
     // events; we accumulate them here and emit the full two-finger snapshot
     // on every change (MSG_TOUCHPAD carries both fingers at once).
     // Input-thread-only. `x`/`y` are already scaled to the wire int16.
+    //
+    // `id` is the protocol's monotonic per-finger tracking id: it is bumped
+    // once on every fresh contact (the SDL_CONTROLLERTOUCHPADDOWN false→true
+    // edge) so the receiver can correlate a finger across frames even when the
+    // other finger lifts. It wraps freely (uint8). `id` is per finger-slot;
+    // the two slots advance independently.
     struct TouchFinger {
         bool active = false;
+        std::uint8_t id = 0;
         std::int16_t x = 0;
         std::int16_t y = 0;
     };

@@ -7,6 +7,7 @@
 #include <QMainWindow>
 
 class QLabel;
+class QProgressBar;
 class QPushButton;
 class QTimer;
 class QVBoxLayout;
@@ -44,6 +45,10 @@ class MainWindow : public QMainWindow {
     QLabel* summaryText_;
     QPushButton* settingsButton_;
     QPushButton* manageButton_;
+    // Indeterminate bar shown while a controller registration is in flight
+    // (state().busy). Replaces the old ~2 s synchronous UI freeze with a
+    // visible "working" cue.
+    QProgressBar* dashboardSpinner_;
     QVBoxLayout* slotsLayout_;
     QLabel* slotsEmpty_;
     QLabel* telemetryLeft_;
