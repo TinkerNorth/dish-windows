@@ -88,8 +88,7 @@ TEST_CASE("accelMps2ToInt16 keeps sign symmetry around -1 g", "[motionconvert]")
 
 // ── Touchpad: 0..1 normalised coord → int16 spanning the pad ────────────────
 
-TEST_CASE("touchpadCoordToInt16 maps the 0..1 span to the full int16 range",
-          "[motionconvert]") {
+TEST_CASE("touchpadCoordToInt16 maps the 0..1 span to the full int16 range", "[motionconvert]") {
     REQUIRE(touchpadCoordToInt16(0.0f) == -32768);
     REQUIRE(touchpadCoordToInt16(1.0f) == 32767);
     // Mid-pad sits at the origin.
