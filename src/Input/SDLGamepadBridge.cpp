@@ -347,9 +347,7 @@ void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
         // ship a spurious "zero gravity" triple on the wire. Wait until at
         // least one SDL_SENSOR_ACCEL update has arrived for this device.
         auto accelIt = lastAccel_.find(iid);
-        if (accelIt == lastAccel_.end()) {
-            return;
-        }
+        if (accelIt == lastAccel_.end()) { return; }
         accel = accelIt->second;
     }
 
@@ -391,9 +389,7 @@ void SDLGamepadBridge::handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev
                 // active finger keeps the current id. The counter wraps
                 // freely — the protocol only needs the id to *change* on a
                 // new contact, not to be globally unique.
-                if (ev.type == SDL_CONTROLLERTOUCHPADDOWN && !f.active) {
-                    ++f.id;
-                }
+                if (ev.type == SDL_CONTROLLERTOUCHPADDOWN && !f.active) { ++f.id; }
                 f.active = true;
                 f.x = touchpadCoordToInt16(ev.x);
                 f.y = touchpadCoordToInt16(ev.y);

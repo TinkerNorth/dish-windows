@@ -508,8 +508,8 @@ TEST_CASE("publishTouchpad forwards every sample, including unchanged ones", "[t
 TEST_CASE("publishTouchpad forwards each device's samples independently", "[touchpad]") {
     GamepadInputProcessor p;
     std::unordered_map<std::string, int> byId;
-    p.setTouchpadSender([&](const std::string& id,
-                            const GamepadInputProcessor::TouchpadSample&) { ++byId[id]; });
+    p.setTouchpadSender(
+        [&](const std::string& id, const GamepadInputProcessor::TouchpadSample&) { ++byId[id]; });
 
     GamepadInputProcessor::TouchpadSample sample{};
     p.publishTouchpad("a", sample);
