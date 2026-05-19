@@ -17,8 +17,12 @@
 namespace dish::models {
 
 inline constexpr int kDefaultUdpPort = 9876;
-inline constexpr int kDefaultHttpPort = 9877;
-inline constexpr int kDefaultPairPort = 9878;
+// The satellite's client-facing API is HTTPS (TLS) on a single port. Both the
+// connection API and pairing now share it; discovery advertises 9443 under the
+// `http` and `pair` TXT keys (and the legacy beacon's httpPort/pairPort JSON
+// fields), so both constants resolve to the same value.
+inline constexpr int kDefaultHttpPort = 9443;
+inline constexpr int kDefaultPairPort = 9443;
 
 // Which discovery path surfaced a satellite. mDNS / Bonjour is the modern
 // path; Broadcast is the legacy UDP beacon; Both means it answered on each.

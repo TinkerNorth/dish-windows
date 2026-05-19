@@ -80,6 +80,12 @@ endif()
 # Dependencies
 # --------------------------------------------------------------------------
 find_package(Threads REQUIRED)
+# Qt6::Network carries the TLS/SSL API (QSslConfiguration, QSslSocket) the
+# HTTP and pairing clients use to reach the satellite's HTTPS server. No extra
+# package is needed: on Windows Qt 6.2+ ships the Schannel TLS backend by
+# default (no OpenSSL DLLs to deploy). A build configured against a Qt with no
+# TLS backend would fail at runtime with "TLS initialization failed"; the
+# standard Qt for Windows binaries are fine.
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network)
 
 # libsodium and SDL2 come from vcpkg on Windows (see vcpkg.json). The

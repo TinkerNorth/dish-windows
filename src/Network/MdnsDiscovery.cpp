@@ -143,9 +143,12 @@ std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std
 
     std::string ip;
     std::string instance;
+    // Protocol-default fallbacks for a response that omits the TXT keys.
+    // The satellite's client API is now HTTPS on a single port (9443),
+    // advertised under both the `pair` and `http` TXT keys.
     int udpPort = 9876;
-    int pairPort = 9878;
-    int httpPort = 9877;
+    int pairPort = 9443;
+    int httpPort = 9443;
     bool haveSrv = false;
     bool haveTxt = false;
 
