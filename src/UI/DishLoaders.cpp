@@ -47,11 +47,10 @@ DishSpinnerWidget::DishSpinnerWidget(int size, QWidget* parent)
     anim_->setDuration(1200);
     anim_->setLoopCount(-1);
     anim_->setEasingCurve(QEasingCurve::Linear);
-    QObject::connect(anim_, &QVariantAnimation::valueChanged, this,
-                     [this](const QVariant& v) {
-                         angle_ = v.toReal();
-                         update();
-                     });
+    QObject::connect(anim_, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
+        angle_ = v.toReal();
+        update();
+    });
 }
 
 DishSpinnerWidget::~DishSpinnerWidget() = default;
@@ -60,9 +59,7 @@ void DishSpinnerWidget::start() {
     if (anim_->state() != QAbstractAnimation::Running) { anim_->start(); }
 }
 
-void DishSpinnerWidget::stop() {
-    anim_->stop();
-}
+void DishSpinnerWidget::stop() { anim_->stop(); }
 
 void DishSpinnerWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
@@ -131,9 +128,7 @@ void DishDotsWidget::start() {
     }
 }
 
-void DishDotsWidget::stop() {
-    tick_->stop();
-}
+void DishDotsWidget::stop() { tick_->stop(); }
 
 void DishDotsWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
@@ -169,8 +164,8 @@ void DishDotsWidget::paintEvent(QPaintEvent*) {
         // SMIL `values="A;B;A"` is linear interpolation -> triangle wave.
         // 0 at the cycle edges, 1 at the midpoint.
         const qreal tri = 1.0 - std::abs(phase - 0.5) * 2.0;
-        const qreal opacity = 0.25 + 0.75 * tri;        // 0.25 -> 1.0
-        const qreal r = scale * (4.0 + 2.0 * tri);      // 4 -> 6 design units
+        const qreal opacity = 0.25 + 0.75 * tri;   // 0.25 -> 1.0
+        const qreal r = scale * (4.0 + 2.0 * tri); // 4 -> 6 design units
         QColor c = primary;
         c.setAlphaF(opacity);
         p.setPen(Qt::NoPen);
@@ -194,11 +189,10 @@ DishBarWidget::DishBarWidget(int width, QWidget* parent)
     anim_->setDuration(1400);
     anim_->setLoopCount(-1);
     anim_->setEasingCurve(QEasingCurve::Linear);
-    QObject::connect(anim_, &QVariantAnimation::valueChanged, this,
-                     [this](const QVariant& v) {
-                         phase_ = v.toReal();
-                         update();
-                     });
+    QObject::connect(anim_, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
+        phase_ = v.toReal();
+        update();
+    });
 }
 
 DishBarWidget::~DishBarWidget() = default;
@@ -207,9 +201,7 @@ void DishBarWidget::start() {
     if (anim_->state() != QAbstractAnimation::Running) { anim_->start(); }
 }
 
-void DishBarWidget::stop() {
-    anim_->stop();
-}
+void DishBarWidget::stop() { anim_->stop(); }
 
 void DishBarWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);

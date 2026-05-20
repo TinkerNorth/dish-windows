@@ -90,7 +90,9 @@ void PairingDialog::buildUi(const models::DiscoveredServer& server, AppModel* mo
     });
 }
 
-QString PairingDialog::pin() const { return pinEdit_ != nullptr ? pinEdit_->text().trimmed() : QString(); }
+QString PairingDialog::pin() const {
+    return pinEdit_ != nullptr ? pinEdit_->text().trimmed() : QString();
+}
 
 void PairingDialog::onPairClicked(const models::DiscoveredServer& server, AppModel* model) {
     submitted_ = true;
