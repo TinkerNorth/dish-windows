@@ -90,7 +90,7 @@ WifiConnection* WifiConnectionManager::ensureConnection(const models::Discovered
 
 void WifiConnectionManager::connectTo(const models::DiscoveredServer& server) {
     auto* conn = ensureConnection(server);
-    if (conn->state() == WifiState::Connected || conn->state() == WifiState::Connecting) {
+    if (conn->state() == SessionState::Live || conn->state() == SessionState::Linking) {
         conn->updateServer(server);
         return;
     }
@@ -124,6 +124,15 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
     }
     const QString did = deviceId_;
     const QString dname = deviceName_;
+    // Mark the connection as "pair in flight" before the future starts so
+    // the UI's spinner appears the moment the user clicks Connect / Pair.
+    // The set is cleared in every terminal branch below — including the
+    // openSession path, which only finishes the in-flight signal once the
+    // session is actually live (or has hard-failed). Mirrors dish-mac's
+    // `pairingInFlight.insert + defer remove` pattern in
+    // WifiConnectionManager.swift, but split across the async hops.
+    pairingInFlight_.insert(conn->id());
+    emit pairingInFlightChanged();
     auto* watcher = new QFutureWatcher<models::PairResponse>(this);
     QObject::connect(
         watcher, &QFutureWatcherBase::finished, this, [this, watcher, conn, server, pin] {
@@ -135,9 +144,15 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
                     using T = std::decay_t<decltype(arm)>;
                     if constexpr (std::is_same_v<T, PairingClient::Success>) {
                         store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                        // openSession is responsible for clearing
+                        // pairingInFlight_ at its own terminal points so the
+                        // spinner stays visible right through the HTTP
+                        // connect handshake.
                         openSession(conn, server);
                     } else if constexpr (std::is_same_v<T, PairingClient::AuthRequired>) {
                         conn->markDisconnected();
+                        pairingInFlight_.remove(conn->id());
+                        emit pairingInFlightChanged();
                         if (pin.isEmpty()) {
                             emit connectionEvent(pairingRequired(server));
                         } else {
@@ -146,6 +161,8 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
                         }
                     } else if constexpr (std::is_same_v<T, PairingClient::Unreachable>) {
                         conn->markDisconnected();
+                        pairingInFlight_.remove(conn->id());
+                        emit pairingInFlightChanged();
                         emit connectionEvent(makeError(
                             QStringLiteral("Server unreachable — has it moved networks? (%1)")
                                 .arg(arm.message)));
@@ -161,15 +178,23 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
 void WifiConnectionManager::openSession(WifiConnection* conn,
                                         const models::DiscoveredServer& server) {
     const auto id = WifiConnection::idFor(server);
+    // Helper: every terminal branch of openSession must clear the in-flight
+    // signal so the UI's spinner doesn't stick. Captured in the
+    // http_->connectAsync callback below.
+    auto clearInFlight = [this](const QString& cid) {
+        if (pairingInFlight_.remove(cid)) { emit pairingInFlightChanged(); }
+    };
     const auto keyHex = store_->sharedKey(id);
     if (!keyHex.has_value() || keyHex->size() != 64) {
         conn->markDisconnected();
+        clearInFlight(conn->id());
         emit connectionEvent(makeError(QStringLiteral("No shared key — re-pair needed")));
         return;
     }
     const auto keyBytes = util::fromHex(keyHex->toStdString());
     if (!keyBytes || keyBytes->size() != 32) {
         conn->markDisconnected();
+        clearInFlight(conn->id());
         emit connectionEvent(makeError(QStringLiteral("Bad shared key — re-pair needed")));
         return;
     }
@@ -178,9 +203,10 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
 
     http_->connectAsync(
         server.ip, server.httpPort, deviceId_,
-        [this, conn, server, key](const models::ConnectResponse& resp) {
+        [this, conn, server, key, clearInFlight](const models::ConnectResponse& resp) {
             if (!resp.connectionId.has_value() || !resp.token.has_value()) {
                 conn->markDisconnected();
+                clearInFlight(conn->id());
                 emit connectionEvent(
                     makeError(QStringLiteral("Error: %1")
                                   .arg(resp.error.value_or(QStringLiteral("connection failed")))));
@@ -189,6 +215,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
             const auto tok = util::fromHex(resp.token->toStdString());
             if (!tok || tok->size() != 4) {
                 conn->markDisconnected();
+                clearInFlight(conn->id());
                 emit connectionEvent(makeError(QStringLiteral("Bad token from server")));
                 return;
             }
@@ -198,6 +225,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
             auto client = std::make_shared<SatelliteClient>();
             if (!client->openSocket(server.ip.toStdString(), server.udpPort)) {
                 conn->markDisconnected();
+                clearInFlight(conn->id());
                 return;
             }
             client->setConnectionParams(token, key);
@@ -205,6 +233,8 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
             const QString cid = *resp.connectionId;
             const QString connId = conn->id();
             conn->markConnected(client, cid, [this, connId] { disconnect(connId); });
+            // Session is live — pairing flow is fully resolved.
+            clearInFlight(connId);
         });
 }
 
@@ -232,7 +262,7 @@ void WifiConnectionManager::forget(const QString& id) {
 void WifiConnectionManager::autoReconnectAll() {
     for (const auto& r : store_->remembered()) {
         auto* existing = connections_.value(r.id, nullptr);
-        if (existing == nullptr || existing->state() != WifiState::Connected) {
+        if (existing == nullptr || existing->state() != SessionState::Live) {
             connectTo(r.toDiscovered());
         }
     }

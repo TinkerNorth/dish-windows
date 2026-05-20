@@ -10,6 +10,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 namespace dish::net {
@@ -36,6 +37,14 @@ class WifiConnectionManager : public QObject {
     const QHash<QString, WifiConnection*>& connections() const { return connections_; }
     WifiConnection* get(const QString& id) const { return connections_.value(id, nullptr); }
 
+    // Set of connection ids whose POST /api/pair is currently in flight.
+    // Mirrors dish-mac's `pairingInFlight`. Used by the UI to gate the
+    // Connect / Pair buttons into a spinner-plus-disabled state for the
+    // duration of the round-trip so the user has continuous visual feedback
+    // through `pair -> openSession -> markConnected` rather than a brief
+    // un-disabled gap. Read on the Qt main thread only.
+    bool isPairingInFlight(const QString& id) const { return pairingInFlight_.contains(id); }
+
     void startDiscovery();
     void connectTo(const models::DiscoveredServer& server);
     void pairWithPin(const models::DiscoveredServer& server, const QString& pin);
@@ -49,6 +58,11 @@ class WifiConnectionManager : public QObject {
     void poolChanged();
     void discoveredChanged();
     void scanningChanged();
+    // Emitted when a connection id is inserted into or removed from
+    // `pairingInFlight_`. The dialog listens for this to refresh the
+    // in-flight spinner inside the Connect / Pair button. Mirrors dish-mac's
+    // `@Published pairingInFlight` change-notification semantics.
+    void pairingInFlightChanged();
     // Named `connectionEvent` (not `event`) so the signal does not shadow
     // QObject::event(QEvent*), which clang flags with
     // -Wclang-diagnostic-overloaded-virtual.
@@ -72,6 +86,10 @@ class WifiConnectionManager : public QObject {
     QHash<QString, WifiConnection*> connections_;
     QList<models::DiscoveredServer> discovered_;
     bool scanning_ = false;
+    // Connection ids with an in-flight POST /api/pair. Inserted as soon as
+    // the future starts, removed in every terminal branch (success, auth
+    // error, unreachable). UI gate: spinner inside the button + disable.
+    QSet<QString> pairingInFlight_;
 };
 
 } // namespace dish::net

@@ -68,6 +68,12 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     textLayout->addLayout(chipRow);
 
     bindButton_ = new QPushButton(this);
+    // 0.4 disabled-opacity rule per the design spec (`ds-components.jsx`
+    // Button: opacity 0.4 when disabled). The bind button is disabled when
+    // there are no available connections; the dimmed control reads as
+    // "nothing to do here" without an extra "no connections" empty-state
+    // label.
+    applyDisabledOpacityEffect(bindButton_);
     QObject::connect(bindButton_, &QPushButton::clicked, this, &SlotCard::onBindClicked);
 
     layout->addWidget(dot_, 0, Qt::AlignVCenter);
@@ -164,7 +170,11 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
 
     if (slot.boundStatus.has_value()) {
         boundLabel_->setText(QStringLiteral("Bound to %1").arg(slot.boundStatus->label));
-        const auto color = slot.boundStatus->live == models::ConnectionLive::Connected
+        // Green dot iff the session is actually live (LinkState::Connected).
+        // Every other state — Connecting / Ready / Saved / Found / Stale /
+        // Unstable — gets the warning amber so the dot's colour distinguishes
+        // "input is reaching the host" from "not yet / no longer".
+        const auto color = slot.boundStatus->live == models::LinkState::Connected
                                ? Theme::success
                                : Theme::warning;
         dot_->setStyleSheet(dotQss(color));

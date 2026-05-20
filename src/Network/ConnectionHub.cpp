@@ -12,6 +12,11 @@ namespace dish::net {
 ConnectionHub::ConnectionHub(WifiConnectionManager* wifi, ConnectionStore* store, QObject* parent)
     : QObject(parent), wifi_(wifi), store_(store) {
     QObject::connect(wifi_, &WifiConnectionManager::poolChanged, this, &ConnectionHub::rebuild);
+    // Discovery hits split an Idle paired entry into Ready (visible on the
+    // network) vs Saved (not in the current scan), so a fresh scan must
+    // re-derive every row's LinkState.
+    QObject::connect(wifi_, &WifiConnectionManager::discoveredChanged, this,
+                     &ConnectionHub::rebuild);
     // A controller-add the server rejected leaves a phantom local binding —
     // the slot card would claim it is bound while the satellite has no
     // controller for it. Roll the binding back so the UI reflects reality.
@@ -23,6 +28,12 @@ ConnectionHub::ConnectionHub(WifiConnectionManager* wifi, ConnectionStore* store
 void ConnectionHub::rebuild() {
     QHash<QString, models::RememberedWifi> remembered;
     for (const auto& r : store_->remembered()) { remembered.insert(r.id, r); }
+
+    // Set of currently-discovered satellite ids. Used to split an Idle paired
+    // entry into LinkState::Ready (we see it on the network) vs
+    // LinkState::Saved (we don't). Mirrors dish-android's discoveredIdSet.
+    QSet<QString> discoveredIds;
+    for (const auto& s : wifi_->discoveredServers()) { discoveredIds.insert(s.id()); }
 
     QSet<QString> ids;
     for (auto it = wifi_->connections().begin(); it != wifi_->connections().end(); ++it) {
@@ -37,19 +48,49 @@ void ConnectionHub::rebuild() {
         const models::DiscoveredServer server =
             (conn != nullptr) ? conn->server() : remembered.value(id).toDiscovered();
         if (!server.isValid()) { continue; }
-        models::ConnectionLive live = models::ConnectionLive::Idle;
+        // Derive LinkState from the wire-level SessionState plus whether this
+        // id is currently in the discovery set. Mirrors dish-android's
+        // ConnectionHub.buildSatelliteSummary.
+        //
+        // - SessionState::Live      -> LinkState::Connected
+        // - SessionState::Linking   -> LinkState::Connecting
+        // - SessionState::Faltering -> LinkState::Unstable (not yet reachable --
+        //   native exposes only binary alive)
+        // - SessionState::Idle / null:
+        //     in discoveredIds      -> LinkState::Ready
+        //     not in discoveredIds  -> LinkState::Saved
+        //
+        // TODO(LinkState::Stale): a server-side forget should land us in
+        // LinkState::Stale, but detecting that requires the server to return a
+        // `PAIRING_UNKNOWN` error so we can distinguish "peer forgot us" from
+        // a transient unreachability. Until that protocol bit lands, a
+        // forgotten device falls through to Saved/Ready and the user only
+        // sees connect failures.
+        models::LinkState live;
         if (conn != nullptr) {
             switch (conn->state()) {
-            case WifiState::Connected:
-                live = models::ConnectionLive::Connected;
+            case SessionState::Live:
+                live = models::LinkState::Connected;
                 break;
-            case WifiState::Connecting:
-                live = models::ConnectionLive::Connecting;
+            case SessionState::Linking:
+                live = models::LinkState::Connecting;
                 break;
-            case WifiState::Idle:
-                live = models::ConnectionLive::Idle;
+            case SessionState::Faltering:
+                // TODO(LinkState::Unstable): native alive-poll currently only
+                // exposes a binary "is alive" and flips Live -> Idle directly
+                // when misses hit the death threshold, so this arm is defined
+                // but never taken. Once the miss count is exposed, the
+                // alive-poll should bump SessionState to Faltering instead.
+                live = models::LinkState::Unstable;
+                break;
+            case SessionState::Idle:
+                live = discoveredIds.contains(id) ? models::LinkState::Ready
+                                                  : models::LinkState::Saved;
                 break;
             }
+        } else {
+            live = discoveredIds.contains(id) ? models::LinkState::Ready
+                                              : models::LinkState::Saved;
         }
         std::optional<QString> bound;
         for (auto it = bindings_.begin(); it != bindings_.end(); ++it) {

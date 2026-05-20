@@ -272,7 +272,7 @@ void AppModel::rebuild() {
     // 0↔positive transitions inside ScreenWakeController set / clear the
     // SetThreadExecutionState flag; intermediate same-count emissions are
     // no-ops so a noisy hub feed doesn't thrash the kernel.
-    QHash<QString, models::ConnectionLive> connectionStates;
+    QHash<QString, models::LinkState> connectionStates;
     for (const auto& summary : state_.connections) {
         connectionStates.insert(summary.id, summary.live);
     }

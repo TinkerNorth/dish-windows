@@ -15,6 +15,8 @@ class AppModel;
 
 namespace dish::ui {
 
+class DishLoaderButton;
+
 // "Manage connections" sheet — discovery, connect, forget. Mirrors the Mac
 // ConnectionsView.
 class ConnectionsDialog : public QDialog {
@@ -27,11 +29,23 @@ class ConnectionsDialog : public QDialog {
     void onScanClicked();
     void onConnectClicked();
     void onForgetClicked();
+    // Refresh the in-flight state of the Scan + Connect buttons. Pulled out
+    // of the constructor so any of `scanningChanged`,
+    // `pairingInFlightChanged`, list-selection change, or `discoveredChanged`
+    // can drive a single update path. Determining "is the current Connect
+    // target pairing in-flight" lives here.
+    void refreshActionState();
 
     AppModel* model_;
     QListWidget* discoveredList_;
     QListWidget* rememberedList_;
-    QPushButton* scanButton_;
+    // Scan + Connect both gain an in-flight visual (spinner + label, disabled
+    // until the network round-trip completes). They are loader-aware buttons
+    // rather than plain QPushButtons so the canonical Dish "0.4 opacity
+    // disabled + inline spinner" pattern applies. Forget is plain (its action
+    // is local and synchronous).
+    DishLoaderButton* scanButton_;
+    DishLoaderButton* connectButton_;
     QLabel* statusLabel_;
 };
 

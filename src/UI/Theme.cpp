@@ -3,7 +3,11 @@
 
 #include "Theme.h"
 
+#include <QEvent>
+#include <QGraphicsOpacityEffect>
+#include <QObject>
 #include <QPalette>
+#include <QWidget>
 
 namespace dish::ui {
 
@@ -98,6 +102,49 @@ QString capabilityChipQss(bool present) {
                           "border: 1px solid %1; border-radius: 5px; "
                           "padding: 2px 7px; font-size: 10px; font-weight: 500;")
         .arg(hex(Theme::muted));
+}
+
+namespace {
+
+// Event filter that flips a QGraphicsOpacityEffect between 1.0 and 0.4
+// whenever the watched widget's enabled state changes. Living as a child of
+// the watched widget guarantees lifetime parity: deleting the widget deletes
+// the filter, which removes the only reference to the effect. Mirrors
+// dish-mac's DishOutlinedButtonStyle which animates opacity 1.0 <-> 0.4
+// on isEnabled — same canonical "control is not tappable right now" cue
+// at the same opacity value.
+class DisabledOpacityFilter : public QObject {
+  public:
+    DisabledOpacityFilter(QWidget* target, QGraphicsOpacityEffect* effect)
+        : QObject(target), effect_(effect) {
+        // Apply the initial state so a widget that was constructed disabled
+        // is immediately dimmed without waiting for a state-change event.
+        effect_->setOpacity(target->isEnabled() ? 1.0 : 0.4);
+    }
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::EnabledChange) {
+            auto* w = qobject_cast<QWidget*>(watched);
+            if (w != nullptr) { effect_->setOpacity(w->isEnabled() ? 1.0 : 0.4); }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    QGraphicsOpacityEffect* effect_;
+};
+
+} // namespace
+
+void applyDisabledOpacityEffect(QWidget* widget) {
+    if (widget == nullptr) { return; }
+    // QGraphicsOpacityEffect parented to the widget — Qt takes ownership and
+    // disposes of it when the widget is destroyed. Reusable across paint
+    // styles (border / hover / pressed) because it composites the whole
+    // control as one rendered image at the requested alpha.
+    auto* effect = new QGraphicsOpacityEffect(widget);
+    effect->setOpacity(widget->isEnabled() ? 1.0 : 0.4);
+    widget->setGraphicsEffect(effect);
+    widget->installEventFilter(new DisabledOpacityFilter(widget, effect));
 }
 
 QString batteryChipQss(bool lowBattery) {

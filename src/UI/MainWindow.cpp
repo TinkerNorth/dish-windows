@@ -140,7 +140,7 @@ void MainWindow::rebuildHeader() {
     int live = 0;
     QString firstLabel;
     for (const auto& c : conns) {
-        if (c.live == models::ConnectionLive::Connected) {
+        if (c.live == models::LinkState::Connected) {
             ++live;
             if (firstLabel.isEmpty()) { firstLabel = c.label; }
         }
@@ -154,7 +154,7 @@ void MainWindow::rebuildHeader() {
     } else if (live == 1) {
         status = firstLabel;
     } else {
-        status = QStringLiteral("%1 active connections").arg(live);
+        status = QStringLiteral("%1 online").arg(live);
     }
     statusText_->setText(status);
     statusDot_->setStyleSheet(dotQss(live > 0 ? Theme::success : Theme::muted));
@@ -167,7 +167,7 @@ void MainWindow::rebuildHeader() {
     } else if (live == 0) {
         summary = QStringLiteral("%1 remembered").arg(total);
     } else {
-        summary = QStringLiteral("%1 of %2 connected").arg(live).arg(total);
+        summary = QStringLiteral("%1 of %2 online").arg(live).arg(total);
     }
     summaryText_->setText(summary);
 }
@@ -208,10 +208,14 @@ void MainWindow::rebuildSlotList() {
 void MainWindow::showPairingPrompt() {
     auto target = model_->state().pairingTarget;
     if (!target.has_value()) { return; }
-    PairingDialog dlg(*target, this);
+    // Async mode: the dialog drives pairWithPin itself so the Pair button
+    // can show the in-flight spinner + disabled treatment per the design
+    // spec. clearPairingTarget() drops the one-shot signal before the dialog
+    // opens so we don't re-enter from the upcoming stateChanged tick.
     const auto server = *target;
     model_->clearPairingTarget();
-    if (dlg.exec() == QDialog::Accepted) { model_->wifi()->pairWithPin(server, dlg.pin()); }
+    PairingDialog dlg(server, model_, this);
+    dlg.exec();
 }
 
 void MainWindow::onError(const QString& msg) {
