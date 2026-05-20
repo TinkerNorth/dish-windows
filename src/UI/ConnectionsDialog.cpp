@@ -4,6 +4,7 @@
 #include "ConnectionsDialog.h"
 
 #include "AppModel.h"
+#include "BrandIcon.h"
 #include "DishLoaders.h"
 #include "Theme.h"
 
@@ -24,9 +25,20 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
     layout->setContentsMargins(20, 20, 20, 20);
     layout->setSpacing(14);
 
-    auto* discoveredHeader = new QLabel(QStringLiteral("FOUND"), this);
-    discoveredHeader->setStyleSheet(sectionHeaderQss());
-    layout->addWidget(discoveredHeader);
+    // Section header: brand satellite glyph + "FOUND" label. Same icon
+    // family appears on the dish-linux ConnectionsPage, the dish-mac
+    // ConnectionsView SectionHeader, and the satellite/web dashboard.
+    {
+        auto* hdrRow = new QHBoxLayout;
+        hdrRow->setSpacing(6);
+        auto* glyph = new QLabel(this);
+        setBrandIcon(glyph, BrandIconKind::Satellite, models::LinkState::Saved, 18);
+        auto* discoveredHeader = new QLabel(QStringLiteral("FOUND"), this);
+        discoveredHeader->setStyleSheet(sectionHeaderQss());
+        hdrRow->addWidget(glyph, 0, Qt::AlignVCenter);
+        hdrRow->addWidget(discoveredHeader, 1, Qt::AlignVCenter);
+        layout->addLayout(hdrRow);
+    }
 
     discoveredList_ = new QListWidget(this);
     layout->addWidget(discoveredList_, 1);
@@ -42,9 +54,19 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
     row->addWidget(connectButton_);
     layout->addLayout(row);
 
-    auto* rememberedHeader = new QLabel(QStringLiteral("REMEMBERED"), this);
-    rememberedHeader->setStyleSheet(sectionHeaderQss());
-    layout->addWidget(rememberedHeader);
+    {
+        auto* hdrRow = new QHBoxLayout;
+        hdrRow->setSpacing(6);
+        auto* glyph = new QLabel(this);
+        // REMEMBERED is a list of satellite servers — same brand family as
+        // FOUND just above so the two halves of the dialog read consistently.
+        setBrandIcon(glyph, BrandIconKind::Satellite, models::LinkState::Saved, 18);
+        auto* rememberedHeader = new QLabel(QStringLiteral("REMEMBERED"), this);
+        rememberedHeader->setStyleSheet(sectionHeaderQss());
+        hdrRow->addWidget(glyph, 0, Qt::AlignVCenter);
+        hdrRow->addWidget(rememberedHeader, 1, Qt::AlignVCenter);
+        layout->addLayout(hdrRow);
+    }
 
     rememberedList_ = new QListWidget(this);
     layout->addWidget(rememberedList_, 1);

@@ -31,6 +31,12 @@ class SlotCard : public QFrame {
 
     QLabel* nameLabel_;
     QLabel* boundLabel_;
+    // v6 brand satellite glyph from `:/brand/satellite[-state].svg` —
+    // each slot binds to a satellite server, so the silhouette mirrors
+    // the ConnectionsDialog row this slot routes to. State tracks the
+    // bound connection's LinkState via setBrandIcon() so the silhouette
+    // and the colour dot reinforce the same signal.
+    QLabel* glyph_;
     QLabel* dot_;
     QPushButton* bindButton_;
     // Capability chip: motion (gyro/accelerometer) availability for this pad.

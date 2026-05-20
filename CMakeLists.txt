@@ -86,7 +86,7 @@ find_package(Threads REQUIRED)
 # default (no OpenSSL DLLs to deploy). A build configured against a Qt with no
 # TLS backend would fail at runtime with "TLS initialization failed"; the
 # standard Qt for Windows binaries are fine.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
 
 # libsodium and SDL2 come from vcpkg on Windows (see vcpkg.json). The
 # `unofficial-` prefix on sodium is vcpkg's "no upstream CMake config"
@@ -167,6 +167,8 @@ set(DISH_UI_SOURCES
     src/UI/DishLoaders.cpp
     src/UI/SlotCard.h
     src/UI/SlotCard.cpp
+    src/UI/BrandIcon.h
+    src/UI/BrandIcon.cpp
     src/UI/PairingDialog.h
     src/UI/PairingDialog.cpp
     src/UI/ConnectionsDialog.h
@@ -187,7 +189,7 @@ set(DISH_UI_SOURCES
 
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
-target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui dish_warnings dish_strict)
+target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui Qt6::Svg dish_warnings dish_strict)
 
 # WIN32 above creates a windowed (non-console) subsystem binary. Qt provides
 # a small Win32 entry-point shim (`qtmain` / WinMain via Qt6::EntryPoint)

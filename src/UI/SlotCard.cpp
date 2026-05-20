@@ -3,6 +3,7 @@
 
 #include "SlotCard.h"
 
+#include "BrandIcon.h"
 #include "Theme.h"
 
 #include <QHBoxLayout>
@@ -35,6 +36,15 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(14, 12, 14, 12);
     layout->setSpacing(12);
+
+    // v6 brand satellite glyph painted from the QRC `:/brand/...svg`
+    // family. Each slot binds to a satellite server, so the silhouette
+    // mirrors the ConnectionsDialog row this slot routes to (same icon
+    // family as dish-linux SlotCard and dish-android item_controller.xml).
+    // The coloured dot stays as the second-stage tonal cue (live=green,
+    // transient=amber, else=muted).
+    glyph_ = new QLabel(this);
+    setBrandIcon(glyph_, BrandIconKind::Satellite, models::LinkState::Saved, 28);
 
     dot_ = new QLabel(this);
     dot_->setFixedSize(8, 8);
@@ -76,6 +86,7 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     applyDisabledOpacityEffect(bindButton_);
     QObject::connect(bindButton_, &QPushButton::clicked, this, &SlotCard::onBindClicked);
 
+    layout->addWidget(glyph_, 0, Qt::AlignVCenter);
     layout->addWidget(dot_, 0, Qt::AlignVCenter);
     layout->addLayout(textLayout, 1);
     layout->addWidget(bindButton_, 0, Qt::AlignVCenter);
@@ -178,10 +189,12 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
                                ? Theme::success
                                : Theme::warning;
         dot_->setStyleSheet(dotQss(color));
+        setBrandIcon(glyph_, BrandIconKind::Satellite, slot.boundStatus->live, 28);
         bindButton_->setText(QStringLiteral("Unbind"));
     } else {
         boundLabel_->setText(QStringLiteral("Unbound"));
         dot_->setStyleSheet(dotQss(Theme::muted));
+        setBrandIcon(glyph_, BrandIconKind::Satellite, models::LinkState::Saved, 28);
         bindButton_->setText(QStringLiteral("Bind\u2026"));
     }
     bindButton_->setEnabled(slot.boundConnectionId.has_value() || !available.isEmpty());
@@ -194,8 +207,15 @@ void SlotCard::onBindClicked() {
     }
     if (available_.isEmpty()) { return; }
     QMenu menu(this);
+    // Each entry in the bind picker IS a satellite server (dish-windows is
+    // Wi-Fi-only, so no Bluetooth kind to branch on). Use the same v6
+    // brand satellite glyph the ConnectionsDialog rows and the SlotCard
+    // leading-edge glyph use, keyed on the same LinkState — mirrors the
+    // dish-mac SlotCard expanded picker and the dish-android
+    // ControllerAdapter.buildConnectionHeader() bind list.
     for (const auto& c : available_) {
-        auto* act = menu.addAction(c.label);
+        auto* act = menu.addAction(brandIcon(BrandIconKind::Satellite, c.live, 16, this),
+                                   c.label);
         const QString cid = c.id;
         QObject::connect(act, &QAction::triggered, this,
                          [this, cid] { emit bindRequested(slot_.id, cid); });
