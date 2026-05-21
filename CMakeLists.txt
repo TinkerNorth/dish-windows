@@ -86,7 +86,7 @@ find_package(Threads REQUIRED)
 # default (no OpenSSL DLLs to deploy). A build configured against a Qt with no
 # TLS backend would fail at runtime with "TLS initialization failed"; the
 # standard Qt for Windows binaries are fine.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg LinguistTools)
 
 # libsodium and SDL2 come from vcpkg on Windows (see vcpkg.json). The
 # `unofficial-` prefix on sodium is vcpkg's "no upstream CMake config"
@@ -190,6 +190,25 @@ set(DISH_UI_SOURCES
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui Qt6::Svg dish_warnings dish_strict)
+
+# --------------------------------------------------------------------------
+# i18n: compile the bundled .ts files into .qm at build time and embed them
+# in the executable as Qt resources under :/i18n/. main.cpp picks the right
+# .qm at startup off QLocale::system() and falls back to English.
+#
+# qt_add_translations creates an internal `Dish_translations` target the
+# `Dish` executable depends on; the .qm files end up in
+# ${CMAKE_CURRENT_BINARY_DIR}/.qm. The RESOURCE_PREFIX puts them at
+# `:/i18n/dish_<locale>.qm` inside the binary.
+# --------------------------------------------------------------------------
+qt_add_translations(Dish
+    TS_FILES
+        translations/dish_bs.ts
+        translations/dish_de.ts
+        translations/dish_es.ts
+        translations/dish_fr.ts
+        translations/dish_pt_BR.ts
+    RESOURCE_PREFIX "/i18n")
 
 # WIN32 above creates a windowed (non-console) subsystem binary. Qt provides
 # a small Win32 entry-point shim (`qtmain` / WinMain via Qt6::EntryPoint)

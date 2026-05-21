@@ -16,6 +16,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <QCoreApplication>
 #include <QSettings>
 #include <QString>
 #include <QTemporaryDir>
@@ -70,8 +71,14 @@ TEST_CASE("lightbarModeFromKey is lenient — unknown keys fall back to FollowGa
 }
 
 TEST_CASE("lightbarModeLabel returns the user-facing strings", "[featuresettings][lightbar]") {
-    REQUIRE(lightbarModeLabel(LightbarMode::FollowGame) == QStringLiteral("Follow game"));
-    REQUIRE(lightbarModeLabel(LightbarMode::Off) == QStringLiteral("Off"));
+    // Locale-aware: the label is routed through QCoreApplication::translate so a
+    // German / French / Spanish run picks the localized form. Pin the test
+    // against the same translation call rather than the English literal so it
+    // keeps passing under every bundled translator.
+    REQUIRE(lightbarModeLabel(LightbarMode::FollowGame) ==
+            QCoreApplication::translate("FeatureSettings", "Follow game"));
+    REQUIRE(lightbarModeLabel(LightbarMode::Off) ==
+            QCoreApplication::translate("FeatureSettings", "Off"));
 }
 
 // --- FeatureSettings behaviour ---------------------------------------------

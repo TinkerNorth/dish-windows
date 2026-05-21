@@ -25,6 +25,7 @@
 namespace dish::ui {
 
 MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), model_(model) {
+    // "Dish" is the brand name — never localized.
     setWindowTitle(QStringLiteral("Dish"));
     resize(520, 640);
 
@@ -41,8 +42,8 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     statusDot_->setStyleSheet(dotQss(Theme::muted));
     statusText_ = new QLabel(central);
     statusText_->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));
-    settingsButton_ = new QPushButton(QStringLiteral("Settings"), central);
-    manageButton_ = new QPushButton(QStringLiteral("Manage"), central);
+    settingsButton_ = new QPushButton(tr("Settings"), central);
+    manageButton_ = new QPushButton(tr("Manage"), central);
     headerRow->addWidget(statusDot_, 0, Qt::AlignVCenter);
     headerRow->addWidget(statusText_, 1, Qt::AlignVCenter);
     headerRow->addWidget(settingsButton_, 0, Qt::AlignVCenter);
@@ -77,7 +78,7 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     root->addWidget(divider);
 
     // Controllers section -------------------------------------------------
-    auto* slotsHeader = new QLabel(QStringLiteral("CONTROLLERS"), central);
+    auto* slotsHeader = new QLabel(tr("CONTROLLERS"), central);
     slotsHeader->setStyleSheet(sectionHeaderQss());
     root->addWidget(slotsHeader);
 
@@ -88,7 +89,7 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     slotsLayout_ = new QVBoxLayout(slotsContainer);
     slotsLayout_->setContentsMargins(0, 0, 0, 0);
     slotsLayout_->setSpacing(8);
-    slotsEmpty_ = new QLabel(QStringLiteral("No controllers connected"), slotsContainer);
+    slotsEmpty_ = new QLabel(tr("No controllers connected"), slotsContainer);
     slotsEmpty_->setStyleSheet(
         QStringLiteral("color: %1; font-size: 12px;").arg(hex(Theme::muted)));
     slotsLayout_->addWidget(slotsEmpty_);
@@ -148,13 +149,13 @@ void MainWindow::rebuildHeader() {
     const int total = static_cast<int>(conns.size());
     QString status;
     if (live == 0 && total == 0) {
-        status = QStringLiteral("No connections yet");
+        status = tr("No connections yet");
     } else if (live == 0) {
-        status = QStringLiteral("%1 remembered").arg(total);
+        status = tr("%1 remembered").arg(total);
     } else if (live == 1) {
         status = firstLabel;
     } else {
-        status = QStringLiteral("%1 online").arg(live);
+        status = tr("%1 online").arg(live);
     }
     statusText_->setText(status);
     statusDot_->setStyleSheet(dotQss(live > 0 ? Theme::success : Theme::muted));
@@ -163,11 +164,11 @@ void MainWindow::rebuildHeader() {
 
     QString summary;
     if (live == 0 && total == 0) {
-        summary = QStringLiteral("Tap Manage to add one");
+        summary = tr("Tap Manage to add one");
     } else if (live == 0) {
-        summary = QStringLiteral("%1 remembered").arg(total);
+        summary = tr("%1 remembered").arg(total);
     } else {
-        summary = QStringLiteral("%1 of %2 online").arg(live).arg(total);
+        summary = tr("%1 of %2 online").arg(live).arg(total);
     }
     summaryText_->setText(summary);
 }
@@ -218,9 +219,7 @@ void MainWindow::showPairingPrompt() {
     dlg.exec();
 }
 
-void MainWindow::onError(const QString& msg) {
-    QMessageBox::warning(this, QStringLiteral("Error"), msg);
-}
+void MainWindow::onError(const QString& msg) { QMessageBox::warning(this, tr("Error"), msg); }
 
 void MainWindow::onTelemetryTick() {
     auto snap = model_->processor()->drainTelemetry();

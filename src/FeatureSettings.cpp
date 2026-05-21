@@ -3,6 +3,8 @@
 
 #include "FeatureSettings.h"
 
+#include <QCoreApplication>
+
 namespace dish {
 
 namespace {
@@ -35,13 +37,18 @@ LightbarMode lightbarModeFromKey(const QString& key) {
 }
 
 QString lightbarModeLabel(LightbarMode mode) {
+    // Routed through QCoreApplication::translate so the labels participate in
+    // the Qt translation pipeline (lupdate picks them up under the
+    // "FeatureSettings" context). The English source strings are also the
+    // baseline assertion target for test_feature_settings.cpp; that test now
+    // pins the same translate() call to stay stable across locales.
     switch (mode) {
     case LightbarMode::Off:
-        return QStringLiteral("Off");
+        return QCoreApplication::translate("FeatureSettings", "Off");
     case LightbarMode::FollowGame:
         break;
     }
-    return QStringLiteral("Follow game");
+    return QCoreApplication::translate("FeatureSettings", "Follow game");
 }
 
 FeatureSettings::FeatureSettings(QObject* parent)

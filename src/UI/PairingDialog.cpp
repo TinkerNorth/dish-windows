@@ -29,25 +29,24 @@ PairingDialog::PairingDialog(const models::DiscoveredServer& server, AppModel* m
 }
 
 void PairingDialog::buildUi(const models::DiscoveredServer& server, AppModel* model) {
-    setWindowTitle(QStringLiteral("Pair with %1").arg(server.name));
+    setWindowTitle(tr("Pair with %1").arg(server.name));
     setMinimumWidth(360);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(20, 20, 20, 20);
     layout->setSpacing(12);
 
-    auto* header = new QLabel(QStringLiteral("PAIRING"), this);
+    auto* header = new QLabel(tr("PAIRING"), this);
     header->setStyleSheet(sectionHeaderQss());
     layout->addWidget(header);
 
-    auto* msg =
-        new QLabel(QStringLiteral("Enter the 6-digit PIN displayed on %1").arg(server.name), this);
+    auto* msg = new QLabel(tr("Enter the 6-digit PIN displayed on %1").arg(server.name), this);
     msg->setWordWrap(true);
     layout->addWidget(msg);
 
     pinEdit_ = new QLineEdit(this);
     pinEdit_->setMaxLength(6);
-    pinEdit_->setPlaceholderText(QStringLiteral("PIN"));
+    pinEdit_->setPlaceholderText(tr("PIN"));
     pinEdit_->setInputMethodHints(Qt::ImhDigitsOnly);
     layout->addWidget(pinEdit_);
 
@@ -56,9 +55,9 @@ void PairingDialog::buildUi(const models::DiscoveredServer& server, AppModel* mo
     // label combo per the design spec when pairing is in flight.
     auto* row = new QHBoxLayout;
     row->addStretch(1);
-    cancelButton_ = new QPushButton(QStringLiteral("Cancel"), this);
+    cancelButton_ = new QPushButton(tr("Cancel"), this);
     applyDisabledOpacityEffect(cancelButton_);
-    pairButton_ = new DishLoaderButton(QStringLiteral("Pair"), this);
+    pairButton_ = new DishLoaderButton(tr("Pair"), this);
     pairButton_->setObjectName(QStringLiteral("primary"));
     row->addWidget(cancelButton_);
     row->addWidget(pairButton_);
@@ -114,7 +113,7 @@ void PairingDialog::onPairingInFlightChanged(const QString& serverId) {
     auto* wifi = qobject_cast<net::WifiConnectionManager*>(sender());
     if (wifi == nullptr) { return; }
     const bool pairing = wifi->isPairingInFlight(serverId);
-    pairButton_->setInFlight(pairing, QStringLiteral("Pairing…"));
+    pairButton_->setInFlight(pairing, tr("Pairing…"));
     // Cancel and the PIN field follow the same disabled state — typing a
     // new PIN mid-request would race the response we're already waiting on.
     cancelButton_->setEnabled(!pairing);

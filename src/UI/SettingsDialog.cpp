@@ -10,7 +10,7 @@
 namespace dish::ui {
 
 SettingsDialog::SettingsDialog(FeatureSettings* settings, QWidget* parent) : QDialog(parent) {
-    setWindowTitle(QStringLiteral("Settings"));
+    setWindowTitle(tr("Settings"));
     setMinimumWidth(420);
 
     auto* layout = new QVBoxLayout(this);

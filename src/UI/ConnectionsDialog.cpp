@@ -18,7 +18,7 @@ namespace dish::ui {
 
 ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
     : QDialog(parent), model_(model) {
-    setWindowTitle(QStringLiteral("Connections"));
+    setWindowTitle(tr("Connections"));
     setMinimumSize(560, 420);
 
     auto* layout = new QVBoxLayout(this);
@@ -33,7 +33,7 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
         hdrRow->setSpacing(6);
         auto* glyph = new QLabel(this);
         setBrandIcon(glyph, BrandIconKind::Satellite, models::LinkState::Saved, 18);
-        auto* discoveredHeader = new QLabel(QStringLiteral("FOUND"), this);
+        auto* discoveredHeader = new QLabel(tr("FOUND"), this);
         discoveredHeader->setStyleSheet(sectionHeaderQss());
         hdrRow->addWidget(glyph, 0, Qt::AlignVCenter);
         hdrRow->addWidget(discoveredHeader, 1, Qt::AlignVCenter);
@@ -44,10 +44,10 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
     layout->addWidget(discoveredList_, 1);
 
     auto* row = new QHBoxLayout;
-    scanButton_ = new DishLoaderButton(QStringLiteral("Scan"), this);
+    scanButton_ = new DishLoaderButton(tr("Scan"), this);
     statusLabel_ = new QLabel(this);
     statusLabel_->setStyleSheet(QStringLiteral("color: %1;").arg(hex(Theme::muted)));
-    connectButton_ = new DishLoaderButton(QStringLiteral("Connect"), this);
+    connectButton_ = new DishLoaderButton(tr("Connect"), this);
     connectButton_->setObjectName(QStringLiteral("primary"));
     row->addWidget(scanButton_);
     row->addWidget(statusLabel_, 1);
@@ -61,7 +61,7 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
         // REMEMBERED is a list of satellite servers — same brand family as
         // FOUND just above so the two halves of the dialog read consistently.
         setBrandIcon(glyph, BrandIconKind::Satellite, models::LinkState::Saved, 18);
-        auto* rememberedHeader = new QLabel(QStringLiteral("REMEMBERED"), this);
+        auto* rememberedHeader = new QLabel(tr("REMEMBERED"), this);
         rememberedHeader->setStyleSheet(sectionHeaderQss());
         hdrRow->addWidget(glyph, 0, Qt::AlignVCenter);
         hdrRow->addWidget(rememberedHeader, 1, Qt::AlignVCenter);
@@ -71,7 +71,7 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
     rememberedList_ = new QListWidget(this);
     layout->addWidget(rememberedList_, 1);
 
-    auto* forgetBtn = new QPushButton(QStringLiteral("Forget"), this);
+    auto* forgetBtn = new QPushButton(tr("Forget"), this);
     // Forget is local + instant, so it does not get the spinner treatment.
     // It still gets the canonical 0.4 disabled-alpha rule for consistency.
     applyDisabledOpacityEffect(forgetBtn);
@@ -107,8 +107,8 @@ void ConnectionsDialog::refreshActionState() {
     // Scan: spinner + "Scanning..." while WifiConnectionManager has a
     // discovery future in flight. Button is force-disabled by setInFlight.
     const bool scanning = model_->wifi()->isScanning();
-    scanButton_->setInFlight(scanning, QStringLiteral("Scanning\u2026"));
-    statusLabel_->setText(scanning ? QStringLiteral("Scanning\u2026") : QString());
+    scanButton_->setInFlight(scanning, tr("Scanning\u2026"));
+    statusLabel_->setText(scanning ? tr("Scanning\u2026") : QString());
 
     // Connect: spinner + "Pairing..." for the currently-selected discovered
     // server iff its pair is in flight. Selecting a different row swaps the
@@ -122,7 +122,7 @@ void ConnectionsDialog::refreshActionState() {
     }
     const auto selectedId = item->data(Qt::UserRole).toString();
     const bool pairing = model_->wifi()->isPairingInFlight(selectedId);
-    connectButton_->setInFlight(pairing, QStringLiteral("Pairing\u2026"));
+    connectButton_->setInFlight(pairing, tr("Pairing\u2026"));
     // Keep the idle-enabled state truthful: a paired-in-flight button is
     // already force-disabled by setInFlight, but on completion the button
     // should re-enable iff there is a selection. Connect remains a no-op
@@ -143,7 +143,7 @@ void ConnectionsDialog::rebuildLists() {
     for (const auto& r : model_->wifi()->remembered()) {
         auto* conn = model_->wifi()->get(r.id);
         const QString liveTag = (conn != nullptr && conn->state() == net::SessionState::Live)
-                                    ? QStringLiteral(" \u2022 online")
+                                    ? tr(" \u2022 online")
                                     : QString();
         auto* item = new QListWidgetItem(
             QStringLiteral("%1 \u2022 %2%3").arg(r.name.isEmpty() ? r.ip : r.name, r.ip, liveTag));

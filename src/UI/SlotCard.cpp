@@ -110,14 +110,13 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
     // "available, off" state (dimmed but with the "Gyro" label) — see the
     // dish-mac CapabilityChip, which keys its colour off FeatureSettings.
     const bool hasMotion = slot.capabilities.hasMotion;
-    motionChip_->setText(hasMotion ? QStringLiteral("Gyro") : QStringLiteral("No gyro"));
+    motionChip_->setText(hasMotion ? tr("Gyro") : tr("No gyro"));
     motionChip_->setStyleSheet(capabilityChipQss(hasMotion));
     motionChip_->setToolTip(
-        hasMotion
-            ? QStringLiteral("Motion available — this controller has a gyro/accelerometer "
-                             "and motion aiming is being forwarded.")
-            : QStringLiteral("Motion not available — this controller has no gyro/accelerometer, "
-                             "so motion aiming can't be forwarded."));
+        hasMotion ? tr("Motion available — this controller has a gyro/accelerometer "
+                       "and motion aiming is being forwarded.")
+                  : tr("Motion not available — this controller has no gyro/accelerometer, "
+                       "so motion aiming can't be forwarded."));
 
     // Lightbar-capability chip. Unlike the motion chip, this is shown ONLY
     // when the pad actually has an addressable RGB LED (DualSense / DS4) —
@@ -128,12 +127,11 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
     const bool hasLightbar = slot_.capabilities.hasLightbar;
     lightbarChip_->setVisible(hasLightbar);
     if (hasLightbar) {
-        lightbarChip_->setText(QStringLiteral("Lightbar"));
+        lightbarChip_->setText(tr("Lightbar"));
         lightbarChip_->setStyleSheet(capabilityChipQss(true));
-        lightbarChip_->setToolTip(
-            QStringLiteral("Lightbar available — this controller has an RGB LED. "
-                           "It follows the host game's colour unless the Light bar "
-                           "setting is Off."));
+        lightbarChip_->setToolTip(tr("Lightbar available — this controller has an RGB LED. "
+                                     "It follows the host game's colour unless the Light bar "
+                                     "setting is Off."));
     }
 
     // Battery chip. The (level, status) pair comes off the same MSG_BATTERY
@@ -153,34 +151,34 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
         // A wired/full pad at 100 % is never "low"; only an actually-draining
         // pack trips the warning style.
         const bool lowBattery = batteryLevel < kLowBatteryThreshold && !charging && !wired;
-        QString label = QStringLiteral("Battery %1%").arg(batteryLevel);
+        QString label = tr("Battery %1%").arg(batteryLevel);
         if (charging) {
-            label = QStringLiteral("Battery %1% ↑").arg(batteryLevel); // up arrow
+            label = tr("Battery %1% ↑").arg(batteryLevel); // up arrow
         } else if (wired) {
-            label = QStringLiteral("Battery wired");
+            label = tr("Battery wired");
         } else if (full) {
-            label = QStringLiteral("Battery full");
+            label = tr("Battery full");
         }
         batteryChip_->setText(label);
         batteryChip_->setStyleSheet(batteryChipQss(lowBattery));
         QString tip;
         if (wired) {
-            tip = QStringLiteral("This host has no internal battery (a desktop) — "
-                                 "reported as wired / full charge.");
+            tip = tr("This host has no internal battery (a desktop) — "
+                     "reported as wired / full charge.");
         } else if (charging) {
-            tip = QStringLiteral("Battery at %1% and charging.").arg(batteryLevel);
+            tip = tr("Battery at %1% and charging.").arg(batteryLevel);
         } else if (full) {
-            tip = QStringLiteral("Battery full (%1%).").arg(batteryLevel);
+            tip = tr("Battery full (%1%).").arg(batteryLevel);
         } else if (lowBattery) {
-            tip = QStringLiteral("Battery low — %1% remaining.").arg(batteryLevel);
+            tip = tr("Battery low — %1% remaining.").arg(batteryLevel);
         } else {
-            tip = QStringLiteral("Battery at %1%.").arg(batteryLevel);
+            tip = tr("Battery at %1%.").arg(batteryLevel);
         }
         batteryChip_->setToolTip(tip);
     }
 
     if (slot.boundStatus.has_value()) {
-        boundLabel_->setText(QStringLiteral("Bound to %1").arg(slot.boundStatus->label));
+        boundLabel_->setText(tr("Bound to %1").arg(slot.boundStatus->label));
         // Green dot iff the session is actually live (LinkState::Connected).
         // Every other state — Connecting / Ready / Saved / Found / Stale /
         // Unstable — gets the warning amber so the dot's colour distinguishes
@@ -189,12 +187,12 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
                                                                                   : Theme::warning;
         dot_->setStyleSheet(dotQss(color));
         setBrandIcon(glyph_, BrandIconKind::Satellite, slot.boundStatus->live, 28);
-        bindButton_->setText(QStringLiteral("Unbind"));
+        bindButton_->setText(tr("Unbind"));
     } else {
-        boundLabel_->setText(QStringLiteral("Unbound"));
+        boundLabel_->setText(tr("Unbound"));
         dot_->setStyleSheet(dotQss(Theme::muted));
         setBrandIcon(glyph_, BrandIconKind::Satellite, models::LinkState::Saved, 28);
-        bindButton_->setText(QStringLiteral("Bind\u2026"));
+        bindButton_->setText(tr("Bind\u2026"));
     }
     bindButton_->setEnabled(slot.boundConnectionId.has_value() || !available.isEmpty());
 }
