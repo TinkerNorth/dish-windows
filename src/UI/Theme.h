@@ -42,4 +42,27 @@ QString sectionHeaderQss();
 QString outlinedButtonQss();
 QString dotQss(QRgb color);
 
+// Apply the canonical Dish design-system "disabled" treatment to a widget:
+// when the widget is disabled, the entire control drops to 0.4 alpha (matches
+// `ds-components.jsx`'s Button rule `opacity: disabled ? 0.4 : 1`). Qt
+// stylesheets don't accept `opacity:` directly, so the helper installs a
+// `QGraphicsOpacityEffect` that toggles on `QEvent::EnabledChange` via a
+// child-object filter. Press / hover feedback is naturally suppressed
+// because the existing `:hover` / `:pressed` QSS selectors do not match a
+// disabled widget. Mirrors dish-mac's `DishOutlinedButtonStyle` opacity rule.
+//
+// Call this once, after the widget is fully constructed, on any control that
+// can transition between enabled / disabled in-flight (Scan, Pair, Connect).
+void applyDisabledOpacityEffect(QWidget* widget);
+
+// Small capability-chip pill used in SlotCard. `present` renders the active
+// (filled, primary-tinted) chip; otherwise a dimmed, outlined "not available"
+// chip. Mirrors dish-mac's CapabilityChip. Colours come from Theme tokens.
+QString capabilityChipQss(bool present);
+
+// Battery-chip pill used in SlotCard, sat next to the motion chip. Shares the
+// capability-chip pill geometry. `lowBattery` swaps the cyan/primary tint for
+// the amber `warning` token so a near-flat pad reads at a glance.
+QString batteryChipQss(bool lowBattery);
+
 } // namespace dish::ui

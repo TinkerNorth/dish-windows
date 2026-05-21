@@ -44,6 +44,61 @@ class GamepadInputProcessor {
                                             std::uint8_t lt, std::uint8_t rt, std::int16_t lx,
                                             std::int16_t ly, std::int16_t rx, std::int16_t ry)>;
 
+    // Single IMU sample destined for MSG_MOTION. The processor rate-limits
+    // these per-device to `kMotionRateLimitHz` (default 250) before invoking
+    // the sender — matches the roadmap acceptance criterion that motion
+    // packets stay under 250 Hz by default.
+    struct MotionSample {
+        std::int16_t gyroX = 0;
+        std::int16_t gyroY = 0;
+        std::int16_t gyroZ = 0;
+        std::int16_t accelX = 0;
+        std::int16_t accelY = 0;
+        std::int16_t accelZ = 0;
+    };
+    using MotionSender =
+        std::function<void(const DeviceId& id, std::int16_t gyroX, std::int16_t gyroY,
+                           std::int16_t gyroZ, std::int16_t accelX, std::int16_t accelY,
+                           std::int16_t accelZ, std::uint32_t timestampDeltaUs)>;
+
+    // Periodic battery sample destined for MSG_BATTERY. Forwarded as-is:
+    // MSG_BATTERY is a fixed 30 s heartbeat (plus on-connect), so the
+    // receiver expects a packet every interval even when the value is
+    // unchanged — that is what lets a dropped UDP packet self-heal. The
+    // SDL bridge's per-device 30 s poll gate owns the cadence.
+    struct BatterySample {
+        std::uint8_t level = 0xFF;
+        std::uint8_t status = 0;
+    };
+    using BatterySender =
+        std::function<void(const DeviceId& id, std::uint8_t level, std::uint8_t status)>;
+
+    // Touchpad sample destined for MSG_TOUCHPAD (DualSense / DS4). Up to two
+    // fingers; coordinates are normalised int16. Touchpad input is genuinely
+    // event-driven (finger down/move/up), so unlike motion it is neither
+    // rate-limited nor coalesced — every assembled state change is forwarded.
+    struct TouchpadSample {
+        bool finger0Active = false;
+        std::uint8_t finger0Id = 0;
+        std::int16_t finger0X = 0;
+        std::int16_t finger0Y = 0;
+        bool finger1Active = false;
+        std::uint8_t finger1Id = 0;
+        std::int16_t finger1X = 0;
+        std::int16_t finger1Y = 0;
+        bool buttonPressed = false;
+    };
+    using TouchpadSender = std::function<void(const DeviceId& id, const TouchpadSample& sample)>;
+
+    // Maximum forwarded MSG_MOTION rate per controller. Roadmap acceptance:
+    // packets are rate-limited to ≤ 250 Hz by default. Samples arriving
+    // faster than this drop on the floor; the next within-budget sample
+    // is sent. We keep this a public compile-time constant so tests can
+    // pin the exact threshold without reading a runtime config.
+    static constexpr std::uint32_t kMotionRateLimitHz = 250;
+    static constexpr std::uint64_t kMotionMinIntervalUs =
+        1'000'000ULL / kMotionRateLimitHz; // 4000 µs
+
     struct DeviceState {
         std::uint16_t wButtons = 0;
         std::uint8_t lt = 0;
@@ -79,8 +134,38 @@ class GamepadInputProcessor {
     };
 
     void setReportSender(ReportSender sender);
+    void setMotionSender(MotionSender sender);
+    void setBatterySender(BatterySender sender);
+    void setTouchpadSender(TouchpadSender sender);
     void setDeadzones(const DeviceId& id, const Deadzones& dz);
     void publish(const DeviceId& id, const DeviceState& state);
+
+    // Publish an IMU sample for `id`. Per-device rate-limited to
+    // kMotionRateLimitHz; samples inside the gate window drop silently.
+    // The wall-clock used for rate-limiting is overridable for tests via
+    // publishMotionAt(); production calls go through publishMotion which
+    // reads steady_clock::now() internally.
+    void publishMotion(const DeviceId& id, const MotionSample& sample);
+
+    // Test seam — accepts a caller-supplied "now" timestamp in microseconds
+    // (any monotonic basis). Production code prefers publishMotion. The
+    // returned bool indicates whether the sample was forwarded (true) or
+    // dropped by the rate limiter (false); not exposed on the production
+    // overload because the caller has no meaningful recovery.
+    bool publishMotionAt(const DeviceId& id, const MotionSample& sample, std::uint64_t nowUs);
+
+    // Publish a battery sample for `id`. Pure pass-through to the
+    // BatterySender — every poll tick is forwarded, unchanged or not, so the
+    // 30 s heartbeat actually reaches the wire. Cadence is owned by the SDL
+    // bridge's poll gate, not this method.
+    void publishBattery(const DeviceId& id, const BatterySample& sample);
+
+    // Publish a touchpad sample for `id`. Pure pass-through to the
+    // TouchpadSender — the SDL bridge has already assembled the full
+    // two-finger state, and a touchpad is an absolute surface so there is no
+    // deadzone / rate-limit / coalesce step.
+    void publishTouchpad(const DeviceId& id, const TouchpadSample& sample);
+
     void zeroAndSendAll();
     void remove(const DeviceId& id);
     TelemetrySnapshot drainTelemetry();
@@ -90,6 +175,23 @@ class GamepadInputProcessor {
     std::unordered_map<DeviceId, DeviceState> states_;
     std::unordered_map<DeviceId, Deadzones> deadzones_;
     ReportSender sender_;
+    MotionSender motionSender_;
+    BatterySender batterySender_;
+    TouchpadSender touchpadSender_;
+
+    // Per-device motion rate-limit gate. `lastUs` is the timestamp of the
+    // last *emitted* sample (microseconds, steady_clock basis or test-
+    // supplied). `hasEmitted` is a distinct flag rather than a `lastUs == 0`
+    // sentinel: a monotonic clock — or a test clock — can legitimately read
+    // 0, and treating that as "never emitted" would mis-handle the second
+    // sample as another first sample. dish-android's MotionRateLimiter uses
+    // the same explicit-flag shape.
+    struct MotionGate {
+        std::uint64_t lastUs = 0;
+        bool hasEmitted = false;
+    };
+    std::unordered_map<DeviceId, MotionGate> lastMotionUs_;
+
     int telEvents_ = 0;
     int telSends_ = 0;
     std::uint64_t telTotalSent_ = 0;

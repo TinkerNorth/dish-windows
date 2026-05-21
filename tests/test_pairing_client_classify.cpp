@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <QCoreApplication>
 #include <QJsonObject>
 
 using dish::models::PairResponse;
@@ -53,7 +54,13 @@ TEST_CASE("classify: unreachable without error falls back to default", "[pairing
     r.reachable = false;
     const auto o = PairingClient::classify(r);
     REQUIRE(holds<PairingClient::Unreachable>(o));
-    REQUIRE(std::get<PairingClient::Unreachable>(o).message == "Server unreachable");
+    // Locale-aware: the fallback message is routed through
+    // QCoreApplication::translate so the production string participates in the
+    // Qt translation pipeline (.ts catalog under context dish::net::PairingClient).
+    // Pin the test against the same translate() call rather than the English
+    // literal so it stays green under every bundled translator.
+    REQUIRE(std::get<PairingClient::Unreachable>(o).message ==
+            QCoreApplication::translate("dish::net::PairingClient", "Server unreachable"));
 }
 
 TEST_CASE("classify: ok but empty sharedKey is AuthRequired, not Success", "[pairing]") {

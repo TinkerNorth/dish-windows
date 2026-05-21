@@ -80,7 +80,19 @@ endif()
 # Dependencies
 # --------------------------------------------------------------------------
 find_package(Threads REQUIRED)
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network)
+# Qt6::Network carries the TLS/SSL API (QSslConfiguration, QSslSocket) the
+# HTTP and pairing clients use to reach the satellite's HTTPS server. No extra
+# package is needed: on Windows Qt 6.2+ ships the Schannel TLS backend by
+# default (no OpenSSL DLLs to deploy). A build configured against a Qt with no
+# TLS backend would fail at runtime with "TLS initialization failed"; the
+# standard Qt for Windows binaries are fine.
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
+# LinguistTools is OPTIONAL — the Qt Linguist .ts → .qm pipeline is only
+# active when qttools is installed. When it's not present we still build a
+# working app: every `tr("...")` falls back to the English source string.
+# The translation catalogues under `translations/` are checked in and don't
+# need to be rebuilt every time. Mirrors the dish-linux pattern.
+find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS LinguistTools)
 
 # libsodium and SDL2 come from vcpkg on Windows (see vcpkg.json). The
 # `unofficial-` prefix on sodium is vcpkg's "no upstream CMake config"
@@ -96,6 +108,8 @@ set(DISH_CORE_SOURCES
     src/Util/Hex.h
     src/Util/Hex.cpp
     src/Util/Endian.h
+    src/Util/HostBattery.h
+    src/Util/HostBattery.cpp
     src/Util/DisplaySleepInhibitor.h
     src/Util/DisplaySleepInhibitor.cpp
     src/Util/ScreenWakeController.h
@@ -108,6 +122,8 @@ set(DISH_CORE_SOURCES
     src/Network/SatelliteClient.cpp
     src/Network/LANDiscovery.h
     src/Network/LANDiscovery.cpp
+    src/Network/MdnsDiscovery.h
+    src/Network/MdnsDiscovery.cpp
     src/Network/PairingClient.h
     src/Network/PairingClient.cpp
     src/Network/HTTPClient.h
@@ -122,8 +138,14 @@ set(DISH_CORE_SOURCES
     src/Network/ConnectionStore.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
+    src/Input/SdlMotionConvert.h
+    src/Input/SdlMotionConvert.cpp
+    src/Input/OutputCommandQueue.h
     src/Input/SDLGamepadBridge.h
     src/Input/SDLGamepadBridge.cpp
+    src/FeatureSettings.h
+    src/FeatureSettings.cpp
+    src/LightbarRouting.h
     src/AppModel.h
     src/AppModel.cpp)
 
@@ -147,12 +169,24 @@ target_link_libraries(dish_core
 set(DISH_UI_SOURCES
     src/UI/Theme.h
     src/UI/Theme.cpp
+    src/UI/DishLoaders.h
+    src/UI/DishLoaders.cpp
     src/UI/SlotCard.h
     src/UI/SlotCard.cpp
+    src/UI/BrandIcon.h
+    src/UI/BrandIcon.cpp
     src/UI/PairingDialog.h
     src/UI/PairingDialog.cpp
     src/UI/ConnectionsDialog.h
     src/UI/ConnectionsDialog.cpp
+    src/UI/SettingsView.h
+    src/UI/SettingsView.cpp
+    src/UI/SettingsDialog.h
+    src/UI/SettingsDialog.cpp
+    src/UI/NotificationQueue.h
+    src/UI/NotificationQueue.cpp
+    src/UI/NotificationToastHost.h
+    src/UI/NotificationToastHost.cpp
     src/UI/MainWindow.h
     src/UI/MainWindow.cpp
     src/main.cpp
@@ -165,7 +199,30 @@ set(DISH_UI_SOURCES
 
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
-target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui dish_warnings dish_strict)
+target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui Qt6::Svg dish_warnings dish_strict)
+
+# --------------------------------------------------------------------------
+# i18n: compile the bundled .ts files into .qm at build time and embed them
+# in the executable as Qt resources under :/i18n/. main.cpp picks the right
+# .qm at startup off QLocale::system() and falls back to English.
+#
+# qt_add_translations creates an internal `Dish_translations` target the
+# `Dish` executable depends on; the .qm files end up in
+# ${CMAKE_CURRENT_BINARY_DIR}/.qm. The RESOURCE_PREFIX puts them at
+# `:/i18n/dish_<locale>.qm` inside the binary.
+# --------------------------------------------------------------------------
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(Dish
+        TS_FILES
+            translations/dish_bs.ts
+            translations/dish_de.ts
+            translations/dish_es.ts
+            translations/dish_fr.ts
+            translations/dish_pt_BR.ts
+        RESOURCE_PREFIX "/i18n")
+else()
+    message(STATUS "Qt6LinguistTools not found — building without translation catalogues.")
+endif()
 
 # WIN32 above creates a windowed (non-console) subsystem binary. Qt provides
 # a small Win32 entry-point shim (`qtmain` / WinMain via Qt6::EntryPoint)

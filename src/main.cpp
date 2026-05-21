@@ -8,6 +8,8 @@
 
 #include <QApplication>
 #include <QIcon>
+#include <QLocale>
+#include <QTranslator>
 
 #include <sodium.h>
 
@@ -34,6 +36,24 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.dev"));
     QCoreApplication::setApplicationName(QStringLiteral("Dish"));
     // No setDesktopFileName on Windows — that's an XDG/Linux concept.
+
+    // i18n: load the .qm matching the system locale out of the QRC-embedded
+    // `:/i18n/dish_<locale>.qm` family. QTranslator::load("dish", ":/i18n",
+    // "_") tries name = "dish_<locale>" with progressively shorter locale
+    // strings (e.g. "pt_BR" -> "pt"), so a host LANG of pt_BR.UTF-8 picks up
+    // dish_pt_BR.qm and a host LANG of pt_PT falls back to dish_pt.qm if
+    // present, or English when nothing matches. The translator stays alive
+    // for the lifetime of the QApplication via the `static` qualifier.
+    static QTranslator translator;
+    const QString localeName = QLocale::system().name();
+    if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n"))) {
+        QCoreApplication::installTranslator(&translator);
+    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"), QStringLiteral("_"),
+                               QStringLiteral(".qm"))) {
+        // Two-step fallback so QLocale::system().name() values that are
+        // language-only (e.g. "de") still find dish_de.qm.
+        QCoreApplication::installTranslator(&translator);
+    }
 
     // dish.rc embeds the icon into the PE resource section (Explorer / Task
     // Manager / taskbar-from-pinned). That's invisible to Qt — without

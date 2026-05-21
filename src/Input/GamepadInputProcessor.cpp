@@ -4,6 +4,7 @@
 #include "GamepadInputProcessor.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace dish::input {
@@ -11,6 +12,16 @@ namespace dish::input {
 void GamepadInputProcessor::setReportSender(ReportSender sender) {
     std::lock_guard<std::mutex> lock(mtx_);
     sender_ = std::move(sender);
+}
+
+void GamepadInputProcessor::setMotionSender(MotionSender sender) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    motionSender_ = std::move(sender);
+}
+
+void GamepadInputProcessor::setBatterySender(BatterySender sender) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    batterySender_ = std::move(sender);
 }
 
 void GamepadInputProcessor::setDeadzones(const DeviceId& id, const Deadzones& dz) {
@@ -58,6 +69,75 @@ void GamepadInputProcessor::remove(const DeviceId& id) {
     std::lock_guard<std::mutex> lock(mtx_);
     states_.erase(id);
     deadzones_.erase(id);
+    lastMotionUs_.erase(id);
+}
+
+bool GamepadInputProcessor::publishMotionAt(const DeviceId& id, const MotionSample& sample,
+                                            std::uint64_t nowUs) {
+    MotionSender snapshot;
+    std::uint32_t deltaUs = 0;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        MotionGate& gate = lastMotionUs_[id];
+        if (gate.hasEmitted && nowUs - gate.lastUs < kMotionMinIntervalUs) {
+            // Inside the rate-limit window — drop. Deliberately do NOT update
+            // `gate`; otherwise a hot stream of dropped samples would push the
+            // gate forward and starve the legitimate sender for longer than
+            // one period.
+            return false;
+        }
+        // `deltaUs` is reported relative to the previous *emitted* packet,
+        // not the previous attempt — that's what the receiver wants for
+        // accurate inter-arrival timing. uint32 overflow is bounded by
+        // the spec's documented 32-bit range (~71 minutes). On the very
+        // first emission (`hasEmitted` false) delta stays 0 — the spec's
+        // first-packet sentinel — regardless of what the clock reads.
+        if (gate.hasEmitted) {
+            const std::uint64_t d = nowUs - gate.lastUs;
+            deltaUs = (d > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : static_cast<std::uint32_t>(d);
+        }
+        gate.lastUs = nowUs;
+        gate.hasEmitted = true;
+        snapshot = motionSender_;
+    }
+    if (snapshot) {
+        snapshot(id, sample.gyroX, sample.gyroY, sample.gyroZ, sample.accelX, sample.accelY,
+                 sample.accelZ, deltaUs);
+    }
+    return true;
+}
+
+void GamepadInputProcessor::publishMotion(const DeviceId& id, const MotionSample& sample) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto us = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count());
+    (void)publishMotionAt(id, sample, us);
+}
+
+void GamepadInputProcessor::publishBattery(const DeviceId& id, const BatterySample& sample) {
+    // Pure pass-through — no coalescing. MSG_BATTERY is a fixed 30 s
+    // heartbeat, so an unchanged sample must still reach the wire; the SDL
+    // bridge's 30 s poll gate is what bounds the rate.
+    BatterySender snapshot;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        snapshot = batterySender_;
+    }
+    if (snapshot) { snapshot(id, sample.level, sample.status); }
+}
+
+void GamepadInputProcessor::setTouchpadSender(TouchpadSender sender) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    touchpadSender_ = std::move(sender);
+}
+
+void GamepadInputProcessor::publishTouchpad(const DeviceId& id, const TouchpadSample& sample) {
+    TouchpadSender snapshot;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        snapshot = touchpadSender_;
+    }
+    if (snapshot) { snapshot(id, sample); }
 }
 
 GamepadInputProcessor::TelemetrySnapshot GamepadInputProcessor::drainTelemetry() {

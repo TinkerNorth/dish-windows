@@ -3,7 +3,11 @@
 
 #include "Theme.h"
 
+#include <QEvent>
+#include <QGraphicsOpacityEffect>
+#include <QObject>
 #include <QPalette>
+#include <QWidget>
 
 namespace dish::ui {
 
@@ -49,15 +53,18 @@ void applyDishTheme(QApplication& app) {
             "QPushButton:disabled { color: %6; border-color: %6; }"
             "QPushButton#primary { background-color: %5; color: %7; border: none; }"
             "QPushButton#primary:hover { background-color: %8; }"
+            "QPushButton#primary:disabled { background-color: %9; color: %6; border: none; }"
             "QListWidget, QTreeWidget { background-color: %3; border: 1px solid %4; "
             "                          border-radius: 8px; padding: 4px; }"
             "QStatusBar { background-color: %3; color: %6; }"
             "QLineEdit { background-color: %3; color: %2; border: 1px solid %4; "
             "           border-radius: 6px; padding: 6px 8px; }"
-            "QLineEdit:focus { border-color: %5; }")
+            "QLineEdit:focus { border-color: %5; }"
+            "QProgressBar { background-color: %3; border: 1px solid %4; border-radius: 2px; }"
+            "QProgressBar::chunk { background-color: %5; border-radius: 2px; }")
             .arg(hex(Theme::background), hex(Theme::onSurface), hex(Theme::surface),
                  hex(Theme::outline), hex(Theme::primary), hex(Theme::muted), hex(Theme::onPrimary),
-                 hex(Theme::primaryDark));
+                 hex(Theme::primaryDark), hex(Theme::surfaceDim));
     app.setStyleSheet(qss);
 }
 
@@ -76,6 +83,86 @@ QString outlinedButtonQss() {
 
 QString dotQss(QRgb color) {
     return QStringLiteral("background-color: %1; border-radius: 4px;").arg(hex(color));
+}
+
+QString capabilityChipQss(bool present) {
+    // Mirrors dish-mac's CapabilityChip: a filled primary-tinted pill when the
+    // capability is present, a dimmed outlined pill when it is not. The cyan
+    // fill is `Theme::primary` at ~14 % alpha — kept as a literal rgba() since
+    // QSS background-color needs the alpha inline and there is no half-alpha
+    // primary token. The "off" pill's text and border both reuse
+    // `Theme::muted` so the chip reads as a single dimmed unit.
+    if (present) {
+        return QStringLiteral("color: %1; background-color: rgba(79,227,255,0.14); "
+                              "border: 1px solid transparent; border-radius: 5px; "
+                              "padding: 2px 7px; font-size: 10px; font-weight: 500;")
+            .arg(hex(Theme::primary));
+    }
+    return QStringLiteral("color: %1; background-color: transparent; "
+                          "border: 1px solid %1; border-radius: 5px; "
+                          "padding: 2px 7px; font-size: 10px; font-weight: 500;")
+        .arg(hex(Theme::muted));
+}
+
+namespace {
+
+// Event filter that flips a QGraphicsOpacityEffect between 1.0 and 0.4
+// whenever the watched widget's enabled state changes. Living as a child of
+// the watched widget guarantees lifetime parity: deleting the widget deletes
+// the filter, which removes the only reference to the effect. Mirrors
+// dish-mac's DishOutlinedButtonStyle which animates opacity 1.0 <-> 0.4
+// on isEnabled — same canonical "control is not tappable right now" cue
+// at the same opacity value.
+class DisabledOpacityFilter : public QObject {
+  public:
+    DisabledOpacityFilter(QWidget* target, QGraphicsOpacityEffect* effect)
+        : QObject(target), effect_(effect) {
+        // Apply the initial state so a widget that was constructed disabled
+        // is immediately dimmed without waiting for a state-change event.
+        effect_->setOpacity(target->isEnabled() ? 1.0 : 0.4);
+    }
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::EnabledChange) {
+            auto* w = qobject_cast<QWidget*>(watched);
+            if (w != nullptr) { effect_->setOpacity(w->isEnabled() ? 1.0 : 0.4); }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    QGraphicsOpacityEffect* effect_;
+};
+
+} // namespace
+
+void applyDisabledOpacityEffect(QWidget* widget) {
+    if (widget == nullptr) { return; }
+    // QGraphicsOpacityEffect parented to the widget — Qt takes ownership and
+    // disposes of it when the widget is destroyed. Reusable across paint
+    // styles (border / hover / pressed) because it composites the whole
+    // control as one rendered image at the requested alpha.
+    auto* effect = new QGraphicsOpacityEffect(widget);
+    effect->setOpacity(widget->isEnabled() ? 1.0 : 0.4);
+    widget->setGraphicsEffect(effect);
+    widget->installEventFilter(new DisabledOpacityFilter(widget, effect));
+}
+
+QString batteryChipQss(bool lowBattery) {
+    // Same pill geometry as capabilityChipQss's "present" branch. A healthy
+    // battery reuses the cyan `primary` tint; a low battery (< ~15 %) swaps to
+    // the amber `warning` token so the player can't miss it. The faint fill
+    // alpha is kept as a literal rgba() — QSS needs the alpha inline and there
+    // is no half-alpha colour token.
+    if (lowBattery) {
+        return QStringLiteral("color: %1; background-color: rgba(245,158,11,0.16); "
+                              "border: 1px solid transparent; border-radius: 5px; "
+                              "padding: 2px 7px; font-size: 10px; font-weight: 600;")
+            .arg(hex(Theme::warning));
+    }
+    return QStringLiteral("color: %1; background-color: rgba(79,227,255,0.14); "
+                          "border: 1px solid transparent; border-radius: 5px; "
+                          "padding: 2px 7px; font-size: 10px; font-weight: 500;")
+        .arg(hex(Theme::primary));
 }
 
 } // namespace dish::ui
