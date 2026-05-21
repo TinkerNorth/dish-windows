@@ -180,4 +180,34 @@ struct RememberedWifi {
 QJsonArray rememberedListToJson(const QList<RememberedWifi>& list);
 QList<RememberedWifi> rememberedListFromJson(const QJsonArray& arr);
 
+// Typed user-facing notification. Mirrors dish-android's `DishNotification`
+// (core/model/DishNotification.kt). A pure value type — the queue surface
+// (NotificationQueue) and renderer (NotificationToastHost) consume it.
+//
+// `kind` is a free-form short tag for callers that want to dedup or categorise
+// programmatically ("server-unreachable", "session-lost", etc.); the renderer
+// itself does not switch on it. `severity` picks the rail / outline tint, the
+// way Android's Severity does. `dismissible` toggles a leading-edge close
+// affordance — persistent banners that the user can't dismiss (e.g. a
+// hardware-off warning) set this to false. `durationMs` is in ms; the
+// PERSISTENT sentinel keeps the toast up until the caller dismisses it
+// explicitly via NotificationQueue::dismiss.
+struct DishNotification {
+    enum class Severity { Info, Success, Warn, Error };
+
+    // Sentinel values for `durationMs`. Mirrors Android's
+    // DishNotification.Companion (DURATION_SHORT / _LONG / _PERSISTENT) so the
+    // two clients use the same wall-clock vocabulary for transient banners.
+    static constexpr int kDurationShortMs = 3'500;
+    static constexpr int kDurationLongMs = 6'000;
+    static constexpr int kDurationPersistent = 0;
+
+    int id = 0;
+    QString kind;
+    Severity severity = Severity::Info;
+    QString message;
+    bool dismissible = true;
+    int durationMs = kDurationShortMs;
+};
+
 } // namespace dish::models

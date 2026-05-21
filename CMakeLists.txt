@@ -177,6 +177,10 @@ set(DISH_UI_SOURCES
     src/UI/SettingsView.cpp
     src/UI/SettingsDialog.h
     src/UI/SettingsDialog.cpp
+    src/UI/NotificationQueue.h
+    src/UI/NotificationQueue.cpp
+    src/UI/NotificationToastHost.h
+    src/UI/NotificationToastHost.cpp
     src/UI/MainWindow.h
     src/UI/MainWindow.cpp
     src/main.cpp

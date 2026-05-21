@@ -18,6 +18,9 @@ class AppModel;
 
 namespace dish::ui {
 
+class NotificationQueue;
+class NotificationToastHost;
+
 // Dashboard window — mirrors dish-mac MainView and dish-android activity_main.
 // Status header, controllers section (one SlotCard per slot), telemetry
 // footer, and a "Manage" button that opens ConnectionsDialog.
@@ -31,7 +34,6 @@ class MainWindow : public QMainWindow {
     void rebuildHeader();
     void rebuildSlotList();
     void showPairingPrompt();
-    void onError(const QString& msg);
     void onTelemetryTick();
     void onManageClicked();
     void onSettingsClicked();
@@ -56,6 +58,13 @@ class MainWindow : public QMainWindow {
 
     QTimer* telemetryTimer_;
     quint64 telemetryTotal_ = 0;
+
+    // Owned by `this` (Qt parent semantics). The queue is the typed
+    // replacement for the legacy single-banner errorMessage signal — every
+    // emitted error toast goes through it. The host is the bottom-anchored
+    // strip that renders the stack. Both are wired by MainWindow's ctor.
+    NotificationQueue* notifications_ = nullptr;
+    NotificationToastHost* toastHost_ = nullptr;
 };
 
 } // namespace dish::ui

@@ -7,6 +7,8 @@
 #include "ConnectionsDialog.h"
 #include "Network/ConnectionHub.h"
 #include "Network/WifiConnectionManager.h"
+#include "NotificationQueue.h"
+#include "NotificationToastHost.h"
 #include "PairingDialog.h"
 #include "SettingsDialog.h"
 #include "SlotCard.h"
@@ -14,7 +16,6 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
@@ -118,7 +119,18 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     // Single observer on the canonical state slice — rebuild header + slot list
     // and react to any pending pairing prompt every time state changes.
     QObject::connect(model_, &AppModel::stateChanged, this, &MainWindow::onStateChanged);
-    QObject::connect(model_, &AppModel::errorMessage, this, &MainWindow::onError);
+
+    // Typed notification surface (slice replacement for the prior
+    // QMessageBox::warning popup). The queue is parented to MainWindow; the
+    // toast host is a transparent overlay anchored bottom-center of the
+    // central widget. AppModel::errorMessage funnels into queue->postError;
+    // the network layer can post additional typed notifications later
+    // without growing AppModel's signal surface.
+    notifications_ = new NotificationQueue(this);
+    toastHost_ = new NotificationToastHost(central);
+    toastHost_->attach(notifications_);
+    QObject::connect(model_, &AppModel::errorMessage, notifications_,
+                     &NotificationQueue::postError);
 
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
@@ -218,8 +230,6 @@ void MainWindow::showPairingPrompt() {
     PairingDialog dlg(server, model_, this);
     dlg.exec();
 }
-
-void MainWindow::onError(const QString& msg) { QMessageBox::warning(this, tr("Error"), msg); }
 
 void MainWindow::onTelemetryTick() {
     auto snap = model_->processor()->drainTelemetry();
