@@ -3,26 +3,36 @@
 
 #include "WifiConnection.h"
 
+#include <QCoreApplication>
+
 namespace dish::net {
 
 namespace {
+
+// Single stable translation context for every user-facing error this file
+// surfaces. The class lacks Q_OBJECT (and the free function isn't a method
+// anyway), so QCoreApplication::translate is the canonical Qt mechanism for
+// participating in the .ts catalog without a tr() method.
+constexpr const char* kTrContext = "dish::net::WifiConnection";
 
 QString controllerAckErrorMessage(std::uint8_t result) {
     // Matches the satellite/src/core/types.h codes verbatim.
     switch (result) {
     case 0x01:
-        return QStringLiteral(
-            "Server has no virtual gamepad backend — controller cannot be created");
+        return QCoreApplication::translate(
+            kTrContext, "Server has no virtual gamepad backend — controller cannot be created");
     case 0x02:
-        return QStringLiteral("Server has no free controller slots");
+        return QCoreApplication::translate(kTrContext, "Server has no free controller slots");
     case 0x03:
-        return QStringLiteral("Controller already added on the server");
+        return QCoreApplication::translate(kTrContext, "Controller already added on the server");
     case 0x04:
-        return QStringLiteral("Controller not found on the server");
+        return QCoreApplication::translate(kTrContext, "Controller not found on the server");
     case 0x05:
-        return QStringLiteral("Server failed to plug in the virtual controller");
+        return QCoreApplication::translate(kTrContext,
+                                           "Server failed to plug in the virtual controller");
     default:
-        return QStringLiteral("Server rejected controller add (code %1)").arg(result);
+        return QCoreApplication::translate(kTrContext, "Server rejected controller add (code %1)")
+            .arg(result);
     }
 }
 
@@ -188,7 +198,8 @@ void WifiConnection::pollControllerAck() {
         // down and surface it so ConnectionHub rolls the binding back.
         const auto slotId = boundSlotId_.value_or(QString());
         finishRegistration();
-        emit errorOccurred(QStringLiteral("Connection dropped before controller acknowledgement"));
+        emit errorOccurred(QCoreApplication::translate(
+            kTrContext, "Connection dropped before controller acknowledgement"));
         if (!slotId.isEmpty()) { emit registrationFailed(slotId); }
         return;
     }
@@ -198,8 +209,8 @@ void WifiConnection::pollControllerAck() {
         if (++ackPollCount_ >= kAckWaitAttempts) {
             const auto slotId = boundSlotId_.value_or(QString());
             finishRegistration();
-            emit errorOccurred(
-                QStringLiteral("Server did not acknowledge controller add (timeout)"));
+            emit errorOccurred(QCoreApplication::translate(
+                kTrContext, "Server did not acknowledge controller add (timeout)"));
             if (!slotId.isEmpty()) { emit registrationFailed(slotId); }
         }
         return;

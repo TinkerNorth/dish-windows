@@ -248,4 +248,96 @@
         <translation>Prati igru</translation>
     </message>
 </context>
+<context>
+    <name>dish::net::WifiConnection</name>
+    <message>
+        <source>Server has no virtual gamepad backend — controller cannot be created</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Server has no free controller slots</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Controller already added on the server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Controller not found on the server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Server failed to plug in the virtual controller</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Server rejected controller add (code %1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connection dropped before controller acknowledgement</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Server did not acknowledge controller add (timeout)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>dish::net::WifiConnectionManager</name>
+    <message>
+        <source>No servers found — check your network</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pairing failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Server unreachable — has it moved networks? (%1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No shared key — re-pair needed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bad shared key — re-pair needed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>connection failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Bad token from server</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>dish::net::PairingClient</name>
+    <message>
+        <source>Server unreachable</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>dish::models::DiscoverySource</name>
+    <message>
+        <source>UDP broadcast</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>mDNS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>mDNS + broadcast</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
 </TS>

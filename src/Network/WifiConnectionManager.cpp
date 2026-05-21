@@ -8,6 +8,7 @@
 #include "PairingClient.h"
 #include "Util/Hex.h"
 
+#include <QCoreApplication>
 #include <QHostInfo>
 #include <QSet>
 #include <QTimer>
@@ -20,6 +21,13 @@
 namespace dish::net {
 
 namespace {
+
+// Single stable translation context so every user-facing error string in this
+// file resolves under one .ts <context> entry. WifiConnectionManager DOES
+// inherit Q_OBJECT, but several of the error strings below are emitted from
+// captured lambdas / detached helpers where `tr()` isn't in scope; for
+// consistency we route them all through QCoreApplication::translate.
+constexpr const char* kTrContext = "dish::net::WifiConnectionManager";
 
 ConnectionEvent makeError(const QString& msg) { return {ConnectionEventKind::Error, {}, msg}; }
 
@@ -58,8 +66,8 @@ void WifiConnectionManager::startDiscovery() {
         emit discoveredChanged();
         emit scanningChanged();
         if (discovered_.isEmpty()) {
-            emit connectionEvent(
-                makeError(QStringLiteral("No servers found — check your network")));
+            emit connectionEvent(makeError(QCoreApplication::translate(
+                kTrContext, "No servers found — check your network")));
         }
         watcher->deleteLater();
     });
@@ -174,8 +182,8 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
                             if (pin.isEmpty()) {
                                 emit connectionEvent(pairingRequired(server));
                             } else {
-                                emit connectionEvent(makeError(
-                                    pair.error.value_or(QStringLiteral("Pairing failed"))));
+                                emit connectionEvent(makeError(pair.error.value_or(
+                                    QCoreApplication::translate(kTrContext, "Pairing failed"))));
                             }
                         } else {
                             conn->markStale();
@@ -189,7 +197,8 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
                         if (intent == ConnectIntent::UserInitiated) {
                             conn->markDisconnected();
                             emit connectionEvent(makeError(
-                                QStringLiteral("Server unreachable — has it moved networks? (%1)")
+                                QCoreApplication::translate(
+                                    kTrContext, "Server unreachable — has it moved networks? (%1)")
                                     .arg(arm.message)));
                         } else {
                             // We still hold a (presumably valid) shared key,
@@ -232,14 +241,16 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
     if (!keyHex.has_value() || keyHex->size() != 64) {
         parkOnFailure(conn);
         clearInFlight(conn->id());
-        emitErrorIfUserInitiated(intent, QStringLiteral("No shared key — re-pair needed"));
+        emitErrorIfUserInitiated(intent, QCoreApplication::translate(
+                                             kTrContext, "No shared key — re-pair needed"));
         return;
     }
     const auto keyBytes = util::fromHex(keyHex->toStdString());
     if (!keyBytes || keyBytes->size() != 32) {
         parkOnFailure(conn);
         clearInFlight(conn->id());
-        emitErrorIfUserInitiated(intent, QStringLiteral("Bad shared key — re-pair needed"));
+        emitErrorIfUserInitiated(intent, QCoreApplication::translate(
+                                             kTrContext, "Bad shared key — re-pair needed"));
         return;
     }
     std::array<std::uint8_t, 32> key{};
@@ -254,15 +265,17 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 clearInFlight(conn->id());
                 emitErrorIfUserInitiated(
                     intent,
-                    QStringLiteral("Error: %1")
-                        .arg(resp.error.value_or(QStringLiteral("connection failed"))));
+                    QCoreApplication::translate(kTrContext, "Error: %1")
+                        .arg(resp.error.value_or(
+                            QCoreApplication::translate(kTrContext, "connection failed"))));
                 return;
             }
             const auto tok = util::fromHex(resp.token->toStdString());
             if (!tok || tok->size() != 4) {
                 parkOnFailure(conn);
                 clearInFlight(conn->id());
-                emitErrorIfUserInitiated(intent, QStringLiteral("Bad token from server"));
+                emitErrorIfUserInitiated(
+                    intent, QCoreApplication::translate(kTrContext, "Bad token from server"));
                 return;
             }
             std::array<std::uint8_t, 4> token{};

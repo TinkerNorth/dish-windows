@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
@@ -29,15 +30,20 @@ inline constexpr int kDefaultPairPort = 9443;
 // Not a wire field — assigned client-side by the discovery merge.
 enum class DiscoverySource { Broadcast, Mdns, Both };
 
-// Short human label for the connections list.
+// Short human label for the connections list. Wrapped in
+// QCoreApplication::translate so the labels participate in the .ts catalog;
+// the strings are protocol acronyms (UDP / mDNS) and will typically read the
+// same in every locale, but routing them through translate keeps the i18n
+// pipeline complete and lets a future translator override if needed.
 inline QString discoverySourceLabel(DiscoverySource source) {
+    constexpr const char* ctx = "dish::models::DiscoverySource";
     switch (source) {
     case DiscoverySource::Broadcast:
-        return QStringLiteral("UDP broadcast");
+        return QCoreApplication::translate(ctx, "UDP broadcast");
     case DiscoverySource::Mdns:
-        return QStringLiteral("mDNS");
+        return QCoreApplication::translate(ctx, "mDNS");
     case DiscoverySource::Both:
-        return QStringLiteral("mDNS + broadcast");
+        return QCoreApplication::translate(ctx, "mDNS + broadcast");
     }
     return {};
 }

@@ -4,6 +4,7 @@
 #include "PairingClient.h"
 
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -20,6 +21,10 @@
 namespace dish::net {
 
 namespace {
+
+// Stable translation context for the user-visible fallback text classify()
+// produces when the server didn't return an error reason of its own.
+constexpr const char* kTrContext = "dish::net::PairingClient";
 
 constexpr int kTimeoutMs = 5000;
 
@@ -41,7 +46,8 @@ PairingClient::Outcome PairingClient::classify(const models::PairResponse& respo
         return Success{*response.sharedKey};
     }
     if (response.reachable) { return AuthRequired{}; }
-    return Unreachable{response.error.value_or(QStringLiteral("Server unreachable"))};
+    return Unreachable{response.error.value_or(
+        QCoreApplication::translate(kTrContext, "Server unreachable"))};
 }
 
 // Pairing is now POST /api/pair on the satellite's HTTPS client server (it was
