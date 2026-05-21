@@ -86,7 +86,13 @@ find_package(Threads REQUIRED)
 # default (no OpenSSL DLLs to deploy). A build configured against a Qt with no
 # TLS backend would fail at runtime with "TLS initialization failed"; the
 # standard Qt for Windows binaries are fine.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg LinguistTools)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
+# LinguistTools is OPTIONAL — the Qt Linguist .ts → .qm pipeline is only
+# active when qttools is installed. When it's not present we still build a
+# working app: every `tr("...")` falls back to the English source string.
+# The translation catalogues under `translations/` are checked in and don't
+# need to be rebuilt every time. Mirrors the dish-linux pattern.
+find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS LinguistTools)
 
 # libsodium and SDL2 come from vcpkg on Windows (see vcpkg.json). The
 # `unofficial-` prefix on sodium is vcpkg's "no upstream CMake config"
@@ -205,14 +211,18 @@ target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui Qt6::Svg dish
 # ${CMAKE_CURRENT_BINARY_DIR}/.qm. The RESOURCE_PREFIX puts them at
 # `:/i18n/dish_<locale>.qm` inside the binary.
 # --------------------------------------------------------------------------
-qt_add_translations(Dish
-    TS_FILES
-        translations/dish_bs.ts
-        translations/dish_de.ts
-        translations/dish_es.ts
-        translations/dish_fr.ts
-        translations/dish_pt_BR.ts
-    RESOURCE_PREFIX "/i18n")
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(Dish
+        TS_FILES
+            translations/dish_bs.ts
+            translations/dish_de.ts
+            translations/dish_es.ts
+            translations/dish_fr.ts
+            translations/dish_pt_BR.ts
+        RESOURCE_PREFIX "/i18n")
+else()
+    message(STATUS "Qt6LinguistTools not found — building without translation catalogues.")
+endif()
 
 # WIN32 above creates a windowed (non-console) subsystem binary. Qt provides
 # a small Win32 entry-point shim (`qtmain` / WinMain via Qt6::EntryPoint)
