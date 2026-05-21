@@ -107,6 +107,32 @@ void WifiConnection::markDisconnected() {
     emit changed();
 }
 
+void WifiConnection::markStale() {
+    // Same teardown sequence as markDisconnected, but lands in Stale so the
+    // hub can render a "Needs pairing" chip rather than the bare "Offline" cue.
+    // Cleared the moment a silent retry promotes the session back to Live, or
+    // the user kicks off a fresh user-initiated pair from the UI.
+    auto existing = clientRef_.get();
+    if (state_ == SessionState::Stale && !existing) { return; }
+    if (aliveTimer_ != nullptr) {
+        aliveTimer_->stop();
+        aliveTimer_->deleteLater();
+        aliveTimer_ = nullptr;
+    }
+    if (ackPollTimer_ != nullptr) { ackPollTimer_->stop(); }
+    controllerRegistering_ = false;
+    if (existing) {
+        existing->stopHeartbeat();
+        existing->stopReceiveLoop();
+        existing->closeSocket();
+    }
+    clientRef_.set(nullptr);
+    connectionId_.reset();
+    controllerAdded_ = false;
+    state_ = SessionState::Stale;
+    emit changed();
+}
+
 void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool hasLightbar,
                                 bool hasMotion) {
     boundSlotId_ = slotId;

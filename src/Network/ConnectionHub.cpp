@@ -56,16 +56,12 @@ void ConnectionHub::rebuild() {
         // - SessionState::Linking   -> LinkState::Connecting
         // - SessionState::Faltering -> LinkState::Unstable (not yet reachable --
         //   native exposes only binary alive)
+        // - SessionState::Stale     -> LinkState::Stale (post-onDead silent
+        //   recovery path; row chip reads "Needs pairing" until the retry
+        //   lands a Live session or the user kicks a fresh pair)
         // - SessionState::Idle / null:
         //     in discoveredIds      -> LinkState::Ready
         //     not in discoveredIds  -> LinkState::Saved
-        //
-        // TODO(LinkState::Stale): a server-side forget should land us in
-        // LinkState::Stale, but detecting that requires the server to return a
-        // `PAIRING_UNKNOWN` error so we can distinguish "peer forgot us" from
-        // a transient unreachability. Until that protocol bit lands, a
-        // forgotten device falls through to Saved/Ready and the user only
-        // sees connect failures.
         models::LinkState live;
         if (conn != nullptr) {
             switch (conn->state()) {
@@ -82,6 +78,12 @@ void ConnectionHub::rebuild() {
                 // but never taken. Once the miss count is exposed, the
                 // alive-poll should bump SessionState to Faltering instead.
                 live = models::LinkState::Unstable;
+                break;
+            case SessionState::Stale:
+                // Silent-recovery marker: heartbeat stream dropped or an
+                // auto-reconnect's pair came back AuthRequired. The row chip
+                // says "Needs pairing"; the manager keeps retrying silently.
+                live = models::LinkState::Stale;
                 break;
             case SessionState::Idle:
                 live = discoveredIds.contains(id) ? models::LinkState::Ready

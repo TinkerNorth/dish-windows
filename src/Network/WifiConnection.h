@@ -34,7 +34,15 @@ namespace dish::net {
 //                consecutive-missed count separately from the binary
 //                isAlive() boolean. Today the alive-poll flips Live → Idle
 //                directly when misses hit the threshold.
-enum class SessionState { Idle, Linking, Live, Faltering };
+// - Stale      — the session collapsed but we still hold a shared key for the
+//                server. Used by the silent-recovery path (alive-poll's onDead
+//                callback) so the UI chip reads "Needs pairing" rather than
+//                "Offline" while WifiConnectionManager retries the handshake
+//                in the background. Mirrors dish-android's `staleSatelliteIds`
+//                marker (see SatelliteConnectionManager.kt:128). Cleared the
+//                moment a silent retry lands a Live session, or the user
+//                explicitly drives a fresh pair from the UI.
+enum class SessionState { Idle, Linking, Live, Faltering, Stale };
 
 // Thread-safe holder for the live SatelliteClient pointer. Writes from the Qt
 // main thread (markConnected/markDisconnected); reads from the SDL gamepad
@@ -77,6 +85,12 @@ class WifiConnection : public QObject {
     void markConnected(std::shared_ptr<SatelliteClient> client, const QString& connectionId,
                        std::function<void()> onDead);
     void markDisconnected();
+    // Like markDisconnected, but lands in SessionState::Stale instead of Idle.
+    // Used by the silent-recovery path: a dropped session whose shared key is
+    // still locally valid is "Needs pairing" to the UI (chip cue), not
+    // "Offline", until either the silent retry succeeds (back to Live) or the
+    // user takes an explicit action.
+    void markStale();
 
     // Bind this connection to a controller slot. `controllerType` is the
     // satellite virtual-device type (CONTROLLER_TYPE_XBOX / _PLAYSTATION).

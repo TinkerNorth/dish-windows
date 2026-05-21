@@ -23,6 +23,25 @@ struct ConnectionEvent {
     QString message;                 // only meaningful for Error
 };
 
+// Why a connect attempt was kicked off. The same connectTo / pairAndConnect
+// plumbing is shared between three callers with very different user-feedback
+// expectations (mirrors dish-android's SatelliteConnectionManager.ConnectIntent):
+//
+//   * UserInitiated   — the user tapped Connect on a discovered row. Every
+//                       failure path SHOULD surface a toast — they just asked
+//                       for the action and would otherwise see no signal.
+//   * AutoReconnect   — fired on app start / from the 15 s auto-reconnect
+//                       timer. Failure MUST be silent: the row chip's natural
+//                       Connecting → Saved/Stale flip is the feedback. A toast
+//                       on every cold start the satellite is offline is pure
+//                       noise.
+//   * RetryAfterDeath — fired by the alive-poll's onDead path after a short
+//                       backoff. Same silence policy as AutoReconnect.
+//
+// Threaded through pairAndConnect / openSession; every error emission gates
+// on it via emitErrorIfUserInitiated().
+enum class ConnectIntent { UserInitiated, AutoReconnect, RetryAfterDeath };
+
 // Owns the pool of live + remembered WiFi sessions. Each session runs its own
 // native socket, heartbeat and ACK loop so multiple servers can be active in
 // parallel. Mirrors dish-mac/Network/WifiConnectionManager.swift.
@@ -46,7 +65,11 @@ class WifiConnectionManager : public QObject {
     bool isPairingInFlight(const QString& id) const { return pairingInFlight_.contains(id); }
 
     void startDiscovery();
-    void connectTo(const models::DiscoveredServer& server);
+    // Default intent is UserInitiated — `connectTo` is the public API the UI
+    // tap binds to. Auto-reconnect and the post-onDead silent-retry path go
+    // through the same plumbing with AutoReconnect / RetryAfterDeath.
+    void connectTo(const models::DiscoveredServer& server,
+                   ConnectIntent intent = ConnectIntent::UserInitiated);
     void pairWithPin(const models::DiscoveredServer& server, const QString& pin);
     void disconnect(const QString& id);
     void forget(const QString& id);
@@ -75,8 +98,18 @@ class WifiConnectionManager : public QObject {
   private:
     WifiConnection* ensureConnection(const models::DiscoveredServer& server);
     void pairAndConnect(WifiConnection* conn, const models::DiscoveredServer& server,
-                        const QString& pin);
-    void openSession(WifiConnection* conn, const models::DiscoveredServer& server);
+                        const QString& pin, ConnectIntent intent);
+    void openSession(WifiConnection* conn, const models::DiscoveredServer& server,
+                     ConnectIntent intent);
+    // Emit a ConnectionEventKind::Error toast only when the user has a recent
+    // mental model for "I asked for this action". On AutoReconnect /
+    // RetryAfterDeath the row chip already conveys the result (Connecting →
+    // Saved / Stale / Online) and a toast on top is noise.
+    void emitErrorIfUserInitiated(ConnectIntent intent, const QString& message);
+    // Silent reconnect after a brief backoff. Fired from the alive-poll's
+    // onDead callback so a momentary Wi-Fi blip self-heals before the user
+    // notices, without bouncing the satellite with back-to-back retries.
+    void scheduleSilentRetry(const QString& id);
 
     ConnectionStore* store_;
     HTTPClient* http_;
