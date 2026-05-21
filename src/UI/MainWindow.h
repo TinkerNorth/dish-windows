@@ -7,6 +7,7 @@
 #include <QMainWindow>
 
 class QLabel;
+class QProgressBar;
 class QPushButton;
 class QTimer;
 class QVBoxLayout;
@@ -16,6 +17,9 @@ class AppModel;
 }
 
 namespace dish::ui {
+
+class NotificationQueue;
+class NotificationToastHost;
 
 // Dashboard window — mirrors dish-mac MainView and dish-android activity_main.
 // Status header, controllers section (one SlotCard per slot), telemetry
@@ -30,9 +34,9 @@ class MainWindow : public QMainWindow {
     void rebuildHeader();
     void rebuildSlotList();
     void showPairingPrompt();
-    void onError(const QString& msg);
     void onTelemetryTick();
     void onManageClicked();
+    void onSettingsClicked();
     void onBindRequested(const QString& slotId, const QString& connectionId);
     void onUnbindRequested(const QString& slotId);
 
@@ -41,7 +45,12 @@ class MainWindow : public QMainWindow {
     QLabel* statusDot_;
     QLabel* statusText_;
     QLabel* summaryText_;
+    QPushButton* settingsButton_;
     QPushButton* manageButton_;
+    // Indeterminate bar shown while a controller registration is in flight
+    // (state().busy). Replaces the old ~2 s synchronous UI freeze with a
+    // visible "working" cue.
+    QProgressBar* dashboardSpinner_;
     QVBoxLayout* slotsLayout_;
     QLabel* slotsEmpty_;
     QLabel* telemetryLeft_;
@@ -49,6 +58,13 @@ class MainWindow : public QMainWindow {
 
     QTimer* telemetryTimer_;
     quint64 telemetryTotal_ = 0;
+
+    // Owned by `this` (Qt parent semantics). The queue is the typed
+    // replacement for the legacy single-banner errorMessage signal — every
+    // emitted error toast goes through it. The host is the bottom-anchored
+    // strip that renders the stack. Both are wired by MainWindow's ctor.
+    NotificationQueue* notifications_ = nullptr;
+    NotificationToastHost* toastHost_ = nullptr;
 };
 
 } // namespace dish::ui

@@ -10,11 +10,13 @@ ScreenWakeController::ScreenWakeController(DisplaySleepInhibitor* inhibitor, QSt
 
 int ScreenWakeController::streamingCount(
     const QHash<QString, QString>& bindings,
-    const QHash<QString, models::ConnectionLive>& connectionStates) {
+    const QHash<QString, models::LinkState>& connectionStates) {
     int count = 0;
     for (auto it = bindings.begin(); it != bindings.end(); ++it) {
-        if (connectionStates.value(it.value(), models::ConnectionLive::Idle) ==
-            models::ConnectionLive::Connected) {
+        // Only a session that's actually live (LinkState::Connected) inhibits
+        // sleep — a Connecting / Ready / Saved binding isn't streaming.
+        if (connectionStates.value(it.value(), models::LinkState::Saved) ==
+            models::LinkState::Connected) {
             ++count;
         }
     }

@@ -7,13 +7,16 @@
 #include "ConnectionsDialog.h"
 #include "Network/ConnectionHub.h"
 #include "Network/WifiConnectionManager.h"
+#include "NotificationQueue.h"
+#include "NotificationToastHost.h"
 #include "PairingDialog.h"
+#include "SettingsDialog.h"
 #include "SlotCard.h"
 #include "Theme.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMessageBox>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStatusBar>
@@ -23,6 +26,7 @@
 namespace dish::ui {
 
 MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), model_(model) {
+    // "Dish" is the brand name — never localized.
     setWindowTitle(QStringLiteral("Dish"));
     resize(520, 640);
 
@@ -39,9 +43,11 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     statusDot_->setStyleSheet(dotQss(Theme::muted));
     statusText_ = new QLabel(central);
     statusText_->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));
-    manageButton_ = new QPushButton(QStringLiteral("Manage"), central);
+    settingsButton_ = new QPushButton(tr("Settings"), central);
+    manageButton_ = new QPushButton(tr("Manage"), central);
     headerRow->addWidget(statusDot_, 0, Qt::AlignVCenter);
     headerRow->addWidget(statusText_, 1, Qt::AlignVCenter);
+    headerRow->addWidget(settingsButton_, 0, Qt::AlignVCenter);
     headerRow->addWidget(manageButton_, 0, Qt::AlignVCenter);
 
     summaryText_ = new QLabel(central);
@@ -54,13 +60,26 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     headerBox->addWidget(summaryText_);
     root->addLayout(headerBox);
 
+    // Indeterminate "registering a controller" spinner. range(0,0) makes Qt
+    // render it as a busy bar; retainSizeWhenHidden keeps the layout from
+    // jumping when it shows / hides. Hidden until state().busy goes true.
+    dashboardSpinner_ = new QProgressBar(central);
+    dashboardSpinner_->setRange(0, 0);
+    dashboardSpinner_->setTextVisible(false);
+    dashboardSpinner_->setFixedHeight(4);
+    auto dashSp = dashboardSpinner_->sizePolicy();
+    dashSp.setRetainSizeWhenHidden(true);
+    dashboardSpinner_->setSizePolicy(dashSp);
+    dashboardSpinner_->setVisible(false);
+    root->addWidget(dashboardSpinner_);
+
     auto* divider = new QFrame(central);
     divider->setFrameShape(QFrame::HLine);
     divider->setStyleSheet(QStringLiteral("color: %1;").arg(hex(Theme::outline)));
     root->addWidget(divider);
 
     // Controllers section -------------------------------------------------
-    auto* slotsHeader = new QLabel(QStringLiteral("CONTROLLERS"), central);
+    auto* slotsHeader = new QLabel(tr("CONTROLLERS"), central);
     slotsHeader->setStyleSheet(sectionHeaderQss());
     root->addWidget(slotsHeader);
 
@@ -71,7 +90,7 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     slotsLayout_ = new QVBoxLayout(slotsContainer);
     slotsLayout_->setContentsMargins(0, 0, 0, 0);
     slotsLayout_->setSpacing(8);
-    slotsEmpty_ = new QLabel(QStringLiteral("No controllers connected"), slotsContainer);
+    slotsEmpty_ = new QLabel(tr("No controllers connected"), slotsContainer);
     slotsEmpty_->setStyleSheet(
         QStringLiteral("color: %1; font-size: 12px;").arg(hex(Theme::muted)));
     slotsLayout_->addWidget(slotsEmpty_);
@@ -96,10 +115,22 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     setCentralWidget(central);
 
     QObject::connect(manageButton_, &QPushButton::clicked, this, &MainWindow::onManageClicked);
+    QObject::connect(settingsButton_, &QPushButton::clicked, this, &MainWindow::onSettingsClicked);
     // Single observer on the canonical state slice — rebuild header + slot list
     // and react to any pending pairing prompt every time state changes.
     QObject::connect(model_, &AppModel::stateChanged, this, &MainWindow::onStateChanged);
-    QObject::connect(model_, &AppModel::errorMessage, this, &MainWindow::onError);
+
+    // Typed notification surface (slice replacement for the prior
+    // QMessageBox::warning popup). The queue is parented to MainWindow; the
+    // toast host is a transparent overlay anchored bottom-center of the
+    // central widget. AppModel::errorMessage funnels into queue->postError;
+    // the network layer can post additional typed notifications later
+    // without growing AppModel's signal surface.
+    notifications_ = new NotificationQueue(this);
+    toastHost_ = new NotificationToastHost(central);
+    toastHost_->attach(notifications_);
+    QObject::connect(model_, &AppModel::errorMessage, notifications_,
+                     &NotificationQueue::postError);
 
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
@@ -113,6 +144,7 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
 void MainWindow::onStateChanged() {
     rebuildHeader();
     rebuildSlotList();
+    dashboardSpinner_->setVisible(model_->state().busy);
     if (model_->state().pairingTarget.has_value()) { showPairingPrompt(); }
 }
 
@@ -121,7 +153,7 @@ void MainWindow::rebuildHeader() {
     int live = 0;
     QString firstLabel;
     for (const auto& c : conns) {
-        if (c.live == models::ConnectionLive::Connected) {
+        if (c.live == models::LinkState::Connected) {
             ++live;
             if (firstLabel.isEmpty()) { firstLabel = c.label; }
         }
@@ -129,13 +161,13 @@ void MainWindow::rebuildHeader() {
     const int total = static_cast<int>(conns.size());
     QString status;
     if (live == 0 && total == 0) {
-        status = QStringLiteral("No connections yet");
+        status = tr("No connections yet");
     } else if (live == 0) {
-        status = QStringLiteral("%1 remembered").arg(total);
+        status = tr("%1 remembered").arg(total);
     } else if (live == 1) {
         status = firstLabel;
     } else {
-        status = QStringLiteral("%1 active connections").arg(live);
+        status = tr("%1 online").arg(live);
     }
     statusText_->setText(status);
     statusDot_->setStyleSheet(dotQss(live > 0 ? Theme::success : Theme::muted));
@@ -144,11 +176,11 @@ void MainWindow::rebuildHeader() {
 
     QString summary;
     if (live == 0 && total == 0) {
-        summary = QStringLiteral("Tap Manage to add one");
+        summary = tr("Tap Manage to add one");
     } else if (live == 0) {
-        summary = QStringLiteral("%1 remembered").arg(total);
+        summary = tr("%1 remembered").arg(total);
     } else {
-        summary = QStringLiteral("%1 of %2 connected").arg(live).arg(total);
+        summary = tr("%1 of %2 online").arg(live).arg(total);
     }
     summaryText_->setText(summary);
 }
@@ -189,14 +221,14 @@ void MainWindow::rebuildSlotList() {
 void MainWindow::showPairingPrompt() {
     auto target = model_->state().pairingTarget;
     if (!target.has_value()) { return; }
-    PairingDialog dlg(*target, this);
+    // Async mode: the dialog drives pairWithPin itself so the Pair button
+    // can show the in-flight spinner + disabled treatment per the design
+    // spec. clearPairingTarget() drops the one-shot signal before the dialog
+    // opens so we don't re-enter from the upcoming stateChanged tick.
     const auto server = *target;
     model_->clearPairingTarget();
-    if (dlg.exec() == QDialog::Accepted) { model_->wifi()->pairWithPin(server, dlg.pin()); }
-}
-
-void MainWindow::onError(const QString& msg) {
-    QMessageBox::warning(this, QStringLiteral("Error"), msg);
+    PairingDialog dlg(server, model_, this);
+    dlg.exec();
 }
 
 void MainWindow::onTelemetryTick() {
@@ -209,6 +241,11 @@ void MainWindow::onTelemetryTick() {
 
 void MainWindow::onManageClicked() {
     ConnectionsDialog dlg(model_, this);
+    dlg.exec();
+}
+
+void MainWindow::onSettingsClicked() {
+    SettingsDialog dlg(model_->featureSettings(), this);
     dlg.exec();
 }
 

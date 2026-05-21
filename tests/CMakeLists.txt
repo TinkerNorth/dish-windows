@@ -20,12 +20,21 @@ set(DISH_TEST_SOURCES
     test_endian.cpp
     test_models.cpp
     test_beacon_parser.cpp
+    test_mdns_discovery.cpp
     test_gamepad_input_processor.cpp
+    test_sdl_motion_convert.cpp
     test_pairing_client_classify.cpp
     test_screen_wake_controller.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
-    test_satellite_client_rumble.cpp)
+    test_satellite_client_rumble.cpp
+    test_satellite_client_motion.cpp
+    test_satellite_client_touchpad.cpp
+    test_satellite_client_lightbar.cpp
+    test_output_command_queue.cpp
+    test_lightbar_routing.cpp
+    test_feature_settings.cpp
+    test_host_battery.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

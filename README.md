@@ -18,11 +18,13 @@ Qt6 Widgets (MainWindow, ConnectionsDialog, PairingDialog, SlotCard)
         ├── WifiConnectionManager
         │     └── WifiConnection (per-server)
         │           └── SatelliteClient  ── encrypted UDP + heartbeat + ACK loop
-        ├── LANDiscovery       ── UDP broadcast listener on :9879
+        ├── LANDiscovery       ── legacy UDP broadcast listener on :9879
+        ├── MdnsDiscovery      ── mDNS / Bonjour browse (modern discovery path)
         ├── PairingClient      ── TCP pair handshake on :9878
         ├── HTTPClient         ── POST/DELETE /api/connections on :9877
         └── SDLGamepadBridge   ── SDL_GameController event pump (own thread)
               └── GamepadInputProcessor → SatelliteClient.sendReport()
+                                        → sendMotion / sendBattery / sendTouchpad
 ```
 
 ### Hot path (input → wire)
@@ -85,9 +87,9 @@ UDP socket, and the dish actuates the matching SDL controller via XInput.
   ┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐
   │ SatelliteClient      │ ───► │ WifiConnection       │ ───► │ SDLGamepadBridge     │
   │  • receive thread    │      │  • per-conn handler  │      │  • applyRumble(...)  │
-  │  • parseRumbleMsg    │      │    (installed by     │      │    → SDL_Game-       │
-  │  • dispatch to       │      │     AppModel via     │      │      ControllerRumble│
-  │    handler           │      │     poolChanged)     │      │    → ...SetLED       │
+  │  • parseRumbleMsg    │      │    (installed by     │      │  • queue → SDL thread│
+  │  • dispatch to       │      │     AppModel via     │      │    → SDL_Game-       │
+  │    handler           │      │     poolChanged)     │      │      ControllerRumble│
   └──────────────────────┘      └──────────────────────┘      └──────────┬───────────┘
                                                                          │
                                                                          ▼
@@ -108,9 +110,39 @@ On the dish-windows side:
   calls `SDLGamepadBridge::applyRumble`.
 * **Actuation** — `SDL_GameControllerRumble(strong, weak, durMs)` for the
   motors; for Xbox-class controllers SDL routes that straight through to
-  XInput's native dual-motor API. `SDL_GameControllerSetLED(R, G, B)` is
-  used when the satellite published a DS4 lightbar colour. Both calls are
-  silent no-ops on pads that don't expose the corresponding feature.
+  XInput's native dual-motor API. A no-op on pads without rumble.
+
+The SDL output calls run on the SDL thread, not the receive thread that
+decoded the packet: `applyRumble` pushes an `OutputCommand` onto a
+thread-safe `OutputCommandQueue` and `SDLGamepadBridge::runLoop` drains it,
+resolving the `SDL_GameController*` on the SDL thread. That closes a
+use-after-close race — the SDL thread is also the only thread allowed to
+`SDL_GameControllerClose` a controller on device removal.
+
+## Light bar (return path)
+
+The DualSense / DualShock 4 light bar has its own return path, **decoupled
+from rumble** (Task 1.4): a game that only changes the LED colour — with no
+vibration — still drives the pad. The satellite emits a dedicated
+`MSG_LIGHTBAR = 0x000D` packet whose inner payload is
+`controller_index(1) + r(1) + g(1) + b(1)`.
+
+* **Parser** — `SatelliteClient::parseLightbarMessage`, a pure static
+  decoder (see `tests/test_satellite_client_lightbar.cpp`).
+* **Routing** — `AppModel` installs a lightbar handler alongside the rumble
+  handler; it resolves the bound device the same way and calls
+  `SDLGamepadBridge::applyLightbar`, which queues an `OutputCommand` so
+  `SDL_GameControllerSetLED(R, G, B)` runs on the SDL thread. A no-op on
+  pads without an LED.
+* **Capability** — when a bound pad reports `SDL_GameControllerHasLED`, the
+  `MSG_CONTROLLER_ADD` capability word carries `CAP_LIGHTBAR = 0x0008`
+  (`caps = analogTriggers | rumble | motion | CAP_LIGHTBAR`). The satellite
+  sends colour over `MSG_LIGHTBAR` only.
+* **Setting** — a *Light bar* preference (**Settings** button → *Follow
+  game* / *Off*) gates the apply. *Off* suppresses the host colour; it does
+  not affect rumble. The choice is persisted via `FeatureSettings`. The pure
+  routing rule lives in `LightbarRouting.h` and is unit-tested in
+  `tests/test_lightbar_routing.cpp`.
 
 ## Cross-platform behaviour parity
 
@@ -148,6 +180,83 @@ user-visible behaviour stays predictable across platforms:
   `SDL_GameControllerType` enum), USB VID / PID, and the SDL GUID. Aimed
   at users reporting *"my pad doesn't work"* — same idea as Android's
   SatelliteJNI `DEVCAPS` log.
+- **Motion-capability chip in the controller list.** Each controller row
+  carries a small chip showing whether that pad has a gyro/accelerometer:
+  a cyan *"Gyro"* chip when motion aiming is available and being forwarded
+  (DualSense / DualShock 4 / Switch-class pads), or a dimmed *"No gyro"*
+  chip when the pad has no motion hardware (Xbox pads). The state is always
+  drawn — never just an absent indicator — so *"motion not available"* is
+  unambiguous. The capability comes from `SDL_GameControllerHasSensor` and
+  is plumbed `SDLGamepadBridge → ControllerSlot.capabilities → SlotCard`.
+  Mirrors the capability chip in dish-mac's slot card.
+- **Lightbar-capability chip in the controller list.** A pad with an
+  addressable RGB LED (DualSense / DualShock 4 — detected via
+  `SDL_GameControllerHasLED`) also gets a *"Lightbar"* chip. Unlike the
+  motion chip this is shown only when the LED is present — most pads have
+  none and a *"no lightbar"* callout would just be noise. Same plumbing
+  path as the motion chip.
+
+## mDNS / Bonjour discovery (Task 1.6)
+
+Discovery runs **two paths in parallel**, merged by `ip:udpPort`:
+
+- **`LANDiscovery`** — the legacy UDP broadcast beacon listener on `:9879`.
+  Kept as a fallback for satellites that predate the mDNS responder.
+- **`MdnsDiscovery`** — an mDNS / Bonjour browse for the satellite service
+  type. mDNS reaches subnets that drop broadcast traffic, so it is the
+  modern primary path.
+
+`WifiConnectionManager::startDiscovery` runs the mDNS scan on a second pool
+thread so the combined wall time is one timeout, not two, then logs a
+per-path `broadcast=N mdns=N merged=N` line so the hit-rate can be compared
+in the field. A server heard on both paths is labelled *"mDNS + broadcast"*.
+
+## Controller-type hint (MSG_CONTROLLER_TYPE)
+
+When a pad binds, `SDLGamepadBridge` classifies it via
+`SDL_GameControllerGetType` into the satellite's cosmetic Xbox / PlayStation
+kind and the connection layer sends a `MSG_CONTROLLER_TYPE = 0x0008` hint.
+A PS3 / PS4 / PS5 pad maps to `CONTROLLER_TYPE_PLAYSTATION` so the receiver
+plugs in a virtual DualShock 4 (touchpad + IMU + lightbar surface) rather
+than an Xbox 360 pad; everything else maps to `CONTROLLER_TYPE_XBOX`.
+
+## Battery reporting (Task 1.2)
+
+`SDLGamepadBridge` polls each controller's charge on a 30 s per-device gate
+(`SDL_JoystickCurrentPowerLevel`) and forwards a `MSG_BATTERY = 0x000B`
+packet — `controller_index + level + status`. SDL only exposes a coarse
+EMPTY / LOW / MEDIUM / FULL bucket for wireless pads; a wired or
+unreadable pad falls back to the **host machine's** battery (the laptop's
+percentage + charging state, or 100 % / wired on a desktop). The capability
+is advertised per-device: `CAP_MOTION` and `CAP_LIGHTBAR` are OR-ed into the
+`MSG_CONTROLLER_ADD` word only for a pad that actually has the hardware, so
+an Xbox pad advertises neither. The latest sample drives a battery chip in
+the controller list.
+
+## Touchpad forwarding (Task 1.3)
+
+A DualSense / DualShock 4 trackpad is forwarded as `MSG_TOUCHPAD = 0x000C` —
+up to two fingers plus the clickable-pad button. `SDLGamepadBridge`
+accumulates SDL's per-finger down / move / up events into a full two-finger
+snapshot and maps SDL's `0..1` coordinates to the resolution-independent
+centre-origin int16 wire frame via `touchpadCoordToInt16`. Each finger
+carries a **monotonic tracking id**, bumped on every fresh contact so the
+receiver can correlate a finger across frames even when the other finger
+lifts. `SatelliteClient::encodeTouchpadPayload` pins the 12-byte layout;
+the receiver routes it per the paired device's touchpad mode (DS4 / mouse /
+off).
+
+## Controller registration (non-blocking)
+
+A `MSG_CONTROLLER_ADD` is acknowledged asynchronously: `WifiConnection`
+sends the add, then **polls** the satellite's `MSG_CONTROLLER_ACK` from a
+`QTimer` on the Qt main thread rather than spinning with `QThread::msleep`
+(which used to freeze the UI for up to ~2 s). The dashboard shows an
+indeterminate spinner while a registration is in flight (`state().busy`).
+If the server rejects the add — no backend, no free slots, plugin failure —
+`WifiConnection` emits `registrationFailed`, `ConnectionHub` rolls the
+local binding back so the slot card reflects reality, and the error is
+surfaced as a toast.
 
 ## Requirements
 
@@ -302,12 +411,16 @@ ctest --test-dir build-debug --output-on-failure
 
 Unit tests cover the hex/byte-packing utilities, the big-endian helpers,
 the XUSB input mapping (axis and trigger scaling, button bitfield,
-per-device deadzone application, zero-on-disconnect fan-out), the
-lock-free atomic counter under contention, the lenient beacon JSON
-decoder, the model codable round-trips, the `PairingClient::classify`
-outcome arms (Success / AuthRequired / Unreachable), and the
-`ScreenWakeController` acquire/release lifecycle via a fake
-`DisplaySleepInhibitor` (so the suite never has to actually flip
+per-device deadzone application, zero-on-disconnect fan-out), the motion /
+battery / touchpad publish paths (rate-limiting, pass-through), the
+SDL→wire conversion helpers (gyro / accel / touchpad scale), the
+`MSG_MOTION` / `MSG_BATTERY` / `MSG_TOUCHPAD` / `MSG_RUMBLE` / `MSG_LIGHTBAR`
+encoders + decoders, the `CAP_MOTION` / `CAP_LIGHTBAR` per-device
+capability folds, the lock-free atomic counter under contention, the
+lenient beacon JSON and mDNS decoders, the model codable round-trips, the
+`PairingClient::classify` outcome arms (Success / AuthRequired /
+Unreachable), and the `ScreenWakeController` acquire/release lifecycle via
+a fake `DisplaySleepInhibitor` (so the suite never has to actually flip
 `SetThreadExecutionState`). They run in well under a second and do not
 open sockets.
 

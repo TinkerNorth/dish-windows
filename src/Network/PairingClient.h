@@ -11,8 +11,12 @@
 
 namespace dish::net {
 
-// Blocking TCP pair handshake on :9878. Mirrors dish-mac/Network/PairingClient.swift
-// and satellite_jni.cpp::pair. Single JSON request line, single JSON response.
+// Blocking pair handshake — POST /api/pair on the satellite's HTTPS client
+// server (:9443, self-signed cert, verification disabled). Mirrors
+// dish-mac/Network/PairingClient.swift and satellite_jni.cpp::pair. The JSON
+// request/response shapes are unchanged from the legacy raw-TCP protocol;
+// only the transport (raw socket -> HTTPS POST) differs. pair() stays blocking
+// by driving a nested QEventLoop around the async QNetworkAccessManager call.
 class PairingClient {
   public:
     // Classification of a PairResponse — mirrors PairingClient.Outcome on
