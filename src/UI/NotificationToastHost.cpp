@@ -71,9 +71,7 @@ NotificationToastHost::NotificationToastHost(QWidget* parent) : QWidget(parent) 
 }
 
 void NotificationToastHost::attach(NotificationQueue* queue) {
-    if (queue_ != nullptr) {
-        QObject::disconnect(queue_, nullptr, this, nullptr);
-    }
+    if (queue_ != nullptr) { QObject::disconnect(queue_, nullptr, this, nullptr); }
     queue_ = queue;
     if (queue_ == nullptr) { return; }
     QObject::connect(queue_, &NotificationQueue::notificationAdded, this,

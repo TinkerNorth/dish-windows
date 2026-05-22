@@ -74,10 +74,9 @@ SettingsView::SettingsView(FeatureSettings* settings, QWidget* parent)
     cardLayout->addWidget(lightbarCombo_, 0, Qt::AlignVCenter);
     layout->addWidget(card);
 
-    auto* footnote =
-        new QLabel(tr("Features only apply when your controller's hardware "
-                      "supports them — the controller list shows what was detected."),
-                   this);
+    auto* footnote = new QLabel(tr("Features only apply when your controller's hardware "
+                                   "supports them — the controller list shows what was detected."),
+                                this);
     footnote->setWordWrap(true);
     footnote->setStyleSheet(QStringLiteral("color: %1; font-size: 11px;").arg(hex(Theme::muted)));
     layout->addWidget(footnote);

@@ -46,8 +46,8 @@ PairingClient::Outcome PairingClient::classify(const models::PairResponse& respo
         return Success{*response.sharedKey};
     }
     if (response.reachable) { return AuthRequired{}; }
-    return Unreachable{response.error.value_or(
-        QCoreApplication::translate(kTrContext, "Server unreachable"))};
+    return Unreachable{
+        response.error.value_or(QCoreApplication::translate(kTrContext, "Server unreachable"))};
 }
 
 // Pairing is now POST /api/pair on the satellite's HTTPS client server (it was
