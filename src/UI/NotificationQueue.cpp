@@ -27,6 +27,15 @@ int NotificationQueue::postError(const QString& message) {
     return post(std::move(n));
 }
 
+int NotificationQueue::postWarning(const QString& message) {
+    models::DishNotification n;
+    n.severity = models::DishNotification::Severity::Warn;
+    n.kind = QStringLiteral("warning");
+    n.message = message;
+    n.durationMs = models::DishNotification::kDurationLongMs;
+    return post(std::move(n));
+}
+
 void NotificationQueue::dismiss(int id) { emit notificationDismissed(id); }
 
 } // namespace dish::ui

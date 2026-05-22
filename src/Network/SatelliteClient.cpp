@@ -7,10 +7,16 @@
 
 #include <sodium.h>
 
+#include <QLoggingCategory>
+
 #include <chrono>
 #include <cstring>
 
 namespace dish::net {
+
+namespace {
+Q_LOGGING_CATEGORY(lcDishNet, "dish.net")
+} // namespace
 
 using util::putU16Be;
 using util::putU32Be;
@@ -77,6 +83,7 @@ void SatelliteClient::setConnectionParams(const std::array<std::uint8_t, 4>& tok
     missedAcks_.store(0, std::memory_order_relaxed);
     connectionAlive_.store(true, std::memory_order_relaxed);
     lastControllerAck_.store(-1, std::memory_order_relaxed);
+    lastControllerAckMotionFlags_.store(-1, std::memory_order_relaxed);
 }
 
 void SatelliteClient::sendReport(int controllerIndex, std::uint16_t buttons, std::uint8_t lt,
@@ -117,6 +124,18 @@ void SatelliteClient::sendControllerType(int index, int type) {
     const std::uint8_t payload[2] = {static_cast<std::uint8_t>(index),
                                      static_cast<std::uint8_t>(type)};
     sendEncrypted(kMsgControllerType, payload, sizeof(payload));
+}
+
+void SatelliteClient::sendCapsUpdate(int index, std::uint16_t capabilities) {
+    // Same payload shape as controllerAdd's caps field: ctrlIdx(1) +
+    // caps(2 BE) = 3 bytes. The receiver's inner_dispatch.cpp ignores the
+    // message id silently on a pre-extension build, so this is a no-op against
+    // an older satellite. controllerAdd is the unchanged Tier-1 send; this is
+    // the in-place reconciliation path that PR #34 added.
+    std::uint8_t payload[3]{};
+    payload[0] = static_cast<std::uint8_t>(index);
+    putU16Be(&payload[1], capabilities);
+    sendEncrypted(kMsgControllerCapsUpdate, payload, sizeof(payload));
 }
 
 std::array<std::uint8_t, 17> SatelliteClient::encodeMotionPayload(
@@ -324,6 +343,25 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
                                     (static_cast<std::int32_t>(idx) << 8) |
                                     static_cast<std::int32_t>(result);
         lastControllerAck_.store(packed, std::memory_order_relaxed);
+        // Optional motion-status byte appended by post-extension satellites.
+        // A pre-extension satellite stops at msgLen == 4 (plainLen == 8) and
+        // the byte is absent — leave lastControllerAckMotionFlags_ at the
+        // sentinel so a slot with no observation stays "unknown" rather than
+        // being misread as "backend broken." A post-extension satellite always
+        // writes the byte (zero or not), so msgLen >= 5 is the live-data
+        // branch. Matches the dish-android JNI parser in satellite_jni.cpp.
+        if (msgLen >= 5 && plainLen >= 9) {
+            const std::uint8_t motionFlags = plain[8];
+            lastControllerAckMotionFlags_.store(static_cast<std::int32_t>(motionFlags),
+                                                std::memory_order_relaxed);
+            qCInfo(lcDishNet, "controller ACK reqType=0x%04X idx=%u result=0x%02X motion=0x%02X",
+                   static_cast<unsigned>(reqType), static_cast<unsigned>(idx),
+                   static_cast<unsigned>(result), static_cast<unsigned>(motionFlags));
+        } else {
+            qCInfo(lcDishNet, "controller ACK reqType=0x%04X idx=%u result=0x%02X (legacy)",
+                   static_cast<unsigned>(reqType), static_cast<unsigned>(idx),
+                   static_cast<unsigned>(result));
+        }
     } else if (msgType == kMsgServerStatus && msgLen >= 2 && plainLen >= 6) {
         vigemAvailable_.store(plain[4] == 0 ? 0 : 1, std::memory_order_relaxed);
         activeControllerCount_.store(static_cast<std::int8_t>(plain[5]), std::memory_order_relaxed);

@@ -113,6 +113,7 @@ void WifiConnection::markDisconnected() {
     clientRef_.set(nullptr);
     connectionId_.reset();
     controllerAdded_ = false;
+    lastAdvertisedCaps_.reset();
     state_ = SessionState::Idle;
     emit changed();
 }
@@ -139,6 +140,7 @@ void WifiConnection::markStale() {
     clientRef_.set(nullptr);
     connectionId_.reset();
     controllerAdded_ = false;
+    lastAdvertisedCaps_.reset();
     state_ = SessionState::Stale;
     emit changed();
 }
@@ -160,7 +162,17 @@ void WifiConnection::detachSlot() {
         if (auto c = clientRef_.get()) { c->controllerRemove(kDefaultCtrlIndex); }
     }
     controllerAdded_ = false;
+    lastAdvertisedCaps_.reset();
     emit changed();
+}
+
+std::uint16_t WifiConnection::composedCaps() const {
+    // Per-controller capability word: the static base (analog triggers,
+    // rumble) plus CAP_MOTION / CAP_LIGHTBAR only for a pad that actually has
+    // the IMU / addressable RGB LED. Mirrors the spec's
+    //   caps = base | (hasImu ? 0x0004 : 0) | (hasLed ? 0x0008 : 0)
+    return SatelliteClient::withLightbarCapability(
+        SatelliteClient::withMotionCapability(kDefaultCaps, motionCapable_), lightbarCapable_);
 }
 
 void WifiConnection::registerController(int type) {
@@ -168,12 +180,7 @@ void WifiConnection::registerController(int type) {
     if (!c) { return; }
     pendingControllerType_ = type;
     c->resetControllerAck();
-    // Per-controller capability word: the static base (analog triggers,
-    // rumble) plus CAP_MOTION / CAP_LIGHTBAR only for a pad that actually has
-    // the IMU / addressable RGB LED. Mirrors the spec's
-    //   caps = base | (hasImu ? 0x0004 : 0) | (hasLed ? 0x0008 : 0)
-    const std::uint16_t caps = SatelliteClient::withLightbarCapability(
-        SatelliteClient::withMotionCapability(kDefaultCaps, motionCapable_), lightbarCapable_);
+    const std::uint16_t caps = composedCaps();
     c->controllerAdd(kDefaultCtrlIndex, caps);
     // Non-blocking ACK wait. The satellite normally replies within a few ms,
     // but the response is decoded on the SatelliteClient receive thread, not
@@ -220,7 +227,42 @@ void WifiConnection::pollControllerAck() {
     if (result == 0x00 /* ACK_OK */) {
         c->sendControllerType(kDefaultCtrlIndex, pendingControllerType_);
         controllerAdded_ = true;
+        lastAdvertisedCaps_ = composedCaps();
         finishRegistration();
+        // Motion-flags inspection (optional 5th ACK byte). Only meaningful
+        // when CAP_MOTION was advertised — a pad without an IMU never streams
+        // MSG_MOTION regardless of the receiver's sink. The sentinel -1 means
+        // the satellite is pre-extension (no extra byte) and we don't know
+        // whether motion will land; in that case we stay silent rather than
+        // false-alarm.
+        if (motionCapable_) {
+            const std::int32_t flags = c->lastControllerAckMotionFlags();
+            if (flags >= 0) {
+                const bool sinkSupported =
+                    (flags & SatelliteClient::kAckMotionFlagSinkSupportedForType) != 0;
+                const bool backendOk = (flags & SatelliteClient::kAckMotionFlagBackendOk) != 0;
+                if (!sinkSupported) {
+                    // Receiver backend has no IMU surface for this controller
+                    // type. Today that's a macOS receiver, or an Xbox virtual
+                    // pad on ViGEm/uinput (those backends only expose motion
+                    // on the PS surface). Motion bytes will arrive but the
+                    // virtual gamepad has nowhere to forward them.
+                    emit motionDeliveryWarning(QCoreApplication::translate(
+                        kTrContext,
+                        "Server has no motion surface for this controller type — gyro/accel "
+                        "won't reach the game"));
+                } else if (!backendOk) {
+                    // Sink IS supported in principle, but the per-serial
+                    // motion node failed to plug in. On Linux uinput this is
+                    // a kernel rejection (too old, no /dev/uinput perm, /tmp
+                    // exhausted); on Windows ViGEm this is a driver/bus
+                    // failure. Either way the dish should tell the user.
+                    emit motionDeliveryWarning(QCoreApplication::translate(
+                        kTrContext, "Server couldn't deliver motion — backend rejected the "
+                                    "IMU sink for this controller"));
+                }
+            }
+        }
     } else {
         // The server rejected the add. Leave controllerAdded_ false so we
         // don't later send a phantom MSG_CONTROLLER_REMOVE, and tell the hub

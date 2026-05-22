@@ -184,3 +184,29 @@ TEST_CASE("withMotionCapability and withLightbarCapability compose independently
         REQUIRE(caps == 0x000F); // 0x0003 | CAP_MOTION | CAP_LIGHTBAR
     }
 }
+
+// ---------------------------------------------------------------------------
+// MSG_CONTROLLER_CAPS_UPDATE (0x000E) and the motion-flag ACK bits — the wire
+// extensions introduced in satellite PR #34. Pinning the literal values here
+// keeps the contract honest: the receiver only recognises these exact bytes,
+// so silently bumping them would silently break paired dish-windows clients.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("MSG_CONTROLLER_CAPS_UPDATE constant pins the wire value", "[caps][constants]") {
+    REQUIRE(SatelliteClient::kMsgControllerCapsUpdate == 0x000E);
+    // Must not collide with any of the existing message types.
+    REQUIRE(SatelliteClient::kMsgControllerCapsUpdate != SatelliteClient::kMsgControllerAdd);
+    REQUIRE(SatelliteClient::kMsgControllerCapsUpdate != SatelliteClient::kMsgControllerType);
+    REQUIRE(SatelliteClient::kMsgControllerCapsUpdate != SatelliteClient::kMsgLightbar);
+}
+
+TEST_CASE("ACK_MOTION_FLAG constants pin the wire values", "[motion][ack][constants]") {
+    // Bit 0 = sink supported for type (PS yes, Xbox no on every shipping
+    // backend); Bit 1 = backend OK (per-serial IMU node accepted). These are
+    // the exact values satellite/src/core/types.h emits — a future receiver
+    // can layer new flags on bits 2..7 without breaking us.
+    REQUIRE(SatelliteClient::kAckMotionFlagSinkSupportedForType == 0x01);
+    REQUIRE(SatelliteClient::kAckMotionFlagBackendOk == 0x02);
+    REQUIRE((SatelliteClient::kAckMotionFlagSinkSupportedForType &
+             SatelliteClient::kAckMotionFlagBackendOk) == 0);
+}

@@ -146,6 +146,16 @@ class WifiConnection : public QObject {
     // rejected or timed out. Listened to by ConnectionHub to roll back the
     // local binding so the UI reflects reality.
     void registrationFailed(const QString& slotId);
+    // Transient one-shot WARNING — the controller registered successfully but
+    // the receiver's motion-flags byte indicates motion bytes won't reach the
+    // game. Surfaced when CAP_MOTION was advertised AND the satellite reported
+    // backendOk == false (kernel rejected the IMU sink) or
+    // sinkSupportedForType == false (the receiver backend has no IMU surface
+    // for this controller's chosen type — e.g. an Xbox virtual pad on a
+    // ViGEm/uinput backend). Unlike errorOccurred this does NOT roll the
+    // binding back: the controller is still usable, motion bytes are just
+    // dropped at the receiver. The manager forwards it as a Warn notification.
+    void motionDeliveryWarning(const QString& message);
 
   private:
     static constexpr int kDefaultCtrlIndex = 0;
@@ -170,6 +180,12 @@ class WifiConnection : public QObject {
     // Stop the ACK poll timer and clear the "registering" flag, emitting
     // changed() so the spinner updates.
     void finishRegistration();
+    // Composed capability word the registration / caps-update path advertises.
+    // Folds kDefaultCaps (analog triggers | rumble) with the per-slot CAP_MOTION
+    // (0x0004) and CAP_LIGHTBAR (0x0008) hardware bits. Single source of truth
+    // shared between registerController and any future mid-session
+    // sendCapsUpdate caller, so the two paths can't drift.
+    std::uint16_t composedCaps() const;
 
     QString id_;
     models::DiscoveredServer server_;
@@ -194,6 +210,14 @@ class WifiConnection : public QObject {
     // Set by attachSlot; consumed by registerController to advertise
     // CAP_MOTION per-device — an Xbox pad never advertises it.
     bool motionCapable_ = false;
+    // The most recent capability word the dish has advertised to the receiver
+    // for this connection's controller, or std::nullopt before the first
+    // registration ACK. Used by a future mid-session toggle to de-dup
+    // MSG_CONTROLLER_CAPS_UPDATE packets — if composedCaps() matches
+    // lastAdvertisedCaps_, there is nothing to send. Cleared on disconnect /
+    // detach so a fresh registration always re-establishes the value.
+    // Mirrors dish-android's SlotBinding.lastAdvertisedCaps.
+    std::optional<std::uint16_t> lastAdvertisedCaps_;
 
     // Set once during composition; re-applied to each fresh SatelliteClient
     // in markConnected() so we don't lose rumble across reconnects.

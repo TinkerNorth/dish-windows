@@ -191,6 +191,13 @@ void AppModel::onWifiEvent(const net::ConnectionEvent& evt) {
     case net::ConnectionEventKind::Error:
         emit errorMessage(evt.message);
         break;
+    case net::ConnectionEventKind::Warning:
+        // Non-fatal heads-up — emitted today only by the motion-flags branch
+        // of the controller-ACK path when the receiver can't deliver IMU
+        // bytes for an advertised pad. The controller is still usable for
+        // sticks/triggers/rumble, so this is a soft notice, not an error.
+        emit warningMessage(evt.message);
+        break;
     }
 }
 

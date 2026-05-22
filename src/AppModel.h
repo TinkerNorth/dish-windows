@@ -85,6 +85,14 @@ class AppModel : public QObject {
     // as toasts/dialogs by MainWindow.
     void errorMessage(const QString& msg);
 
+    // Transient one-shot — non-fatal heads-up the user should see but does
+    // not warrant an Error-severity toast. Today's only emitter is the
+    // motion-delivery branch of the controller-ACK path (the satellite told us
+    // it can't actually land MSG_MOTION bytes for an advertised CAP_MOTION
+    // pad). MainWindow routes this into a Warn-severity DishNotification via
+    // the same NotificationQueue that consumes errorMessage.
+    void warningMessage(const QString& msg);
+
   private:
     void rebuild();
     void onHubChanged();

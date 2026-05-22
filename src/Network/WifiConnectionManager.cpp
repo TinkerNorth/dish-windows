@@ -31,6 +31,8 @@ constexpr const char* kTrContext = "dish::net::WifiConnectionManager";
 
 ConnectionEvent makeError(const QString& msg) { return {ConnectionEventKind::Error, {}, msg}; }
 
+ConnectionEvent makeWarning(const QString& msg) { return {ConnectionEventKind::Warning, {}, msg}; }
+
 ConnectionEvent pairingRequired(const models::DiscoveredServer& s) {
     return {ConnectionEventKind::PairingRequired, s, {}};
 }
@@ -66,8 +68,8 @@ void WifiConnectionManager::startDiscovery() {
         emit discoveredChanged();
         emit scanningChanged();
         if (discovered_.isEmpty()) {
-            emit connectionEvent(makeError(QCoreApplication::translate(
-                kTrContext, "No servers found — check your network")));
+            emit connectionEvent(makeError(
+                QCoreApplication::translate(kTrContext, "No servers found — check your network")));
         }
         watcher->deleteLater();
     });
@@ -98,6 +100,8 @@ WifiConnection* WifiConnectionManager::ensureConnection(const models::Discovered
     QObject::connect(conn, &WifiConnection::changed, this, &WifiConnectionManager::poolChanged);
     QObject::connect(conn, &WifiConnection::errorOccurred, this,
                      [this](const QString& msg) { emit connectionEvent(makeError(msg)); });
+    QObject::connect(conn, &WifiConnection::motionDeliveryWarning, this,
+                     [this](const QString& msg) { emit connectionEvent(makeWarning(msg)); });
     QObject::connect(conn, &WifiConnection::registrationFailed, this,
                      &WifiConnectionManager::slotRegistrationFailed);
     emit poolChanged();
@@ -241,16 +245,16 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
     if (!keyHex.has_value() || keyHex->size() != 64) {
         parkOnFailure(conn);
         clearInFlight(conn->id());
-        emitErrorIfUserInitiated(intent, QCoreApplication::translate(
-                                             kTrContext, "No shared key — re-pair needed"));
+        emitErrorIfUserInitiated(
+            intent, QCoreApplication::translate(kTrContext, "No shared key — re-pair needed"));
         return;
     }
     const auto keyBytes = util::fromHex(keyHex->toStdString());
     if (!keyBytes || keyBytes->size() != 32) {
         parkOnFailure(conn);
         clearInFlight(conn->id());
-        emitErrorIfUserInitiated(intent, QCoreApplication::translate(
-                                             kTrContext, "Bad shared key — re-pair needed"));
+        emitErrorIfUserInitiated(
+            intent, QCoreApplication::translate(kTrContext, "Bad shared key — re-pair needed"));
         return;
     }
     std::array<std::uint8_t, 32> key{};
@@ -264,10 +268,9 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 parkOnFailure(conn);
                 clearInFlight(conn->id());
                 emitErrorIfUserInitiated(
-                    intent,
-                    QCoreApplication::translate(kTrContext, "Error: %1")
-                        .arg(resp.error.value_or(
-                            QCoreApplication::translate(kTrContext, "connection failed"))));
+                    intent, QCoreApplication::translate(kTrContext, "Error: %1")
+                                .arg(resp.error.value_or(
+                                    QCoreApplication::translate(kTrContext, "connection failed"))));
                 return;
             }
             const auto tok = util::fromHex(resp.token->toStdString());

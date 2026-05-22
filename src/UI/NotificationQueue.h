@@ -43,6 +43,14 @@ class NotificationQueue : public QObject {
     // into the typed queue, and by the network layer's user-facing errors.
     int postError(const QString& message);
 
+    // Convenience: post a short warning toast for `message` — same shape as
+    // postError but with Warn severity (amber rail rather than red) and a
+    // distinct kind tag so the renderer can dedupe runs of the same warning.
+    // Used by the AppModel adapter that bridges the `warningMessage(QString)`
+    // signal — today the only emitter is the motion-delivery branch of the
+    // controller-ACK path.
+    int postWarning(const QString& message);
+
     // Drop a previously-posted notification by id. No-op if the renderer
     // already aged it out.
     void dismiss(int id);

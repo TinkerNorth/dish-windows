@@ -51,6 +51,17 @@ class SatelliteClient {
     static constexpr std::uint16_t kMsgBattery = 0x000B;
     static constexpr std::uint16_t kMsgTouchpad = 0x000C;
     static constexpr std::uint16_t kMsgLightbar = 0x000D;
+    // Mid-session capability update for an already-registered controller.
+    // Same payload shape as the caps field of MSG_CONTROLLER_ADD:
+    // ctrlIdx(1) + caps(2 BE) = 3 bytes. Used when the local motion / lightbar
+    // toggle flips after registration — the receiver overwrites Controller::caps
+    // in place rather than requiring an unplug/replug. See
+    // satellite/src/core/types.h::MSG_CONTROLLER_CAPS_UPDATE and
+    // satellite/src/net/inner_dispatch.cpp for the receiver routing. A
+    // pre-extension satellite silently drops the packet — the load-bearing
+    // correctness gate is the dish-side runtime listener, so dropping the
+    // wire update only costs dashboard staleness.
+    static constexpr std::uint16_t kMsgControllerCapsUpdate = 0x000E;
 
     // Controller-add capability bits. Bits 0x01 / 0x02 are documented in
     // satellite/docs/protocol.md (analog triggers, rumble). Bit 0x04 is the
@@ -65,6 +76,25 @@ class SatelliteClient {
     // DualShock 4). A satellite that sees this bit sends lightbar colour via
     // the dedicated MSG_LIGHTBAR (0x000D) stream.
     static constexpr std::uint16_t kCapLightbar = 0x0008;
+
+    // Optional motion-status flags appended after the 4-byte controller-ACK
+    // payload for MSG_CONTROLLER_ADD acks (wire length becomes 5 instead of 4).
+    // Lets the dish learn the receiver's two motion-sink facts at plug-in time
+    // without polling /api/connections. A pre-extension satellite sends only 4
+    // payload bytes and the dish records motion status as "unknown" (sentinel
+    // -1); a post-extension satellite always appends the byte even if zero, so
+    // msgLen >= 5 is the live-data branch. Mirrors satellite/src/core/types.h
+    // ACK_MOTION_FLAG_* and the dish-android JNI parser.
+    //
+    // Bit 0: receiver's backend has an IMU surface for this controller's
+    //        chosen type (IGamepadPort::supportsMotionForType). PS = yes on
+    //        every shipping backend, Xbox = no; macOS receiver = no for all.
+    // Bit 1: receiver's backend successfully created the per-serial IMU sink
+    //        (IGamepadPort::motionBackendOk). False = real failure the dish
+    //        surfaces to the user as "motion can't reach the game"; true =
+    //        kernel accepted the node, motion bytes will land.
+    static constexpr std::uint8_t kAckMotionFlagSinkSupportedForType = 0x01;
+    static constexpr std::uint8_t kAckMotionFlagBackendOk = 0x02;
 
     // Battery wire constants (satellite/src/core/types.h mirrors).
     static constexpr std::uint8_t kBatteryLevelUnknown = 0xFF;
@@ -100,7 +130,24 @@ class SatelliteClient {
     void controllerAdd(int index, std::uint16_t capabilities);
     void controllerRemove(int index);
     void sendControllerType(int index, int type);
-    void resetControllerAck() { lastControllerAck_.store(-1, std::memory_order_relaxed); }
+    void resetControllerAck() {
+        lastControllerAck_.store(-1, std::memory_order_relaxed);
+        lastControllerAckMotionFlags_.store(-1, std::memory_order_relaxed);
+    }
+
+    // Mid-session capability update for an already-registered controller. Wire
+    // payload mirrors the caps field of MSG_CONTROLLER_ADD: ctrlIdx(1) +
+    // caps(2 BE) = 3 bytes. Caller (WifiConnection) only sends this when the
+    // composed cap word differs from what was last advertised — the receiver
+    // no-ops on duplicates per session_service.cpp::handleControllerCapsUpdate,
+    // so de-dup on the sender is for wire / log economy, not correctness.
+    //
+    // Currently the dish-windows UI exposes no per-controller motion toggle, so
+    // the per-controller cap word does not flip mid-session — this helper is
+    // here for parity with dish-android (which has a composer-driven runtime
+    // toggle) and as the wire seam a future Settings dialog or registry-backed
+    // motionEnabled flag would call.
+    void sendCapsUpdate(int index, std::uint16_t capabilities);
 
     // Pure helper: fold the per-controller CAP_LIGHTBAR (0x0008) bit into a
     // base capability word. Returns `base` unchanged when the bound pad has
@@ -247,6 +294,14 @@ class SatelliteClient {
     std::int32_t lastControllerAck() const {
         return lastControllerAck_.load(std::memory_order_relaxed);
     }
+    // Last motion-flags byte from a MSG_CONTROLLER_ACK, or -1 ("unknown") if
+    // no ACK has carried the optional byte yet. Pre-extension satellites send
+    // a 4-byte ACK with no motion byte and leave this at the sentinel; a
+    // post-extension satellite always writes (zero or non-zero). Decoded with
+    // SatelliteClient::kAckMotionFlag* against the returned int.
+    std::int32_t lastControllerAckMotionFlags() const {
+        return lastControllerAckMotionFlags_.load(std::memory_order_relaxed);
+    }
     std::int8_t vigemAvailable() const { return vigemAvailable_.load(std::memory_order_relaxed); }
     std::int8_t activeControllerCount() const {
         return activeControllerCount_.load(std::memory_order_relaxed);
@@ -277,6 +332,10 @@ class SatelliteClient {
     std::atomic<int> missedAcks_{0};
     std::atomic<bool> connectionAlive_{true};
     std::atomic<std::int32_t> lastControllerAck_{-1};
+    // -1 ("never written / pre-extension satellite") sentinel. Holds the raw
+    // motion-flags byte (0..255) once a post-extension ACK has been parsed.
+    // Reset alongside lastControllerAck_ at every fresh registration.
+    std::atomic<std::int32_t> lastControllerAckMotionFlags_{-1};
     std::atomic<std::int8_t> vigemAvailable_{-1};
     std::atomic<std::int8_t> activeControllerCount_{-1};
 

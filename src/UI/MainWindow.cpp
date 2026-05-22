@@ -131,6 +131,8 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     toastHost_->attach(notifications_);
     QObject::connect(model_, &AppModel::errorMessage, notifications_,
                      &NotificationQueue::postError);
+    QObject::connect(model_, &AppModel::warningMessage, notifications_,
+                     &NotificationQueue::postWarning);
 
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);

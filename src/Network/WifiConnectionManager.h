@@ -15,12 +15,12 @@
 
 namespace dish::net {
 
-enum class ConnectionEventKind { PairingRequired, Error };
+enum class ConnectionEventKind { PairingRequired, Error, Warning };
 
 struct ConnectionEvent {
     ConnectionEventKind kind;
     models::DiscoveredServer server; // only meaningful for PairingRequired
-    QString message;                 // only meaningful for Error
+    QString message;                 // only meaningful for Error / Warning
 };
 
 // Why a connect attempt was kicked off. The same connectTo / pairAndConnect
