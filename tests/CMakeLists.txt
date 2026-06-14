@@ -16,6 +16,7 @@ include(Catch)
 
 set(DISH_TEST_SOURCES
     test_kernel.cpp
+    test_session_crypto.cpp
     test_atomic_counter.cpp
     test_hex.cpp
     test_endian.cpp

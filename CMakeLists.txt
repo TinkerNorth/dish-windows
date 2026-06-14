@@ -113,6 +113,9 @@ set(DISH_CORE_SOURCES
     src/architecture/StateSource.h
     src/architecture/Controller.h
     src/architecture/Repository.h
+    # core/ — pure, Qt-free wire/crypto/model/reducer logic (host-testable)
+    src/core/wire/SessionCrypto.h
+    src/core/wire/SessionCrypto.cpp
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp
