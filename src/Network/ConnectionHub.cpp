@@ -62,7 +62,10 @@ void ConnectionHub::rebuild() {
         // - SessionState::Idle / null:
         //     in discoveredIds      -> LinkState::Ready
         //     not in discoveredIds  -> LinkState::Saved
-        models::LinkState live;
+        // Baseline default; every branch below reassigns it. The explicit
+        // initializer silences MSVC C4701 (the switch is exhaustive but has no
+        // default, so the compiler can't prove every path assigns).
+        models::LinkState live = models::LinkState::Saved;
         if (conn != nullptr) {
             switch (conn->state()) {
             case SessionState::Live:

@@ -236,7 +236,7 @@ void DishBarWidget::paintEvent(QPaintEvent*) {
     const QColor primary(Theme::primary);
     // Track at 22 % alpha — the resting backdrop.
     QColor track = primary;
-    track.setAlphaF(0.22);
+    track.setAlphaF(0.22f);
     p.setPen(Qt::NoPen);
     p.setBrush(track);
     p.drawRoundedRect(QRectF(0, trackY, w, trackH), radius, radius);

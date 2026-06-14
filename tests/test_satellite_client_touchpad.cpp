@@ -41,7 +41,7 @@ TEST_CASE("encodeTouchpadPayload is 12 bytes with ctrlIdx at byte 0", "[touchpad
     REQUIRE(out[0] == 6U);
 }
 
-TEST_CASE("encodeTouchpadPayload flags: all inactive, no button → 0", "[touchpad]") {
+TEST_CASE("encodeTouchpadPayload flags: all inactive, no button -> 0", "[touchpad]") {
     const auto out =
         SatelliteClient::encodeTouchpadPayload(0, false, 0, 0, 0, false, 0, 0, 0, false);
     REQUIRE(out[1] == 0x00U);
@@ -65,7 +65,7 @@ TEST_CASE("encodeTouchpadPayload flags: bit 2 = button pressed", "[touchpad]") {
     REQUIRE(out[1] == 0x04U);
 }
 
-TEST_CASE("encodeTouchpadPayload flags: all three bits set together → 0x07", "[touchpad]") {
+TEST_CASE("encodeTouchpadPayload flags: all three bits set together -> 0x07", "[touchpad]") {
     const auto out = SatelliteClient::encodeTouchpadPayload(0, /*f0Active=*/true, 0, 0, 0,
                                                             /*f1Active=*/true, 0, 0, 0,
                                                             /*button=*/true);
