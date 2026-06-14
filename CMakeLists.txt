@@ -116,6 +116,11 @@ set(DISH_CORE_SOURCES
     # core/ — pure, Qt-free wire/crypto/model/reducer logic (host-testable)
     src/core/wire/SessionCrypto.h
     src/core/wire/SessionCrypto.cpp
+    src/core/model/Protocol.h
+    src/core/reducer/RestOutcome.h
+    src/core/reducer/Backoff.h
+    src/core/reducer/Reconcile.h
+    src/core/reducer/CloseNotify.h
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp

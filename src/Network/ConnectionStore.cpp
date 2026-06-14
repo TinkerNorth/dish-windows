@@ -53,6 +53,7 @@ void ConnectionStore::remember(const models::DiscoveredServer& server) {
     r.udpPort = server.udpPort;
     r.pairPort = server.pairPort;
     r.httpPort = server.httpPort;
+    r.machineId = server.machineId;
     list.append(r);
     persist(list);
 }
@@ -79,6 +80,10 @@ std::optional<QString> ConnectionStore::sharedKey(const QString& id) const {
 
 void ConnectionStore::setSharedKey(const QString& keyHex, const QString& id) {
     settings_->setValue(QLatin1String(kSharedKeyPrefix) + id, keyHex);
+}
+
+void ConnectionStore::forgetKey(const QString& id) {
+    settings_->remove(QLatin1String(kSharedKeyPrefix) + id);
 }
 
 } // namespace dish::net

@@ -31,6 +31,10 @@ class ConnectionStore {
 
     std::optional<QString> sharedKey(const QString& id) const;
     void setSharedKey(const QString& keyHex, const QString& id);
+    // Drop only the per-server pairing key, leaving the remembered entry. Used
+    // on a terminal 401 / close-notify(unpaired): the satellite no longer
+    // recognizes the key, but the server stays in the list as "Needs pairing".
+    void forgetKey(const QString& id);
 
   private:
     void persist(const QList<models::RememberedWifi>& list);

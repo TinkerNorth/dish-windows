@@ -5,6 +5,8 @@
 
 #include "LightbarRouting.h"
 
+#include <chrono>
+
 namespace dish {
 
 AppModel::AppModel(QObject* parent)
@@ -66,18 +68,27 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
             if (sender) { sender(level, status); }
         });
 
-    processor_.setTouchpadSender(
-        [this](const std::string& did, const input::GamepadInputProcessor::TouchpadSample& s) {
-            net::ConnectionHub::TouchpadSender sender;
-            {
-                std::lock_guard<std::mutex> lock(routingMtx_);
-                sender = touchpadRouting_.value(QString::fromStdString(did));
-            }
-            if (sender) {
-                sender(s.finger0Active, s.finger0Id, s.finger0X, s.finger0Y, s.finger1Active,
-                       s.finger1Id, s.finger1X, s.finger1Y, s.buttonPressed);
-            }
-        });
+    processor_.setTouchpadSender([this](const std::string& did,
+                                        const input::GamepadInputProcessor::TouchpadSample& s) {
+        net::ConnectionHub::TouchpadSender sender;
+        {
+            std::lock_guard<std::mutex> lock(routingMtx_);
+            sender = touchpadRouting_.value(QString::fromStdString(did));
+        }
+        if (sender) {
+            // protocol-1 MSG_TOUCHPAD carries a sender-side uptime-ms
+            // timestamp (mouse-mode timing scales by the delta between
+            // consecutive samples). The SDL touchpad path forwards every
+            // assembled state change with no resends, so a fresh monotonic
+            // stamp per publish matches the contract's eventTimeMs.
+            const auto nowMs =
+                static_cast<std::uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                               std::chrono::steady_clock::now().time_since_epoch())
+                                               .count());
+            sender(s.finger0Active, s.finger0Id, s.finger0X, s.finger0Y, s.finger1Active,
+                   s.finger1Id, s.finger1X, s.finger1Y, s.buttonPressed, nowMs);
+        }
+    });
 
     // Teach the hub how to look up a slot's lightbar capability so a bind()
     // can advertise CAP_LIGHTBAR. The slot id is the SDL bridge device id, so
@@ -229,12 +240,12 @@ void AppModel::rebuild() {
     }
     state_.slotList = std::move(next);
 
-    // Surface "a controller registration is in flight" so the dashboard can
-    // show an indeterminate spinner. The ACK poll is non-blocking, so this
-    // flag (not a frozen UI) is how the user learns the add is pending.
+    // Surface "a session is being established" so the dashboard can show an
+    // indeterminate spinner. In protocol-1 topology rides REST (no per-add UDP
+    // ACK poll), so "busy" is a session in its Linking handshake.
     bool busy = false;
     for (auto* conn : wifi_->connections()) {
-        if (conn->isRegisteringController()) {
+        if (conn->state() == net::SessionState::Linking) {
             busy = true;
             break;
         }
