@@ -104,6 +104,15 @@ find_package(SDL2 CONFIG REQUIRED)
 # Core library: everything except main.cpp & UI is reusable for tests
 # --------------------------------------------------------------------------
 set(DISH_CORE_SOURCES
+    # Architecture kernel — pure, header-only, Qt-free (the StateFlow/Flow.combine
+    # analogues every source/composer/controller is built on). See
+    # src/architecture/README.md.
+    src/architecture/Observable.h
+    src/architecture/Combiner.h
+    src/architecture/Composer.h
+    src/architecture/StateSource.h
+    src/architecture/Controller.h
+    src/architecture/Repository.h
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp
