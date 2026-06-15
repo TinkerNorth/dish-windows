@@ -43,6 +43,15 @@ set(DISH_TEST_SOURCES
     test_rest_control_plane.cpp
     test_udp_opcodes.cpp
     test_session_reconcile.cpp
+    # Workstream 2b — connections composer/coordinator, session mappers, pacer
+    test_satellite_link_state.cpp
+    test_connection_rows.cpp
+    test_resend_pacer.cpp
+    test_late_slot_converge.cpp
+    test_connections_composer.cpp
+    test_connection_coordinator.cpp
+    test_session_lifecycle.cpp
+    test_session_manager.cpp
     test_screen_wake_controller.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp

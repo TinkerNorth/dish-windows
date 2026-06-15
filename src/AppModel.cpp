@@ -16,6 +16,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     : QObject(parent), store_(std::make_unique<net::ConnectionStore>()),
       wifi_(new net::WifiConnectionManager(store_.get(), this)),
       hub_(new net::ConnectionHub(wifi_, store_.get(), this)),
+      connections_(new composer::ConnectionCoordinator(wifi_, hub_, this)),
       bridge_(new input::SDLGamepadBridge(&processor_, this)),
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
       inhibitor_(std::move(inhibitor)), wake_(inhibitor_.get()) {

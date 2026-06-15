@@ -10,6 +10,7 @@
 #include "Network/ConnectionHub.h"
 #include "Network/ConnectionStore.h"
 #include "Network/WifiConnectionManager.h"
+#include "composer/ConnectionCoordinator.h"
 #include "Util/DisplaySleepInhibitor.h"
 #include "Util/ScreenWakeController.h"
 
@@ -59,6 +60,11 @@ class AppModel : public QObject {
     net::ConnectionStore* store() { return store_.get(); }
     net::WifiConnectionManager* wifi() { return wifi_; }
     net::ConnectionHub* hub() { return hub_; }
+    // The kernel Coordinator over the connection subsystem: it re-exposes the
+    // ConnectionsComposer's derived row list and carries the bind/forget/
+    // auto-reconnect commands (Workstream 2b). The hot-path binding/routing
+    // still lives on hub(); this is the reactive/command surface the UI binds to.
+    composer::ConnectionCoordinator* connections() { return connections_; }
     input::GamepadInputProcessor* processor() { return &processor_; }
     input::SDLGamepadBridge* bridge() { return bridge_; }
     util::ScreenWakeController* wake() { return &wake_; }
@@ -98,6 +104,7 @@ class AppModel : public QObject {
     std::unique_ptr<net::ConnectionStore> store_;
     net::WifiConnectionManager* wifi_;
     net::ConnectionHub* hub_;
+    composer::ConnectionCoordinator* connections_;
     input::GamepadInputProcessor processor_;
     input::SDLGamepadBridge* bridge_;
     FeatureSettings* featureSettings_;

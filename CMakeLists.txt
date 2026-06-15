@@ -126,6 +126,12 @@ set(DISH_CORE_SOURCES
     src/core/reducer/Backoff.h
     src/core/reducer/Reconcile.h
     src/core/reducer/CloseNotify.h
+    # core/reducer mappers — Workstream 2b (pure, Qt-free; the connection->row
+    # decision logic + the descriptor-aware late-slot converge + the resend pacer).
+    src/core/reducer/SatelliteLinkState.h
+    src/core/reducer/ConnectionRows.h
+    src/core/reducer/LateSlotConverge.h
+    src/core/reducer/ResendPacer.h
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp
@@ -177,6 +183,12 @@ set(DISH_CORE_SOURCES
     src/repository/RememberedSatelliteRepository.cpp
     src/repository/ConnectionStore.h
     src/repository/ConnectionStore.cpp
+    # composer — the derived connections view (Composer) + the imperative
+    # Coordinator that re-exposes it (Workstream 2b).
+    src/composer/ConnectionsComposer.h
+    src/composer/ConnectionsComposer.cpp
+    src/composer/ConnectionCoordinator.h
+    src/composer/ConnectionCoordinator.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
