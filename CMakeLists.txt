@@ -117,6 +117,11 @@ set(DISH_CORE_SOURCES
     src/core/wire/SessionCrypto.h
     src/core/wire/SessionCrypto.cpp
     src/core/model/Protocol.h
+    src/core/model/IdentityKey.h
+    src/core/net/Tofu.h
+    src/core/net/Tofu.cpp
+    src/core/net/IpLiterals.h
+    src/core/net/IpLiterals.cpp
     src/core/reducer/RestOutcome.h
     src/core/reducer/Backoff.h
     src/core/reducer/Reconcile.h
@@ -137,10 +142,6 @@ set(DISH_CORE_SOURCES
     src/Network/WinsockInit.cpp
     src/Network/SatelliteClient.h
     src/Network/SatelliteClient.cpp
-    src/Network/LANDiscovery.h
-    src/Network/LANDiscovery.cpp
-    src/Network/MdnsDiscovery.h
-    src/Network/MdnsDiscovery.cpp
     src/Network/PairingClient.h
     src/Network/PairingClient.cpp
     src/Network/HTTPClient.h
@@ -153,6 +154,29 @@ set(DISH_CORE_SOURCES
     src/Network/ConnectionHub.cpp
     src/Network/ConnectionStore.h
     src/Network/ConnectionStore.cpp
+    # source/connection — discovery Gateways (relocated from Network/) + the
+    # DiscoveryGateway merge/source-tag fuse (Workstream 2a).
+    src/source/connection/LANDiscovery.h
+    src/source/connection/LANDiscovery.cpp
+    src/source/connection/MdnsDiscovery.h
+    src/source/connection/MdnsDiscovery.cpp
+    src/source/connection/DiscoveryGateway.h
+    src/source/connection/DiscoveryGateway.cpp
+    # source/http — the TOFU TLS verifier seam HTTPClient calls (Workstream 2a).
+    src/source/http/SatelliteTlsVerifier.h
+    src/source/http/SatelliteTlsVerifier.cpp
+    # repository — trust+identity stores on the kernel Repository + the
+    # ConnectionStore facade/Coordinator over them (Workstream 2a).
+    src/repository/SettingsKeys.h
+    src/repository/RememberedWifiEq.h
+    src/repository/SatellitePinRepository.h
+    src/repository/SatellitePinRepository.cpp
+    src/repository/SatelliteSharedKeyRepository.h
+    src/repository/SatelliteSharedKeyRepository.cpp
+    src/repository/RememberedSatelliteRepository.h
+    src/repository/RememberedSatelliteRepository.cpp
+    src/repository/ConnectionStore.h
+    src/repository/ConnectionStore.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h

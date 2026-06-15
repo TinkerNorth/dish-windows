@@ -9,6 +9,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSslCertificate>
 #include <QSslConfiguration>
 #include <QSslError>
 #include <QSslSocket>
@@ -51,16 +52,29 @@ void HTTPClient::perform(const QString& url, const QByteArray& method, const QBy
     if (!acceptLanguage.isEmpty()) { req.setRawHeader("Accept-Language", acceptLanguage.toUtf8()); }
     if (!ifNoneMatch.isEmpty()) { req.setRawHeader("If-None-Match", ifNoneMatch.toUtf8()); }
 
-    // Self-signed cert accepted without verification (curl --insecure). TOFU
-    // cert-pinning is a later wave; today's behaviour is preserved so nothing
-    // regresses. The seam for the pin verify is the sslErrors handler below.
+    // Self-signed cert: there is no CA chain to validate, so peer verification
+    // is off (curl --insecure). Trust is enforced by the TOFU pin verifier on
+    // the `encrypted` signal below — VerifyNone here just stops Qt from refusing
+    // the self-signed chain before we get a chance to pin it.
     QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
     tls.setPeerVerifyMode(QSslSocket::VerifyNone);
     req.setSslConfiguration(tls);
 
+    const QString host = QUrl(url).host();
+
     auto* reply = nam_->sendCustomRequest(req, method, body);
     QObject::connect(reply, &QNetworkReply::sslErrors, reply,
                      [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
+    // TOFU pin check: once the handshake completes the peer cert is available.
+    // First contact pins + proceeds; a cert whose fingerprint differs from the
+    // pin aborts the request (the `finished` handler then reports it unreachable,
+    // exactly as a dropped connection would). No verifier installed → no-op.
+    if (pinVerifier_) {
+        QObject::connect(reply, &QNetworkReply::encrypted, reply, [this, reply, host] {
+            const QByteArray der = reply->sslConfiguration().peerCertificate().toDer();
+            if (!pinVerifier_(host, der)) { reply->abort(); }
+        });
+    }
     QObject::connect(reply, &QNetworkReply::finished, this, [reply, done = std::move(done)] {
         reply->deleteLater();
         RawReply out;

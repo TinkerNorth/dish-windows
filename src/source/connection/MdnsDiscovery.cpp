@@ -6,13 +6,14 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#include <QByteArray>
 #include <QHash>
 #include <QSet>
+#include <QString>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -143,12 +144,8 @@ std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std
 
     std::string ip;
     std::string instance;
-    // Protocol-default fallbacks for a response that omits the TXT keys.
-    // The satellite's client API is now HTTPS on a single port (9443),
-    // advertised under both the `pair` and `http` TXT keys.
-    int udpPort = 9876;
-    int pairPort = 9443;
-    int httpPort = 9443;
+    int srvPort = 0; // 0 = no SRV seen; the mapping layer applies precedence
+    QHash<QString, QByteArray> txt;
     bool haveSrv = false;
     bool haveTxt = false;
 
@@ -168,7 +165,7 @@ std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std
             std::memcpy(&a, p + rdata, 4);
             if (::inet_ntop(AF_INET, &a, buf, sizeof(buf)) != nullptr) { ip = buf; }
         } else if (type == kTypeSrv && rdlen >= 7) {
-            udpPort = read16(p + rdata + 4); // priority(2) weight(2) port(2)
+            srvPort = read16(p + rdata + 4); // priority(2) weight(2) port(2)
             haveSrv = true;
         } else if (type == kTypeTxt) {
             std::size_t t = rdata;
@@ -179,11 +176,9 @@ std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std
                 const std::string entry(reinterpret_cast<const char*>(p + t + 1), slen);
                 const auto eq = entry.find('=');
                 if (eq != std::string::npos) {
-                    const std::string key = entry.substr(0, eq);
-                    const int val = std::atoi(entry.c_str() + eq + 1);
-                    if (key == "udp" && val > 0) { udpPort = val; }
-                    if (key == "pair" && val > 0) { pairPort = val; }
-                    if (key == "http" && val > 0) { httpPort = val; }
+                    const QString key = QString::fromStdString(entry.substr(0, eq));
+                    const QByteArray val = QByteArray::fromStdString(entry.substr(eq + 1));
+                    txt.insert(key, val);
                 }
                 t += 1 + slen;
                 haveTxt = true;
@@ -199,50 +194,54 @@ std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std
     }
 
     if (ip.empty() || (!haveSrv && !haveTxt)) { return std::nullopt; }
-    models::DiscoveredServer s;
-    s.name = instance.empty() ? QString::fromStdString(ip) : QString::fromStdString(instance);
-    s.ip = QString::fromStdString(ip);
-    s.udpPort = udpPort;
-    s.pairPort = pairPort;
-    s.httpPort = httpPort;
-    s.source = models::DiscoverySource::Mdns;
-    return s;
+    // Hand the parsed records to the pure mapping layer (TXT > SRV > defaults,
+    // mid extraction). The instance label becomes the service name.
+    return mdnsServiceToServer(QString::fromStdString(instance), QString::fromStdString(ip),
+                               srvPort, txt);
 }
 
 } // namespace detail
 
-QList<models::DiscoveredServer> mergeDiscovered(const QList<models::DiscoveredServer>& broadcast,
-                                                const QList<models::DiscoveredServer>& mdns) {
-    const auto keyOf = [](const models::DiscoveredServer& s) {
-        return s.ip + QStringLiteral(":") + QString::number(s.udpPort);
-    };
-    QList<models::DiscoveredServer> merged;
-    QHash<QString, int> indexByKey; // discovery key → index into `merged`
+std::optional<int> mdnsTxtInt(const QHash<QString, QByteArray>& txt, const QString& key) {
+    const auto it = txt.constFind(key);
+    if (it == txt.constEnd() || it->isNull()) { return std::nullopt; }
+    const QString trimmed = QString::fromUtf8(*it).trimmed();
+    if (trimmed.isEmpty()) { return std::nullopt; }
+    bool ok = false;
+    const int value = trimmed.toInt(&ok);
+    if (!ok) { return std::nullopt; }
+    return value;
+}
 
-    for (auto server : broadcast) {
-        server.source = models::DiscoverySource::Broadcast;
-        const QString key = keyOf(server);
-        if (indexByKey.contains(key)) { continue; }
-        indexByKey.insert(key, static_cast<int>(merged.size()));
-        merged.append(server);
+std::optional<QString> mdnsTxtString(const QHash<QString, QByteArray>& txt, const QString& key) {
+    const auto it = txt.constFind(key);
+    if (it == txt.constEnd() || it->isNull()) { return std::nullopt; }
+    const QString trimmed = QString::fromUtf8(*it).trimmed();
+    if (trimmed.isEmpty()) { return std::nullopt; }
+    return trimmed;
+}
+
+std::optional<models::DiscoveredServer> mdnsServiceToServer(const QString& serviceName,
+                                                            const QString& hostAddress, int srvPort,
+                                                            const QHash<QString, QByteArray>& txt) {
+    if (hostAddress.isEmpty()) { return std::nullopt; } // null host → nothing to connect to
+
+    models::DiscoveredServer s;
+    s.name = serviceName.isEmpty() ? hostAddress : serviceName;
+    s.ip = hostAddress;
+    // udp: TXT "udp" > SRV port (only when > 0) > default.
+    if (const auto txtUdp = mdnsTxtInt(txt, QStringLiteral("udp"))) {
+        s.udpPort = *txtUdp;
+    } else if (srvPort > 0) {
+        s.udpPort = srvPort;
+    } else {
+        s.udpPort = kMdnsDefaultUdp;
     }
-    for (auto server : mdns) {
-        const QString key = keyOf(server);
-        const auto it = indexByKey.constFind(key);
-        if (it != indexByKey.constEnd()) {
-            // Heard on both paths.
-            merged[it.value()].source = models::DiscoverySource::Both;
-            continue;
-        }
-        server.source = models::DiscoverySource::Mdns;
-        indexByKey.insert(key, static_cast<int>(merged.size()));
-        merged.append(server);
-    }
-    std::sort(merged.begin(), merged.end(),
-              [](const models::DiscoveredServer& a, const models::DiscoveredServer& b) {
-                  return a.name < b.name;
-              });
-    return merged;
+    s.pairPort = mdnsTxtInt(txt, QStringLiteral("pair")).value_or(kMdnsDefaultPair);
+    s.httpPort = mdnsTxtInt(txt, QStringLiteral("http")).value_or(kMdnsDefaultHttp);
+    s.machineId = mdnsTxtString(txt, QStringLiteral("mid")).value_or(QString());
+    s.source = models::DiscoverySource::Mdns;
+    return s;
 }
 
 QList<models::DiscoveredServer> MdnsDiscovery::discover(int timeoutMs) {

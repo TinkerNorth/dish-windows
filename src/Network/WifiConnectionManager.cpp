@@ -3,9 +3,11 @@
 
 #include "WifiConnectionManager.h"
 
-#include "LANDiscovery.h"
-#include "MdnsDiscovery.h"
 #include "PairingClient.h"
+#include "source/connection/DiscoveryGateway.h"
+#include "source/connection/LANDiscovery.h"
+#include "source/connection/MdnsDiscovery.h"
+#include "source/http/SatelliteTlsVerifier.h"
 #include "Util/Hex.h"
 #include "core/reducer/Backoff.h"
 #include "core/reducer/CloseNotify.h"
@@ -69,6 +71,15 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* pa
     deviceId_ = store_->getOrCreateDeviceId();
     deviceName_ = QHostInfo::localHostName();
     if (deviceName_.isEmpty()) { deviceName_ = QStringLiteral("Windows"); }
+    // Enforce TOFU cert-pinning on every HTTPS call: pin the cert first seen for
+    // a satellite (keyed by host/IP, matching the ConnectionStore pin-migration
+    // convention) and reject any later cert whose fingerprint differs. The pin
+    // store lives on the ConnectionStore facade; the verifier composes it with
+    // core/net/Tofu via source/http/SatelliteTlsVerifier.
+    auto& pins = store_->facade().pins();
+    http_->setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
+        return http::verifyPeerCertificate(host, pins, certDer);
+    });
 }
 
 WifiConnectionManager::~WifiConnectionManager() {
@@ -105,7 +116,8 @@ void WifiConnectionManager::startDiscovery() {
         auto mdnsFuture = QtConcurrent::run([] { return MdnsDiscovery::discover(); });
         const QList<models::DiscoveredServer> beacon = LANDiscovery::discover();
         const QList<models::DiscoveredServer> mdns = mdnsFuture.result();
-        const QList<models::DiscoveredServer> merged = mergeDiscovered(beacon, mdns);
+        const QList<models::DiscoveredServer> merged =
+            DiscoveryGateway::mergeDiscovered(beacon, mdns);
         qInfo("discovery scan: broadcast=%lld mdns=%lld merged=%lld",
               static_cast<long long>(beacon.size()), static_cast<long long>(mdns.size()),
               static_cast<long long>(merged.size()));

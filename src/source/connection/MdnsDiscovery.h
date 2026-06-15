@@ -5,7 +5,10 @@
 
 #include "Models/Models.h"
 
+#include <QByteArray>
+#include <QHash>
 #include <QList>
+#include <QString>
 
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +27,11 @@ namespace dish::net {
 // dependencies, so this is a one-shot raw multicast-DNS client: it sends a
 // single PTR query (with the unicast-response bit set) to 224.0.0.251:5353
 // and parses the PTR + SRV + TXT + A answer records the responder returns.
+//
+// This is a Gateway (IO + pure wire parse): the wire-DNS layer lives in
+// detail::, and the service→DiscoveredServer MAPPING layer below mirrors
+// dish-android's MdnsDiscovery mapping functions so port precedence + TXT
+// extraction are unit-testable without a socket.
 class MdnsDiscovery {
   public:
     static constexpr int kDefaultTimeoutMs = 4000;
@@ -35,12 +43,35 @@ class MdnsDiscovery {
     static QList<models::DiscoveredServer> discover(int timeoutMs = kDefaultTimeoutMs);
 };
 
-// Merge the legacy-broadcast and mDNS discovery results, tagging each server's
-// `source`. A server heard on both paths becomes DiscoverySource::Both;
-// otherwise it carries the path that surfaced it. Result is name-sorted and
-// de-duplicated by `ip:udpPort`. Pure — exercised by tests/test_mdns_discovery.
-QList<models::DiscoveredServer> mergeDiscovered(const QList<models::DiscoveredServer>& broadcast,
-                                                const QList<models::DiscoveredServer>& mdns);
+// ── mDNS service→DiscoveredServer mapping layer ─────────────────────────────
+// Pure functions over a parsed (serviceName, hostAddress, SRV port, TXT map)
+// tuple. Port of dish-android source/connection/MdnsDiscovery.kt's
+// mdnsServiceToServer / mdnsTxtInt / mdnsTxtString. Exposed for unit tests.
+
+// Protocol-default ports when neither TXT nor SRV supplies one. The client API
+// is HTTPS on a single port (9443) advertised under `pair` and `http`.
+inline constexpr int kMdnsDefaultUdp = 9876;
+inline constexpr int kMdnsDefaultPair = 9443;
+inline constexpr int kMdnsDefaultHttp = 9443;
+
+// Parse TXT[key] as an int, trimming surrounding whitespace. nullopt when the
+// key is missing, the value is null/empty, or it isn't fully numeric.
+std::optional<int> mdnsTxtInt(const QHash<QString, QByteArray>& txt, const QString& key);
+
+// TXT[key] as a trimmed non-empty string, else nullopt (missing / whitespace).
+std::optional<QString> mdnsTxtString(const QHash<QString, QByteArray>& txt, const QString& key);
+
+// Assemble a DiscoveredServer from one resolved mDNS service.
+//   * null host (empty `hostAddress`) → nullopt (nothing to connect to)
+//   * empty service name → fall back to the observed IP for `name`
+//   * udpPort precedence: TXT "udp" > SRV port (only when > 0) > 9876
+//   * pairPort / httpPort: TXT "pair"/"http" > 9443 (SRV never feeds these)
+//   * machineId from TXT "mid" (else "")
+//   * source = Mdns
+// `hostAddress` empty string models android's null host.
+std::optional<models::DiscoveredServer> mdnsServiceToServer(const QString& serviceName,
+                                                            const QString& hostAddress, int srvPort,
+                                                            const QHash<QString, QByteArray>& txt);
 
 // Pure mDNS wire helpers. Exposed only so tests/test_mdns_discovery.cpp can
 // exercise the compression-pointer + bounds handling directly; production code

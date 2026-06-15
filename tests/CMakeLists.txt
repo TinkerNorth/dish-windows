@@ -15,6 +15,9 @@ endif()
 include(Catch)
 
 set(DISH_TEST_SOURCES
+    # Route debug-CRT assertions to stderr+abort so a bad assert fails the test
+    # instead of popping a modal dialog that hangs ctest / headless runs.
+    CrtAssertToStderr.cpp
     test_kernel.cpp
     test_session_crypto.cpp
     test_atomic_counter.cpp
@@ -23,6 +26,17 @@ set(DISH_TEST_SOURCES
     test_models.cpp
     test_beacon_parser.cpp
     test_mdns_discovery.cpp
+    # Workstream 2a — discovery mapping/merge, TOFU, identity, trust repos
+    test_stable_key.cpp
+    test_tofu.cpp
+    test_ip_literals.cpp
+    test_mdns_mapping.cpp
+    test_discovery_gateway.cpp
+    test_satellite_tls_verifier.cpp
+    test_pin_repository.cpp
+    test_shared_key_repository.cpp
+    test_remembered_satellite_repository.cpp
+    test_connection_store_identity.cpp
     test_gamepad_input_processor.cpp
     test_sdl_motion_convert.cpp
     test_pairing_client_classify.cpp

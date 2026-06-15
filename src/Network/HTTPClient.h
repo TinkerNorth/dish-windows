@@ -23,16 +23,27 @@ namespace dish::net {
 // caller via core/wire/SessionCrypto and passed in). Callbacks fire on the
 // network manager's home thread (the Qt main thread).
 //
-// TLS: the satellite presents a self-signed cert; we keep today's VerifyNone
-// behaviour (the equivalent of `curl --insecure`). TOFU cert-pinning is a later
-// wave — `pinSeam_` is the clearly-marked hook where the pin verify will land
-// (storage lives in a future pin repository); it is unused today so behaviour
-// does not regress.
+// TLS: the satellite presents a self-signed cert, so there is no CA chain to
+// validate — peer verification stays VerifyNone (the equivalent of
+// `curl --insecure`). Trust is instead enforced by TOFU cert-pinning: after the
+// handshake completes, `pinVerifier_` (if installed) is handed the peer cert's
+// DER bytes keyed by host; it pins on first contact and aborts the request if a
+// later cert's fingerprint differs (anti-MITM). The verifier composes
+// core/net/Tofu + repository/SatellitePinRepository (see
+// source/http/SatelliteTlsVerifier); when no verifier is installed behaviour is
+// the pre-2a VerifyNone (nothing regresses).
 class HTTPClient : public QObject {
     Q_OBJECT
   public:
     explicit HTTPClient(QObject* parent = nullptr);
     ~HTTPClient() override;
+
+    // The TOFU pin seam: given the request host (ip) and the peer cert's DER
+    // bytes, return true to trust (and let the request proceed) or false to
+    // reject (the request is aborted). Installed by the composition root, which
+    // binds it to the SatellitePinRepository + the satellite-id for the host.
+    using PinVerifier = std::function<bool(const QString& host, const QByteArray& certDer)>;
+    void setPinVerifier(PinVerifier verifier) { pinVerifier_ = std::move(verifier); }
 
     using SessionCb = std::function<void(const models::SessionResponse&)>;
     using ControllerCb = std::function<void(const models::ControllerPutResponse&)>;
@@ -98,6 +109,7 @@ class HTTPClient : public QObject {
                  const QString& ifNoneMatch, std::function<void(const RawReply&)> done);
 
     QNetworkAccessManager* nam_;
+    PinVerifier pinVerifier_;
 };
 
 } // namespace dish::net
