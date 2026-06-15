@@ -126,6 +126,16 @@ set(DISH_CORE_SOURCES
     src/core/reducer/Backoff.h
     src/core/reducer/Reconcile.h
     src/core/reducer/CloseNotify.h
+    # core/reducer — Workstream 2g USB-direct PURE reducers (Qt-free): the total
+    # path-lifecycle FSM (reduce: phase x event -> next + effects-as-data), the
+    # interrupt-endpoint poll-rate math, the URB-count delta sampler core, the
+    # per-model path choice enum, and the direct-claim-failure reason enum.
+    src/core/reducer/PathChoice.h
+    src/core/reducer/DirectClaimFailure.h
+    src/core/reducer/UsbPollRate.h
+    src/core/reducer/PollRateSampler.h
+    src/core/reducer/UsbPathMachine.h
+    src/core/reducer/UsbPathMachine.cpp
     # core/reducer mappers — Workstream 2b (pure, Qt-free; the connection->row
     # decision logic + the descriptor-aware late-slot converge + the resend pacer).
     src/core/reducer/SatelliteLinkState.h
@@ -203,6 +213,20 @@ set(DISH_CORE_SOURCES
     src/source/store/MotionEnabledStore.cpp
     src/source/store/SatelliteMotionBackendStatusStore.h
     src/source/store/SatelliteMotionBackendStatusStore.cpp
+    # source/store — Workstream 2g per-VID:PID USB path preference: a durable
+    # QSettings Repository (RepositoryContract) wrapped in a reactive StateSource.
+    src/source/store/UsbPathPreferenceStore.h
+    src/source/store/UsbPathPreferenceStore.cpp
+    # source/usb — Workstream 2g Windows raw-HID claim Gateway + the imperative
+    # driver (the only USB-IO place). The gateway interface is the test seam; the
+    # WinHidGateway is the SetupAPI/hid.dll body (hardware-validated manually).
+    # XInput hides Xbox pads from raw HID -> this serves HID pads (DualSense/DS4/
+    # 8BitDo); Xbox pads fall back to SDL/XInput.
+    src/source/usb/UsbDeviceGateway.h
+    src/source/usb/WinHidGateway.h
+    src/source/usb/WinHidGateway.cpp
+    src/source/usb/UsbGamepadManager.h
+    src/source/usb/UsbGamepadManager.cpp
     # source/notification — the in-app notification event-channel source (two
     # bounded DROP_OLDEST channels, monotonic ids, severity->duration defaults)
     # under the UI NotificationQueue/ToastHost; the renderer keeps dedup (2f).
@@ -277,6 +301,10 @@ target_link_libraries(dish_core
         Threads::Threads
         # Winsock + Win32 power management
         ws2_32
+        # Workstream 2g raw-HID claim Gateway: SetupAPI device enumeration +
+        # the HID class API (HidD_*/HidP_*). hid.lib pulls in hidsdi/hidpi.
+        setupapi
+        hid
     PRIVATE
         dish_warnings
         dish_strict)

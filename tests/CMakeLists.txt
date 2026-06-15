@@ -99,7 +99,20 @@ set(DISH_TEST_SOURCES
     test_battery_routing.cpp
     test_battery_validator.cpp
     test_physical_battery_mapping.cpp
-    test_touchpad_routing.cpp)
+    test_touchpad_routing.cpp
+    # Workstream 2g — USB-direct input path. PURE reducers (path FSM totality +
+    # exact effect lists, poll-rate spec math, path choice/resolution) ported
+    # 1:1; ADAPT the URB-count delta sampler, the per-VID:PID path store (+the
+    # RepositoryContract), and the claim driver's open/claim/attach outcome
+    # classification + auto-Direct gating against a fake gateway.
+    test_usb_path_machine.cpp
+    test_usb_path_machine_edge_cases.cpp
+    test_usb_poll_rate.cpp
+    test_poll_rate_sampler.cpp
+    test_path_choice.cpp
+    test_usb_path_resolution.cpp
+    test_usb_path_preference_store.cpp
+    test_usb_gamepad_manager.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests
