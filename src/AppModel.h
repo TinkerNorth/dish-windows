@@ -12,8 +12,11 @@
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "repository/DeadzoneRepository.h"
+#include "repository/MotionPreferenceRepository.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
+#include "source/store/MotionEnabledStore.h"
 #include "Util/DisplaySleepInhibitor.h"
 #include "Util/ScreenWakeController.h"
 
@@ -74,6 +77,26 @@ class AppModel : public QObject {
     // Feature-forwarding preferences (light bar on/off). Owned by the model;
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }
+
+    // ── Workstream 2d: deadzones + motion enable/negotiation ─────────────────
+
+    // The durable per-device deadzone store the deadzone settings page writes
+    // and the device-attach path reads (pushes into the processor once).
+    repository::DeadzoneRepository* deadzoneRepository() { return &deadzoneRepo_; }
+
+    // The per-slot motion-enable store (default on). The settings toggle writes
+    // it; the CAP_MOTION negotiation + the motion routing read it.
+    source::MotionEnabledStore* motionEnabledStore() { return &motionEnabledStore_; }
+
+    // The currently-attached controllers in (id, name, hasGyro) form, for the
+    // deadzone settings page to render a per-device card.
+    QList<input::SDLGamepadBridge::Device> attachedDevices() const { return bridge_->devices(); }
+
+    // Push a freshly-chosen deadzone profile into the live processor for a
+    // device — the settings page calls this on a slider change so the hot path
+    // picks it up without a re-attach. Runs on the Qt main thread (the seam the
+    // SDL bridge also uses at device-add); never per input event.
+    void applyDeadzones(const QString& deviceId, const input::deadzone::Deadzones& dz);
 
     // ── Workstream 2c: catalog-driven "Emulate" picker ───────────────────────
 
@@ -164,6 +187,16 @@ class AppModel : public QObject {
     net::HTTPClient* catalogHttp_;
     source::SatelliteCatalogRepository catalogRepo_;
     source::ControllerTypeStore typeStore_;
+
+    // ── Workstream 2d: deadzone + motion stores ──────────────────────────────
+    // Declared (and therefore constructed) in this order: the motion-preference
+    // repo must exist before the MotionEnabledStore that hydrates from it.
+    repository::DeadzoneRepository deadzoneRepo_;
+    repository::MotionPreferenceRepository motionPrefRepo_;
+    source::MotionEnabledStore motionEnabledStore_;
+    // Device ids whose persisted deadzone profile we've already pushed into the
+    // processor, so onBridgeDevicesChanged pushes once per attach, not per tick.
+    QSet<QString> deadzonePushedDevices_;
     // The currently-relevant catalog snapshot the CatalogComposer projects into
     // a pickable-type list. Updated when a catalog fetch lands.
     arch::Observable<composer::CatalogSnapshot> catalogSnapshot_;

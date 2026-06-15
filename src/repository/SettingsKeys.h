@@ -26,6 +26,15 @@ inline constexpr const char* kSharedKeyPrefix = "satellite_shared_key:";
 // The remembered-satellite list, stored as one JSON array under a single key.
 inline constexpr const char* kSatelliteListKey = "satellite_list";
 
+// Per-device deadzone profiles: "deadzone:<deviceId>" -> {s,t} JSON
+// (Workstream 2d). Disjoint from the pin/shared-key namespaces; clear() on the
+// deadzone repo wipes only this prefix.
+inline constexpr const char* kDeadzonePrefix = "deadzone:";
+
+// Per-slot motion-enable toggles: "motion_enabled:<slotId>" -> "1"/"0"
+// (Workstream 2d). Absence means "never written" -> the store defaults it on.
+inline constexpr const char* kMotionEnabledPrefix = "motion_enabled:";
+
 // Stable per-install device id (machineId source for X-Device-Id). One owner.
 inline constexpr const char* kDeviceIdKey = "deviceId";
 

@@ -81,6 +81,16 @@ SettingsView::SettingsView(FeatureSettings* settings, QWidget* parent)
     footnote->setStyleSheet(QStringLiteral("color: %1; font-size: 11px;").arg(hex(Theme::muted)));
     layout->addWidget(footnote);
 
+    // Entry point to the per-device dead-zone / motion page (Workstream 2d).
+    auto* controllerHeader = new QLabel(tr("CONTROLLER TUNING"), this);
+    controllerHeader->setStyleSheet(sectionHeaderQss());
+    layout->addWidget(controllerHeader);
+
+    auto* deadzonesButton = new QPushButton(tr("Dead zones && motion…"), this);
+    QObject::connect(deadzonesButton, &QPushButton::clicked, this,
+                     &SettingsView::deadzonesRequested);
+    layout->addWidget(deadzonesButton, 0, Qt::AlignLeft);
+
     layout->addStretch(1);
 }
 

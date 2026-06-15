@@ -18,6 +18,9 @@ SettingsDialog::SettingsDialog(FeatureSettings* settings, QWidget* parent) : QDi
     auto* view = new SettingsView(settings, this);
     // The view's Done button closes the modal sheet.
     QObject::connect(view, &SettingsView::closeRequested, this, &QDialog::accept);
+    // Forward the dead-zone page request up to the host (MainWindow).
+    QObject::connect(view, &SettingsView::deadzonesRequested, this,
+                     &SettingsDialog::deadzonesRequested);
     layout->addWidget(view);
 }
 

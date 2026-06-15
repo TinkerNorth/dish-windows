@@ -39,6 +39,17 @@ set(DISH_TEST_SOURCES
     test_connection_store_identity.cpp
     test_gamepad_input_processor.cpp
     test_sdl_motion_convert.cpp
+    # Workstream 2d — pure XUSB/HID layout math, deadzone pure layer, per-device
+    # deadzone + per-slot motion repos, motion enable/backend stores, the motion
+    # capability composer, and the physical-motion convert/filter/probe.
+    test_gamepad_button_layouts.cpp
+    test_deadzones.cpp
+    test_deadzone_repository.cpp
+    test_motion_preference_repository.cpp
+    test_motion_enabled_store.cpp
+    test_motion_backend_status_store.cpp
+    test_motion_capability_composer.cpp
+    test_physical_motion_source.cpp
     test_pairing_client_classify.cpp
     test_rest_control_plane.cpp
     test_udp_opcodes.cpp

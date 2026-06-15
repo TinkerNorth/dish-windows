@@ -23,7 +23,8 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
       inhibitor_(std::move(inhibitor)), wake_(inhibitor_.get()),
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
-      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_) {
+      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
+      motionEnabledStore_(&motionPrefRepo_) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -106,12 +107,19 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     });
 
     // Same lookup for the per-device motion capability — gates CAP_MOTION in
-    // the controller-add so an Xbox pad never advertises it.
+    // the controller-add so an Xbox pad never advertises it. Workstream 2d folds
+    // the user's per-slot motion toggle into the negotiation: CAP_MOTION is sent
+    // iff the pad HAS a gyro AND the user left motion enabled — the same
+    // `hasGyro ∧ userEnabled` rule MotionCapability::toCapBits derives.
     hub_->setMotionCapabilityFn([this](const QString& slotId) {
+        bool hasGyro = false;
         for (const auto& d : bridge_->devices()) {
-            if (d.id == slotId) { return d.motionCapable; }
+            if (d.id == slotId) {
+                hasGyro = d.motionCapable;
+                break;
+            }
         }
-        return false;
+        return hasGyro && motionEnabledStore_.isEnabled(slotId.toStdString());
     });
 
     // And the controller type (Xbox / PlayStation) so the controller-add can
@@ -192,9 +200,35 @@ void AppModel::onHubChanged() {
 }
 
 void AppModel::onBridgeDevicesChanged() {
+    // Push each newly-attached device's persisted deadzone profile into the
+    // processor exactly once (the hot-path rule: configure at device-add, never
+    // per event). The SDL bridge already installed its default at attach; if the
+    // user saved a per-device override we overwrite it here with the stored
+    // value. Devices that drop out are pruned so a re-plug re-applies.
+    const auto devices = bridge_->devices();
+    QSet<QString> present;
+    for (const auto& d : devices) {
+        present.insert(d.id);
+        if (deadzonePushedDevices_.contains(d.id)) { continue; }
+        deadzonePushedDevices_.insert(d.id);
+        if (auto dz = deadzoneRepo_.deadzonesFor(d.id)) {
+            processor_.setDeadzones(d.id.toStdString(), {dz->stickFlat, dz->triggerFlat});
+        }
+    }
+    for (auto it = deadzonePushedDevices_.begin(); it != deadzonePushedDevices_.end();) {
+        it = present.contains(*it) ? std::next(it) : deadzonePushedDevices_.erase(it);
+    }
+
     // A new device only matters for routing if a connection is already bound
     // to its slot id, so re-trigger the same rebuild path.
     rebuild();
+}
+
+void AppModel::applyDeadzones(const QString& deviceId, const input::deadzone::Deadzones& dz) {
+    // Push to the live processor (once, off the hot path) so a slider change
+    // takes effect without a re-attach. Persistence is the settings page's job
+    // (it writes the DeadzoneRepository before emitting); we only apply here.
+    processor_.setDeadzones(deviceId.toStdString(), {dz.stickFlat, dz.triggerFlat});
 }
 
 void AppModel::onWifiEvent(const net::ConnectionEvent& evt) {

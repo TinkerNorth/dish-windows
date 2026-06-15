@@ -53,6 +53,10 @@
         <source>Error</source>
         <translation>Error</translation>
     </message>
+    <message>
+        <source>Dead zones</source>
+        <translation>Zonas muertas</translation>
+    </message>
 </context>
 <context>
     <name>dish::ui::ConnectionsDialog</name>
@@ -118,6 +122,49 @@
     <message>
         <source>Features only apply when your controller&apos;s hardware supports them — the controller list shows what was detected.</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CONTROLLER TUNING</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dead zones &amp;&amp; motion…</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>dish::ui::DeadzoneSettingsView</name>
+    <message>
+        <source>Dead zones</source>
+        <translation>Zonas muertas</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Listo</translation>
+    </message>
+    <message>
+        <source>CONTROLLERS</source>
+        <translation>MANDOS</translation>
+    </message>
+    <message>
+        <source>Connect a controller to adjust its dead zones.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A larger dead zone ignores more stick or trigger travel near rest — raise it if a worn controller drifts on its own.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Stick: %1</source>
+        <translation>Stick: %1</translation>
+    </message>
+    <message>
+        <source>Trigger: %1</source>
+        <translation>Gatillo: %1</translation>
+    </message>
+    <message>
+        <source>Forward motion</source>
+        <translation>Reenviar movimiento</translation>
     </message>
 </context>
 <context>

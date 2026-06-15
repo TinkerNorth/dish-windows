@@ -5,6 +5,7 @@
 
 #include "AppModel.h"
 #include "ConnectionsDialog.h"
+#include "DeadzoneSettingsView.h"
 #include "EmulatePicker.h"
 #include "Network/ConnectionHub.h"
 #include "Network/WifiConnectionManager.h"
@@ -15,6 +16,7 @@
 #include "SlotCard.h"
 #include "Theme.h"
 
+#include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QProgressBar>
@@ -248,6 +250,30 @@ void MainWindow::onManageClicked() {
 
 void MainWindow::onSettingsClicked() {
     SettingsDialog dlg(model_->featureSettings(), this);
+    // Open the per-device dead-zone / motion page on request (Workstream 2d).
+    QObject::connect(&dlg, &SettingsDialog::deadzonesRequested, this,
+                     &MainWindow::onDeadzonesClicked);
+    dlg.exec();
+}
+
+void MainWindow::onDeadzonesClicked() {
+    QList<DeadzoneSettingsView::DeviceRow> rows;
+    for (const auto& d : model_->attachedDevices()) {
+        rows.append({d.id, d.name, d.motionCapable});
+    }
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Dead zones"));
+    dlg.setMinimumWidth(440);
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto* view = new DeadzoneSettingsView(model_->deadzoneRepository(),
+                                          model_->motionEnabledStore(), rows, &dlg);
+    QObject::connect(view, &DeadzoneSettingsView::closeRequested, &dlg, &QDialog::accept);
+    // Apply a slider change to the live processor immediately (the view already
+    // persisted it). Off the hot path — one call per slider move.
+    QObject::connect(view, &DeadzoneSettingsView::deadzoneChanged, model_,
+                     &AppModel::applyDeadzones);
+    layout->addWidget(view);
     dlg.exec();
 }
 

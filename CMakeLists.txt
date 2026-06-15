@@ -135,6 +135,11 @@ set(DISH_CORE_SOURCES
     # core/reducer mapper — Workstream 2c (pure picker-visibility + catalog
     # forward-compat: which connections/types the Emulate picker offers).
     src/core/reducer/PickerVisibility.h
+    # core/input — pure, Qt-free XUSB/HID layout math + deadzone/scale + the
+    # host-testable physical-motion convert/filter (Workstream 2d). Header-only.
+    src/core/input/GamepadButtonLayouts.h
+    src/core/input/Deadzones.h
+    src/core/input/PhysicalMotionSource.h
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp
@@ -182,6 +187,12 @@ set(DISH_CORE_SOURCES
     # the picker writes + the connection layer reads (Workstream 2c).
     src/source/store/ControllerTypeStore.h
     src/source/store/ControllerTypeStore.cpp
+    # source/store — motion enable (in-mem + repo bridge) + the satellite motion
+    # backend-status decode store (Workstream 2d).
+    src/source/store/MotionEnabledStore.h
+    src/source/store/MotionEnabledStore.cpp
+    src/source/store/SatelliteMotionBackendStatusStore.h
+    src/source/store/SatelliteMotionBackendStatusStore.cpp
     # repository — trust+identity stores on the kernel Repository + the
     # ConnectionStore facade/Coordinator over them (Workstream 2a).
     src/repository/SettingsKeys.h
@@ -194,6 +205,12 @@ set(DISH_CORE_SOURCES
     src/repository/RememberedSatelliteRepository.cpp
     src/repository/ConnectionStore.h
     src/repository/ConnectionStore.cpp
+    # repository — per-device deadzone profiles + per-slot motion toggle stores
+    # on the kernel Repository (Workstream 2d).
+    src/repository/DeadzoneRepository.h
+    src/repository/DeadzoneRepository.cpp
+    src/repository/MotionPreferenceRepository.h
+    src/repository/MotionPreferenceRepository.cpp
     # composer — the derived connections view (Composer) + the imperative
     # Coordinator that re-exposes it (Workstream 2b).
     src/composer/ConnectionsComposer.h
@@ -203,6 +220,10 @@ set(DISH_CORE_SOURCES
     # composer — the catalog → pickable-type-list projection (Workstream 2c).
     src/composer/CatalogComposer.h
     src/composer/CatalogComposer.cpp
+    # composer — per-slot motion-capability derivation (gyro ∧ enabled ∧ live,
+    # type→sink map, toCapBits) (Workstream 2d).
+    src/composer/MotionCapabilityComposer.h
+    src/composer/MotionCapabilityComposer.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
@@ -250,6 +271,8 @@ set(DISH_UI_SOURCES
     src/UI/EmulatePicker.cpp
     src/UI/SettingsView.h
     src/UI/SettingsView.cpp
+    src/UI/DeadzoneSettingsView.h
+    src/UI/DeadzoneSettingsView.cpp
     src/UI/SettingsDialog.h
     src/UI/SettingsDialog.cpp
     src/UI/NotificationQueue.h

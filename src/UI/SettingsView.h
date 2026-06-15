@@ -32,6 +32,12 @@ class SettingsView : public QWidget {
     // shell closes the dialog / pops the page.
     void closeRequested();
 
+    // Emitted when the user opens the per-device dead-zone / motion page from
+    // here. The host shell presents DeadzoneSettingsView (Workstream 2d). Kept
+    // as a request signal so this shared view stays free of the device list /
+    // repositories the deadzone page needs.
+    void deadzonesRequested();
+
   private:
     // Push the combo selection back into FeatureSettings.
     void onLightbarModeChanged(int index);

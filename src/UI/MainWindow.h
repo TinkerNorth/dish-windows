@@ -37,6 +37,8 @@ class MainWindow : public QMainWindow {
     void onTelemetryTick();
     void onManageClicked();
     void onSettingsClicked();
+    // Open the per-device dead-zone / motion settings page (Workstream 2d).
+    void onDeadzonesClicked();
     void onBindRequested(const QString& slotId, const QString& connectionId);
     void onUnbindRequested(const QString& slotId);
     // Open the catalog-driven Emulate picker for a bound slot (Workstream 2c).
