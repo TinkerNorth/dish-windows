@@ -236,6 +236,37 @@
         <source>Bind…</source>
         <translation>Poveži…</translation>
     </message>
+    <message>
+        <source>Emulate…</source>
+        <translation>Emuliraj…</translation>
+    </message>
+</context>
+<context>
+    <name>dish::ui::EmulatePicker</name>
+    <message>
+        <source>Emulate</source>
+        <translation>Emuliraj</translation>
+    </message>
+    <message>
+        <source>EMULATE</source>
+        <translation>EMULIRAJ</translation>
+    </message>
+    <message>
+        <source>Choose what %1 appears as on the host.</source>
+        <translation>Odaberite kako se %1 prikazuje na hostu.</translation>
+    </message>
+    <message>
+        <source>No controller types available yet.</source>
+        <translation>Još nema dostupnih tipova kontrolera.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Otkaži</translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation>Primijeni</translation>
+    </message>
 </context>
 <context>
     <name>FeatureSettings</name>

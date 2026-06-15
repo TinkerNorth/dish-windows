@@ -52,6 +52,12 @@ set(DISH_TEST_SOURCES
     test_connection_coordinator.cpp
     test_session_lifecycle.cpp
     test_session_manager.cpp
+    # Workstream 2c — catalog cache (ETag/304/stale), controller-type store,
+    # picker-visibility mapper, catalog forward-compat.
+    test_catalog_repository.cpp
+    test_catalog_dto.cpp
+    test_controller_type_store.cpp
+    test_picker_visibility.cpp
     test_screen_wake_controller.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp

@@ -236,6 +236,37 @@
         <source>Bind…</source>
         <translation>Vincular…</translation>
     </message>
+    <message>
+        <source>Emulate…</source>
+        <translation>Emular…</translation>
+    </message>
+</context>
+<context>
+    <name>dish::ui::EmulatePicker</name>
+    <message>
+        <source>Emulate</source>
+        <translation>Emular</translation>
+    </message>
+    <message>
+        <source>EMULATE</source>
+        <translation>EMULAR</translation>
+    </message>
+    <message>
+        <source>Choose what %1 appears as on the host.</source>
+        <translation>Escolha como %1 aparece no host.</translation>
+    </message>
+    <message>
+        <source>No controller types available yet.</source>
+        <translation>Nenhum tipo de controle disponível ainda.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation>Aplicar</translation>
+    </message>
 </context>
 <context>
     <name>FeatureSettings</name>

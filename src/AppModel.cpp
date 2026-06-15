@@ -5,6 +5,8 @@
 
 #include "LightbarRouting.h"
 
+#include <QLocale>
+
 #include <chrono>
 
 namespace dish {
@@ -19,7 +21,9 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       connections_(new composer::ConnectionCoordinator(wifi_, hub_, this)),
       bridge_(new input::SDLGamepadBridge(&processor_, this)),
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
-      inhibitor_(std::move(inhibitor)), wake_(inhibitor_.get()) {
+      inhibitor_(std::move(inhibitor)), wake_(inhibitor_.get()),
+      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
+      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -111,13 +115,12 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     });
 
     // And the controller type (Xbox / PlayStation) so the controller-add can
-    // send the right MSG_CONTROLLER_TYPE hint — a DualSense → virtual DS4.
-    hub_->setControllerTypeFn([this](const QString& slotId) -> int {
-        for (const auto& d : bridge_->devices()) {
-            if (d.id == slotId) { return d.controllerType; }
-        }
-        return 0; // CONTROLLER_TYPE_XBOX
-    });
+    // send the right MSG_CONTROLLER_TYPE hint — a DualSense → virtual DS4. The
+    // user's Emulate override (ControllerTypeStore, Workstream 2c) wins over the
+    // SDL hardware classification; resolveControllerType applies that ladder so
+    // the choice is threaded into the descriptor PUT.
+    hub_->setControllerTypeFn(
+        [this](const QString& slotId) { return resolveControllerType(slotId); });
 
     rebuild();
 }
@@ -293,6 +296,67 @@ void AppModel::rebuild() {
     wake_.update(streamingCount);
 
     emit stateChanged();
+}
+
+// ── Workstream 2c: catalog-driven Emulate picker ─────────────────────────────
+
+int AppModel::resolveControllerType(const QString& slotId) const {
+    // 1) The user's Emulate override (keyed by the slot's bound connection).
+    const QString connId = hub_->bindings().value(slotId);
+    if (!connId.isEmpty()) {
+        if (auto override = typeStore_.typeFor(connId.toStdString(), slotId.toStdString())) {
+            return *override;
+        }
+    }
+    // 2) The pad's SDL hardware classification.
+    for (const auto& d : bridge_->devices()) {
+        if (d.id == slotId) { return d.controllerType; }
+    }
+    // 3) Default Xbox.
+    return proto::kControllerTypeXbox;
+}
+
+int AppModel::currentTypeFor(const QString& slotId) const { return resolveControllerType(slotId); }
+
+QList<composer::PickableType> AppModel::pickableTypesFor(const QString& slotId) const {
+    const QString connId = hub_->bindings().value(slotId);
+    if (connId.isEmpty()) { return {}; }
+    if (auto* conn = wifi_->get(connId)) {
+        if (auto cached = catalogRepo_.cached(conn->server().id())) {
+            return composer::offerableTypes(*cached);
+        }
+    }
+    // Fall back to whatever the composer currently projects (the last fetched
+    // catalog), so a freshly-bound slot still offers the known types.
+    return catalogComposer_.state().value();
+}
+
+void AppModel::setSlotControllerType(const QString& slotId, int type) {
+    const QString connId = hub_->bindings().value(slotId);
+    if (connId.isEmpty()) { return; } // unbound: nothing to emulate
+    typeStore_.setType(connId.toStdString(), slotId.toStdString(), type);
+    // Re-attach the slot so the new descriptor (carrying the chosen type) is
+    // PUT to the satellite — the chosen type reaches the wire. bind() re-reads
+    // resolveControllerType, which now returns the override.
+    hub_->bind(slotId, connId);
+}
+
+void AppModel::refreshCatalogForSlot(const QString& slotId) {
+    const QString connId = hub_->bindings().value(slotId);
+    if (connId.isEmpty()) { return; }
+    auto* conn = wifi_->get(connId);
+    if (conn == nullptr) { return; }
+    const auto server = conn->server();
+    const QString satId = server.id();
+    // BCP-47 locale chain for Accept-Language; the satellite falls back to en.
+    const QString acceptLanguage = QLocale().bcp47Name();
+    catalogRepo_.catalogFor(server, satId, acceptLanguage,
+                            [this](const std::optional<models::CatalogDto>& catalog) {
+                                if (!catalog.has_value()) { return; }
+                                // Feed the composer; its distinct-until-changed
+                                // suppresses a no-op (304-served identical) update.
+                                catalogSnapshot_.set(composer::CatalogSnapshot{*catalog});
+                            });
 }
 
 } // namespace dish

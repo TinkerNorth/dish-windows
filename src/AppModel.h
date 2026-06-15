@@ -10,7 +10,10 @@
 #include "Network/ConnectionHub.h"
 #include "Network/ConnectionStore.h"
 #include "Network/WifiConnectionManager.h"
+#include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "source/http/SatelliteCatalogRepository.h"
+#include "source/store/ControllerTypeStore.h"
 #include "Util/DisplaySleepInhibitor.h"
 #include "Util/ScreenWakeController.h"
 
@@ -72,6 +75,32 @@ class AppModel : public QObject {
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }
 
+    // ── Workstream 2c: catalog-driven "Emulate" picker ───────────────────────
+
+    // The per-slot controller-type override store the Emulate picker writes and
+    // the controllerType resolver (threaded into the descriptor PUT) reads.
+    source::ControllerTypeStore* typeStore() { return &typeStore_; }
+
+    // The pickable controller types for a slot's Emulate dialog, derived from
+    // the cached catalog of the satellite the slot is bound to (empty if the
+    // slot is unbound or no catalog has been fetched yet). The picker UI opens
+    // with this list. Mirrors android's per-slot picker derivation.
+    QList<composer::PickableType> pickableTypesFor(const QString& slotId) const;
+
+    // The slot's current emulated type id (the user override if set, else the
+    // pad's hardware classification, else Xbox). Pre-selects the picker.
+    int currentTypeFor(const QString& slotId) const;
+
+    // Apply the user's Emulate choice: write the override into the type store
+    // and re-attach the slot so the new descriptor is PUT to the satellite.
+    // Mirrors android ConnectionCoordinator.setControllerType.
+    void setSlotControllerType(const QString& slotId, int type);
+
+    // Kick a catalog fetch for the satellite a slot is bound to (best-effort;
+    // unauthenticated GET /api/catalog with ETag revalidation). On success the
+    // catalog snapshot Observable updates and the picker can render fresh types.
+    void refreshCatalogForSlot(const QString& slotId);
+
     // Single read-only accessor — the UI reads everything off this slice
     // and re-renders on stateChanged().
     const MainUiState& state() const { return state_; }
@@ -101,6 +130,12 @@ class AppModel : public QObject {
     // every poolChanged signal so newly-created connections get wired.
     void installRumbleHandlers();
 
+    // Resolve the controller type to advertise for a slot: the user's Emulate
+    // override (ControllerTypeStore) wins; absent that, the pad's SDL hardware
+    // classification; absent that, Xbox. This is what bind()/attachSlot threads
+    // into the descriptor PUT, so an Emulate choice reaches the satellite.
+    int resolveControllerType(const QString& slotId) const;
+
     std::unique_ptr<net::ConnectionStore> store_;
     net::WifiConnectionManager* wifi_;
     net::ConnectionHub* hub_;
@@ -121,6 +156,18 @@ class AppModel : public QObject {
     util::ScreenWakeController wake_;
 
     MainUiState state_;
+
+    // ── Workstream 2c: catalog + Emulate-picker state ────────────────────────
+    // A dedicated HTTPClient for the unauthenticated catalog GET (kept off the
+    // session path so a catalog fetch never perturbs a live connection). Owned
+    // as a QObject child of this AppModel.
+    net::HTTPClient* catalogHttp_;
+    source::SatelliteCatalogRepository catalogRepo_;
+    source::ControllerTypeStore typeStore_;
+    // The currently-relevant catalog snapshot the CatalogComposer projects into
+    // a pickable-type list. Updated when a catalog fetch lands.
+    arch::Observable<composer::CatalogSnapshot> catalogSnapshot_;
+    composer::CatalogComposer catalogComposer_;
 
     // slotId -> active sender. Read on the SDL gamepad thread; written on the
     // Qt main thread. Guarded by routingMtx_ for both directions.

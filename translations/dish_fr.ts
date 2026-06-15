@@ -236,6 +236,37 @@
         <source>Bind…</source>
         <translation>Lier…</translation>
     </message>
+    <message>
+        <source>Emulate…</source>
+        <translation>Émuler…</translation>
+    </message>
+</context>
+<context>
+    <name>dish::ui::EmulatePicker</name>
+    <message>
+        <source>Emulate</source>
+        <translation>Émuler</translation>
+    </message>
+    <message>
+        <source>EMULATE</source>
+        <translation>ÉMULER</translation>
+    </message>
+    <message>
+        <source>Choose what %1 appears as on the host.</source>
+        <translation>Choisissez ce que %1 apparaît comme sur l’hôte.</translation>
+    </message>
+    <message>
+        <source>No controller types available yet.</source>
+        <translation>Aucun type de manette disponible pour l’instant.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation>Appliquer</translation>
+    </message>
 </context>
 <context>
     <name>FeatureSettings</name>

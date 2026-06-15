@@ -5,6 +5,7 @@
 
 #include "AppModel.h"
 #include "ConnectionsDialog.h"
+#include "EmulatePicker.h"
 #include "Network/ConnectionHub.h"
 #include "Network/WifiConnectionManager.h"
 #include "NotificationQueue.h"
@@ -214,6 +215,7 @@ void MainWindow::rebuildSlotList() {
         card->setSlot(s, available);
         QObject::connect(card, &SlotCard::bindRequested, this, &MainWindow::onBindRequested);
         QObject::connect(card, &SlotCard::unbindRequested, this, &MainWindow::onUnbindRequested);
+        QObject::connect(card, &SlotCard::emulateRequested, this, &MainWindow::onEmulateRequested);
         slotsLayout_->insertWidget(slotsLayout_->count() - 1, card);
     }
 }
@@ -254,5 +256,28 @@ void MainWindow::onBindRequested(const QString& slotId, const QString& connectio
 }
 
 void MainWindow::onUnbindRequested(const QString& slotId) { model_->hub()->unbind(slotId); }
+
+void MainWindow::onEmulateRequested(const QString& slotId) {
+    // Kick a best-effort catalog refresh (async; the cache serves immediately on
+    // first open before it lands, then fresh on a later open). Then open the
+    // picker with the currently-available types and the slot's current type.
+    model_->refreshCatalogForSlot(slotId);
+    const auto types = model_->pickableTypesFor(slotId);
+    const int currentType = model_->currentTypeFor(slotId);
+
+    // Name the slot in the dialog header.
+    QString slotName = slotId;
+    for (const auto& s : model_->state().slotList) {
+        if (s.id == slotId) {
+            slotName = s.name;
+            break;
+        }
+    }
+
+    EmulatePicker dlg(types, slotName, currentType, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        model_->setSlotControllerType(slotId, dlg.chosenType());
+    }
+}
 
 } // namespace dish::ui

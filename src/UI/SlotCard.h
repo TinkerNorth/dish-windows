@@ -25,6 +25,9 @@ class SlotCard : public QFrame {
   signals:
     void bindRequested(const QString& slotId, const QString& connectionId);
     void unbindRequested(const QString& slotId);
+    // The player tapped "Emulate" on a bound slot: open the catalog-driven type
+    // picker for it (Workstream 2c). Only emitted while the slot is bound.
+    void emulateRequested(const QString& slotId);
 
   private:
     void onBindClicked();
@@ -39,6 +42,9 @@ class SlotCard : public QFrame {
     QLabel* glyph_;
     QLabel* dot_;
     QPushButton* bindButton_;
+    // "Emulate" affordance — opens the catalog-driven type picker. Shown only
+    // when the slot is bound (there is a satellite to emulate a pad on).
+    QPushButton* emulateButton_;
     // Capability chip: motion (gyro/accelerometer) availability for this pad.
     // Always visible — its text/style/tooltip switch between the "available"
     // and "not available" states so the absence of motion is explicit, never

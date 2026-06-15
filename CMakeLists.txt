@@ -132,6 +132,9 @@ set(DISH_CORE_SOURCES
     src/core/reducer/ConnectionRows.h
     src/core/reducer/LateSlotConverge.h
     src/core/reducer/ResendPacer.h
+    # core/reducer mapper — Workstream 2c (pure picker-visibility + catalog
+    # forward-compat: which connections/types the Emulate picker offers).
+    src/core/reducer/PickerVisibility.h
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp
@@ -171,6 +174,14 @@ set(DISH_CORE_SOURCES
     # source/http — the TOFU TLS verifier seam HTTPClient calls (Workstream 2a).
     src/source/http/SatelliteTlsVerifier.h
     src/source/http/SatelliteTlsVerifier.cpp
+    # source/http — the catalog ETag caching gateway over HTTPClient::getCatalog
+    # (Workstream 2c). A caching gateway, NOT a durable Repository.
+    src/source/http/SatelliteCatalogRepository.h
+    src/source/http/SatelliteCatalogRepository.cpp
+    # source/store — the per-slot Emulate controller-type override StateSource
+    # the picker writes + the connection layer reads (Workstream 2c).
+    src/source/store/ControllerTypeStore.h
+    src/source/store/ControllerTypeStore.cpp
     # repository — trust+identity stores on the kernel Repository + the
     # ConnectionStore facade/Coordinator over them (Workstream 2a).
     src/repository/SettingsKeys.h
@@ -189,6 +200,9 @@ set(DISH_CORE_SOURCES
     src/composer/ConnectionsComposer.cpp
     src/composer/ConnectionCoordinator.h
     src/composer/ConnectionCoordinator.cpp
+    # composer — the catalog → pickable-type-list projection (Workstream 2c).
+    src/composer/CatalogComposer.h
+    src/composer/CatalogComposer.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
@@ -232,6 +246,8 @@ set(DISH_UI_SOURCES
     src/UI/PairingDialog.cpp
     src/UI/ConnectionsDialog.h
     src/UI/ConnectionsDialog.cpp
+    src/UI/EmulatePicker.h
+    src/UI/EmulatePicker.cpp
     src/UI/SettingsView.h
     src/UI/SettingsView.cpp
     src/UI/SettingsDialog.h

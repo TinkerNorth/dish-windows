@@ -39,6 +39,8 @@ class MainWindow : public QMainWindow {
     void onSettingsClicked();
     void onBindRequested(const QString& slotId, const QString& connectionId);
     void onUnbindRequested(const QString& slotId);
+    // Open the catalog-driven Emulate picker for a bound slot (Workstream 2c).
+    void onEmulateRequested(const QString& slotId);
 
     AppModel* model_;
 

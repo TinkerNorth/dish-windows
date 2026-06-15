@@ -86,9 +86,19 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     applyDisabledOpacityEffect(bindButton_);
     QObject::connect(bindButton_, &QPushButton::clicked, this, &SlotCard::onBindClicked);
 
+    // "Emulate" — opens the catalog-driven controller-type picker for a bound
+    // slot. Hidden when unbound (nothing to emulate a pad on yet).
+    emulateButton_ = new QPushButton(tr("Emulate…"), this);
+    emulateButton_->setObjectName(QStringLiteral("outlined"));
+    applyDisabledOpacityEffect(emulateButton_);
+    emulateButton_->setVisible(false);
+    QObject::connect(emulateButton_, &QPushButton::clicked, this,
+                     [this] { emit emulateRequested(slot_.id); });
+
     layout->addWidget(glyph_, 0, Qt::AlignVCenter);
     layout->addWidget(dot_, 0, Qt::AlignVCenter);
     layout->addLayout(textLayout, 1);
+    layout->addWidget(emulateButton_, 0, Qt::AlignVCenter);
     layout->addWidget(bindButton_, 0, Qt::AlignVCenter);
 }
 
@@ -176,6 +186,9 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
         }
         batteryChip_->setToolTip(tip);
     }
+
+    // The Emulate picker only makes sense once the slot is bound to a satellite.
+    emulateButton_->setVisible(slot.boundConnectionId.has_value());
 
     if (slot.boundStatus.has_value()) {
         boundLabel_->setText(tr("Bound to %1").arg(slot.boundStatus->label));
