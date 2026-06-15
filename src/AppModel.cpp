@@ -40,7 +40,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
       motionEnabledStore_(&motionPrefRepo_), themeController_(themeStore_.state(), qApp),
       crashController_(crashStore_.state(), &crashBackend_), usbPathStore_(&usbPathRepo_),
-      usbObserver_(this), usbScanTimer_(new QTimer(this)) {
+      usbObserver_(this), usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -185,6 +185,33 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     // stop() is a deliberate no-op so the opt-in survives teardown (D4).
     crashController_.start();
 
+    // ── Live input-rate measurement (android parity) ─────────────────────────
+    // The store samples the processor's per-device counters through the pure
+    // InputRateTracker. Its CounterSource borrows processor_ (alive for the whole
+    // AppModel lifetime). slotId is the SDL device id / USB-direct synthetic key
+    // string — exactly the key processor_.publish() counts under, so the lookup
+    // lines up with no translation.
+    inputRateStore_ = std::make_unique<source::InputRateStore>(
+        [this](const std::string& slotId) -> source::SlotInputCounters {
+            const auto c = processor_.inputCounters(slotId);
+            return source::SlotInputCounters{c.gamepadEvents, c.motionEvents};
+        });
+    inputRatesSub_ = inputRateStore_->state().subscribe(
+        [this](const source::SlotInputRatesMap& rates) { onInputRatesChanged(rates); },
+        /*emitCurrent=*/false);
+    // Drive the store at ~1 Hz on the main thread — the same cadence as the
+    // telemetry footer and android's sub-second sampling loop. We pump sampleAt()
+    // with the steady clock rather than the store's own QTimer so the sampling
+    // lives on the AppModel's thread alongside the slot-list state it patches.
+    inputRateTimer_->setInterval(1000);
+    QObject::connect(inputRateTimer_, &QTimer::timeout, this, [this] {
+        const auto nowUs =
+            static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                                           std::chrono::steady_clock::now().time_since_epoch())
+                                           .count());
+        inputRateStore_->sampleAt(nowUs);
+    });
+
     rebuild();
 }
 
@@ -198,6 +225,10 @@ AppModel::~AppModel() {
     // manager.
     bridge_->stop();
     usbScanTimer_->stop();
+    inputRateTimer_->stop();
+    // Drop the subscription before the store so no folded emission races teardown.
+    inputRatesSub_ = arch::Observable<source::SlotInputRatesMap>::Subscription{};
+    inputRateStore_.reset();
     usbManager_.reset();
     usbGateway_.reset();
 }
@@ -270,6 +301,9 @@ void AppModel::start() {
     // claimed promptly, then the periodic reconcile + poll-rate sampling.
     pollUsbDirect();
     usbScanTimer_->start();
+    // Begin live input-rate sampling. The first tick only baselines each tracker
+    // (reports 0), so numbers appear from the second tick on — same as android.
+    inputRateTimer_->start();
 }
 
 void AppModel::clearPairingTarget() {
@@ -357,9 +391,43 @@ void AppModel::pollUsbDirect() {
                                       std::chrono::steady_clock::now().time_since_epoch())
                                       .count());
     source::usb::WinHidGateway* gw = usbGateway_.get();
-    (void)usbPollSampler_.sampleAll(nowMs, present, [gw](int id) -> std::int64_t {
+    const auto updates = usbPollSampler_.sampleAll(nowMs, present, [gw](int id) -> std::int64_t {
         return gw != nullptr ? gw->completionCount(id) : 0;
     });
+    // Surface the measured poll rate per synthetic so the slot card can show it
+    // for a USB-direct pad (android renders this as the Direct path's measured
+    // Hz). The sampler is keyed by syntheticId; the slot id the UI uses is the
+    // controllers() map key string, so translate syntheticId -> key here while we
+    // still hold both. A synthetic's first sample emits no update (baseline only)
+    // and an idle one emits 0 — both are fine to publish (0 reads as "pending").
+    if (!updates.empty()) {
+        QHash<int, int> bySyntheticId;
+        for (const auto& u : updates) { bySyntheticId.insert(u.deviceId, u.rateHz); }
+        bool changed = false;
+        for (const auto& [key, c] : usbManager_->controllers()) {
+            if (c.phase != reducer::UsbPhase::Direct || !c.syntheticId.has_value()) { continue; }
+            const auto it = bySyntheticId.constFind(*c.syntheticId);
+            if (it == bySyntheticId.constEnd()) { continue; }
+            if (usbPollRateHz_.value(key, -1) != it.value()) {
+                usbPollRateHz_.insert(key, it.value());
+                changed = true;
+            }
+        }
+        // Prune synthetics that are gone so a stale rate can't linger on a reused
+        // key, then repaint if anything moved (the slot card reads it via state).
+        for (auto it = usbPollRateHz_.begin(); it != usbPollRateHz_.end();) {
+            const auto cit = usbManager_->controllers().find(it.key());
+            const bool live = cit != usbManager_->controllers().end() &&
+                              cit->second.phase == reducer::UsbPhase::Direct;
+            if (live) {
+                ++it;
+            } else {
+                it = usbPollRateHz_.erase(it);
+                changed = true;
+            }
+        }
+        if (changed) { rebuild(); }
+    }
 }
 
 void AppModel::onUsbDirectChanged() {
@@ -468,6 +536,11 @@ void AppModel::rebuild() {
         s.capabilities.hasMotion = input::usbparse::parserHasImu(
             input::usbparse::parserForDevice(c.vendorId, c.productId));
         s.capabilities.hasLightbar = false;
+        // Mark it as a USB-direct synthetic so the slot card shows its gamepad Hz
+        // as a live (continuously-streaming) measurement, and attach the latest
+        // independently-measured poll rate (URB completion rate) for it.
+        s.usbDirect = true;
+        s.liveRates.directPollHz = usbPollRateHz_.value(key, 0);
         next.append(s);
     }
 
@@ -479,8 +552,23 @@ void AppModel::rebuild() {
             s.boundConnectionId = cid;
             s.boundStatus = hub_->summary(cid);
         }
+        // Stamp the latest measured stream rates (gamepad/motion Hz + peaks) the
+        // InputRateStore folded into liveRatesBySlot_, preserving them across this
+        // rebuild. directPollHz was already set on the synthetic above from
+        // usbPollRateHz_; keep it.
+        const auto rit = liveRatesBySlot_.constFind(s.id);
+        if (rit != liveRatesBySlot_.constEnd()) {
+            const int keepPoll = s.liveRates.directPollHz;
+            s.liveRates = rit.value();
+            s.liveRates.directPollHz = keepPoll;
+        }
     }
     state_.slotList = std::move(next);
+
+    // Keep the InputRateStore's tracked slot set in lockstep with the slot list,
+    // so a freshly-attached pad gets a tracker and a departed one is dropped
+    // (its tracker rebaselines on re-attach).
+    syncInputRateDevices();
 
     // Surface "a session is being established" so the dashboard can show an
     // indeterminate spinner. In protocol-1 topology rides REST (no per-add UDP
@@ -534,6 +622,64 @@ void AppModel::rebuild() {
     streamingSlotCount_.set(composer::streamingSlotCount(bindings, connectionStates));
 
     emit stateChanged();
+}
+
+void AppModel::syncInputRateDevices() {
+    if (!inputRateStore_) { return; }
+    // Desired tracked set = the current slot ids.
+    QSet<QString> present;
+    for (const auto& s : state_.slotList) {
+        present.insert(s.id);
+        inputRateStore_->addDevice(s.id.toStdString()); // idempotent
+    }
+    // Drop trackers + cached rates for slots that vanished, so a later re-attach
+    // re-baselines from 0 instead of inheriting a stale anchor / number.
+    for (auto it = liveRatesBySlot_.begin(); it != liveRatesBySlot_.end();) {
+        if (present.contains(it.key())) {
+            ++it;
+        } else {
+            inputRateStore_->removeDevice(it.key().toStdString());
+            it = liveRatesBySlot_.erase(it);
+        }
+    }
+    // removeDevice for ids that were tracked but never had a cached-rate entry is
+    // handled by the store's own idempotent no-op; the cache prune above covers
+    // the common case (a slot that produced at least one rate emission).
+}
+
+void AppModel::onInputRatesChanged(const source::SlotInputRatesMap& rates) {
+    // Project the store's emission into the model's value type and remember it so
+    // a later slot-list rebuild keeps the numbers. directPollHz is owned by the
+    // USB poll path (usbPollRateHz_), not the store, so it is preserved here.
+    bool changed = false;
+    for (const auto& [slotId, r] : rates) {
+        const QString id = QString::fromStdString(slotId);
+        models::SlotLiveRates next = liveRatesBySlot_.value(id);
+        next.gamepadHz = r.gamepadHz;
+        next.gamepadPeakHz = r.gamepadPeakHz;
+        next.motionHz = r.motionHz;
+        next.motionPeakHz = r.motionPeakHz;
+        if (liveRatesBySlot_.value(id) != next) {
+            liveRatesBySlot_.insert(id, next);
+            changed = true;
+        }
+    }
+    if (!changed) { return; }
+    // Patch the live slot list in place + repaint. We avoid a full rebuild() (no
+    // routing/twin-dedup recompute needed for a pure rate change) but reuse the
+    // same stamping rule so directPollHz is retained.
+    bool visibleChange = false;
+    for (auto& s : state_.slotList) {
+        const auto rit = liveRatesBySlot_.constFind(s.id);
+        if (rit == liveRatesBySlot_.constEnd()) { continue; }
+        models::SlotLiveRates merged = rit.value();
+        merged.directPollHz = s.liveRates.directPollHz;
+        if (s.liveRates != merged) {
+            s.liveRates = merged;
+            visibleChange = true;
+        }
+    }
+    if (visibleChange) { emit stateChanged(); }
 }
 
 // ── Workstream 2c: catalog-driven Emulate picker ─────────────────────────────

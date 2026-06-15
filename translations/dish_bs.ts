@@ -723,6 +723,30 @@ Kontroler: bilo koji pad koji ovaj PC otkrije.</translation>
 <context>
     <name>dish::ui::SlotCard</name>
     <message>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <source>~%1 Hz</source>
+        <translation>~%1 Hz</translation>
+    </message>
+    <message>
+        <source>Controller report rate (measured).</source>
+        <translation>Brzina izvještaja kontrolera (izmjereno).</translation>
+    </message>
+    <message>
+        <source>Controller report rate (estimated from recent activity).</source>
+        <translation>Brzina izvještaja kontrolera (procijenjeno na osnovu nedavne aktivnosti).</translation>
+    </message>
+    <message>
+        <source>Motion (gyro) sample rate.</source>
+        <translation>Brzina uzorkovanja pokreta (žiroskop).</translation>
+    </message>
+    <message>
+        <source>USB-direct poll rate (measured).</source>
+        <translation>Brzina USB-direct anketiranja (izmjereno).</translation>
+    </message>
+    <message>
         <source>Gyro</source>
         <translation>Žiro</translation>
     </message>

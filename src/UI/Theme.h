@@ -136,4 +136,13 @@ QString capabilityChipQss(bool present);
 // the amber `warning` token so a near-flat pad reads at a glance.
 QString batteryChipQss(bool lowBattery);
 
+// Small, unobtrusive live-stats text used in SlotCard for the measured-Hz
+// readouts (gamepad / motion / USB-direct poll rate). Deliberately quieter than
+// the filled capability pills — a borderless monospace number — so the live
+// numbers read as telemetry, not as another status chip. Mirrors android's
+// live-stats pills tone split: `measured` (a USB-direct pad's continuously-
+// measured rate) renders in the `success` token, an estimated/peak routed rate
+// in the muted token.
+QString liveStatChipQss(bool measured);
+
 } // namespace dish::ui

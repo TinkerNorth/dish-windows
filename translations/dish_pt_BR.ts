@@ -727,6 +727,30 @@ Controle: qualquer controle que este PC detecte.</translation>
 <context>
     <name>dish::ui::SlotCard</name>
     <message>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <source>~%1 Hz</source>
+        <translation>~%1 Hz</translation>
+    </message>
+    <message>
+        <source>Controller report rate (measured).</source>
+        <translation>Taxa de relatórios do controle (medida).</translation>
+    </message>
+    <message>
+        <source>Controller report rate (estimated from recent activity).</source>
+        <translation>Taxa de relatórios do controle (estimada pela atividade recente).</translation>
+    </message>
+    <message>
+        <source>Motion (gyro) sample rate.</source>
+        <translation>Taxa de amostragem de movimento (giroscópio).</translation>
+    </message>
+    <message>
+        <source>USB-direct poll rate (measured).</source>
+        <translation>Taxa de sondagem USB direta (medida).</translation>
+    </message>
+    <message>
         <source>Gyro</source>
         <translation>Giroscópio</translation>
     </message>

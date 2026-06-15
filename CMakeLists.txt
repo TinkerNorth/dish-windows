@@ -369,6 +369,7 @@ set(DISH_UI_SOURCES
     src/UI/DishLoaders.cpp
     src/UI/SlotCard.h
     src/UI/SlotCard.cpp
+    src/UI/SlotLiveStats.h
     src/UI/BrandIcon.h
     src/UI/BrandIcon.cpp
     src/UI/PairingDialog.h

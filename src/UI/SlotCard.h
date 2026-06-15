@@ -60,6 +60,15 @@ class SlotCard : public QFrame {
     // battery sample arrives (level 0xFF / unknown).
     QLabel* batteryChip_;
 
+    // Live-stats chips (android parity): the small measured-Hz readouts. The
+    // gamepad chip shows the report stream rate (live for a USB-direct pad,
+    // "~peak" otherwise); the motion chip the IMU sample rate; the poll chip the
+    // independently-measured USB-direct poll rate. Each hides when there is no
+    // measurement worth showing, so a quiet slot stays uncluttered like android.
+    QLabel* gamepadRateChip_;
+    QLabel* motionRateChip_;
+    QLabel* pollRateChip_;
+
     models::ControllerSlot slot_;
     QList<models::ConnectionSummary> available_;
 };

@@ -528,3 +528,97 @@ TEST_CASE("publishTouchpad is a no-op when no touchpad sender is installed", "[t
     p.publishTouchpad("pad", sample); // must not throw / dereference null
     SUCCEED();
 }
+
+// ── Live-input rate counters (the InputRateStore feed) ────────────────────────
+// The hot path bumps a per-device atomic gamepad counter in publish() and a
+// per-device atomic motion counter in publishMotion() (forwarded samples only).
+// These are what the InputRateStore samples to derive Hz; the tests pin the
+// contract: a faithful per-stream tally, motion counting only what cleared the
+// rate-limit gate, per-device independence, and a remove() that zeroes the slot.
+
+TEST_CASE("inputCounters tally one gamepad event per publish", "[input][rate]") {
+    GamepadInputProcessor p;
+    p.setReportSender([](const std::string&, std::uint16_t, std::uint8_t, std::uint8_t,
+                         std::int16_t, std::int16_t, std::int16_t, std::int16_t) {});
+    REQUIRE(p.inputCounters("pad").gamepadEvents == 0);
+
+    GamepadInputProcessor::DeviceState s;
+    for (int i = 0; i < 7; ++i) {
+        s.wButtons = static_cast<std::uint16_t>(i); // distinct states, still 7 publishes
+        p.publish("pad", s);
+    }
+    const auto c = p.inputCounters("pad");
+    REQUIRE(c.gamepadEvents == 7);
+    REQUIRE(c.motionEvents == 0);
+}
+
+TEST_CASE("inputCounters count a gamepad event even for an unchanged state", "[input][rate]") {
+    // publish() forwards every state (no coalescing), so the rate counter must
+    // also bump every time — the displayed Hz reflects reports actually sent.
+    GamepadInputProcessor p;
+    p.setReportSender([](const std::string&, std::uint16_t, std::uint8_t, std::uint8_t,
+                         std::int16_t, std::int16_t, std::int16_t, std::int16_t) {});
+    GamepadInputProcessor::DeviceState s; // identical each time
+    p.publish("pad", s);
+    p.publish("pad", s);
+    p.publish("pad", s);
+    REQUIRE(p.inputCounters("pad").gamepadEvents == 3);
+}
+
+TEST_CASE("inputCounters motion tally counts only forwarded samples", "[input][rate]") {
+    // The motion counter must mirror what reaches the wire: a sample dropped by
+    // the rate-limit gate must NOT bump it (else a throttled stream over-reports).
+    GamepadInputProcessor p;
+    int forwarded = 0;
+    p.setMotionSender([&](const std::string&, std::int16_t, std::int16_t, std::int16_t,
+                          std::int16_t, std::int16_t, std::int16_t,
+                          std::uint32_t) { ++forwarded; });
+
+    const GamepadInputProcessor::MotionSample m{};
+    const std::uint64_t minGap = GamepadInputProcessor::kMotionMinIntervalUs;
+    // t=0 forwarded; t=1us dropped (inside the gate); t=minGap forwarded.
+    REQUIRE(p.publishMotionAt("pad", m, 0));
+    REQUIRE_FALSE(p.publishMotionAt("pad", m, 1));
+    REQUIRE(p.publishMotionAt("pad", m, minGap));
+
+    REQUIRE(forwarded == 2);
+    const auto c = p.inputCounters("pad");
+    REQUIRE(c.motionEvents == 2); // the dropped one did not count
+    REQUIRE(c.gamepadEvents == 0);
+}
+
+TEST_CASE("inputCounters are independent per device", "[input][rate]") {
+    GamepadInputProcessor p;
+    p.setReportSender([](const std::string&, std::uint16_t, std::uint8_t, std::uint8_t,
+                         std::int16_t, std::int16_t, std::int16_t, std::int16_t) {});
+    GamepadInputProcessor::DeviceState s;
+    p.publish("a", s);
+    p.publish("a", s);
+    p.publish("b", s);
+    REQUIRE(p.inputCounters("a").gamepadEvents == 2);
+    REQUIRE(p.inputCounters("b").gamepadEvents == 1);
+    REQUIRE(p.inputCounters("ghost").gamepadEvents == 0); // never-seen device reads 0
+}
+
+TEST_CASE("remove resets a device's input counters so a re-attach re-baselines", "[input][rate]") {
+    GamepadInputProcessor p;
+    p.setReportSender([](const std::string&, std::uint16_t, std::uint8_t, std::uint8_t,
+                         std::int16_t, std::int16_t, std::int16_t, std::int16_t) {});
+    p.setMotionSender([](const std::string&, std::int16_t, std::int16_t, std::int16_t, std::int16_t,
+                         std::int16_t, std::int16_t, std::uint32_t) {});
+    GamepadInputProcessor::DeviceState s;
+    p.publish("pad", s);
+    p.publish("pad", s);
+    (void)p.publishMotionAt("pad", GamepadInputProcessor::MotionSample{}, 0);
+    REQUIRE(p.inputCounters("pad").gamepadEvents == 2);
+    REQUIRE(p.inputCounters("pad").motionEvents == 1);
+
+    p.remove("pad");
+    const auto c = p.inputCounters("pad");
+    REQUIRE(c.gamepadEvents == 0);
+    REQUIRE(c.motionEvents == 0);
+
+    // A fresh publish after remove starts the tally from 1, not 3.
+    p.publish("pad", s);
+    REQUIRE(p.inputCounters("pad").gamepadEvents == 1);
+}

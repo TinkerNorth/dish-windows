@@ -727,6 +727,30 @@ Mando: cualquier mando que detecte este PC.</translation>
 <context>
     <name>dish::ui::SlotCard</name>
     <message>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <source>~%1 Hz</source>
+        <translation>~%1 Hz</translation>
+    </message>
+    <message>
+        <source>Controller report rate (measured).</source>
+        <translation>Frecuencia de informes del mando (medida).</translation>
+    </message>
+    <message>
+        <source>Controller report rate (estimated from recent activity).</source>
+        <translation>Frecuencia de informes del mando (estimada por la actividad reciente).</translation>
+    </message>
+    <message>
+        <source>Motion (gyro) sample rate.</source>
+        <translation>Frecuencia de muestreo de movimiento (giroscopio).</translation>
+    </message>
+    <message>
+        <source>USB-direct poll rate (measured).</source>
+        <translation>Frecuencia de sondeo USB directo (medida).</translation>
+    </message>
+    <message>
         <source>Gyro</source>
         <translation>Giro</translation>
     </message>

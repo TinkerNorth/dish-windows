@@ -727,6 +727,30 @@ Controller: jedes Pad, das dieser PC erkennt.</translation>
 <context>
     <name>dish::ui::SlotCard</name>
     <message>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <source>~%1 Hz</source>
+        <translation>~%1 Hz</translation>
+    </message>
+    <message>
+        <source>Controller report rate (measured).</source>
+        <translation>Controller-Meldungsrate (gemessen).</translation>
+    </message>
+    <message>
+        <source>Controller report rate (estimated from recent activity).</source>
+        <translation>Controller-Meldungsrate (geschätzt anhand der letzten Aktivität).</translation>
+    </message>
+    <message>
+        <source>Motion (gyro) sample rate.</source>
+        <translation>Bewegungs-Abtastrate (Gyroskop).</translation>
+    </message>
+    <message>
+        <source>USB-direct poll rate (measured).</source>
+        <translation>USB-Direct-Abfragerate (gemessen).</translation>
+    </message>
+    <message>
         <source>Gyro</source>
         <translation>Gyro</translation>
     </message>

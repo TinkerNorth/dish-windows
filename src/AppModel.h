@@ -21,6 +21,7 @@
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
 #include "core/reducer/PollRateSampler.h"
+#include "source/inputrate/InputRateStore.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
 #include "source/store/CrashReportingStore.h"
@@ -196,6 +197,15 @@ class AppModel : public QObject {
     // every poolChanged signal so newly-created connections get wired.
     void installRumbleHandlers();
 
+    // Reconcile the InputRateStore's tracked slot set with the current slot list
+    // (add freshly-appeared slots, drop departed ones so a tracker re-baselines
+    // on re-attach). Cheap + idempotent; called from rebuild().
+    void syncInputRateDevices();
+    // Fold the InputRateStore's latest per-slot Hz emission into liveRatesBySlot_
+    // and patch state_.slotList in place, emitting stateChanged() only when a
+    // visible number actually moved (so a quiet 1 Hz tick doesn't thrash the UI).
+    void onInputRatesChanged(const source::SlotInputRatesMap& rates);
+
     // Resolve the controller type to advertise for a slot: the user's Emulate
     // override (ControllerTypeStore) wins; absent that, the pad's SDL hardware
     // classification; absent that, Xbox. This is what bind()/attachSlot threads
@@ -297,9 +307,34 @@ class AppModel : public QObject {
     std::unique_ptr<source::usb::UsbGamepadManager> usbManager_;
     QTimer* usbScanTimer_;
     reducer::PollRateSampler usbPollSampler_;
+    // Latest independently-measured USB-direct poll rate (URB completion rate)
+    // per controllers() map key — the same int the synthetic slot id is built
+    // from. Written on the main thread by pollUsbDirect (from usbPollSampler_),
+    // read in rebuild() to stamp ControllerSlot::liveRates.directPollHz. A
+    // synthetic that leaves Direct is pruned so a reused key can't show a stale
+    // rate.
+    QHash<int, int> usbPollRateHz_;
     // The VID:PIDs of SDL devices seen on the last syncFrameworkPresence pass, so
     // the next pass can emit FrameworkUp/Down deltas to the FSM. Main-thread-only.
     QSet<int> lastFrameworkVpKeys_;
+
+    // ── Live input-rate measurement (android parity) ─────────────────────────
+    // The per-slot live-rate StateSource: it samples the hot-path event counters
+    // the GamepadInputProcessor exposes (inputCounters) through a pure
+    // InputRateTracker to derive quantized gamepad/motion Hz + peaks. Built in the
+    // ctor body (its CounterSource borrows processor_). Driven by inputRateTimer_
+    // at ~1 Hz on the main thread (the android InputRateStore samples on a similar
+    // sub-second loop). inputRatesSub_ folds each emission into state_.slotList so
+    // the slot card repaints; the cache survives slot-list rebuilds so a rebuild
+    // triggered by an unrelated change keeps the last measured numbers.
+    std::unique_ptr<source::InputRateStore> inputRateStore_;
+    arch::Observable<source::SlotInputRatesMap>::Subscription inputRatesSub_;
+    QTimer* inputRateTimer_;
+    // slotId -> last measured gamepad/motion Hz (+peaks), the InputRateStore's
+    // latest emission projected to the model's value type. directPollHz is filled
+    // separately from usbPollRateHz_ at rebuild(); this carries the SDL/HID stream
+    // rates. Read on the main thread only.
+    QHash<QString, models::SlotLiveRates> liveRatesBySlot_;
 
     // slotId -> active sender. Read on the SDL gamepad thread; written on the
     // Qt main thread. Guarded by routingMtx_ for both directions.

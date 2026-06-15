@@ -4,6 +4,7 @@
 #include "SlotCard.h"
 
 #include "BrandIcon.h"
+#include "SlotLiveStats.h"
 #include "Theme.h"
 
 #include <QHBoxLayout>
@@ -74,7 +75,17 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     chipRow->addWidget(lightbarChip_, 0, Qt::AlignVCenter);
     batteryChip_ = new QLabel(this);
     chipRow->addWidget(batteryChip_, 0, Qt::AlignVCenter);
+    // Live-stats readouts (android parity): measured gamepad / motion / USB-direct
+    // poll-rate Hz. Sit at the trailing edge of the chip row, after the stretch,
+    // so they right-align as a compact telemetry cluster and never crowd the
+    // capability pills. Each hides itself when there's nothing to show.
     chipRow->addStretch(1);
+    gamepadRateChip_ = new QLabel(this);
+    chipRow->addWidget(gamepadRateChip_, 0, Qt::AlignVCenter);
+    motionRateChip_ = new QLabel(this);
+    chipRow->addWidget(motionRateChip_, 0, Qt::AlignVCenter);
+    pollRateChip_ = new QLabel(this);
+    chipRow->addWidget(pollRateChip_, 0, Qt::AlignVCenter);
     textLayout->addLayout(chipRow);
 
     bindButton_ = new QPushButton(this);
@@ -186,6 +197,44 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
         }
         batteryChip_->setToolTip(tip);
     }
+
+    // Live-stats chips (android parity). The pure SlotLiveStats mapper decides
+    // which to show and whether the value is a live reading or a "~peak"; here we
+    // only format the localized "%1 Hz" / "~%1 Hz" string and apply the tone. A
+    // Hidden chip is hidden so a quiet slot stays uncluttered. A USB-direct pad's
+    // measured rates use the brighter `success` tone (continuous measurement);
+    // routed peaks stay muted — matching android's measured-vs-fact tone split.
+    const bool direct = slot.usbDirect;
+    const auto applyRateChip = [](QLabel* chip, const RateChip& spec, bool measured,
+                                  const QString& live, const QString& peak, const QString& tip) {
+        if (spec.kind == RateChipKind::Hidden) {
+            chip->setVisible(false);
+            return;
+        }
+        chip->setVisible(true);
+        chip->setText(spec.kind == RateChipKind::Live ? live.arg(spec.hz) : peak.arg(spec.hz));
+        chip->setStyleSheet(liveStatChipQss(measured));
+        chip->setToolTip(tip);
+    };
+
+    // "%1 Hz" / "~%1 Hz" are language-neutral (Hz is an SI unit); the "~" marks an
+    // estimate from a peak window rather than a continuous measurement.
+    const QString hzLive = tr("%1 Hz");
+    const QString hzPeak = tr("~%1 Hz");
+
+    const RateChip gp = gamepadRateChip(slot.liveRates, direct);
+    applyRateChip(gamepadRateChip_, gp, direct, hzLive, hzPeak,
+                  gp.kind == RateChipKind::Live
+                      ? tr("Controller report rate (measured).")
+                      : tr("Controller report rate (estimated from recent activity)."));
+
+    // The motion chip only makes sense for a pad that actually has an IMU.
+    const RateChip mo = slot.capabilities.hasMotion ? motionRateChip(slot.liveRates) : RateChip{};
+    applyRateChip(motionRateChip_, mo, direct, hzLive, hzPeak, tr("Motion (gyro) sample rate."));
+
+    const RateChip pr = pollRateChip(slot.liveRates, direct);
+    applyRateChip(pollRateChip_, pr, /*measured=*/true, hzLive, hzPeak,
+                  tr("USB-direct poll rate (measured)."));
 
     // The Emulate picker only makes sense once the slot is bound to a satellite.
     emulateButton_->setVisible(slot.boundConnectionId.has_value());

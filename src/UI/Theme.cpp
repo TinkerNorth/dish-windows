@@ -305,4 +305,15 @@ QString batteryChipQss(bool lowBattery) {
         .arg(hex(Theme::primary), rgba(Theme::primary, 0.14));
 }
 
+QString liveStatChipQss(bool measured) {
+    // A borderless, monospace number — quieter than the filled capability pills
+    // so the live Hz reads as telemetry. A continuously-measured (USB-direct)
+    // rate uses the `success` token to set it apart from an estimated/peak rate,
+    // which stays in `muted`. Both derive from the active palette so a light
+    // re-theme retints. Matches the telemetry footer's monospace treatment.
+    return QStringLiteral("color: %1; font-family: monospace; font-size: 10px; "
+                          "font-weight: 500; padding: 0px 2px;")
+        .arg(hex(measured ? Theme::success : Theme::muted));
+}
+
 } // namespace dish::ui

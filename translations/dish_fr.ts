@@ -727,6 +727,30 @@ Manette : toute manette détectée par ce PC.</translation>
 <context>
     <name>dish::ui::SlotCard</name>
     <message>
+        <source>%1 Hz</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <source>~%1 Hz</source>
+        <translation>~%1 Hz</translation>
+    </message>
+    <message>
+        <source>Controller report rate (measured).</source>
+        <translation>Fréquence des rapports de la manette (mesurée).</translation>
+    </message>
+    <message>
+        <source>Controller report rate (estimated from recent activity).</source>
+        <translation>Fréquence des rapports de la manette (estimée d&apos;après l&apos;activité récente).</translation>
+    </message>
+    <message>
+        <source>Motion (gyro) sample rate.</source>
+        <translation>Fréquence d&apos;échantillonnage du mouvement (gyroscope).</translation>
+    </message>
+    <message>
+        <source>USB-direct poll rate (measured).</source>
+        <translation>Fréquence d&apos;interrogation USB direct (mesurée).</translation>
+    </message>
+    <message>
         <source>Gyro</source>
         <translation>Gyro</translation>
     </message>

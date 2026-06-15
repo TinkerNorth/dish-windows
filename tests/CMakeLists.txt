@@ -78,6 +78,7 @@ set(DISH_TEST_SOURCES
     test_dish_notifications.cpp
     test_input_rate_tracker.cpp
     test_input_rate_store.cpp
+    test_slot_live_stats.cpp
     test_motion_indicator_state.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp

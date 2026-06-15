@@ -41,6 +41,11 @@ void GamepadInputProcessor::publish(const DeviceId& id, const DeviceState& state
         ++telEvents_;
         ++telSends_;
         ++telTotalSent_;
+        // Bump the per-device gamepad live-rate counter under the lock we're
+        // already holding — allocation-free after the first event (the node is
+        // reused), no new lock on the send path. The InputRateStore samples this
+        // ~1 Hz to derive the displayed gamepad Hz.
+        rateCounters_[id].gamepad.fetch_add(1, std::memory_order_relaxed);
         snapshot = sender_;
     }
     if (snapshot) {
@@ -70,6 +75,19 @@ void GamepadInputProcessor::remove(const DeviceId& id) {
     states_.erase(id);
     deadzones_.erase(id);
     lastMotionUs_.erase(id);
+    // Drop the live-rate counters too, so a device that re-attaches under the
+    // same id starts its counter from 0 and the tracker re-baselines cleanly
+    // rather than seeing a counter that appears to leap forward.
+    rateCounters_.erase(id);
+}
+
+GamepadInputProcessor::InputRateCounters
+GamepadInputProcessor::inputCounters(const DeviceId& id) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = rateCounters_.find(id);
+    if (it == rateCounters_.end()) { return InputRateCounters{}; }
+    return InputRateCounters{it->second.gamepad.load(std::memory_order_relaxed),
+                             it->second.motion.load(std::memory_order_relaxed)};
 }
 
 bool GamepadInputProcessor::publishMotionAt(const DeviceId& id, const MotionSample& sample,
@@ -98,6 +116,11 @@ bool GamepadInputProcessor::publishMotionAt(const DeviceId& id, const MotionSamp
         }
         gate.lastUs = nowUs;
         gate.hasEmitted = true;
+        // Count only forwarded motion samples (we got past the rate-limit gate),
+        // matching what actually reaches the wire — counting dropped attempts
+        // would over-report a stream the gate is throttling. Same already-held
+        // lock; no new lock on the send path.
+        rateCounters_[id].motion.fetch_add(1, std::memory_order_relaxed);
         snapshot = motionSender_;
     }
     if (snapshot) {

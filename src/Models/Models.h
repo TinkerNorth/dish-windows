@@ -348,6 +348,33 @@ struct ConnectionSummary {
 // on Windows (no touch, no on-screen pad), so SlotInputType and the
 // physicalDeviceId field were dropped — same removal dish-mac did in PR #7
 // for the same reason on macOS.
+// Live, measured input rates for a slot — the small "live-stats" numbers the
+// slot card shows, mirroring dish-android SlotInputRates rendered by
+// ControllerAdapter. `gamepadHz` / `motionHz` are the current quantized Hz of
+// the report and IMU streams; the `*PeakHz` are the high-water marks (shown with
+// a "~" prefix when the live value is idle). `directPollHz` is the independently-
+// measured USB-direct poll rate (URB completion rate) for a synthetic pad — 0
+// for a non-direct pad or before the first measurement. All 0 until the
+// InputRateStore / poll sampler produce a reading; `hasAny()` gates the row.
+struct SlotLiveRates {
+    int gamepadHz = 0;
+    int gamepadPeakHz = 0;
+    int motionHz = 0;
+    int motionPeakHz = 0;
+    int directPollHz = 0;
+
+    bool hasAny() const {
+        return gamepadHz > 0 || gamepadPeakHz > 0 || motionHz > 0 || motionPeakHz > 0 ||
+               directPollHz > 0;
+    }
+    bool operator==(const SlotLiveRates& o) const {
+        return gamepadHz == o.gamepadHz && gamepadPeakHz == o.gamepadPeakHz &&
+               motionHz == o.motionHz && motionPeakHz == o.motionPeakHz &&
+               directPollHz == o.directPollHz;
+    }
+    bool operator!=(const SlotLiveRates& o) const { return !(*this == o); }
+};
+
 struct ControllerSlot {
     QString id;
     QString name;
@@ -356,6 +383,15 @@ struct ControllerSlot {
     // Hardware capabilities detected by SDLGamepadBridge when the device
     // attached. Drives the capability indicator in SlotCard.
     ControllerCapabilities capabilities;
+    // True iff this slot is a USB-direct (raw-HID) synthetic rather than an SDL
+    // pad — drives whether the slot card shows the gamepad Hz live (Direct
+    // streams continuously) vs. as a "~peak". Mirrors android's
+    // currentMode == Direct check on the PathCard.
+    bool usbDirect = false;
+    // Live measured rates the slot card renders as small live-stats chips.
+    // Refreshed ~1 Hz off the InputRateStore / USB poll sampler, independent of
+    // the slot-list shape.
+    SlotLiveRates liveRates;
 };
 
 struct RememberedWifi {
