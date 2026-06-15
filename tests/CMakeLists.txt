@@ -112,7 +112,16 @@ set(DISH_TEST_SOURCES
     test_path_choice.cpp
     test_usb_path_resolution.cpp
     test_usb_path_preference_store.cpp
-    test_usb_gamepad_manager.cpp)
+    test_usb_gamepad_manager.cpp
+    # Workstream 3a/3b/3c/3d/3e — onboarding/theme/crash preference stores +
+    # controllers, the donate-pill dismiss-window pure fn, and the license-manifest
+    # parse + mapping + forward-compat. Windows-authored (most surfaces had no
+    # android @Test); they pin the android class RULES, asserted via probes/fakes.
+    test_onboarding_store.cpp
+    test_donate_pill.cpp
+    test_license_manifest.cpp
+    test_theme_store.cpp
+    test_crash_reporting.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests
@@ -120,6 +129,12 @@ target_link_libraries(DishTests
         dish_core
         Catch2::Catch2WithMain
         dish_warnings)
+
+# The shipped license manifest is a Qt resource only in the Dish exe (not in
+# dish_core, which DishTests links), so the manifest smoke test reads the source
+# file directly. Hand it the absolute path at compile time.
+target_compile_definitions(DishTests PRIVATE
+    DISH_LICENSES_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../assets/licenses/licenses.json")
 
 # Tests don't need -Werror on the third-party header path; keep our own at -Werror.
 #
@@ -137,7 +152,11 @@ if(WIN32)
     catch_discover_tests(DishTests
         DL_PATHS
             $<TARGET_FILE_DIR:Qt6::Core>
-            $<TARGET_FILE_DIR:Qt6::Network>)
+            $<TARGET_FILE_DIR:Qt6::Network>
+            # dish_core now links Qt6::Gui/Widgets (the theme layer moved in for
+            # Workstream 3d), so the test exe needs their DLLs on PATH too.
+            $<TARGET_FILE_DIR:Qt6::Gui>
+            $<TARGET_FILE_DIR:Qt6::Widgets>)
 else()
     catch_discover_tests(DishTests)
 endif()

@@ -15,6 +15,13 @@
   <qresource prefix="/">
     <file>dish.ico</file>
   </qresource>
+  <qresource prefix="/licenses">
+    <!-- Third-party attribution manifest (Workstream 3c). Hand-authored seed of
+         the Windows deps (Qt6 LGPL-3.0, SDL2 Zlib, libsodium ISC, Catch2
+         BSL-1.0); LicensesView renders it from the binary. The path is relative
+         to this .qrc, so it reaches up into ../assets/. -->
+    <file alias="licenses.json">../assets/licenses/licenses.json</file>
+  </qresource>
   <qresource prefix="/brand">
     <file alias="bluetooth.svg">brand/bluetooth.svg</file>
     <file alias="bluetooth-connected.svg">brand/bluetooth-connected.svg</file>

@@ -15,6 +15,12 @@
 #include "SettingsDialog.h"
 #include "SlotCard.h"
 #include "Theme.h"
+#include "ui/donate/DonatePill.h"
+#include "ui/donate/DonateView.h"
+#include "ui/licenses/LicensesView.h"
+#include "ui/onboarding/HelpView.h"
+#include "ui/onboarding/SetupWizardView.h"
+#include "ui/onboarding/WelcomeDialog.h"
 
 #include <QDialog>
 #include <QHBoxLayout>
@@ -48,8 +54,14 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     statusText_->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));
     settingsButton_ = new QPushButton(tr("Settings"), central);
     manageButton_ = new QPushButton(tr("Manage"), central);
+    // Dismissible "support Dish" pill (Workstream 3b). Self-hides if dismissed
+    // within the last 24h (checked in its ctor); tapping opens the donate screen
+    // (wired below). Docked in the header so it's visible without floating-overlay
+    // plumbing.
+    donatePill_ = new DonatePill(nullptr, central);
     headerRow->addWidget(statusDot_, 0, Qt::AlignVCenter);
     headerRow->addWidget(statusText_, 1, Qt::AlignVCenter);
+    headerRow->addWidget(donatePill_, 0, Qt::AlignVCenter);
     headerRow->addWidget(settingsButton_, 0, Qt::AlignVCenter);
     headerRow->addWidget(manageButton_, 0, Qt::AlignVCenter);
 
@@ -135,6 +147,9 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     QObject::connect(model_, &AppModel::errorMessage, notifications_,
                      &NotificationQueue::postError);
 
+    // The donate pill is wired below (its widget was created in the header row).
+    QObject::connect(donatePill_, &DonatePill::openRequested, this, &MainWindow::openDonate);
+
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
     QObject::connect(telemetryTimer_, &QTimer::timeout, this, &MainWindow::onTelemetryTick);
@@ -142,6 +157,11 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
 
     onStateChanged();
     onTelemetryTick();
+
+    // First-run onboarding gate (Workstream 3a). Deferred to the next event-loop
+    // turn so the dashboard is painted behind the modal welcome pager. Shown only
+    // when the welcome flow hasn't been completed.
+    QTimer::singleShot(0, this, &MainWindow::maybeShowOnboarding);
 }
 
 void MainWindow::onStateChanged() {
@@ -249,11 +269,53 @@ void MainWindow::onManageClicked() {
 }
 
 void MainWindow::onSettingsClicked() {
-    SettingsDialog dlg(model_->featureSettings(), this);
+    SettingsDialog dlg(model_->featureSettings(), model_->themeStore(), model_->crashStore(),
+                       notifications_, this);
     // Open the per-device dead-zone / motion page on request (Workstream 2d).
     QObject::connect(&dlg, &SettingsDialog::deadzonesRequested, this,
                      &MainWindow::onDeadzonesClicked);
+    // Setup wizard / help / licenses / donate (Workstreams 3a / 3b / 3c).
+    QObject::connect(&dlg, &SettingsDialog::setupWizardRequested, this,
+                     &MainWindow::openSetupWizard);
+    QObject::connect(&dlg, &SettingsDialog::helpRequested, this, &MainWindow::openHelp);
+    QObject::connect(&dlg, &SettingsDialog::licensesRequested, this, &MainWindow::openLicenses);
+    QObject::connect(&dlg, &SettingsDialog::donateRequested, this, &MainWindow::openDonate);
     dlg.exec();
+}
+
+void MainWindow::openSetupWizard() {
+    SetupWizardView wizard(model_->onboardingStore(), this);
+    wizard.exec();
+}
+
+void MainWindow::openHelp() {
+    HelpView help(notifications_, this);
+    // The Help "Run setup" card relaunches the wizard.
+    QObject::connect(&help, &HelpView::runSetupRequested, this, &MainWindow::openSetupWizard);
+    help.exec();
+}
+
+void MainWindow::openLicenses() {
+    LicensesView view(notifications_, this);
+    view.exec();
+}
+
+void MainWindow::openDonate() {
+    DonateView view(notifications_, this);
+    view.exec();
+}
+
+void MainWindow::maybeShowOnboarding() {
+    // First-run gate: show the welcome pager only when the welcome flow hasn't
+    // been completed. The pager's launch CTA flows into the setup wizard; Skip /
+    // final-Next mark complete and fall through to the dashboard.
+    if (model_->onboardingStore()->welcomeCompleted()) { return; }
+    WelcomeDialog welcome(model_->onboardingStore(), notifications_, this);
+    bool launchWizard = false;
+    QObject::connect(&welcome, &WelcomeDialog::launchWizardRequested, this,
+                     [&launchWizard] { launchWizard = true; });
+    welcome.exec();
+    if (launchWizard) { openSetupWizard(); }
 }
 
 void MainWindow::onDeadzonesClicked() {

@@ -217,6 +217,15 @@ set(DISH_CORE_SOURCES
     # QSettings Repository (RepositoryContract) wrapped in a reactive StateSource.
     src/source/store/UsbPathPreferenceStore.h
     src/source/store/UsbPathPreferenceStore.cpp
+    # source/store — Workstream 3a/3d/3e preference StateSources: onboarding
+    # welcome-seen flags, theme mode (dark/light/system), crash-reporting opt-out
+    # (default-ON, D4). Each a StateSource<S> over QSettings, host-testable.
+    src/source/store/OnboardingPreferenceStore.h
+    src/source/store/OnboardingPreferenceStore.cpp
+    src/source/store/ThemePreferenceStore.h
+    src/source/store/ThemePreferenceStore.cpp
+    src/source/store/CrashReportingStore.h
+    src/source/store/CrashReportingStore.cpp
     # source/usb — Workstream 2g Windows raw-HID claim Gateway + the imperative
     # driver (the only USB-IO place). The gateway interface is the test seam; the
     # WinHidGateway is the SetupAPI/hid.dll body (hardware-validated manually).
@@ -278,6 +287,34 @@ set(DISH_CORE_SOURCES
     src/composer/WakeStateComposer.h
     src/composer/WakeStateController.h
     src/composer/WakeStateController.cpp
+    # composer — Workstream 3d/3e effect controllers: ThemeController (resolve
+    # SYSTEM -> palette, re-theme the live app off the ThemePreferenceStore), and
+    # CrashReportingController (forward opt-in flips to a no-op backend seam; its
+    # stop() is a deliberate no-op so the opt-in survives teardown, D4). Both live
+    # here (host-testable via the kernel ControllerProbe + injected seams). The
+    # Theme files move into dish_core with them so the palette data + the
+    # full-light/system palette are reachable from the controller + the tests.
+    src/composer/ThemeController.h
+    src/composer/ThemeController.cpp
+    src/composer/CrashReportingBackend.h
+    src/composer/CrashReportingBackend.cpp
+    src/composer/CrashReportingController.h
+    src/composer/CrashReportingController.cpp
+    # UI/Theme — the design-token palette + the full light/system palette
+    # (Workstream 3d OWNS this). In dish_core so ThemeController + the theme tests
+    # can reach the palettes; the widget rendering (applyDishTheme / QSS helpers)
+    # links Qt6::Gui/Widgets (added to dish_core below).
+    src/UI/Theme.h
+    src/UI/Theme.cpp
+    # ui/licenses — the license-manifest DTO + parse + pure mapping rules
+    # (Workstream 3c). Pure (no QWidget), host-testable; LicensesView renders it.
+    src/ui/licenses/LicenseManifest.h
+    src/ui/licenses/LicenseManifest.cpp
+    # ui/donate — the PURE donate-pill dismiss-window decision + persistence
+    # helpers (Workstream 3b), split out of the widget so they're host-testable.
+    # Only the logic .cpp is in dish_core; the DonatePill.h widget (Q_OBJECT) is
+    # moc'd in the Dish exe (DISH_UI_SOURCES) to avoid a duplicate meta-object.
+    src/ui/donate/DonatePillLogic.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
@@ -296,6 +333,11 @@ target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(dish_core
     PUBLIC
         Qt6::Core Qt6::Network
+        # Qt6::Gui/Widgets: the theme layer (UI/Theme.cpp + composer/ThemeController)
+        # moved into dish_core for Workstream 3d so the palette data + the
+        # full-light/system re-apply are reachable from the controller and the
+        # theme tests. applyDishTheme/QSS helpers/QStyleHints need Gui + Widgets.
+        Qt6::Gui Qt6::Widgets
         unofficial-sodium::sodium
         $<TARGET_NAME_IF_EXISTS:SDL2::SDL2> $<TARGET_NAME_IF_EXISTS:SDL2::SDL2-static>
         Threads::Threads
@@ -313,8 +355,6 @@ target_link_libraries(dish_core
 # UI executable
 # --------------------------------------------------------------------------
 set(DISH_UI_SOURCES
-    src/UI/Theme.h
-    src/UI/Theme.cpp
     src/UI/DishLoaders.h
     src/UI/DishLoaders.cpp
     src/UI/SlotCard.h
@@ -339,6 +379,27 @@ set(DISH_UI_SOURCES
     src/UI/NotificationToastHost.cpp
     src/UI/MainWindow.h
     src/UI/MainWindow.cpp
+    # Workstream 3a/3b/3c/3e UI screens. Onboarding (welcome pager + adapted
+    # setup wizard + help/FAQ), donate (screen + dismissible pill), licenses
+    # (list view over the bundled manifest), the crash-reporting toggle row
+    # (3e-owned factory inserted into 3d's Settings column), and the shared
+    # external-link helper.
+    src/ui/common/ExternalLink.h
+    src/ui/common/ExternalLink.cpp
+    src/ui/onboarding/WelcomeDialog.h
+    src/ui/onboarding/WelcomeDialog.cpp
+    src/ui/onboarding/SetupWizardView.h
+    src/ui/onboarding/SetupWizardView.cpp
+    src/ui/onboarding/HelpView.h
+    src/ui/onboarding/HelpView.cpp
+    src/ui/donate/DonateView.h
+    src/ui/donate/DonateView.cpp
+    src/ui/donate/DonatePill.h
+    src/ui/donate/DonatePill.cpp
+    src/ui/licenses/LicensesView.h
+    src/ui/licenses/LicensesView.cpp
+    src/ui/settings/CrashReportingRow.h
+    src/ui/settings/CrashReportingRow.cpp
     src/main.cpp
     # Windows resource file embeds the application icon + version metadata
     # so the .exe shows a real Dish icon in Explorer / taskbar.

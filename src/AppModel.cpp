@@ -8,6 +8,7 @@
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/TouchpadRouting.h"
 
+#include <QApplication>
 #include <QLocale>
 
 #include <chrono>
@@ -29,7 +30,8 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
       catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
-      motionEnabledStore_(&motionPrefRepo_) {
+      motionEnabledStore_(&motionPrefRepo_), themeController_(themeStore_.state(), qApp),
+      crashController_(crashStore_.state(), &crashBackend_) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -145,6 +147,18 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     // the current WakeState immediately (idempotent start). From here, setting
     // streamingSlotCount_ in recompute() flows count -> WakeState -> inhibitor.
     wakeController_.start();
+
+    // Arm the theme controller: it subscribes the ThemePreferenceStore and
+    // applies the persisted (or System-resolved) palette immediately, re-theming
+    // the live QApplication. start() applying the current value == android's
+    // applyPersistedMode(). The Source derives the mode; this Controller effects
+    // the palette — they cannot drift (§4.3 rule 2).
+    themeController_.start();
+
+    // Arm the crash-reporting controller: it subscribes the CrashReportingStore
+    // and forwards the current opt-in to the (no-op) backend immediately. Its
+    // stop() is a deliberate no-op so the opt-in survives teardown (D4).
+    crashController_.start();
 
     rebuild();
 }

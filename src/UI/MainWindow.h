@@ -18,6 +18,7 @@ class AppModel;
 
 namespace dish::ui {
 
+class DonatePill;
 class NotificationQueue;
 class NotificationToastHost;
 
@@ -39,6 +40,15 @@ class MainWindow : public QMainWindow {
     void onSettingsClicked();
     // Open the per-device dead-zone / motion settings page (Workstream 2d).
     void onDeadzonesClicked();
+    // Onboarding gate (Workstream 3a): on first launch, if the welcome flow
+    // hasn't been completed, show the welcome pager before the dashboard. The
+    // pager's launch CTA / a Help "Run setup" flows into the setup wizard.
+    void maybeShowOnboarding();
+    void openSetupWizard();
+    void openHelp();
+    // About-section screens (Workstreams 3b / 3c).
+    void openLicenses();
+    void openDonate();
     void onBindRequested(const QString& slotId, const QString& connectionId);
     void onUnbindRequested(const QString& slotId);
     // Open the catalog-driven Emulate picker for a bound slot (Workstream 2c).
@@ -69,6 +79,10 @@ class MainWindow : public QMainWindow {
     // strip that renders the stack. Both are wired by MainWindow's ctor.
     NotificationQueue* notifications_ = nullptr;
     NotificationToastHost* toastHost_ = nullptr;
+
+    // Dismissible "support Dish" pill (Workstream 3b), docked bottom-right of the
+    // header. Tapping it opens the donate screen; its × hides it for 24h.
+    DonatePill* donatePill_ = nullptr;
 };
 
 } // namespace dish::ui

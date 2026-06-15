@@ -13,13 +13,19 @@
 #include "architecture/Observable.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "composer/CrashReportingBackend.h"
+#include "composer/CrashReportingController.h"
+#include "composer/ThemeController.h"
 #include "composer/WakeStateComposer.h"
 #include "composer/WakeStateController.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
+#include "source/store/CrashReportingStore.h"
 #include "source/store/MotionEnabledStore.h"
+#include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/ThemePreferenceStore.h"
 #include "Util/DisplaySleepInhibitor.h"
 
 #include <QHash>
@@ -79,6 +85,20 @@ class AppModel : public QObject {
     // Feature-forwarding preferences (light bar on/off). Owned by the model;
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }
+
+    // ── Workstream 3a/3d/3e: onboarding + theme + crash-reporting stores ──────
+
+    // The first-run "welcome seen" store (Workstream 3a). The composition root
+    // gates the welcome pager on !welcomeCompleted via maybeShowOnboarding().
+    source::OnboardingPreferenceStore* onboardingStore() { return &onboardingStore_; }
+
+    // The theme-mode store (Workstream 3d). The settings picker binds to it; the
+    // ThemeController re-themes off its Observable.
+    source::ThemePreferenceStore* themeStore() { return &themeStore_; }
+
+    // The crash-reporting opt-out store (Workstream 3e). The Diagnostics toggle
+    // binds to it; the CrashReportingController forwards flips to the backend.
+    source::CrashReportingStore* crashStore() { return &crashStore_; }
 
     // ── Workstream 2d: deadzones + motion enable/negotiation ─────────────────
 
@@ -188,6 +208,18 @@ class AppModel : public QObject {
     arch::Observable<int> shouldKeepScreenOn_{0};
     composer::WakeStateComposer wakeComposer_;
     composer::WakeStateController wakeController_;
+
+    // ── Workstream 3a/3d/3e: onboarding + theme + crash-reporting ────────────
+    // Declaration order matters: each controller captures its store's Observable,
+    // so the stores must precede the controllers. The crash backend (a no-op
+    // seam this wave, D4) precedes its controller. The theme controller re-themes
+    // the live QApplication off the theme store's ThemeMode Observable.
+    source::OnboardingPreferenceStore onboardingStore_;
+    source::ThemePreferenceStore themeStore_;
+    source::CrashReportingStore crashStore_;
+    composer::NoopCrashReportingBackend crashBackend_;
+    composer::ThemeController themeController_;
+    composer::CrashReportingController crashController_;
 
     MainUiState state_;
 
