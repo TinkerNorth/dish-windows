@@ -80,7 +80,17 @@ set(DISH_TEST_SOURCES
     test_output_command_queue.cpp
     test_lightbar_routing.cpp
     test_feature_settings.cpp
-    test_host_battery.cpp)
+    test_host_battery.cpp
+    # Workstream 2e — return-path routing reducers (pure): rumble resolve +
+    # 16->8 magnitude/safe-duration helpers, battery lowest-pick + validator +
+    # physical-capacity mapping (host fallback preserved), touchpad forward
+    # routing carrying eventTimeMs.
+    test_rumble_routing.cpp
+    test_rumble_helpers.cpp
+    test_battery_routing.cpp
+    test_battery_validator.cpp
+    test_physical_battery_mapping.cpp
+    test_touchpad_routing.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

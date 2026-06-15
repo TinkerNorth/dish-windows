@@ -135,6 +135,13 @@ set(DISH_CORE_SOURCES
     # core/reducer mapper — Workstream 2c (pure picker-visibility + catalog
     # forward-compat: which connections/types the Emulate picker offers).
     src/core/reducer/PickerVisibility.h
+    # core/reducer — Workstream 2e return-path routing (pure, Qt-free): rumble
+    # resolve + 16->8 magnitude / safe-duration helpers, battery lowest-pick +
+    # validator + physical-capacity mapping (host fallback preserved), and the
+    # touchpad forward assembly that threads eventTimeMs end-to-end.
+    src/core/reducer/RumbleRouting.h
+    src/core/reducer/BatteryRouting.h
+    src/core/reducer/TouchpadRouting.h
     # core/input — pure, Qt-free XUSB/HID layout math + deadzone/scale + the
     # host-testable physical-motion convert/filter (Workstream 2d). Header-only.
     src/core/input/GamepadButtonLayouts.h

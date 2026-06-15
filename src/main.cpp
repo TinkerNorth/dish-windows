@@ -48,8 +48,8 @@ int main(int argc, char* argv[]) {
     const QString localeName = QLocale::system().name();
     if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n"))) {
         QCoreApplication::installTranslator(&translator);
-    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"), QStringLiteral("_"),
-                               QStringLiteral(".qm"))) {
+    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"),
+                               QStringLiteral("_"), QStringLiteral(".qm"))) {
         // Two-step fallback so QLocale::system().name() values that are
         // language-only (e.g. "de") still find dish_de.qm.
         QCoreApplication::installTranslator(&translator);

@@ -4,10 +4,13 @@
 #include "AppModel.h"
 
 #include "LightbarRouting.h"
+#include "core/reducer/RumbleRouting.h"
+#include "core/reducer/TouchpadRouting.h"
 
 #include <QLocale>
 
 #include <chrono>
+#include <vector>
 
 namespace dish {
 
@@ -86,13 +89,19 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
             // timestamp (mouse-mode timing scales by the delta between
             // consecutive samples). The SDL touchpad path forwards every
             // assembled state change with no resends, so a fresh monotonic
-            // stamp per publish matches the contract's eventTimeMs.
+            // stamp per publish matches the contract's eventTimeMs. The pure
+            // reducer::assembleTouchpadForward threads eventTimeMs end-to-end
+            // (the 2e routing fix); the wire encoder Wave 1 extended to 16 bytes
+            // reads it back. mouseControl stays false for v1 (D2; sent by 2b).
             const auto nowMs =
                 static_cast<std::uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
                                                std::chrono::steady_clock::now().time_since_epoch())
                                                .count());
-            sender(s.finger0Active, s.finger0Id, s.finger0X, s.finger0Y, s.finger1Active,
-                   s.finger1Id, s.finger1X, s.finger1Y, s.buttonPressed, nowMs);
+            const auto fwd = reducer::assembleTouchpadForward(
+                s.finger0Active, s.finger0Id, s.finger0X, s.finger0Y, s.finger1Active, s.finger1Id,
+                s.finger1X, s.finger1Y, s.buttonPressed, nowMs);
+            sender(fwd.finger0Active, fwd.finger0Id, fwd.finger0X, fwd.finger0Y, fwd.finger1Active,
+                   fwd.finger1Id, fwd.finger1X, fwd.finger1Y, fwd.buttonPressed, fwd.eventTimeMs);
         }
     });
 
@@ -144,21 +153,34 @@ void AppModel::installRumbleHandlers() {
         // the SatelliteClient receive thread; it only reads structures
         // protected by their own locks (hub bindings, bridge device map).
         conn->setRumbleHandler([this, id](const net::SatelliteClient::RumbleMessage& rm) {
-            // Find the slot bound to this connection.
-            QString deviceId;
+            // Snapshot the live connection→slot bindings ONCE off the receive
+            // thread, then decide with the pure reducer::resolveRumble (the
+            // android RumbleRouter pattern: "read each StateFlow once into an
+            // immutable snapshot, decide via a pure function"). For dish-windows
+            // slot.id == the SDL bridge device id, so the resolved target IS the
+            // device id to actuate. The Phone / DirectUsb arms are dropped
+            // (physical-only; USB-direct is 2g).
             const auto bindings = hub_->bindings();
-            for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
-                if (it.value() == id) {
-                    deviceId = it.key();
-                    break;
+            std::vector<reducer::RumbleConnectionSnapshot> snapshot;
+            for (auto* c : wifi_->connections()) {
+                reducer::RumbleConnectionSnapshot s;
+                s.connId = c->id();
+                s.connected = c->state() == net::SessionState::Live;
+                for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
+                    if (it.value() == s.connId) {
+                        s.boundDeviceId = it.key();
+                        break;
+                    }
                 }
+                snapshot.push_back(std::move(s));
             }
-            if (deviceId.isEmpty()) { return; }
-            // For dish-windows, slot.id == bridge device id (set in rebuild()),
-            // so the slot id IS the bridge's device id. Hand it straight to
-            // the SDL bridge. Rumble = vibration only; the light bar has its
-            // own return path via MSG_LIGHTBAR.
-            bridge_->applyRumble(deviceId, rm.strongMagnitude, rm.weakMagnitude, rm.durationMs);
+            const auto target = reducer::resolveRumble(snapshot, id);
+            if (!target.valid()) { return; }
+            // Rumble = vibration only; the light bar has its own return path via
+            // MSG_LIGHTBAR. Actuation is marshalled onto the SDL thread inside
+            // applyRumble (OutputCommandQueue) — the threading model is untouched.
+            bridge_->applyRumble(target.deviceId, rm.strongMagnitude, rm.weakMagnitude,
+                                 rm.durationMs);
         });
         // Parallel handler for the dedicated MSG_LIGHTBAR stream (Task 1.4).
         // Resolves the same slot/connection mapping and forwards to the
