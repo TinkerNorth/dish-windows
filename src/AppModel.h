@@ -10,15 +10,17 @@
 #include "Network/ConnectionHub.h"
 #include "Network/ConnectionStore.h"
 #include "Network/WifiConnectionManager.h"
+#include "architecture/Observable.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "composer/WakeStateComposer.h"
+#include "composer/WakeStateController.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "Util/DisplaySleepInhibitor.h"
-#include "Util/ScreenWakeController.h"
 
 #include <QHash>
 #include <QObject>
@@ -73,7 +75,7 @@ class AppModel : public QObject {
     composer::ConnectionCoordinator* connections() { return connections_; }
     input::GamepadInputProcessor* processor() { return &processor_; }
     input::SDLGamepadBridge* bridge() { return bridge_; }
-    util::ScreenWakeController* wake() { return &wake_; }
+    composer::WakeStateController* wake() { return &wakeController_; }
     // Feature-forwarding preferences (light bar on/off). Owned by the model;
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }
@@ -173,10 +175,19 @@ class AppModel : public QObject {
     // application teardown so this set never gets pruned.
     QSet<QString> rumbleWiredConnections_;
     // Owned in unique_ptr so we can swap a FakeDisplaySleepInhibitor in
-    // tests. ScreenWakeController holds a raw back-pointer; lifetime is
+    // tests. The WakeStateController holds a raw back-pointer; lifetime is
     // tied to the AppModel.
     std::unique_ptr<util::DisplaySleepInhibitor> inhibitor_;
-    util::ScreenWakeController wake_;
+    // Wake subsystem, kernel-split: AppModel owns the two upstream Observables
+    // (the streaming-slot count derived from bindings x link states, and a
+    // keep-screen-on override count), the Composer that folds them into a
+    // WakeState, and the Controller that effects SetThreadExecutionState off it.
+    // Declaration order matters: the Composer captures the Observables and the
+    // Controller captures the Composer's state, so they must precede it.
+    arch::Observable<int> streamingSlotCount_{0};
+    arch::Observable<int> shouldKeepScreenOn_{0};
+    composer::WakeStateComposer wakeComposer_;
+    composer::WakeStateController wakeController_;
 
     MainUiState state_;
 

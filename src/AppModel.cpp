@@ -4,6 +4,7 @@
 #include "AppModel.h"
 
 #include "LightbarRouting.h"
+#include "composer/StreamingSlotCount.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/TouchpadRouting.h"
 
@@ -24,7 +25,8 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       connections_(new composer::ConnectionCoordinator(wifi_, hub_, this)),
       bridge_(new input::SDLGamepadBridge(&processor_, this)),
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
-      inhibitor_(std::move(inhibitor)), wake_(inhibitor_.get()),
+      inhibitor_(std::move(inhibitor)), wakeComposer_(streamingSlotCount_, shouldKeepScreenOn_),
+      wakeController_(wakeComposer_.state(), inhibitor_.get()),
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
       catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
       motionEnabledStore_(&motionPrefRepo_) {
@@ -138,6 +140,11 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     // the choice is threaded into the descriptor PUT.
     hub_->setControllerTypeFn(
         [this](const QString& slotId) { return resolveControllerType(slotId); });
+
+    // Arm the wake controller: it subscribes the WakeStateComposer and applies
+    // the current WakeState immediately (idempotent start). From here, setting
+    // streamingSlotCount_ in recompute() flows count -> WakeState -> inhibitor.
+    wakeController_.start();
 
     rebuild();
 }
@@ -339,17 +346,17 @@ void AppModel::rebuild() {
         touchpadRouting_ = std::move(nextTouchpad);
     }
 
-    // Drive the display-sleep inhibitor off bindings × hub.connections. The
-    // 0↔positive transitions inside ScreenWakeController set / clear the
-    // SetThreadExecutionState flag; intermediate same-count emissions are
-    // no-ops so a noisy hub feed doesn't thrash the kernel.
+    // Drive the display-sleep inhibitor off bindings × hub.connections. Setting
+    // the streaming-slot-count Observable flows through WakeStateComposer (derive
+    // WakeState) into WakeStateController (effect SetThreadExecutionState). The
+    // composer's distinct-until-changed + the inhibitor's idempotent acquire/
+    // release preserve the 0↔positive no-thrash contract — a noisy hub feed that
+    // doesn't change the count never touches the OS power portal.
     QHash<QString, models::LinkState> connectionStates;
     for (const auto& summary : state_.connections) {
         connectionStates.insert(summary.id, summary.live);
     }
-    const int streamingCount =
-        util::ScreenWakeController::streamingCount(bindings, connectionStates);
-    wake_.update(streamingCount);
+    streamingSlotCount_.set(composer::streamingSlotCount(bindings, connectionStates));
 
     emit stateChanged();
 }

@@ -70,6 +70,15 @@ set(DISH_TEST_SOURCES
     test_controller_type_store.cpp
     test_picker_visibility.cpp
     test_screen_wake_controller.cpp
+    # Workstream 2f — wake split (composer + controller), the DishNotifications
+    # event-channel source, the per-stream input-rate tracker + store, and the
+    # motion-indicator precedence ladder + meter-visibility conjunctions.
+    test_wake_state_composer.cpp
+    test_wake_state_controller.cpp
+    test_dish_notifications.cpp
+    test_input_rate_tracker.cpp
+    test_input_rate_store.cpp
+    test_motion_indicator_state.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
     test_satellite_client_rumble.cpp

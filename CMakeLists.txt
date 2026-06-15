@@ -142,6 +142,11 @@ set(DISH_CORE_SOURCES
     src/core/reducer/RumbleRouting.h
     src/core/reducer/BatteryRouting.h
     src/core/reducer/TouchpadRouting.h
+    # core/reducer — Workstream 2f telemetry (pure, Qt-free): the per-stream
+    # input-rate estimator (event-count delta -> 5 Hz-quantized rate) and the
+    # motion-indicator precedence ladder + meter-visibility conjunctions.
+    src/core/reducer/InputRateTracker.h
+    src/core/reducer/MotionIndicatorState.h
     # core/input — pure, Qt-free XUSB/HID layout math + deadzone/scale + the
     # host-testable physical-motion convert/filter (Workstream 2d). Header-only.
     src/core/input/GamepadButtonLayouts.h
@@ -155,8 +160,6 @@ set(DISH_CORE_SOURCES
     src/Util/HostBattery.cpp
     src/Util/DisplaySleepInhibitor.h
     src/Util/DisplaySleepInhibitor.cpp
-    src/Util/ScreenWakeController.h
-    src/Util/ScreenWakeController.cpp
     src/Models/Models.h
     src/Models/Models.cpp
     src/Network/WinsockInit.h
@@ -200,6 +203,18 @@ set(DISH_CORE_SOURCES
     src/source/store/MotionEnabledStore.cpp
     src/source/store/SatelliteMotionBackendStatusStore.h
     src/source/store/SatelliteMotionBackendStatusStore.cpp
+    # source/notification — the in-app notification event-channel source (two
+    # bounded DROP_OLDEST channels, monotonic ids, severity->duration defaults)
+    # under the UI NotificationQueue/ToastHost; the renderer keeps dedup (2f).
+    src/source/notification/EventChannel.h
+    src/source/notification/DishNotifications.h
+    src/source/notification/DishNotifications.cpp
+    # source/inputrate — the per-slot live-rate StateSource (samples the hot-path
+    # event counters through the pure InputRateTracker) + the SlotInputRates value
+    # the live-stats display reads (2f).
+    src/source/inputrate/SlotInputRates.h
+    src/source/inputrate/InputRateStore.h
+    src/source/inputrate/InputRateStore.cpp
     # repository — trust+identity stores on the kernel Repository + the
     # ConnectionStore facade/Coordinator over them (Workstream 2a).
     src/repository/SettingsKeys.h
@@ -231,6 +246,14 @@ set(DISH_CORE_SOURCES
     # type→sink map, toCapBits) (Workstream 2d).
     src/composer/MotionCapabilityComposer.h
     src/composer/MotionCapabilityComposer.cpp
+    # composer — the wake subsystem split onto the kernel (Workstream 2f): the
+    # pure streaming-slot-count derivation, the WakeStateComposer (count +
+    # keep-screen-on -> WakeState), and the WakeStateController that effects
+    # SetThreadExecutionState via the DisplaySleepInhibitor on each transition.
+    src/composer/StreamingSlotCount.h
+    src/composer/WakeStateComposer.h
+    src/composer/WakeStateController.h
+    src/composer/WakeStateController.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h

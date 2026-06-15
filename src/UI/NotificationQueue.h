@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Models/Models.h"
+#include "source/notification/DishNotifications.h"
 
 #include <QMetaType>
 #include <QObject>
@@ -18,19 +19,24 @@ Q_DECLARE_METATYPE(dish::models::DishNotification)
 
 namespace dish::ui {
 
-// Process-wide bus for [models::DishNotification]. Mirrors dish-android's
-// `DishNotifications` (source/notification/DishNotifications.kt) — emitters
-// post typed notifications, the toast host renders them as a stacked strip.
+// UI-layer adapter over the source-layer [source::DishNotifications] event
+// channel. The id assignment + severity->duration defaults + the bounded
+// DROP_OLDEST post/dismiss channels now live in the source class (the business
+// owner, mirroring dish-android source/notification/DishNotifications); this
+// queue forwards into it and re-emits its signals under the names the renderer
+// (NotificationToastHost) already binds to, so the UI wiring is unchanged.
 //
-// The queue is intentionally a pure signal hub: it owns id assignment and the
-// `errorMessage → enqueue` adapter only. Same-kind de-duplication and
-// dismiss-on-action live in the renderer (NotificationToastHost), the way
-// the Android DishNotifications.Attachment owns dedup. Keeping the queue
-// view-free leaves it cheap to drive from a future headless / service mode.
+// Same-kind de-duplication and dismiss-on-action still live in the renderer
+// (NotificationToastHost), the way the Android DishNotifications.Attachment owns
+// dedup — this queue stays view-free.
 class NotificationQueue : public QObject {
     Q_OBJECT
   public:
     explicit NotificationQueue(QObject* parent = nullptr);
+
+    // The underlying source-layer notifications owner (for non-UI consumers that
+    // want the raw event channels). Owned by this queue.
+    source::DishNotifications* source() { return source_; }
 
     // Post a notification. Returns the assigned id so a caller can later
     // dismiss it explicitly (the equivalent of a `notification.dismiss()` in
@@ -56,7 +62,7 @@ class NotificationQueue : public QObject {
     void notificationDismissed(int id);
 
   private:
-    int nextId_ = 1;
+    source::DishNotifications* source_;
 };
 
 } // namespace dish::ui
