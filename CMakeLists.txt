@@ -136,6 +136,11 @@ set(DISH_CORE_SOURCES
     src/core/reducer/PollRateSampler.h
     src/core/reducer/UsbPathMachine.h
     src/core/reducer/UsbPathMachine.cpp
+    # Workstream 2g twin-dedup arbitration (pure, Qt-free): which SDL/framework
+    # device ids are hidden by an active USB-direct synthetic of the same model,
+    # so a pad visible to both paths streams via exactly one. Port of android's
+    # ui/main/SyntheticTwinDedup.kt.
+    src/core/reducer/UsbTwinDedup.h
     # core/reducer mappers — Workstream 2b (pure, Qt-free; the connection->row
     # decision logic + the descriptor-aware late-slot converge + the resend pacer).
     src/core/reducer/SatelliteLinkState.h
@@ -162,6 +167,11 @@ set(DISH_CORE_SOURCES
     src/core/input/GamepadButtonLayouts.h
     src/core/input/Deadzones.h
     src/core/input/PhysicalMotionSource.h
+    # Workstream 2g per-model HID input-report decoders (pure, Qt-free,
+    # allocation-free): DualShock 4 / DualSense / Switch Pro / generic-HID byte
+    # layouts mirrored 1:1 from dish-android usb_parsers.cpp, producing an XUSB
+    # report (+ IMU / touchpad). WinHidGateway::readLoop calls these.
+    src/core/input/UsbReportParsers.h
     src/Util/AtomicCounter.h
     src/Util/Hex.h
     src/Util/Hex.cpp

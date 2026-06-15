@@ -62,17 +62,42 @@ struct ClaimResult {
 
 // A decoded controller report from the claimed device's read loop, already
 // normalised to the XUSB axis/trigger scale (the gateway owns the per-model HID
-// report parse). The driver maps the buttons through the pure HID<->XUSB layout
-// math before publishing to GamepadInputProcessor.
+// report parse via core/input/UsbReportParsers). `wButtons` is the XUSB button
+// word the decoders emit directly (GamepadButtonLayouts kXusb* bits) — the driver
+// publishes it straight to GamepadInputProcessor with NO further conversion, so
+// the decode->publish path stays allocation-free. The IMU + touchpad fields carry
+// the in-band motion / touchpad surface for the pads that have them (DS4 /
+// DualSense / Switch Pro); `motionValid` / `touchpadValid` gate whether the
+// manager forwards a MOTION / TOUCHPAD packet for this report.
 struct UsbReport {
-    int hidButtons = 0; // HID button word (BTN_A..BTN_HOME); see GamepadButtonLayouts.
-    int hidHat = 0;     // HID hat octant 0..8.
+    std::uint16_t wButtons = 0; // XUSB button bits (already mapped by the decoder).
     std::uint8_t lt = 0;
     std::uint8_t rt = 0;
     std::int16_t lx = 0;
     std::int16_t ly = 0;
     std::int16_t rx = 0;
     std::int16_t ry = 0;
+
+    // IMU (wire int16 scale). Forwarded as MSG_MOTION only when motionValid.
+    bool motionValid = false;
+    std::int16_t gyroX = 0;
+    std::int16_t gyroY = 0;
+    std::int16_t gyroZ = 0;
+    std::int16_t accelX = 0;
+    std::int16_t accelY = 0;
+    std::int16_t accelZ = 0;
+
+    // Touchpad (DS4 / DualSense). Forwarded as MSG_TOUCHPAD only when touchpadValid.
+    bool touchpadValid = false;
+    bool finger0Active = false;
+    std::uint8_t finger0Id = 0;
+    std::int16_t finger0X = 0;
+    std::int16_t finger0Y = 0;
+    bool finger1Active = false;
+    std::uint8_t finger1Id = 0;
+    std::int16_t finger1X = 0;
+    std::int16_t finger1Y = 0;
+    bool touchpadButton = false;
 };
 
 class UsbDeviceGateway {

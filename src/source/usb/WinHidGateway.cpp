@@ -3,7 +3,7 @@
 
 #include "source/usb/WinHidGateway.h"
 
-#include "core/input/GamepadButtonLayouts.h"
+#include "core/input/UsbReportParsers.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
 // then the HID + SetupAPI headers, which depend on the base Win32 types.
@@ -127,7 +127,11 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
                 caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
             info.endpointInInterval = 1;
             info.hasOutEndpoint = caps.OutputReportByteLength > 0;
-            info.hasImu = info.vendorId == kVidSony; // DualSense/DS4 carry an IMU.
+            // DualSense / DS4 (Sony) and the Switch Pro (Nintendo) carry an IMU;
+            // derive it from the per-model decoder family so it tracks the parser
+            // selection rather than a hard-coded VID list.
+            info.hasImu = input::usbparse::parserHasImu(
+                input::usbparse::parserForDevice(info.vendorId, info.productId));
         }
         CloseHandle(h);
 
@@ -204,6 +208,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->onReport = std::move(onReport);
     claim->vendorId = device.vendorId;
     claim->productId = device.productId;
+    claim->parser = input::usbparse::parserForDevice(device.vendorId, device.productId);
     claim->running.store(true);
     Claimed* raw = claim.get();
     {
@@ -216,13 +221,19 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
 
 void WinHidGateway::readLoop(Claimed* c) {
     // The read loop is plain C++ on its own thread — no allocation per report, no
-    // Qt. It decodes each HID input report into normalised buttons/sticks and
-    // hands it to onReport, which publishes through GamepadInputProcessor.
+    // Qt. It decodes each HID input report into a normalised XUSB report via the
+    // pure core/input/UsbReportParsers decoders (chosen per-model at claim time)
+    // and hands it to onReport, which publishes through GamepadInputProcessor.
     //
-    // NOTE: the per-model report byte layout (DualSense vs DS4 vs 8BitDo) is the
-    // one piece that needs real-hardware validation. The skeleton below reads the
-    // report and forwards a zeroed UsbReport with the completion counter advanced
-    // so the poll-rate sampler works; wiring the exact offsets is a manual step.
+    // Allocation discipline: the read buffer + the ParsedReport scratch live on
+    // this thread's stack and are reused every iteration; the decoder is a pure
+    // function over those, mutating the device's stick auto-range state in place.
+    // Nothing on the per-report path heap-allocates.
+    //
+    // NOTE: the button/stick/trigger byte offsets mirror dish-android's
+    // usb_parsers.cpp 1:1 (hardware-validated there). The DS4/DualSense IMU +
+    // touchpad offsets are the public hid-playstation layout and need a final
+    // sign/scale check against real pads (flagged in UsbReportParsers.h).
     auto* handle = static_cast<HANDLE>(c->handle);
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
@@ -242,11 +253,38 @@ void WinHidGateway::readLoop(Claimed* c) {
         }
         if (read == 0) { continue; }
         c->completions.fetch_add(1);
-        // Skeleton decode: forward a neutral report (exact per-model offsets are a
-        // hardware-validation TODO). The button word travels as packed HID bits
-        // through GamepadButtonLayouts on the manager side.
+        // Decode into the XUSB report. A report that doesn't match the family's
+        // shape (wrong id / too short) is skipped rather than published as noise.
+        input::usbparse::ParsedReport parsed{};
+        if (!input::usbparse::decodeReport(c->parser, buf.data(), static_cast<std::size_t>(read),
+                                           parsed, c->sticks)) {
+            continue;
+        }
         UsbReport report{};
-        report.hidHat = input::layout::kHatNeutral;
+        report.wButtons = parsed.wButtons;
+        report.lt = parsed.lt;
+        report.rt = parsed.rt;
+        report.lx = parsed.lx;
+        report.ly = parsed.ly;
+        report.rx = parsed.rx;
+        report.ry = parsed.ry;
+        report.motionValid = parsed.motionValid;
+        report.gyroX = parsed.gyroX;
+        report.gyroY = parsed.gyroY;
+        report.gyroZ = parsed.gyroZ;
+        report.accelX = parsed.accelX;
+        report.accelY = parsed.accelY;
+        report.accelZ = parsed.accelZ;
+        report.touchpadValid = parsed.touchpadValid;
+        report.finger0Active = parsed.finger0Active;
+        report.finger0Id = parsed.finger0Id;
+        report.finger0X = parsed.finger0X;
+        report.finger0Y = parsed.finger0Y;
+        report.finger1Active = parsed.finger1Active;
+        report.finger1Id = parsed.finger1Id;
+        report.finger1X = parsed.finger1X;
+        report.finger1Y = parsed.finger1Y;
+        report.touchpadButton = parsed.touchpadButton;
         if (c->onReport) { c->onReport(report); }
     }
     if (ov.hEvent != nullptr) { CloseHandle(ov.hEvent); }

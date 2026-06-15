@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -72,8 +73,28 @@ class SDLGamepadBridge : public QObject {
         std::uint8_t batteryLevel = 0xFF;
         std::uint8_t batteryStatus = 0;
         std::uint8_t controllerType = 0; // CONTROLLER_TYPE_XBOX
+        // The pad's USB identity (SDL_GameControllerGetVendor/Product). 0 when SDL
+        // could not report it. Surfaced so AppModel can pair an SDL device with a
+        // USB-direct (raw-HID) twin of the same model for the twin-dedup
+        // arbitration (UsbTwinDedup) — see setSuppressedDeviceIds.
+        int vendorId = 0;
+        int productId = 0;
     };
     QList<Device> devices() const;
+
+    // ── USB-direct twin-dedup seam (the narrow, documented suppression hook) ──
+    // A pad visible to BOTH SDL/XInput and the raw-HID USB-direct gateway must
+    // stream via exactly one path. When USB-direct claims a pad (FSM phase
+    // Direct), AppModel computes the set of SDL device ids that are twins of an
+    // active synthetic (reducer::suppressedRoutedIds) and installs it here; the
+    // input thread then SKIPS publish()/publishMotion()/publishTouchpad() for any
+    // suppressed device, so its INPUT/MOTION/TOUCHPAD never reach the wire while
+    // USB-direct owns it. On claim-failure / detach the set recomputes without
+    // that id and SDL resumes — a clean fallback. Thread-safe: written from the Qt
+    // main thread, read on the input thread under suppressedMtx_. Empty by default
+    // (no suppression), so the live SDL path for every non-claimed device is
+    // untouched.
+    void setSuppressedDeviceIds(const std::unordered_set<std::string>& ids);
 
     // Drive the physical controller's rumble motors — vibration ONLY. As of
     // Task 1.4 the lightbar is fully decoupled from rumble: this never touches
@@ -112,6 +133,9 @@ class SDLGamepadBridge : public QObject {
     void handleSensorEvent(const SDL_ControllerSensorEvent& ev);
     void handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev);
     void pollBatteries();
+    // True iff `deviceId` is currently twin-suppressed (USB-direct owns the pad).
+    // Cheap: a short-held read of suppressedIds_ under suppressedMtx_.
+    bool isSuppressed(const std::string& deviceId) const;
 
     GamepadInputProcessor* processor_;
     std::thread thread_;
@@ -143,6 +167,23 @@ class SDLGamepadBridge : public QObject {
     // MSG_CONTROLLER_TYPE hint. Same lifecycle / locking as motionCapable_;
     // a device absent from the map defaults to CONTROLLER_TYPE_XBOX.
     std::unordered_map<int, std::uint8_t> controllerType_;
+
+    // Per-device USB identity (vid, pid) classified once at attach. Surfaced via
+    // devices() for the twin-dedup pairing. Same lifecycle / locking as
+    // controllerType_; a device absent reads (0, 0).
+    struct UsbIdentity {
+        int vendorId = 0;
+        int productId = 0;
+    };
+    std::unordered_map<int, UsbIdentity> usbIdentity_;
+
+    // The set of device ids whose SDL input is twin-suppressed because a
+    // USB-direct claim of the same model is streaming (see setSuppressedDeviceIds
+    // / UsbTwinDedup). Guarded by its OWN mutex (not mtx_) so installing a fresh
+    // set on the main thread never contends with the device-map critical section
+    // on the input thread, and the per-report read is a tiny independent lock.
+    mutable std::mutex suppressedMtx_;
+    std::unordered_set<std::string> suppressedIds_;
 
     // Latest accelerometer reading per device (m/s²). Updated when an accel
     // SDL_CONTROLLERSENSORUPDATE arrives; merged with the next gyro update

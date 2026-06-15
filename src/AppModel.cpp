@@ -5,8 +5,16 @@
 
 #include "LightbarRouting.h"
 #include "composer/StreamingSlotCount.h"
+#include "core/input/UsbReportParsers.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/TouchpadRouting.h"
+#include "core/reducer/UsbTwinDedup.h"
+
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 #include <QApplication>
 #include <QLocale>
@@ -31,7 +39,8 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
       catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
       motionEnabledStore_(&motionPrefRepo_), themeController_(themeStore_.state(), qApp),
-      crashController_(crashStore_.state(), &crashBackend_) {
+      crashController_(crashStore_.state(), &crashBackend_), usbPathStore_(&usbPathRepo_),
+      usbObserver_(this), usbScanTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -143,6 +152,22 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     hub_->setControllerTypeFn(
         [this](const QString& slotId) { return resolveControllerType(slotId); });
 
+    // ── USB-direct (raw-HID) claim path ──────────────────────────────────────
+    // Build the real Windows raw-HID gateway + the claim driver, feeding decoded
+    // reports into the SAME processor_ as the SDL path. The driver is dormant
+    // until start() arms the scan timer; reconcile() then enumerates HID pads and
+    // auto-claims the verified fast-lane models (DualSense / DS4 / 8BitDo) while
+    // every other / failed pad stays on SDL via the FSM's Routed phase.
+    usbGateway_ = std::make_unique<source::usb::WinHidGateway>();
+    usbManager_ = std::make_unique<source::usb::UsbGamepadManager>(usbGateway_.get(), &processor_,
+                                                                   &usbPathStore_, &usbObserver_);
+    // The scan timer drives reconcile() (idempotent re-enumeration) + the
+    // poll-rate sampler. 1 s mirrors android's foreground reconcile cadence; it is
+    // off the hot path (enumeration only, never per-report). Fires on the main
+    // thread — the only thread that mutates the FSM.
+    usbScanTimer_->setInterval(1000);
+    QObject::connect(usbScanTimer_, &QTimer::timeout, this, &AppModel::pollUsbDirect);
+
     // Arm the wake controller: it subscribes the WakeStateComposer and applies
     // the current WakeState immediately (idempotent start). From here, setting
     // streamingSlotCount_ in recompute() flows count -> WakeState -> inhibitor.
@@ -163,7 +188,19 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     rebuild();
 }
 
-AppModel::~AppModel() { bridge_->stop(); }
+AppModel::~AppModel() {
+    // Stop the input thread first so no further SDL reports race teardown, then
+    // tear down the USB-direct path. usbManager_ destructs before usbGateway_
+    // (reverse declaration order) — but the manager holds only a borrowed gateway
+    // pointer, so the gateway's own destructor is what releases the live claims
+    // (stops every read loop + closes the HID handles). Reset the timer-bound
+    // objects explicitly so no queued pollUsbDirect fires against a half-torn-down
+    // manager.
+    bridge_->stop();
+    usbScanTimer_->stop();
+    usbManager_.reset();
+    usbGateway_.reset();
+}
 
 void AppModel::installRumbleHandlers() {
     for (auto* conn : wifi_->connections()) {
@@ -229,6 +266,10 @@ void AppModel::start() {
     bridge_->start();
     wifi_->autoReconnectAll();
     autoReconnectTimer_->start();
+    // Bring up USB-direct: an immediate scan so a pad plugged in before launch is
+    // claimed promptly, then the periodic reconcile + poll-rate sampling.
+    pollUsbDirect();
+    usbScanTimer_->start();
 }
 
 void AppModel::clearPairingTarget() {
@@ -262,8 +303,14 @@ void AppModel::onBridgeDevicesChanged() {
         it = present.contains(*it) ? std::next(it) : deadzonePushedDevices_.erase(it);
     }
 
+    // An SDL device appearing / disappearing is a framework up/down signal for the
+    // USB FSM (the "framework" path on Windows is SDL) — feed the deltas so a
+    // claim-failure / Standard pick can settle on the live SDL device.
+    syncFrameworkPresence();
+
     // A new device only matters for routing if a connection is already bound
-    // to its slot id, so re-trigger the same rebuild path.
+    // to its slot id, so re-trigger the same rebuild path (which also recomputes
+    // the twin-dedup suppression off the fresh device list).
     rebuild();
 }
 
@@ -286,13 +333,111 @@ void AppModel::onWifiEvent(const net::ConnectionEvent& evt) {
     }
 }
 
+void AppModel::pollUsbDirect() {
+    if (usbManager_ == nullptr) { return; }
+    // Idempotent re-enumeration: tracks freshly-plugged HID pads + drives each
+    // toward its resolved path (auto-Direct for verified fast-lane models). A pad
+    // that fails to claim falls back to SDL via the FSM, so this never regresses
+    // a working SDL pad.
+    usbManager_->reconcile();
+
+    // Sample the per-device poll rate off the gateway's completion counters. The
+    // sampler is pure (clock-injected); we feed it the present synthetic ids and a
+    // count lookup. The measured rate is currently informational (the live-stats
+    // surface reads it on android); we drain it so the snapshot map stays bounded
+    // and a re-attached id starts fresh.
+    std::vector<int> present;
+    for (const auto& [key, c] : usbManager_->controllers()) {
+        if (c.phase == reducer::UsbPhase::Direct && c.syntheticId.has_value()) {
+            present.push_back(*c.syntheticId);
+        }
+    }
+    const auto nowMs =
+        static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      std::chrono::steady_clock::now().time_since_epoch())
+                                      .count());
+    source::usb::WinHidGateway* gw = usbGateway_.get();
+    (void)usbPollSampler_.sampleAll(nowMs, present, [gw](int id) -> std::int64_t {
+        return gw != nullptr ? gw->completionCount(id) : 0;
+    });
+}
+
+void AppModel::onUsbDirectChanged() {
+    // A synthetic appeared / vanished (or its phase changed). Recompute the slot
+    // list + the twin-dedup suppression off the fresh controller set. rebuild()
+    // does both; it is cheap and already the single place the routing table is
+    // rebuilt. Safe to call re-entrantly from a UsbDirectObserver effect — the
+    // manager runs effects with its own lock released, and rebuild() takes only a
+    // fresh snapshot of controllers().
+    rebuild();
+}
+
+void AppModel::syncFrameworkPresence() {
+    if (usbManager_ == nullptr) { return; }
+    // Diff the SDL device VID:PIDs against the last pass and emit FrameworkUp for
+    // newly-present models, FrameworkDown for vanished ones. The FSM uses these to
+    // settle AwaitingFramework -> Routed (a Standard pick / claim-failure rolling
+    // back to the live SDL device). A frameworkId is needed by the FSM's bind
+    // effect; we use the model's vpKey as a stable surrogate id (the Windows path
+    // binds by slot-id string, not the numeric framework id, so its exact value is
+    // immaterial — only up/down transitions matter).
+    QSet<int> current;
+    for (const auto& d : bridge_->devices()) {
+        if (d.vendorId == 0 || d.productId == 0) { continue; }
+        const int key = (d.vendorId << 16) | (d.productId & 0xFFFF);
+        current.insert(key);
+        if (!lastFrameworkVpKeys_.contains(key)) {
+            usbManager_->onFrameworkUp(d.vendorId, d.productId, key);
+        }
+    }
+    for (int key : lastFrameworkVpKeys_) {
+        if (!current.contains(key)) {
+            const int vendorId = (key >> 16) & 0xFFFF;
+            const int productId = key & 0xFFFF;
+            usbManager_->onFrameworkDown(vendorId, productId);
+        }
+    }
+    lastFrameworkVpKeys_ = current;
+}
+
 void AppModel::rebuild() {
     QList<models::ControllerSlot> next;
     // Windows is physical-controllers-only — no virtual touch overlay, so
     // we never seed a "Virtual Controller" slot. Matches dish-mac (PR #7);
     // dish-linux carries the slot as a placeholder for a future feature
     // that hasn't materialised on either desktop platform.
-    for (const auto& d : bridge_->devices()) {
+
+    // Twin-dedup: a pad visible to BOTH SDL/XInput and the raw-HID gateway must
+    // stream via exactly one path. Build the active USB-direct synthetics (FSM
+    // phase Direct) and the SDL routed devices, then ask the pure reducer which
+    // SDL ids are hidden by a synthetic twin. Push the hidden set into the bridge
+    // so its INPUT/MOTION/TOUCHPAD for those ids never reach the wire; the hidden
+    // SDL slots are also dropped from the slot list (so they get no binding /
+    // routing), and the synthetics are added in their place. Mirrors android's
+    // MainViewModel slot derivation (routedTwinIdsHiddenBySynthetics).
+    std::vector<reducer::SyntheticTwin> synthetics;
+    std::map<int, reducer::UsbController> controllers;
+    if (usbManager_ != nullptr) { controllers = usbManager_->controllers(); }
+    for (const auto& [key, c] : controllers) {
+        if (c.phase == reducer::UsbPhase::Direct) {
+            synthetics.push_back({c.vendorId, c.productId});
+        }
+    }
+    const auto sdlDevices = bridge_->devices();
+    std::vector<reducer::RoutedDevice> routed;
+    routed.reserve(static_cast<std::size_t>(sdlDevices.size()));
+    for (const auto& d : sdlDevices) {
+        routed.push_back({d.id.toStdString(), d.vendorId, d.productId, /*disconnecting=*/false});
+    }
+    const std::set<std::string> hidden = reducer::suppressedRoutedIds(synthetics, routed);
+    {
+        std::unordered_set<std::string> hiddenSet(hidden.begin(), hidden.end());
+        bridge_->setSuppressedDeviceIds(hiddenSet);
+    }
+
+    for (const auto& d : sdlDevices) {
+        // Skip the SDL twin of an active USB-direct claim — it streams via raw-HID.
+        if (hidden.count(d.id.toStdString()) != 0) { continue; }
         models::ControllerSlot s;
         s.id = d.id;
         s.name = d.name;
@@ -307,6 +452,22 @@ void AppModel::rebuild() {
         // host machine's for a wired/unknown one.
         s.capabilities.batteryLevel = d.batteryLevel;
         s.capabilities.batteryStatus = d.batteryStatus;
+        next.append(s);
+    }
+
+    // Add a slot for each USB-direct-claimed pad (FSM phase Direct). Its id is the
+    // model key string the read-loop publishes under (UsbGamepadManager::doClaim),
+    // so binding it routes the decoded reports through the existing hub machinery.
+    // hasMotion is the model's IMU capability (the decoder emits gyro/accel for
+    // DS4 / DualSense / Switch Pro).
+    for (const auto& [key, c] : controllers) {
+        if (c.phase != reducer::UsbPhase::Direct) { continue; }
+        models::ControllerSlot s;
+        s.id = QString::fromStdString(std::to_string(key));
+        s.name = QString::fromStdString(c.name);
+        s.capabilities.hasMotion = input::usbparse::parserHasImu(
+            input::usbparse::parserForDevice(c.vendorId, c.productId));
+        s.capabilities.hasLightbar = false;
         next.append(s);
     }
 

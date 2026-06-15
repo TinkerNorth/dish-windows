@@ -20,12 +20,16 @@
 #include "composer/WakeStateController.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
+#include "core/reducer/PollRateSampler.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
+#include "source/store/UsbPathPreferenceStore.h"
+#include "source/usb/UsbGamepadManager.h"
+#include "source/usb/WinHidGateway.h"
 #include "Util/DisplaySleepInhibitor.h"
 
 #include <QHash>
@@ -156,6 +160,11 @@ class AppModel : public QObject {
 
     void start();
 
+    // The USB-direct claim driver (raw-HID). Exposed read-only for the settings
+    // surface / tests; the lifecycle is owned here. Null only in the degenerate
+    // case where the gateway failed to construct (never on Windows).
+    source::usb::UsbGamepadManager* usbManager() { return usbManager_.get(); }
+
   signals:
     // Emitted after any field of state() changes. Replaces the previous
     // slotsChanged / connectionsChanged / pairingTargetChanged trio.
@@ -170,6 +179,18 @@ class AppModel : public QObject {
     void onHubChanged();
     void onBridgeDevicesChanged();
     void onWifiEvent(const net::ConnectionEvent& evt);
+    // Re-scan the raw-HID bus, drive each present pad toward its resolved path,
+    // and sample the per-device poll rate. Driven off usbScanTimer_ (and once at
+    // start()). Runs on the Qt main thread — the only thread that mutates the FSM.
+    void pollUsbDirect();
+    // Recompute the twin-dedup suppression set + the synthetic slot list from the
+    // current SDL devices × USB-direct controllers and rebuild. Invoked when a
+    // synthetic is added/removed (the UsbDirectObserver) or SDL devices change.
+    void onUsbDirectChanged();
+    // Diff the SDL device list against the last-seen set and feed framework
+    // up/down per VID:PID into the USB FSM, so a claim-failure / Standard pick can
+    // settle on the live SDL device (the "framework" path on Windows).
+    void syncFrameworkPresence();
     // Walk the WifiConnectionManager pool and install our rumble handler on
     // any connection that doesn't already have one. Idempotent — invoked on
     // every poolChanged signal so newly-created connections get wired.
@@ -244,6 +265,41 @@ class AppModel : public QObject {
     // a pickable-type list. Updated when a catalog fetch lands.
     arch::Observable<composer::CatalogSnapshot> catalogSnapshot_;
     composer::CatalogComposer catalogComposer_;
+
+    // ── Workstream 2g: USB-direct (raw-HID) claim path ──────────────────────
+    // The Windows raw-HID gateway (SetupAPI/hid.dll), the per-VID:PID path-choice
+    // store, the claim driver (the only USB-IO place), and the scan/poll-rate
+    // timer. Declaration order: the gateway + store must precede the manager that
+    // borrows them. usbObserver_ bridges the FSM's non-input effects (a synthetic
+    // appeared/vanished) into a slot-list + suppression recompute.
+    //
+    // A synthetic USB-direct device publishes decoded reports into the SAME
+    // processor_ as the SDL path (keyed by its model id string); AppModel adds it
+    // to the slot list so it binds + routes through the existing hub machinery,
+    // and suppresses the SDL twin so the pad streams via exactly one path.
+    class UsbObserver : public source::usb::UsbDirectObserver {
+      public:
+        explicit UsbObserver(AppModel* owner) : owner_(owner) {}
+        void syntheticAdded(int /*syntheticId*/, const std::string& /*name*/, bool /*hasGyro*/,
+                            int /*pollRateHz*/, int /*vendorId*/, int /*productId*/) override {
+            owner_->onUsbDirectChanged();
+        }
+        void syntheticRemoved(int /*syntheticId*/) override { owner_->onUsbDirectChanged(); }
+
+      private:
+        AppModel* owner_;
+    };
+
+    source::UsbPathPreferenceRepository usbPathRepo_;
+    source::UsbPathPreferenceStore usbPathStore_;
+    std::unique_ptr<source::usb::WinHidGateway> usbGateway_;
+    UsbObserver usbObserver_;
+    std::unique_ptr<source::usb::UsbGamepadManager> usbManager_;
+    QTimer* usbScanTimer_;
+    reducer::PollRateSampler usbPollSampler_;
+    // The VID:PIDs of SDL devices seen on the last syncFrameworkPresence pass, so
+    // the next pass can emit FrameworkUp/Down deltas to the FSM. Main-thread-only.
+    QSet<int> lastFrameworkVpKeys_;
 
     // slotId -> active sender. Read on the SDL gamepad thread; written on the
     // Qt main thread. Guarded by routingMtx_ for both directions.

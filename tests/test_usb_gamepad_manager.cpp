@@ -21,10 +21,13 @@
 #include "source/store/UsbPathPreferenceStore.h"
 #include "source/usb/UsbDeviceGateway.h"
 
+#include "Input/GamepadInputProcessor.h"
+
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -223,4 +226,138 @@ TEST_CASE("a verified model with no recorded failure auto-claims Direct", "[usb-
     // The auto path attempted the claim (the gateway's claim was reached) instead
     // of settling Standard without trying.
     CHECK(gw.claimCalls == 1);
+}
+
+namespace {
+
+// A gateway that drives a single decoded report through the onReport callback on
+// claim, so the manager's publish path (INPUT + MOTION + TOUCHPAD into the real
+// GamepadInputProcessor) can be asserted with no real HID IO.
+class ReportingGateway : public UsbDeviceGateway {
+  public:
+    UsbReport report; // the report claim() will emit.
+    int syntheticId = -1000;
+
+    std::vector<UsbDeviceInfo> enumerate() override { return {padDevice()}; }
+    ClaimResult claim(const UsbDeviceInfo& /*d*/,
+                      std::function<void(const UsbReport&)> onReport) override {
+        if (onReport) { onReport(report); }
+        return ClaimResult::success(syntheticId);
+    }
+    void releaseClaim(int /*syntheticId*/) override {}
+    bool isKnownFastLaneModel(int /*v*/, int /*p*/) const override { return false; }
+    std::int64_t completionCount(int /*syntheticId*/) const override { return 0; }
+};
+
+} // namespace
+
+TEST_CASE("a claimed report publishes INPUT through the processor on the claim path",
+          "[usb-manager]") {
+    ReportingGateway gw;
+    gw.report.wButtons = dish::input::GamepadInputProcessor::Buttons::kA;
+    gw.report.lt = 200;
+    gw.report.lx = 12345;
+
+    dish::input::GamepadInputProcessor processor;
+    std::string gotId;
+    std::uint16_t gotButtons = 0;
+    std::uint8_t gotLt = 0;
+    std::int16_t gotLx = 0;
+    processor.setReportSender([&](const std::string& id, std::uint16_t b, std::uint8_t lt,
+                                  std::uint8_t /*rt*/, std::int16_t lx, std::int16_t /*ly*/,
+                                  std::int16_t /*rx*/, std::int16_t /*ry*/) {
+        gotId = id;
+        gotButtons = b;
+        gotLt = lt;
+        gotLx = lx;
+    });
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    UsbGamepadManager m(&gw, &processor, &prefs, nullptr);
+
+    m.tryDirectMode(kVid, kPid);
+
+    // The synthetic slot id the read loop publishes under is the model vpKey string.
+    const std::string expectId = std::to_string((kVid << 16) | (kPid & 0xFFFF));
+    CHECK(gotId == expectId);
+    CHECK(gotButtons == dish::input::GamepadInputProcessor::Buttons::kA);
+    CHECK(gotLt == 200);
+    CHECK(gotLx == 12345);
+}
+
+TEST_CASE("a claimed report with IMU publishes MOTION through the processor", "[usb-manager]") {
+    ReportingGateway gw;
+    gw.report.motionValid = true;
+    gw.report.gyroX = 111;
+    gw.report.accelZ = 222;
+
+    dish::input::GamepadInputProcessor processor;
+    bool gotMotion = false;
+    std::int16_t gotGyroX = 0;
+    std::int16_t gotAccelZ = 0;
+    processor.setMotionSender([&](const std::string& /*id*/, std::int16_t gx, std::int16_t /*gy*/,
+                                  std::int16_t /*gz*/, std::int16_t /*ax*/, std::int16_t /*ay*/,
+                                  std::int16_t az, std::uint32_t /*dt*/) {
+        gotMotion = true;
+        gotGyroX = gx;
+        gotAccelZ = az;
+    });
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    UsbGamepadManager m(&gw, &processor, &prefs, nullptr);
+
+    m.tryDirectMode(kVid, kPid);
+
+    CHECK(gotMotion);
+    CHECK(gotGyroX == 111);
+    CHECK(gotAccelZ == 222);
+}
+
+TEST_CASE("a claimed report without IMU does not publish MOTION", "[usb-manager]") {
+    ReportingGateway gw;
+    gw.report.motionValid = false;
+    gw.report.gyroX = 999; // present but must be ignored (motionValid gates it).
+
+    dish::input::GamepadInputProcessor processor;
+    bool gotMotion = false;
+    processor.setMotionSender([&](const std::string&, std::int16_t, std::int16_t, std::int16_t,
+                                  std::int16_t, std::int16_t, std::int16_t,
+                                  std::uint32_t) { gotMotion = true; });
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    UsbGamepadManager m(&gw, &processor, &prefs, nullptr);
+
+    m.tryDirectMode(kVid, kPid);
+
+    CHECK_FALSE(gotMotion);
+}
+
+TEST_CASE("a claimed report with a touchpad publishes TOUCHPAD through the processor",
+          "[usb-manager]") {
+    ReportingGateway gw;
+    gw.report.touchpadValid = true;
+    gw.report.finger0Active = true;
+    gw.report.finger0Id = 7;
+    gw.report.finger0X = -100;
+    gw.report.touchpadButton = true;
+
+    dish::input::GamepadInputProcessor processor;
+    bool gotTouch = false;
+    dish::input::GamepadInputProcessor::TouchpadSample got{};
+    processor.setTouchpadSender([&](const std::string& /*id*/,
+                                    const dish::input::GamepadInputProcessor::TouchpadSample& s) {
+        gotTouch = true;
+        got = s;
+    });
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    UsbGamepadManager m(&gw, &processor, &prefs, nullptr);
+
+    m.tryDirectMode(kVid, kPid);
+
+    REQUIRE(gotTouch);
+    CHECK(got.finger0Active);
+    CHECK(got.finger0Id == 7);
+    CHECK(got.finger0X == -100);
+    CHECK(got.buttonPressed);
 }

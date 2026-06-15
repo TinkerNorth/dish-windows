@@ -32,6 +32,8 @@
 
 #include "source/usb/UsbDeviceGateway.h"
 
+#include "core/input/UsbReportParsers.h"
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -67,6 +69,12 @@ class WinHidGateway : public UsbDeviceGateway {
         std::function<void(const UsbReport&)> onReport;
         int vendorId = 0;
         int productId = 0;
+        // The per-model decoder family chosen from VID:PID at claim time, and the
+        // expand-only stick auto-range state it mutates per report (Switch Pro).
+        // Both are read-loop-thread-only (no lock needed): the reader is the sole
+        // owner once started, and joined before the Claimed is destroyed.
+        input::usbparse::HidParser parser = input::usbparse::HidParser::None;
+        input::usbparse::StickAutoRangeState sticks;
     };
 
     void readLoop(Claimed* c);

@@ -5,7 +5,6 @@
 
 #include "source/store/UsbPathPreferenceStore.h"
 
-#include "core/input/GamepadButtonLayouts.h"
 #include "core/reducer/UsbPollRate.h"
 
 #include "Input/GamepadInputProcessor.h"
@@ -259,26 +258,53 @@ ClaimResult UsbGamepadManager::doClaim(const UsbDeviceInfo& device) {
     if (gateway_ == nullptr) {
         return ClaimResult::fail(reducer::DirectClaimFailure::Busy, /*frameworkStolen=*/false);
     }
-    // The read loop maps each decoded HID report through the pure packed-int
-    // HID->XUSB layout math and publishes to GamepadInputProcessor on the
-    // gateway thread — the same publish path the SDL bridge uses. No allocation
-    // per report; no Qt on this path.
+    // The read loop publishes each decoded XUSB report to GamepadInputProcessor
+    // on the gateway thread — the SAME publish path the SDL bridge uses (so the
+    // routing table, deadzones, and motion rate-limit all apply identically). The
+    // decoder already produced the XUSB button word, so there is no per-report
+    // conversion and no allocation here; INPUT goes through publish(), MOTION
+    // through publishMotion() (rate-limited to <=250 Hz by the processor), and the
+    // DS4/DualSense TOUCHPAD through publishTouchpad().
     const std::string deviceTag = device.name;
     const int vp = device.vpKey();
+    const std::string slotId = std::to_string(vp);
     input::GamepadInputProcessor* processor = processor_;
-    const ClaimResult outcome = gateway_->claim(device, [processor, vp](const UsbReport& r) {
+    const ClaimResult outcome = gateway_->claim(device, [processor, slotId](const UsbReport& r) {
         if (processor == nullptr) { return; }
         input::GamepadInputProcessor::DeviceState st;
-        st.wButtons = static_cast<std::uint16_t>(input::layout::hidToXusb(r.hidButtons, r.hidHat));
+        st.wButtons = r.wButtons;
         st.lt = r.lt;
         st.rt = r.rt;
         st.lx = r.lx;
         st.ly = r.ly;
         st.rx = r.rx;
         st.ry = r.ry;
-        // The synthetic device id for the input pipeline is the model key as
-        // a string; one claimed pad per model on this path.
-        processor->publish(std::to_string(vp), st);
+        // The synthetic device id for the input pipeline is the model key as a
+        // string; one claimed pad per model on this path.
+        processor->publish(slotId, st);
+        if (r.motionValid) {
+            input::GamepadInputProcessor::MotionSample m;
+            m.gyroX = r.gyroX;
+            m.gyroY = r.gyroY;
+            m.gyroZ = r.gyroZ;
+            m.accelX = r.accelX;
+            m.accelY = r.accelY;
+            m.accelZ = r.accelZ;
+            processor->publishMotion(slotId, m);
+        }
+        if (r.touchpadValid) {
+            input::GamepadInputProcessor::TouchpadSample t;
+            t.finger0Active = r.finger0Active;
+            t.finger0Id = r.finger0Id;
+            t.finger0X = r.finger0X;
+            t.finger0Y = r.finger0Y;
+            t.finger1Active = r.finger1Active;
+            t.finger1Id = r.finger1Id;
+            t.finger1X = r.finger1X;
+            t.finger1Y = r.finger1Y;
+            t.buttonPressed = r.touchpadButton;
+            processor->publishTouchpad(slotId, t);
+        }
     });
     if (outcome.ok && observer_ != nullptr) {
         observer_->syntheticAdded(

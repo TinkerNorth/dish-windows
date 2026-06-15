@@ -145,6 +145,10 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
         if (auto it = controllerType_.find(iid); it != controllerType_.end()) {
             dev.controllerType = it->second;
         }
+        if (auto it = usbIdentity_.find(iid); it != usbIdentity_.end()) {
+            dev.vendorId = it->second.vendorId;
+            dev.productId = it->second.productId;
+        }
         out.append(dev);
     }
     return out;
@@ -198,6 +202,11 @@ void SDLGamepadBridge::runLoop() {
             // MSG_CONTROLLER_TYPE hint (a DualSense → virtual DS4).
             const auto type = SDL_GameControllerGetType(gc);
             const std::uint8_t ctrlType = sdlTypeToControllerType(type);
+            // The pad's USB identity, classified once here for the twin-dedup
+            // pairing (AppModel matches it against a USB-direct synthetic of the
+            // same model). SDL returns 0 when it can't read the descriptor.
+            const int vendorId = SDL_GameControllerGetVendor(gc);
+            const int productId = SDL_GameControllerGetProduct(gc);
             {
                 std::lock_guard<std::mutex> lock(mtx_);
                 openControllers_[iid] = gc;
@@ -206,6 +215,7 @@ void SDLGamepadBridge::runLoop() {
                 if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
                 if (hasLed) { lightbarCapable_.insert(iid); }
                 controllerType_[iid] = ctrlType;
+                usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
             }
             // One-shot device-capability dump — mirrors the SatelliteJNI
@@ -214,14 +224,12 @@ void SDLGamepadBridge::runLoop() {
             // / product id, and the GUID; together that pins what mapping was
             // applied so users reporting "my pad doesn't work" get a usable
             // diagnostic without a debugger.
-            const auto vid = SDL_GameControllerGetVendor(gc);
-            const auto pid = SDL_GameControllerGetProduct(gc);
             char guidBuf[64] = {0};
             SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
             qCInfo(lcDishInput) << "DEVCAPS id=" << deviceId << "name=" << deviceName
                                 << "type=" << static_cast<int>(type)
-                                << "vid=" << QString::number(vid, 16)
-                                << "pid=" << QString::number(pid, 16) << "guid=" << guidBuf
+                                << "vid=" << QString::number(vendorId, 16)
+                                << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
                                 << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed;
             // Push the default deadzone profile so the processor filters
             // out controller noise from the first event. The default lives
@@ -250,6 +258,7 @@ void SDLGamepadBridge::runLoop() {
                 motionCapable_.erase(iid);
                 lightbarCapable_.erase(iid);
                 controllerType_.erase(iid);
+                usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
                 lastBattery_.erase(iid);
                 touchState_.erase(iid);
@@ -302,6 +311,16 @@ void SDLGamepadBridge::applyRumble(const QString& deviceId, std::uint16_t strong
     outputQueue_.push(OutputCommand::rumble(deviceId, strongMagnitude, weakMagnitude, durationMs));
 }
 
+void SDLGamepadBridge::setSuppressedDeviceIds(const std::unordered_set<std::string>& ids) {
+    std::lock_guard<std::mutex> lock(suppressedMtx_);
+    suppressedIds_ = ids;
+}
+
+bool SDLGamepadBridge::isSuppressed(const std::string& deviceId) const {
+    std::lock_guard<std::mutex> lock(suppressedMtx_);
+    return suppressedIds_.count(deviceId) != 0;
+}
+
 void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
     // Manufacturer-rotation note: the satellite wire frame is right-handed
     // (+X right, +Y up, +Z toward player). SDL2 already delivers gyro/accel
@@ -350,6 +369,9 @@ void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
         if (accelIt == lastAccel_.end()) { return; }
         accel = accelIt->second;
     }
+
+    // Twin-dedup: suppress motion too while USB-direct owns this pad.
+    if (isSuppressed(deviceId)) { return; }
 
     GamepadInputProcessor::MotionSample sample{};
     sample.gyroX = gyroRadPerSecToInt16(ev.data[0]);
@@ -404,6 +426,9 @@ void SDLGamepadBridge::handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev
     if (gc != nullptr) {
         button = SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_TOUCHPAD) == 1;
     }
+
+    // Twin-dedup: suppress the touchpad surface too while USB-direct owns the pad.
+    if (isSuppressed(deviceId)) { return; }
 
     GamepadInputProcessor::TouchpadSample sample{};
     sample.finger0Active = state.fingers[0].active;
@@ -530,6 +555,9 @@ void SDLGamepadBridge::rebuildState(int iid) {
         }
     }
     if (gc == nullptr || deviceId.empty()) { return; }
+    // Twin-dedup: a pad claimed by USB-direct streams via raw-HID only — drop its
+    // SDL input so the satellite never sees the same pad twice.
+    if (isSuppressed(deviceId)) { return; }
 
     GamepadInputProcessor::DeviceState st{};
     using B = GamepadInputProcessor::Buttons;

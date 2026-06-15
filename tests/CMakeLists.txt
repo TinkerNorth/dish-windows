@@ -113,6 +113,12 @@ set(DISH_TEST_SOURCES
     test_usb_path_resolution.cpp
     test_usb_path_preference_store.cpp
     test_usb_gamepad_manager.cpp
+    # Workstream 2g USB-direct REAL: the per-model HID report decoders (DualShock4/
+    # DualSense/Switch Pro/generic byte-layout vectors -> XUSB + IMU + touchpad)
+    # and the twin-dedup arbitration (which SDL device is hidden by an active
+    # USB-direct synthetic; claim->suppress, detach->restore).
+    test_usb_report_parsers.cpp
+    test_usb_twin_dedup.cpp
     # Workstream 3a/3b/3c/3d/3e — onboarding/theme/crash preference stores +
     # controllers, the donate-pill dismiss-window pure fn, and the license-manifest
     # parse + mapping + forward-compat. Windows-authored (most surfaces had no
