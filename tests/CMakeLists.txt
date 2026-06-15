@@ -121,7 +121,13 @@ set(DISH_TEST_SOURCES
     test_donate_pill.cpp
     test_license_manifest.cpp
     test_theme_store.cpp
-    test_crash_reporting.cpp)
+    test_crash_reporting.cpp
+    # Cross-cutting test-parity audit (PROMPT_05) — the one genuinely-fillable pure
+    # gap: MainUiState's battery-display projection (fromWire + isLow). Pins
+    # android's canonical rule via a tests-local pure fn (the live impl is trapped
+    # in + diverges from SlotCard.cpp; see tests/PARITY.md "production code that
+    # resisted testing").
+    test_main_ui_state.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests
