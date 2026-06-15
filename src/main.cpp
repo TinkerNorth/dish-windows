@@ -3,6 +3,7 @@
 
 #include "AppModel.h"
 #include "Network/WinsockInit.h"
+#include "UI/CrashHandler.h"
 #include "UI/MainWindow.h"
 #include "UI/Theme.h"
 
@@ -16,6 +17,12 @@
 #include <cstdio>
 
 int main(int argc, char* argv[]) {
+    // Arm crash diagnostics FIRST — before any other subsystem can fault — so an
+    // unhandled SEH (access violation, etc.) or a debug-CRT assert writes a
+    // minidump + a symbolized crash.log to %LOCALAPPDATA%\Dish\ for the user to
+    // send. Dependency-light and self-guarding; see UI/CrashHandler.cpp.
+    dish::crash::install();
+
     // Initialize Winsock for the lifetime of `main`. Every network call in
     // the app (LANDiscovery, PairingClient, the per-session SatelliteClient
     // threads) assumes Winsock is up; this RAII guard guarantees it. The

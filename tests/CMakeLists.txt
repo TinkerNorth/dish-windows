@@ -37,6 +37,11 @@ set(DISH_TEST_SOURCES
     test_shared_key_repository.cpp
     test_remembered_satellite_repository.cpp
     test_connection_store_identity.cpp
+    # Remembered-satellite reconnect/relearn (the "must rescan to reconnect" bug):
+    # the net::ConnectionStore adapter seam the session manager calls on every
+    # discovery completion to persist a moved satellite's IP, so autoReconnectAll
+    # / scheduleRetry dial the current address and the paired key survives.
+    test_remembered_reconnect.cpp
     test_gamepad_input_processor.cpp
     test_sdl_motion_convert.cpp
     # Workstream 2d — pure XUSB/HID layout math, deadzone pure layer, per-device

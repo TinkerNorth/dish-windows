@@ -28,6 +28,11 @@ class ConnectionsDialog : public QDialog {
     void rebuildLists();
     void onScanClicked();
     void onConnectClicked();
+    // Connect to the selected REMEMBERED satellite using its last-known endpoint
+    // (no rescan required). The paired key persists, so no PIN is needed; if the
+    // box moved, the manager's relearn (discovery refresh + backoff) re-resolves
+    // the address. Android parity: ConnectionsActivity connects a Known row.
+    void onReconnectClicked();
     void onForgetClicked();
     // Refresh the in-flight state of the Scan + Connect buttons. Pulled out
     // of the constructor so any of `scanningChanged`,
@@ -46,6 +51,10 @@ class ConnectionsDialog : public QDialog {
     // is local and synchronous).
     DishLoaderButton* scanButton_;
     DishLoaderButton* connectButton_;
+    // Connect to a remembered (possibly not-currently-discovered) satellite by
+    // its last-known endpoint. Enabled only when a remembered row is selected
+    // and it isn't already live.
+    QPushButton* reconnectButton_;
     QLabel* statusLabel_;
 };
 

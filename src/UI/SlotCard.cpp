@@ -10,8 +10,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace dish::ui {
 
@@ -265,7 +267,32 @@ void SlotCard::onBindClicked() {
         return;
     }
     if (available_.isEmpty()) { return; }
-    QMenu menu(this);
+
+    // CRASH FIX (bind button): use a NON-BLOCKING popup, never QMenu::exec().
+    //
+    // QMenu::exec() spins a NESTED event loop while this SlotCard sits on the
+    // call stack. During that loop the 1 Hz timers (usbScanTimer_ / inputRate /
+    // autoReconnect) and the queued devicesChanged signal keep firing →
+    // AppModel::rebuild() → stateChanged() → MainWindow::rebuildSlotList(),
+    // which deleteLater()s every SlotCard — including THIS one. Qt processes
+    // that deferred delete inside the nested menu loop, so when exec() returns
+    // it unwinds back through the freed SlotCard / its QPushButton: a
+    // use-after-free. popup() returns immediately (no nested loop, this card
+    // never on the stack across it), so the rebuild can replace the card safely.
+    //
+    // The menu is parented to the top-level window (NOT this card) so it
+    // survives a rebuild that destroys the card while the popup is open, and
+    // self-destructs on close. The chosen action emits the bind through a
+    // QPointer guard: normally the card outlives the (now non-blocking) popup
+    // and we emit as usual. In the rare case a rebuild replaced the card while
+    // the menu was open, the guard is null and we skip — the user simply
+    // re-clicks on the fresh card. Dropping that one stale tap is correct and,
+    // crucially, can never dereference freed memory the way exec() did.
+    QWidget* anchor = window() != nullptr ? window() : static_cast<QWidget*>(this);
+    auto* menu = new QMenu(anchor);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    const QString slotId = slot_.id;
+    QPointer<SlotCard> guard(this);
     // Each entry in the bind picker IS a satellite server (dish-windows is
     // Wi-Fi-only, so no Bluetooth kind to branch on). Use the same v6
     // brand satellite glyph the ConnectionsDialog rows and the SlotCard
@@ -273,12 +300,19 @@ void SlotCard::onBindClicked() {
     // dish-mac SlotCard expanded picker and the dish-android
     // ControllerAdapter.buildConnectionHeader() bind list.
     for (const auto& c : available_) {
-        auto* act = menu.addAction(brandIcon(BrandIconKind::Satellite, c.live, 16, this), c.label);
+        auto* act =
+            menu->addAction(brandIcon(BrandIconKind::Satellite, c.live, 16, anchor), c.label);
         const QString cid = c.id;
-        QObject::connect(act, &QAction::triggered, this,
-                         [this, cid] { emit bindRequested(slot_.id, cid); });
+        // Route the emission through the menu (a stable QObject) rather than the
+        // SlotCard, so a card destroyed while the popup is open can't dangle the
+        // receiver. The bindRequested signal must still originate from a live
+        // SlotCard for MainWindow's connect; emit it from the guarded card when
+        // it's alive.
+        QObject::connect(act, &QAction::triggered, menu, [guard, slotId, cid] {
+            if (guard) { emit guard->bindRequested(slotId, cid); }
+        });
     }
-    menu.exec(bindButton_->mapToGlobal(QPoint(0, bindButton_->height())));
+    menu->popup(bindButton_->mapToGlobal(QPoint(0, bindButton_->height())));
 }
 
 } // namespace dish::ui

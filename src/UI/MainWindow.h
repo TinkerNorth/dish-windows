@@ -73,6 +73,14 @@ class MainWindow : public QMainWindow {
     QTimer* telemetryTimer_;
     quint64 telemetryTotal_ = 0;
 
+    // Re-entrancy guard for rebuildSlotList(). Deleting SlotCards (deleteLater)
+    // and the AppModel state churn can pump the event loop; a stateChanged that
+    // lands while we're mid-rebuild must NOT recursively tear down the cards
+    // we're in the middle of replacing (that is how a card gets freed under its
+    // own stack). When re-entered we just note it and re-run once on unwind.
+    bool rebuildingSlots_ = false;
+    bool slotRebuildPending_ = false;
+
     // Owned by `this` (Qt parent semantics). The queue is the typed
     // replacement for the legacy single-banner errorMessage signal — every
     // emitted error toast goes through it. The host is the bottom-anchored

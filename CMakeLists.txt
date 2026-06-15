@@ -367,6 +367,11 @@ target_link_libraries(dish_core
 set(DISH_UI_SOURCES
     src/UI/DishLoaders.h
     src/UI/DishLoaders.cpp
+    # Crash diagnostic: SetUnhandledExceptionFilter -> minidump + symbolized
+    # crash.log under %LOCALAPPDATA%\Dish, plus the debug-CRT assert redirect.
+    # Links dbghelp (MiniDumpWriteDump / StackWalk64 / SymFromAddr) below.
+    src/UI/CrashHandler.h
+    src/UI/CrashHandler.cpp
     src/UI/SlotCard.h
     src/UI/SlotCard.cpp
     src/UI/SlotLiveStats.h
@@ -422,6 +427,12 @@ set(DISH_UI_SOURCES
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui Qt6::Svg dish_warnings dish_strict)
+# dbghelp powers the crash diagnostic in UI/CrashHandler.cpp: MiniDumpWriteDump
+# (the .dmp), plus StackWalk64 / SymFromAddr / SymGetLineFromAddr64 (the
+# symbolized crash.log stack). shell32 (SHGetKnownFolderPath) + ole32
+# (CoTaskMemFree) resolve %LOCALAPPDATA%; both are in Qt's default link set but
+# named explicitly so the crash path never depends on transitive linkage.
+target_link_libraries(Dish PRIVATE dbghelp shell32 ole32)
 
 # --------------------------------------------------------------------------
 # i18n: compile the bundled .ts files into .qm at build time and embed them

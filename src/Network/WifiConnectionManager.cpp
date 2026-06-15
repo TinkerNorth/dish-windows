@@ -94,6 +94,18 @@ void WifiConnectionManager::startDiscovery() {
     QObject::connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
         discovered_ = watcher->result();
         scanning_ = false;
+        // DURABLE relearn: a fresh scan can carry a new IP for a remembered
+        // satellite (matched by machineId). Persist the moved endpoint back to
+        // the remembered store BEFORE anything else, so the next app launch's
+        // autoReconnectAll — and any in-flight silent backoff retry, which
+        // re-reads store_->remembered() — targets the current address instead of
+        // a stale one. Without this, the only path that ever wrote a fresh IP was
+        // a SUCCESSFUL session PUT (openSession → store_->remember), which can't
+        // happen while the IP is wrong: the "must rescan, then reconnect" trap
+        // the user hit. refreshFromDiscovery re-points only already-remembered
+        // rows (and migrates the cert pin); it never adds a new satellite.
+        // Mirrors dish-android SatelliteConnectionManager.startDiscovery.
+        store_->refreshFromDiscovery(discovered_);
         // A fresh scan can carry a new IP for a remembered satellite (same
         // machineId) — refresh the live connection's server so the next connect
         // targets the current address.
@@ -104,6 +116,11 @@ void WifiConnectionManager::startDiscovery() {
                 }
             }
         }
+        // A relearned endpoint should also (re)attempt any remembered satellite
+        // that isn't currently live — so a moved box reconnects on its own once
+        // the scan finds it, with no manual Connect. Silent intent: the row
+        // chip is the cue, and a still-stale entry just rides the backoff curve.
+        autoReconnectAll();
         emit discoveredChanged();
         emit scanningChanged();
         if (discovered_.isEmpty()) {
@@ -520,6 +537,16 @@ void WifiConnectionManager::scheduleRetry(const models::DiscoveredServer& server
         // Only retry from a settled-down state — a user-driven reconnect or
         // forget in the interim moved it out, and we don't want to clobber that.
         if (c->state() != SessionState::Idle && c->state() != SessionState::Stale) { return; }
+        // Relearn a moved endpoint WITHOUT the user having to open Manage and
+        // press Scan: kick a discovery pass (idempotent — a no-op if one is
+        // already running). On completion it persists any new IP via
+        // refreshFromDiscovery and re-runs autoReconnectAll, so a box that moved
+        // DHCP leases reconnects on its own. We ALSO attempt the freshest
+        // last-known endpoint right now (below), so a satellite that discovery
+        // can't reach — e.g. mDNS/broadcast blocked on the segment — still gets a
+        // direct backoff attempt rather than waiting on a scan that may find
+        // nothing.
+        startDiscovery();
         // Prefer the freshest remembered endpoint (a re-scan may have a new IP).
         models::DiscoveredServer target = server;
         for (const auto& r : store_->remembered()) {

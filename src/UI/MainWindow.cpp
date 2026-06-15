@@ -209,6 +209,18 @@ void MainWindow::rebuildHeader() {
 }
 
 void MainWindow::rebuildSlotList() {
+    // Coalesce a re-entrant rebuild rather than recursing into the card teardown
+    // (see rebuildingSlots_ in the header). A stateChanged delivered while we're
+    // mid-rebuild — e.g. a 1 Hz timer tick pumped during widget deletion — sets
+    // the pending flag and returns; the outer call re-runs once on unwind so the
+    // final card set reflects the latest state without ever deleting a card from
+    // inside its own rebuild.
+    if (rebuildingSlots_) {
+        slotRebuildPending_ = true;
+        return;
+    }
+    rebuildingSlots_ = true;
+
     // Note: Qt's `slots` keyword/macro precludes naming a local `slots`.
     const auto& slotItems = model_->state().slotList;
     const auto& conns = model_->state().connections;
@@ -239,6 +251,12 @@ void MainWindow::rebuildSlotList() {
         QObject::connect(card, &SlotCard::unbindRequested, this, &MainWindow::onUnbindRequested);
         QObject::connect(card, &SlotCard::emulateRequested, this, &MainWindow::onEmulateRequested);
         slotsLayout_->insertWidget(slotsLayout_->count() - 1, card);
+    }
+
+    rebuildingSlots_ = false;
+    if (slotRebuildPending_) {
+        slotRebuildPending_ = false;
+        rebuildSlotList();
     }
 }
 

@@ -34,6 +34,15 @@ class ConnectionStore {
 
     QList<models::RememberedWifi> remembered() const { return facade_->remembered(); }
     void remember(const models::DiscoveredServer& server) { facade_->rememberSatellite(server); }
+    // Re-point ONLY already-remembered rows from a fresh scan (durable). The
+    // session manager calls this on every discovery completion so a satellite
+    // that moved to a new DHCP lease has its persisted IP relearned WITHOUT a
+    // successful session — closing the "must rescan to reconnect" gap. Never
+    // adds an un-remembered satellite. Mirrors dish-android's
+    // store.refreshFromDiscovery in SatelliteConnectionManager.startDiscovery.
+    void refreshFromDiscovery(const QList<models::DiscoveredServer>& discovered) {
+        facade_->refreshFromDiscovery(discovered);
+    }
     void forget(const QString& id) { facade_->forgetSatellite(id); }
 
     std::optional<QString> sharedKey(const QString& id) const {
