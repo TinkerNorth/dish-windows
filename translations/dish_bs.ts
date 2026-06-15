@@ -130,8 +130,12 @@
         <translation>Preporučeno</translation>
     </message>
     <message>
-        <source>Cadence: %1   ·   Pays with: %2</source>
-        <translation>Učestalost: %1   ·   Plaća se: %2</translation>
+        <source>CADENCE</source>
+        <translation>UČESTALOST</translation>
+    </message>
+    <message>
+        <source>PAYS WITH</source>
+        <translation>PLAĆA SE SA</translation>
     </message>
     <message>
         <source>Support Dish</source>
@@ -217,8 +221,8 @@
         <translation>Otvori Buy Me a Coffee →</translation>
     </message>
     <message>
-        <source>WHAT YOUR DONATION PAYS FOR</source>
-        <translation>ZA ŠTO SE KORISTI VAŠA DONACIJA</translation>
+        <source>What your donation pays for</source>
+        <translation>Šta vaša donacija zapravo plaća</translation>
     </message>
     <message>
         <source>Hosting. dish.tinkernorth.com, tinkernorth.com, and every signed-installer mirror. AWS isn&apos;t free, even at our scale.</source>
@@ -235,6 +239,10 @@
     <message>
         <source>Time. Honest answer: most of it. Dish is a nights-and-weekends project. Donations let us say yes to working on it.</source>
         <translation>Vrijeme. Iskren odgovor: većinu njega. Dish je projekt večeri i vikenda. Donacije nam omogućuju da kažemo da radu na njemu.</translation>
+    </message>
+    <message>
+        <source>Thank you. Every dollar, every star, every shared link. They all add up. Emir</source>
+        <translation>Hvala vam. Svaki dolar, svaka zvjezdica, svaki podijeljeni link. Sve to zbraja. Emir</translation>
     </message>
     <message>
         <source>Close</source>

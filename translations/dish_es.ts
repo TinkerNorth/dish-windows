@@ -130,8 +130,12 @@
         <translation>Recomendado</translation>
     </message>
     <message>
-        <source>Cadence: %1   ·   Pays with: %2</source>
-        <translation>Frecuencia: %1   ·   Paga con: %2</translation>
+        <source>CADENCE</source>
+        <translation>FRECUENCIA</translation>
+    </message>
+    <message>
+        <source>PAYS WITH</source>
+        <translation>PAGA CON</translation>
     </message>
     <message>
         <source>Support Dish</source>
@@ -217,8 +221,8 @@
         <translation>Abrir Buy Me a Coffee →</translation>
     </message>
     <message>
-        <source>WHAT YOUR DONATION PAYS FOR</source>
-        <translation>PARA QUÉ SIRVE TU DONACIÓN</translation>
+        <source>What your donation pays for</source>
+        <translation>Qué paga realmente tu donación</translation>
     </message>
     <message>
         <source>Hosting. dish.tinkernorth.com, tinkernorth.com, and every signed-installer mirror. AWS isn&apos;t free, even at our scale.</source>
@@ -235,6 +239,10 @@
     <message>
         <source>Time. Honest answer: most of it. Dish is a nights-and-weekends project. Donations let us say yes to working on it.</source>
         <translation>Tiempo. Respuesta honesta: la mayor parte. Dish es un proyecto de noches y fines de semana. Las donaciones nos permiten decir que sí a trabajar en él.</translation>
+    </message>
+    <message>
+        <source>Thank you. Every dollar, every star, every shared link. They all add up. Emir</source>
+        <translation>Gracias. Cada dólar, cada estrella, cada enlace compartido. Todo suma. Emir</translation>
     </message>
     <message>
         <source>Close</source>

@@ -26,10 +26,14 @@ DonatePill::DonatePill(std::shared_ptr<QSettings> settings, QWidget* parent)
     row->setContentsMargins(12, 8, 8, 8);
     row->setSpacing(8);
 
-    // A filled, primary-tinted pill (capability-chip "present" geometry, scaled
-    // up) so it reads as an invitation rather than a warning.
+    // A surface pill with an accent border + heart — android's view_donate_pill
+    // uses app:strokeColor="@color/colorPulse" (its donate accent) so the pill
+    // reads as a donate invitation, not a neutral card. The pulse-pink accent has
+    // no portable Theme token on Windows, so the border/heart use the cyan
+    // `primary` accent (theme-correct under dark AND light — it reads the active
+    // palette).
     setStyleSheet(QStringLiteral("background-color: %1; border: 1px solid %2; border-radius: 16px;")
-                      .arg(hex(Theme::surface), hex(Theme::outline)));
+                      .arg(hex(Theme::surface), hex(Theme::primary)));
 
     auto* heart = new QLabel(QStringLiteral("♥"), this); // ♥ — brand glyph, not localized
     heart->setStyleSheet(QStringLiteral("color: %1; font-size: 14px;").arg(hex(Theme::primary)));
