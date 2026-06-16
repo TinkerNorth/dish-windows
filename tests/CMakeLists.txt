@@ -139,7 +139,11 @@ set(DISH_TEST_SOURCES
     # android's canonical rule via a tests-local pure fn (the live impl is trapped
     # in + diverges from SlotCard.cpp; see tests/PARITY.md "production code that
     # resisted testing").
-    test_main_ui_state.cpp)
+    test_main_ui_state.cpp
+    # QML migration (A0) — the PURE frameless-window hit-test region math
+    # (caption/maximize/client/8 resize regions, half-open edge off-by-ones,
+    # maximized suppression) + the Win11 build-number gate predicate. No Qt/Win32.
+    test_window_hit_test.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

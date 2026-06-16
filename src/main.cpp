@@ -4,8 +4,16 @@
 #include "AppModel.h"
 #include "Network/WinsockInit.h"
 #include "UI/CrashHandler.h"
-#include "UI/MainWindow.h"
 #include "UI/Theme.h"
+
+#ifdef DISH_QML
+// The Qt Quick chrome path (built only when the DISH_QML option is ON). When
+// OFF, none of the Quick headers/libs are referenced and the build is the exact
+// Widgets app.
+#include "qml/QmlEntryPoint.h"
+#else
+#include "UI/MainWindow.h"
+#endif
 
 #include <QApplication>
 #include <QIcon>
@@ -69,12 +77,25 @@ int main(int argc, char* argv[]) {
     // multi-resolution .ico via AUTORCC; QIcon picks the best size per DPI.
     app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
 
+#ifndef DISH_QML
+    // applyDishTheme styles QWidgets (global QPalette + QSS) — meaningless and
+    // unused on the Quick path, where ThemeBridge feeds the same tokens to QML.
     dish::ui::applyDishTheme(app);
+#endif
 
     dish::AppModel model;
+
+#ifdef DISH_QML
+    // The C++ AppModel is NOT yet exposed to QML at this migration step; the
+    // stub Quick screen needs no model. Core init above is identical to the
+    // Widgets path and in the same order; only the window construction differs.
+    model.start();
+    return dish::qml::runQmlApp(model);
+#else
     dish::ui::MainWindow window(&model);
     window.show();
     model.start();
 
     return app.exec();
+#endif
 }

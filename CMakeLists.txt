@@ -24,6 +24,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(DISH_BUILD_TESTS     "Build the Dish test suite"          ON)
 option(DISH_ENABLE_WARNINGS "Treat compiler warnings as errors"  ON)
 option(DISH_ENABLE_LTO      "Enable LTO/IPO for Release builds"  ON)
+# OFF by default: with DISH_QML OFF the build is byte-for-byte the current
+# Widgets app — no Quick libs linked, no QML compiled. ON swaps the app entry
+# point to the parallel Qt Quick chrome (the Widgets UI still builds & runs).
+option(DISH_QML             "Build the parallel Qt Quick UI entry point" OFF)
 
 if(DISH_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
     include(CheckIPOSupported)
@@ -86,7 +90,15 @@ find_package(Threads REQUIRED)
 # default (no OpenSSL DLLs to deploy). A build configured against a Qt with no
 # TLS backend would fail at runtime with "TLS initialization failed"; the
 # standard Qt for Windows binaries are fine.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
+# Floor raised to 6.7 (the installed Qt) so the optional Quick components below
+# resolve against the same version. The Widgets components are unchanged.
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
+# Qt Quick stack — only required when the DISH_QML entry point is built. Kept out
+# of the default REQUIRED set so a Quick-less Qt still configures the Widgets app.
+if(DISH_QML)
+    find_package(Qt6 6.7 REQUIRED COMPONENTS Quick Qml QuickControls2)
+    qt_standard_project_setup(REQUIRES 6.7)
+endif()
 # LinguistTools is OPTIONAL — the Qt Linguist .ts → .qm pipeline is only
 # active when qttools is installed. When it's not present we still build a
 # working app: every `tr("...")` falls back to the English source string.
@@ -336,7 +348,12 @@ set(DISH_CORE_SOURCES
     src/FeatureSettings.cpp
     src/LightbarRouting.h
     src/AppModel.h
-    src/AppModel.cpp)
+    src/AppModel.cpp
+    # qml/chrome — PURE, Qt-free frameless-window hit-test math + the Win11
+    # version gate (WindowHitTest.h). Header-only and in dish_core so the unit
+    # tests link it without any Quick/Win32 dependency. The side-effecting Win32
+    # chrome (FramelessWindowChrome) lives in the QML target, not here.
+    src/qml/chrome/WindowHitTest.h)
 
 add_library(dish_core STATIC ${DISH_CORE_SOURCES})
 target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -433,6 +450,51 @@ target_link_libraries(Dish PRIVATE dish_core Qt6::Widgets Qt6::Gui Qt6::Svg dish
 # (CoTaskMemFree) resolve %LOCALAPPDATA%; both are in Qt's default link set but
 # named explicitly so the crash path never depends on transitive linkage.
 target_link_libraries(Dish PRIVATE dbghelp shell32 ole32)
+
+# --------------------------------------------------------------------------
+# Qt Quick UI (DISH_QML) — the parallel modern-chrome entry point. Compiled
+# into the Dish exe only when DISH_QML is ON; otherwise none of this runs and
+# the exe is the unchanged Widgets app. main.cpp branches on the DISH_QML
+# define below.
+# --------------------------------------------------------------------------
+if(DISH_QML)
+    target_compile_definitions(Dish PRIVATE DISH_QML)
+
+    # The side-effecting Quick/Win32 glue: the native frameless chrome (Mica +
+    # snap hit-test via the pure WindowHitTest in dish_core), the QML-facing
+    # bridges (chrome state + the C++ Theme tokens), and the entry point.
+    target_sources(Dish PRIVATE
+        src/qml/QmlEntryPoint.h
+        src/qml/QmlEntryPoint.cpp
+        src/qml/chrome/FramelessWindowChrome.h
+        src/qml/chrome/FramelessWindowChrome.cpp
+        src/qml/chrome/ChromeBridge.h
+        src/qml/chrome/ChromeBridge.cpp
+        src/qml/chrome/ThemeBridge.h
+        src/qml/chrome/ThemeBridge.cpp)
+
+    # The QML module. URI Dish.Chrome ties the .qml files and the QML_ELEMENT
+    # bridges into one import. The singletons (ChromeBridge/ThemeBridge) are
+    # registered via their QML_SINGLETON macros; Main/WindowTitleBar are the
+    # visual tree loaded by QmlEntryPoint::runQmlApp.
+    qt_add_qml_module(Dish
+        URI Dish.Chrome
+        VERSION 1.0
+        QML_FILES
+            src/qml/Main.qml
+            src/qml/WindowTitleBar.qml)
+
+    # The qmltyperegistrar emits a registration .cpp that #includes the bridge
+    # headers by BASENAME (ChromeBridge.h, ThemeBridge.h), so their directory
+    # must be on the include path for that generated TU to compile.
+    target_include_directories(Dish PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/qml/chrome)
+
+    target_link_libraries(Dish PRIVATE
+        Qt6::Quick Qt6::Qml Qt6::QuickControls2
+        # dwmapi: DwmSetWindowAttribute (Mica/dark mode) +
+        # DwmExtendFrameIntoClientArea (shadow/resize frame).
+        dwmapi)
+endif()
 
 # --------------------------------------------------------------------------
 # i18n: compile the bundled .ts files into .qm at build time and embed them
