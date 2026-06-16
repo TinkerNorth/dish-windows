@@ -30,6 +30,17 @@ Kit.Page {
     // hand-cached snapshot, no manual refresh handler (the old non-reactive
     // invokables only updated on page recreation).
 
+    // isPairingInFlight() is a plain invokable (no NOTIFY), so a binding that
+    // reads it never re-evaluates on its own when a pair starts/finishes. Bump
+    // this counter on every App.stateChanged and reference it alongside the
+    // invokable in those bindings to force a re-read on each state move.
+    property int pairTick: 0
+
+    Connections {
+        target: App
+        function onStateChanged() { page.pairTick++; }
+    }
+
     // Localized chip text for a ConnectionListModel `chip` token. Kept in QML
     // because it is pure presentation (the C++ vends the token, not the copy).
     function chipText(token) {
@@ -129,11 +140,14 @@ Kit.Page {
                     onClicked: App.connectByServerId(foundCard.modelData.id)
                 }
 
+                // `page.pairTick` is read (comma-expression) only to enlist this
+                // binding in the stateChanged dependency graph — isPairingInFlight
+                // has no NOTIFY of its own, so without it the spinner never clears.
                 Kit.KitButton {
                     id: pairButton
-                    text: App.isPairingInFlight(foundCard.modelData.id) ? qsTr("Pairing…")
-                                                                        : qsTr("Pair")
-                    enabled: !App.isPairingInFlight(foundCard.modelData.id)
+                    text: (page.pairTick, App.isPairingInFlight(foundCard.modelData.id))
+                          ? qsTr("Pairing…") : qsTr("Pair")
+                    enabled: !(page.pairTick, App.isPairingInFlight(foundCard.modelData.id))
                     onClicked: pairDialog.openFor(foundCard.modelData.id,
                                                   foundCard.modelData.name.length > 0
                                                       ? foundCard.modelData.name
@@ -141,11 +155,22 @@ Kit.Page {
 
                     BusyIndicator {
                         anchors.centerIn: parent
-                        running: App.isPairingInFlight(foundCard.modelData.id)
+                        running: (page.pairTick, App.isPairingInFlight(foundCard.modelData.id))
                         visible: running
                         implicitWidth: 20
                         implicitHeight: 20
                     }
+                }
+
+                // Reverse (host-initiated) pairing: the dish shows a PIN the
+                // operator approves on the satellite. requestReversePairing then
+                // open — the sheet drives off App.reversePairingPhase.
+                Kit.OutlineButton {
+                    text: qsTr("Request pairing")
+                    onClicked: reverseDialog.openFor(foundCard.modelData.id,
+                                                     foundCard.modelData.name.length > 0
+                                                         ? foundCard.modelData.name
+                                                         : foundCard.modelData.ip)
                 }
             }
         }
@@ -185,9 +210,11 @@ Kit.Page {
             required property string label
             required property string ip
             required property int udpPort
+            required property string linkState
             required property string chip
             required property string dotColor
             required property string glyph
+            required property bool liveLink
 
             width: parent ? parent.width : implicitWidth
 
@@ -227,6 +254,36 @@ Kit.Page {
                         color: Theme.muted
                         font.pixelSize: 12
                         Layout.alignment: Qt.AlignVCenter
+                    }
+                }
+
+                // Live ⇔ not-live are mutually exclusive: a live row offers
+                // Disconnect, an offline row offers Connect (reconnect). Both
+                // gate purely on reactive model roles so they track the row's
+                // chip/dot without any non-reactive invokable.
+                Kit.OutlineButton {
+                    text: qsTr("Disconnect")
+                    visible: rememberedCard.liveLink
+                    onClicked: App.disconnectConnection(rememberedCard.connectionId)
+                }
+
+                Kit.KitButton {
+                    text: rememberedCard.linkState === "connecting" ? qsTr("Connecting…")
+                                                                    : qsTr("Connect")
+                    visible: !rememberedCard.liveLink
+                    // Disabled mid-connect: reconnectConnection is gated on the
+                    // row not yet being live, and a second kick while connecting
+                    // is meaningless.
+                    enabled: !rememberedCard.liveLink
+                             && rememberedCard.linkState !== "connecting"
+                    onClicked: App.reconnectConnection(rememberedCard.connectionId)
+
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        running: rememberedCard.linkState === "connecting"
+                        visible: running
+                        implicitWidth: 20
+                        implicitHeight: 20
                     }
                 }
 
@@ -334,6 +391,122 @@ Kit.Page {
             errorBanner.visible = false;
             errorBanner.text = "";
             pairDialog.submitted = false;
+        }
+    }
+
+    // ---- REVERSE-PAIRING dialog --------------------------------------------
+
+    // Host-initiated pairing: the dish generates + shows a PIN; the operator
+    // types it on the satellite. Everything visible is driven off the reactive
+    // App.reversePairing* properties (NOTIFY reversePairingChanged), so a phase
+    // move ("awaiting"→"approved"/"declined"/"timedout") repaints the body and
+    // re-gates the footer without any manual polling here.
+    Kit.ContentDialog {
+        id: reverseDialog
+        heading: qsTr("Pair with %1").arg(App.reversePairingServerName)
+        // Only Cancel acts while awaiting; the approved arm auto-closes, the
+        // terminal-error arms offer Retry. Accept is the Retry affordance and is
+        // only meaningful once the request has timed out.
+        acceptText: qsTr("Retry")
+        rejectText: qsTr("Cancel")
+        acceptEnabled: App.reversePairingPhase === "timedout"
+
+        // Set by openFor() before open(); kept for the Retry path so a retry
+        // re-targets the same server without re-reading the (possibly reordered)
+        // discovered list.
+        property string serverId: ""
+
+        function openFor(id, name) {
+            reverseDialog.serverId = id;
+            // Kicks the request; the dish PIN + phase land on reversePairingChanged.
+            App.requestReversePairing(id);
+            reverseDialog.open();
+        }
+
+        contentColumn.children: [
+            // The locally-generated PIN, shown big while awaiting.
+            Label {
+                text: App.reversePairingPin
+                visible: App.reversePairingPhase === "awaiting"
+                color: Theme.onSurface
+                font.pixelSize: 40
+                font.bold: true
+                font.letterSpacing: 8
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            },
+            Label {
+                text: qsTr("Enter this PIN on %1 to approve.").arg(App.reversePairingServerName)
+                visible: App.reversePairingPhase === "awaiting"
+                color: Theme.muted
+                font.pixelSize: 13
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            },
+            RowLayout {
+                visible: App.reversePairingPhase === "awaiting"
+                spacing: 8
+                Layout.fillWidth: true
+                BusyIndicator {
+                    running: App.reversePairingPhase === "awaiting"
+                    implicitWidth: 18
+                    implicitHeight: 18
+                }
+                Label {
+                    text: qsTr("Waiting for %1 to accept…").arg(App.reversePairingServerName)
+                    color: Theme.muted
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+            },
+            Label {
+                text: qsTr("Paired — the connection is opening.")
+                visible: App.reversePairingPhase === "approved"
+                color: Theme.success
+                font.pixelSize: 13
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            },
+            Label {
+                text: qsTr("Request declined.")
+                visible: App.reversePairingPhase === "declined"
+                color: Theme.error
+                font.pixelSize: 13
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            },
+            Label {
+                text: qsTr("Timed out — try again.")
+                visible: App.reversePairingPhase === "timedout"
+                color: Theme.error
+                font.pixelSize: 13
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        ]
+
+        // Accept here is Retry (enabled only on timedout): re-kick the same
+        // server and fall back into the awaiting arm.
+        onAccepted: {
+            if (reverseDialog.serverId.length > 0)
+                App.requestReversePairing(reverseDialog.serverId);
+        }
+        // Cancel aborts the in-flight request and closes (rejected auto-closes).
+        onRejected: App.cancelReversePairing()
+
+        Connections {
+            target: App
+            enabled: reverseDialog.visible
+
+            // Auto-close on the approved edge (session is opening; the row goes
+            // live). The declined/timedout arms stay open so the operator can
+            // read the reason and Retry/Cancel.
+            function onReversePairingChanged() {
+                if (App.reversePairingPhase === "approved")
+                    reverseDialog.close();
+            }
         }
     }
 }
