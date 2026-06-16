@@ -25,9 +25,13 @@
 using dish::input::axisAt;
 using dish::input::buttonAt;
 using dish::input::hasTriggerAxes;
+using dish::input::JoystickRemap;
 using dish::input::JoystickSnapshot;
 using dish::input::mapJoystick;
+using dish::input::RemapButton;
 using dish::input::triggerFromAxis;
+using dish::input::TriggerSource;
+using dish::input::TriggerSourceKind;
 using B = dish::input::GamepadInputProcessor::Buttons;
 namespace hat = dish::input::hat;
 
@@ -250,4 +254,122 @@ TEST_CASE("an all-zero snapshot maps to a neutral report", "[joymap]") {
     REQUIRE(st.ry == 0);
     REQUIRE(st.lt == 0);
     REQUIRE(st.rt == 0);
+}
+
+// ── DEFAULT-EQUIVALENCE: the parameterized overload under the default remap
+//    must equal the legacy overload for the same snapshot ──────────────────────
+
+TEST_CASE("default JoystickRemap matches the legacy mapJoystick overload", "[joymap][remap]") {
+    // A snapshot exercising sticks, both trigger paths, faces, shoulders,
+    // system buttons, stick clicks, and a hat — fed through BOTH overloads.
+    std::array<std::int16_t, 6> axes{1000, -2000, 24000, 3000, -4000, 16384};
+    std::array<bool, 12> buttons{true, false, true, false, true, true,
+                                 true, true,  false, false, true, true};
+    std::array<std::uint8_t, 1> hats{static_cast<std::uint8_t>(hat::kUp | hat::kRight)};
+    auto snap = makeSnapshot(axes.data(), 6, buttons.data(), 12, hats.data(), 1);
+
+    auto legacy = mapJoystick(snap);
+    auto viaDefault = mapJoystick(snap, JoystickRemap{});
+    REQUIRE(legacy == viaDefault);
+
+    // And the same for a 4-axis pad (the adaptive right-stick + button-trigger
+    // fallback path) so default-equivalence covers BOTH branches.
+    std::array<std::int16_t, 4> axes4{500, 600, 700, 800};
+    std::array<bool, 10> buttons4{};
+    buttons4[8] = true; // adaptive left-trigger button
+    auto snap4 = makeSnapshot(axes4.data(), 4, buttons4.data(), 10, nullptr, 0);
+    REQUIRE(mapJoystick(snap4) == mapJoystick(snap4, JoystickRemap{}));
+}
+
+// ── NON-DEFAULT remaps: routing follows the table ───────────────────────────
+
+TEST_CASE("remap swaps A and B", "[joymap][remap]") {
+    JoystickRemap remap{};
+    // Route logical A from source button 1 and logical B from source button 0.
+    remap.buttons[static_cast<int>(RemapButton::A)] = 1;
+    remap.buttons[static_cast<int>(RemapButton::B)] = 0;
+
+    std::array<bool, 4> buttons{true, false, false, false}; // physical button 0 down
+    std::array<std::int16_t, 6> axes{}; // 6 axes so the trigger-button path is off
+    auto st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 4, nullptr, 0), remap);
+    // Physical 0 now drives B (swapped), not A.
+    REQUIRE((st.wButtons & B::kB) != 0);
+    REQUIRE((st.wButtons & B::kA) == 0);
+
+    buttons = {false, true, false, false}; // physical button 1 down
+    st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 4, nullptr, 0), remap);
+    REQUIRE((st.wButtons & B::kA) != 0);
+    REQUIRE((st.wButtons & B::kB) == 0);
+}
+
+TEST_CASE("remap moves the right stick to axes 2/3 on a 6-axis pad", "[joymap][remap]") {
+    JoystickRemap remap{};
+    remap.rightStickX = 2;
+    remap.rightStickY = 3;
+    remap.useAdaptiveRightStick = false; // explicit choice — no adaptive fallback
+    // 6 axes so adaptive would NOT trigger anyway; this asserts the explicit
+    // 2/3 routing overrides the default 3/4 even with dedicated trigger axes.
+    std::array<std::int16_t, 6> axes{0, 0, 1111, 2222, 9999, 9999};
+    auto st = mapJoystick(makeSnapshot(axes.data(), 6, nullptr, 0, nullptr, 0), remap);
+    REQUIRE(st.rx == 1111);
+    REQUIRE(st.ry == -2222); // inverted by default
+}
+
+TEST_CASE("remap moves a trigger from an axis to a button", "[joymap][remap]") {
+    JoystickRemap remap{};
+    remap.useAdaptiveTriggers = false; // honour the explicit sources verbatim
+    remap.leftTrigger = TriggerSource{TriggerSourceKind::Button, 3};
+    // Right trigger stays an axis (default index 5).
+    std::array<std::int16_t, 6> axes{0, 0, 0, 0, 0, 32767}; // axis 5 = full right trigger
+    std::array<bool, 4> buttons{false, false, false, true}; // button 3 = left trigger
+    auto st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 4, nullptr, 0), remap);
+    REQUIRE(st.lt == 255); // from the button
+    REQUIRE(st.rt == 255); // from axis 5
+}
+
+TEST_CASE("remap can unassign a button to neutral", "[joymap][remap]") {
+    JoystickRemap remap{};
+    remap.buttons[static_cast<int>(RemapButton::A)] = -1; // unassigned
+    std::array<bool, 4> buttons{true, false, false, false}; // physical 0 down
+    std::array<std::int16_t, 6> axes{};
+    auto st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 4, nullptr, 0), remap);
+    REQUIRE((st.wButtons & B::kA) == 0); // unassigned → never lights
+}
+
+TEST_CASE("remap can change the hat index", "[joymap][remap]") {
+    JoystickRemap remap{};
+    remap.hatIndex = 1; // read the SECOND hat
+    std::array<std::uint8_t, 2> hats{hat::kCentered, hat::kLeft};
+    auto st = mapJoystick(makeSnapshot(nullptr, 0, nullptr, 0, hats.data(), 2), remap);
+    REQUIRE((st.wButtons & B::kDpadLeft) != 0);
+    REQUIRE((st.wButtons & B::kDpadUp) == 0);
+
+    // hatIndex -1 disables the hat dpad entirely.
+    remap.hatIndex = -1;
+    st = mapJoystick(makeSnapshot(nullptr, 0, nullptr, 0, hats.data(), 2), remap);
+    REQUIRE(st.wButtons == 0);
+}
+
+TEST_CASE("remap invert toggles flip stick Y polarity", "[joymap][remap]") {
+    JoystickRemap remap{};
+    remap.invertLeftY = false;  // pass through
+    remap.invertRightY = false; // pass through
+    std::array<std::int16_t, 6> axes{0, 2000, 0, 0, 4000, 0};
+    auto st = mapJoystick(makeSnapshot(axes.data(), 6, nullptr, 0, nullptr, 0), remap);
+    REQUIRE(st.ly == 2000); // not negated
+    REQUIRE(st.ry == 4000); // not negated
+
+    remap.invertLeftY = true; // back to the historical invert
+    st = mapJoystick(makeSnapshot(axes.data(), 6, nullptr, 0, nullptr, 0), remap);
+    REQUIRE(st.ly == -2000);
+}
+
+TEST_CASE("remap can route a dpad direction to a button", "[joymap][remap]") {
+    JoystickRemap remap{};
+    remap.buttons[static_cast<int>(RemapButton::DpadUp)] = 6; // dpad-up from button 6
+    std::array<bool, 7> buttons{};
+    buttons[6] = true;
+    std::array<std::int16_t, 6> axes{};
+    auto st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 7, nullptr, 0), remap);
+    REQUIRE((st.wButtons & B::kDpadUp) != 0);
 }

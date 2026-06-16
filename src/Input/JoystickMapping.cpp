@@ -32,75 +32,106 @@ bool hasTriggerAxes(const JoystickSnapshot& snap) {
     return snap.axisCount >= 6;
 }
 
-GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap) {
+namespace {
+
+// Drive one logical button from its remapped source index. -1 (unassigned)
+// reads neutral so the bit stays clear.
+void applyButton(std::uint16_t& btn, std::uint16_t bit, const JoystickSnapshot& snap, int source) {
+    if (source >= 0 && buttonAt(snap, source)) { btn |= bit; }
+}
+
+// Resolve a trigger source to its 0..255 value. An Axis source scales through
+// triggerFromAxis (same shape the controller path uses); a Button source is
+// full-scale on press. An unassigned (-1) source reads neutral.
+std::uint8_t triggerValue(const JoystickSnapshot& snap, const TriggerSource& src) {
+    if (src.index < 0) { return 0; }
+    if (src.kind == TriggerSourceKind::Axis) { return triggerFromAxis(axisAt(snap, src.index)); }
+    return buttonAt(snap, src.index) ? 255 : 0;
+}
+
+} // namespace
+
+GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
+                                               const JoystickRemap& remap) {
     using B = GamepadInputProcessor::Buttons;
     GamepadInputProcessor::DeviceState st{};
 
-    const bool triggerAxes = hasTriggerAxes(snap);
+    // Under the DEFAULT remap a pad with < 6 axes used right stick 2/3 and
+    // sourced triggers from buttons 8/9. The adaptive flags preserve that for
+    // the default while an explicit user remap is honoured verbatim. Compute
+    // the fallback once so right-stick and trigger paths share it.
+    const bool fewAxes = !hasTriggerAxes(snap);
 
     // ── Sticks ──────────────────────────────────────────────────────────────
-    // Left stick is axes 0/1 in every common generic layout. Right stick is
-    // axes 3/4 when dedicated trigger axes are present (6-axis pads put the
-    // triggers on 2/5), else axes 2/3.
-    st.lx = axisAt(snap, 0);
-    st.ly = static_cast<std::int16_t>(-axisAt(snap, 1)); // SDL +down → report +up
-    const int rightX = triggerAxes ? 3 : 2;
-    const int rightY = triggerAxes ? 4 : 3;
-    st.rx = axisAt(snap, rightX);
-    st.ry = static_cast<std::int16_t>(-axisAt(snap, rightY));
+    st.lx = remap.leftStickX >= 0 ? axisAt(snap, remap.leftStickX) : 0;
+    {
+        const std::int16_t ly = remap.leftStickY >= 0 ? axisAt(snap, remap.leftStickY) : 0;
+        st.ly = remap.invertLeftY ? static_cast<std::int16_t>(-ly) : ly;
+    }
+    int rightX = remap.rightStickX;
+    int rightY = remap.rightStickY;
+    if (remap.useAdaptiveRightStick && fewAxes) {
+        // Historical 4/5-axis fallback: right stick on 2/3.
+        rightX = 2;
+        rightY = 3;
+    }
+    st.rx = rightX >= 0 ? axisAt(snap, rightX) : 0;
+    {
+        const std::int16_t ry = rightY >= 0 ? axisAt(snap, rightY) : 0;
+        st.ry = remap.invertRightY ? static_cast<std::int16_t>(-ry) : ry;
+    }
 
     // ── Buttons ─────────────────────────────────────────────────────────────
-    // Face buttons 0-3 map A/B/X/Y (south/east/west/north) in DirectInput
-    // order; stick clicks are the high indices.
     std::uint16_t btn = 0;
-    if (buttonAt(snap, 0)) { btn |= B::kA; }
-    if (buttonAt(snap, 1)) { btn |= B::kB; }
-    if (buttonAt(snap, 2)) { btn |= B::kX; }
-    if (buttonAt(snap, 3)) { btn |= B::kY; }
-    if (buttonAt(snap, 4)) { btn |= B::kLeftShoulder; }
-    if (buttonAt(snap, 5)) { btn |= B::kRightShoulder; }
-    if (buttonAt(snap, 6)) { btn |= B::kBack; }
-    if (buttonAt(snap, 7)) { btn |= B::kStart; }
-    // Button 8 is the guide/home key on pads that have one. The XUSB report the
-    // processor consumes has no guide bit (see GamepadInputProcessor::Buttons),
-    // so it is intentionally dropped here rather than aliased onto Start/Back.
-    if (buttonAt(snap, 10)) { btn |= B::kLeftThumb; }
-    if (buttonAt(snap, 11)) { btn |= B::kRightThumb; }
+    const auto src = [&](RemapButton b) { return remap.buttons[static_cast<int>(b)]; };
+    applyButton(btn, B::kDpadUp, snap, src(RemapButton::DpadUp));
+    applyButton(btn, B::kDpadDown, snap, src(RemapButton::DpadDown));
+    applyButton(btn, B::kDpadLeft, snap, src(RemapButton::DpadLeft));
+    applyButton(btn, B::kDpadRight, snap, src(RemapButton::DpadRight));
+    applyButton(btn, B::kStart, snap, src(RemapButton::Start));
+    applyButton(btn, B::kBack, snap, src(RemapButton::Back));
+    applyButton(btn, B::kLeftThumb, snap, src(RemapButton::LeftThumb));
+    applyButton(btn, B::kRightThumb, snap, src(RemapButton::RightThumb));
+    applyButton(btn, B::kLeftShoulder, snap, src(RemapButton::LeftShoulder));
+    applyButton(btn, B::kRightShoulder, snap, src(RemapButton::RightShoulder));
+    applyButton(btn, B::kA, snap, src(RemapButton::A));
+    applyButton(btn, B::kB, snap, src(RemapButton::B));
+    applyButton(btn, B::kX, snap, src(RemapButton::X));
+    applyButton(btn, B::kY, snap, src(RemapButton::Y));
+    // The guide/home key (historically button 8) maps to no XUSB bit; it is
+    // simply not routed to any logical button, so it stays dropped here.
 
     // ── Triggers ────────────────────────────────────────────────────────────
-    if (triggerAxes) {
-        st.lt = triggerFromAxis(axisAt(snap, 2));
-        st.rt = triggerFromAxis(axisAt(snap, 5));
-    } else {
-        // No dedicated trigger axes: the two trigger keys are the next free
-        // buttons after the shoulders. Many 4-axis pads expose L2/R2 as
-        // buttons 6/7 — but those are already claimed for back/start above on
-        // pads that have a select/start cluster. A generic pad cannot have it
-        // both ways from a static default; we treat 6/7 as back/start (the more
-        // common case) and source triggers from buttons 8/9 so a press still
-        // produces a full-scale trigger. This is exactly the kind of ambiguity
-        // a per-device remap resolves.
+    if (remap.useAdaptiveTriggers && fewAxes) {
+        // Historical 4/5-axis fallback: triggers from buttons 8/9 at full scale.
+        // (See the long-form rationale that lived here before: a generic 4-axis
+        // pad cannot disambiguate L2/R2 vs back/start statically; this is the
+        // ambiguity the per-device remap resolves.)
         st.lt = buttonAt(snap, 8) ? 255 : 0;
         st.rt = buttonAt(snap, 9) ? 255 : 0;
+    } else {
+        st.lt = triggerValue(snap, remap.leftTrigger);
+        st.rt = triggerValue(snap, remap.rightTrigger);
     }
 
     // ── Hat → dpad ──────────────────────────────────────────────────────────
-    // Hat 0 only; SDL_HAT_* is a bitmask so diagonals (e.g. up-right) set two
-    // dpad bits. A pad with no hat leaves the dpad clear.
-    const std::uint8_t h = (snap.hats != nullptr && snap.hatCount > 0) ? snap.hats[0] : hat::kCentered;
+    // SDL_HAT_* is a bitmask so diagonals (e.g. up-right) set two dpad bits. A
+    // negative hatIndex (or a pad with no hat) leaves the dpad clear.
+    const std::uint8_t h = (remap.hatIndex >= 0 && snap.hats != nullptr &&
+                            remap.hatIndex < snap.hatCount)
+                               ? snap.hats[remap.hatIndex]
+                               : hat::kCentered;
     if ((h & hat::kUp) != 0) { btn |= B::kDpadUp; }
     if ((h & hat::kDown) != 0) { btn |= B::kDpadDown; }
     if ((h & hat::kLeft) != 0) { btn |= B::kDpadLeft; }
     if ((h & hat::kRight) != 0) { btn |= B::kDpadRight; }
 
     st.wButtons = btn;
-
-    // TODO(remap): a future per-device remap UI plugs in here — it would take
-    // the same JoystickSnapshot and a stored per-(vid,pid) remap table and
-    // override the axis/button routing above. The default layout is a best
-    // guess; the remap is where a user corrects it for their specific pad.
-
     return st;
+}
+
+GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap) {
+    return mapJoystick(snap, JoystickRemap{});
 }
 
 } // namespace dish::input

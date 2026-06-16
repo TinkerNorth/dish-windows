@@ -50,6 +50,11 @@ set(DISH_TEST_SOURCES
     # 8 hat directions, and out-of-range axis/button safety. SDL-free, like the
     # motion-convert tests next to it.
     test_joystick_mapping.cpp
+    # Per-VID:PID raw-joystick REMAP ("Configure controls" page): the durable
+    # QSettings Repository (RepositoryContract) over a "joystick_remaps" key
+    # disjoint from "usb_path_choices", wrapped in a reactive StateSource. Pure +
+    # the QSettings seam — no SDL, no live manager.
+    test_joystick_remap_repository.cpp
     # Workstream 2d — pure XUSB/HID layout math, deadzone pure layer, per-device
     # deadzone + per-slot motion repos, motion enable/backend stores, the motion
     # capability composer, and the physical-motion convert/filter/probe.

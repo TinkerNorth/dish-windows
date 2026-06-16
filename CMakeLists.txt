@@ -239,6 +239,12 @@ set(DISH_CORE_SOURCES
     # QSettings Repository (RepositoryContract) wrapped in a reactive StateSource.
     src/source/store/UsbPathPreferenceStore.h
     src/source/store/UsbPathPreferenceStore.cpp
+    # source/store — per-VID:PID raw-joystick button/axis remap ("Configure
+    # controls" page): a durable QSettings Repository (RepositoryContract) over a
+    # "joystick_remaps" key disjoint from "usb_path_choices", wrapped in a
+    # reactive StateSource. Overrides JoystickMapping's default DirectInput layout.
+    src/source/store/JoystickRemapStore.h
+    src/source/store/JoystickRemapStore.cpp
     # source/store — Workstream 3a/3d/3e preference StateSources: onboarding
     # welcome-seen flags, theme mode (dark/light/system), crash-reporting opt-out
     # (default-ON, D4). Each a StateSource<S> over QSettings, host-testable.

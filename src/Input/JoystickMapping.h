@@ -5,6 +5,7 @@
 
 #include "GamepadInputProcessor.h"
 
+#include <array>
 #include <cstdint>
 
 namespace dish::input {
@@ -71,9 +72,116 @@ constexpr std::uint8_t kDown = 0x04;
 constexpr std::uint8_t kLeft = 0x08;
 } // namespace hat
 
-// Map a raw joystick snapshot to the normalised gamepad report. Pure, total,
-// deterministic. The Y axes are inverted to match the controller path (SDL Y
-// is +down; the XUSB report the processor consumes expects +up).
+// ── Per-device REMAP ────────────────────────────────────────────────────────
+// A JoystickRemap is the user-correctable routing table the "Configure controls"
+// page edits (android parity). It describes which RAW source (axis / button /
+// hat index) drives each logical output, so a user can fix a pad whose generic
+// DirectInput order is scrambled. The DEFAULT value reproduces the historical
+// hard-coded layout 1:1, so a device with no stored remap behaves exactly as
+// before (and the default-layout contract in test_joystick_mapping.cpp stays
+// green unchanged).
+
+// Where a logical trigger reads its value from. Generic pads expose a trigger
+// either as a dedicated analogue axis or as a digital button; the remap tags
+// which, so triggerFromAxis / full-scale-on-press is chosen per device.
+enum class TriggerSourceKind { Axis, Button };
+
+struct TriggerSource {
+    TriggerSourceKind kind = TriggerSourceKind::Axis;
+    int index = -1; // -1 = unassigned → reads neutral (trigger stays 0)
+
+    bool operator==(const TriggerSource& o) const { return kind == o.kind && index == o.index; }
+    bool operator!=(const TriggerSource& o) const { return !(*this == o); }
+};
+
+// Count of logical buttons routed by the remap. Indexed by the logical-button
+// enumerators below (kButtonCount is NOT a button — it sizes the array).
+enum class RemapButton : int {
+    DpadUp = 0,
+    DpadDown,
+    DpadLeft,
+    DpadRight,
+    Start,
+    Back,
+    LeftThumb,
+    RightThumb,
+    LeftShoulder,
+    RightShoulder,
+    A,
+    B,
+    X,
+    Y,
+    kButtonCount // sentinel: array size, not a real button
+};
+constexpr int kRemapButtonCount = static_cast<int>(RemapButton::kButtonCount);
+
+// The routing table. Every field defaults to the historical layout, so a
+// default-constructed JoystickRemap == today's hard-coded behaviour. Indices
+// are RAW source indices into the snapshot; -1 means "unassigned" → the logical
+// output reads neutral. The mapper is total: an index the device does not
+// provide reads neutral via axisAt / buttonAt, never out-of-range memory.
+struct JoystickRemap {
+    // Sticks. Right-stick defaults are 3/4 — the 6-axis (dedicated-trigger-axes)
+    // layout. The historical code adaptively used 2/3 when a pad reports < 6
+    // axes; that adaptive fallback is preserved (see useAdaptiveRightStick) so
+    // the default reproduces BOTH the 6-axis and the 4/5-axis behaviour. A user
+    // who edits these fields opts out of the adaptive fallback (their explicit
+    // choice is honoured verbatim).
+    int leftStickX = 0;
+    int leftStickY = 1;
+    int rightStickX = 3;
+    int rightStickY = 4;
+    bool invertLeftY = true;  // SDL +down → report +up (historical hard invert)
+    bool invertRightY = true; // same
+
+    // Triggers. Defaults match the historical >=6-axis layout (axes 2/5). The
+    // adaptive fallback for < 6 axes (buttons 8/9 at full scale) is preserved
+    // under the default; an explicit edit disables it (see useAdaptiveTriggers).
+    TriggerSource leftTrigger{TriggerSourceKind::Axis, 2};
+    TriggerSource rightTrigger{TriggerSourceKind::Axis, 5};
+
+    // Logical button → raw source-button index (-1 = unassigned → released).
+    // Default order is the historical DirectInput face-first map: A/B/X/Y on
+    // 0-3, shoulders 4/5, back/start 6/7, stick clicks 10/11. Dpad entries
+    // default to -1 because the dpad comes from the HAT, not a button (a remap
+    // MAY route a dpad direction to a button instead).
+    std::array<int, kRemapButtonCount> buttons{
+        /*DpadUp*/ -1,        /*DpadDown*/ -1, /*DpadLeft*/ -1, /*DpadRight*/ -1,
+        /*Start*/ 7,          /*Back*/ 6,      /*LeftThumb*/ 10, /*RightThumb*/ 11,
+        /*LeftShoulder*/ 4,   /*RightShoulder*/ 5,
+        /*A*/ 0,              /*B*/ 1,         /*X*/ 2,         /*Y*/ 3};
+
+    int hatIndex = 0; // raw hat index that drives the dpad (-1 = no hat dpad)
+
+    // The two flags below are NOT user-editable fields; they are TRUE only for
+    // the default routing and FALSE the moment a user customises the relevant
+    // group. They gate the historical adaptive (< 6 axes) behaviour so the
+    // single default value reproduces both the 6-axis and the 4/5-axis paths,
+    // while an explicit user remap is applied verbatim.
+    bool useAdaptiveRightStick = true; // default right stick falls back to 2/3 on < 6 axes
+    bool useAdaptiveTriggers = true;   // default triggers fall back to buttons 8/9 on < 6 axes
+
+    bool operator==(const JoystickRemap& o) const {
+        return leftStickX == o.leftStickX && leftStickY == o.leftStickY &&
+               rightStickX == o.rightStickX && rightStickY == o.rightStickY &&
+               invertLeftY == o.invertLeftY && invertRightY == o.invertRightY &&
+               leftTrigger == o.leftTrigger && rightTrigger == o.rightTrigger &&
+               buttons == o.buttons && hatIndex == o.hatIndex &&
+               useAdaptiveRightStick == o.useAdaptiveRightStick &&
+               useAdaptiveTriggers == o.useAdaptiveTriggers;
+    }
+    bool operator!=(const JoystickRemap& o) const { return !(*this == o); }
+};
+
+// Map a raw joystick snapshot to the normalised gamepad report under `remap`.
+// Pure, total, deterministic. Unassigned (-1) targets read neutral.
+GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
+                                               const JoystickRemap& remap);
+
+// Map under the DEFAULT remap (the historical hard-coded layout). Kept as an
+// overload so existing callers and the default-layout contract test are
+// unchanged. The Y axes are inverted to match the controller path (SDL Y is
+// +down; the XUSB report the processor consumes expects +up).
 GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap);
 
 // ── Internal helpers, exposed for unit tests (pure) ─────────────────────────
