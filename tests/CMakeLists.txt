@@ -143,7 +143,14 @@ set(DISH_TEST_SOURCES
     # QML migration (A0) — the PURE frameless-window hit-test region math
     # (caption/maximize/client/8 resize regions, half-open edge off-by-ones,
     # maximized suppression) + the Win11 build-number gate predicate. No Qt/Win32.
-    test_window_hit_test.cpp)
+    test_window_hit_test.cpp
+    # QML migration (A1) — the QML-facing role models. The SlotListModel adapter
+    # (mirrors SlotCard's roles + the shared SlotLiveStats mapper) and the
+    # ConnectionListModel adapter (mirrors composer::ConnectionRow + its render-key
+    # tokens): roleNames coverage, row-count tracking, data() per role, and the
+    # minimal dataChanged/rowsInserted/rowsRemoved on a state push.
+    test_slot_list_model.cpp
+    test_connection_list_model.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

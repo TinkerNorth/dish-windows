@@ -86,8 +86,8 @@ int main(int argc, char* argv[]) {
     dish::AppModel model;
 
 #ifdef DISH_QML
-    // The C++ AppModel is NOT yet exposed to QML at this migration step; the
-    // stub Quick screen needs no model. Core init above is identical to the
+    // The AppModel is exposed to QML as the `App` context property (an
+    // AppViewModel adapter) inside runQmlApp. Core init above is identical to the
     // Widgets path and in the same order; only the window construction differs.
     model.start();
     return dish::qml::runQmlApp(model);

@@ -353,7 +353,18 @@ set(DISH_CORE_SOURCES
     # version gate (WindowHitTest.h). Header-only and in dish_core so the unit
     # tests link it without any Quick/Win32 dependency. The side-effecting Win32
     # chrome (FramelessWindowChrome) lives in the QML target, not here.
-    src/qml/chrome/WindowHitTest.h)
+    src/qml/chrome/WindowHitTest.h
+    # qml — the QML-facing exposure layer (the AppViewModel adapter + the two
+    # role models). Plain QObject/QAbstractListModel — they need only Qt Core/Gui,
+    # NOT Qml/Quick — so they live here and the unit tests link them directly. The
+    # QML registration (context property + qmlRegisterUncreatableType) is in the
+    # DISH_QML-only QmlEntryPoint, not here.
+    src/qml/SlotListModel.h
+    src/qml/SlotListModel.cpp
+    src/qml/ConnectionListModel.h
+    src/qml/ConnectionListModel.cpp
+    src/qml/AppViewModel.h
+    src/qml/AppViewModel.cpp)
 
 add_library(dish_core STATIC ${DISH_CORE_SOURCES})
 target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
