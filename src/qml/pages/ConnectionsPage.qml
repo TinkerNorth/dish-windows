@@ -133,13 +133,6 @@ Kit.Page {
                     }
                 }
 
-                Kit.OutlineButton {
-                    text: qsTr("Connect")
-                    // Id-based (de-raced): a scan reordering the list between bind
-                    // and click can't connect the wrong box.
-                    onClicked: App.connectByServerId(foundCard.modelData.id)
-                }
-
                 // `page.pairTick` is read (comma-expression) only to enlist this
                 // binding in the stateChanged dependency graph — isPairingInFlight
                 // has no NOTIFY of its own, so without it the spinner never clears.
@@ -160,17 +153,6 @@ Kit.Page {
                         implicitWidth: 20
                         implicitHeight: 20
                     }
-                }
-
-                // Reverse (host-initiated) pairing: the dish shows a PIN the
-                // operator approves on the satellite. requestReversePairing then
-                // open — the sheet drives off App.reversePairingPhase.
-                Kit.OutlineButton {
-                    text: qsTr("Request pairing")
-                    onClicked: reverseDialog.openFor(foundCard.modelData.id,
-                                                     foundCard.modelData.name.length > 0
-                                                         ? foundCard.modelData.name
-                                                         : foundCard.modelData.ip)
                 }
             }
         }
@@ -295,38 +277,100 @@ Kit.Page {
         }
     }
 
-    // ---- PAIRING dialog ----------------------------------------------------
+    // ---- PAIRING dialog (both directions, one shot) ------------------------
 
+    // A discovered satellite is unpaired, so Pair is its only action. Opening the
+    // sheet immediately SENDS the reverse pair request — it shows the operator a
+    // PIN to type on the satellite and starts polling for approval — AND offers a
+    // field to type the satellite's own PIN (forward). Whichever path completes
+    // first pairs; closing aborts the still-pending reverse request.
     Kit.ContentDialog {
         id: pairDialog
         heading: qsTr("Pair with %1").arg(pairDialog.serverName)
-        acceptText: App.isPairingInFlight(pairDialog.serverId) ? qsTr("Pairing…") : qsTr("Pair")
         rejectText: qsTr("Cancel")
-        // Enable accept only on a full 4-digit PIN and while no request is in
-        // flight for this server.
-        acceptEnabled: pinField.text.length === 4 && !App.isPairingInFlight(pairDialog.serverId)
 
-        // The discovered server this dialog targets — set by openFor() before
-        // open(). Id-based (de-raced): the contract calls address the row by its
-        // stable id, not a list index that a concurrent scan could shift.
         property string serverId: ""
         property string serverName: ""
+        property bool submitted: false        // forward submit guard
+        property string errorText: ""         // forward inline error
+
+        // The footer drives the FORWARD path (typing the satellite's PIN); the
+        // reverse path completes on its own when the operator approves. pairTick
+        // enlists the non-reactive isPairingInFlight() in the stateChanged graph.
+        acceptText: (page.pairTick, App.isPairingInFlight(pairDialog.serverId)) ? qsTr("Pairing…")
+                                                                                : qsTr("Pair")
+        acceptEnabled: pinField.text.length === 4
+                       && !(page.pairTick, App.isPairingInFlight(pairDialog.serverId))
 
         function openFor(id, name) {
             pairDialog.serverId = id;
             pairDialog.serverName = name;
+            pairDialog.errorText = "";
+            pairDialog.submitted = false;
             pinField.clear();
-            // Drop any parked one-shot pairing trigger before showing the sheet
-            // (contract: clearPairingTarget before opening to avoid re-entry).
-            App.clearPairingTarget();
+            App.clearPairingTarget();          // drop any parked trigger (avoid re-entry)
+            // Send the initial (reverse) pair now: generates + shows our PIN and
+            // starts polling for the operator to approve on the satellite.
+            App.requestReversePairing(id);
             pairDialog.open();
         }
 
         contentColumn.children: [
+            // ── REVERSE: the PIN to type on the satellite (sent on open) ──
             Label {
-                text: qsTr("Enter the 4-digit PIN displayed on %1").arg(pairDialog.serverName)
+                text: qsTr("Show this PIN on %1 to approve").arg(pairDialog.serverName)
                 color: Theme.muted
-                font.pixelSize: 13
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            },
+            Label {
+                text: App.reversePairingPhase === "timedout" ? qsTr("expired")
+                                                             : App.reversePairingPin
+                color: App.reversePairingPhase === "timedout" ? Theme.muted : Theme.onSurface
+                font.pixelSize: 36
+                font.bold: true
+                font.letterSpacing: 6
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            },
+            // Reverse status line: waiting / declined / expired, with regenerate.
+            RowLayout {
+                spacing: 8
+                Layout.fillWidth: true
+                BusyIndicator {
+                    running: App.reversePairingPhase === "awaiting"
+                    visible: running
+                    implicitWidth: 16
+                    implicitHeight: 16
+                }
+                Label {
+                    Layout.fillWidth: true
+                    color: App.reversePairingPhase === "declined" ? Theme.error : Theme.muted
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    text: App.reversePairingPhase === "awaiting"
+                              ? qsTr("Waiting for %1 to accept…").arg(pairDialog.serverName)
+                          : App.reversePairingPhase === "declined" ? qsTr("Declined on the satellite.")
+                          : App.reversePairingPhase === "timedout" ? qsTr("That code expired.")
+                          : ""
+                }
+                Kit.OutlineButton {
+                    text: qsTr("New code")
+                    visible: App.reversePairingPhase === "timedout"
+                             || App.reversePairingPhase === "declined"
+                    onClicked: App.requestReversePairing(pairDialog.serverId)
+                }
+            },
+
+            // Divider between the two directions.
+            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.outline },
+
+            // ── FORWARD: type the satellite's own PIN ──
+            Label {
+                text: qsTr("…or enter the PIN shown on %1").arg(pairDialog.serverName)
+                color: Theme.muted
+                font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             },
@@ -336,15 +380,12 @@ Kit.Page {
                 maximumLength: 4
                 inputMethodHints: Qt.ImhDigitsOnly
                 validator: IntValidator { bottom: 0 }
-                // Disabled mid-request: a new PIN would race the in-flight call.
-                enabled: !App.isPairingInFlight(pairDialog.serverId)
+                enabled: !(page.pairTick, App.isPairingInFlight(pairDialog.serverId))
                 Layout.fillWidth: true
             },
-            // Inline error surface (App.errorMessage is one-shot; the page owns
-            // showing it). Sits in the body, above the footer.
             Label {
-                id: errorBanner
-                visible: false
+                visible: pairDialog.errorText.length > 0
+                text: pairDialog.errorText
                 color: Theme.error
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
@@ -352,161 +393,46 @@ Kit.Page {
             }
         ]
 
-        // The dialog does NOT auto-close on accept (kit convention). Submit and
-        // wait: close on the success edge (in-flight clears with no error), stay
-        // open on errorMessage so the user can retry the same field.
-        property bool submitted: false
-
+        // Footer = the FORWARD submit. Reverse completes on its own (approval).
         onAccepted: {
             pairDialog.submitted = true;
             // Id-based: de-raced against a concurrent scan reordering the list.
             App.pairByServerId(pairDialog.serverId, pinField.text);
         }
-        onRejected: pinField.clear()
+        onRejected: App.cancelReversePairing()
 
         Connections {
             target: App
             enabled: pairDialog.visible
 
-            // Keep the dialog OPEN on error and surface the message; arm a guard
-            // so the next in-flight-clear edge does not mistake the failed attempt
-            // for a success and auto-dismiss.
+            // Forward: keep the sheet OPEN on error and surface why.
             function onErrorMessage(message) {
                 pairDialog.submitted = false;
-                errorBanner.text = message;
-                errorBanner.visible = message.length > 0;
+                pairDialog.errorText = message;
             }
-
-            // On any state move, if a submission is no longer in flight and no
-            // error vetoed it, the pairing succeeded — close the sheet.
+            // Forward success: a submission is no longer in flight and no error
+            // vetoed it → close.
             function onStateChanged() {
                 if (pairDialog.submitted && !App.isPairingInFlight(pairDialog.serverId)) {
                     pairDialog.submitted = false;
                     pairDialog.close();
                 }
             }
+            // Reverse approved: the session is opening (the row goes live) → close.
+            function onReversePairingChanged() {
+                if (App.reversePairingPhase === "approved")
+                    pairDialog.close();
+            }
         }
 
         onClosed: {
-            errorBanner.visible = false;
-            errorBanner.text = "";
+            // Abort a still-pending reverse request so no orphan poll outlives the sheet.
+            if (App.reversePairingPhase !== "approved")
+                App.cancelReversePairing();
+            pinField.clear();
+            pairDialog.errorText = "";
             pairDialog.submitted = false;
         }
     }
 
-    // ---- REVERSE-PAIRING dialog --------------------------------------------
-
-    // Host-initiated pairing: the dish generates + shows a PIN; the operator
-    // types it on the satellite. Everything visible is driven off the reactive
-    // App.reversePairing* properties (NOTIFY reversePairingChanged), so a phase
-    // move ("awaiting"→"approved"/"declined"/"timedout") repaints the body and
-    // re-gates the footer without any manual polling here.
-    Kit.ContentDialog {
-        id: reverseDialog
-        heading: qsTr("Pair with %1").arg(App.reversePairingServerName)
-        // Only Cancel acts while awaiting; the approved arm auto-closes, the
-        // terminal-error arms offer Retry. Accept is the Retry affordance and is
-        // only meaningful once the request has timed out.
-        acceptText: qsTr("Retry")
-        rejectText: qsTr("Cancel")
-        acceptEnabled: App.reversePairingPhase === "timedout"
-
-        // Set by openFor() before open(); kept for the Retry path so a retry
-        // re-targets the same server without re-reading the (possibly reordered)
-        // discovered list.
-        property string serverId: ""
-
-        function openFor(id, name) {
-            reverseDialog.serverId = id;
-            // Kicks the request; the dish PIN + phase land on reversePairingChanged.
-            App.requestReversePairing(id);
-            reverseDialog.open();
-        }
-
-        contentColumn.children: [
-            // The locally-generated PIN, shown big while awaiting.
-            Label {
-                text: App.reversePairingPin
-                visible: App.reversePairingPhase === "awaiting"
-                color: Theme.onSurface
-                font.pixelSize: 40
-                font.bold: true
-                font.letterSpacing: 8
-                horizontalAlignment: Text.AlignHCenter
-                Layout.fillWidth: true
-            },
-            Label {
-                text: qsTr("Enter this PIN on %1 to approve.").arg(App.reversePairingServerName)
-                visible: App.reversePairingPhase === "awaiting"
-                color: Theme.muted
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-                Layout.fillWidth: true
-            },
-            RowLayout {
-                visible: App.reversePairingPhase === "awaiting"
-                spacing: 8
-                Layout.fillWidth: true
-                BusyIndicator {
-                    running: App.reversePairingPhase === "awaiting"
-                    implicitWidth: 18
-                    implicitHeight: 18
-                }
-                Label {
-                    text: qsTr("Waiting for %1 to accept…").arg(App.reversePairingServerName)
-                    color: Theme.muted
-                    font.pixelSize: 13
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-            },
-            Label {
-                text: qsTr("Paired — the connection is opening.")
-                visible: App.reversePairingPhase === "approved"
-                color: Theme.success
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            },
-            Label {
-                text: qsTr("Request declined.")
-                visible: App.reversePairingPhase === "declined"
-                color: Theme.error
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            },
-            Label {
-                text: qsTr("Timed out — try again.")
-                visible: App.reversePairingPhase === "timedout"
-                color: Theme.error
-                font.pixelSize: 13
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-        ]
-
-        // Accept here is Retry (enabled only on timedout): re-kick the same
-        // server and fall back into the awaiting arm.
-        onAccepted: {
-            if (reverseDialog.serverId.length > 0)
-                App.requestReversePairing(reverseDialog.serverId);
-        }
-        // Cancel aborts the in-flight request and closes (rejected auto-closes).
-        onRejected: App.cancelReversePairing()
-
-        Connections {
-            target: App
-            enabled: reverseDialog.visible
-
-            // Auto-close on the approved edge (session is opening; the row goes
-            // live). The declined/timedout arms stay open so the operator can
-            // read the reason and Retry/Cancel.
-            function onReversePairingChanged() {
-                if (App.reversePairingPhase === "approved")
-                    reverseDialog.close();
-            }
-        }
-    }
 }
