@@ -493,12 +493,37 @@ if(DISH_QML)
         VERSION 1.0
         QML_FILES
             src/qml/Main.qml
-            src/qml/WindowTitleBar.qml)
+            src/qml/WindowTitleBar.qml
+            src/qml/AppShell.qml
+            # Shared component kit (A2) — styled from Theme tokens on Basic.
+            src/qml/kit/SectionHeader.qml
+            src/qml/kit/KitButton.qml
+            src/qml/kit/OutlineButton.qml
+            src/qml/kit/Card.qml
+            src/qml/kit/StatusDot.qml
+            src/qml/kit/BrandGlyph.qml
+            src/qml/kit/LabeledSwitch.qml
+            src/qml/kit/KitTextField.qml
+            src/qml/kit/Page.qml
+            src/qml/kit/ContentDialog.qml
+            # Nav destinations (placeholders; page agents replace bodies).
+            src/qml/pages/ControllersPage.qml
+            src/qml/pages/ConnectionsPage.qml
+            src/qml/pages/SettingsPage.qml)
 
     # The qmltyperegistrar emits a registration .cpp that #includes the bridge
     # headers by BASENAME (ChromeBridge.h, ThemeBridge.h), so their directory
     # must be on the include path for that generated TU to compile.
     target_include_directories(Dish PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/qml/chrome)
+
+    # qmlcachegen emits per-QML C++ TUs that instantiate Qt's qmetatype/qjsengine
+    # templates; under MSVC those headers raise C4702 (unreachable code) which
+    # dish_strict's /WX turns fatal. The warning is Qt's, not ours, and only the
+    # generated cache TUs hit it — relax just C4702 for this target. Gated inside
+    # DISH_QML so the Widgets build (DISH_QML OFF) keeps full /WX, byte-for-byte.
+    if(MSVC)
+        target_compile_options(Dish PRIVATE /wd4702)
+    endif()
 
     target_link_libraries(Dish PRIVATE
         Qt6::Quick Qt6::Qml Qt6::QuickControls2

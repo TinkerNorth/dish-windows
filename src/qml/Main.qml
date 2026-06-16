@@ -4,8 +4,10 @@
 // The Qt Quick entry window for the modern Windows chrome (DISH_QML build). A
 // frameless ApplicationWindow: the OS draws no title bar, the C++ chrome filter
 // supplies snap/resize/Mica, and WindowTitleBar bleeds into the body on the same
-// surface so there is no seam between the bar and the content. The body is a
-// stub (a centered label) at this migration step — enough to confirm Mica.
+// surface so there is no seam between the bar and the content. Below the title
+// bar a top-level StackView hosts the app: the AppShell (nav rail + content) is
+// the root; a first-run onboarding flow is pushed full-screen over it OUTSIDE
+// the nav shell (see docs/QML_UI_KIT.md "Onboarding convention").
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -40,18 +42,19 @@ ApplicationWindow {
         anchors.top: parent.top
     }
 
-    // Stub body — a single centered label so Mica is visible behind it.
-    Item {
+    // Top-level host below the title bar. Transparent so Mica shows through the
+    // whole body. The AppShell (nav shell) is the root item; the onboarding
+    // agent shows a first-run flow by pushing a full-screen page here — over,
+    // not inside, the nav shell — and pops it to reveal the shell:
+    //   appRoot.push("onboarding/OnboardingFlow.qml")   // ... later: appRoot.pop()
+    StackView {
+        id: appRoot
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: titleBar.bottom
         anchors.bottom: parent.bottom
+        background: null
 
-        Label {
-            anchors.centerIn: parent
-            text: qsTr("Dish — Qt Quick chrome preview")
-            color: Theme.onSurface
-            font.pixelSize: 18
-        }
+        initialItem: AppShell {}
     }
 }
