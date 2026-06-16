@@ -5,13 +5,29 @@
 
 #include "AppModel.h"
 #include "Input/GamepadInputProcessor.h"
+#include "Input/SDLGamepadBridge.h"
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "core/input/Deadzones.h"
+#include "qml/AppSettingsMaps.h"
+#include "repository/DeadzoneRepository.h"
+#include "source/store/CrashReportingStore.h"
+#include "source/store/MotionEnabledStore.h"
+#include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/ThemePreferenceStore.h"
+#include "UI/Theme.h"
+#include "ui/licenses/LicenseManifest.h"
 
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QTimer>
+#include <QUrl>
 #include <QVariantMap>
+
+#ifndef DISH_VERSION
+#define DISH_VERSION "0.0.0"
+#endif
 
 namespace dish::qml {
 
@@ -29,6 +45,30 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     QObject::connect(model_, &dish::AppModel::errorMessage, this, &AppViewModel::errorMessage);
     QObject::connect(model_->connections(), &composer::ConnectionCoordinator::connectionsChanged,
                      this, &AppViewModel::onConnectionsChanged);
+
+    // Re-pull the discovered list on the precise edge (P2 had to key off the
+    // broad stateChanged). The WifiConnectionManager owns the scan results.
+    QObject::connect(model_->wifi(), &net::WifiConnectionManager::discoveredChanged, this,
+                     &AppViewModel::discoveredChanged);
+
+    // The settings stores republish through their StateSource Observables (not Qt
+    // signals); subscribe so a republish (incl. the ThemeController's own re-theme
+    // path and any external setEnabled) re-emits our Qt NOTIFY. emitCurrent=false
+    // — the initial values are read lazily by the getters; we only want deltas.
+    themeSub_ = model_->themeStore()->state().subscribe(
+        [this](const source::ThemeMode&) { emit themeModeChanged(); }, false);
+    crashSub_ = model_->crashStore()->state().subscribe(
+        [this](bool) { emit crashReportingChanged(); }, false);
+    onboardingSub_ = model_->onboardingStore()->state().subscribe(
+        [this](const source::OnboardingState&) {
+            const bool needed = !model_->onboardingStore()->welcomeCompleted();
+            if (needed != onboardingNeeded_) {
+                onboardingNeeded_ = needed;
+                emit onboardingNeededChanged();
+            }
+        },
+        false);
+    onboardingNeeded_ = !model_->onboardingStore()->welcomeCompleted();
 
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
@@ -82,6 +122,16 @@ void AppViewModel::onStateChanged() {
     pairingServerName_ = pairingActive_ ? st.pairingTarget->name : QString();
 
     slotModel_.setState(st.slotList);
+
+    // Pairing-success edge: a fresh connection reached Connected (online count
+    // rose). Mirrors the rising edge the Widgets pairing sheet closes on. Cheap
+    // and best-effort — the QML sheet treats it as "a pair likely just landed".
+    if (live > lastOnlineCount_) { emit pairingSucceeded(); }
+    lastOnlineCount_ = live;
+
+    // The slot list moving also covers a device attach/detach (the bridge feeds
+    // rebuild()), so the deadzone device rows may have changed — nudge the page.
+    emit deadzonesChanged();
 
     emit stateChanged();
 }
@@ -172,5 +222,93 @@ bool AppViewModel::isPairingInFlight(const QString& serverId) const {
 }
 
 void AppViewModel::clearPairingTarget() { model_->clearPairingTarget(); }
+
+// ── Settings: appearance + diagnostics ──────────────────────────────────────
+
+int AppViewModel::themeMode() const { return themeModeToInt(model_->themeStore()->mode()); }
+
+void AppViewModel::setThemeMode(int mode) {
+    const source::ThemeMode next = themeModeFromInt(mode);
+    // Forward to the store. The ThemeController (subscribed to the same store)
+    // resolves SYSTEM + swaps the active palette + re-applies the global QSS, so
+    // the palette is already current when we push the resolved appearance to the
+    // QML Theme singleton + the chrome dark-mode attribute below. setMode is
+    // distinct-until-changed; our themeSub_ re-emits themeModeChanged on a real
+    // transition, so we don't double-emit here.
+    model_->themeStore()->setMode(next);
+    // Push the now-resolved appearance to the QML side + the native chrome so the
+    // live palette and the title-bar immersive-dark attribute follow the mode.
+    if (themeAppliedSink_) {
+        themeAppliedSink_(ui::activeAppearance() == ui::Appearance::Dark);
+    }
+}
+
+bool AppViewModel::crashReportingEnabled() const { return model_->crashStore()->enabled(); }
+
+void AppViewModel::setCrashReportingEnabled(bool enabled) {
+    model_->crashStore()->setEnabled(enabled);
+}
+
+QString AppViewModel::appVersion() const { return QStringLiteral(DISH_VERSION); }
+
+bool AppViewModel::onboardingNeeded() const {
+    return !model_->onboardingStore()->welcomeCompleted();
+}
+
+QString AppViewModel::donateSponsorsUrl() const {
+    return tr("https://github.com/sponsors/TinkerNorth");
+}
+QString AppViewModel::donateKofiUrl() const { return tr("https://ko-fi.com/tinkernorth"); }
+QString AppViewModel::donateBmacUrl() const { return tr("https://buymeacoffee.com/tinkernorth"); }
+
+// ── Deadzone settings ───────────────────────────────────────────────────────
+
+QVariantList AppViewModel::deadzoneDevices() const {
+    return deadzoneDeviceRows(model_->bridge(), model_->deadzoneRepository(),
+                              model_->motionEnabledStore());
+}
+
+void AppViewModel::setDeadzones(const QString& deviceId, int stickFlat, int triggerFlat) {
+    const input::deadzone::Deadzones dz{static_cast<std::int16_t>(stickFlat),
+                                        static_cast<std::uint8_t>(triggerFlat)};
+    // Persist the override AND push it into the live processor — the exact pair
+    // the Widgets view (repo->setDeadzones) + MainWindow (AppModel::applyDeadzones)
+    // do, so a slider move re-tunes the hot path without a re-attach.
+    model_->deadzoneRepository()->setDeadzones(deviceId, dz);
+    model_->applyDeadzones(deviceId, dz);
+    emit deadzonesChanged();
+}
+
+void AppViewModel::setMotionEnabled(const QString& deviceId, bool enabled) {
+    // Keyed by the device id (the Widgets view's slotKey == deviceId.toStdString()).
+    model_->motionEnabledStore()->setEnabled(deviceId.toStdString(), enabled);
+    emit deadzonesChanged();
+}
+
+// ── Licenses ────────────────────────────────────────────────────────────────
+
+QVariantList AppViewModel::licenses() const {
+    return licenseRows(ui::loadBundledLicenseManifest());
+}
+
+// ── Onboarding + external links ─────────────────────────────────────────────
+
+void AppViewModel::markOnboardingComplete() {
+    model_->onboardingStore()->markWelcomeCompleted();
+    // onboardingSub_ flips onboardingNeeded_ + emits onboardingNeededChanged on
+    // the store republish; no direct emit here.
+}
+
+void AppViewModel::openExternalUrl(const QString& url) {
+    if (url.isEmpty()) { return; }
+    // The injected sink routes through ExternalLink (the Widgets path); when no
+    // NotificationQueue is wired (the Quick path has none yet) it returns false on
+    // failure, so we surface the failure on errorMessage — the QML toast channel —
+    // matching the Widgets "Couldn't open browser" warning. Without a sink (tests)
+    // open directly and report the same way.
+    const bool ok = externalOpenSink_ ? externalOpenSink_(url)
+                                      : QDesktopServices::openUrl(QUrl(url));
+    if (!ok) { emit errorMessage(tr("Couldn't open browser")); }
+}
 
 } // namespace dish::qml

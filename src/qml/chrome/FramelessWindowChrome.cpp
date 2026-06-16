@@ -84,6 +84,8 @@ bool FramelessWindowChrome::applyMicaBackdrop() {
         return false;
     }
 
+    // Default to the deep-space dark frame (the app's design default). A later
+    // theme change flips this via setImmersiveDarkMode without re-applying Mica.
     const BOOL dark = TRUE;
     ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
 
@@ -98,6 +100,15 @@ bool FramelessWindowChrome::applyMicaBackdrop() {
     ::DwmExtendFrameIntoClientArea(hwnd, &margins);
 
     return true;
+}
+
+void FramelessWindowChrome::setImmersiveDarkMode(bool dark) {
+    HWND hwnd = hwndOf(m_window);
+    if (!hwnd || !isWin11OrLater(osBuildNumber())) {
+        return;
+    }
+    const BOOL value = dark ? TRUE : FALSE;
+    ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 }
 
 bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType,

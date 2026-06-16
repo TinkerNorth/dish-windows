@@ -7,11 +7,9 @@
 // each clickable with an "Open X →" link and a Cadence | Pays-with meta grid, a
 // "What your donation pays for" card, and a closing thanks line.
 //
-// CONTRACT NOTE: the donate URLs and external-open are NOT on the frozen `App`
-// surface. URLs are the brand defaults from DonateView (localizable there); the
-// external-open is a placeholder Qt.openUrlExternally. Mappings (report):
-//   donate URLs / pill → DonatePill / DonatePillLogic (test_donate_pill)
-//   openUrl            → ExternalLink openExternalUrl
+// Bound to the real `App` surface: App.donateSponsorsUrl / -KofiUrl / -BmacUrl
+// (the brand defaults, localizable in C++) and App.openExternalUrl (routes
+// through ExternalLink so a failure toasts). See docs/QML_CONTRACT.md §1b.
 
 // Bind outer-component ids (donatePage) into the rail/why Repeater delegates.
 pragma ComponentBehavior: Bound
@@ -26,10 +24,11 @@ Kit.Page {
     id: donatePage
     title: qsTr("Support Dish")
 
-    // Brand donation URLs (defaults from DonateView; localizable overrides there).
-    readonly property string urlSponsors: "https://github.com/sponsors/TinkerNorth"
-    readonly property string urlKofi: "https://ko-fi.com/tinkernorth"
-    readonly property string urlBmac: "https://buymeacoffee.com/tinkernorth"
+    // Brand donation URLs from the App surface (defaults mirror DonateView; the
+    // C++ side carries the localizable overrides).
+    readonly property string urlSponsors: App.donateSponsorsUrl
+    readonly property string urlKofi: App.donateKofiUrl
+    readonly property string urlBmac: App.donateBmacUrl
 
     // ── Hero (centered) ──────────────────────────────────────────────────────
     // The pulse-pink accent has no portable Theme token; the heart / eyebrow /
@@ -282,10 +281,11 @@ Kit.Page {
         width: parent ? parent.width : implicitWidth
     }
 
-    // Placeholder external-open (see header note).
+    // Route through App.openExternalUrl so a failed open raises the same toast the
+    // Widgets DonateView does (via ExternalLink), not a silent Qt.openUrlExternally.
     function openUrl(url) {
         if (url && url.length > 0) {
-            Qt.openUrlExternally(url);
+            App.openExternalUrl(url);
         }
     }
 }

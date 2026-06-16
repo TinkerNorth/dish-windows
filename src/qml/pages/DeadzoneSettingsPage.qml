@@ -6,13 +6,10 @@
 // stick and a trigger dead-zone slider and (for gyro pads) a Forward-motion
 // toggle, plus the explanatory footnote.
 //
-// CONTRACT NOTE: the device list and the deadzone/motion stores are NOT on the
-// frozen `App` surface. This page binds a LOCAL placeholder `deviceModel` and
-// shows the empty-state by default; the coordinator wires the real repository.
-// Mappings (see report):
-//   deviceModel       → DeadzoneRepository device rows (test_deadzone_repository)
-//   per-row stick/trigger setters → DeadzoneRepository::setDeadzones
-//   per-row forwardMotion → MotionEnabledStore::setEnabled
+// Bound to the real `App` surface: App.deadzoneDevices() rows (re-pulled on
+// App.deadzonesChanged), App.setDeadzones(deviceId,stickFlat,triggerFlat), and
+// App.setMotionEnabled(deviceId,bool) — forwards to the already-tested
+// DeadzoneRepository + MotionEnabledStore (docs/QML_CONTRACT.md §1b).
 
 // Bind outer-component ids (deadzonePage) into the device-card Repeater delegate.
 pragma ComponentBehavior: Bound
@@ -31,11 +28,15 @@ Kit.Page {
     readonly property int stickSliderMax: 10000
     readonly property int triggerSliderMax: 255
 
-    // Placeholder device rows. Shape mirrors the Widgets DeviceRow + seeded
-    // Deadzones: { id, name, hasGyro, stickFlat, triggerFlat, forwardMotion }.
-    // Empty by default → the empty-state renders (coordinator supplies the real
-    // repository-backed model).
-    property var deviceModel: []
+    // Device rows from App.deadzoneDevices(): { id, name, hasGyro, stickFlat,
+    // triggerFlat, forwardMotion }. Re-pulled whenever the rows move (a device
+    // attached/detached, or a set landed) via App.deadzonesChanged.
+    property var deviceModel: App.deadzoneDevices()
+
+    Connections {
+        target: App
+        function onDeadzonesChanged() { deadzonePage.deviceModel = App.deadzoneDevices(); }
+    }
 
     Kit.SectionHeader { label: qsTr("Controllers") }
 
@@ -72,7 +73,10 @@ Kit.Page {
                         font.bold: true
                     }
 
-                    // Stick dead-zone slider + live value (mirror stickRow).
+                    // Stick dead-zone slider + live value (mirror stickRow). A user
+                    // move persists BOTH axes (App.setDeadzones takes the pair) and
+                    // re-tunes the live processor. onMoved (not value-changed) so a
+                    // binding refresh after a re-pull never re-fires the setter.
                     RowLayout {
                         spacing: 12
                         Slider {
@@ -81,7 +85,9 @@ Kit.Page {
                             from: 0
                             to: deadzonePage.stickSliderMax
                             value: deviceCard.modelData.stickFlat
-                            // repo_->setDeadzones(...) in Widgets; placeholder no-op.
+                            onMoved: App.setDeadzones(deviceCard.modelData.id,
+                                                      Math.round(stickSlider.value),
+                                                      Math.round(triggerSlider.value))
                         }
                         Label {
                             text: qsTr("Stick: %1").arg(Math.round(stickSlider.value))
@@ -99,6 +105,9 @@ Kit.Page {
                             from: 0
                             to: deadzonePage.triggerSliderMax
                             value: deviceCard.modelData.triggerFlat
+                            onMoved: App.setDeadzones(deviceCard.modelData.id,
+                                                      Math.round(stickSlider.value),
+                                                      Math.round(triggerSlider.value))
                         }
                         Label {
                             text: qsTr("Trigger: %1").arg(Math.round(triggerSlider.value))
@@ -113,7 +122,7 @@ Kit.Page {
                         visible: deviceCard.modelData.hasGyro === true
                         label: qsTr("Forward motion")
                         checked: deviceCard.modelData.forwardMotion === true
-                        // motionStore_->setEnabled(slotKey, on) in Widgets.
+                        onToggled: App.setMotionEnabled(deviceCard.modelData.id, checked)
                     }
                 }
             }

@@ -40,6 +40,13 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `pairingServerName` | `string` | `stateChanged` | Display name of the pairing target (empty when `!pairingActive`). |
 | `slotModel` | `SlotListModel*` | (CONSTANT) | The controllers/slots model — see §2. Bind into a `ListView.model`. |
 | `connectionModel` | `ConnectionListModel*` | (CONSTANT) | The connection-rows model — see §3. |
+| `themeMode` | `int` (read/write) | `themeModeChanged` | Appearance mode, `0=Light 1=Dark 2=System` (the SettingsPage chip order). Writing forwards to `ThemePreferenceStore::setMode`; the live app + native chrome re-theme. See §1b. |
+| `crashReportingEnabled` | `bool` (read/write) | `crashReportingChanged` | Crash-reporting opt-out flag (default ON). Writing forwards to `CrashReportingStore::setEnabled`. |
+| `appVersion` | `string` | (CONSTANT) | The build version (the CMake project `VERSION`). |
+| `onboardingNeeded` | `bool` | `onboardingNeededChanged` | `!OnboardingPreferenceStore::welcomeCompleted()`. Main.qml pushes the onboarding flow on it; flips false after `markOnboardingComplete()`. |
+| `donateSponsorsUrl` | `string` | (CONSTANT) | GitHub Sponsors URL (brand default; localizable in C++). |
+| `donateKofiUrl` | `string` | (CONSTANT) | Ko-fi URL. |
+| `donateBmacUrl` | `string` | (CONSTANT) | Buy Me a Coffee URL. |
 
 > Note: the property is `slotModel`, NOT `slots` — `slots` is the reserved
 > `Q_SLOTS` token and moc strips it.
@@ -51,6 +58,12 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `stateChanged` | — | Header / slot / pairing state moved (folds AppModel's `stateChanged`). |
 | `telemetryChanged` | — | Telemetry footer numbers moved (~1 Hz). |
 | `errorMessage` | `string message` | Transient one-shot error — surface it as a toast. |
+| `discoveredChanged` | — | The discovered-servers list moved (folds `WifiConnectionManager::discoveredChanged`). Re-pull `discoveredServers()` on this precise edge instead of `stateChanged`. |
+| `themeModeChanged` | — | `themeMode` moved (the store republished). |
+| `crashReportingChanged` | — | `crashReportingEnabled` moved. |
+| `onboardingNeededChanged` | — | `onboardingNeeded` flipped. |
+| `deadzonesChanged` | — | The deadzone device rows / their seeded values moved (a device attach/detach, or a `setDeadzones`/`setMotionEnabled` landed). Re-pull `deadzoneDevices()`. |
+| `pairingSucceeded` | — | One-shot: a connection reached `Connected` after a pair (the online-count rising edge). The pairing sheet may close on it. Best-effort. |
 
 ### Invokable methods
 
@@ -70,6 +83,46 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `pairWithPin(discoveredIndex, pin)` | `int, string` | Submit a 6-digit PIN for the discovered server at that index. Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
 | `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers()`). Drives the Pair button's spinner+disabled state. |
 | `clearPairingTarget()` | — | Drop the one-shot pairing trigger (call before opening the pairing sheet to avoid re-entry). |
+| `setThemeMode(mode)` | `int` | Apply an appearance mode (`0=Light 1=Dark 2=System`). Forwards to `ThemePreferenceStore`; re-themes the live QML palette + the native chrome immersive-dark attribute. |
+| `setCrashReportingEnabled(on)` | `bool` | Forward to `CrashReportingStore::setEnabled`. |
+| `deadzoneDevices()` | → `list` | Per-device deadzone rows as JS objects: `{ id:string, name:string, hasGyro:bool, stickFlat:int, triggerFlat:int, forwardMotion:bool }`. Re-pull on `deadzonesChanged`. |
+| `setDeadzones(deviceId, stickFlat, triggerFlat)` | `string, int, int` | Persist the per-device override (`DeadzoneRepository`) AND push it into the live processor (`AppModel::applyDeadzones`) — the exact pair the Widgets view does. |
+| `setMotionEnabled(deviceId, on)` | `string, bool` | Forward to `MotionEnabledStore::setEnabled`, keyed by the device id. |
+| `licenses()` | → `list` | The bundled third-party manifest as JS objects: `{ name:string, version:string, license:string, url:string }` (unnamed entries dropped). |
+| `markOnboardingComplete()` | — | Persist the welcome-completed flag (`OnboardingPreferenceStore::markWelcomeCompleted`). `onboardingNeeded` then flips false. |
+| `openExternalUrl(url)` | `string` | Open a URL via the shared `ExternalLink` path; a failure raises `errorMessage` (the QML toast channel), matching the Widgets warning. NOT a raw `Qt.openUrlExternally`. |
+
+---
+
+## 1b. Settings / About / Onboarding surfaces (A-ext)
+
+These extend §1 over the EXISTING, already-tested stores — `AppViewModel` only
+re-projects/forwards (no new behaviour). The pages bind them directly:
+
+* **SettingsPage** — `App.themeMode` / `App.setThemeMode` (Appearance chips),
+  `App.crashReportingEnabled` / `App.setCrashReportingEnabled` (Diagnostics),
+  `App.appVersion` (About).
+* **DeadzoneSettingsPage** — `App.deadzoneDevices()` rows (re-pulled on
+  `deadzonesChanged`), `App.setDeadzones`, `App.setMotionEnabled`.
+* **LicensesPage** — `App.licenses()` rows, `App.openExternalUrl`.
+* **DonatePage** — `App.donateSponsorsUrl` / `-KofiUrl` / `-BmacUrl`,
+  `App.openExternalUrl`.
+* **Main.qml first-run** — if `App.onboardingNeeded`, push
+  `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
+  `App.markOnboardingComplete()`.
+
+### Dark-mode / Mica wiring
+
+The app DEFAULTS to its deep-space DARK palette: `QmlEntryPoint` pins
+`Appearance::Dark` when the theme store sits at its System default (so a fresh
+launch is dark rather than following the OS to light), and the native chrome
+applies immersive-dark by default. `setThemeMode` forwards to the store (the
+`ThemeController` swaps the active `dish::ui::Theme` palette + re-applies the
+global QSS off its Observable), then pushes the resolved appearance to the QML
+side: the `Theme` singleton (`ThemeBridge`) is `refresh()`-ed — its tokens are
+now `NOTIFY paletteChanged` (was `CONSTANT`) so bindings re-read live — and the
+chrome's `DWMWA_USE_IMMERSIVE_DARK_MODE` is flipped to match, so the frame never
+drifts light while the body re-darks.
 
 ---
 

@@ -25,10 +25,10 @@ Kit.Page {
     title: qsTr("Connections")
 
     // discoveredServers() is a plain method (no NOTIFY), so a binding off it does
-    // not re-evaluate when a scan lands. App.busy / a stateChanged tick drives the
-    // header; we re-pull the list on the model's stateChanged so FOUND refreshes
-    // without polling. `discovered` is the single re-pulled snapshot the FOUND
-    // Repeater and the pairing dialog index against.
+    // not re-evaluate when a scan lands. App.discoveredChanged is the precise edge
+    // (the WifiConnectionManager's discovered list moved); re-pull the snapshot on
+    // it rather than on the broad stateChanged. `discovered` is the single re-pulled
+    // snapshot the FOUND Repeater and the pairing dialog index against.
     property var discovered: App.discoveredServers()
     function refreshDiscovered() { page.discovered = App.discoveredServers(); }
 
@@ -49,9 +49,9 @@ Kit.Page {
 
     Connections {
         target: App
-        // A scan completing / a server appearing folds into stateChanged; re-pull
-        // the FOUND snapshot so the Repeater below tracks it.
-        function onStateChanged() { page.refreshDiscovered(); }
+        // A scan completing / a server appearing fires discoveredChanged; re-pull
+        // the FOUND snapshot so the Repeater below tracks it precisely.
+        function onDiscoveredChanged() { page.refreshDiscovered(); }
     }
 
     // ---- FOUND -------------------------------------------------------------

@@ -20,4 +20,6 @@ QColor ThemeBridge::success() const { return QColor::fromRgba(dish::ui::Theme::s
 QColor ThemeBridge::error() const { return QColor::fromRgba(dish::ui::Theme::error); }
 QColor ThemeBridge::warning() const { return QColor::fromRgba(dish::ui::Theme::warning); }
 
+void ThemeBridge::refresh() { emit paletteChanged(); }
+
 } // namespace dish::chrome

@@ -16,11 +16,18 @@
 #pragma once
 
 #include "Models/Models.h"
+#include "architecture/Observable.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
+#include "source/store/CrashReportingStore.h"
+#include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/ThemePreferenceStore.h"
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
+
+#include <functional>
 
 class QTimer;
 
@@ -63,6 +70,29 @@ class AppViewModel : public QObject {
     Q_PROPERTY(dish::qml::SlotListModel* slotModel READ slotModel CONSTANT)
     Q_PROPERTY(dish::qml::ConnectionListModel* connectionModel READ connectionModel CONSTANT)
 
+    // ── Settings: appearance + diagnostics (re-projections of the stores) ─────
+    // themeMode 0=Light 1=Dark 2=System (the SettingsPage chip order). setThemeMode
+    // forwards to ThemePreferenceStore; the ThemeController re-themes the live app
+    // off its Observable, and we re-emit so QML re-reads + the chrome dark-mode
+    // attribute follows. crashReportingEnabled forwards to CrashReportingStore.
+    Q_PROPERTY(int themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged)
+    Q_PROPERTY(bool crashReportingEnabled READ crashReportingEnabled WRITE
+                   setCrashReportingEnabled NOTIFY crashReportingChanged)
+
+    // ── About ─────────────────────────────────────────────────────────────────
+    // The build version string (CMake project VERSION, threaded in as DISH_VERSION).
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
+
+    // ── First-run onboarding (mirrors maybeShowOnboarding's gate) ─────────────
+    // onboardingNeeded == !OnboardingPreferenceStore::welcomeCompleted(). Main.qml
+    // pushes the onboarding flow on it; markOnboardingComplete() persists the flag.
+    Q_PROPERTY(bool onboardingNeeded READ onboardingNeeded NOTIFY onboardingNeededChanged)
+
+    // ── Donate (brand defaults, mirroring DonateView's localizable URLs) ──────
+    Q_PROPERTY(QString donateSponsorsUrl READ donateSponsorsUrl CONSTANT)
+    Q_PROPERTY(QString donateKofiUrl READ donateKofiUrl CONSTANT)
+    Q_PROPERTY(QString donateBmacUrl READ donateBmacUrl CONSTANT)
+
   public:
     explicit AppViewModel(dish::AppModel* model, QObject* parent = nullptr);
 
@@ -81,6 +111,32 @@ class AppViewModel : public QObject {
 
     SlotListModel* slotModel() { return &slotModel_; }
     ConnectionListModel* connectionModel() { return &connectionModel_; }
+
+    int themeMode() const;
+    void setThemeMode(int mode);
+    bool crashReportingEnabled() const;
+    void setCrashReportingEnabled(bool enabled);
+    QString appVersion() const;
+    bool onboardingNeeded() const;
+    QString donateSponsorsUrl() const;
+    QString donateKofiUrl() const;
+    QString donateBmacUrl() const;
+
+    // The external-open sink: the QmlEntryPoint injects the real ExternalLink
+    // path (which routes a failure through the NotificationQueue toast, matching
+    // Widgets). Returns true iff the open was handed off. When unset (tests / no
+    // entry point) the default below opens via QDesktopServices and reports a
+    // failure through errorMessage(). Kept as a seam so dish_core need not link
+    // the exe-only ExternalLink/NotificationQueue.
+    using ExternalOpenSink = std::function<bool(const QString& url)>;
+    void setExternalOpenSink(ExternalOpenSink sink) { externalOpenSink_ = std::move(sink); }
+
+    // The theme-applied sink: the QmlEntryPoint injects a callback that refreshes
+    // the QML Theme singleton + flips the chrome immersive-dark attribute to the
+    // resolved appearance (true == dark). Called after a setThemeMode so the live
+    // QML palette + the native title bar follow the new mode. Unset in tests.
+    using ThemeAppliedSink = std::function<void(bool dark)>;
+    void setThemeAppliedSink(ThemeAppliedSink sink) { themeAppliedSink_ = std::move(sink); }
 
     // ── Commands (forward verbatim to the existing AppModel surface) ─────────
 
@@ -113,6 +169,26 @@ class AppViewModel : public QObject {
     Q_INVOKABLE bool isPairingInFlight(const QString& serverId) const;
     Q_INVOKABLE void clearPairingTarget();
 
+    // ── Deadzone settings page ───────────────────────────────────────────────
+    // The per-device rows {id,name,hasGyro,stickFlat,triggerFlat,forwardMotion}
+    // (re-pull on deadzonesChanged). setDeadzones persists the override AND pushes
+    // it into the live processor (same pair the Widgets view + MainWindow do);
+    // setMotionEnabled forwards to MotionEnabledStore keyed by the device id.
+    Q_INVOKABLE QVariantList deadzoneDevices() const;
+    Q_INVOKABLE void setDeadzones(const QString& deviceId, int stickFlat, int triggerFlat);
+    Q_INVOKABLE void setMotionEnabled(const QString& deviceId, bool enabled);
+
+    // ── Licenses page ────────────────────────────────────────────────────────
+    // The bundled third-party manifest as {name,version,license,url} rows.
+    Q_INVOKABLE QVariantList licenses() const;
+
+    // ── Onboarding + external links ──────────────────────────────────────────
+    // Persist the welcome-completed flag (Main.qml calls this when the flow's
+    // completed() fires). openExternalUrl routes through the injected sink so a
+    // failure raises the same toast the Widgets screens do.
+    Q_INVOKABLE void markOnboardingComplete();
+    Q_INVOKABLE void openExternalUrl(const QString& url);
+
   signals:
     // Any header/slot/connection/pairing state changed (folds AppModel's
     // stateChanged + the coordinator's connectionsChanged).
@@ -122,6 +198,26 @@ class AppViewModel : public QObject {
     // Transient one-shot error, forwarded from AppModel::errorMessage so the QML
     // toast host can surface it.
     void errorMessage(const QString& message);
+
+    // Settings property NOTIFYs. themeMode/crashReporting re-emit when the store
+    // republishes; onboardingNeeded flips false once markOnboardingComplete lands.
+    void themeModeChanged();
+    void crashReportingChanged();
+    void onboardingNeededChanged();
+
+    // Discovery results moved (P2 had to re-pull discoveredServers() on the broad
+    // stateChanged; this is the precise edge to re-pull on). Folds the
+    // WifiConnectionManager's discoveredChanged.
+    void discoveredChanged();
+
+    // The deadzone device rows / their seeded values moved (a device attached or
+    // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().
+    void deadzonesChanged();
+
+    // A one-shot pairing-success edge (a session reached Connected after a pair).
+    // Mirrors the rising edge of a connection going live; the QML pairing sheet
+    // closes on it. Best-effort, fired at most once per live transition.
+    void pairingSucceeded();
 
   private:
     // Recompute the cached header/pairing fields + repush the slot model from
@@ -149,6 +245,24 @@ class AppViewModel : public QObject {
 
     bool pairingActive_ = false;
     QString pairingServerName_;
+
+    // Cached so onStateChanged can fire pairingSucceeded() on the rising edge of
+    // the online count (a fresh connection reached Connected).
+    int lastOnlineCount_ = 0;
+
+    // Cached onboarding gate so onStateChanged can fire onboardingNeededChanged
+    // only on a real transition (markOnboardingComplete is the only mover today,
+    // but the store could change out from under us).
+    bool onboardingNeeded_ = false;
+
+    ExternalOpenSink externalOpenSink_;
+    ThemeAppliedSink themeAppliedSink_;
+
+    // Store-observable subscriptions held for the model's lifetime so the
+    // store-side republish (theme/crash/onboarding) re-emits our Qt NOTIFYs.
+    arch::Observable<source::ThemeMode>::Subscription themeSub_;
+    arch::Observable<bool>::Subscription crashSub_;
+    arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
 };
 
 } // namespace dish::qml

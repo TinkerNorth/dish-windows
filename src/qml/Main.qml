@@ -57,4 +57,18 @@ ApplicationWindow {
 
         initialItem: AppShell {}
     }
+
+    // First-run gate (C++/Main owns the policy, per the onboarding convention).
+    // If the onboarding store reports the welcome flow hasn't completed, push the
+    // flow full-screen over the shell; its one-shot completed() pops it and marks
+    // onboarding done via the App surface (App.onboardingNeeded then flips false).
+    Component.onCompleted: {
+        if (App.onboardingNeeded) {
+            const flow = appRoot.push(Qt.resolvedUrl("onboarding/OnboardingFlow.qml"));
+            flow.completed.connect(function () {
+                appRoot.pop();
+                App.markOnboardingComplete();
+            });
+        }
+    }
 }

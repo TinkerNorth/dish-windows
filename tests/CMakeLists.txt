@@ -150,7 +150,13 @@ set(DISH_TEST_SOURCES
     # tokens): roleNames coverage, row-count tracking, data() per role, and the
     # minimal dataChanged/rowsInserted/rowsRemoved on a state push.
     test_slot_list_model.cpp
-    test_connection_list_model.cpp)
+    test_connection_list_model.cpp
+    # QML migration (A-ext) — the AppViewModel settings/about/deadzone/license
+    # EXPOSURE mapping (qml/AppSettingsMaps): theme-mode int<->enum + store
+    # round-trip, crash toggle forwarding, deadzone row folding (override + default
+    # seed + per-device motion), license-row projection, onboarding gate +
+    # markWelcomeCompleted. Driven via the real stores over isolated QSettings.
+    test_app_view_model_maps.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

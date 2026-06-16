@@ -364,10 +364,18 @@ set(DISH_CORE_SOURCES
     src/qml/ConnectionListModel.h
     src/qml/ConnectionListModel.cpp
     src/qml/AppViewModel.h
-    src/qml/AppViewModel.cpp)
+    src/qml/AppViewModel.cpp
+    # qml — pure settings/about/deadzone/license mapping helpers the AppViewModel
+    # re-projects (split out so the mapping is unit-testable without the heavy
+    # AppModel). Plain QVariant + borrowed store pointers; Qt Core/Gui only.
+    src/qml/AppSettingsMaps.h
+    src/qml/AppSettingsMaps.cpp)
 
 add_library(dish_core STATIC ${DISH_CORE_SOURCES})
 target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+# The build version string the About surface reads (AppViewModel::appVersion).
+# Sourced from the single CMake project VERSION so it never drifts from dish.rc.
+target_compile_definitions(dish_core PUBLIC DISH_VERSION="${PROJECT_VERSION}")
 target_link_libraries(dish_core
     PUBLIC
         Qt6::Core Qt6::Network

@@ -6,11 +6,9 @@
 // Appearance (theme), Deadzones (entry → detail sub-page), Diagnostics (crash
 // reporting), About (version + Licenses entry), Support (Donate entry).
 //
-// CONTRACT NOTE: most of these settings stores are NOT yet on the frozen `App`
-// surface (docs/QML_CONTRACT.md exposes slots/connections/telemetry/pairing
-// only). Each data/action surface below binds to a clearly-named placeholder
-// property and is flagged in this agent's report for the coordinator to wire.
-// No business logic lives here — the placeholders stand in for App.* bindings.
+// Bound to the real `App` surface: App.themeMode / App.crashReportingEnabled /
+// App.appVersion (docs/QML_CONTRACT.md §1b). The stores behind them are the
+// already-tested ThemePreferenceStore / CrashReportingStore; App only re-projects.
 
 // Bind outer-component ids into nested Repeater delegates (qmllint-clean
 // qualified access to `settingsPage` from inside the theme-chip delegate).
@@ -26,17 +24,7 @@ Kit.Page {
     id: settingsPage
     title: qsTr("Settings")
 
-    // ── Placeholder contract surfaces ────────────────────────────────────────
-    // These mirror the Widgets stores. They are LOCAL placeholders so the page
-    // renders and reads naturally; the coordinator replaces each with the real
-    // App.* binding once the contract is extended (see report). Documented:
-    //   themeMode        → ThemePreferenceStore (test_theme_store)
-    //   crashReporting   → CrashReportingStore  (test_crash_reporting)
-    //   appVersion       → app version string   (CMake project VERSION)
-    property int themeMode: 2                 // 0=Light 1=Dark 2=System
-    property bool crashReportingEnabled: true // CrashReportingStore default = on
     readonly property string appName: qsTr("Dish")
-    readonly property string appVersion: "0.1.0"  // placeholder → App.appVersion
 
     // ── Appearance ───────────────────────────────────────────────────────────
     Kit.SectionHeader { label: qsTr("Appearance") }
@@ -75,14 +63,14 @@ Kit.Page {
                         required property var modelData
                         text: modelData.label
                         checkable: true
-                        checked: settingsPage.themeMode === modelData.mode
+                        checked: App.themeMode === modelData.mode
                         font.pixelSize: 12
                         implicitHeight: 30
                         leftPadding: 14
                         rightPadding: 14
-                        // setMode persists + republishes in the store; here we
-                        // only move the placeholder (coordinator wires the call).
-                        onClicked: settingsPage.themeMode = modelData.mode
+                        // setThemeMode persists + republishes (ThemePreferenceStore)
+                        // and re-themes the live app + chrome (see App.setThemeMode).
+                        onClicked: App.setThemeMode(modelData.mode)
 
                         contentItem: Text {
                             text: chip.text
@@ -151,9 +139,9 @@ Kit.Page {
             description: qsTr("On by default — turn off to opt out. Shares anonymized crash logs and "
                             + "stack traces to help fix bugs; no gameplay or controller input is "
                             + "included. (No crash backend is wired yet.)")
-            checked: settingsPage.crashReportingEnabled
-            // store->setEnabled(on) in Widgets; placeholder mirror here.
-            onToggled: settingsPage.crashReportingEnabled = checked
+            checked: App.crashReportingEnabled
+            // Forwards to CrashReportingStore::setEnabled (opt-out, default on).
+            onToggled: App.setCrashReportingEnabled(checked)
         }
     }
 
@@ -182,7 +170,7 @@ Kit.Page {
                         font.bold: true
                     }
                     Label {
-                        text: qsTr("Version %1").arg(settingsPage.appVersion)
+                        text: qsTr("Version %1").arg(App.appVersion)
                         color: Theme.muted
                         font.pixelSize: 11
                         font.family: "Consolas"

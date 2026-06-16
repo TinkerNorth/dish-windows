@@ -42,6 +42,12 @@ public:
     // themed fallback instead. Safe to call once the window has a native handle.
     bool applyMicaBackdrop();
 
+    // Flip the DWMWA_USE_IMMERSIVE_DARK_MODE attribute so the OS-drawn frame edges
+    // / shadow tint match the app's resolved appearance. Called when the theme
+    // mode changes so the native chrome doesn't drift light while the body re-darks
+    // (the "Mica resolved light" mismatch). No-op on pre-Win11.
+    void setImmersiveDarkMode(bool dark);
+
     bool nativeEventFilter(const QByteArray& eventType, void* message,
                            qintptr* result) override;
 

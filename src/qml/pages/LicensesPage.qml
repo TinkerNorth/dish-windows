@@ -6,13 +6,10 @@
 // its name, version (monospace) and license label, opening the license URL when
 // tapped.
 //
-// CONTRACT NOTE: the license manifest is NOT on the frozen `App` surface. The
-// rows below are SEEDED from assets/licenses/licenses.json (the same bundle the
-// Widgets view parses) as a LOCAL placeholder so the page lists real
-// attributions; the coordinator should replace `entries` with the manifest
-// binding and `openUrl` with the real external-link action. Mappings (report):
-//   entries → LicenseManifest / loadBundledLicenseManifest (test_license_manifest)
-//   openUrl → ExternalLink openExternalUrl
+// Bound to the real `App` surface: App.licenses() rows (the bundled manifest via
+// loadBundledLicenseManifest, mapped with the same display rules the Widgets
+// LicensesView uses) and App.openExternalUrl (routes through ExternalLink so a
+// failure raises a toast). See docs/QML_CONTRACT.md §1b.
 
 // Bind outer-component ids (licensesPage) into the license-row Repeater delegate.
 pragma ComponentBehavior: Bound
@@ -27,21 +24,9 @@ Kit.Page {
     id: licensesPage
     title: qsTr("Open source licenses")
 
-    // Seeded from assets/licenses/licenses.json. Shape: { name, version, license, url }.
-    readonly property var entries: [
-        { name: "Qt 6", version: "6.7.3",
-          license: qsTr("GNU Lesser General Public License v3.0"),
-          url: "https://www.gnu.org/licenses/lgpl-3.0.html" },
-        { name: "Simple DirectMedia Layer (SDL2)", version: "2.30",
-          license: qsTr("zlib License"),
-          url: "https://www.zlib.net/zlib_license.html" },
-        { name: "libsodium", version: "1.0.20",
-          license: qsTr("ISC License"),
-          url: "https://opensource.org/license/isc-license-txt" },
-        { name: "Catch2", version: "3.5.4",
-          license: qsTr("Boost Software License 1.0"),
-          url: "https://www.boost.org/LICENSE_1_0.txt" }
-    ]
+    // The bundled manifest, mapped to { name, version, license, url } rows. Read
+    // once on load (the manifest is a static resource — it never moves at runtime).
+    readonly property var entries: App.licenses()
 
     Kit.SectionHeader { label: qsTr("Open source licenses") }
 
@@ -103,12 +88,12 @@ Kit.Page {
         }
     }
 
-    // Placeholder external-open. Qt.openUrlExternally is a platform call (not
-    // business logic); the coordinator may route it through the app's notifying
-    // ExternalLink helper instead.
+    // Route through App.openExternalUrl so a failed open raises the same toast the
+    // Widgets LicensesView does (via ExternalLink/NotificationQueue), not a raw
+    // Qt.openUrlExternally that fails silently.
     function openUrl(url) {
         if (url && url.length > 0) {
-            Qt.openUrlExternally(url);
+            App.openExternalUrl(url);
         }
     }
 }

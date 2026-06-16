@@ -21,16 +21,19 @@ class ThemeBridge : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(Theme)
     QML_SINGLETON
-    Q_PROPERTY(QColor background READ background CONSTANT)
-    Q_PROPERTY(QColor surface READ surface CONSTANT)
-    Q_PROPERTY(QColor surfaceDim READ surfaceDim CONSTANT)
-    Q_PROPERTY(QColor primary READ primary CONSTANT)
-    Q_PROPERTY(QColor onSurface READ onSurface CONSTANT)
-    Q_PROPERTY(QColor muted READ muted CONSTANT)
-    Q_PROPERTY(QColor outline READ outline CONSTANT)
-    Q_PROPERTY(QColor success READ success CONSTANT)
-    Q_PROPERTY(QColor error READ error CONSTANT)
-    Q_PROPERTY(QColor warning READ warning CONSTANT)
+    // NOTIFY paletteChanged (was CONSTANT): the active C++ palette is now swapped
+    // live by setThemeMode, so these tokens re-read when the appearance flips.
+    // refresh() (called from the QmlEntryPoint after a theme change) re-emits.
+    Q_PROPERTY(QColor background READ background NOTIFY paletteChanged)
+    Q_PROPERTY(QColor surface READ surface NOTIFY paletteChanged)
+    Q_PROPERTY(QColor surfaceDim READ surfaceDim NOTIFY paletteChanged)
+    Q_PROPERTY(QColor primary READ primary NOTIFY paletteChanged)
+    Q_PROPERTY(QColor onSurface READ onSurface NOTIFY paletteChanged)
+    Q_PROPERTY(QColor muted READ muted NOTIFY paletteChanged)
+    Q_PROPERTY(QColor outline READ outline NOTIFY paletteChanged)
+    Q_PROPERTY(QColor success READ success NOTIFY paletteChanged)
+    Q_PROPERTY(QColor error READ error NOTIFY paletteChanged)
+    Q_PROPERTY(QColor warning READ warning NOTIFY paletteChanged)
 
 public:
     explicit ThemeBridge(QObject* parent = nullptr);
@@ -45,6 +48,13 @@ public:
     QColor success() const;
     QColor error() const;
     QColor warning() const;
+
+    // Re-read the active C++ Theme tokens (call after setActiveAppearance swapped
+    // the palette). Every token property re-evaluates off the one paletteChanged.
+    Q_INVOKABLE void refresh();
+
+signals:
+    void paletteChanged();
 };
 
 } // namespace dish::chrome
