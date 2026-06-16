@@ -166,6 +166,16 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void bindSlot(const QString& slotId, const QString& connectionId);
     Q_INVOKABLE void unbindSlot(const QString& slotId);
 
+    // Force a slot's USB input path: "standard" (let SDL/XInput own the pad),
+    // "direct" (raw-HID claim), or "auto" (clear the override; the resolution
+    // policy decides). Resolves slotId -> (vid, pid) — a synthetic slot's id IS
+    // the packed vpKey string; an SDL slot's identity comes from the bridge
+    // device list — then forwards to the existing UsbGamepadManager::setPathChoice
+    // / clearChoice. AppModel already rebuilds + emits stateChanged on a USB path
+    // change, so the slot roles refresh with no new NOTIFY. A no-op when the slot
+    // has no resolvable (vid, pid) or no USB manager is wired.
+    Q_INVOKABLE void setSlotPath(const QString& slotId, const QString& choice);
+
     // The connections a slot may actually bind to, for the bind chooser. Returns
     // JS objects {connectionId,label,dotColor,glyph} via the SAME pure
     // reducer::connectionsVisibleInPicker the Widgets SlotCard uses: connections

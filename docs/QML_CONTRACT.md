@@ -78,6 +78,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 |---|---|---|
 | `bindSlot(slotId, connectionId)` | `string, string` | Bind a slot to a connection (the SlotCard bind menu). |
 | `unbindSlot(slotId)` | `string` | Unbind the slot. |
+| `setSlotPath(slotId, choice)` | `string, string` | Force the slot's USB input path: `"standard"` (SDL/XInput owns the pad), `"direct"` (raw-HID claim), or `"auto"` (clear the override; the resolution policy decides). Resolves `slotId` → `(vid, pid)` (a synthetic slot's id IS the packed vpKey string; an SDL slot's identity comes from the bridge device list) and forwards to `UsbGamepadManager::setPathChoice` / `clearChoice`. No-op when the slot has no resolvable identity or no USB manager is wired. The slot roles (`pathPhase`/`desiredPath`/…) refresh on the next `stateChanged` — no new NOTIFY. Gate the control on the `pathSupported` role. |
 | `availableConnectionsForSlot(slotId)` | `string` → `list` | The connections this slot may bind to, for the bind chooser, as JS objects `{ connectionId:string, label:string, dotColor:string, glyph:string }` (`dotColor`/`glyph` are the same tokens §3 exposes). Computed via the SAME pure `reducer::connectionsVisibleInPicker` the Widgets SlotCard uses: connections bound to ANOTHER slot are EXCLUDED, live-available unbound ones are offered, and the slot's OWN current binding is held over even when offline. Read it **one-shot when the chooser opens** (like `emulateTypes`) — no NOTIFY. Do NOT bind the chooser to the unfiltered `connectionModel`, and gate the Bind button on this list being non-empty (or the slot being bound), not the total `connectionModel.count`. |
 | `refreshEmulate(slotId)` | `string` | Kick a best-effort catalog refresh for the slot's bound satellite. Call before reading `emulateTypes` so a later open shows fresh types. |
 | `emulateTypes(slotId)` | `string` → `list` | Offerable controller types as JS objects: `{ type:int, slug:string, name:string, shortName:string, description:string, known:bool }`. Empty if the slot is unbound or no catalog cached yet. |
@@ -190,6 +191,11 @@ never resets on a quiet telemetry tick.
 | `motionHzShown` | `bool` | Whether to show the motion-rate chip (only for motion-capable pads with a reading). |
 | `pollHz` | `int` | Measured USB-direct poll rate (URB completion rate). |
 | `pollHzShown` | `bool` | Whether to show the poll-rate chip (USB-direct pads with a reading). |
+| `pathPhase` | `string` | USB-path FSM phase token: `"routed"` / `"claiming"` / `"direct"` / `"awaitingFramework"` / `"restoreStuck"` / `"needsReplug"`. |
+| `desiredPath` | `string` | Resolved desired path the toggle reads as selected: `"standard"` / `"direct"`. (`"auto"` is a `setSlotPath` INPUT only — it resolves to one of these, so it never appears here.) |
+| `pathSupported` | `bool` | The device is a raw-HID-claimable controller (a `UsbController` exists for it). Show the Standard/Direct/Auto control ONLY when true — an Xbox/XInput pad has none and hides it. |
+| `claimInProgress` | `bool` | `pathPhase == "claiming"` — a Direct claim is in flight. Disable the toggle + show a spinner while true. |
+| `directFailure` | `string` | Last Direct-claim failure reason token (`"permissionDenied"` / `"busy"` / `"initFailed"` / `"dropped"`), or `""` when none. Drives the inline note (together with the `needsReplug` / `restoreStuck` phases). |
 
 > The `*Shown` / `*Live` booleans come from the SAME pure `SlotLiveStats` mapper
 > the Widgets card uses, so the two UIs never disagree about which chip renders.

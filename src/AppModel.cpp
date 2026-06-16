@@ -7,6 +7,7 @@
 #include "composer/StreamingSlotCount.h"
 #include "core/input/UsbReportParsers.h"
 #include "core/reducer/RumbleRouting.h"
+#include "core/reducer/SlotPathFields.h"
 #include "core/reducer/TouchpadRouting.h"
 #include "core/reducer/UsbTwinDedup.h"
 
@@ -23,6 +24,23 @@
 #include <vector>
 
 namespace dish {
+
+namespace {
+
+// Stamp the USB path fields onto a slot from the pure reducer mapper. Lives here
+// (not in the loop body) so both the SDL-slot and synthetic-slot rebuild arms
+// thread through the SAME one-line cross-reference. Keeping the derivation in the
+// pure reducer::slotPathFields makes it unit-testable without a live manager.
+void stampSlotPath(models::ControllerSlot& s, int vendorId, int productId,
+                   const std::map<int, reducer::UsbController>& controllers) {
+    const reducer::SlotPathFields f = reducer::slotPathFields(vendorId, productId, controllers);
+    s.pathSupported = f.supported;
+    s.pathPhase = f.phase;
+    s.desiredPath = f.desired;
+    s.directFailure = f.failure;
+}
+
+} // namespace
 
 AppModel::AppModel(QObject* parent)
     : AppModel(std::make_unique<util::SetThreadExecutionStateInhibitor>(), parent) {}
@@ -520,6 +538,11 @@ void AppModel::rebuild() {
         // host machine's for a wired/unknown one.
         s.capabilities.batteryLevel = d.batteryLevel;
         s.capabilities.batteryStatus = d.batteryStatus;
+        // Stamp the USB path state by cross-referencing the matching
+        // UsbController by this SDL device's (vid, pid). A pad the raw-HID
+        // gateway never enumerates (Xbox/XInput) has no controller -> the pure
+        // mapper leaves pathSupported=false and the card hides the control.
+        stampSlotPath(s, d.vendorId, d.productId, controllers);
         next.append(s);
     }
 
@@ -541,6 +564,10 @@ void AppModel::rebuild() {
         // independently-measured poll rate (URB completion rate) for it.
         s.usbDirect = true;
         s.liveRates.directPollHz = usbPollRateHz_.value(key, 0);
+        // A synthetic IS a USB-direct controller, so it is always
+        // path-supported; the mapper reads the phase/desired/failure off its own
+        // controller entry (keyed by vid/pid, which round-trips to this key).
+        stampSlotPath(s, c.vendorId, c.productId, controllers);
         next.append(s);
     }
 

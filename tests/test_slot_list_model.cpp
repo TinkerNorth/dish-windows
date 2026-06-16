@@ -12,6 +12,9 @@
 // input IS that slice; it owns no store of its own.
 
 #include "Models/Models.h"
+#include "core/reducer/DirectClaimFailure.h"
+#include "core/reducer/PathChoice.h"
+#include "core/reducer/UsbPathMachine.h"
 #include "qml/SlotListModel.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -96,13 +99,18 @@ QVariant roleOf(const SlotListModel& model, int row, int role) {
 TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel][roles]") {
     SlotListModel model;
     const auto names = model.roleNames();
-    // One entry per declared role (Id..PollHzShown). If a role is added without a
-    // name, this count drifts and the test flags it.
-    REQUIRE(names.size() == 20);
+    // One entry per declared role (Id..DirectFailure). If a role is added without
+    // a name, this count drifts and the test flags it.
+    REQUIRE(names.size() == 25);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
     REQUIRE(names.value(SlotListModel::GamepadHzShownRole) == QByteArray("gamepadHzShown"));
     REQUIRE(names.value(SlotListModel::PollHzShownRole) == QByteArray("pollHzShown"));
+    REQUIRE(names.value(SlotListModel::PathPhaseRole) == QByteArray("pathPhase"));
+    REQUIRE(names.value(SlotListModel::DesiredPathRole) == QByteArray("desiredPath"));
+    REQUIRE(names.value(SlotListModel::PathSupportedRole) == QByteArray("pathSupported"));
+    REQUIRE(names.value(SlotListModel::ClaimInProgressRole) == QByteArray("claimInProgress"));
+    REQUIRE(names.value(SlotListModel::DirectFailureRole) == QByteArray("directFailure"));
     // No duplicate role names (each maps a distinct delegate property).
     QSet<QByteArray> unique;
     for (const auto& n : names) { unique.insert(n); }
@@ -283,4 +291,66 @@ TEST_CASE("SlotListModel: out-of-range index returns an invalid variant", "[slot
     SlotListModel model;
     model.setState({plainSlot()});
     REQUIRE_FALSE(model.data(model.index(5, 0), SlotListModel::NameRole).isValid());
+}
+
+namespace r = dish::reducer;
+
+TEST_CASE("SlotListModel: path roles default to the inert unsupported state",
+          "[slotmodel][path]") {
+    // A plain slot carries no USB path entry -> the control is hidden and the
+    // tokens read their defaults.
+    SlotListModel model;
+    model.setState({plainSlot()});
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::PathSupportedRole).toBool());
+    REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "routed");
+    REQUIRE(roleOf(model, 0, SlotListModel::DesiredPathRole).toString() == "standard");
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::ClaimInProgressRole).toBool());
+    REQUIRE(roleOf(model, 0, SlotListModel::DirectFailureRole).toString().isEmpty());
+}
+
+TEST_CASE("SlotListModel: a supported Direct slot exposes the path roles as tokens",
+          "[slotmodel][path]") {
+    SlotListModel model;
+    auto s = richSlot();
+    s.pathSupported = true;
+    s.pathPhase = r::UsbPhase::Direct;
+    s.desiredPath = r::PathChoice::Direct;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::PathSupportedRole).toBool());
+    REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "direct");
+    REQUIRE(roleOf(model, 0, SlotListModel::DesiredPathRole).toString() == "direct");
+    // Direct (not Claiming) -> no in-flight spinner.
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::ClaimInProgressRole).toBool());
+}
+
+TEST_CASE("SlotListModel: claimInProgress is true exactly in the Claiming phase",
+          "[slotmodel][path]") {
+    SlotListModel model;
+    auto s = plainSlot();
+    s.pathSupported = true;
+    s.pathPhase = r::UsbPhase::Claiming;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::ClaimInProgressRole).toBool());
+    REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "claiming");
+}
+
+TEST_CASE("SlotListModel: a Direct failure surfaces as a token; needsReplug/restoreStuck phases map",
+          "[slotmodel][path]") {
+    SlotListModel model;
+    auto s = plainSlot();
+    s.pathSupported = true;
+    s.pathPhase = r::UsbPhase::Routed;
+    s.directFailure = r::DirectClaimFailure::Busy;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::DirectFailureRole).toString() == "busy");
+
+    s.directFailure.reset();
+    s.pathPhase = r::UsbPhase::NeedsReplug;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "needsReplug");
+    REQUIRE(roleOf(model, 0, SlotListModel::DirectFailureRole).toString().isEmpty());
+
+    s.pathPhase = r::UsbPhase::RestoreStuck;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "restoreStuck");
 }

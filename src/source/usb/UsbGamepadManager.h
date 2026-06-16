@@ -109,6 +109,12 @@ class UsbGamepadManager {
     // user-initiated Choose. Mirrors android setPathChoice.
     void setPathChoice(int vendorId, int productId, reducer::PathChoice choice);
 
+    // The user picks Auto: drop the stored override and drive a user-initiated
+    // Choose with the freshly RE-RESOLVED path (the resolution policy now decides
+    // with no stored pick — a fast-lane model returns to Direct, everything else
+    // to Standard). Mirrors android clearChoice.
+    void clearChoice(int vendorId, int productId);
+
     // ── World-signal entry points (the driver turns these into events) ────────
     // Framework (SDL/XInput) device for this model appeared / disappeared.
     void onFrameworkUp(int vendorId, int productId, int frameworkId);

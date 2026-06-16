@@ -11,6 +11,52 @@ namespace {
 
 constexpr std::uint8_t kBatteryLevelUnknown = 0xFF;
 
+// The stable phase token the QML path control switches on. Kept here (a
+// view-model string concern) rather than on the Qt-free FSM enum; a test pins it
+// indirectly through the role. Mirrors the android PathCard's phase strings.
+QString pathPhaseToken(reducer::UsbPhase phase) {
+    switch (phase) {
+    case reducer::UsbPhase::Routed:
+        return QStringLiteral("routed");
+    case reducer::UsbPhase::Claiming:
+        return QStringLiteral("claiming");
+    case reducer::UsbPhase::Direct:
+        return QStringLiteral("direct");
+    case reducer::UsbPhase::AwaitingFramework:
+        return QStringLiteral("awaitingFramework");
+    case reducer::UsbPhase::RestoreStuck:
+        return QStringLiteral("restoreStuck");
+    case reducer::UsbPhase::NeedsReplug:
+        return QStringLiteral("needsReplug");
+    }
+    return QStringLiteral("routed"); // unreachable; total switch
+}
+
+// The resolved desired path the toggle reads as selected. The stamped value is
+// always the FSM's resolved PathChoice (Direct/Standard) — Auto resolves to one
+// of these — so only those two strings appear; "auto" is an input to
+// setSlotPath, never a reflected desired.
+QString desiredPathToken(reducer::PathChoice choice) {
+    return choice == reducer::PathChoice::Direct ? QStringLiteral("direct")
+                                                 : QStringLiteral("standard");
+}
+
+// The last Direct-claim failure reason for the inline note. Empty when none.
+QString directFailureToken(const std::optional<reducer::DirectClaimFailure>& failure) {
+    if (!failure.has_value()) { return {}; }
+    switch (*failure) {
+    case reducer::DirectClaimFailure::PermissionDenied:
+        return QStringLiteral("permissionDenied");
+    case reducer::DirectClaimFailure::Busy:
+        return QStringLiteral("busy");
+    case reducer::DirectClaimFailure::InitFailed:
+        return QStringLiteral("initFailed");
+    case reducer::DirectClaimFailure::Dropped:
+        return QStringLiteral("dropped");
+    }
+    return {}; // unreachable; total switch
+}
+
 // Semantic dot-color token a SlotCard paints: green only when the bound session
 // is genuinely Connected, amber for any other bound-but-not-live state, muted
 // when unbound. Mirrors SlotCard::setSlot's dot logic exactly.
@@ -95,6 +141,17 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         const auto chip = ui::pollRateChip(s.liveRates, s.usbDirect);
         return chip.kind != ui::RateChipKind::Hidden;
     }
+
+    case PathPhaseRole:
+        return pathPhaseToken(s.pathPhase);
+    case DesiredPathRole:
+        return desiredPathToken(s.desiredPath);
+    case PathSupportedRole:
+        return s.pathSupported;
+    case ClaimInProgressRole:
+        return s.pathPhase == reducer::UsbPhase::Claiming;
+    case DirectFailureRole:
+        return directFailureToken(s.directFailure);
     default:
         return {};
     }
@@ -122,6 +179,11 @@ QHash<int, QByteArray> SlotListModel::roleNames() const {
         {MotionHzShownRole, "motionHzShown"},
         {PollHzRole, "pollHz"},
         {PollHzShownRole, "pollHzShown"},
+        {PathPhaseRole, "pathPhase"},
+        {DesiredPathRole, "desiredPath"},
+        {PathSupportedRole, "pathSupported"},
+        {ClaimInProgressRole, "claimInProgress"},
+        {DirectFailureRole, "directFailure"},
     };
 }
 

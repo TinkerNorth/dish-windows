@@ -162,6 +162,12 @@ set(DISH_TEST_SOURCES
     # tokens): roleNames coverage, row-count tracking, data() per role, and the
     # minimal dataChanged/rowsInserted/rowsRemoved on a state push.
     test_slot_list_model.cpp
+    # QML migration (USB path surfacing) — the PURE slot-identity x controllers-map
+    # -> path-fields mapper (routed reflects its controller; synthetic reports
+    # Direct; an Xbox pad with no controller is unsupported) + the synthetic
+    # slot-id (vpKey) parse the view model resolves (vid, pid) through. No live
+    # UsbGamepadManager (it opens real USB/SDL and would hang).
+    test_slot_path_fields.cpp
     test_connection_list_model.cpp
     # QML migration (A-ext) — the AppViewModel settings/about/deadzone/license
     # EXPOSURE mapping (qml/AppSettingsMaps): theme-mode int<->enum + store

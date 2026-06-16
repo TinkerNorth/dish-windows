@@ -91,6 +91,22 @@ void UsbGamepadManager::setPathChoice(int vendorId, int productId, reducer::Path
     applyEvent(vpKey(vendorId, productId), reducer::event::Choose{choice, /*userInitiated=*/true});
 }
 
+void UsbGamepadManager::clearChoice(int vendorId, int productId) {
+    if (prefs_ != nullptr) { prefs_->clearChoice(vendorId, productId); }
+    // Bring a present-but-untracked device in first (chosen before the first
+    // scan), then re-resolve the path with the override now gone and drive it.
+    if (gateway_ != nullptr) {
+        for (const auto& d : gateway_->enumerate()) {
+            if (d.vendorId == vendorId && d.productId == productId) {
+                ensureTracked(d);
+                break;
+            }
+        }
+    }
+    applyEvent(vpKey(vendorId, productId),
+               reducer::event::Choose{resolvePath(vendorId, productId), /*userInitiated=*/true});
+}
+
 void UsbGamepadManager::onFrameworkUp(int vendorId, int productId, int frameworkId) {
     applyEvent(vpKey(vendorId, productId), reducer::event::FrameworkUp{frameworkId});
 }

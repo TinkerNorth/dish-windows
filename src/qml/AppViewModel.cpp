@@ -11,7 +11,10 @@
 #include "composer/ConnectionCoordinator.h"
 #include "core/input/Deadzones.h"
 #include "core/reducer/ConnectionRows.h"
+#include "core/reducer/PathChoice.h"
 #include "core/reducer/PickerVisibility.h"
+#include "core/reducer/SlotPathFields.h"
+#include "source/usb/UsbGamepadManager.h"
 #include "qml/AppSettingsMaps.h"
 #include "repository/DeadzoneRepository.h"
 #include "source/store/CrashReportingStore.h"
@@ -198,6 +201,43 @@ void AppViewModel::bindSlot(const QString& slotId, const QString& connectionId) 
 }
 
 void AppViewModel::unbindSlot(const QString& slotId) { model_->hub()->unbind(slotId); }
+
+namespace {
+// Resolve a slot id to its model (vid, pid). A synthetic slot's id IS the packed
+// vpKey string (parse it); an SDL slot's id ("sdl:<iid>") doesn't parse, so fall
+// back to the bridge device list, matching the id. Returns nullopt when neither
+// path yields an identity (an unknown slot, or an SDL pad SDL couldn't identify).
+std::optional<std::pair<int, int>> resolveSlotVidPid(dish::AppModel* model,
+                                                     const QString& slotId) {
+    if (const auto parsed = reducer::parseSyntheticSlotId(slotId.toStdString())) { return parsed; }
+    for (const auto& d : model->bridge()->devices()) {
+        if (d.id == slotId) {
+            if (d.vendorId == 0 || d.productId == 0) { return std::nullopt; }
+            return std::make_pair(d.vendorId, d.productId);
+        }
+    }
+    return std::nullopt;
+}
+} // namespace
+
+void AppViewModel::setSlotPath(const QString& slotId, const QString& choice) {
+    auto* usb = model_->usbManager();
+    if (usb == nullptr) { return; }
+    const auto vidPid = resolveSlotVidPid(model_, slotId);
+    if (!vidPid.has_value()) { return; }
+    const auto [vendorId, productId] = *vidPid;
+    // "auto" clears the override (the resolution policy decides); the two explicit
+    // picks persist + drive a user-initiated Choose through the existing manager.
+    if (choice == QLatin1String("auto")) {
+        usb->clearChoice(vendorId, productId);
+    } else if (choice == QLatin1String("direct")) {
+        usb->setPathChoice(vendorId, productId, reducer::PathChoice::Direct);
+    } else if (choice == QLatin1String("standard")) {
+        usb->setPathChoice(vendorId, productId, reducer::PathChoice::Standard);
+    }
+    // An unrecognised string is ignored (forward-compat); a real pick triggers the
+    // manager's effects + AppModel's rebuild, which re-emits stateChanged.
+}
 
 QVariantList AppViewModel::availableConnectionsForSlot(const QString& slotId) const {
     const auto& st = model_->state();

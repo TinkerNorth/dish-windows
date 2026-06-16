@@ -60,6 +60,13 @@ class SlotListModel : public QAbstractListModel {
         MotionHzShownRole,    // bool: motion rate chip is visible
         PollHzRole,           // int: measured USB-direct poll Hz
         PollHzShownRole,      // bool: poll rate chip is visible
+
+        // ── USB input-path state (the Standard/Direct control) ──────────────
+        PathPhaseRole,        // QString: FSM phase token ("routed"/"claiming"/...)
+        DesiredPathRole,      // QString: "standard"/"direct"/"auto"
+        PathSupportedRole,    // bool: device is raw-HID-claimable (control shown)
+        ClaimInProgressRole,  // bool: phase == claiming (spinner, control disabled)
+        DirectFailureRole,    // QString: last Direct-claim failure reason ("" if none)
     };
     Q_ENUM(Roles)
 

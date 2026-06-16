@@ -11,6 +11,9 @@
 #pragma once
 
 #include "core/model/Protocol.h"
+#include "core/reducer/DirectClaimFailure.h"
+#include "core/reducer/PathChoice.h"
+#include "core/reducer/UsbPathMachine.h"
 
 #include <QCoreApplication>
 #include <QJsonArray>
@@ -392,6 +395,21 @@ struct ControllerSlot {
     // Refreshed ~1 Hz off the InputRateStore / USB poll sampler, independent of
     // the slot-list shape.
     SlotLiveRates liveRates;
+
+    // ── USB input-path state (the Standard/Direct control) ───────────────────
+    // Stamped in AppModel::rebuild() by cross-referencing the matching
+    // UsbController (by vid/pid) via the pure reducer::slotPathFields mapper.
+    // They drive the per-slot Standard/Direct control in the Controllers page:
+    // the FSM phase (toggle reflected + in-flight spinner), the resolved/stored
+    // desired path (which segment reads selected), whether the device is
+    // path-switchable at all (a raw-HID-claimable controller exists for it —
+    // false for an Xbox/XInput pad, which hides the control), and the last
+    // Direct-claim failure reason for the inline note. Defaults are the inert
+    // "no controller" state for a slot with no USB path entry.
+    reducer::UsbPhase pathPhase = reducer::UsbPhase::Routed;
+    reducer::PathChoice desiredPath = reducer::PathChoice::Standard;
+    bool pathSupported = false;
+    std::optional<reducer::DirectClaimFailure> directFailure;
 };
 
 struct RememberedWifi {

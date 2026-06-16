@@ -101,6 +101,13 @@ Kit.Page {
             required property bool motionHzShown
             required property int pollHz
             required property bool pollHzShown
+            // USB input-path roles (contract §2). The path control reflects
+            // these; toggling calls App.setSlotPath.
+            required property string pathPhase
+            required property string desiredPath
+            required property bool pathSupported
+            required property bool claimInProgress
+            required property string directFailure
 
             // Brand glyph variant follows the live state, like the Widgets card's
             // leading satellite silhouette.
@@ -189,6 +196,96 @@ Kit.Page {
                             visible: card.pollHzShown
                             text: qsTr("%1 Hz").arg(card.pollHz)
                             tone: "live"
+                        }
+                    }
+
+                    // ── USB input path (Standard / Direct / Auto) ────────────
+                    // Shown ONLY for a raw-HID-claimable pad (pathSupported) —
+                    // an Xbox/XInput pad has no UsbController and hides this.
+                    // The segments reflect desiredPath; while a claim is in
+                    // flight they disable and a spinner shows. A note surfaces a
+                    // claim failure / needs-replug / restore-stuck state. All
+                    // reactive off the model roles; toggling calls setSlotPath.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 4
+                        visible: card.pathSupported
+                        spacing: 4
+
+                        RowLayout {
+                            spacing: 6
+
+                            Label {
+                                text: qsTr("Input path")
+                                color: Theme.muted
+                                font.pixelSize: 11
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Repeater {
+                                model: [
+                                    { label: qsTr("Standard"), choice: "standard" },
+                                    { label: qsTr("Direct"), choice: "direct" },
+                                    { label: qsTr("Auto"), choice: "auto" }
+                                ]
+                                delegate: Button {
+                                    id: pathSeg
+                                    required property var modelData
+                                    text: modelData.label
+                                    checkable: true
+                                    // "auto" has no reflected desired (the FSM
+                                    // resolves it to standard/direct), so it
+                                    // never reads checked — it's the "clear" verb.
+                                    checked: card.desiredPath === modelData.choice
+                                    // Disabled mid-claim so a second pick can't
+                                    // race the in-flight transition.
+                                    enabled: !card.claimInProgress
+                                    font.pixelSize: 11
+                                    implicitHeight: 26
+                                    leftPadding: 12
+                                    rightPadding: 12
+                                    onClicked: App.setSlotPath(card.slotId, // qmllint disable unqualified
+                                                               pathSeg.modelData.choice)
+
+                                    contentItem: Text {
+                                        text: pathSeg.text
+                                        font: pathSeg.font
+                                        color: pathSeg.checked ? Theme.background : Theme.onSurface
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    background: Rectangle {
+                                        radius: 7
+                                        color: pathSeg.checked ? Theme.primary
+                                             : pathSeg.hovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.10)
+                                             : "transparent"
+                                        border.width: 1
+                                        border.color: pathSeg.checked ? Theme.primary : Theme.outline
+                                    }
+                                }
+                            }
+
+                            // In-flight claim spinner — the toggle stays
+                            // disabled until the FSM leaves Claiming.
+                            BusyIndicator {
+                                visible: card.claimInProgress
+                                running: card.claimInProgress
+                                implicitWidth: 18
+                                implicitHeight: 18
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                        }
+
+                        // Inline status note for the non-happy path states. A
+                        // claim failure, a needs-replug, or a restore-stuck each
+                        // reads as a short amber line under the toggle.
+                        Label {
+                            visible: text.length > 0
+                            text: page.pathNote(card.pathPhase, card.directFailure)
+                            color: Theme.warning
+                            font.pixelSize: 11
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
                         }
                     }
                 }
@@ -361,6 +458,33 @@ Kit.Page {
         // A wired/charging pad is never "low"; only an actually-draining pack
         // trips the amber warning style (matches SlotCard's threshold).
         return level < 15 && status !== 2 && status !== 4;
+    }
+
+    // The inline note under the path toggle for the non-happy FSM states. The
+    // phase drives the needs-replug / restore-stuck lines; a directFailure token
+    // (present when Direct couldn't claim) drives the failure-reason line. Empty
+    // for the steady routed/direct/claiming states (no note needed). Presentation
+    // only — the phase + failure tokens come straight from the model roles.
+    function pathNote(phase, failure) {
+        if (phase === "needsReplug") {
+            return qsTr("Unplug and replug this controller to switch its input path.");
+        }
+        if (phase === "restoreStuck") {
+            return qsTr("Standard isn't responding — pick Direct, retry, or replug.");
+        }
+        if (failure === "permissionDenied") {
+            return qsTr("Direct claim was refused — another app or driver may hold the device.");
+        }
+        if (failure === "busy") {
+            return qsTr("Direct claim is busy — another app or driver holds the device.");
+        }
+        if (failure === "initFailed") {
+            return qsTr("Direct claim couldn't start the controller's report stream.");
+        }
+        if (failure === "dropped") {
+            return qsTr("The device dropped during the claim — a replug is needed.");
+        }
+        return "";
     }
 
     // ---- Inline chip -------------------------------------------------------
