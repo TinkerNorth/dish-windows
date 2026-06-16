@@ -154,6 +154,10 @@ void SlotListModel::setState(const QList<models::ControllerSlot>& slotList) {
     if (common > 0) {
         emit dataChanged(index(0), index(common - 1));
     }
+
+    if (oldCount != newCount) {
+        emit countChanged();
+    }
 }
 
 } // namespace dish::qml

@@ -30,6 +30,10 @@ namespace dish::qml {
 // are carried as data the delegate paints; the booleans gate chip visibility.
 class SlotListModel : public QAbstractListModel {
     Q_OBJECT
+    // A bare QAbstractListModel exposes no `count` to QML (only the *view* does),
+    // so `model.count` in a binding reads undefined — which silently hides any
+    // `count > 0` / `count === 0` gate. Expose it explicitly + reactively.
+    Q_PROPERTY(int count READ count NOTIFY countChanged)
   public:
     // Roles mirror SlotCard's rendered fields one-to-one. Kept in sync with
     // roleNames(); the contract doc lists each.
@@ -62,6 +66,7 @@ class SlotListModel : public QAbstractListModel {
     explicit SlotListModel(QObject* parent = nullptr);
 
     int rowCount(const QModelIndex& parent = {}) const override;
+    int count() const { return static_cast<int>(slots_.size()); }
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
@@ -73,6 +78,9 @@ class SlotListModel : public QAbstractListModel {
     // carried so the delegate can gate a "bind" control, mirroring MainWindow's
     // "connections not bound elsewhere" filter.
     void setState(const QList<models::ControllerSlot>& slotList);
+
+  signals:
+    void countChanged();
 
   private:
     QList<models::ControllerSlot> slots_;

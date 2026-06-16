@@ -26,6 +26,9 @@ namespace dish::qml {
 
 class ConnectionListModel : public QAbstractListModel {
     Q_OBJECT
+    // A bare QAbstractListModel exposes no `count` to QML; expose it reactively
+    // so bindings can gate on the row count (e.g. the bind-button enable rule).
+    Q_PROPERTY(int count READ count NOTIFY countChanged)
   public:
     enum Roles {
         IdRole = Qt::UserRole + 1,
@@ -46,6 +49,7 @@ class ConnectionListModel : public QAbstractListModel {
     explicit ConnectionListModel(QObject* parent = nullptr);
 
     int rowCount(const QModelIndex& parent = {}) const override;
+    int count() const { return static_cast<int>(rows_.size()); }
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
@@ -53,6 +57,9 @@ class ConnectionListModel : public QAbstractListModel {
     // tail count (rowsInserted/rowsRemoved) and patches surviving rows via one
     // dataChanged so a no-op re-emit doesn't reset the view.
     void setRows(const std::vector<composer::ConnectionRow>& rows);
+
+  signals:
+    void countChanged();
 
   private:
     std::vector<composer::ConnectionRow> rows_;
