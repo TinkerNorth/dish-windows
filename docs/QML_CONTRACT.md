@@ -49,6 +49,9 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `donateBmacUrl` | `string` | (CONSTANT) | Buy Me a Coffee URL. |
 | `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. Bind a `Repeater.model` to it and it re-evaluates as a scan lands — no manual re-pull. |
 | `scanning` | `bool` | `scanningChanged` | Whether a discovery scan is in flight (reactive). Flips true on `startDiscovery()` and false on completion; gate the Scan button / "Scanning…" label on it. |
+| `reversePairingPhase` | `string` | `reversePairingChanged` | The host-initiated (reverse) pairing phase: `"idle"` (none in flight) / `"awaiting"` (PIN shown, waiting for the operator to approve on the satellite) / `"approved"` (operator approved — the session is opening) / `"declined"` (operator denied) / `"timedout"` (no approval inside the ~2-min budget). The sheet switches on this. |
+| `reversePairingPin` | `string` | `reversePairingChanged` | The 4-digit PIN to display while `awaiting` (the operator types it on the satellite). Stays set on the terminal arms so the sheet can keep showing it; cleared on the next `requestReversePairing`/`cancelReversePairing`. |
+| `reversePairingServerName` | `string` | `reversePairingChanged` | Display name of the server being reverse-paired (its `name`, or `ip` when unnamed). Empty when `idle`. |
 
 > Note: the property is `slotModel`, NOT `slots` — `slots` is the reserved
 > `Q_SLOTS` token and moc strips it.
@@ -62,6 +65,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `errorMessage` | `string message` | Transient one-shot error — surface it as a toast. |
 | `discoveredChanged` | — | The discovered-servers list moved (folds `WifiConnectionManager::discoveredChanged`). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
 | `scanningChanged` | — | The `scanning` flag flipped (a scan started or finished; folds `WifiConnectionManager::scanningChanged`). NOTIFY for the `scanning` property. |
+| `reversePairingChanged` | — | A reverse-pairing transition (phase / PIN / server name moved; folds `WifiConnectionManager::reversePairingChanged`). NOTIFY for all three `reversePairing*` properties. |
 | `themeModeChanged` | — | `themeMode` moved (the store republished). |
 | `crashReportingChanged` | — | `crashReportingEnabled` moved. |
 | `onboardingNeededChanged` | — | `onboardingNeeded` flipped. |
@@ -90,6 +94,8 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `pairWithPin(discoveredIndex, pin)` | `int, string` | **DEPRECATED** (racy if the list reorders). Submit a 6-digit PIN for the discovered server at that index. Use `pairByServerId`. |
 | `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers`). Drives the Pair button's spinner+disabled state. |
 | `clearPairingTarget()` | — | Drop the one-shot pairing trigger (call before opening the pairing sheet to avoid re-entry). |
+| `requestReversePairing(serverId)` | `string` | Start HOST-INITIATED (reverse) pairing for the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). The dish generates + shows a 4-digit PIN (`reversePairingPin`); the operator types it on the satellite. Watch `reversePairingPhase` for the outcome and `App.errorMessage` for the decline/timeout reason. A second call cancels the first. |
+| `cancelReversePairing()` | — | Abort an in-flight reverse pair (stops the poll, returns `reversePairingPhase` to `"idle"` and clears the PIN/server name). Safe to call when idle. |
 | `setThemeMode(mode)` | `int` | Apply an appearance mode (`0=Light 1=Dark 2=System`). Forwards to `ThemePreferenceStore`; re-themes the live QML palette + the native chrome immersive-dark attribute. |
 | `setCrashReportingEnabled(on)` | `bool` | Forward to `CrashReportingStore::setEnabled`. |
 | `deadzoneDevices()` | → `list` | Per-device deadzone rows as JS objects: `{ id:string, name:string, hasGyro:bool, stickFlat:int, triggerFlat:int, forwardMotion:bool }`. Re-pull on `deadzonesChanged`. |
@@ -117,6 +123,24 @@ re-projects/forwards (no new behaviour). The pages bind them directly:
 * **Main.qml first-run** — if `App.onboardingNeeded`, push
   `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
   `App.markOnboardingComplete()`.
+
+### Reverse (host-initiated) pairing sheet
+
+Forward pairing (`pairByServerId`) is the operator-reads-the-PIN-off-the-dish
+flow. The REVERSE flow is the inverse: the dish SHOWS a PIN and the operator
+approves on the satellite. Bind a sheet like:
+
+* On the user's "Pair this way" tap: `App.requestReversePairing(server.id)`,
+  then open the sheet.
+* While `App.reversePairingPhase === "awaiting"`: show `App.reversePairingPin`
+  (the 4 digits) and `App.reversePairingServerName`, with a spinner.
+* On `"approved"`: close the sheet (the session is opening — the connection row
+  will go live). On `"declined"` / `"timedout"`: show the reason (also arrives on
+  `App.errorMessage`) and offer retry.
+* The sheet's Cancel calls `App.cancelReversePairing()`.
+
+The poll budget is ~2 minutes; a momentary network blip during the wait does NOT
+abort (it keeps polling until the deadline).
 
 ### Dark-mode / Mica wiring
 

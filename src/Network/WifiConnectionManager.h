@@ -17,9 +17,18 @@
 #include <cstdint>
 #include <optional>
 
+class QTimer;
+
 namespace dish::net {
 
 enum class ConnectionEventKind { PairingRequired, Error };
+
+// The reverse (host-initiated) pairing lifecycle the Connections dialog binds a
+// PIN sheet against. The dish shows the clientPin, the operator types it on the
+// satellite, and the poll loop resolves to Approved/Declined/TimedOut. Idle is
+// the resting state (no reverse pair in flight); the terminal arms are sticky
+// until the next requestReversePairing/cancelReversePairing clears them.
+enum class ReversePairingPhase { Idle, AwaitingApproval, Approved, Declined, TimedOut };
 
 struct ConnectionEvent {
     ConnectionEventKind kind;
@@ -62,6 +71,24 @@ class WifiConnectionManager : public QObject {
     void connectTo(const models::DiscoveredServer& server,
                    ConnectIntent intent = ConnectIntent::UserInitiated);
     void pairWithPin(const models::DiscoveredServer& server, const QString& pin);
+
+    // ── Reverse (host-initiated) pairing — Path B ───────────────────────────
+    // Generate + display a 4-digit clientPin, POST it (the server stages a
+    // pending grant), then poll GET /api/pair/status until the operator approves
+    // on the satellite. On approval: adopt the key + openSession (exactly like a
+    // forward Success). Resolves to Approved/Declined/TimedOut; every transition
+    // emits reversePairingChanged. A second request while one is live cancels the
+    // first. NOT unit-tested (drives real network); the DECISION core it leans on
+    // — reducer::nextReversePairingAction — is exhaustively tested instead.
+    void requestReversePairing(const models::DiscoveredServer& server);
+    // Abort an in-flight reverse pair (stops the poll timer, returns to Idle).
+    void cancelReversePairing();
+
+    // Reverse-pairing state the QML sheet reads (folded through one NOTIFY).
+    ReversePairingPhase reversePairingPhase() const { return reversePhase_; }
+    QString reversePairingPin() const { return reversePin_; }       // 4 digits to show
+    QString reversePairingServerName() const { return reverseServerName_; }
+
     void disconnect(const QString& id);
     void forget(const QString& id);
     void autoReconnectAll();
@@ -73,6 +100,9 @@ class WifiConnectionManager : public QObject {
     void discoveredChanged();
     void scanningChanged();
     void pairingInFlightChanged();
+    // Fired on every reverse-pairing transition (phase / pin / server name). The
+    // QML surface folds it into the reactive reversePairing* properties.
+    void reversePairingChanged();
     // Named `connectionEvent` (not `event`) so it doesn't shadow QObject::event.
     void connectionEvent(const dish::net::ConnectionEvent& evt);
     // Forwarded from per-connection slot apply failures so the hub can roll a
@@ -104,6 +134,15 @@ class WifiConnectionManager : public QObject {
     void emitErrorIfUserInitiated(ConnectIntent intent, const QString& message);
     void markStale(const QString& id);
 
+    // Reverse-pairing internals. pollReverseStatus does ONE pairStatus round-trip
+    // off the thread pool, feeds its classifyApproval verdict + the elapsed clock
+    // through reducer::nextReversePairingAction, and acts on the result (re-arm
+    // the timer / openSession / abort). setReversePhase mutates the state slice
+    // and emits reversePairingChanged once. finishReverse parks a terminal arm.
+    void pollReverseStatus();
+    void setReversePhase(ReversePairingPhase phase);
+    void finishReverse(ReversePairingPhase terminal);
+
     // The pairing key + proof for an authed REST call; nullopt when the key is
     // absent or undecodable (both mean: re-pair). The proof = hmacProof
     // (core/wire) of the stored pairing key.
@@ -131,6 +170,22 @@ class WifiConnectionManager : public QObject {
     // Single-flight reconcile guard per id (ack ticks every second; the GET can
     // take longer).
     QSet<QString> reconcileInFlight_;
+
+    // ── Reverse-pairing state ────────────────────────────────────────────────
+    // The phase the QML sheet renders, the 4-digit clientPin to display, and the
+    // server we are pairing (kept so the poll loop + openSession have the
+    // endpoint and so the sheet can name it). reverseTimer_ drives the poll;
+    // reverseDeadlineMs_/reverseElapsedMs_ feed the pure deadline decision. The
+    // QFutureWatcher* is tracked so a cancel/restart tears a stale poll's watcher
+    // down without acting on its late reply.
+    ReversePairingPhase reversePhase_ = ReversePairingPhase::Idle;
+    QString reversePin_;
+    QString reverseServerName_;
+    models::DiscoveredServer reverseServer_;
+    QTimer* reverseTimer_ = nullptr;
+    std::int64_t reverseElapsedMs_ = 0;
+    std::int64_t reverseDeadlineMs_ = 0;
+    bool reversePollInFlight_ = false;
 };
 
 } // namespace dish::net

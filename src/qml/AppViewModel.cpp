@@ -55,6 +55,8 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
                      [this] { emit discoveredChanged(); });
     QObject::connect(model_->wifi(), &net::WifiConnectionManager::scanningChanged, this,
                      [this] { emit scanningChanged(); });
+    QObject::connect(model_->wifi(), &net::WifiConnectionManager::reversePairingChanged, this,
+                     [this] { emit reversePairingChanged(); });
 
     // The settings stores republish through their StateSource Observables (not Qt
     // signals); subscribe so a republish (incl. the ThemeController's own re-theme
@@ -258,6 +260,51 @@ bool AppViewModel::isPairingInFlight(const QString& serverId) const {
 }
 
 void AppViewModel::clearPairingTarget() { model_->clearPairingTarget(); }
+
+// ── Reverse (host-initiated) pairing ─────────────────────────────────────────
+
+namespace {
+// Map the manager's reverse-pairing phase enum to the stable string the QML
+// sheet switches on. Kept here (not in the manager) so the wire string is a
+// view-model concern; a unit test pins this mapping.
+QString reversePhaseString(net::ReversePairingPhase phase) {
+    switch (phase) {
+    case net::ReversePairingPhase::Idle:
+        return QStringLiteral("idle");
+    case net::ReversePairingPhase::AwaitingApproval:
+        return QStringLiteral("awaiting");
+    case net::ReversePairingPhase::Approved:
+        return QStringLiteral("approved");
+    case net::ReversePairingPhase::Declined:
+        return QStringLiteral("declined");
+    case net::ReversePairingPhase::TimedOut:
+        return QStringLiteral("timedout");
+    }
+    return QStringLiteral("idle");
+}
+} // namespace
+
+QString AppViewModel::reversePairingPhase() const {
+    return reversePhaseString(model_->wifi()->reversePairingPhase());
+}
+
+QString AppViewModel::reversePairingPin() const { return model_->wifi()->reversePairingPin(); }
+
+QString AppViewModel::reversePairingServerName() const {
+    return model_->wifi()->reversePairingServerName();
+}
+
+void AppViewModel::requestReversePairing(const QString& serverId) {
+    // De-raced resolve out of the live discovered list, mirroring connectByServerId.
+    for (const auto& s : model_->wifi()->discoveredServers()) {
+        if (s.id() == serverId) {
+            model_->wifi()->requestReversePairing(s);
+            return;
+        }
+    }
+}
+
+void AppViewModel::cancelReversePairing() { model_->wifi()->cancelReversePairing(); }
 
 // ── Settings: appearance + diagnostics ──────────────────────────────────────
 

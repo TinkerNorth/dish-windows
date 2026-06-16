@@ -57,6 +57,12 @@ set(DISH_TEST_SOURCES
     test_physical_motion_source.cpp
     test_pairing_client_classify.cpp
     test_rest_control_plane.cpp
+    # Reverse (host-initiated) Path-B pairing — the PURE poll-loop decision core
+    # (nextReversePairingAction over every classifyApproval verdict x deadline
+    # boundary) + the 4-digit clientPin shape helpers. Socket/clock-free: the live
+    # manager poll methods open real Winsock the test process would join, so the
+    # branching is tested here, not by driving the manager.
+    test_reverse_pairing.cpp
     test_udp_opcodes.cpp
     test_session_reconcile.cpp
     # Workstream 2b — connections composer/coordinator, session mappers, pacer

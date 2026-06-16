@@ -13,6 +13,7 @@
 #include "core/reducer/CloseNotify.h"
 #include "core/reducer/Reconcile.h"
 #include "core/reducer/RestOutcome.h"
+#include "core/reducer/ReversePairing.h"
 #include "core/wire/SessionCrypto.h"
 
 #include <QCoreApplication>
@@ -22,6 +23,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QtGlobal>
 
+#include <random>
 #include <type_traits>
 #include <variant>
 
@@ -63,6 +65,21 @@ QString versionMsg() {
     return QCoreApplication::translate(
         kTrContext, "This app and the satellite speak different protocol versions.");
 }
+QString reverseDeclinedMsg() {
+    return QCoreApplication::translate(
+        kTrContext, "The satellite declined this device. Pairing was not approved.");
+}
+QString reverseTimedOutMsg() {
+    return QCoreApplication::translate(
+        kTrContext, "Timed out waiting for approval on the satellite. Try again.");
+}
+
+// Path-B poll cadence + budget: poll once a second for up to two minutes — the
+// window an operator needs to read the PIN and approve on the satellite. The
+// elapsed clock is accumulated from these intervals (not a wall-clock read) so
+// the pure decision stays driven by integers the manager fully controls.
+constexpr int kReversePollIntervalMs = 1000;
+constexpr std::int64_t kReverseDeadlineMs = 120'000;
 
 } // namespace
 
@@ -240,6 +257,170 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
     watcher->setFuture(QtConcurrent::run([server, did, dname, pin] {
         return PairingClient::pair(server.ip, server.pairPort, did, dname, pin);
     }));
+}
+
+// ── Reverse (host-initiated) pairing — Path B ───────────────────────────────
+
+void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer& server) {
+    // A fresh request supersedes any in-flight one (and clears a terminal arm
+    // from a previous attempt): stop the old poll before re-arming.
+    cancelReversePairing();
+
+    auto* conn = ensureConnection(server);
+    retryAttempts_.remove(conn->id());
+    conn->updateServer(server);
+
+    // Generate the 4-digit clientPin. The VALUE is random; the SHAPE is fixed by
+    // the pure formatter, so the displayed PIN is always exactly 4 digits. The
+    // randomness lives here (the seam), never in the tested decision core.
+    std::random_device rd;
+    const std::uint32_t draw = rd();
+    reversePin_ = QString::fromStdString(reducer::formatReversePin(draw));
+    reverseServer_ = server;
+    reverseServerName_ = server.name.isEmpty() ? server.ip : server.name;
+    reverseElapsedMs_ = 0;
+    reverseDeadlineMs_ = kReverseDeadlineMs;
+    setReversePhase(ReversePairingPhase::AwaitingApproval);
+
+    const QString did = deviceId_;
+    const QString dname = deviceName_;
+    const QString pin = reversePin_;
+    // POST the clientPin (Path B). The server stages a pending grant; the reply
+    // is {ok:false, pending:true} on the happy path. We then poll for approval.
+    pairingInFlight_.insert(conn->id());
+    emit pairingInFlightChanged();
+    auto* watcher = new QFutureWatcher<models::PairResponse>(this);
+    QObject::connect(
+        watcher, &QFutureWatcherBase::finished, this, [this, watcher, conn, server, pin] {
+            const auto pair = watcher->result();
+            watcher->deleteLater();
+            pairingInFlight_.remove(conn->id());
+            emit pairingInFlightChanged();
+            // A cancel / restart that landed while this POST was in flight moved
+            // us out of AwaitingApproval (or swapped the target) — drop the late
+            // reply rather than starting a poll for a superseded request.
+            if (reversePhase_ != ReversePairingPhase::AwaitingApproval ||
+                reverseServer_.id() != server.id() || reversePin_ != pin) {
+                return;
+            }
+            const auto outcome = PairingClient::classify(pair);
+            std::visit(
+                [&](auto&& arm) {
+                    using T = std::decay_t<decltype(arm)>;
+                    if constexpr (std::is_same_v<T, PairingClient::Success>) {
+                        // Server approved synchronously (no operator step needed):
+                        // adopt the key + open the session, exactly like forward.
+                        conn->markConnecting();
+                        store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                        setReversePhase(ReversePairingPhase::Approved);
+                        openSession(conn, server, ConnectIntent::UserInitiated);
+                    } else if constexpr (std::is_same_v<T, PairingClient::Pending>) {
+                        // The expected Path-B arm: start the approval poll loop.
+                        if (reverseTimer_ == nullptr) {
+                            reverseTimer_ = new QTimer(this);
+                            reverseTimer_->setInterval(kReversePollIntervalMs);
+                            QObject::connect(reverseTimer_, &QTimer::timeout, this,
+                                             &WifiConnectionManager::pollReverseStatus);
+                        }
+                        reverseTimer_->start();
+                    } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
+                        emit connectionEvent(makeError(versionMsg()));
+                        finishReverse(ReversePairingPhase::Declined);
+                    } else {
+                        // AuthRequired / Unreachable: the POST never staged a
+                        // pending grant — surface the reason and abort.
+                        emit connectionEvent(makeError(pair.error.value_or(unreachableMsg())));
+                        finishReverse(ReversePairingPhase::TimedOut);
+                    }
+                },
+                outcome);
+        });
+    watcher->setFuture(QtConcurrent::run([server, did, dname, pin] {
+        // pin=empty (no operator PIN), clientPin=the displayed PIN (Path B).
+        return PairingClient::pair(server.ip, server.pairPort, did, dname, QString(), pin);
+    }));
+}
+
+void WifiConnectionManager::pollReverseStatus() {
+    if (reversePhase_ != ReversePairingPhase::AwaitingApproval) { return; }
+    // Single-flight: a slow GET must not stack behind the 1s timer.
+    if (reversePollInFlight_) { return; }
+    reversePollInFlight_ = true;
+    reverseElapsedMs_ += kReversePollIntervalMs;
+
+    const QString did = deviceId_;
+    const models::DiscoveredServer server = reverseServer_;
+    auto* watcher = new QFutureWatcher<models::PairResponse>(this);
+    QObject::connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, server] {
+        const auto status = watcher->result();
+        watcher->deleteLater();
+        reversePollInFlight_ = false;
+        // A cancel / restart raced this GET — its reply is for a superseded
+        // request, so ignore it.
+        if (reversePhase_ != ReversePairingPhase::AwaitingApproval ||
+            reverseServer_.id() != server.id()) {
+            return;
+        }
+        reducer::ApprovalReply ar;
+        ar.status = status.httpStatus;
+        ar.bodyParsed = status.reachable;
+        ar.statusStr = status.status.value_or(QString()).toStdString();
+        ar.hasSharedKey = status.sharedKey.has_value() && !status.sharedKey->isEmpty();
+        const auto approval = reducer::classifyApproval(ar);
+        // The pure decision: the only place the poll loop's branching lives.
+        switch (reducer::nextReversePairingAction(approval, reverseElapsedMs_,
+                                                  reverseDeadlineMs_)) {
+        case reducer::ReversePairingAction::Approve: {
+            // Approved with a usable key — adopt + open the session (forward path).
+            auto* conn = ensureConnection(server);
+            conn->markConnecting();
+            store_->setSharedKey(*status.sharedKey, WifiConnection::idFor(server));
+            if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
+            setReversePhase(ReversePairingPhase::Approved);
+            openSession(conn, server, ConnectIntent::UserInitiated);
+            break;
+        }
+        case reducer::ReversePairingAction::Decline:
+            emit connectionEvent(makeError(reverseDeclinedMsg()));
+            finishReverse(ReversePairingPhase::Declined);
+            break;
+        case reducer::ReversePairingAction::TimeOut:
+            emit connectionEvent(makeError(reverseTimedOutMsg()));
+            finishReverse(ReversePairingPhase::TimedOut);
+            break;
+        case reducer::ReversePairingAction::KeepPolling:
+            // Timer re-fires on its own; nothing to do.
+            break;
+        }
+    });
+    watcher->setFuture(QtConcurrent::run(
+        [server, did] { return PairingClient::pairStatus(server.ip, server.pairPort, did); }));
+}
+
+void WifiConnectionManager::cancelReversePairing() {
+    if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
+    reversePollInFlight_ = false;
+    if (reversePhase_ != ReversePairingPhase::Idle) {
+        reversePin_.clear();
+        reverseServerName_.clear();
+        reverseServer_ = {};
+        reverseElapsedMs_ = 0;
+        setReversePhase(ReversePairingPhase::Idle);
+    }
+}
+
+void WifiConnectionManager::finishReverse(ReversePairingPhase terminal) {
+    if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
+    reversePollInFlight_ = false;
+    // Keep the pin + server name on the terminal arm so the sheet can still name
+    // what it was pairing while it shows the outcome; the next request/cancel
+    // clears them.
+    setReversePhase(terminal);
+}
+
+void WifiConnectionManager::setReversePhase(ReversePairingPhase phase) {
+    reversePhase_ = phase;
+    emit reversePairingChanged();
 }
 
 void WifiConnectionManager::pairAndConnect(WifiConnection* conn,

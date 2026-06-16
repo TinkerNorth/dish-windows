@@ -92,6 +92,16 @@ class AppViewModel : public QObject {
     Q_PROPERTY(QVariantList discoveredServers READ discoveredServers NOTIFY discoveredChanged)
     Q_PROPERTY(bool scanning READ isScanning NOTIFY scanningChanged)
 
+    // ── Reverse (host-initiated) pairing (reactive) ──────────────────────────
+    // The host shows a 4-digit PIN; the operator types it on the satellite. The
+    // sheet binds the phase ("idle"/"awaiting"/"approved"/"declined"/"timedout"),
+    // the PIN to display, and the server name. All fold the manager's
+    // reversePairingChanged into one NOTIFY.
+    Q_PROPERTY(QString reversePairingPhase READ reversePairingPhase NOTIFY reversePairingChanged)
+    Q_PROPERTY(QString reversePairingPin READ reversePairingPin NOTIFY reversePairingChanged)
+    Q_PROPERTY(
+        QString reversePairingServerName READ reversePairingServerName NOTIFY reversePairingChanged)
+
     // ── First-run onboarding (mirrors maybeShowOnboarding's gate) ─────────────
     // onboardingNeeded == !OnboardingPreferenceStore::welcomeCompleted(). Main.qml
     // pushes the onboarding flow on it; markOnboardingComplete() persists the flag.
@@ -127,6 +137,9 @@ class AppViewModel : public QObject {
     void setCrashReportingEnabled(bool enabled);
     QString appVersion() const;
     bool onboardingNeeded() const;
+    QString reversePairingPhase() const;
+    QString reversePairingPin() const;
+    QString reversePairingServerName() const;
     QString donateSponsorsUrl() const;
     QString donateKofiUrl() const;
     QString donateBmacUrl() const;
@@ -205,6 +218,13 @@ class AppViewModel : public QObject {
     Q_INVOKABLE bool isPairingInFlight(const QString& serverId) const;
     Q_INVOKABLE void clearPairingTarget();
 
+    // Reverse (host-initiated) pairing: kick a host-initiated pair for the
+    // discovered server with that stable id (de-raced, like connectByServerId);
+    // cancel an in-flight one. The displayed PIN + phase stream through the
+    // reversePairing* properties.
+    Q_INVOKABLE void requestReversePairing(const QString& serverId);
+    Q_INVOKABLE void cancelReversePairing();
+
     // ── Deadzone settings page ───────────────────────────────────────────────
     // The per-device rows {id,name,hasGyro,stickFlat,triggerFlat,forwardMotion}
     // (re-pull on deadzonesChanged). setDeadzones persists the override AND pushes
@@ -250,6 +270,11 @@ class AppViewModel : public QObject {
     // The scan flag flipped (a scan started or finished). Folds the
     // WifiConnectionManager's scanningChanged; NOTIFY for the scanning property.
     void scanningChanged();
+
+    // A reverse-pairing transition (phase / pin / server name moved). Folds the
+    // WifiConnectionManager's reversePairingChanged; NOTIFY for the three
+    // reversePairing* properties.
+    void reversePairingChanged();
 
     // The deadzone device rows / their seeded values moved (a device attached or
     // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().
