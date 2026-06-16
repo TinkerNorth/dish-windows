@@ -46,10 +46,15 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     QObject::connect(model_->connections(), &composer::ConnectionCoordinator::connectionsChanged,
                      this, &AppViewModel::onConnectionsChanged);
 
-    // Re-pull the discovered list on the precise edge (P2 had to key off the
-    // broad stateChanged). The WifiConnectionManager owns the scan results.
+    // Re-pull the discovered list + scan flag on their precise edges (P2 had to
+    // key off the broad stateChanged, and had no scan-flag NOTIFY at all). The
+    // WifiConnectionManager owns the scan results. Routed through explicit
+    // lambdas (not bare signal→signal) so the emission is unambiguous, mirroring
+    // the working connectionModel path below.
     QObject::connect(model_->wifi(), &net::WifiConnectionManager::discoveredChanged, this,
-                     &AppViewModel::discoveredChanged);
+                     [this] { emit discoveredChanged(); });
+    QObject::connect(model_->wifi(), &net::WifiConnectionManager::scanningChanged, this,
+                     [this] { emit scanningChanged(); });
 
     // The settings stores republish through their StateSource Observables (not Qt
     // signals); subscribe so a republish (incl. the ThemeController's own re-theme
@@ -195,10 +200,24 @@ QVariantList AppViewModel::discoveredServers() const {
         m[QStringLiteral("pairPort")] = s.pairPort;
         m[QStringLiteral("httpPort")] = s.httpPort;
         m[QStringLiteral("machineId")] = s.machineId;
+        // The discovery-source label (Widgets ConnectionsDialog showed it on the
+        // FOUND row, e.g. "mDNS + broadcast").
+        m[QStringLiteral("source")] = models::discoverySourceLabel(s.source);
         m[QStringLiteral("id")] = s.id();
         out.append(m);
     }
     return out;
+}
+
+void AppViewModel::connectByServerId(const QString& serverId) {
+    // Resolve the server out of the live list by its stable id — de-raced vs. an
+    // index that goes stale if the list reorders. Matches Widgets onConnectClicked.
+    for (const auto& s : model_->wifi()->discoveredServers()) {
+        if (s.id() == serverId) {
+            model_->wifi()->connectTo(s);
+            return;
+        }
+    }
 }
 
 void AppViewModel::connectByIndex(int discoveredIndex) {
@@ -207,8 +226,25 @@ void AppViewModel::connectByIndex(int discoveredIndex) {
     model_->wifi()->connectTo(servers.at(discoveredIndex));
 }
 
+void AppViewModel::reconnectConnection(const QString& connectionId) {
+    model_->connections()->reconnectConnection(connectionId);
+}
+
+void AppViewModel::disconnectConnection(const QString& connectionId) {
+    model_->connections()->disconnectConnection(connectionId);
+}
+
 void AppViewModel::forgetConnection(const QString& connectionId) {
     model_->connections()->forgetConnection(connectionId);
+}
+
+void AppViewModel::pairByServerId(const QString& serverId, const QString& pin) {
+    for (const auto& s : model_->wifi()->discoveredServers()) {
+        if (s.id() == serverId) {
+            model_->wifi()->pairWithPin(s, pin);
+            return;
+        }
+    }
 }
 
 void AppViewModel::pairWithPin(int discoveredIndex, const QString& pin) {

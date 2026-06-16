@@ -203,3 +203,33 @@ TEST_CASE("coordinator: rows are sorted by label", "[coord]") {
     REQUIRE(rows[0].label == "Alpha");
     REQUIRE(rows[1].label == "Zeta");
 }
+
+// ── Reconnect / disconnect commands (the Widgets contract gaps) ──────────────
+//
+// The LIVE orchestration is verified at runtime, not here: reconnectConnection()
+// always kicks a real startDiscovery() (blocking Winsock/mDNS on the thread pool)
+// when the id isn't already in a current scan, and a successful reconnect/
+// disconnect opens or tears down a real session — none of which has a network
+// seam in this harness (see test_session_manager). Driving those paths hangs the
+// test process on exit. So below we pin only the network-free contract: a
+// disconnect with no live session is a graceful no-op that must NOT forget.
+
+TEST_CASE("coordinator: disconnect of a remembered-but-not-live satellite keeps its row "
+          "(graceful, not a forget)",
+          "[coord][disconnect]") {
+    Fixture f({sat("m1", "10.0.0.1", "Pc")});
+    // No live session exists, so disconnect opens no socket — it is a graceful
+    // no-op that must NOT drop the remembered row/key (the contrast with forget,
+    // which does). The row stays exactly Saved.
+    f.coord->disconnectConnection(midId("m1"));
+    REQUIRE_FALSE(f.wifi->remembered().isEmpty());
+    const auto r = f.row(midId("m1"));
+    REQUIRE(r.has_value());
+    REQUIRE(r->live == UiLinkState::Saved);
+}
+
+TEST_CASE("coordinator: disconnect of an unknown id is a quiet no-op", "[coord][disconnect]") {
+    Fixture f({sat("m1", "10.0.0.1", "Pc")});
+    f.coord->disconnectConnection(midId("nope"));
+    REQUIRE(f.coord->connections().value().size() == 1);
+}

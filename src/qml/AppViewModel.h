@@ -83,6 +83,15 @@ class AppViewModel : public QObject {
     // The build version string (CMake project VERSION, threaded in as DISH_VERSION).
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
 
+    // ── Connections discovery (reactive) ─────────────────────────────────────
+    // The FOUND list + scan flag, exposed REACTIVELY so QML bindings stream as a
+    // scan lands (P2's plain invokables had no NOTIFY, so the FOUND list only
+    // refreshed on page recreation). The properties read THROUGH the kept
+    // invokables; discoveredChanged folds the manager's discoveredChanged, and
+    // scanning folds its scanningChanged.
+    Q_PROPERTY(QVariantList discoveredServers READ discoveredServers NOTIFY discoveredChanged)
+    Q_PROPERTY(bool scanning READ isScanning NOTIFY scanningChanged)
+
     // ── First-run onboarding (mirrors maybeShowOnboarding's gate) ─────────────
     // onboardingNeeded == !OnboardingPreferenceStore::welcomeCompleted(). Main.qml
     // pushes the onboarding flow on it; markOnboardingComplete() persists the flag.
@@ -154,17 +163,44 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void setControllerType(const QString& slotId, int type);
 
     // Connections page: discovery + connect + forget. discoveredServers returns
-    // {name,ip,udpPort,pairPort,httpPort,machineId,id} objects for the FOUND
-    // list (the rows that aren't yet remembered surface only here).
+    // {name,ip,udpPort,pairPort,httpPort,machineId,source,id} objects for the
+    // FOUND list (the rows that aren't yet remembered surface only here).
     Q_INVOKABLE void startDiscovery();
     Q_INVOKABLE bool isScanning() const;
     Q_INVOKABLE QVariantList discoveredServers() const;
-    Q_INVOKABLE void connectByIndex(int discoveredIndex);
     Q_INVOKABLE void forgetConnection(const QString& connectionId);
 
-    // Pairing sheet: submit a PIN for a discovered server (by its index in
-    // discoveredServers), query the in-flight state, and clear the one-shot
-    // pairing trigger before showing the sheet.
+    // Connect a discovered server by its STABLE id (resolves the server out of
+    // the live discovered list). De-raced replacement for connectByIndex — an
+    // index goes stale if the list reorders between read and call. Matches the
+    // Widgets onConnectClicked, which matches on s.id().
+    Q_INVOKABLE void connectByServerId(const QString& serverId);
+
+    // DEPRECATED: index-based connect; racy if the discovered list reorders
+    // between read and call. Kept until the QML page migrates to
+    // connectByServerId. Prefer connectByServerId.
+    Q_INVOKABLE void connectByIndex(int discoveredIndex);
+
+    // Reconnect a REMEMBERED (possibly currently-undiscovered) satellite by id
+    // WITHOUT a rescan requirement and WITHOUT re-pairing. Forwards to the
+    // coordinator's reconnectConnection (Widgets ConnectionsDialog Reconnect).
+    Q_INVOKABLE void reconnectConnection(const QString& connectionId);
+
+    // Graceful disconnect of a LIVE session WITHOUT forgetting (row + key stay).
+    // Forwards to the coordinator's disconnectConnection. Gate on the row's
+    // liveLink role: enable only when the link is live.
+    Q_INVOKABLE void disconnectConnection(const QString& connectionId);
+
+    // Pairing sheet: submit a PIN for a discovered server (by id or by index),
+    // query the in-flight state, and clear the one-shot pairing trigger before
+    // showing the sheet.
+
+    // De-raced PIN submit, resolving the server by its stable id (matches
+    // connectByServerId). Prefer this over pairWithPin.
+    Q_INVOKABLE void pairByServerId(const QString& serverId, const QString& pin);
+
+    // DEPRECATED: index-based pair; racy if the discovered list reorders. Kept
+    // until the QML page migrates to pairByServerId.
     Q_INVOKABLE void pairWithPin(int discoveredIndex, const QString& pin);
     Q_INVOKABLE bool isPairingInFlight(const QString& serverId) const;
     Q_INVOKABLE void clearPairingTarget();
@@ -207,8 +243,13 @@ class AppViewModel : public QObject {
 
     // Discovery results moved (P2 had to re-pull discoveredServers() on the broad
     // stateChanged; this is the precise edge to re-pull on). Folds the
-    // WifiConnectionManager's discoveredChanged.
+    // WifiConnectionManager's discoveredChanged. NOTIFY for the discoveredServers
+    // property so QML bindings stream as a scan lands.
     void discoveredChanged();
+
+    // The scan flag flipped (a scan started or finished). Folds the
+    // WifiConnectionManager's scanningChanged; NOTIFY for the scanning property.
+    void scanningChanged();
 
     // The deadzone device rows / their seeded values moved (a device attached or
     // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().

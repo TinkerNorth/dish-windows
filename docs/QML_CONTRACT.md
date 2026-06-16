@@ -47,6 +47,8 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `donateSponsorsUrl` | `string` | (CONSTANT) | GitHub Sponsors URL (brand default; localizable in C++). |
 | `donateKofiUrl` | `string` | (CONSTANT) | Ko-fi URL. |
 | `donateBmacUrl` | `string` | (CONSTANT) | Buy Me a Coffee URL. |
+| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. Bind a `Repeater.model` to it and it re-evaluates as a scan lands — no manual re-pull. |
+| `scanning` | `bool` | `scanningChanged` | Whether a discovery scan is in flight (reactive). Flips true on `startDiscovery()` and false on completion; gate the Scan button / "Scanning…" label on it. |
 
 > Note: the property is `slotModel`, NOT `slots` — `slots` is the reserved
 > `Q_SLOTS` token and moc strips it.
@@ -58,7 +60,8 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `stateChanged` | — | Header / slot / pairing state moved (folds AppModel's `stateChanged`). |
 | `telemetryChanged` | — | Telemetry footer numbers moved (~1 Hz). |
 | `errorMessage` | `string message` | Transient one-shot error — surface it as a toast. |
-| `discoveredChanged` | — | The discovered-servers list moved (folds `WifiConnectionManager::discoveredChanged`). Re-pull `discoveredServers()` on this precise edge instead of `stateChanged`. |
+| `discoveredChanged` | — | The discovered-servers list moved (folds `WifiConnectionManager::discoveredChanged`). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
+| `scanningChanged` | — | The `scanning` flag flipped (a scan started or finished; folds `WifiConnectionManager::scanningChanged`). NOTIFY for the `scanning` property. |
 | `themeModeChanged` | — | `themeMode` moved (the store republished). |
 | `crashReportingChanged` | — | `crashReportingEnabled` moved. |
 | `onboardingNeededChanged` | — | `onboardingNeeded` flipped. |
@@ -76,12 +79,16 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `emulateCurrentType(slotId)` | `string` → `int` | The wire type id to pre-select in the picker (user override → hardware class → Xbox). |
 | `setControllerType(slotId, type)` | `string, int` | Apply the Emulate choice and re-attach the slot so the new descriptor is PUT. |
 | `startDiscovery()` | — | Begin a satellite discovery scan (Connections page "Scan"). |
-| `isScanning()` | → `bool` | Whether a scan is in flight. |
-| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, id:string }`. Index into this for `connectByIndex` / `pairWithPin`. |
-| `connectByIndex(discoveredIndex)` | `int` | Connect to the discovered server at that index (no-op if out of range). |
+| `isScanning()` | → `bool` | Whether a scan is in flight. Prefer the reactive `scanning` property for bindings. |
+| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
+| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. **Prefer this over `connectByIndex`.** |
+| `connectByIndex(discoveredIndex)` | `int` | **DEPRECATED** (racy if the list reorders between read and call). Connect to the discovered server at that index (no-op if out of range). Use `connectByServerId`. |
+| `reconnectConnection(connectionId)` | `string` | Reconnect a REMEMBERED satellite by id WITHOUT a rescan requirement and WITHOUT re-pairing (the key persists). If the id is in the current scan, connects the fresh endpoint; else kicks a discovery relearn AND attempts the last-known endpoint now. Gate the button on the row NOT being `liveLink`. |
+| `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered row + pairing key survive (contrast `forgetConnection`). Gate the button on the row's `liveLink` role. |
 | `forgetConnection(connectionId)` | `string` | Forget a remembered connection (unbinds its slots, drops key/pin/row). |
-| `pairWithPin(discoveredIndex, pin)` | `int, string` | Submit a 6-digit PIN for the discovered server at that index. Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
-| `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers()`). Drives the Pair button's spinner+disabled state. |
+| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable `id` (de-raced; resolves out of the live list). **Prefer this over `pairWithPin`.** Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
+| `pairWithPin(discoveredIndex, pin)` | `int, string` | **DEPRECATED** (racy if the list reorders). Submit a 6-digit PIN for the discovered server at that index. Use `pairByServerId`. |
+| `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers`). Drives the Pair button's spinner+disabled state. |
 | `clearPairingTarget()` | — | Drop the one-shot pairing trigger (call before opening the pairing sheet to avoid re-entry). |
 | `setThemeMode(mode)` | `int` | Apply an appearance mode (`0=Light 1=Dark 2=System`). Forwards to `ThemePreferenceStore`; re-themes the live QML palette + the native chrome immersive-dark attribute. |
 | `setCrashReportingEnabled(on)` | `bool` | Forward to `CrashReportingStore::setEnabled`. |
@@ -183,10 +190,11 @@ mirrors `ConnectionsDialog` rows). Same minimal-signal behavior as §2.
 | `dotColor` | `string` | `"success"`/`"primary"`/`"warning"`/`"muted"` — resolve to a `Theme` color. |
 | `glyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"` — pick the brand glyph variant. |
 | `boundSlotId` | `string` | Slot id bound to this connection ("" when unbound). |
-| `liveLink` | `bool` | Link is actively streaming (`Connected` or `Unstable`). |
+| `liveLink` | `bool` | Link is actively streaming (`Connected` or `Unstable`). **Gates the per-row Disconnect/Reconnect buttons**: enable `disconnectConnection(connectionId)` only when `liveLink`; enable `reconnectConnection(connectionId)` only when NOT `liveLink`. |
 
 > `connectionModel` carries the REMEMBERED/derived rows. The FOUND list of
-> not-yet-remembered discovered servers comes from `App.discoveredServers()`.
+> not-yet-remembered discovered servers comes from the `App.discoveredServers`
+> property (reactive) / `App.discoveredServers()` invokable.
 
 ---
 

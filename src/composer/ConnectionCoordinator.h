@@ -68,6 +68,20 @@ class ConnectionCoordinator : public QObject {
     // the Coordinator, mirroring android ConnectionCoordinator.autoReconnectAll.
     void autoReconnectAll();
 
+    // Reconnect a REMEMBERED satellite by id WITHOUT requiring the user to
+    // rescan first and WITHOUT re-pairing (the key persists). Mirrors Widgets
+    // ConnectionsDialog::onReconnectClicked: prefer the freshest discovered
+    // endpoint if this id is in the current scan (its IP is guaranteed current);
+    // else kick a discovery pass to relearn a moved box AND attempt the
+    // last-known persisted endpoint right now. No-op if the id is neither
+    // discovered nor remembered.
+    void reconnectConnection(const QString& connectionId);
+
+    // Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered
+    // row + pairing key survive (contrast forgetConnection, which drops them).
+    // Delegates to WifiConnectionManager::disconnect (authed server-side close).
+    void disconnectConnection(const QString& connectionId);
+
   signals:
     // Fired whenever the derived connections list may have changed (a thin Qt
     // bridge so existing QObject consumers — ConnectionsDialog, AppModel — can

@@ -24,13 +24,11 @@ Kit.Page {
     id: page
     title: qsTr("Connections")
 
-    // discoveredServers() is a plain method (no NOTIFY), so a binding off it does
-    // not re-evaluate when a scan lands. App.discoveredChanged is the precise edge
-    // (the WifiConnectionManager's discovered list moved); re-pull the snapshot on
-    // it rather than on the broad stateChanged. `discovered` is the single re-pulled
-    // snapshot the FOUND Repeater and the pairing dialog index against.
-    property var discovered: App.discoveredServers()
-    function refreshDiscovered() { page.discovered = App.discoveredServers(); }
+    // FOUND + scan flag are now REACTIVE properties on App (App.discoveredServers
+    // / App.scanning, NOTIFY discoveredChanged / scanningChanged). Bind them
+    // directly so the list and the Scan button stream as a scan progresses — no
+    // hand-cached snapshot, no manual refresh handler (the old non-reactive
+    // invokables only updated on page recreation).
 
     // Localized chip text for a ConnectionListModel `chip` token. Kept in QML
     // because it is pure presentation (the C++ vends the token, not the copy).
@@ -47,13 +45,6 @@ Kit.Page {
         }
     }
 
-    Connections {
-        target: App
-        // A scan completing / a server appearing fires discoveredChanged; re-pull
-        // the FOUND snapshot so the Repeater below tracks it precisely.
-        function onDiscoveredChanged() { page.refreshDiscovered(); }
-    }
-
     // ---- FOUND -------------------------------------------------------------
 
     RowLayout {
@@ -67,13 +58,13 @@ Kit.Page {
         // on `enabled` for the disabled-while-scanning look.
         Kit.KitButton {
             id: scanButton
-            text: App.isScanning() ? qsTr("Scanning…") : qsTr("Scan")
-            enabled: !App.isScanning()
+            text: App.scanning ? qsTr("Scanning…") : qsTr("Scan")
+            enabled: !App.scanning
             onClicked: App.startDiscovery()
 
             BusyIndicator {
                 anchors.centerIn: parent
-                running: App.isScanning()
+                running: App.scanning
                 visible: running
                 implicitWidth: 20
                 implicitHeight: 20
@@ -84,10 +75,10 @@ Kit.Page {
     // Empty-state for FOUND.
     Kit.Card {
         Layout.fillWidth: true
-        visible: page.discovered.length === 0
+        visible: App.discoveredServers.length === 0
         contentItem: Label {
-            text: App.isScanning() ? qsTr("Scanning for satellites…")
-                                   : qsTr("No satellites found yet. Tap Scan to look for one.")
+            text: App.scanning ? qsTr("Scanning for satellites…")
+                               : qsTr("No satellites found yet. Tap Scan to look for one.")
             color: Theme.muted
             font.pixelSize: 13
             wrapMode: Text.WordWrap
@@ -97,7 +88,7 @@ Kit.Page {
     // One Card per discovered server. The Repeater lays them out inside the
     // Page's default Column, so each Card is a sibling stacking row.
     Repeater {
-        model: page.discovered
+        model: App.discoveredServers
         delegate: Kit.Card {
             id: foundCard
             required property int index
@@ -133,7 +124,9 @@ Kit.Page {
 
                 Kit.OutlineButton {
                     text: qsTr("Connect")
-                    onClicked: App.connectByIndex(foundCard.index)
+                    // Id-based (de-raced): a scan reordering the list between bind
+                    // and click can't connect the wrong box.
+                    onClicked: App.connectByServerId(foundCard.modelData.id)
                 }
 
                 Kit.KitButton {
@@ -141,8 +134,7 @@ Kit.Page {
                     text: App.isPairingInFlight(foundCard.modelData.id) ? qsTr("Pairing…")
                                                                         : qsTr("Pair")
                     enabled: !App.isPairingInFlight(foundCard.modelData.id)
-                    onClicked: pairDialog.openFor(foundCard.index,
-                                                  foundCard.modelData.id,
+                    onClicked: pairDialog.openFor(foundCard.modelData.id,
                                                   foundCard.modelData.name.length > 0
                                                       ? foundCard.modelData.name
                                                       : foundCard.modelData.ip)
@@ -253,19 +245,17 @@ Kit.Page {
         heading: qsTr("Pair with %1").arg(pairDialog.serverName)
         acceptText: App.isPairingInFlight(pairDialog.serverId) ? qsTr("Pairing…") : qsTr("Pair")
         rejectText: qsTr("Cancel")
-        // Enable accept only on a full 6-digit PIN and while no request is in
+        // Enable accept only on a full 4-digit PIN and while no request is in
         // flight for this server.
-        acceptEnabled: pinField.text.length === 6 && !App.isPairingInFlight(pairDialog.serverId)
+        acceptEnabled: pinField.text.length === 4 && !App.isPairingInFlight(pairDialog.serverId)
 
         // The discovered server this dialog targets — set by openFor() before
-        // open() so the contract calls (pairWithPin index, isPairingInFlight id)
-        // address the right row.
-        property int discoveredIndex: -1
+        // open(). Id-based (de-raced): the contract calls address the row by its
+        // stable id, not a list index that a concurrent scan could shift.
         property string serverId: ""
         property string serverName: ""
 
-        function openFor(index, id, name) {
-            pairDialog.discoveredIndex = index;
+        function openFor(id, name) {
             pairDialog.serverId = id;
             pairDialog.serverName = name;
             pinField.clear();
@@ -277,7 +267,7 @@ Kit.Page {
 
         contentColumn.children: [
             Label {
-                text: qsTr("Enter the 6-digit PIN displayed on %1").arg(pairDialog.serverName)
+                text: qsTr("Enter the 4-digit PIN displayed on %1").arg(pairDialog.serverName)
                 color: Theme.muted
                 font.pixelSize: 13
                 wrapMode: Text.WordWrap
@@ -285,8 +275,8 @@ Kit.Page {
             },
             Kit.KitTextField {
                 id: pinField
-                placeholderText: qsTr("6-digit PIN")
-                maximumLength: 6
+                placeholderText: qsTr("4-digit PIN")
+                maximumLength: 4
                 inputMethodHints: Qt.ImhDigitsOnly
                 validator: IntValidator { bottom: 0 }
                 // Disabled mid-request: a new PIN would race the in-flight call.
@@ -312,7 +302,8 @@ Kit.Page {
 
         onAccepted: {
             pairDialog.submitted = true;
-            App.pairWithPin(pairDialog.discoveredIndex, pinField.text);
+            // Id-based: de-raced against a concurrent scan reordering the list.
+            App.pairByServerId(pairDialog.serverId, pinField.text);
         }
         onRejected: pinField.clear()
 

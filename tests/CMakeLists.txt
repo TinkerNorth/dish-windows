@@ -156,7 +156,14 @@ set(DISH_TEST_SOURCES
     # round-trip, crash toggle forwarding, deadzone row folding (override + default
     # seed + per-device motion), license-row projection, onboarding gate +
     # markWelcomeCompleted. Driven via the real stores over isolated QSettings.
-    test_app_view_model_maps.cpp)
+    test_app_view_model_maps.cpp
+    # QML migration (C1) — the Connections C++ foundation AppViewModel exposes
+    # reactively: the manager scan-start NOTIFY edge it folds (scanning), the
+    # discovery-source label each FOUND row carries, and the de-raced stable-id
+    # the id-based invokables (connectByServerId/pairByServerId/reconnect) resolve
+    # on. The new coordinator commands (reconnect/disconnect) are exercised in
+    # test_connection_coordinator.cpp via the coordinator Fixture.
+    test_app_view_model_connections.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

@@ -174,4 +174,34 @@ void ConnectionCoordinator::forgetConnection(const QString& connectionId) {
 
 void ConnectionCoordinator::autoReconnectAll() { wifi_->autoReconnectAll(); }
 
+void ConnectionCoordinator::reconnectConnection(const QString& connectionId) {
+    // Prefer the freshest discovered endpoint if this satellite is in the
+    // current scan (same machineId id) — its IP is guaranteed current.
+    for (const auto& s : wifi_->discoveredServers()) {
+        if (s.id() == connectionId) {
+            wifi_->connectTo(s);
+            return;
+        }
+    }
+    // Not in the current scan: kick a discovery pass so a moved box is relearned
+    // (the manager persists any new IP and re-attempts on scan completion), AND
+    // attempt the last-known persisted endpoint right now. The key persists (no
+    // PIN); if the box is still at its last address this connects immediately,
+    // and if it moved the scan-driven relearn picks it up — either way the user
+    // no longer has to manually rescan first. Mirrors ConnectionsDialog::onReconnectClicked.
+    wifi_->startDiscovery();
+    for (const auto& r : wifi_->remembered()) {
+        if (r.id == connectionId) {
+            wifi_->connectTo(r.toDiscovered());
+            return;
+        }
+    }
+}
+
+void ConnectionCoordinator::disconnectConnection(const QString& connectionId) {
+    // Graceful teardown only — the remembered row + key stay. The pooled row
+    // flips to its post-disconnect presence on the resulting poolChanged.
+    wifi_->disconnect(connectionId);
+}
+
 } // namespace dish::composer
