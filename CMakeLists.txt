@@ -517,7 +517,23 @@ if(DISH_QML)
             # Nav destinations (placeholders; page agents replace bodies).
             src/qml/pages/ControllersPage.qml
             src/qml/pages/ConnectionsPage.qml
-            src/qml/pages/SettingsPage.qml)
+            src/qml/pages/SettingsPage.qml
+            # Settings detail sub-pages (pushed onto the content StackView by
+            # SettingsPage.openDetail via Qt.resolvedUrl — they must be in the
+            # module so the resolved URL maps to a registered component).
+            src/qml/pages/DeadzoneSettingsPage.qml
+            src/qml/pages/DonatePage.qml
+            src/qml/pages/LicensesPage.qml
+            # EmulatePicker is referenced by bare type name from ControllersPage,
+            # so it must register into the same Dish.Chrome module.
+            src/qml/pages/EmulatePicker.qml
+            # First-run onboarding flow (pushed full-screen onto appRoot). The
+            # flow loads its screens by bare type name, so all five register here.
+            src/qml/onboarding/OnboardingFlow.qml
+            src/qml/onboarding/WelcomeScreen.qml
+            src/qml/onboarding/SetupWizardScreen.qml
+            src/qml/onboarding/HelpScreen.qml
+            src/qml/onboarding/OnboardingNavBar.qml)
 
     # The qmltyperegistrar emits a registration .cpp that #includes the bridge
     # headers by BASENAME (ChromeBridge.h, ThemeBridge.h), so their directory

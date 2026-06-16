@@ -8,6 +8,10 @@
 // pushed to the C++ chrome filter (ChromeBridge) so the native hit-test can
 // drive Snap Layouts over the maximize button and let the strip act as caption.
 
+// Bound: the inline CaptionButton component binds `bar.height` (an outer id),
+// which qmllint only resolves under bound component behavior.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -40,7 +44,7 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         onPressed: bar.window.startSystemMove()
-        onDoubleClicked: toggleMaximize()
+        onDoubleClicked: bar.toggleMaximize()
     }
 
     function toggleMaximize() {
@@ -58,8 +62,10 @@ Item {
         spacing: 8
 
         Rectangle {
-            width: 8
-            height: 8
+            // implicit*, not width/height: this Rectangle is laid out by the
+            // enclosing RowLayout, which owns the final geometry.
+            implicitWidth: 8
+            implicitHeight: 8
             radius: 4
             color: Theme.success
         }
