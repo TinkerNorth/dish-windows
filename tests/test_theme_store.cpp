@@ -245,3 +245,58 @@ TEST_CASE("ThemeController: switching System resolution re-themes when re-emitte
     h.mode.set(ThemeMode::System);
     REQUIRE(h.applied.back() == Appearance::Light);
 }
+
+// --- Active-token state after the startup resolution ------------------------
+// The QML ThemeBridge reads the live dish::ui::Theme::* statics (surface,
+// background, ...) at render time. The "body renders LIGHT under System+OS-dark"
+// bug was that the rendered tokens did not match the resolved appearance. These
+// pin the invariant that drives those statics: applying the appearance a mode +
+// OS reading resolves to leaves Theme::* equal to that appearance's palette — so
+// whatever the bridge reads matches what was resolved. Pure global-state checks
+// (no QML engine); the statics are process-global, so each section re-applies.
+
+namespace {
+
+// The production startup decision, distilled: resolve the mode (System via the
+// reader) and apply it to the active palette — exactly what the ThemeController's
+// real apply sink and the QmlEntryPoint System re-resolve both do.
+void applyResolved(ThemeMode mode, Appearance systemReading) {
+    const Appearance resolved = mode == ThemeMode::Light  ? Appearance::Light
+                                : mode == ThemeMode::Dark ? Appearance::Dark
+                                                          : systemReading;
+    dish::ui::setActiveAppearance(resolved);
+}
+
+} // namespace
+
+TEST_CASE("active Theme tokens match the resolved appearance after startup",
+          "[settings][theme]") {
+    SECTION("System + OS dark -> dark tokens (the reported repro)") {
+        applyResolved(ThemeMode::System, Appearance::Dark);
+        REQUIRE(dish::ui::activeAppearance() == Appearance::Dark);
+        REQUIRE(dish::ui::Theme::surface == darkPalette().surface);
+        REQUIRE(dish::ui::Theme::background == darkPalette().background);
+        // The exact seam the QML Card binds (color: Theme.surface) — must be dark,
+        // not the light 0xFFFFFFFF the bug rendered.
+        REQUIRE(dish::ui::Theme::surface != lightPalette().surface);
+    }
+    SECTION("System + OS light -> light tokens") {
+        applyResolved(ThemeMode::System, Appearance::Light);
+        REQUIRE(dish::ui::activeAppearance() == Appearance::Light);
+        REQUIRE(dish::ui::Theme::surface == lightPalette().surface);
+        REQUIRE(dish::ui::Theme::background == lightPalette().background);
+    }
+    SECTION("explicit Light ignores an OS-dark reading -> light tokens") {
+        applyResolved(ThemeMode::Light, Appearance::Dark);
+        REQUIRE(dish::ui::activeAppearance() == Appearance::Light);
+        REQUIRE(dish::ui::Theme::surface == lightPalette().surface);
+    }
+    SECTION("explicit Dark ignores an OS-light reading -> dark tokens") {
+        applyResolved(ThemeMode::Dark, Appearance::Light);
+        REQUIRE(dish::ui::activeAppearance() == Appearance::Dark);
+        REQUIRE(dish::ui::Theme::surface == darkPalette().surface);
+    }
+    // Restore the process-global default so a later test reading the statics is
+    // not perturbed by whichever section ran last.
+    dish::ui::setActiveAppearance(Appearance::Dark);
+}

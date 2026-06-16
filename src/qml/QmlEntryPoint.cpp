@@ -45,24 +45,35 @@ int runQmlApp(dish::AppModel& model) {
 
     dish::qml::AppViewModel appVm(&model);
 
-    // Default to the deep-space DARK palette (the design default). model.start()
-    // already ran the ThemeController; if the user never chose a mode (the store
-    // sits at its System default), pin Dark here so a fresh QML launch is dark
-    // rather than following the OS to light (A2's "Mica resolved light"). An
-    // explicit Light/Dark choice is honoured — only the System default is pinned.
+    // model.start() already ran the ThemeController, which resolved the persisted
+    // mode (System -> the OS appearance) and swapped the active palette. Re-resolve
+    // System here so the active palette provably matches the OS at the instant the
+    // QML Theme singleton is registered and first read — an explicit Light/Dark
+    // choice is already applied by the controller and left untouched. (A later
+    // setThemeMode re-themes live via the AppViewModel theme-applied sink below.)
     if (model.themeStore()->mode() == dish::source::ThemeMode::System) {
-        dish::ui::setActiveAppearance(dish::ui::Appearance::Dark);
+        dish::ui::setActiveAppearance(dish::ui::detectSystemAppearance());
     }
+
+    // Own the two QML singletons explicitly and register them by instance, rather
+    // than relying on QML_SINGLETON auto-registration. Under this target's LTCG
+    // (/GL) the generated QQmlModuleRegistration static initializer is stripped,
+    // so the auto-registered `ChromeBridge`/`Theme` names never reach the engine —
+    // every `Theme.*` / `ChromeBridge.*` reference in QML resolves to a
+    // ReferenceError, leaving the window at QtQuick's default WHITE and the body
+    // unthemed. Registering the instances here makes the names resolvable AND lets
+    // us hand QML the very objects we wire to the native chrome / re-theme sink.
+    // They are declared before the engine so they outlive it. QML must not delete
+    // them, so register with CppOwnership.
+    auto* bridge = new dish::chrome::ChromeBridge(qApp);
+    auto* themeBridge = new dish::chrome::ThemeBridge(qApp);
+    QQmlEngine::setObjectOwnership(bridge, QQmlEngine::CppOwnership);
+    QQmlEngine::setObjectOwnership(themeBridge, QQmlEngine::CppOwnership);
+    qmlRegisterSingletonInstance("Dish.Chrome", 1, 0, "ChromeBridge", bridge);
+    qmlRegisterSingletonInstance("Dish.Chrome", 1, 0, "Theme", themeBridge);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &appVm);
-
-    // Resolve the singleton instances so we can wire them to the native chrome /
-    // theme tokens before QML reads them. The engine owns them (QML_SINGLETON).
-    auto* bridge = engine.singletonInstance<dish::chrome::ChromeBridge*>(
-        QStringLiteral("Dish.Chrome"), QStringLiteral("ChromeBridge"));
-    auto* themeBridge = engine.singletonInstance<dish::chrome::ThemeBridge*>(
-        QStringLiteral("Dish.Chrome"), QStringLiteral("Theme"));
 
     // A shared borrow of the chrome filter so the theme-applied sink (below) can
     // flip the native immersive-dark attribute after the window exists. Filled by
