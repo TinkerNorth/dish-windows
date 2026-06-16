@@ -341,6 +341,8 @@ set(DISH_CORE_SOURCES
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
     src/Input/SdlMotionConvert.cpp
+    src/Input/JoystickMapping.h
+    src/Input/JoystickMapping.cpp
     src/Input/OutputCommandQueue.h
     src/Input/SDLGamepadBridge.h
     src/Input/SDLGamepadBridge.cpp

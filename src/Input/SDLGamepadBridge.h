@@ -24,6 +24,9 @@ extern "C" {
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 struct _SDL_GameController;
 using SDL_GameController = struct _SDL_GameController;
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
+struct _SDL_Joystick;
+using SDL_Joystick = struct _SDL_Joystick;
 struct SDL_ControllerSensorEvent;
 struct SDL_ControllerTouchpadEvent;
 }
@@ -130,6 +133,12 @@ class SDLGamepadBridge : public QObject {
     // (rumble / SetLED) on the SDL thread. Called once per runLoop iteration.
     void drainOutputCommands();
     void rebuildState(int iid);
+    // RAW-joystick twin of rebuildState: reads an open SDL_Joystick's current
+    // raw axis/button/hat state, runs the SDL-free JoystickMapping default
+    // layout, and publishes the resulting report — the SAME processor path the
+    // game-controller rebuildState uses. Only for pads SDL does NOT recognise
+    // as game controllers (see openJoysticks_).
+    void rebuildJoystickState(int iid);
     void handleSensorEvent(const SDL_ControllerSensorEvent& ev);
     void handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev);
     void pollBatteries();
@@ -147,6 +156,22 @@ class SDLGamepadBridge : public QObject {
     std::unordered_map<int, SDL_GameController*> openControllers_;
     std::unordered_map<int, QString> deviceIds_;
     std::unordered_map<int, QString> deviceNames_;
+
+    // RAW-JOYSTICK fallback: SDL joysticks that are NOT game controllers (no
+    // entry in SDL's mapping DB — e.g. a generic vid 0x0079 pad). These are
+    // opened with SDL_JoystickOpen and stream through rebuildJoystickState +
+    // the SDL-free JoystickMapping default layout, NOT the game-controller
+    // path. Tracked in their OWN map so they never collide with
+    // openControllers_; their instance ids are disjoint from it by the
+    // SDL_IsGameController guard in runLoop (a game controller is opened on the
+    // controller path, a non-controller joystick here — never both). They share
+    // deviceIds_ / deviceNames_ / usbIdentity_ / lastBattery_ with the
+    // controller path so devices() emits one unified list and no extra plumbing
+    // is needed in AppModel::rebuild. They are intentionally absent from
+    // motionCapable_ / lightbarCapable_ (a raw joystick exposes neither IMU nor
+    // LED through SDL's joystick API). Same lifecycle / locking as
+    // openControllers_.
+    std::unordered_map<int, SDL_Joystick*> openJoysticks_;
 
     // Devices that successfully had at least one of SDL_SENSOR_GYRO /
     // SDL_SENSOR_ACCEL enabled. Used to skip the sensor-event dispatch

@@ -44,6 +44,12 @@ set(DISH_TEST_SOURCES
     test_remembered_reconnect.cpp
     test_gamepad_input_processor.cpp
     test_sdl_motion_convert.cpp
+    # RAW-JOYSTICK fallback (feat/qml-fluent-migration) — the PURE default-layout
+    # mapper for generic pads SDL classifies as a joystick but NOT a game
+    # controller. Pins stick/trigger routing, face/shoulder/system buttons, all
+    # 8 hat directions, and out-of-range axis/button safety. SDL-free, like the
+    # motion-convert tests next to it.
+    test_joystick_mapping.cpp
     # Workstream 2d — pure XUSB/HID layout math, deadzone pure layer, per-device
     # deadzone + per-slot motion repos, motion enable/backend stores, the motion
     # capability composer, and the physical-motion convert/filter/probe.

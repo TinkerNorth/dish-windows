@@ -3,6 +3,7 @@
 
 #include "SDLGamepadBridge.h"
 
+#include "JoystickMapping.h"
 #include "SdlMotionConvert.h"
 #include "Util/HostBattery.h"
 
@@ -26,6 +27,14 @@ Q_LOGGING_CATEGORY(lcDishInput, "dish.input")
 // `InputDevice.getMotionRange(axis).getFlat()`. SDL2 has no equivalent.
 constexpr std::int16_t kDefaultStickFlat = 3277;
 constexpr std::uint8_t kDefaultTriggerFlat = 13;
+
+// The Dish ecosystem's own virtual output (the satellite's ViGEm pad) enumerates
+// as a device named "Dish ...". Skip it as an INPUT so a single-machine setup
+// (client + satellite local) doesn't loop the emulated output back in as a
+// controller. No real controller carries this name.
+bool isDishVirtualDevice(const char* name) {
+    return name != nullptr && QString::fromUtf8(name).startsWith(QStringLiteral("Dish "));
+}
 
 // The SDL → wire conversion helpers (gyroRadPerSecToInt16, accelMps2ToInt16,
 // touchpadCoordToInt16) live in SdlMotionConvert.{h,cpp} so the arithmetic is
@@ -160,12 +169,19 @@ void SDLGamepadBridge::runLoop() {
         return;
     }
     SDL_GameControllerEventState(SDL_ENABLE);
+    // RAW-JOYSTICK fallback: also pump joystick events so generic pads SDL does
+    // not recognise as game controllers still surface (handled below, guarded by
+    // SDL_IsGameController so the controller path keeps sole ownership of
+    // recognised pads). SDL_INIT_JOYSTICK is already up (gamecontroller implies
+    // it), but joystick event delivery is a separate opt-in.
+    SDL_JoystickEventState(SDL_ENABLE);
 
     while (running_.load(std::memory_order_relaxed)) {
         SDL_Event ev;
         if (SDL_WaitEventTimeout(&ev, 100) == 0) { continue; }
         switch (ev.type) {
         case SDL_CONTROLLERDEVICEADDED: {
+            if (isDishVirtualDevice(SDL_GameControllerNameForIndex(ev.cdevice.which))) { break; }
             SDL_GameController* gc = SDL_GameControllerOpen(ev.cdevice.which);
             if (gc == nullptr) { break; }
             SDL_Joystick* js = SDL_GameControllerGetJoystick(gc);
@@ -272,6 +288,88 @@ void SDLGamepadBridge::runLoop() {
         case SDL_CONTROLLERBUTTONUP:
             rebuildState(ev.cdevice.which);
             break;
+        case SDL_JOYDEVICEADDED: {
+            // SDL_JOYDEVICEADDED.which is a device INDEX (not an instance id),
+            // matching SDL_JoystickOpen's argument — unlike every other event
+            // here whose `which` is already an instance id.
+            const int which = ev.jdevice.which;
+            // CRITICAL: a game controller ALSO emits joystick events. The
+            // controller path (SDL_CONTROLLERDEVICEADDED) owns recognised pads,
+            // so skip them here — opening the same device twice would double it.
+            if (SDL_IsGameController(which) == SDL_TRUE) { break; }
+            if (isDishVirtualDevice(SDL_JoystickNameForIndex(which))) { break; }
+            SDL_Joystick* js = SDL_JoystickOpen(which);
+            if (js == nullptr) { break; }
+            const int iid = SDL_JoystickInstanceID(js);
+            const auto* name = SDL_JoystickName(js);
+            const QString deviceId = QStringLiteral("sdl:%1").arg(iid);
+            const QString deviceName = QString::fromUtf8(name != nullptr ? name : "Joystick");
+            // A raw joystick exposes no IMU / LED / controller-type through
+            // SDL's joystick API; surface it as a plain Xbox-kind pad with no
+            // motion and no lightbar.
+            const int vendorId = SDL_JoystickGetVendor(js);
+            const int productId = SDL_JoystickGetProduct(js);
+            {
+                std::lock_guard<std::mutex> lock(mtx_);
+                openJoysticks_[iid] = js;
+                deviceIds_[iid] = deviceId;
+                deviceNames_[iid] = deviceName;
+                controllerType_[iid] = kControllerTypeXbox;
+                usbIdentity_[iid] = {vendorId, productId};
+                lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
+            }
+            // One-shot DEVCAPS dump mirroring the controller path so a user's
+            // "my generic pad doesn't work" report carries the same diagnostic.
+            char guidBuf[64] = {0};
+            SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
+            qCInfo(lcDishInput) << "DEVCAPS(joystick) id=" << deviceId << "name=" << deviceName
+                                << "axes=" << SDL_JoystickNumAxes(js)
+                                << "buttons=" << SDL_JoystickNumButtons(js)
+                                << "hats=" << SDL_JoystickNumHats(js)
+                                << "vid=" << QString::number(vendorId, 16)
+                                << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf;
+            processor_->setDeadzones(deviceId.toStdString(),
+                                     {kDefaultStickFlat, kDefaultTriggerFlat});
+            QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+            rebuildJoystickState(iid);
+            break;
+        }
+        case SDL_JOYDEVICEREMOVED: {
+            const int iid = ev.jdevice.which;
+            std::string deviceId;
+            {
+                std::lock_guard<std::mutex> lock(mtx_);
+                // A device removed on the controller path is absent here, so
+                // this only fires for raw joysticks we actually opened.
+                auto jit = openJoysticks_.find(iid);
+                if (jit == openJoysticks_.end()) { break; }
+                SDL_JoystickClose(jit->second);
+                openJoysticks_.erase(jit);
+                if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+                    deviceId = it->second.toStdString();
+                    deviceIds_.erase(it);
+                }
+                deviceNames_.erase(iid);
+                controllerType_.erase(iid);
+                usbIdentity_.erase(iid);
+                lastBatteryPoll_.erase(iid);
+                lastBattery_.erase(iid);
+            }
+            if (!deviceId.empty()) { processor_->remove(deviceId); }
+            QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+            break;
+        }
+        case SDL_JOYAXISMOTION:
+        case SDL_JOYBUTTONDOWN:
+        case SDL_JOYBUTTONUP:
+        case SDL_JOYHATMOTION:
+            // All four carry the joystick instance id in `which` under their
+            // own event struct. A game controller's joystick events also arrive
+            // here, but its iid is in openControllers_ (never openJoysticks_),
+            // so rebuildJoystickState no-ops for it — the controller path's
+            // SDL_CONTROLLER* events drive that pad instead.
+            rebuildJoystickState(ev.jaxis.which);
+            break;
         case SDL_CONTROLLERSENSORUPDATE:
             handleSensorEvent(ev.csensor);
             break;
@@ -298,6 +396,8 @@ void SDLGamepadBridge::runLoop() {
         std::lock_guard<std::mutex> lock(mtx_);
         for (auto& [iid, gc] : openControllers_) { SDL_GameControllerClose(gc); }
         openControllers_.clear();
+        for (auto& [iid, js] : openJoysticks_) { SDL_JoystickClose(js); }
+        openJoysticks_.clear();
         deviceIds_.clear();
         deviceNames_.clear();
     }
@@ -450,32 +550,40 @@ void SDLGamepadBridge::pollBatteries() {
     // critical section. SDL_JoystickCurrentPowerLevel is cheap and
     // thread-safe, but holding mtx_ across the publish would block
     // applyRumble unnecessarily.
+    // The joystick handle is resolved under the lock — for a game controller via
+    // SDL_GameControllerGetJoystick, for a raw joystick the open handle itself —
+    // so both the controller path and the RAW-joystick fallback share one poll.
     struct PollEntry {
         int iid;
         std::string deviceId;
-        SDL_GameController* gc;
+        SDL_Joystick* js;
     };
     std::vector<PollEntry> due;
     {
         std::lock_guard<std::mutex> lock(mtx_);
-        due.reserve(openControllers_.size());
-        for (const auto& [iid, gc] : openControllers_) {
+        due.reserve(openControllers_.size() + openJoysticks_.size());
+        auto consider = [&](int iid, SDL_Joystick* js) {
+            if (js == nullptr) { return; }
             const auto last = lastBatteryPoll_[iid];
             const bool first = last == std::chrono::steady_clock::time_point{};
-            if (!first && (now - last) < kBatteryPollInterval) { continue; }
+            if (!first && (now - last) < kBatteryPollInterval) { return; }
             lastBatteryPoll_[iid] = now;
             std::string did;
             if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
                 did = it->second.toStdString();
             }
-            if (did.empty()) { continue; }
-            due.push_back({iid, std::move(did), gc});
+            if (did.empty()) { return; }
+            due.push_back({iid, std::move(did), js});
+        };
+        for (const auto& [iid, gc] : openControllers_) {
+            consider(iid, SDL_GameControllerGetJoystick(gc));
         }
+        for (const auto& [iid, js] : openJoysticks_) { consider(iid, js); }
     }
 
     bool anyChange = false;
     for (const auto& e : due) {
-        SDL_Joystick* js = SDL_GameControllerGetJoystick(e.gc);
+        SDL_Joystick* js = e.js;
         if (js == nullptr) { continue; }
         const auto pl = SDL_JoystickCurrentPowerLevel(js);
         const auto wire = powerLevelToWire(pl);
@@ -586,6 +694,61 @@ void SDLGamepadBridge::rebuildState(int iid) {
     st.ry = static_cast<std::int16_t>(-axisValue(gc, SDL_CONTROLLER_AXIS_RIGHTY));
 
     processor_->publish(deviceId, st);
+}
+
+void SDLGamepadBridge::rebuildJoystickState(int iid) {
+    SDL_Joystick* js = nullptr;
+    std::string deviceId;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (auto it = openJoysticks_.find(iid); it != openJoysticks_.end()) { js = it->second; }
+        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+            deviceId = it->second.toStdString();
+        }
+    }
+    // No-ops for a game controller (absent from openJoysticks_) — the
+    // controller path owns it via SDL_CONTROLLER* events.
+    if (js == nullptr || deviceId.empty()) { return; }
+    // Twin-dedup parity with rebuildState: a pad claimed by USB-direct streams
+    // via raw-HID only — drop its SDL input so the satellite never sees it twice.
+    if (isSuppressed(deviceId)) { return; }
+
+    // Snapshot the joystick's current raw state into SDL-free buffers, then run
+    // the pure default-layout mapper. SDL_JoystickGet* are cheap reads on the
+    // SDL thread. The arrays are sized to the device's real counts so the
+    // mapper's bounds checks see the true extent.
+    const int numAxes = SDL_JoystickNumAxes(js);
+    const int numButtons = SDL_JoystickNumButtons(js);
+    const int numHats = SDL_JoystickNumHats(js);
+
+    // Fixed-cap local buffers keep this allocation-free on the hot path. A pad
+    // with more axes/buttons/hats than the cap is truncated to the cap — the
+    // default layout references only low indices, so nothing useful is lost.
+    constexpr int kMaxAxes = 32;
+    constexpr int kMaxButtons = 64;
+    constexpr int kMaxHats = 8;
+    std::int16_t axes[kMaxAxes] = {0};
+    bool buttons[kMaxButtons] = {false};
+    std::uint8_t hats[kMaxHats] = {0};
+
+    const int axisCount = numAxes < kMaxAxes ? numAxes : kMaxAxes;
+    const int buttonCount = numButtons < kMaxButtons ? numButtons : kMaxButtons;
+    const int hatCount = numHats < kMaxHats ? numHats : kMaxHats;
+    for (int i = 0; i < axisCount; ++i) { axes[i] = SDL_JoystickGetAxis(js, i); }
+    for (int i = 0; i < buttonCount; ++i) {
+        buttons[i] = SDL_JoystickGetButton(js, i) != 0;
+    }
+    for (int i = 0; i < hatCount; ++i) { hats[i] = SDL_JoystickGetHat(js, i); }
+
+    JoystickSnapshot snap{};
+    snap.axes = axes;
+    snap.axisCount = axisCount;
+    snap.buttons = buttons;
+    snap.buttonCount = buttonCount;
+    snap.hats = hats;
+    snap.hatCount = hatCount;
+
+    processor_->publish(deviceId, mapJoystick(snap));
 }
 
 } // namespace dish::input
