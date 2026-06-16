@@ -182,3 +182,32 @@ TEST_CASE("ConnectionListModel: a same-count chip change emits dataChanged, not 
     REQUIRE(spy.changes == 1);
     REQUIRE(roleOf(model, 0, ConnectionListModel::ChipRole).toString() == "online");
 }
+
+TEST_CASE("ConnectionListModel: countChanged fires on a row-count delta, not a same-count patch",
+          "[connmodel][signals]") {
+    // The reactive `count` property (the bind-button enable rule reads it) must
+    // re-emit only when the row count actually moves — an in-place patch (same
+    // count, new state) must NOT, or QML re-evaluates the gate needlessly.
+    ConnectionListModel model;
+    model.setRows({savedRow()});
+
+    int countEmissions = 0;
+    QObject::connect(&model, &ConnectionListModel::countChanged,
+                     [&countEmissions] { ++countEmissions; });
+
+    // Same count, different state -> dataChanged only, no countChanged.
+    auto patched = savedRow();
+    patched.live = rd::UiLinkState::Connected;
+    model.setRows({patched});
+    REQUIRE(countEmissions == 0);
+
+    // Row added -> countChanged.
+    model.setRows({patched, connectedRow()});
+    REQUIRE(countEmissions == 1);
+    REQUIRE(model.count() == 2);
+
+    // Row removed -> countChanged again.
+    model.setRows({patched});
+    REQUIRE(countEmissions == 2);
+    REQUIRE(model.count() == 1);
+}

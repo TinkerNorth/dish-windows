@@ -169,7 +169,14 @@ set(DISH_TEST_SOURCES
     # the id-based invokables (connectByServerId/pairByServerId/reconnect) resolve
     # on. The new coordinator commands (reconnect/disconnect) are exercised in
     # test_connection_coordinator.cpp via the coordinator Fixture.
-    test_app_view_model_connections.cpp)
+    test_app_view_model_connections.cpp
+    # QML migration (bind flow) — the bind-chooser availability exposure
+    # (AppViewModel::availableConnectionsForSlot). The view model can't be
+    # instantiated (owns a full AppModel), so this pins the reducer seam it folds:
+    # the candidate filter (drop bound-elsewhere) + connectionsVisibleInPicker
+    # holdover, asserting another slot's binding is excluded while an unbound-
+    # available one and the slot's own offline holdover are included.
+    test_app_view_model_bind_availability.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

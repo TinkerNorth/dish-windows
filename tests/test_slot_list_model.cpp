@@ -250,6 +250,35 @@ TEST_CASE("SlotListModel: a same-count telemetry tick emits dataChanged, not a r
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzRole).toInt() == 500);
 }
 
+TEST_CASE("SlotListModel: countChanged fires on a row-count delta, not a same-count patch",
+          "[slotmodel][signals]") {
+    // The reactive `count` property (the page's empty-state + bind gates read it)
+    // must re-emit only when the slot count actually moves — a quiet telemetry
+    // tick (same count, new Hz) must NOT, or QML re-evaluates the gates needlessly.
+    SlotListModel model;
+    model.setState({richSlot()});
+
+    int countEmissions = 0;
+    QObject::connect(&model, &SlotListModel::countChanged,
+                     [&countEmissions] { ++countEmissions; });
+
+    // Same count, a Hz moved -> dataChanged only, no countChanged.
+    auto s = richSlot();
+    s.liveRates.gamepadHz = 500;
+    model.setState({s});
+    REQUIRE(countEmissions == 0);
+
+    // Slot added -> countChanged.
+    model.setState({s, plainSlot(QStringLiteral("b"))});
+    REQUIRE(countEmissions == 1);
+    REQUIRE(model.count() == 2);
+
+    // Slot removed -> countChanged again.
+    model.setState({s});
+    REQUIRE(countEmissions == 2);
+    REQUIRE(model.count() == 1);
+}
+
 TEST_CASE("SlotListModel: out-of-range index returns an invalid variant", "[slotmodel][data]") {
     SlotListModel model;
     model.setState({plainSlot()});

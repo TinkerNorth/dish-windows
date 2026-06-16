@@ -166,6 +166,14 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void bindSlot(const QString& slotId, const QString& connectionId);
     Q_INVOKABLE void unbindSlot(const QString& slotId);
 
+    // The connections a slot may actually bind to, for the bind chooser. Returns
+    // JS objects {connectionId,label,dotColor,glyph} via the SAME pure
+    // reducer::connectionsVisibleInPicker the Widgets SlotCard uses: connections
+    // bound to ANOTHER slot are excluded, live-available unbound ones are offered,
+    // and the slot's OWN current binding is held over even when offline. One-shot
+    // (read when the chooser opens, like emulateTypes), so no NOTIFY.
+    Q_INVOKABLE QVariantList availableConnectionsForSlot(const QString& slotId) const;
+
     // Emulate picker: kick a catalog refresh, then read the offerable types +
     // the slot's current type. emulateTypes returns a list of JS objects
     // {type,slug,name,shortName,description,known}; emulateCurrentType the

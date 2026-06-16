@@ -29,6 +29,13 @@ Kit.Page {
     // The connectionId chosen in the bind chooser, captured in the delegate
     // scope (where the role is visible) so accept needn't reach into model.data.
     property string bindConnectionId: ""
+    // The connections the open chooser offers — {connectionId,label,dotColor,glyph}
+    // objects pulled one-shot from App.availableConnectionsForSlot(slotId) when the
+    // chooser opens. NOT the unfiltered App.connectionModel: this is the same
+    // pick-list the Widgets SlotCard shows (connections free to bind + the slot's
+    // own held-over binding), so a connection already bound to another slot can't
+    // be chosen here.
+    property var bindCandidates: []
     // The slot whose emulate picker is open, mirrored for the same reason.
     property string emulateSlotId: ""
 
@@ -198,9 +205,16 @@ Kit.Page {
                 Kit.KitButton {
                     text: card.bound ? qsTr("Unbind") : qsTr("Bind…")
                     Layout.alignment: Qt.AlignVCenter
-                    // Disabled when unbound and there is nothing to bind to — the
-                    // dimmed control reads as "nothing to do here".
-                    enabled: card.bound || App.connectionModel.count > 0 // qmllint disable unqualified
+                    // Disabled when unbound and there is nothing this slot may
+                    // bind to — the dimmed control reads as "nothing to do here".
+                    // Gated on the SLOT's pick-list (bound, or it has at least one
+                    // available connection), not the unfiltered total: a connection
+                    // already bound to another slot doesn't count here. The
+                    // connectionModel.count read keeps the binding reactive (it
+                    // moves whenever the pick-list could change). qmllint disable unqualified
+                    enabled: card.bound
+                             || (App.connectionModel.count >= 0
+                                 && App.availableConnectionsForSlot(card.slotId).length > 0)
                     onClicked: {
                         if (card.bound) {
                             App.unbindSlot(card.slotId); // qmllint disable unqualified
@@ -214,8 +228,9 @@ Kit.Page {
     }
 
     // ---- Bind chooser (shared; one per page, retargeted per click) ----------
-    // Lists the remembered/derived connections from App.connectionModel and
-    // binds the captured slot to the chosen one.
+    // Lists the slot's filtered pick-list (page.bindCandidates, pulled from
+    // App.availableConnectionsForSlot on open) and binds the captured slot to the
+    // chosen one.
     Kit.ContentDialog {
         id: bindDialog
         heading: qsTr("Bind controller")
@@ -239,26 +254,25 @@ Kit.Page {
                 clip: true
                 spacing: 4
                 currentIndex: -1
-                model: App.connectionModel // qmllint disable unqualified
+                // The slot's filtered pick-list (page.bindCandidates), pulled
+                // one-shot from App.availableConnectionsForSlot when the chooser
+                // opens — NOT the unfiltered App.connectionModel. Each entry is a
+                // {connectionId,label,dotColor,glyph} object, read via modelData.
+                model: page.bindCandidates
 
                 delegate: ItemDelegate {
                     id: connRow
-                    // Connection roles consumed here (contract §3).
                     required property int index
-                    required property string connectionId
-                    required property string label
-                    required property string ip
-                    required property int udpPort
-                    required property string dotColor
-                    required property string glyph
+                    // The pick-list row object (contract §1, availableConnectionsForSlot).
+                    required property var modelData
 
                     width: ListView.view ? ListView.view.width : implicitWidth
                     highlighted: ListView.isCurrentItem
                     onClicked: {
                         bindList.currentIndex = connRow.index;
-                        // Capture the id here, in delegate scope, where the role
-                        // is visible — the dialog's accept handler reads it back.
-                        page.bindConnectionId = connRow.connectionId;
+                        // Capture the id here, in delegate scope — the dialog's
+                        // accept handler reads it back.
+                        page.bindConnectionId = connRow.modelData.connectionId;
                     }
 
                     contentItem: RowLayout {
@@ -266,25 +280,20 @@ Kit.Page {
                         Kit.BrandGlyph {
                             Layout.preferredWidth: 18
                             Layout.preferredHeight: 18
-                            glyph: glyphForToken(connRow.glyph)
+                            glyph: glyphForToken(connRow.modelData.glyph)
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Kit.StatusDot {
-                            token: connRow.dotColor
+                            token: connRow.modelData.dotColor
                             Layout.alignment: Qt.AlignVCenter
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 0
                             Label {
-                                text: connRow.label
+                                text: connRow.modelData.label
                                 color: Theme.onSurface
                                 font.pixelSize: 13
-                            }
-                            Label {
-                                text: qsTr("%1 • UDP %2").arg(connRow.ip).arg(connRow.udpPort)
-                                color: Theme.muted
-                                font.pixelSize: 11
                             }
                         }
                     }
@@ -322,6 +331,10 @@ Kit.Page {
     function openBind(slotId) {
         page.bindSlotId = slotId;
         page.bindConnectionId = "";
+        // Re-pull the slot's filtered pick-list each open (one-shot, like the
+        // emulate picker's load below). App.availableConnectionsForSlot runs the
+        // same PickerVisibility reducer the Widgets SlotCard uses.
+        page.bindCandidates = App.availableConnectionsForSlot(slotId); // qmllint disable unqualified
         bindList.currentIndex = -1;
         bindDialog.open();
     }

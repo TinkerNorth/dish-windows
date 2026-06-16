@@ -10,6 +10,8 @@
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
 #include "core/input/Deadzones.h"
+#include "core/reducer/ConnectionRows.h"
+#include "core/reducer/PickerVisibility.h"
 #include "qml/AppSettingsMaps.h"
 #include "repository/DeadzoneRepository.h"
 #include "source/store/CrashReportingStore.h"
@@ -36,6 +38,42 @@ namespace {
 // "Bound to <ip> • UDP <port>" detail not needed here — the header strings
 // mirror MainWindow::rebuildHeader, which keys off ConnectionSummary only.
 QString tr(const char* s) { return QCoreApplication::translate("AppViewModel", s); }
+
+// models::LinkState and reducer::UiLinkState are the SAME 7-value enum in the
+// same order (the latter is the Qt-free mirror); the picker rows carry a
+// models::LinkState, so cross over to feed the reducer render-key mappers.
+reducer::UiLinkState toUiLinkState(models::LinkState s) {
+    return static_cast<reducer::UiLinkState>(s);
+}
+
+// Same token strings ConnectionListModel exposes (dotToken/glyphToken there), so
+// a bind-chooser row renders identically to a Connections-page row by
+// construction — both go through the same reducer mapper + token switch.
+QString dotColorToken(models::LinkState s) {
+    switch (reducer::dotColorForState(toUiLinkState(s))) {
+    case reducer::DotColor::Success:
+        return QStringLiteral("success");
+    case reducer::DotColor::Primary:
+        return QStringLiteral("primary");
+    case reducer::DotColor::Warning:
+        return QStringLiteral("warning");
+    case reducer::DotColor::Muted:
+        return QStringLiteral("muted");
+    }
+    return {};
+}
+
+QString glyphToken(models::LinkState s) {
+    switch (reducer::glyphForConnection(reducer::ConnectionKind::Satellite, toUiLinkState(s))) {
+    case reducer::ConnectionGlyph::SatelliteBase:
+        return QStringLiteral("satelliteBase");
+    case reducer::ConnectionGlyph::SatelliteConnected:
+        return QStringLiteral("satelliteConnected");
+    case reducer::ConnectionGlyph::SatelliteOff:
+        return QStringLiteral("satelliteOff");
+    }
+    return {};
+}
 
 } // namespace
 
@@ -160,6 +198,40 @@ void AppViewModel::bindSlot(const QString& slotId, const QString& connectionId) 
 }
 
 void AppViewModel::unbindSlot(const QString& slotId) { model_->hub()->unbind(slotId); }
+
+QVariantList AppViewModel::availableConnectionsForSlot(const QString& slotId) const {
+    const auto& st = model_->state();
+
+    // The slot's own current binding (the holdover the picker keeps even offline).
+    std::optional<QString> boundConnectionId;
+    for (const auto& s : st.slotList) {
+        if (s.id == slotId) {
+            boundConnectionId = s.boundConnectionId;
+            break;
+        }
+    }
+
+    // Candidate set = connections NOT bound to ANOTHER slot (mirrors
+    // MainWindow.cpp's `available`), but we KEEP this slot's own binding in so the
+    // reducer's holdover can surface it. The reducer then drops the non-available
+    // unbound rows and re-adds the slot's own offline binding.
+    QList<models::ConnectionSummary> candidates;
+    for (const auto& c : st.connections) {
+        const bool boundElsewhere = c.boundSlotId.has_value() && *c.boundSlotId != slotId;
+        if (!boundElsewhere) { candidates.append(c); }
+    }
+
+    QVariantList out;
+    for (const auto& c : reducer::connectionsVisibleInPicker(candidates, boundConnectionId)) {
+        QVariantMap m;
+        m[QStringLiteral("connectionId")] = c.id;
+        m[QStringLiteral("label")] = c.label;
+        m[QStringLiteral("dotColor")] = dotColorToken(c.live);
+        m[QStringLiteral("glyph")] = glyphToken(c.live);
+        out.append(m);
+    }
+    return out;
+}
 
 void AppViewModel::refreshEmulate(const QString& slotId) {
     model_->refreshCatalogForSlot(slotId);
