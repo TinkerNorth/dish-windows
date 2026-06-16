@@ -33,8 +33,21 @@ Page {
 
     padding: 24
 
-    contentItem: Column {
-        id: body
-        spacing: 16
+    // The content pane scrolls vertically when it outgrows the viewport — the
+    // Windows-Settings pattern: the nav rail + breadcrumb (in the shell) stay
+    // fixed, only this pane scrolls. Pages are authored to grow vertically (list
+    // pages use a content-sized, non-interactive list), so this single page-level
+    // scroller owns all overflow. contentWidth = availableWidth pins the width so
+    // only the vertical axis ever scrolls.
+    contentItem: ScrollView {
+        id: scroller
+        contentWidth: availableWidth
+        clip: true
+
+        Column {
+            id: body
+            width: scroller.availableWidth
+            spacing: 16
+        }
     }
 }

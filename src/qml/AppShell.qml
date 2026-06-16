@@ -179,6 +179,10 @@ Item {
                 Layout.fillHeight: true
                 initialItem: Qt.resolvedUrl(shell.destinations[0].source)
                 background: null
+                // Confine the slide transition to the content bounds so an
+                // outgoing page disappears at the rail divider (slides "behind"
+                // it) instead of painting over the transparent rail to the edge.
+                clip: true
             }
         }
     }
