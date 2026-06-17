@@ -82,6 +82,13 @@ class UsbDirectObserver {
     virtual void syntheticAdded(int /*syntheticId*/, const std::string& /*name*/, bool /*hasGyro*/,
                                 int /*pollRateHz*/, int /*vendorId*/, int /*productId*/) {}
     virtual void syntheticRemoved(int /*syntheticId*/) {}
+    // Fired once after EVERY state-changing applyEvent. This is the single
+    // unidirectional "the FSM state moved, rebuild the slot list from the fresh
+    // controllers() snapshot" signal — the slot list binds to this, not to the
+    // granular per-effect callbacks above (which exist for banners/toasts). It is
+    // what makes a held-synthetic phase change (e.g. Direct->AwaitingFramework on a
+    // Standard pick) reach the UI; without it those transitions were invisible.
+    virtual void controllersChanged() {}
 };
 
 class UsbGamepadManager {

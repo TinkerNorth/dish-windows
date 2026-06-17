@@ -83,6 +83,7 @@ class FakeGateway : public UsbDeviceGateway {
 struct RecordingObserver : UsbDirectObserver {
     std::vector<DirectClaimFailure> failures;
     std::vector<int> syntheticsAdded;
+    int controllersChangedCount = 0;
     void markFailure(int /*v*/, int /*p*/, DirectClaimFailure reason) override {
         failures.push_back(reason);
     }
@@ -90,6 +91,7 @@ struct RecordingObserver : UsbDirectObserver {
                         int /*pollRateHz*/, int /*v*/, int /*p*/) override {
         syntheticsAdded.push_back(syntheticId);
     }
+    void controllersChanged() override { ++controllersChangedCount; }
 };
 
 bool sawFailure(const RecordingObserver& obs, DirectClaimFailure reason) {
@@ -185,6 +187,40 @@ TEST_CASE("successful claim reaches Direct and registers a synthetic", "[usb-man
     CHECK_FALSE(c->failure.has_value());
     REQUIRE(obs.syntheticsAdded.size() == 1);
     CHECK(obs.syntheticsAdded.front() == -1000);
+}
+
+TEST_CASE("controllersChanged fires on a held-synthetic transition (Direct->AwaitingFramework)",
+          "[usb-manager]") {
+    // The regression guard for the UI-never-updated bug: a Direct->Standard pick
+    // parks the controller in AwaitingFramework but KEEPS the synthetic (no
+    // syntheticRemoved), so the granular callbacks fire nothing. The single
+    // controllersChanged signal must still fire so the slot list rebuilds + the
+    // AwaitingFramework settle runs.
+    FakeGateway gw;
+    gw.nextClaim = ClaimResult::success(-1000);
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    RecordingObserver obs;
+    UsbGamepadManager m(&gw, nullptr, &prefs, &obs);
+
+    m.tryDirectMode(kVid, kPid);
+    {
+        const auto c = m.controllerFor(kVid, kPid);
+        REQUIRE(c.has_value());
+        REQUIRE(c->phase == UsbPhase::Direct);
+    }
+    const int afterDirect = obs.controllersChangedCount;
+    REQUIRE(afterDirect > 0); // the claim transition notified
+
+    m.setPathChoice(kVid, kPid, PathChoice::Standard);
+    {
+        const auto c = m.controllerFor(kVid, kPid);
+        REQUIRE(c.has_value());
+        CHECK(c->phase == UsbPhase::AwaitingFramework); // synthetic held, not removed
+    }
+    // The held-synthetic transition still notified — the old syntheticRemoved-only
+    // path would have left this equal to afterDirect.
+    CHECK(obs.controllersChangedCount > afterDirect);
 }
 
 TEST_CASE("a recorded failure suppresses auto-Direct on a verified model", "[usb-manager]") {

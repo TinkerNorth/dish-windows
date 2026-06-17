@@ -339,11 +339,10 @@ class AppModel : public QObject {
     class UsbObserver : public source::usb::UsbDirectObserver {
       public:
         explicit UsbObserver(AppModel* owner) : owner_(owner) {}
-        void syntheticAdded(int /*syntheticId*/, const std::string& /*name*/, bool /*hasGyro*/,
-                            int /*pollRateHz*/, int /*vendorId*/, int /*productId*/) override {
-            owner_->onUsbDirectChanged();
-        }
-        void syntheticRemoved(int /*syntheticId*/) override { owner_->onUsbDirectChanged(); }
+        // Rebuild the slot list on the single "FSM state moved" signal — covers
+        // EVERY transition (synthetic add/remove AND held-synthetic phase changes
+        // like Direct->AwaitingFramework that the granular callbacks missed).
+        void controllersChanged() override { owner_->onUsbDirectChanged(); }
 
       private:
         AppModel* owner_;

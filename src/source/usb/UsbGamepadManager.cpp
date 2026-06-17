@@ -161,6 +161,13 @@ void UsbGamepadManager::applyEvent(int key, const reducer::UsbEvent& event) {
     }
     const reducer::UsbController& ctx = next.has_value() ? *next : *cur;
     for (const auto& fx : effects) { execute(key, ctx, fx); }
+
+    // The single unidirectional notification: any FSM mutation re-renders the slot
+    // list from the fresh snapshot. Emitted AFTER the effects (so the gateway
+    // claim/release has run) and outside mtx_ (the observer reads controllers()).
+    // This is what makes held-synthetic phase changes (Direct->AwaitingFramework)
+    // reach the UI + trigger the AwaitingFramework settle.
+    if (observer_ != nullptr) { observer_->controllersChanged(); }
 }
 
 void UsbGamepadManager::execute(int key, const reducer::UsbController& c,

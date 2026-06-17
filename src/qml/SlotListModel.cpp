@@ -151,7 +151,12 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
     case PathSupportedRole:
         return s.pathSupported;
     case ClaimInProgressRole:
-        return s.pathPhase == reducer::UsbPhase::Claiming;
+        // Both transition directions are "busy": Claiming (Standard->Direct, the
+        // raw-HID claim) and AwaitingFramework (Direct->Standard, releasing +
+        // waiting for the framework device to settle). The toggle shows the
+        // indeterminate spinner + disables for either.
+        return s.pathPhase == reducer::UsbPhase::Claiming ||
+               s.pathPhase == reducer::UsbPhase::AwaitingFramework;
     case DirectFailureRole:
         return directFailureToken(s.directFailure);
     default:
