@@ -158,6 +158,10 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
             dev.vendorId = it->second.vendorId;
             dev.productId = it->second.productId;
         }
+        // A device tracked in openJoysticks_ is a raw (non-game-controller) pad —
+        // the only kind the JoystickRemap path applies to (a game controller in
+        // openControllers_ uses SDL's own mapping). Drives the slot's remappable.
+        dev.isRawJoystick = openJoysticks_.count(iid) != 0;
         out.append(dev);
     }
     return out;

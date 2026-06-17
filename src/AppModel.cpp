@@ -611,6 +611,10 @@ void AppModel::rebuild() {
         // UsbController by this SDL device's (vid, pid). A pad the raw-HID
         // gateway never enumerates (Xbox/XInput) has no controller -> the pure
         // mapper leaves pathSupported=false and the card hides the control.
+        // Only a raw joystick (not an SDL game controller) decodes through the
+        // remappable mapJoystick path; carry the flag so the page entry shows
+        // for exactly those. Synthetics below stay false (default).
+        s.remappable = d.isRawJoystick;
         stampSlotPath(s, d.vendorId, d.productId, controllers);
         next.append(s);
     }

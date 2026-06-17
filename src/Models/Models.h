@@ -391,6 +391,13 @@ struct ControllerSlot {
     // streams continuously) vs. as a "~peak". Mirrors android's
     // currentMode == Direct check on the PathCard.
     bool usbDirect = false;
+    // True iff this slot is a RAW-joystick-backed SDL pad whose DirectInput
+    // routing the "Configure controls" page may remap (the mapJoystick /
+    // JoystickRemap path). False for synthetics (USB-direct), the virtual slot,
+    // and SDL-recognised game controllers — those use SDL's own mapping and
+    // ignore any remap, so the page entry must NOT show for them. Stamped from
+    // the bridge Device::isRawJoystick in AppModel::rebuild for SDL slots.
+    bool remappable = false;
     // Live measured rates the slot card renders as small live-stats chips.
     // Refreshed ~1 Hz off the InputRateStore / USB poll sampler, independent of
     // the slot-list shape.

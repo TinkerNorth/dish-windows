@@ -85,6 +85,13 @@ class SDLGamepadBridge : public QObject {
         // arbitration (UsbTwinDedup) — see setSuppressedDeviceIds.
         int vendorId = 0;
         int productId = 0;
+        // True iff this device is a RAW joystick (openJoysticks_) rather than an
+        // SDL-recognised game controller (openControllers_). Only raw joysticks
+        // decode through the mapJoystick / JoystickRemap path, so only they are
+        // remappable by the "Configure controls" page — a game controller uses
+        // SDL's own mapping and ignores any remap. AppModel stamps it onto the
+        // slot's `remappable` so the page entry shows for exactly these.
+        bool isRawJoystick = false;
     };
     QList<Device> devices() const;
 

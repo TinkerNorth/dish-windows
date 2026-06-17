@@ -101,9 +101,10 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     const auto names = model.roleNames();
     // One entry per declared role (Id..DirectFailure). If a role is added without
     // a name, this count drifts and the test flags it.
-    REQUIRE(names.size() == 25);
+    REQUIRE(names.size() == 26);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
+    REQUIRE(names.value(SlotListModel::RemappableRole) == QByteArray("remappable"));
     REQUIRE(names.value(SlotListModel::GamepadHzShownRole) == QByteArray("gamepadHzShown"));
     REQUIRE(names.value(SlotListModel::PollHzShownRole) == QByteArray("pollHzShown"));
     REQUIRE(names.value(SlotListModel::PathPhaseRole) == QByteArray("pathPhase"));
@@ -178,6 +179,20 @@ TEST_CASE("SlotListModel: data maps an unbound plain pad's off-state roles",
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::GamepadHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::MotionHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::PollHzShownRole).toBool());
+}
+
+TEST_CASE("SlotListModel: remappable defaults off and reflects the slot flag",
+          "[slotmodel][data]") {
+    // Only a raw-joystick-backed SDL slot is remappable; a default slot (synthetic
+    // / game controller / virtual) is not, so the page entry stays hidden for it.
+    SlotListModel model;
+    model.setState({plainSlot()});
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::RemappableRole).toBool());
+
+    auto s = plainSlot();
+    s.remappable = true;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::RemappableRole).toBool());
 }
 
 TEST_CASE("SlotListModel: a bound-but-not-connected slot shows the warning dot",

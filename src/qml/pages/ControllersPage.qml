@@ -89,6 +89,10 @@ Kit.Page {
             required property bool live
             required property string dotColor
             required property bool usbDirect
+            // True for a raw-joystick slot whose DirectInput routing the
+            // "Configure controls" page may remap; gates that action's visibility
+            // (an SDL game controller / synthetic uses its own mapping).
+            required property bool remappable
             required property bool hasMotion
             required property bool hasLightbar
             required property int batteryLevel
@@ -290,6 +294,17 @@ Kit.Page {
                     }
                 }
 
+                // "Configure controls" — the raw-joystick remap page. Shown ONLY
+                // for a remappable slot (a generic DirectInput pad); an SDL game
+                // controller / USB-direct synthetic uses its own mapping and
+                // hides this. A quiet outline action next to Emulate/Bind.
+                Kit.OutlineButton {
+                    visible: card.remappable
+                    text: qsTr("Configure controls…")
+                    Layout.alignment: Qt.AlignVCenter
+                    onClicked: page.openRemap(card.slotId, card.name)
+                }
+
                 // Emulate is offered only on a bound slot (nothing to emulate a
                 // pad on until it routes to a satellite).
                 Kit.OutlineButton {
@@ -434,6 +449,16 @@ Kit.Page {
         page.bindCandidates = App.availableConnectionsForSlot(slotId); // qmllint disable unqualified
         bindList.currentIndex = -1;
         bindDialog.open();
+    }
+
+    // Push the raw-joystick remap sub-page onto the enclosing content StackView
+    // (the SettingsPage sub-page pattern, QML_UI_KIT.md §3), seeding the target
+    // slot's id + name as initial properties so the page reads its remap on load.
+    function openRemap(slotId, slotName) {
+        if (StackView.view) {
+            StackView.view.push(Qt.resolvedUrl("ControlsRemapPage.qml"),
+                                { slotId: slotId, slotName: slotName });
+        }
     }
 
     function openEmulate(slotId) {

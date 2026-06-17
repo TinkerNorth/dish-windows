@@ -206,6 +206,7 @@ never resets on a quiet telemetry tick.
 | `live` | `bool` | Bound session is `Connected` (green dot iff true). |
 | `dotColor` | `string` | Status-dot token: `"success"` / `"warning"` / `"muted"`. Resolve to a `Theme` color. |
 | `usbDirect` | `bool` | Slot is a USB-direct (raw-HID) synthetic. |
+| `remappable` | `bool` | Slot is a RAW-joystick SDL pad whose DirectInput routing the "Configure controls" page may remap (the `mapJoystick` path). `false` for synthetics (USB-direct), the virtual slot, and SDL-recognised game controllers (they use SDL's own mapping and ignore a remap). Gate the "Configure controls" entry on this — and `slotRemap(slotId)` returns `{}` for a non-remappable slot. |
 | `hasMotion` | `bool` | Hardware has a gyro/accelerometer (drives the Gyro/No-gyro chip). |
 | `hasLightbar` | `bool` | Hardware has an RGB LED (show the Lightbar chip ONLY when true). |
 | `batteryLevel` | `int` | 0..100 percent, or `255` (0xFF) = unknown. |

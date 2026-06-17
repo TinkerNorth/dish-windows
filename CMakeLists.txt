@@ -532,6 +532,9 @@ if(DISH_QML)
             src/qml/pages/DeadzoneSettingsPage.qml
             src/qml/pages/DonatePage.qml
             src/qml/pages/LicensesPage.qml
+            # Raw-joystick remap detail (pushed from ControllersPage's
+            # "Configure controls" action on a remappable slot card).
+            src/qml/pages/ControlsRemapPage.qml
             # EmulatePicker is referenced by bare type name from ControllersPage,
             # so it must register into the same Dish.Chrome module.
             src/qml/pages/EmulatePicker.qml

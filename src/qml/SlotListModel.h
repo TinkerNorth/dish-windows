@@ -46,6 +46,7 @@ class SlotListModel : public QAbstractListModel {
         LiveRole,             // bool: bound session is LinkState::Connected
         DotColorRole,         // QString: semantic token name ("success"/"warning"/"muted")
         UsbDirectRole,        // bool: synthetic USB-direct pad
+        RemappableRole,       // bool: raw joystick whose routing is user-remappable
 
         HasMotionRole,        // bool: hardware has a gyro/accelerometer
         HasLightbarRole,      // bool: hardware has an addressable RGB LED
