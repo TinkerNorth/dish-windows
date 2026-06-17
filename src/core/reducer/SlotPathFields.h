@@ -87,6 +87,27 @@ inline SlotPathFields slotPathFields(int vendorId, int productId,
     return out;
 }
 
+// Whether a slot is mid path-switch — the single derived "loading" state the
+// toggle binds to (spinner + disabled). Pure, so the full transition flow is
+// testable. True from a pick until the slot reaches a STABLE state matching the
+// desired path:
+//   * a transitional FSM phase (Claiming = the raw-HID claim; AwaitingFramework =
+//     release + settle), OR
+//   * the desired path's device form is not present yet — Direct wants a synthetic
+//     whose poll rate has been measured (the claim is near-instant but the
+//     URB-completion-rate sampler needs a brief window: this is the observed "Hz
+//     comes in a moment later"); Standard wants the synthetic gone.
+// A terminal failure / RestoreStuck / NeedsReplug is NOT switching — those surface
+// an error note, never a perpetual spinner.
+inline bool slotPathSwitching(UsbPhase phase, PathChoice desired, bool usbDirect,
+                              int directPollHz, bool hasFailure) {
+    if (phase == UsbPhase::RestoreStuck || phase == UsbPhase::NeedsReplug) { return false; }
+    if (hasFailure) { return false; }
+    if (phase == UsbPhase::Claiming || phase == UsbPhase::AwaitingFramework) { return true; }
+    if (desired == PathChoice::Direct) { return !usbDirect || directPollHz <= 0; }
+    return usbDirect; // desired Standard: still switching while on the synthetic.
+}
+
 // Parse a synthetic slot id (the decimal vpKey string AppModel builds the
 // synthetic slot's id from) back into its (vid, pid). Returns nullopt if the
 // string is not a plain non-negative decimal integer (an SDL slot id like

@@ -244,8 +244,9 @@ Kit.Page {
                                     // the "clear" verb.
                                     readonly property bool selected: card.desiredPath === modelData.choice
                                     text: modelData.label
-                                    // Disabled mid-claim so a second pick can't
-                                    // race the in-flight transition.
+                                    // Disabled for the whole switch (claimInProgress is
+                                    // the derived slotPathSwitching state) so a second
+                                    // pick can't race the in-flight transition.
                                     enabled: !card.claimInProgress
                                     font.pixelSize: 11
                                     implicitHeight: 26
@@ -272,8 +273,9 @@ Kit.Page {
                                 }
                             }
 
-                            // In-flight claim spinner — the toggle stays
-                            // disabled until the FSM leaves Claiming.
+                            // Spinner for the whole derived switching window — the
+                            // FSM transition AND the Direct telemetry-establishing
+                            // (synthetic up but poll rate not yet measured).
                             BusyIndicator {
                                 visible: card.claimInProgress
                                 running: card.claimInProgress

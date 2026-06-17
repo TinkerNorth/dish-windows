@@ -4,6 +4,7 @@
 #include "qml/SlotListModel.h"
 
 #include "UI/SlotLiveStats.h"
+#include "core/reducer/SlotPathFields.h"
 
 namespace dish::qml {
 
@@ -151,12 +152,13 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
     case PathSupportedRole:
         return s.pathSupported;
     case ClaimInProgressRole:
-        // Both transition directions are "busy": Claiming (Standard->Direct, the
-        // raw-HID claim) and AwaitingFramework (Direct->Standard, releasing +
-        // waiting for the framework device to settle). The toggle shows the
-        // indeterminate spinner + disables for either.
-        return s.pathPhase == reducer::UsbPhase::Claiming ||
-               s.pathPhase == reducer::UsbPhase::AwaitingFramework;
+        // The single derived "switching" state (pure reducer): true through the
+        // whole path-switch lifecycle — the transitional FSM phase AND the device-
+        // form/telemetry settle (Direct until its synthetic's poll rate is
+        // measured, Standard until the synthetic is gone). Drives the toggle's
+        // spinner + disabled state with no arbitrary timer.
+        return reducer::slotPathSwitching(s.pathPhase, s.desiredPath, s.usbDirect,
+                                          s.liveRates.directPollHz, s.directFailure.has_value());
     case DirectFailureRole:
         return directFailureToken(s.directFailure);
     default:
