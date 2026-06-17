@@ -379,3 +379,57 @@ TEST_CASE("start claim clears a stale failure on the controller", "[usb-fsm]") {
     REQUIRE(r.next.has_value());
     CHECK_FALSE(r.next->failure.has_value());
 }
+
+// ── The Windows level-triggered settle predicate ─────────────────────────────
+// shouldSettleAwaitingFramework drives the coordinator's synthetic FrameworkUp
+// when a controller is parked awaiting a framework device that is already present
+// (the SDL twin never left the device list across a Direct claim on Windows). The
+// settle event itself is plain FrameworkUp, exercised by the AwaitingFramework
+// cases above; here we pin the gate that decides whether to emit it.
+
+TEST_CASE("settle predicate fires only when awaiting AND the framework is present", "[usb-fsm]") {
+    // The bug case: parked in AwaitingFramework with the framework device present.
+    CHECK(shouldSettleAwaitingFramework(UsbPhase::AwaitingFramework, /*present=*/true));
+    // Genuinely-gone device: not present -> do NOT settle, so Timeout->RestoreStuck
+    // stays reachable instead of a spurious FrameworkUp.
+    CHECK_FALSE(shouldSettleAwaitingFramework(UsbPhase::AwaitingFramework, /*present=*/false));
+}
+
+TEST_CASE("settle predicate is idempotent for non-awaiting phases", "[usb-fsm]") {
+    // A controller already settled to Routed (or in any non-awaiting phase) must
+    // not re-fire even with the framework present, so the queued settle terminates.
+    for (const UsbPhase phase : {UsbPhase::Routed, UsbPhase::Claiming, UsbPhase::Direct,
+                                 UsbPhase::RestoreStuck, UsbPhase::NeedsReplug}) {
+        CHECK_FALSE(shouldSettleAwaitingFramework(phase, /*present=*/true));
+    }
+}
+
+TEST_CASE("settle-then-reduce drives AwaitingFramework to Routed with the standard effects",
+          "[usb-fsm]") {
+    // The full settle: predicate says yes, then the FrameworkUp the coordinator
+    // emits lands the controller on Standard, dropping the synthetic. This is the
+    // exact resolution of the Direct->Standard stuck bug.
+    const auto c = controller(UsbPhase::AwaitingFramework, std::nullopt, -1000, false,
+                              PathChoice::Standard, false, std::string("c"));
+    REQUIRE(shouldSettleAwaitingFramework(c.phase, /*present=*/true));
+    const auto r = reduce(c, ev::FrameworkUp{42});
+    REQUIRE(r.next.has_value());
+    CHECK(r.next->phase == UsbPhase::Routed);
+    CHECK_FALSE(r.next->syntheticId.has_value());
+    const std::vector<UsbEffect> expected{fx::RemoveSynthetic{-1000}, fx::BindFramework{42},
+                                          fx::SetPref{PathChoice::Standard}, fx::ClearFailure{}};
+    CHECK(r.effects == expected);
+}
+
+TEST_CASE("a truly-gone device keeps the timeout path: awaiting + timeout -> restore stuck",
+          "[usb-fsm]") {
+    // Mirrors the regression guard: with the device absent the predicate returns
+    // false (tested above), so no FrameworkUp is synthesized and the timer is what
+    // fires — landing in RestoreStuck (synthetic held), NOT Routed.
+    const auto c = controller(UsbPhase::AwaitingFramework, std::nullopt, -1000);
+    REQUIRE_FALSE(shouldSettleAwaitingFramework(c.phase, /*present=*/false));
+    const auto r = reduce(c, ev::Timeout{});
+    REQUIRE(r.next.has_value());
+    CHECK(r.next->phase == UsbPhase::RestoreStuck);
+    CHECK(r.next->syntheticId == -1000);
+}

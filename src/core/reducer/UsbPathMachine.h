@@ -236,6 +236,27 @@ struct Reduction {
 // The total reducer: (controller, event) -> next state + effects.
 Reduction reduce(const UsbController& c, const UsbEvent& event);
 
+// Whether the coordinator should synthesize a FrameworkUp to settle a controller
+// that is parked in AwaitingFramework. Pulled out as a pure predicate so the
+// Windows-specific settle rule is checkable without driving the live manager.
+//
+// Why this exists at all: on Windows the SDL/XInput "framework" twin is NOT
+// removed when a pad is claimed for Direct (it is only twin-dedup-suppressed,
+// still in the bridge's device list), so its vpKey is *continuously* present.
+// The coordinator's presence diff therefore never sees a fresh appearance edge
+// after a Direct->Standard Release parks the controller in AwaitingFramework, and
+// the FSM would wait forever for a FrameworkUp that never comes. (Android differs:
+// claiming detaches the device, so a real appearance edge re-fires on release.)
+// The fix is level-triggered, not edge-triggered: if the framework device is
+// present *right now* and we are still awaiting it, settle. `present` MUST be read
+// from the real current device set so a device that is genuinely gone returns
+// false here and the Timeout -> RestoreStuck/NeedsReplug failure path stays
+// reachable. Settling is idempotent: AwaitingFramework --FrameworkUp--> Routed,
+// and Routed is not AwaitingFramework, so a re-check does not re-fire.
+inline bool shouldSettleAwaitingFramework(UsbPhase phase, bool frameworkPresent) {
+    return phase == UsbPhase::AwaitingFramework && frameworkPresent;
+}
+
 // The path-resolution policy, lifted out of the coordinator so each branch is
 // checkable directly (UsbPathResolutionTest). An explicit stored pick always
 // wins; absent one (stored == nullopt = Auto), auto-Direct ONLY a verified

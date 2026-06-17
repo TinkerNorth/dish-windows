@@ -217,6 +217,15 @@ class AppModel : public QObject {
     // up/down per VID:PID into the USB FSM, so a claim-failure / Standard pick can
     // settle on the live SDL device (the "framework" path on Windows).
     void syncFrameworkPresence();
+    // Drive a FrameworkUp for any controller still parked in AwaitingFramework
+    // whose framework (SDL twin) device is present in the live device list, so the
+    // FSM settles to Standard. Needed because on Windows the twin never leaves
+    // bridge_->devices() across a Direct claim, so syncFrameworkPresence's
+    // appearance-edge diff alone never re-fires after a Direct->Standard release.
+    // Idempotent (a settled controller is Routed, not AwaitingFramework); invoked
+    // deferred (queued) from onUsbDirectChanged to avoid re-entering the FSM mid
+    // effect-dispatch.
+    void settleAwaitingFrameworkControllers();
     // Push every saved per-(vid,pid) remap from the store into the bridge. Called
     // on construction, on a store republish, and on a device-add (so a freshly-
     // attached pad with a saved profile decodes correctly). Idempotent; off the

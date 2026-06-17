@@ -525,6 +525,36 @@ void AppModel::onUsbDirectChanged() {
     // manager runs effects with its own lock released, and rebuild() takes only a
     // fresh snapshot of controllers().
     rebuild();
+
+    // A Direct->Standard/Auto pick parks the controller in AwaitingFramework while
+    // its synthetic is dropped (this callback fires on that change). On Windows the
+    // SDL twin never left bridge_->devices(), so syncFrameworkPresence's appearance
+    // diff won't re-fire FrameworkUp — settle it here instead. DEFERRED to a queued
+    // call so it runs after the current effect loop (this very callback came from
+    // inside applyEvent's effect dispatch) has fully unwound: settling re-enters
+    // applyEvent, and doing that re-entrantly would mutate FSM state mid-dispatch.
+    // The settle is idempotent (a Routed controller is no longer AwaitingFramework),
+    // so the queued pass terminates after one settling step per controller.
+    QMetaObject::invokeMethod(this, [this] { settleAwaitingFrameworkControllers(); },
+                              Qt::QueuedConnection);
+}
+
+void AppModel::settleAwaitingFrameworkControllers() {
+    if (usbManager_ == nullptr) { return; }
+    // Build the set of framework VID:PIDs present RIGHT NOW from the live device
+    // list — not the last-pass cache — so a device that has genuinely gone is
+    // absent here and is left to time out into RestoreStuck/NeedsReplug rather than
+    // getting a spurious FrameworkUp.
+    QSet<int> present;
+    for (const auto& d : bridge_->devices()) {
+        if (d.vendorId == 0 || d.productId == 0) { continue; }
+        present.insert((d.vendorId << 16) | (d.productId & 0xFFFF));
+    }
+    for (const auto& [key, c] : usbManager_->controllers()) {
+        if (reducer::shouldSettleAwaitingFramework(c.phase, present.contains(key))) {
+            usbManager_->onFrameworkUp(c.vendorId, c.productId, key);
+        }
+    }
 }
 
 void AppModel::syncFrameworkPresence() {
@@ -553,6 +583,18 @@ void AppModel::syncFrameworkPresence() {
         }
     }
     lastFrameworkVpKeys_ = current;
+
+    // Level-triggered settle, not only the appearance edge above: on Windows the
+    // SDL twin is continuously present while a pad is claimed for Direct, so a
+    // controller parked in AwaitingFramework by a Direct->Standard release would
+    // never see a fresh FrameworkUp edge. Drive one for any controller still
+    // awaiting whose framework device is present in the *current* set (a genuinely
+    // gone device is not in `current`, so its Timeout->RestoreStuck path is intact).
+    for (const auto& [key, c] : usbManager_->controllers()) {
+        if (reducer::shouldSettleAwaitingFramework(c.phase, current.contains(key))) {
+            usbManager_->onFrameworkUp(c.vendorId, c.productId, key);
+        }
+    }
 }
 
 void AppModel::rebuild() {
