@@ -17,6 +17,14 @@ void ChromeBridge::setMicaActive(bool active) {
     emit micaActiveChanged();
 }
 
+void ChromeBridge::setDark(bool dark) {
+    if (m_dark == dark) {
+        return;
+    }
+    m_dark = dark;
+    emit darkChanged();
+}
+
 void ChromeBridge::setCaptionRect(const QRect& rect) {
     if (m_chrome) {
         m_chrome->setCaptionRect(rect);

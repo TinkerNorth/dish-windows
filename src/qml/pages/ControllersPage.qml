@@ -235,12 +235,15 @@ Kit.Page {
                                 delegate: Button {
                                     id: pathSeg
                                     required property var modelData
+                                    // NOT checkable: a checkable Button sets its own
+                                    // `checked` imperatively on click, breaking the
+                                    // binding so segments stop being exclusive. Drive
+                                    // the visual purely off `selected` (a binding that
+                                    // a click can't break). "auto" never reads selected
+                                    // (the FSM resolves it to standard/direct) — it's
+                                    // the "clear" verb.
+                                    readonly property bool selected: card.desiredPath === modelData.choice
                                     text: modelData.label
-                                    checkable: true
-                                    // "auto" has no reflected desired (the FSM
-                                    // resolves it to standard/direct), so it
-                                    // never reads checked — it's the "clear" verb.
-                                    checked: card.desiredPath === modelData.choice
                                     // Disabled mid-claim so a second pick can't
                                     // race the in-flight transition.
                                     enabled: !card.claimInProgress
@@ -254,17 +257,17 @@ Kit.Page {
                                     contentItem: Text {
                                         text: pathSeg.text
                                         font: pathSeg.font
-                                        color: pathSeg.checked ? Theme.background : Theme.onSurface
+                                        color: pathSeg.selected ? Theme.background : Theme.onSurface
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
                                     }
                                     background: Rectangle {
                                         radius: 7
-                                        color: pathSeg.checked ? Theme.primary
+                                        color: pathSeg.selected ? Theme.primary
                                              : pathSeg.hovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.10)
                                              : "transparent"
                                         border.width: 1
-                                        border.color: pathSeg.checked ? Theme.primary : Theme.outline
+                                        border.color: pathSeg.selected ? Theme.primary : Theme.outline
                                     }
                                 }
                             }

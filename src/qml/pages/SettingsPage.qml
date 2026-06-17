@@ -61,9 +61,11 @@ Kit.Page {
                     delegate: Button {
                         id: chip
                         required property var modelData
+                        // NOT checkable: a checkable Button sets `checked`
+                        // imperatively on click, breaking the binding so the chips
+                        // stop being exclusive. Drive the visual off `selected`.
+                        readonly property bool selected: App.themeMode === modelData.mode
                         text: modelData.label
-                        checkable: true
-                        checked: App.themeMode === modelData.mode
                         font.pixelSize: 12
                         implicitHeight: 30
                         leftPadding: 14
@@ -75,17 +77,17 @@ Kit.Page {
                         contentItem: Text {
                             text: chip.text
                             font: chip.font
-                            color: chip.checked ? Theme.background : Theme.onSurface
+                            color: chip.selected ? Theme.background : Theme.onSurface
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
                         background: Rectangle {
                             radius: 8
-                            color: chip.checked ? Theme.primary
+                            color: chip.selected ? Theme.primary
                                  : chip.hovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.10)
                                  : "transparent"
                             border.width: 1
-                            border.color: chip.checked ? Theme.primary : Theme.outline
+                            border.color: chip.selected ? Theme.primary : Theme.outline
                         }
                     }
                 }

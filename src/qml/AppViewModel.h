@@ -133,9 +133,12 @@ class AppViewModel : public QObject {
     ConnectionListModel* connectionModel() { return &connectionModel_; }
 
     int themeMode() const;
-    void setThemeMode(int mode);
+    // Q_INVOKABLE (not just the property WRITE): the SettingsPage calls these as
+    // functions (App.setThemeMode(x)), which a bare WRITE accessor does not expose
+    // — QML can only assign the property otherwise.
+    Q_INVOKABLE void setThemeMode(int mode);
     bool crashReportingEnabled() const;
-    void setCrashReportingEnabled(bool enabled);
+    Q_INVOKABLE void setCrashReportingEnabled(bool enabled);
     QString appVersion() const;
     bool onboardingNeeded() const;
     QString reversePairingPhase() const;

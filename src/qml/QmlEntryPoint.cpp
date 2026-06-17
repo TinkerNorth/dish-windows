@@ -96,8 +96,16 @@ int runQmlApp(dish::AppModel& model) {
                 bridge->setChrome(chrome);
             }
             const bool mica = chrome->applyMicaBackdrop();
+            // Push the resolved STARTUP appearance so a persisted Light mode paints
+            // the solid light background + light chrome from the first frame. The
+            // theme-applied sink only fires on a later user toggle, so without this
+            // a cold start in Light kept the dark Mica backdrop until the user
+            // toggled the theme.
+            const bool startupDark = dish::ui::activeAppearance() == dish::ui::Appearance::Dark;
+            chrome->setImmersiveDarkMode(startupDark);
             if (bridge) {
                 bridge->setMicaActive(mica);
+                bridge->setDark(startupDark);
             }
         },
         Qt::DirectConnection);
@@ -112,9 +120,14 @@ int runQmlApp(dish::AppModel& model) {
 
     // After a theme change: re-read the C++ tokens into the QML Theme singleton
     // and flip the native chrome's immersive-dark attribute so the frame matches.
-    appVm.setThemeAppliedSink([themeBridge, chromeHolder](bool dark) {
+    appVm.setThemeAppliedSink([themeBridge, chromeHolder, bridge](bool dark) {
         if (themeBridge) {
             themeBridge->refresh();
+        }
+        if (bridge) {
+            // Drives Main.qml's transparent-vs-solid background: a light app over
+            // a dark desktop must not keep the dark Mica backdrop showing through.
+            bridge->setDark(dark);
         }
         if (*chromeHolder) {
             (*chromeHolder)->setImmersiveDarkMode(dark);

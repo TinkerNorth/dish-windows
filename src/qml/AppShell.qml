@@ -177,12 +177,18 @@ Item {
                 id: contentStack
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                initialItem: Qt.resolvedUrl(shell.destinations[0].source)
                 background: null
                 // Confine the slide transition to the content bounds so an
                 // outgoing page disappears at the rail divider (slides "behind"
                 // it) instead of painting over the transparent rail to the edge.
                 clip: true
+                // Push the first page AFTER the StackView has a layout size rather
+                // than via initialItem: initialItem is created during construction
+                // when this is still 0x0 inside the Layout, so the first page (the
+                // default Controllers destination) renders blank until a later
+                // navigation forces a relayout. Deferring to onCompleted creates it
+                // already sized.
+                Component.onCompleted: contentStack.push(Qt.resolvedUrl(shell.destinations[0].source))
             }
         }
     }

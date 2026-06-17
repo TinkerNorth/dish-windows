@@ -30,7 +30,10 @@ ApplicationWindow {
     // When Mica is active the OS backdrop shows through a transparent surface;
     // ChromeBridge.micaActive is set by main.cpp after applyMicaBackdrop(). On
     // pre-Win11 we paint the themed solid background instead.
-    color: ChromeBridge.micaActive ? "transparent" : Theme.background
+    // Only stay transparent in DARK mode: Mica's tint follows the OS, so a light
+    // app over a dark desktop would keep a dark backdrop while the content goes
+    // light ("only some items went light"). Light mode paints the solid bg.
+    color: (ChromeBridge.micaActive && ChromeBridge.dark) ? "transparent" : Theme.background
 
     // The title bar bleeds into the body: same parent, no divider. The bar
     // publishes its caption + maximize-button geometry up to C++ for hit-testing.

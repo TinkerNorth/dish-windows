@@ -23,12 +23,19 @@ class ChromeBridge : public QObject {
     QML_ELEMENT
     QML_SINGLETON
     Q_PROPERTY(bool micaActive READ micaActive NOTIFY micaActiveChanged)
+    // The resolved app appearance. The body is transparent (Mica shows) only when
+    // dark — Mica's tint follows the OS, so a light app over a dark desktop would
+    // otherwise keep a dark backdrop while the cards/text go light. In light mode
+    // we paint the solid light Theme.background instead.
+    Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
 
 public:
     explicit ChromeBridge(QObject* parent = nullptr);
 
     bool micaActive() const { return m_micaActive; }
     void setMicaActive(bool active);
+    bool dark() const { return m_dark; }
+    void setDark(bool dark);
 
     // Wire to the native chrome filter. The bridge forwards rect updates to it.
     void setChrome(FramelessWindowChrome* chrome) { m_chrome = chrome; }
@@ -38,10 +45,12 @@ public:
 
 signals:
     void micaActiveChanged();
+    void darkChanged();
 
 private:
     FramelessWindowChrome* m_chrome = nullptr;
     bool m_micaActive = false;
+    bool m_dark = true; // app defaults to the dark palette
 };
 
 } // namespace dish::chrome
