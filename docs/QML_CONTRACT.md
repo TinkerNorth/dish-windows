@@ -71,6 +71,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `onboardingNeededChanged` | — | `onboardingNeeded` flipped. |
 | `deadzonesChanged` | — | The deadzone device rows / their seeded values moved (a device attach/detach, or a `setDeadzones`/`setMotionEnabled` landed). Re-pull `deadzoneDevices()`. |
 | `pairingSucceeded` | — | One-shot: a connection reached `Connected` after a pair (the online-count rising edge). The pairing sheet may close on it. Best-effort. |
+| `rawInputCaptured` | `string slotId, int kind, int index, int value` | A raw joystick input was observed for the slot currently capturing (after `startInputCapture`). `kind` `0=axis 1=button 2=hat`; `index` the raw source index; `value` the axis int16 / `1` for a button / the `SDL_HAT_*` bitmask for a hat. Pass `slotId`/`kind`/`index` straight into `assignSlotInput` to bind the output the page is editing. Fires ONLY for the capturing slot — other devices' inputs are filtered out. |
 
 ### Invokable methods
 
@@ -103,6 +104,12 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `deadzoneDevices()` | → `list` | Per-device deadzone rows as JS objects: `{ id:string, name:string, hasGyro:bool, stickFlat:int, triggerFlat:int, forwardMotion:bool }`. Re-pull on `deadzonesChanged`. |
 | `setDeadzones(deviceId, stickFlat, triggerFlat)` | `string, int, int` | Persist the per-device override (`DeadzoneRepository`) AND push it into the live processor (`AppModel::applyDeadzones`) — the exact pair the Widgets view does. |
 | `setMotionEnabled(deviceId, on)` | `string, bool` | Forward to `MotionEnabledStore::setEnabled`, keyed by the device id. |
+| `slotRemap(slotId)` | `string` → `map` | The slot's EFFECTIVE raw-joystick remap as a JS object (stored override → else the default layout). Resolves `slotId` → `(vid,pid)` (same resolver `setSlotPath` uses); returns `{}` for a slot with no resolvable identity (e.g. an SDL-recognised game controller or USB-direct synthetic — those don't take a raw-joystick remap). Shape: `{ a, b, x, y, dpadUp, dpadDown, dpadLeft, dpadRight, leftShoulder, rightShoulder, back, start, leftThumb, rightThumb : int (raw source-button index, -1 = unassigned), leftStickX, leftStickY, rightStickX, rightStickY, hatIndex : int (raw source/hat index, -1 = none), leftTrigger, rightTrigger : { kind:"axis"\|"button", index:int }, invertLeftY, invertRightY : bool }`. Re-pull after an `assignSlotInput`/`setSlotInvert`/`resetSlotRemap`. |
+| `assignSlotInput(slotId, target, kind, index)` | `string, string, int, int` | Apply a CAPTURE result to the slot's remap via the pure `withAssignment` helper and persist it (the store pushes into the live bridge, so it takes effect on the next report — no re-attach). `target` is the logical output being assigned, one of: `"a"`/`"b"`/`"x"`/`"y"`/`"dpadUp"`/`"dpadDown"`/`"dpadLeft"`/`"dpadRight"`/`"leftShoulder"`/`"rightShoulder"`/`"back"`/`"start"`/`"leftThumb"`/`"rightThumb"`/`"leftStickX"`/`"leftStickY"`/`"rightStickX"`/`"rightStickY"`/`"leftTrigger"`/`"rightTrigger"`. `kind` is the captured input kind `0=axis 1=button 2=hat` and `index` the raw source index — pass through the `kind`/`index` from `rawInputCaptured` verbatim. A trigger target tags its source kind from `kind` (axis-capture → analogue axis, button-capture → digital full-scale-on-press). A `hat`-kind capture to a dpad target routes the dpad to that hat; a `button`-kind capture routes that direction to the button. No-op for an unknown `target` (forward-compat) or a slot with no resolvable identity. |
+| `setSlotInvert(slotId, which, on)` | `string, string, bool` | Flip a stick Y-invert flag and persist (→ live). `which` is `"leftY"` or `"rightY"`. No-op for an unknown flag or an unresolvable slot. |
+| `resetSlotRemap(slotId)` | `string` | Drop the slot's stored remap override (revert to the default DirectInput layout) and clear it in the live bridge. No-op for an unresolvable slot. |
+| `startInputCapture(slotId)` | `string` | Arm the bridge's input-capture mode and remember `slotId` as the capturing slot. While active, raw inputs from THAT slot's device arrive on `rawInputCaptured`; assign one with `assignSlotInput`. Calling it again for another slot re-points the filter. An axis only fires on a deliberate move (idle jitter is rejected); buttons on press; hats on a non-centered direction — so a resting pad never self-assigns. |
+| `stopInputCapture()` | — | Disarm capture and clear the capturing slot. Call when the user finishes assigning (or leaves the page). Safe to call when idle. |
 | `licenses()` | → `list` | The bundled third-party manifest as JS objects: `{ name:string, version:string, license:string, url:string }` (unnamed entries dropped). |
 | `markOnboardingComplete()` | — | Persist the welcome-completed flag (`OnboardingPreferenceStore::markWelcomeCompleted`). `onboardingNeeded` then flips false. |
 | `openExternalUrl(url)` | `string` | Open a URL via the shared `ExternalLink` path; a failure raises `errorMessage` (the QML toast channel), matching the Widgets warning. NOT a raw `Qt.openUrlExternally`. |
@@ -125,6 +132,26 @@ re-projects/forwards (no new behaviour). The pages bind them directly:
 * **Main.qml first-run** — if `App.onboardingNeeded`, push
   `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
   `App.markOnboardingComplete()`.
+
+### Configure-controls (raw-joystick remap) page
+
+For a generic pad whose DirectInput button order is scrambled, the page corrects
+the routing per `(vid,pid)`. Bind it like:
+
+* On open: `let r = App.slotRemap(slotId)` to render the current routing (which
+  raw source each output reads + the invert toggles). If `r` is `{}` the slot
+  has no raw-joystick remap (an SDL game controller / USB-direct synthetic) —
+  hide the page or show a "not remappable" note.
+* To (re)assign an output: call `App.startInputCapture(slotId)`, prompt the user
+  to press the input, and on `rawInputCaptured(slotId, kind, index, value)` call
+  `App.assignSlotInput(slotId, target, kind, index)` for the output being edited.
+  Then `App.stopInputCapture()` and re-pull `App.slotRemap(slotId)`.
+* Invert toggles: `App.setSlotInvert(slotId, "leftY"|"rightY", on)`.
+* "Reset to defaults": `App.resetSlotRemap(slotId)`.
+
+All four persist AND push into the live bridge, so the change takes effect on the
+next report with no re-attach. ALWAYS call `stopInputCapture()` when leaving the
+page so capture doesn't keep streaming.
 
 ### Reverse (host-initiated) pairing sheet
 

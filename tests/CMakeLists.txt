@@ -50,6 +50,11 @@ set(DISH_TEST_SOURCES
     # 8 hat directions, and out-of-range axis/button safety. SDL-free, like the
     # motion-convert tests next to it.
     test_joystick_mapping.cpp
+    # Pure capture→assignment layer for the "Configure controls" page: the
+    # withAssignment reducer (one capture → a new JoystickRemap), the withInvert
+    # toggle, and the capture-threshold predicates the bridge gates its emit on.
+    # SDL-free — the bridge is never constructed (it would init SDL and hang).
+    test_joystick_remap_assign.cpp
     # Per-VID:PID raw-joystick REMAP ("Configure controls" page): the durable
     # QSettings Repository (RepositoryContract) over a "joystick_remaps" key
     # disjoint from "usb_path_choices", wrapped in a reactive StateSource. Pure +

@@ -173,6 +173,83 @@ struct JoystickRemap {
     bool operator!=(const JoystickRemap& o) const { return !(*this == o); }
 };
 
+// ── Capture → assignment (pure, testable) ───────────────────────────────────
+// The "Configure controls" page runs a CAPTURE: the bridge streams the raw
+// input the user just pressed (kind 0=axis, 1=button, 2=hat + the source index)
+// and the page routes it to a logical OUTPUT the user is currently assigning.
+// RemapTarget enumerates every assignable output; withAssignment is the pure
+// reducer that folds one capture into a JoystickRemap. Keeping it here (SDL-free)
+// makes the whole capture→remap step unit-testable without a live device.
+
+// Kind tags for a raw capture event — mirror the bridge's rawJoystickInput
+// `kind` argument so the UI never hard-codes the integers.
+enum class CaptureKind : int { Axis = 0, Button = 1, Hat = 2 };
+
+// Every logical output the remap page can (re)assign from a capture. The four
+// invert toggles are NOT here — they are booleans, not a captured source, so
+// they have their own setter (withInvert) rather than flowing through a capture.
+enum class RemapTarget : int {
+    A = 0,
+    B,
+    X,
+    Y,
+    DpadUp,
+    DpadDown,
+    DpadLeft,
+    DpadRight,
+    LeftShoulder,
+    RightShoulder,
+    Back,
+    Start,
+    LeftThumb,
+    RightThumb,
+    LeftStickX,
+    LeftStickY,
+    RightStickX,
+    RightStickY,
+    LeftTrigger,
+    RightTrigger,
+};
+
+// Which invert flag a withInvert call toggles. Kept separate from RemapTarget
+// because an invert is a boolean edit, not a captured source.
+enum class InvertTarget : int { LeftY = 0, RightY };
+
+// Apply ONE capture result (kind + raw source index) to `base` and return the
+// new remap. Pure + total: routing a button-kind capture to a STICK/axis target
+// (or an axis-kind to a digital BUTTON target) is honoured verbatim — the page,
+// not this function, decides what makes sense; here we only record the user's
+// choice. A capture to a trigger target tags the TriggerSource kind from the
+// capture kind (Axis-kind → analogue axis source, Button-kind → digital button
+// source) so a pad whose trigger is a button decodes at full-scale-on-press.
+// Assigning any of the stick/trigger/right-stick targets clears the matching
+// adaptive fallback flag, so an explicit user choice is applied verbatim instead
+// of being overridden by the historical < 6-axis fallback (parity with the
+// JoystickRemap field comments). A Hat-kind capture to a DPAD target routes the
+// dpad to that hat index (and clears any button override for that direction);
+// a Button-kind capture to a DPAD target routes that direction to the button.
+JoystickRemap withAssignment(JoystickRemap base, RemapTarget target, int kind, int index);
+
+// Toggle one invert flag. Pure; returns the edited remap.
+JoystickRemap withInvert(JoystickRemap base, InvertTarget which, bool on);
+
+// Deliberate-press gate for an AXIS capture: true iff |value| exceeds the
+// stick-flat-scaled threshold, so resting-axis jitter never registers as a
+// press. Button / hat captures do NOT use this (they pass on any press / any
+// non-centered direction) — see captureButtonPasses / captureHatPasses. `value`
+// is the raw int16 axis reading. The threshold is a multiple of the default
+// stick flat (kDefaultStickFlat) so it sits well above idle noise.
+bool captureAxisPasses(int value);
+
+// A button capture always registers a deliberate press (SDL only raises
+// SDL_JOYBUTTONDOWN on a real press). Provided as a named predicate so the
+// bridge and the tests share one definition.
+bool captureButtonPasses();
+
+// A hat capture registers iff the direction is non-centered (a release to
+// center is not an assignment). `hatValue` is the SDL_HAT_* bitmask.
+bool captureHatPasses(int hatValue);
+
 // Map a raw joystick snapshot to the normalised gamepad report under `remap`.
 // Pure, total, deterministic. Unassigned (-1) targets read neutral.
 GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,

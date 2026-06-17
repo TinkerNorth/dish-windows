@@ -51,6 +51,91 @@ std::uint8_t triggerValue(const JoystickSnapshot& snap, const TriggerSource& src
 
 } // namespace
 
+namespace {
+
+// Deliberate-press threshold for an axis capture. ~half the int16 range — well
+// above the kDefaultStickFlat (~10 %) noise floor the processor already filters,
+// so a user has to actually shove the stick/trigger to assign it, and a resting
+// axis (even a trigger that rests at the negative extreme) never self-assigns.
+// A constant here (not a reference to the bridge's kDefaultStickFlat) keeps this
+// TU SDL-free and the predicate purely arithmetic.
+constexpr int kCaptureAxisThreshold = 16000;
+
+} // namespace
+
+bool captureAxisPasses(int value) {
+    const int mag = value < 0 ? -value : value;
+    return mag > kCaptureAxisThreshold;
+}
+
+bool captureButtonPasses() { return true; }
+
+bool captureHatPasses(int hatValue) { return (hatValue & 0xFF) != hat::kCentered; }
+
+JoystickRemap withAssignment(JoystickRemap base, RemapTarget target, int kind, int index) {
+    const auto setButton = [&](RemapButton b) { base.buttons[static_cast<int>(b)] = index; };
+    // Routing a DPAD direction differs by capture kind: a Hat capture points the
+    // dpad at that hat index (and drops any button override for the direction so
+    // the hat wins); a Button capture routes the direction to the button (and
+    // detaches the hat for THAT remap only by leaving hatIndex — other directions
+    // still read the hat unless individually reassigned).
+    const auto setDpad = [&](RemapButton b) {
+        if (kind == static_cast<int>(CaptureKind::Hat)) {
+            base.hatIndex = index;
+            base.buttons[static_cast<int>(b)] = -1;
+        } else {
+            base.buttons[static_cast<int>(b)] = index;
+        }
+    };
+    // A trigger source's kind follows the capture kind: an Axis capture is an
+    // analogue trigger axis, a Button capture is a digital (full-scale-on-press)
+    // trigger. Either way the explicit choice disables the adaptive fallback.
+    const auto setTrigger = [&](TriggerSource& t) {
+        t.kind = (kind == static_cast<int>(CaptureKind::Button)) ? TriggerSourceKind::Button
+                                                                 : TriggerSourceKind::Axis;
+        t.index = index;
+        base.useAdaptiveTriggers = false;
+    };
+
+    switch (target) {
+    case RemapTarget::A: setButton(RemapButton::A); break;
+    case RemapTarget::B: setButton(RemapButton::B); break;
+    case RemapTarget::X: setButton(RemapButton::X); break;
+    case RemapTarget::Y: setButton(RemapButton::Y); break;
+    case RemapTarget::DpadUp: setDpad(RemapButton::DpadUp); break;
+    case RemapTarget::DpadDown: setDpad(RemapButton::DpadDown); break;
+    case RemapTarget::DpadLeft: setDpad(RemapButton::DpadLeft); break;
+    case RemapTarget::DpadRight: setDpad(RemapButton::DpadRight); break;
+    case RemapTarget::LeftShoulder: setButton(RemapButton::LeftShoulder); break;
+    case RemapTarget::RightShoulder: setButton(RemapButton::RightShoulder); break;
+    case RemapTarget::Back: setButton(RemapButton::Back); break;
+    case RemapTarget::Start: setButton(RemapButton::Start); break;
+    case RemapTarget::LeftThumb: setButton(RemapButton::LeftThumb); break;
+    case RemapTarget::RightThumb: setButton(RemapButton::RightThumb); break;
+    case RemapTarget::LeftStickX: base.leftStickX = index; break;
+    case RemapTarget::LeftStickY: base.leftStickY = index; break;
+    case RemapTarget::RightStickX:
+        base.rightStickX = index;
+        base.useAdaptiveRightStick = false;
+        break;
+    case RemapTarget::RightStickY:
+        base.rightStickY = index;
+        base.useAdaptiveRightStick = false;
+        break;
+    case RemapTarget::LeftTrigger: setTrigger(base.leftTrigger); break;
+    case RemapTarget::RightTrigger: setTrigger(base.rightTrigger); break;
+    }
+    return base;
+}
+
+JoystickRemap withInvert(JoystickRemap base, InvertTarget which, bool on) {
+    switch (which) {
+    case InvertTarget::LeftY: base.invertLeftY = on; break;
+    case InvertTarget::RightY: base.invertRightY = on; break;
+    }
+    return base;
+}
+
 GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
                                                const JoystickRemap& remap) {
     using B = GamepadInputProcessor::Buttons;

@@ -25,6 +25,7 @@
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
 #include "source/store/CrashReportingStore.h"
+#include "source/store/JoystickRemapStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
@@ -115,6 +116,24 @@ class AppModel : public QObject {
     // it; the CAP_MOTION negotiation + the motion routing read it.
     source::MotionEnabledStore* motionEnabledStore() { return &motionEnabledStore_; }
 
+    // ── Raw-joystick remap ("Configure controls" page, android parity) ───────
+    // The per-(vid,pid) remap store the page writes; AppModel pushes every saved
+    // remap into the bridge so a generic pad decodes under its corrected layout.
+    source::JoystickRemapStore* joystickRemapStore() { return &joystickRemapStore_; }
+
+    // The effective remap for a model: the stored override if any, else the
+    // default JoystickRemap (today's layout). What the remap page renders.
+    input::JoystickRemap remapFor(int vendorId, int productId) const;
+
+    // Persist a model's remap (the store republishes → pushed into the bridge so
+    // it takes effect live) and clear it (revert to the default layout).
+    void setJoystickRemap(int vendorId, int productId, const input::JoystickRemap& remap);
+    void clearJoystickRemap(int vendorId, int productId);
+
+    // Toggle the bridge's input-capture mode (the "press to assign" detector).
+    // While on, the bridge emits rawJoystickInput which AppModel re-emits.
+    void setInputCaptureEnabled(bool enabled);
+
     // The currently-attached controllers in (id, name, hasGyro) form, for the
     // deadzone settings page to render a per-device card.
     QList<input::SDLGamepadBridge::Device> attachedDevices() const { return bridge_->devices(); }
@@ -175,6 +194,12 @@ class AppModel : public QObject {
     // as toasts/dialogs by MainWindow.
     void errorMessage(const QString& msg);
 
+    // Re-emit of the bridge's rawJoystickInput (a raw input observed during a
+    // capture). AppViewModel maps deviceId → slotId and re-emits only for the
+    // capturing slot. `kind` 0=axis/1=button/2=hat; `index` the raw source;
+    // `value` the axis int16 / 1 for a button / SDL_HAT_* bitmask for a hat.
+    void rawJoystickInput(const QString& deviceId, int kind, int index, int value);
+
   private:
     void rebuild();
     void onHubChanged();
@@ -192,6 +217,12 @@ class AppModel : public QObject {
     // up/down per VID:PID into the USB FSM, so a claim-failure / Standard pick can
     // settle on the live SDL device (the "framework" path on Windows).
     void syncFrameworkPresence();
+    // Push every saved per-(vid,pid) remap from the store into the bridge. Called
+    // on construction, on a store republish, and on a device-add (so a freshly-
+    // attached pad with a saved profile decodes correctly). Idempotent; off the
+    // hot path (the bridge copies the small remap under its own lock per report).
+    void pushJoystickRemapsToBridge();
+
     // Walk the WifiConnectionManager pool and install our rumble handler on
     // any connection that doesn't already have one. Idempotent — invoked on
     // every poolChanged signal so newly-created connections get wired.
@@ -268,6 +299,15 @@ class AppModel : public QObject {
     repository::DeadzoneRepository deadzoneRepo_;
     repository::MotionPreferenceRepository motionPrefRepo_;
     source::MotionEnabledStore motionEnabledStore_;
+
+    // ── Raw-joystick remap store (android parity) ────────────────────────────
+    // Declaration order: the repo must precede the store that hydrates from it.
+    // joystickRemapSub_ folds every store republish into a full push of the saved
+    // remaps to the bridge (the StateSource carries the whole map per emit, so a
+    // re-push is the simplest correct thing — it is rare, off the hot path).
+    source::JoystickRemapRepository joystickRemapRepo_;
+    source::JoystickRemapStore joystickRemapStore_;
+    arch::Observable<source::JoystickRemapMap>::Subscription joystickRemapSub_;
     // Device ids whose persisted deadzone profile we've already pushed into the
     // processor, so onBridgeDevicesChanged pushes once per attach, not per tick.
     QSet<QString> deadzonePushedDevices_;

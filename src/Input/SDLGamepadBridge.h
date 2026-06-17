@@ -4,6 +4,7 @@
 #pragma once
 
 #include "GamepadInputProcessor.h"
+#include "JoystickMapping.h"
 #include "OutputCommandQueue.h"
 
 #include <QObject>
@@ -12,11 +13,13 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 // Mirror SDL2's own typedef so we can keep <SDL.h> out of this header.
 // The leading underscore is dictated by SDL's struct tag, not our choice.
@@ -99,6 +102,29 @@ class SDLGamepadBridge : public QObject {
     // untouched.
     void setSuppressedDeviceIds(const std::unordered_set<std::string>& ids);
 
+    // ── Per-(vid,pid) raw-joystick REMAP seam ────────────────────────────────
+    // The "Configure controls" page persists a per-model JoystickRemap; AppModel
+    // pushes every saved remap here (on construction, on a store change, and on a
+    // fresh device-add so a re-attached pad with a profile decodes correctly).
+    // rebuildJoystickState looks up the remap for the device's (vid,pid) and maps
+    // under it (default JoystickRemap when none is set). Thread-safe like
+    // setSuppressedDeviceIds: written from the Qt main thread, read on the input
+    // thread under remapMtx_; the hot path copies the small JoystickRemap under
+    // the lock and maps OUTSIDE it. clearJoystickRemap drops a model's override
+    // (the device then decodes under the default layout again).
+    void setJoystickRemap(int vendorId, int productId, const input::JoystickRemap& remap);
+    void clearJoystickRemap(int vendorId, int productId);
+
+    // ── Input-capture seam (the "press a button to assign it" mode) ──────────
+    // When ON, the JOY axis/button/hat event cases additionally emit
+    // rawJoystickInput (QueuedConnection to the GUI thread) so the remap page can
+    // detect WHICH raw input the user pressed. An axis only emits when its
+    // magnitude clears the deliberate-press gate (captureAxisPasses); buttons on
+    // press; hats on a non-centered direction. Normal streaming continues during
+    // capture. Costs NOTHING when off — every emit is guarded behind this flag
+    // (a relaxed atomic load, no lock on the hot path).
+    void setJoystickCaptureEnabled(bool enabled);
+
     // Drive the physical controller's rumble motors — vibration ONLY. As of
     // Task 1.4 the lightbar is fully decoupled from rumble: this never touches
     // the LED. `strongMagnitude` and `weakMagnitude` are 16-bit magnitudes
@@ -126,6 +152,14 @@ class SDLGamepadBridge : public QObject {
 
   signals:
     void devicesChanged();
+
+    // A raw joystick input observed while capture is enabled. `deviceId` is the
+    // "sdl:<iid>" id; `kind` is 0=axis / 1=button / 2=hat; `index` is the raw
+    // source index; `value` is the axis int16 / 1 for a button press / the
+    // SDL_HAT_* bitmask for a hat. The GUI thread (AppModel → AppViewModel) maps
+    // the deviceId to a slot and routes it to the output being assigned. Emitted
+    // via QueuedConnection so it crosses from the SDL thread to the GUI thread.
+    void rawJoystickInput(QString deviceId, int kind, int index, int value);
 
   private:
     void runLoop();
@@ -209,6 +243,24 @@ class SDLGamepadBridge : public QObject {
     // on the input thread, and the per-report read is a tiny independent lock.
     mutable std::mutex suppressedMtx_;
     std::unordered_set<std::string> suppressedIds_;
+
+    // Per-(vid,pid) raw-joystick remap overrides (see setJoystickRemap). Keyed by
+    // a packed (vendorId, productId) pair. Guarded by its OWN mutex so a main-
+    // thread push never contends with the device-map critical section; the hot
+    // path copies the matched remap under this lock and maps outside it. A device
+    // absent from the map decodes under the default JoystickRemap.
+    mutable std::mutex remapMtx_;
+    std::map<std::pair<int, int>, input::JoystickRemap> joystickRemaps_;
+
+    // Capture mode flag (see setJoystickCaptureEnabled). A relaxed atomic so the
+    // JOY event cases can gate the emit with no lock when capture is off (the
+    // overwhelmingly common case).
+    std::atomic<bool> captureEnabled_{false};
+
+    // Emit a raw-input capture for `iid` if capture is enabled. Resolves the iid
+    // to its deviceId under mtx_ and emits rawJoystickInput on the GUI thread.
+    // Called from the JOY event cases on the SDL thread; a cheap no-op when off.
+    void maybeEmitCapture(int iid, int kind, int index, int value);
 
     // Latest accelerometer reading per device (m/s²). Updated when an accel
     // SDL_CONTROLLERSENSORUPDATE arrives; merged with the next gyro update

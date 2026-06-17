@@ -57,11 +57,17 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
       catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
       motionEnabledStore_(&motionPrefRepo_), themeController_(themeStore_.state(), qApp),
-      crashController_(crashStore_.state(), &crashBackend_), usbPathStore_(&usbPathRepo_),
-      usbObserver_(this), usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
+      crashController_(crashStore_.state(), &crashBackend_),
+      joystickRemapStore_(&joystickRemapRepo_), usbPathStore_(&usbPathRepo_), usbObserver_(this),
+      usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
+    // Forward the bridge's raw-input capture up to the view-model (which maps the
+    // deviceId → slotId and re-emits only for the capturing slot). A direct signal
+    // relay — the bridge already QueuedConnection-hops to this (GUI) thread.
+    QObject::connect(bridge_, &input::SDLGamepadBridge::rawJoystickInput, this,
+                     &AppModel::rawJoystickInput);
     QObject::connect(wifi_, &net::WifiConnectionManager::connectionEvent, this,
                      &AppModel::onWifiEvent);
     // poolChanged fires every time a WifiConnection is created or transitions
@@ -186,6 +192,16 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     usbScanTimer_->setInterval(1000);
     QObject::connect(usbScanTimer_, &QTimer::timeout, this, &AppModel::pollUsbDirect);
 
+    // ── Raw-joystick remap → bridge ──────────────────────────────────────────
+    // Push every saved remap into the bridge now, then re-push on any store
+    // republish (a setRemap/clearRemap from the page). The hot path then decodes a
+    // generic pad under its corrected layout. emitCurrent=false because we push
+    // explicitly below — the subscription handles only subsequent changes.
+    joystickRemapSub_ = joystickRemapStore_.state().subscribe(
+        [this](const source::JoystickRemapMap&) { pushJoystickRemapsToBridge(); },
+        /*emitCurrent=*/false);
+    pushJoystickRemapsToBridge();
+
     // Arm the wake controller: it subscribes the WakeStateComposer and applies
     // the current WakeState immediately (idempotent start). From here, setting
     // streamingSlotCount_ in recompute() flows count -> WakeState -> inhibitor.
@@ -247,6 +263,9 @@ AppModel::~AppModel() {
     // Drop the subscription before the store so no folded emission races teardown.
     inputRatesSub_ = arch::Observable<source::SlotInputRatesMap>::Subscription{};
     inputRateStore_.reset();
+    // Same for the remap subscription — drop it before teardown so a late store
+    // republish can't push into a half-gone bridge.
+    joystickRemapSub_ = arch::Observable<source::JoystickRemapMap>::Subscription{};
     usbManager_.reset();
     usbGateway_.reset();
 }
@@ -355,6 +374,11 @@ void AppModel::onBridgeDevicesChanged() {
         it = present.contains(*it) ? std::next(it) : deadzonePushedDevices_.erase(it);
     }
 
+    // A freshly-attached generic pad with a saved remap must decode under it from
+    // the first report, so re-push the saved set on every device change. Cheap +
+    // idempotent (the bridge just overwrites its small per-model map).
+    pushJoystickRemapsToBridge();
+
     // An SDL device appearing / disappearing is a framework up/down signal for the
     // USB FSM (the "framework" path on Windows is SDL) — feed the deltas so a
     // claim-failure / Standard pick can settle on the live SDL device.
@@ -371,6 +395,51 @@ void AppModel::applyDeadzones(const QString& deviceId, const input::deadzone::De
     // takes effect without a re-attach. Persistence is the settings page's job
     // (it writes the DeadzoneRepository before emitting); we only apply here.
     processor_.setDeadzones(deviceId.toStdString(), {dz.stickFlat, dz.triggerFlat});
+}
+
+void AppModel::pushJoystickRemapsToBridge() {
+    // Walk the store's whole keyed map and install each into the bridge. The key
+    // is the "%04x:%04x" vid:pid string; split it back into the two ints the
+    // bridge keys by. A malformed key (never produced by joystickRemapKeyFor) is
+    // skipped rather than crashing — forward-compat with a future key format.
+    for (const auto& [key, remap] : joystickRemapStore_.state().value()) {
+        const auto colon = key.find(':');
+        if (colon == std::string::npos) { continue; }
+        bool okV = false;
+        bool okP = false;
+        const int vendorId =
+            static_cast<int>(QString::fromStdString(key.substr(0, colon)).toUInt(&okV, 16));
+        const int productId =
+            static_cast<int>(QString::fromStdString(key.substr(colon + 1)).toUInt(&okP, 16));
+        if (!okV || !okP) { continue; }
+        bridge_->setJoystickRemap(vendorId, productId, remap);
+    }
+}
+
+input::JoystickRemap AppModel::remapFor(int vendorId, int productId) const {
+    // The stored override if any, else today's default layout — exactly what the
+    // page renders (and the bridge applies).
+    if (const auto r = joystickRemapStore_.remapFor(vendorId, productId)) { return *r; }
+    return input::JoystickRemap{};
+}
+
+void AppModel::setJoystickRemap(int vendorId, int productId, const input::JoystickRemap& remap) {
+    // Persist + republish; the store subscription re-pushes the whole set into the
+    // bridge, so the new layout takes effect on the next report.
+    joystickRemapStore_.setRemap(vendorId, productId, remap);
+}
+
+void AppModel::clearJoystickRemap(int vendorId, int productId) {
+    // Drop the override (the store republish re-pushes the remaining set), then
+    // explicitly clear it in the bridge — the store-driven re-push only INSTALLS
+    // present entries, it never erases a dropped one, so the bridge would keep the
+    // stale remap without this.
+    joystickRemapStore_.clearRemap(vendorId, productId);
+    bridge_->clearJoystickRemap(vendorId, productId);
+}
+
+void AppModel::setInputCaptureEnabled(bool enabled) {
+    bridge_->setJoystickCaptureEnabled(enabled);
 }
 
 void AppModel::onWifiEvent(const net::ConnectionEvent& evt) {

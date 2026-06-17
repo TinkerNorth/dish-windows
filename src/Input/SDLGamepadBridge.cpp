@@ -360,15 +360,40 @@ void SDLGamepadBridge::runLoop() {
             break;
         }
         case SDL_JOYAXISMOTION:
-        case SDL_JOYBUTTONDOWN:
-        case SDL_JOYBUTTONUP:
-        case SDL_JOYHATMOTION:
-            // All four carry the joystick instance id in `which` under their
-            // own event struct. A game controller's joystick events also arrive
-            // here, but its iid is in openControllers_ (never openJoysticks_),
-            // so rebuildJoystickState no-ops for it — the controller path's
-            // SDL_CONTROLLER* events drive that pad instead.
+            // All JOY* events carry the joystick instance id in `which` under
+            // their own event struct. A game controller's joystick events also
+            // arrive here, but its iid is in openControllers_ (never
+            // openJoysticks_), so rebuildJoystickState no-ops for it — the
+            // controller path's SDL_CONTROLLER* events drive that pad instead.
             rebuildJoystickState(ev.jaxis.which);
+            // Capture: an axis only registers a deliberate move (reject idle
+            // jitter). Guard the whole branch behind the flag so capture costs
+            // nothing when off.
+            if (captureEnabled_.load(std::memory_order_relaxed) &&
+                captureAxisPasses(ev.jaxis.value)) {
+                maybeEmitCapture(ev.jaxis.which, static_cast<int>(CaptureKind::Axis), ev.jaxis.axis,
+                                 ev.jaxis.value);
+            }
+            break;
+        case SDL_JOYBUTTONDOWN:
+            rebuildJoystickState(ev.jbutton.which);
+            // A button registers on PRESS only (DOWN), never release.
+            if (captureEnabled_.load(std::memory_order_relaxed) && captureButtonPasses()) {
+                maybeEmitCapture(ev.jbutton.which, static_cast<int>(CaptureKind::Button),
+                                 ev.jbutton.button, 1);
+            }
+            break;
+        case SDL_JOYBUTTONUP:
+            rebuildJoystickState(ev.jbutton.which);
+            break;
+        case SDL_JOYHATMOTION:
+            rebuildJoystickState(ev.jhat.which);
+            // A hat registers only on a non-centered direction (a release to
+            // center is not an assignment).
+            if (captureEnabled_.load(std::memory_order_relaxed) && captureHatPasses(ev.jhat.value)) {
+                maybeEmitCapture(ev.jhat.which, static_cast<int>(CaptureKind::Hat), ev.jhat.hat,
+                                 ev.jhat.value);
+            }
             break;
         case SDL_CONTROLLERSENSORUPDATE:
             handleSensorEvent(ev.csensor);
@@ -419,6 +444,37 @@ void SDLGamepadBridge::setSuppressedDeviceIds(const std::unordered_set<std::stri
 bool SDLGamepadBridge::isSuppressed(const std::string& deviceId) const {
     std::lock_guard<std::mutex> lock(suppressedMtx_);
     return suppressedIds_.count(deviceId) != 0;
+}
+
+void SDLGamepadBridge::setJoystickRemap(int vendorId, int productId, const JoystickRemap& remap) {
+    std::lock_guard<std::mutex> lock(remapMtx_);
+    joystickRemaps_[{vendorId, productId}] = remap;
+}
+
+void SDLGamepadBridge::clearJoystickRemap(int vendorId, int productId) {
+    std::lock_guard<std::mutex> lock(remapMtx_);
+    joystickRemaps_.erase({vendorId, productId});
+}
+
+void SDLGamepadBridge::setJoystickCaptureEnabled(bool enabled) {
+    captureEnabled_.store(enabled, std::memory_order_relaxed);
+}
+
+void SDLGamepadBridge::maybeEmitCapture(int iid, int kind, int index, int value) {
+    // The flag is checked by the caller too, but re-check here so this stays a
+    // safe no-op if ever called unguarded.
+    if (!captureEnabled_.load(std::memory_order_relaxed)) { return; }
+    QString deviceId;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) { deviceId = it->second; }
+    }
+    if (deviceId.isEmpty()) { return; }
+    // QueuedConnection hops the SDL thread → GUI thread. The signal's args are
+    // value types (QString + ints) so the cross-thread copy is safe.
+    QMetaObject::invokeMethod(this, "rawJoystickInput", Qt::QueuedConnection,
+                              Q_ARG(QString, deviceId), Q_ARG(int, kind), Q_ARG(int, index),
+                              Q_ARG(int, value));
 }
 
 void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
@@ -699,11 +755,17 @@ void SDLGamepadBridge::rebuildState(int iid) {
 void SDLGamepadBridge::rebuildJoystickState(int iid) {
     SDL_Joystick* js = nullptr;
     std::string deviceId;
+    int vendorId = 0;
+    int productId = 0;
     {
         std::lock_guard<std::mutex> lock(mtx_);
         if (auto it = openJoysticks_.find(iid); it != openJoysticks_.end()) { js = it->second; }
         if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
             deviceId = it->second.toStdString();
+        }
+        if (auto it = usbIdentity_.find(iid); it != usbIdentity_.end()) {
+            vendorId = it->second.vendorId;
+            productId = it->second.productId;
         }
     }
     // No-ops for a game controller (absent from openJoysticks_) — the
@@ -748,7 +810,17 @@ void SDLGamepadBridge::rebuildJoystickState(int iid) {
     snap.hats = hats;
     snap.hatCount = hatCount;
 
-    processor_->publish(deviceId, mapJoystick(snap));
+    // Look up this model's remap (default layout when none). Copy the small value
+    // under remapMtx_ and map OUTSIDE the lock so a main-thread push never stalls
+    // the hot path — the lock-light pattern setSuppressedDeviceIds uses.
+    JoystickRemap remap;
+    {
+        std::lock_guard<std::mutex> lock(remapMtx_);
+        if (auto it = joystickRemaps_.find({vendorId, productId}); it != joystickRemaps_.end()) {
+            remap = it->second;
+        }
+    }
+    processor_->publish(deviceId, mapJoystick(snap, remap));
 }
 
 } // namespace dish::input

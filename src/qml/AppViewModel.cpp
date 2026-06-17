@@ -5,6 +5,7 @@
 
 #include "AppModel.h"
 #include "Input/GamepadInputProcessor.h"
+#include "Input/JoystickMapping.h"
 #include "Input/SDLGamepadBridge.h"
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
@@ -29,6 +30,9 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+
+#include <map>
+#include <optional>
 
 #ifndef DISH_VERSION
 #define DISH_VERSION "0.0.0"
@@ -78,6 +82,50 @@ QString glyphToken(models::LinkState s) {
     return {};
 }
 
+// ── Configure-controls token maps ────────────────────────────────────────────
+// The page passes a stable string for the logical OUTPUT it is assigning; map it
+// to the pure RemapTarget enum. A string the C++ doesn't know returns nullopt so
+// the caller no-ops (forward-compat: a newer page can introduce a target without
+// crashing an older C++). The strings match the JoystickRemap field names.
+std::optional<input::RemapTarget> remapTargetFromString(const QString& t) {
+    using T = input::RemapTarget;
+    static const std::map<QString, T> kMap{
+        {QStringLiteral("a"), T::A},
+        {QStringLiteral("b"), T::B},
+        {QStringLiteral("x"), T::X},
+        {QStringLiteral("y"), T::Y},
+        {QStringLiteral("dpadUp"), T::DpadUp},
+        {QStringLiteral("dpadDown"), T::DpadDown},
+        {QStringLiteral("dpadLeft"), T::DpadLeft},
+        {QStringLiteral("dpadRight"), T::DpadRight},
+        {QStringLiteral("leftShoulder"), T::LeftShoulder},
+        {QStringLiteral("rightShoulder"), T::RightShoulder},
+        {QStringLiteral("back"), T::Back},
+        {QStringLiteral("start"), T::Start},
+        {QStringLiteral("leftThumb"), T::LeftThumb},
+        {QStringLiteral("rightThumb"), T::RightThumb},
+        {QStringLiteral("leftStickX"), T::LeftStickX},
+        {QStringLiteral("leftStickY"), T::LeftStickY},
+        {QStringLiteral("rightStickX"), T::RightStickX},
+        {QStringLiteral("rightStickY"), T::RightStickY},
+        {QStringLiteral("leftTrigger"), T::LeftTrigger},
+        {QStringLiteral("rightTrigger"), T::RightTrigger},
+    };
+    const auto it = kMap.find(t);
+    if (it == kMap.end()) { return std::nullopt; }
+    return it->second;
+}
+
+// A trigger source rendered as a JS object {kind:"axis"|"button", index:int}.
+QVariantMap triggerSourceToMap(const input::TriggerSource& src) {
+    QVariantMap m;
+    m[QStringLiteral("kind")] = src.kind == input::TriggerSourceKind::Button
+                                   ? QStringLiteral("button")
+                                   : QStringLiteral("axis");
+    m[QStringLiteral("index")] = src.index;
+    return m;
+}
+
 } // namespace
 
 AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
@@ -86,6 +134,10 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     QObject::connect(model_, &dish::AppModel::errorMessage, this, &AppViewModel::errorMessage);
     QObject::connect(model_->connections(), &composer::ConnectionCoordinator::connectionsChanged,
                      this, &AppViewModel::onConnectionsChanged);
+    // Relay raw-input captures (configure-controls page). Filtered to the
+    // capturing slot in the handler so only that page's assignment fires.
+    QObject::connect(model_, &dish::AppModel::rawJoystickInput, this,
+                     &AppViewModel::onRawJoystickInput);
 
     // Re-pull the discovered list + scan flag on their precise edges (P2 had to
     // key off the broad stateChanged, and had no scan-flag NOTIFY at all). The
@@ -478,6 +530,105 @@ void AppViewModel::setMotionEnabled(const QString& deviceId, bool enabled) {
     // Keyed by the device id (the Widgets view's slotKey == deviceId.toStdString()).
     model_->motionEnabledStore()->setEnabled(deviceId.toStdString(), enabled);
     emit deadzonesChanged();
+}
+
+// ── Configure-controls (raw-joystick remap) ──────────────────────────────────
+
+QVariantMap AppViewModel::slotRemap(const QString& slotId) const {
+    QVariantMap out;
+    const auto vidPid = resolveSlotVidPid(model_, slotId);
+    if (!vidPid.has_value()) { return out; }
+    const auto [vendorId, productId] = *vidPid;
+    const input::JoystickRemap r = model_->remapFor(vendorId, productId);
+
+    // A flat JS object the page renders: which raw source each logical output
+    // reads + the invert/hat states. Button indices are the raw source-button
+    // indices (-1 = unassigned); the two trigger sources are {kind,index} objects.
+    using Btn = input::RemapButton;
+    const auto btn = [&](Btn b) { return r.buttons[static_cast<int>(b)]; };
+    out[QStringLiteral("a")] = btn(Btn::A);
+    out[QStringLiteral("b")] = btn(Btn::B);
+    out[QStringLiteral("x")] = btn(Btn::X);
+    out[QStringLiteral("y")] = btn(Btn::Y);
+    out[QStringLiteral("dpadUp")] = btn(Btn::DpadUp);
+    out[QStringLiteral("dpadDown")] = btn(Btn::DpadDown);
+    out[QStringLiteral("dpadLeft")] = btn(Btn::DpadLeft);
+    out[QStringLiteral("dpadRight")] = btn(Btn::DpadRight);
+    out[QStringLiteral("leftShoulder")] = btn(Btn::LeftShoulder);
+    out[QStringLiteral("rightShoulder")] = btn(Btn::RightShoulder);
+    out[QStringLiteral("back")] = btn(Btn::Back);
+    out[QStringLiteral("start")] = btn(Btn::Start);
+    out[QStringLiteral("leftThumb")] = btn(Btn::LeftThumb);
+    out[QStringLiteral("rightThumb")] = btn(Btn::RightThumb);
+    out[QStringLiteral("leftStickX")] = r.leftStickX;
+    out[QStringLiteral("leftStickY")] = r.leftStickY;
+    out[QStringLiteral("rightStickX")] = r.rightStickX;
+    out[QStringLiteral("rightStickY")] = r.rightStickY;
+    out[QStringLiteral("leftTrigger")] = triggerSourceToMap(r.leftTrigger);
+    out[QStringLiteral("rightTrigger")] = triggerSourceToMap(r.rightTrigger);
+    out[QStringLiteral("hatIndex")] = r.hatIndex;
+    out[QStringLiteral("invertLeftY")] = r.invertLeftY;
+    out[QStringLiteral("invertRightY")] = r.invertRightY;
+    return out;
+}
+
+void AppViewModel::assignSlotInput(const QString& slotId, const QString& target, int kind,
+                                   int index) {
+    const auto vidPid = resolveSlotVidPid(model_, slotId);
+    if (!vidPid.has_value()) { return; }
+    const auto tgt = remapTargetFromString(target);
+    if (!tgt.has_value()) { return; } // unknown target — forward-compat no-op
+    const auto [vendorId, productId] = *vidPid;
+    // Fold the capture into the effective remap via the pure helper, then persist
+    // (the store pushes into the bridge → takes effect on the next report).
+    const input::JoystickRemap next =
+        input::withAssignment(model_->remapFor(vendorId, productId), *tgt, kind, index);
+    model_->setJoystickRemap(vendorId, productId, next);
+}
+
+void AppViewModel::setSlotInvert(const QString& slotId, const QString& which, bool on) {
+    const auto vidPid = resolveSlotVidPid(model_, slotId);
+    if (!vidPid.has_value()) { return; }
+    std::optional<input::InvertTarget> inv;
+    if (which == QLatin1String("leftY")) {
+        inv = input::InvertTarget::LeftY;
+    } else if (which == QLatin1String("rightY")) {
+        inv = input::InvertTarget::RightY;
+    }
+    if (!inv.has_value()) { return; } // unknown flag — no-op
+    const auto [vendorId, productId] = *vidPid;
+    const input::JoystickRemap next =
+        input::withInvert(model_->remapFor(vendorId, productId), *inv, on);
+    model_->setJoystickRemap(vendorId, productId, next);
+}
+
+void AppViewModel::resetSlotRemap(const QString& slotId) {
+    const auto vidPid = resolveSlotVidPid(model_, slotId);
+    if (!vidPid.has_value()) { return; }
+    const auto [vendorId, productId] = *vidPid;
+    model_->clearJoystickRemap(vendorId, productId);
+}
+
+void AppViewModel::startInputCapture(const QString& slotId) {
+    // Remember which slot is capturing so the rawJoystickInput relay filters to
+    // it, then arm the bridge. A second start for another slot simply re-points
+    // the filter (capture is global in the bridge; the slot filter is here).
+    capturingSlotId_ = slotId;
+    model_->setInputCaptureEnabled(true);
+}
+
+void AppViewModel::stopInputCapture() {
+    capturingSlotId_.clear();
+    model_->setInputCaptureEnabled(false);
+}
+
+void AppViewModel::onRawJoystickInput(const QString& deviceId, int kind, int index, int value) {
+    // Map the source deviceId back to a slot id and re-emit ONLY for the slot the
+    // page is currently capturing. For an SDL slot the slot id IS the device id; a
+    // synthetic (USB-direct) slot is never a raw joystick, so a deviceId match
+    // against the capturing slot is sufficient.
+    if (capturingSlotId_.isEmpty() || deviceId != capturingSlotId_) { return; }
+    emit rawInputCaptured(capturingSlotId_, kind, index, value);
 }
 
 // ── Licenses ────────────────────────────────────────────────────────────────

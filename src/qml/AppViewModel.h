@@ -26,6 +26,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <functional>
 
@@ -252,6 +253,26 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void setDeadzones(const QString& deviceId, int stickFlat, int triggerFlat);
     Q_INVOKABLE void setMotionEnabled(const QString& deviceId, bool enabled);
 
+    // ── Configure-controls (raw-joystick remap) page ─────────────────────────
+    // slotRemap returns the slot's EFFECTIVE remap as a JS object the page renders
+    // (which raw axis/button/hat each logical output reads + the invert states).
+    // assignSlotInput applies a capture result via the pure withAssignment helper
+    // and persists it (the store pushes into the bridge, so it takes effect live).
+    // setSlotInvert flips an invert flag; resetSlotRemap drops the override (revert
+    // to the default layout). All resolve slotId → (vid,pid) via the same resolver
+    // setSlotPath uses; a no-op for a slot with no resolvable identity.
+    Q_INVOKABLE QVariantMap slotRemap(const QString& slotId) const;
+    Q_INVOKABLE void assignSlotInput(const QString& slotId, const QString& target, int kind,
+                                     int index);
+    Q_INVOKABLE void setSlotInvert(const QString& slotId, const QString& which, bool on);
+    Q_INVOKABLE void resetSlotRemap(const QString& slotId);
+
+    // Toggle the bridge's input-capture mode. While active, the page listens to
+    // rawInputCaptured for the capturing slot. startInputCapture remembers WHICH
+    // slot is capturing so the relay filters to it; stopInputCapture clears it.
+    Q_INVOKABLE void startInputCapture(const QString& slotId);
+    Q_INVOKABLE void stopInputCapture();
+
     // ── Licenses page ────────────────────────────────────────────────────────
     // The bundled third-party manifest as {name,version,license,url} rows.
     Q_INVOKABLE QVariantList licenses() const;
@@ -303,6 +324,13 @@ class AppViewModel : public QObject {
     // closes on it. Best-effort, fired at most once per live transition.
     void pairingSucceeded();
 
+    // A raw input was captured for the slot currently capturing (the configure-
+    // controls page assigns it to the output it is editing). `kind` 0=axis /
+    // 1=button / 2=hat; `index` the raw source; `value` the axis int16 / 1 for a
+    // button / SDL_HAT_* bitmask for a hat. Re-emitted from AppModel's
+    // rawJoystickInput ONLY when the source deviceId maps to the capturing slot.
+    void rawInputCaptured(const QString& slotId, int kind, int index, int value);
+
   private:
     // Recompute the cached header/pairing fields + repush the slot model from
     // the AppModel's current state slice, then emit stateChanged().
@@ -311,6 +339,9 @@ class AppViewModel : public QObject {
     void onConnectionsChanged();
     // Sample the processor telemetry (the same drain MainWindow does).
     void onTelemetryTick();
+    // Relay AppModel's rawJoystickInput: map the deviceId → slotId and re-emit
+    // rawInputCaptured only when it matches the currently-capturing slot.
+    void onRawJoystickInput(const QString& deviceId, int kind, int index, int value);
 
     dish::AppModel* model_;
     SlotListModel slotModel_;
@@ -329,6 +360,11 @@ class AppViewModel : public QObject {
 
     bool pairingActive_ = false;
     QString pairingServerName_;
+
+    // The slot currently running an input capture, or empty when none. Set by
+    // startInputCapture, cleared by stopInputCapture; the rawJoystickInput relay
+    // filters to it so only the capturing slot's page sees the event.
+    QString capturingSlotId_;
 
     // Cached so onStateChanged can fire pairingSucceeded() on the rising edge of
     // the online count (a fresh connection reached Connected).
