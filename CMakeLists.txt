@@ -522,6 +522,14 @@ if(DISH_QML)
             src/qml/kit/KitTextField.qml
             src/qml/kit/Page.qml
             src/qml/kit/ContentDialog.qml
+            # State components — shared loading / error / empty states + the
+            # global transient toast host, so every page binds all four UI states
+            # (loading / error / empty / content) the same way. See ARCHITECTURE.md
+            # §7 "bind all the states".
+            src/qml/kit/LoadingSpinner.qml
+            src/qml/kit/ErrorBanner.qml
+            src/qml/kit/EmptyState.qml
+            src/qml/kit/NotificationToastHost.qml
             # Nav destinations (placeholders; page agents replace bodies).
             src/qml/pages/ControllersPage.qml
             src/qml/pages/ConnectionsPage.qml

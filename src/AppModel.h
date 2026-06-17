@@ -168,7 +168,16 @@ class AppModel : public QObject {
     // Kick a catalog fetch for the satellite a slot is bound to (best-effort;
     // unauthenticated GET /api/catalog with ETag revalidation). On success the
     // catalog snapshot Observable updates and the picker can render fresh types.
+    // Drives catalogState() through Loading → Success/Error and emits
+    // catalogStateChanged() at each transition.
     void refreshCatalogForSlot(const QString& slotId);
+
+    // The catalog fetch lifecycle for the most-recently-refreshed slot's
+    // satellite: Idle / Loading / Success(possibly stale) / Error(reason). The
+    // Emulate picker binds this to show a spinner while loading, the cause + a
+    // retry on failure, and an empty-vs-content distinction — replacing the old
+    // "the fetch silently returned nothing" behaviour. Read on the main thread.
+    const source::CatalogState& catalogState() const { return catalogState_; }
 
     // Single read-only accessor — the UI reads everything off this slice
     // and re-renders on stateChanged().
@@ -194,6 +203,11 @@ class AppModel : public QObject {
     // as toasts/dialogs by MainWindow.
     void errorMessage(const QString& msg);
 
+    // The catalog fetch lifecycle (catalogState()) moved — Loading started or a
+    // Success/Error landed. The QML facade folds this into an emulate-state
+    // NOTIFY so the picker re-reads loading/error/stale.
+    void catalogStateChanged();
+
     // Re-emit of the bridge's rawJoystickInput (a raw input observed during a
     // capture). AppViewModel maps deviceId → slotId and re-emits only for the
     // capturing slot. `kind` 0=axis/1=button/2=hat; `index` the raw source;
@@ -205,6 +219,9 @@ class AppModel : public QObject {
     void onHubChanged();
     void onBridgeDevicesChanged();
     void onWifiEvent(const net::ConnectionEvent& evt);
+    // Map a USB-path FSM banner reason to a localized one-shot toast (errorMessage).
+    // Called from UsbObserver on the Qt main thread (the only FSM-mutating thread).
+    void onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice notice);
     // Re-scan the raw-HID bus, drive each present pad toward its resolved path,
     // and sample the per-device poll rate. Driven off usbScanTimer_ (and once at
     // start()). Runs on the Qt main thread — the only thread that mutates the FSM.
@@ -324,6 +341,11 @@ class AppModel : public QObject {
     // a pickable-type list. Updated when a catalog fetch lands.
     arch::Observable<composer::CatalogSnapshot> catalogSnapshot_;
     composer::CatalogComposer catalogComposer_;
+    // The catalog fetch lifecycle (Idle/Loading/Success/Error). A plain member
+    // (not an Observable) because CatalogDto has no operator==; it is read by the
+    // QML facade on catalogStateChanged() and drives the picker's loading/error
+    // UX. Holds the last good catalog (stale) across a refresh/failure.
+    source::CatalogState catalogState_;
 
     // ── Workstream 2g: USB-direct (raw-HID) claim path ──────────────────────
     // The Windows raw-HID gateway (SetupAPI/hid.dll), the per-VID:PID path-choice
@@ -343,6 +365,15 @@ class AppModel : public QObject {
         // EVERY transition (synthetic add/remove AND held-synthetic phase changes
         // like Direct->AwaitingFramework that the granular callbacks missed).
         void controllersChanged() override { owner_->onUsbDirectChanged(); }
+
+        // Surface the FSM's user-facing banner instead of dropping it. The
+        // persistent error STATE (RestoreStuck/NeedsReplug phase + DirectClaimFailure)
+        // already reaches the slot card via the controllers() snapshot + stampSlotPath;
+        // this is the transient "what just happened" notice (claim failed / rolled
+        // back / needs replug), routed to the one-shot errorMessage toast channel.
+        void notice(const reducer::UsbController& c, reducer::UsbNotice n) override {
+            owner_->onUsbNotice(c, n);
+        }
 
       private:
         AppModel* owner_;

@@ -77,8 +77,8 @@ class AppViewModel : public QObject {
     // off its Observable, and we re-emit so QML re-reads + the chrome dark-mode
     // attribute follows. crashReportingEnabled forwards to CrashReportingStore.
     Q_PROPERTY(int themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged)
-    Q_PROPERTY(bool crashReportingEnabled READ crashReportingEnabled WRITE
-                   setCrashReportingEnabled NOTIFY crashReportingChanged)
+    Q_PROPERTY(bool crashReportingEnabled READ crashReportingEnabled WRITE setCrashReportingEnabled
+                   NOTIFY crashReportingChanged)
 
     // ── About ─────────────────────────────────────────────────────────────────
     // The build version string (CMake project VERSION, threaded in as DISH_VERSION).
@@ -102,6 +102,16 @@ class AppViewModel : public QObject {
     Q_PROPERTY(QString reversePairingPin READ reversePairingPin NOTIFY reversePairingChanged)
     Q_PROPERTY(
         QString reversePairingServerName READ reversePairingServerName NOTIFY reversePairingChanged)
+
+    // ── Emulate picker catalog lifecycle (AsyncState<CatalogDto>) ─────────────
+    // The Emulate sheet binds these so it shows a spinner while the catalog GET
+    // is in flight (with nothing cached yet), a typed error message + retry on
+    // failure, and an empty-vs-content distinction — instead of the old "the
+    // fetch silently returned nothing" (one static hint for loading/empty/error).
+    // All three fold AppModel::catalogStateChanged into one NOTIFY.
+    Q_PROPERTY(bool emulateLoading READ emulateLoading NOTIFY emulateStateChanged)
+    Q_PROPERTY(QString emulateError READ emulateError NOTIFY emulateStateChanged)
+    Q_PROPERTY(bool emulateStale READ emulateStale NOTIFY emulateStateChanged)
 
     // ── First-run onboarding (mirrors maybeShowOnboarding's gate) ─────────────
     // onboardingNeeded == !OnboardingPreferenceStore::welcomeCompleted(). Main.qml
@@ -196,6 +206,10 @@ class AppViewModel : public QObject {
     Q_INVOKABLE QVariantList emulateTypes(const QString& slotId) const;
     Q_INVOKABLE int emulateCurrentType(const QString& slotId) const;
     Q_INVOKABLE void setControllerType(const QString& slotId, int type);
+    // Catalog-fetch lifecycle projection (see the Q_PROPERTYs above).
+    bool emulateLoading() const;
+    QString emulateError() const;
+    bool emulateStale() const;
 
     // Connections page: discovery + connect + forget. discoveredServers returns
     // {name,ip,udpPort,pairPort,httpPort,machineId,source,id} objects for the
@@ -211,11 +225,6 @@ class AppViewModel : public QObject {
     // Widgets onConnectClicked, which matches on s.id().
     Q_INVOKABLE void connectByServerId(const QString& serverId);
 
-    // DEPRECATED: index-based connect; racy if the discovered list reorders
-    // between read and call. Kept until the QML page migrates to
-    // connectByServerId. Prefer connectByServerId.
-    Q_INVOKABLE void connectByIndex(int discoveredIndex);
-
     // Reconnect a REMEMBERED (possibly currently-undiscovered) satellite by id
     // WITHOUT a rescan requirement and WITHOUT re-pairing. Forwards to the
     // coordinator's reconnectConnection (Widgets ConnectionsDialog Reconnect).
@@ -226,17 +235,11 @@ class AppViewModel : public QObject {
     // liveLink role: enable only when the link is live.
     Q_INVOKABLE void disconnectConnection(const QString& connectionId);
 
-    // Pairing sheet: submit a PIN for a discovered server (by id or by index),
+    // Pairing sheet: submit a PIN for a discovered server by its stable id,
     // query the in-flight state, and clear the one-shot pairing trigger before
-    // showing the sheet.
-
-    // De-raced PIN submit, resolving the server by its stable id (matches
-    // connectByServerId). Prefer this over pairWithPin.
+    // showing the sheet. De-raced (resolves the server by id, matching
+    // connectByServerId) — the old index-based pairWithPin was removed (R14).
     Q_INVOKABLE void pairByServerId(const QString& serverId, const QString& pin);
-
-    // DEPRECATED: index-based pair; racy if the discovered list reorders. Kept
-    // until the QML page migrates to pairByServerId.
-    Q_INVOKABLE void pairWithPin(int discoveredIndex, const QString& pin);
     Q_INVOKABLE bool isPairingInFlight(const QString& serverId) const;
     Q_INVOKABLE void clearPairingTarget();
 
@@ -317,6 +320,11 @@ class AppViewModel : public QObject {
     // WifiConnectionManager's reversePairingChanged; NOTIFY for the three
     // reversePairing* properties.
     void reversePairingChanged();
+
+    // The Emulate catalog fetch lifecycle moved (Loading/Success/Error). NOTIFY
+    // for emulateLoading / emulateError / emulateStale; folds AppModel's
+    // catalogStateChanged.
+    void emulateStateChanged();
 
     // The deadzone device rows / their seeded values moved (a device attached or
     // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().

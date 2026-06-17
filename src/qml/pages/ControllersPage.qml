@@ -441,6 +441,22 @@ Kit.Page {
             App.setControllerType(page.emulateSlotId, type); // qmllint disable unqualified
             emulatePicker.close();
         }
+        // Retry re-kicks the async catalog fetch for the open slot; the spinner/
+        // error/list then reflect the new AsyncState as it resolves.
+        onRetryRequested: App.refreshEmulate(page.emulateSlotId) // qmllint disable unqualified
+    }
+
+    // When the catalog fetch lands (Loading→Success/Error), re-pull the offer
+    // list into the open picker so a slow/late catalog populates the rows without
+    // the user reopening. Harmless when the picker is closed (next open reloads).
+    Connections {
+        target: App
+        function onEmulateStateChanged() {
+            if (page.emulateSlotId.length > 0) {
+                emulatePicker.load(App.emulateTypes(page.emulateSlotId), // qmllint disable unqualified
+                                   App.emulateCurrentType(page.emulateSlotId));
+            }
+        }
     }
 
     // ---- Helpers (presentation only; no business logic) ---------------------

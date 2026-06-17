@@ -19,6 +19,10 @@ set(DISH_TEST_SOURCES
     # instead of popping a modal dialog that hangs ctest / headless runs.
     CrtAssertToStderr.cpp
     test_kernel.cpp
+    # core/AsyncState.h — the canonical Idle/Loading/Success/Error container every
+    # async flow (catalog/discovery/pairing) binds through. Exhaustive pure
+    # transitions + stale-while-revalidate retention + == (distinct-until-changed).
+    test_async_state.cpp
     test_session_crypto.cpp
     test_atomic_counter.cpp
     test_hex.cpp
@@ -55,6 +59,13 @@ set(DISH_TEST_SOURCES
     # toggle, and the capture-threshold predicates the bridge gates its emit on.
     # SDL-free — the bridge is never constructed (it would init SDL and hang).
     test_joystick_remap_assign.cpp
+    # Pure input-capture LIFECYCLE FSM (core/input/CaptureMode.h) for "press a
+    # button to assign it": every (phase x event) transition, the other-device
+    # filter (the property AppViewModel's deviceId != capturingSlotId_ guard
+    # enforces today, now a single-owner pure reducer), sub-threshold rejection,
+    # Stop-from-any-phase, Start re-targeting. Reuses the bridge's capture
+    # predicates; SDL/Qt-free (the bridge is never constructed).
+    test_capture_mode.cpp
     # Per-VID:PID raw-joystick REMAP ("Configure controls" page): the durable
     # QSettings Repository (RepositoryContract) over a "joystick_remaps" key
     # disjoint from "usb_path_choices", wrapped in a reactive StateSource. Pure +
@@ -79,6 +90,18 @@ set(DISH_TEST_SOURCES
     # manager poll methods open real Winsock the test process would join, so the
     # branching is tested here, not by driving the manager.
     test_reverse_pairing.cpp
+    # Forward (Path A, user-types-a-PIN) pairing lifecycle — the PURE total FSM
+    # (reducePairing over every PairPhase x PairEvent) giving forward pairing the
+    # same first-class, typed, retained lifecycle reverse pairing already has.
+    # Consumes the existing classifyPair verdict; Qt/socket-free.
+    test_pairing_machine.cpp
+    # Per-satellite SESSION lifecycle — the PURE total FSM (reduce over every
+    # SessionPhase x SessionEvent) closing the audit gap the imperative
+    # WifiConnectionManager left: Faltering is finally ENTERED at the 2-miss
+    # threshold, Reconnecting + backoff is observable, and the failure reason is
+    # retained + typed. Consumes classifyRest/classifyPair/closeActionForReason/
+    # backoffDelayMs; clock-free + Qt/socket-free.
+    test_satellite_session_machine.cpp
     test_udp_opcodes.cpp
     test_session_reconcile.cpp
     # Workstream 2b — connections composer/coordinator, session mappers, pacer

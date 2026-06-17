@@ -120,8 +120,8 @@ std::optional<input::RemapTarget> remapTargetFromString(const QString& t) {
 QVariantMap triggerSourceToMap(const input::TriggerSource& src) {
     QVariantMap m;
     m[QStringLiteral("kind")] = src.kind == input::TriggerSourceKind::Button
-                                   ? QStringLiteral("button")
-                                   : QStringLiteral("axis");
+                                    ? QStringLiteral("button")
+                                    : QStringLiteral("axis");
     m[QStringLiteral("index")] = src.index;
     return m;
 }
@@ -150,6 +150,12 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
                      [this] { emit scanningChanged(); });
     QObject::connect(model_->wifi(), &net::WifiConnectionManager::reversePairingChanged, this,
                      [this] { emit reversePairingChanged(); });
+    // The catalog fetch lifecycle (Idle/Loading/Success/Error) moved — fold it
+    // into one emulate-state NOTIFY so the Emulate picker re-reads emulateLoading
+    // / emulateError / emulateStale and shows a spinner, a typed error + retry, or
+    // an empty-vs-content distinction (was: the fetch silently returned nothing).
+    QObject::connect(model_, &dish::AppModel::catalogStateChanged, this,
+                     [this] { emit emulateStateChanged(); });
 
     // The settings stores republish through their StateSource Observables (not Qt
     // signals); subscribe so a republish (incl. the ThemeController's own re-theme
@@ -259,8 +265,7 @@ namespace {
 // vpKey string (parse it); an SDL slot's id ("sdl:<iid>") doesn't parse, so fall
 // back to the bridge device list, matching the id. Returns nullopt when neither
 // path yields an identity (an unknown slot, or an SDL pad SDL couldn't identify).
-std::optional<std::pair<int, int>> resolveSlotVidPid(dish::AppModel* model,
-                                                     const QString& slotId) {
+std::optional<std::pair<int, int>> resolveSlotVidPid(dish::AppModel* model, const QString& slotId) {
     if (const auto parsed = reducer::parseSyntheticSlotId(slotId.toStdString())) { return parsed; }
     for (const auto& d : model->bridge()->devices()) {
         if (d.id == slotId) {
@@ -325,9 +330,33 @@ QVariantList AppViewModel::availableConnectionsForSlot(const QString& slotId) co
     return out;
 }
 
-void AppViewModel::refreshEmulate(const QString& slotId) {
-    model_->refreshCatalogForSlot(slotId);
+void AppViewModel::refreshEmulate(const QString& slotId) { model_->refreshCatalogForSlot(slotId); }
+
+bool AppViewModel::emulateLoading() const {
+    // Loading is only meaningful before the first content arrives; once we have
+    // cached types a background revalidate shows them (stale), not a blank
+    // spinner — so the picker treats "loading" as "loading AND nothing to show".
+    const auto& s = model_->catalogState();
+    return s.isLoading() && !s.hasData();
 }
+
+QString AppViewModel::emulateError() const {
+    // Localize the typed CatalogError at the UI edge (the core carries a reason
+    // code, not a string). Empty string = no error to show.
+    const auto& s = model_->catalogState();
+    if (!s.isError() || !s.error.has_value()) { return {}; }
+    switch (*s.error) {
+    case source::CatalogError::Unreachable:
+        return tr("Couldn't reach the satellite to load controller types.");
+    case source::CatalogError::ServerError:
+        return tr("The satellite couldn't provide controller types right now.");
+    case source::CatalogError::Malformed:
+        return tr("The satellite sent an unreadable controller-type list.");
+    }
+    return {};
+}
+
+bool AppViewModel::emulateStale() const { return model_->catalogState().stale; }
 
 QVariantList AppViewModel::emulateTypes(const QString& slotId) const {
     QVariantList out;
@@ -386,12 +415,6 @@ void AppViewModel::connectByServerId(const QString& serverId) {
     }
 }
 
-void AppViewModel::connectByIndex(int discoveredIndex) {
-    const auto servers = model_->wifi()->discoveredServers();
-    if (discoveredIndex < 0 || discoveredIndex >= servers.size()) { return; }
-    model_->wifi()->connectTo(servers.at(discoveredIndex));
-}
-
 void AppViewModel::reconnectConnection(const QString& connectionId) {
     model_->connections()->reconnectConnection(connectionId);
 }
@@ -411,12 +434,6 @@ void AppViewModel::pairByServerId(const QString& serverId, const QString& pin) {
             return;
         }
     }
-}
-
-void AppViewModel::pairWithPin(int discoveredIndex, const QString& pin) {
-    const auto servers = model_->wifi()->discoveredServers();
-    if (discoveredIndex < 0 || discoveredIndex >= servers.size()) { return; }
-    model_->wifi()->pairWithPin(servers.at(discoveredIndex), pin);
 }
 
 bool AppViewModel::isPairingInFlight(const QString& serverId) const {
@@ -485,9 +502,7 @@ void AppViewModel::setThemeMode(int mode) {
     model_->themeStore()->setMode(next);
     // Push the now-resolved appearance to the QML side + the native chrome so the
     // live palette and the title-bar immersive-dark attribute follow the mode.
-    if (themeAppliedSink_) {
-        themeAppliedSink_(ui::activeAppearance() == ui::Appearance::Dark);
-    }
+    if (themeAppliedSink_) { themeAppliedSink_(ui::activeAppearance() == ui::Appearance::Dark); }
 }
 
 bool AppViewModel::crashReportingEnabled() const { return model_->crashStore()->enabled(); }
@@ -652,8 +667,8 @@ void AppViewModel::openExternalUrl(const QString& url) {
     // failure, so we surface the failure on errorMessage — the QML toast channel —
     // matching the Widgets "Couldn't open browser" warning. Without a sink (tests)
     // open directly and report the same way.
-    const bool ok = externalOpenSink_ ? externalOpenSink_(url)
-                                      : QDesktopServices::openUrl(QUrl(url));
+    const bool ok =
+        externalOpenSink_ ? externalOpenSink_(url) : QDesktopServices::openUrl(QUrl(url));
     if (!ok) { emit errorMessage(tr("Couldn't open browser")); }
 }
 

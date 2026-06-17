@@ -70,6 +70,16 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
                      &AppModel::rawJoystickInput);
     QObject::connect(wifi_, &net::WifiConnectionManager::connectionEvent, this,
                      &AppModel::onWifiEvent);
+    // A controller-registration rejection (the satellite refused a slot's
+    // descriptor) is rolled back by ConnectionHub (the binding reverts), but the
+    // user saw their bind silently undo with no reason. Surface it: the only
+    // error path that previously produced ZERO user feedback. Routed to the same
+    // one-shot toast channel as every other transient error.
+    QObject::connect(wifi_, &net::WifiConnectionManager::slotRegistrationFailed, this,
+                     [this](const QString&) {
+                         emit errorMessage(
+                             tr("The satellite wouldn't accept that controller — binding undone."));
+                     });
     // poolChanged fires every time a WifiConnection is created or transitions
     // state — perfect place to make sure new connections have a rumble
     // handler. Idempotent on already-wired connections.
@@ -438,9 +448,7 @@ void AppModel::clearJoystickRemap(int vendorId, int productId) {
     bridge_->clearJoystickRemap(vendorId, productId);
 }
 
-void AppModel::setInputCaptureEnabled(bool enabled) {
-    bridge_->setJoystickCaptureEnabled(enabled);
-}
+void AppModel::setInputCaptureEnabled(bool enabled) { bridge_->setJoystickCaptureEnabled(enabled); }
 
 void AppModel::onWifiEvent(const net::ConnectionEvent& evt) {
     switch (evt.kind) {
@@ -452,6 +460,28 @@ void AppModel::onWifiEvent(const net::ConnectionEvent& evt) {
         emit errorMessage(evt.message);
         break;
     }
+}
+
+void AppModel::onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice notice) {
+    // The pad name for the banner; fall back to a generic noun when the FSM
+    // controller has no name yet.
+    const QString name = c.name.empty() ? tr("Controller") : QString::fromStdString(c.name);
+    QString msg;
+    switch (notice) {
+    case reducer::UsbNotice::SwitchToDirectFailed:
+        msg = tr("Couldn't switch %1 to Direct mode — keeping it on Standard.").arg(name);
+        break;
+    case reducer::UsbNotice::NeedsReplug:
+        msg = tr("%1 needs to be unplugged and reconnected.").arg(name);
+        break;
+    case reducer::UsbNotice::RolledBackToDirect:
+        msg = tr("%1 stayed on Direct mode.").arg(name);
+        break;
+    case reducer::UsbNotice::RestoreFailed:
+        msg = tr("Couldn't return %1 to Standard mode.").arg(name);
+        break;
+    }
+    if (!msg.isEmpty()) { emit errorMessage(msg); }
 }
 
 void AppModel::pollUsbDirect() {
@@ -535,8 +565,8 @@ void AppModel::onUsbDirectChanged() {
     // applyEvent, and doing that re-entrantly would mutate FSM state mid-dispatch.
     // The settle is idempotent (a Routed controller is no longer AwaitingFramework),
     // so the queued pass terminates after one settling step per controller.
-    QMetaObject::invokeMethod(this, [this] { settleAwaitingFrameworkControllers(); },
-                              Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this, [this] { settleAwaitingFrameworkControllers(); }, Qt::QueuedConnection);
 }
 
 void AppModel::settleAwaitingFrameworkControllers() {
@@ -876,12 +906,24 @@ void AppModel::refreshCatalogForSlot(const QString& slotId) {
     const QString satId = server.id();
     // BCP-47 locale chain for Accept-Language; the satellite falls back to en.
     const QString acceptLanguage = QLocale().bcp47Name();
+    // Enter Loading (keeping any prior catalog as stale) so the picker can show a
+    // spinner over the last-known types while the GET is in flight.
+    catalogState_ = core::toLoading(catalogState_);
+    emit catalogStateChanged();
     catalogRepo_.catalogFor(server, satId, acceptLanguage,
-                            [this](const std::optional<models::CatalogDto>& catalog) {
-                                if (!catalog.has_value()) { return; }
-                                // Feed the composer; its distinct-until-changed
-                                // suppresses a no-op (304-served identical) update.
-                                catalogSnapshot_.set(composer::CatalogSnapshot{*catalog});
+                            [this](const source::CatalogState& state) {
+                                // Capture the full lifecycle — Loading already
+                                // fired; this is the terminal Success/Error. The
+                                // failure is no longer dropped: the picker binds
+                                // catalogState() to show the cause + a retry.
+                                catalogState_ = state;
+                                // Feed the composer whenever we have data (fresh
+                                // 200, 304-revalidated, or stale-served-on-error);
+                                // its distinct-until-changed suppresses no-ops.
+                                if (state.hasData()) {
+                                    catalogSnapshot_.set(composer::CatalogSnapshot{*state.data});
+                                }
+                                emit catalogStateChanged();
                             });
 }
 

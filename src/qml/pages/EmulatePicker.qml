@@ -34,6 +34,10 @@ Kit.ContentDialog {
     // App.setControllerType(slotId, type).
     signal chosen(int type)
 
+    // Emitted when the user taps Retry on the error banner; the page re-kicks the
+    // catalog fetch (App.refreshEmulate) for the slot it is showing.
+    signal retryRequested()
+
     // Populate the picker and pre-select the current wire type. Called by the
     // page just before open() so the list is fresh each time.
     function load(offered, currentType) {
@@ -56,12 +60,42 @@ Kit.ContentDialog {
             font.pixelSize: 12
             Layout.fillWidth: true
         },
+        // ── The catalog fetch's four states, each rendered distinctly (was a
+        // single static hint that conflated loading / empty / error). All bind
+        // App's AsyncState projection so they clear reactively when the GET lands. ──
+        Kit.LoadingSpinner { // qmllint disable missing-property
+            // In-flight with nothing cached yet → a spinner, not a blank list.
+            visible: App.emulateLoading
+            text: qsTr("Loading controller types…")
+            Layout.fillWidth: true
+        },
+        Kit.ErrorBanner { // qmllint disable missing-property
+            // The fetch failed: show the typed reason + a Retry. If we have stale
+            // cached types they still render below; this banner sits above them.
+            visible: App.emulateError.length > 0
+            text: App.emulateError
+            showRetry: true
+            onRetryRequested: picker.retryRequested()
+            Layout.fillWidth: true
+        },
         Label { // qmllint disable missing-property
-            // Empty-offer hint: the slot may be unbound or its catalog not cached
-            // yet (the page kicks refreshEmulate before opening, but the first
-            // open can still race an empty catalog).
-            visible: picker.types.length === 0
-            text: qsTr("No controller types available yet — try again in a moment.")
+            // Stale-while-revalidate cue: we're showing cached types from a prior
+            // fetch while a background refresh is in flight (App.emulateStale).
+            // Distinct from the cold-load spinner above (which shows only when there
+            // is nothing cached yet). Binds the previously-unread emulateStale.
+            visible: App.emulateStale && picker.types.length > 0 && App.emulateError.length === 0
+            text: qsTr("Updating controller types…")
+            color: Theme.muted
+            font.pixelSize: 11
+            font.italic: true
+            Layout.fillWidth: true
+        },
+        Label { // qmllint disable missing-property
+            // Genuinely empty: not loading, no error, and the catalog offered
+            // nothing (or the slot is unbound) — distinct from the two states above.
+            visible: !App.emulateLoading && App.emulateError.length === 0
+                     && picker.types.length === 0
+            text: qsTr("No controller types available for this connection.")
             color: Theme.muted
             font.pixelSize: 12
             wrapMode: Text.WordWrap

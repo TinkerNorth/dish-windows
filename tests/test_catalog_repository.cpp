@@ -108,12 +108,12 @@ DiscoveredServer makeServer() {
     return s;
 }
 
-// Synchronous fetch: capture the optional<CatalogDto> the async cb delivers.
-std::optional<CatalogDto> fetchSync(SatelliteCatalogRepository& repo, const DiscoveredServer& s,
-                                    const QString& satId) {
-    std::optional<CatalogDto> captured;
+// Synchronous fetch: capture the AsyncState the async cb delivers.
+dish::source::CatalogState fetchSync(SatelliteCatalogRepository& repo, const DiscoveredServer& s,
+                                     const QString& satId) {
+    dish::source::CatalogState captured;
     bool fired = false;
-    repo.catalogFor(s, satId, QStringLiteral("en"), [&](const std::optional<CatalogDto>& r) {
+    repo.catalogFor(s, satId, QStringLiteral("en"), [&](const dish::source::CatalogState& r) {
         captured = r;
         fired = true;
     });
@@ -122,6 +122,8 @@ std::optional<CatalogDto> fetchSync(SatelliteCatalogRepository& repo, const Disc
 }
 
 } // namespace
+
+using dish::source::CatalogError;
 
 TEST_CASE("CatalogCache: a 200 fills the cache and the next fetch revalidates with the stored ETag",
           "[catalog][cache]") {
@@ -132,15 +134,18 @@ TEST_CASE("CatalogCache: a 200 fills the cache and the next fetch revalidates wi
     const auto server = makeServer();
 
     const auto first = fetchSync(repo, server, "sat-1");
-    REQUIRE(first.has_value());
-    REQUIRE(first->controllerTypes.size() == 1);
-    REQUIRE(first->controllerTypes.front().slug == "xbox360");
+    REQUIRE(first.isSuccess());
+    REQUIRE_FALSE(first.stale); // a fresh 200
+    REQUIRE(first.hasData());
+    REQUIRE(first.data->controllerTypes.size() == 1);
+    REQUIRE(first.data->controllerTypes.front().slug == "xbox360");
     REQUIRE(fake.receivedEtags[0].isEmpty()); // nothing cached yet → unconditional
 
     const auto second = fetchSync(repo, server, "sat-1");
     REQUIRE(fake.receivedEtags[1] == "\"1.6.0\""); // If-None-Match from the cache
-    REQUIRE(second.has_value());
-    REQUIRE(second->controllerTypes.front().slug == "xbox360"); // 304 → cache served
+    REQUIRE(second.isSuccess());
+    REQUIRE(second.stale); // 304 → cache re-served, flagged not-freshly-fetched
+    REQUIRE(second.data->controllerTypes.front().slug == "xbox360");
 
     const auto cached = repo.cached("sat-1");
     REQUIRE(cached.has_value());
@@ -153,12 +158,15 @@ TEST_CASE("CatalogCache: a transport failure serves the last good copy", "[catal
     SatelliteCatalogRepository repo(fake.fn());
     const auto server = makeServer();
 
-    REQUIRE(fetchSync(repo, server, "sat-1").has_value());
+    REQUIRE(fetchSync(repo, server, "sat-1").isSuccess());
 
     fake.throwInstead = true; // now every fetch fails (unreachable)
     const auto stale = fetchSync(repo, server, "sat-1");
-    REQUIRE(stale.has_value());
-    REQUIRE(stale->controllerTypes.front().slug == "xbox360");
+    REQUIRE(stale.isError());                           // failure is no longer dropped
+    REQUIRE(*stale.error == CatalogError::Unreachable); // with the typed reason
+    REQUIRE(stale.hasData());                           // but the last good copy survives
+    REQUIRE(stale.stale);
+    REQUIRE(stale.data->controllerTypes.front().slug == "xbox360");
 }
 
 TEST_CASE("CatalogCache: a server error keeps the cache, a malformed body too",
@@ -170,15 +178,19 @@ TEST_CASE("CatalogCache: a server error keeps the cache, a malformed body too",
     SatelliteCatalogRepository repo(fake.fn());
     const auto server = makeServer();
 
-    REQUIRE(fetchSync(repo, server, "sat-1").has_value());
+    REQUIRE(fetchSync(repo, server, "sat-1").isSuccess());
 
     const auto afterServerError = fetchSync(repo, server, "sat-1");
-    REQUIRE(afterServerError.has_value());
-    REQUIRE(afterServerError->controllerTypes.front().slug == "xbox360");
+    REQUIRE(afterServerError.isError());
+    REQUIRE(*afterServerError.error == CatalogError::ServerError);
+    REQUIRE(afterServerError.hasData()); // cache survives
+    REQUIRE(afterServerError.data->controllerTypes.front().slug == "xbox360");
 
     const auto afterMalformed = fetchSync(repo, server, "sat-1");
-    REQUIRE(afterMalformed.has_value());
-    REQUIRE(afterMalformed->controllerTypes.front().slug == "xbox360");
+    REQUIRE(afterMalformed.isError());
+    REQUIRE(*afterMalformed.error == CatalogError::Malformed);
+    REQUIRE(afterMalformed.hasData());
+    REQUIRE(afterMalformed.data->controllerTypes.front().slug == "xbox360");
 }
 
 TEST_CASE("CatalogCache: a never-reachable satellite yields nullopt, no cache to serve",
@@ -188,7 +200,10 @@ TEST_CASE("CatalogCache: a never-reachable satellite yields nullopt, no cache to
     SatelliteCatalogRepository repo(fake.fn());
     const auto server = makeServer();
 
-    REQUIRE_FALSE(fetchSync(repo, server, "sat-1").has_value());
+    const auto cold = fetchSync(repo, server, "sat-1");
+    REQUIRE(cold.isError());
+    REQUIRE(*cold.error == CatalogError::Unreachable);
+    REQUIRE_FALSE(cold.hasData()); // never reachable ⇒ no cache to serve
     REQUIRE_FALSE(repo.cached("sat-1").has_value());
 }
 
@@ -203,8 +218,8 @@ TEST_CASE("CatalogCache: the cache is keyed per satellite id", "[catalog][cache]
 
     const auto a = fetchSync(repo, server, "sat-A");
     const auto b = fetchSync(repo, server, "sat-B");
-    REQUIRE(a->controllerTypes.front().slug == "xbox360");
-    REQUIRE(b->controllerTypes.front().slug == "ds4");
+    REQUIRE(a.data->controllerTypes.front().slug == "xbox360");
+    REQUIRE(b.data->controllerTypes.front().slug == "ds4");
     // sat-A revalidates with ITS etag, not sat-B's.
     REQUIRE(fake.receivedEtags[0].isEmpty());
     REQUIRE(fake.receivedEtags[1].isEmpty());

@@ -192,4 +192,19 @@ Item {
             }
         }
     }
+
+    // ---- Global transient-notification host. Dropped ONCE here so every
+    // one-shot failure in the app (a failed connect/reconnect, an external-link
+    // open that couldn't launch, a USB path-switch notice) surfaces as a toast
+    // instead of being silently dropped — previously App.errorMessage had no
+    // listener outside the pairing dialog. It overlays the whole shell but only
+    // paints at the bottom-center, so it never blocks interaction elsewhere.
+    Kit.NotificationToastHost {
+        id: toastHost
+        anchors.fill: parent
+    }
+    Connections {
+        target: App
+        function onErrorMessage(message) { toastHost.show(message); }
+    }
 }

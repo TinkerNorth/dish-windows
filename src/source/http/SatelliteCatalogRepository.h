@@ -22,6 +22,7 @@
 #pragma once
 
 #include "Models/Models.h"
+#include "core/AsyncState.h"
 
 #include <QString>
 
@@ -35,6 +36,21 @@ class HTTPClient;
 }
 
 namespace dish::source {
+
+// Why a catalog fetch failed, carried AS DATA (the UI localizes it) so the
+// "Emulate" picker can show a distinct message + retry per cause instead of one
+// generic "try again". Mirrors the RestVerdict/DirectClaimFailure reason-enum
+// style used elsewhere in core.
+enum class CatalogError {
+    Unreachable, // transport never produced a response (offline / wrong host)
+    ServerError, // a reply arrived but not a 200 catalog (5xx, etc.)
+    Malformed,   // a 200 whose body did not parse into a real catalog
+};
+
+// The catalog as an async value: Idle (never fetched) / Loading / Success
+// (Loaded — possibly stale-revalidated on a 304) / Error (with a CatalogError
+// reason, carrying the last good catalog so the picker degrades gracefully).
+using CatalogState = core::AsyncState<models::CatalogDto, CatalogError>;
 
 class SatelliteCatalogRepository {
   public:
@@ -52,12 +68,16 @@ class SatelliteCatalogRepository {
     // outlive this object (the composition root owns both).
     explicit SatelliteCatalogRepository(net::HTTPClient* http);
 
-    using CatalogCb = std::function<void(const std::optional<models::CatalogDto>&)>;
+    using CatalogCb = std::function<void(const CatalogState&)>;
 
     // Resolve the catalog for `server` keyed by `satelliteId`, applying the
-    // revalidate policy, and deliver it to `cb` (nullopt = never been reachable,
-    // nothing to serve). `acceptLanguage` is the locale chain (en/es/fr/de/bs/
-    // pt-BR, en fallback fine). Async: `cb` fires on the fetch's home thread.
+    // revalidate policy, and deliver it to `cb` as an AsyncState: Success on a
+    // fresh 200, Success(stale) on a 304, Error(reason) on a transport/server/
+    // malformed failure — the Error STILL carries the last good catalog (so the
+    // picker shows cached content + an error chip rather than going blank), and
+    // carries no data only when the satellite was never reachable. `acceptLanguage`
+    // is the locale chain (en/es/fr/de/bs/pt-BR, en fallback fine). Async: `cb`
+    // fires on the fetch's home thread.
     void catalogFor(const models::DiscoveredServer& server, const QString& satelliteId,
                     const QString& acceptLanguage, CatalogCb cb);
 

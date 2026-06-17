@@ -65,6 +65,14 @@ QString versionMsg() {
     return QCoreApplication::translate(
         kTrContext, "This app and the satellite speak different protocol versions.");
 }
+QString wrongPinMsg() {
+    return QCoreApplication::translate(
+        kTrContext, "That PIN wasn't accepted. Check the code on the satellite and try again.");
+}
+QString pairPendingMsg() {
+    return QCoreApplication::translate(
+        kTrContext, "The satellite hasn't confirmed pairing yet. Try again in a moment.");
+}
 QString reverseDeclinedMsg() {
     return QCoreApplication::translate(
         kTrContext, "The satellite declined this device. Pairing was not approved.");
@@ -140,10 +148,12 @@ void WifiConnectionManager::startDiscovery() {
         autoReconnectAll();
         emit discoveredChanged();
         emit scanningChanged();
-        if (discovered_.isEmpty()) {
-            emit connectionEvent(makeError(
-                QCoreApplication::translate(kTrContext, "No servers found — check your network")));
-        }
+        // NOTE (R6): an empty result is STATE, not a transient event. The
+        // Connections page renders a distinct empty-state for
+        // discoveredServers.length === 0 (separate from the scanning spinner),
+        // so a redundant "No servers found" toast on top of it is removed —
+        // scanning_=false with an empty discovered_ IS the "scanned, found
+        // nothing" state the UI binds.
         watcher->deleteLater();
     });
     watcher->setFuture(QtConcurrent::run([] {
@@ -244,12 +254,21 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
                     } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
                         conn->markDisconnected();
                         emit connectionEvent(makeError(versionMsg()));
-                    } else {
-                        // A PIN submit that comes back Pending/AuthRequired/
-                        // Unreachable is a failed pair — surface the reason.
+                    } else if constexpr (std::is_same_v<T, PairingClient::AuthRequired>) {
+                        // Reachable + parsed, but no key granted: the PIN was wrong
+                        // or expired — the most common, most actionable failure.
+                        // Typed now (was collapsed into a generic "Pairing failed").
                         conn->markDisconnected();
-                        emit connectionEvent(makeError(pair.error.value_or(
-                            QCoreApplication::translate(kTrContext, "Pairing failed"))));
+                        emit connectionEvent(makeError(wrongPinMsg()));
+                    } else if constexpr (std::is_same_v<T, PairingClient::Unreachable>) {
+                        // Transport failure — distinct from a wrong PIN.
+                        conn->markDisconnected();
+                        emit connectionEvent(makeError(unreachableMsg()));
+                    } else {
+                        // Pending: the satellite staged the request but hasn't
+                        // granted yet (rare on a direct PIN submit).
+                        conn->markDisconnected();
+                        emit connectionEvent(makeError(pairPendingMsg()));
                     }
                 },
                 outcome);
@@ -368,8 +387,8 @@ void WifiConnectionManager::pollReverseStatus() {
         ar.hasSharedKey = status.sharedKey.has_value() && !status.sharedKey->isEmpty();
         const auto approval = reducer::classifyApproval(ar);
         // The pure decision: the only place the poll loop's branching lives.
-        switch (reducer::nextReversePairingAction(approval, reverseElapsedMs_,
-                                                  reverseDeadlineMs_)) {
+        switch (
+            reducer::nextReversePairingAction(approval, reverseElapsedMs_, reverseDeadlineMs_)) {
         case reducer::ReversePairingAction::Approve: {
             // Approved with a usable key — adopt + open the session (forward path).
             auto* conn = ensureConnection(server);

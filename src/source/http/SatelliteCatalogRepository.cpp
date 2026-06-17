@@ -22,6 +22,14 @@ bool isValidFill(const models::CatalogDto& reply) {
     return reply.httpStatus == 200 && reply.reachable && !reply.serverVersion.isEmpty();
 }
 
+// Classify a non-304, non-fill reply into the typed failure reason. Pure.
+CatalogError classifyCatalogError(const models::CatalogDto& reply) {
+    if (!reply.reachable) { return CatalogError::Unreachable; }
+    if (reply.httpStatus != 200) { return CatalogError::ServerError; }
+    // reachable + 200 but not a valid fill ⇒ the body didn't parse into a catalog.
+    return CatalogError::Malformed;
+}
+
 } // namespace
 
 SatelliteCatalogRepository::SatelliteCatalogRepository(Fetch fetch) : fetch_(std::move(fetch)) {}
@@ -49,16 +57,25 @@ void SatelliteCatalogRepository::catalogFor(const models::DiscoveredServer& serv
 
     fetch_(server.ip, server.httpPort, acceptLanguage, conditionalEtag,
            [this, satelliteId, cachedCatalog, cb = std::move(cb)](const models::CatalogDto& reply) {
-               // 304: the cache is still valid — serve it (nullopt if, somehow,
-               // we 304'd with nothing cached).
+               // The pre-fetch baseline: a prior success iff we had something
+               // cached. The AsyncState transitions retain this `data` (marked
+               // stale) across a revalidate / failure so the picker never blanks.
+               CatalogState prev = cachedCatalog
+                                       ? core::toSuccess(CatalogState{}, *cachedCatalog)
+                                       : core::asyncIdle<models::CatalogDto, CatalogError>();
+               // 304: the cache is still current — re-serve it as a stale-flagged
+               // Success (or, anomalously, a ServerError if we 304'd with nothing
+               // cached: the server claimed our cache is good but we have none).
                if (reply.notModified) {
-                   cb(cachedCatalog);
+                   cb(cachedCatalog ? core::toRevalidated(prev)
+                                    : core::toError(prev, CatalogError::ServerError));
                    return;
                }
                // Not a fresh, well-formed 200 (server error, unreachable, or a
-               // malformed body): stale-on-error — serve the last good copy.
+               // malformed body): Error with the typed reason — STILL carrying the
+               // last good copy (stale-on-error), so the UI shows cached content.
                if (!isValidFill(reply)) {
-                   cb(cachedCatalog);
+                   cb(core::toError(prev, classifyCatalogError(reply)));
                    return;
                }
                // A good 200: fill the cache (store the response ETag for the
@@ -67,7 +84,7 @@ void SatelliteCatalogRepository::catalogFor(const models::DiscoveredServer& serv
                    std::lock_guard<std::mutex> lock(mutex_);
                    cache_[satelliteId] = CacheEntry{reply.etag, reply};
                }
-               cb(reply);
+               cb(core::toSuccess(prev, reply));
            });
 }
 
