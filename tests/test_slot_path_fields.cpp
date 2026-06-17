@@ -100,8 +100,7 @@ TEST_CASE("parseSyntheticSlotId: a packed vpKey string round-trips to (vid, pid)
     REQUIRE(parsed->second == pid);
 }
 
-TEST_CASE("parseSyntheticSlotId: an SDL slot id (or junk) does not parse",
-          "[slotpath][resolve]") {
+TEST_CASE("parseSyntheticSlotId: an SDL slot id (or junk) does not parse", "[slotpath][resolve]") {
     // An SDL id is "sdl:<iid>" — never an all-digit string, so it falls through
     // to the bridge-device lookup the view model does instead.
     REQUIRE_FALSE(parseSyntheticSlotId("sdl:3").has_value());
@@ -112,8 +111,7 @@ TEST_CASE("parseSyntheticSlotId: an SDL slot id (or junk) does not parse",
     REQUIRE_FALSE(parseSyntheticSlotId("99999999999").has_value());
 }
 
-TEST_CASE("parseSyntheticSlotId: a low-vid/pid key still splits correctly",
-          "[slotpath][resolve]") {
+TEST_CASE("parseSyntheticSlotId: a low-vid/pid key still splits correctly", "[slotpath][resolve]") {
     // vid 0x0001, pid 0x0002 -> key 0x00010002 -> "65538".
     const auto parsed = parseSyntheticSlotId("65538");
     REQUIRE(parsed.has_value());
@@ -129,13 +127,18 @@ TEST_CASE("slotPathSwitching: the derived loading state over the full switch flo
 
     // Want Direct: switching until a synthetic exists AND its poll rate is measured
     // (the observed "Hz comes in a moment later" window).
-    CHECK(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, false, 0, false)); // not synthetic yet
-    CHECK(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, true, 0, false));  // synthetic, no rate yet
-    CHECK_FALSE(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, true, 250, false)); // settled + streaming
+    CHECK(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, false, 0,
+                            false)); // not synthetic yet
+    CHECK(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, true, 0,
+                            false)); // synthetic, no rate yet
+    CHECK_FALSE(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, true, 250,
+                                  false)); // settled + streaming
 
     // Want Standard: switching while still on the synthetic; settled once back on SDL.
-    CHECK(slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, true, 100, false)); // still synthetic
-    CHECK_FALSE(slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, false, 0, false)); // back on SDL
+    CHECK(slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, true, 100,
+                            false)); // still synthetic
+    CHECK_FALSE(
+        slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, false, 0, false)); // back on SDL
 
     // A settled Standard slot at rest is never switching.
     CHECK_FALSE(slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, false, 0, false));
@@ -143,5 +146,6 @@ TEST_CASE("slotPathSwitching: the derived loading state over the full switch flo
     // Terminal / failure states surface an error note, never a perpetual spinner.
     CHECK_FALSE(slotPathSwitching(UsbPhase::RestoreStuck, PathChoice::Direct, false, 0, false));
     CHECK_FALSE(slotPathSwitching(UsbPhase::NeedsReplug, PathChoice::Direct, false, 0, false));
-    CHECK_FALSE(slotPathSwitching(UsbPhase::Routed, PathChoice::Direct, false, 0, /*hasFailure=*/true));
+    CHECK_FALSE(
+        slotPathSwitching(UsbPhase::Routed, PathChoice::Direct, false, 0, /*hasFailure=*/true));
 }

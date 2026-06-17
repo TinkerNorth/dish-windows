@@ -24,21 +24,21 @@ using input::TriggerSourceKind;
 // Compact field names — one persisted blob can hold many pads, so keep keys
 // short. The shape is forward-compatible: joystickRemapFromJson reads each
 // field independently and falls back to the default value when absent/garbled.
-constexpr const char* kFieldKey = "vk";       // entry's own vid:pid key (Map<K,V> faithfulness)
-constexpr const char* kFieldLsx = "lsx";      // left stick X axis
-constexpr const char* kFieldLsy = "lsy";      // left stick Y axis
-constexpr const char* kFieldRsx = "rsx";      // right stick X axis
-constexpr const char* kFieldRsy = "rsy";      // right stick Y axis
-constexpr const char* kFieldInvLy = "ily";    // invert left Y
-constexpr const char* kFieldInvRy = "iry";    // invert right Y
-constexpr const char* kFieldLtKind = "ltk";   // left trigger source kind (0 Axis / 1 Button)
-constexpr const char* kFieldLtIdx = "lti";    // left trigger source index
-constexpr const char* kFieldRtKind = "rtk";   // right trigger source kind
-constexpr const char* kFieldRtIdx = "rti";    // right trigger source index
-constexpr const char* kFieldButtons = "btn";  // logical-button -> source array
-constexpr const char* kFieldHat = "hat";      // hat index
-constexpr const char* kFieldAdaptRs = "ars";  // adaptive right stick flag
-constexpr const char* kFieldAdaptTr = "atr";  // adaptive triggers flag
+constexpr const char* kFieldKey = "vk";      // entry's own vid:pid key (Map<K,V> faithfulness)
+constexpr const char* kFieldLsx = "lsx";     // left stick X axis
+constexpr const char* kFieldLsy = "lsy";     // left stick Y axis
+constexpr const char* kFieldRsx = "rsx";     // right stick X axis
+constexpr const char* kFieldRsy = "rsy";     // right stick Y axis
+constexpr const char* kFieldInvLy = "ily";   // invert left Y
+constexpr const char* kFieldInvRy = "iry";   // invert right Y
+constexpr const char* kFieldLtKind = "ltk";  // left trigger source kind (0 Axis / 1 Button)
+constexpr const char* kFieldLtIdx = "lti";   // left trigger source index
+constexpr const char* kFieldRtKind = "rtk";  // right trigger source kind
+constexpr const char* kFieldRtIdx = "rti";   // right trigger source index
+constexpr const char* kFieldButtons = "btn"; // logical-button -> source array
+constexpr const char* kFieldHat = "hat";     // hat index
+constexpr const char* kFieldAdaptRs = "ars"; // adaptive right stick flag
+constexpr const char* kFieldAdaptTr = "atr"; // adaptive triggers flag
 
 int triggerKindToInt(TriggerSourceKind k) { return k == TriggerSourceKind::Button ? 1 : 0; }
 TriggerSourceKind triggerKindFromInt(int v) {
@@ -61,7 +61,9 @@ bool boolOr(const QJsonObject& obj, const char* field, bool fallback) {
 
 QJsonObject joystickRemapToJson(const JoystickRemap& remap) {
     QJsonArray buttons;
-    for (int i = 0; i < kRemapButtonCount; ++i) { buttons.append(remap.buttons[static_cast<std::size_t>(i)]); }
+    for (int i = 0; i < kRemapButtonCount; ++i) {
+        buttons.append(remap.buttons[static_cast<std::size_t>(i)]);
+    }
     return QJsonObject{
         {kFieldLsx, remap.leftStickX},
         {kFieldLsy, remap.leftStickY},
@@ -93,9 +95,11 @@ input::JoystickRemap joystickRemapFromJson(const QJsonValue& v) {
     remap.rightStickY = intOr(obj, kFieldRsy, remap.rightStickY);
     remap.invertLeftY = boolOr(obj, kFieldInvLy, remap.invertLeftY);
     remap.invertRightY = boolOr(obj, kFieldInvRy, remap.invertRightY);
-    remap.leftTrigger.kind = triggerKindFromInt(intOr(obj, kFieldLtKind, triggerKindToInt(remap.leftTrigger.kind)));
+    remap.leftTrigger.kind =
+        triggerKindFromInt(intOr(obj, kFieldLtKind, triggerKindToInt(remap.leftTrigger.kind)));
     remap.leftTrigger.index = intOr(obj, kFieldLtIdx, remap.leftTrigger.index);
-    remap.rightTrigger.kind = triggerKindFromInt(intOr(obj, kFieldRtKind, triggerKindToInt(remap.rightTrigger.kind)));
+    remap.rightTrigger.kind =
+        triggerKindFromInt(intOr(obj, kFieldRtKind, triggerKindToInt(remap.rightTrigger.kind)));
     remap.rightTrigger.index = intOr(obj, kFieldRtIdx, remap.rightTrigger.index);
     remap.hatIndex = intOr(obj, kFieldHat, remap.hatIndex);
     remap.useAdaptiveRightStick = boolOr(obj, kFieldAdaptRs, remap.useAdaptiveRightStick);
@@ -213,7 +217,8 @@ JoystickRemapMap JoystickRemapStore::hydrate(JoystickRemapRepository* repo) {
 JoystickRemapStore::JoystickRemapStore(JoystickRemapRepository* repo)
     : arch::StateSource<JoystickRemapMap>(hydrate(repo)), repo_(repo) {}
 
-std::optional<input::JoystickRemap> JoystickRemapStore::remapFor(int vendorId, int productId) const {
+std::optional<input::JoystickRemap> JoystickRemapStore::remapFor(int vendorId,
+                                                                 int productId) const {
     const auto& snapshot = state().value();
     const auto it = snapshot.find(joystickRemapKeyFor(vendorId, productId).toStdString());
     if (it == snapshot.end()) { return std::nullopt; }

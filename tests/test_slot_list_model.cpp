@@ -50,10 +50,9 @@ struct RowSpy {
                              firstRow = first;
                              lastRow = last;
                          });
-        QObject::connect(model, &QAbstractItemModel::dataChanged,
-                         [this](const QModelIndex&, const QModelIndex&, const QList<int>&) {
-                             ++changes;
-                         });
+        QObject::connect(
+            model, &QAbstractItemModel::dataChanged,
+            [this](const QModelIndex&, const QModelIndex&, const QList<int>&) { ++changes; });
     }
 };
 
@@ -159,8 +158,7 @@ TEST_CASE("SlotListModel: data maps a bound rich pad's roles", "[slotmodel][data
     REQUIRE(roleOf(model, 0, SlotListModel::PollHzShownRole).toBool());
 }
 
-TEST_CASE("SlotListModel: data maps an unbound plain pad's off-state roles",
-          "[slotmodel][data]") {
+TEST_CASE("SlotListModel: data maps an unbound plain pad's off-state roles", "[slotmodel][data]") {
     SlotListModel model;
     model.setState({plainSlot()});
 
@@ -282,8 +280,7 @@ TEST_CASE("SlotListModel: countChanged fires on a row-count delta, not a same-co
     model.setState({richSlot()});
 
     int countEmissions = 0;
-    QObject::connect(&model, &SlotListModel::countChanged,
-                     [&countEmissions] { ++countEmissions; });
+    QObject::connect(&model, &SlotListModel::countChanged, [&countEmissions] { ++countEmissions; });
 
     // Same count, a Hz moved -> dataChanged only, no countChanged.
     auto s = richSlot();
@@ -310,8 +307,7 @@ TEST_CASE("SlotListModel: out-of-range index returns an invalid variant", "[slot
 
 namespace r = dish::reducer;
 
-TEST_CASE("SlotListModel: path roles default to the inert unsupported state",
-          "[slotmodel][path]") {
+TEST_CASE("SlotListModel: path roles default to the inert unsupported state", "[slotmodel][path]") {
     // A plain slot carries no USB path entry -> the control is hidden and the
     // tokens read their defaults.
     SlotListModel model;
@@ -349,8 +345,9 @@ TEST_CASE("SlotListModel: claimInProgress is true exactly in the Claiming phase"
     REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "claiming");
 }
 
-TEST_CASE("SlotListModel: a Direct failure surfaces as a token; needsReplug/restoreStuck phases map",
-          "[slotmodel][path]") {
+TEST_CASE(
+    "SlotListModel: a Direct failure surfaces as a token; needsReplug/restoreStuck phases map",
+    "[slotmodel][path]") {
     SlotListModel model;
     auto s = plainSlot();
     s.pathSupported = true;

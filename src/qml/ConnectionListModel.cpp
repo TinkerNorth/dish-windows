@@ -87,8 +87,7 @@ int ConnectionListModel::rowCount(const QModelIndex& parent) const {
 }
 
 QVariant ConnectionListModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || index.row() < 0 ||
-        index.row() >= static_cast<int>(rows_.size())) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(rows_.size())) {
         return {};
     }
     const auto& r = rows_.at(static_cast<std::size_t>(index.row()));
@@ -121,15 +120,9 @@ QVariant ConnectionListModel::data(const QModelIndex& index, int role) const {
 
 QHash<int, QByteArray> ConnectionListModel::roleNames() const {
     return {
-        {IdRole, "connectionId"},
-        {LabelRole, "label"},
-        {IpRole, "ip"},
-        {UdpPortRole, "udpPort"},
-        {LinkStateRole, "linkState"},
-        {ChipRole, "chip"},
-        {DotColorRole, "dotColor"},
-        {GlyphRole, "glyph"},
-        {BoundSlotIdRole, "boundSlotId"},
+        {IdRole, "connectionId"},   {LabelRole, "label"},         {IpRole, "ip"},
+        {UdpPortRole, "udpPort"},   {LinkStateRole, "linkState"}, {ChipRole, "chip"},
+        {DotColorRole, "dotColor"}, {GlyphRole, "glyph"},         {BoundSlotIdRole, "boundSlotId"},
         {LiveLinkRole, "liveLink"},
     };
 }
@@ -151,13 +144,9 @@ void ConnectionListModel::setRows(const std::vector<composer::ConnectionRow>& ro
     }
 
     const int common = newCount < oldCount ? newCount : oldCount;
-    if (common > 0) {
-        emit dataChanged(index(0), index(common - 1));
-    }
+    if (common > 0) { emit dataChanged(index(0), index(common - 1)); }
 
-    if (oldCount != newCount) {
-        emit countChanged();
-    }
+    if (oldCount != newCount) { emit countChanged(); }
 }
 
 } // namespace dish::qml

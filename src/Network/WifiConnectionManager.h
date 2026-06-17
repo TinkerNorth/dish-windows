@@ -86,7 +86,7 @@ class WifiConnectionManager : public QObject {
 
     // Reverse-pairing state the QML sheet reads (folded through one NOTIFY).
     ReversePairingPhase reversePairingPhase() const { return reversePhase_; }
-    QString reversePairingPin() const { return reversePin_; }       // 4 digits to show
+    QString reversePairingPin() const { return reversePin_; } // 4 digits to show
     QString reversePairingServerName() const { return reverseServerName_; }
 
     void disconnect(const QString& id);

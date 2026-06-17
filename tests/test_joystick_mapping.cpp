@@ -263,7 +263,7 @@ TEST_CASE("default JoystickRemap matches the legacy mapJoystick overload", "[joy
     // A snapshot exercising sticks, both trigger paths, faces, shoulders,
     // system buttons, stick clicks, and a hat — fed through BOTH overloads.
     std::array<std::int16_t, 6> axes{1000, -2000, 24000, 3000, -4000, 16384};
-    std::array<bool, 12> buttons{true, false, true, false, true, true,
+    std::array<bool, 12> buttons{true, false, true,  false, true, true,
                                  true, true,  false, false, true, true};
     std::array<std::uint8_t, 1> hats{static_cast<std::uint8_t>(hat::kUp | hat::kRight)};
     auto snap = makeSnapshot(axes.data(), 6, buttons.data(), 12, hats.data(), 1);
@@ -329,7 +329,7 @@ TEST_CASE("remap moves a trigger from an axis to a button", "[joymap][remap]") {
 
 TEST_CASE("remap can unassign a button to neutral", "[joymap][remap]") {
     JoystickRemap remap{};
-    remap.buttons[static_cast<int>(RemapButton::A)] = -1; // unassigned
+    remap.buttons[static_cast<int>(RemapButton::A)] = -1;   // unassigned
     std::array<bool, 4> buttons{true, false, false, false}; // physical 0 down
     std::array<std::int16_t, 6> axes{};
     auto st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 4, nullptr, 0), remap);

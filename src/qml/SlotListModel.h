@@ -40,34 +40,34 @@ class SlotListModel : public QAbstractListModel {
     enum Roles {
         IdRole = Qt::UserRole + 1,
         NameRole,
-        BoundRole,            // bool: is the slot bound to a connection
+        BoundRole,             // bool: is the slot bound to a connection
         BoundConnectionIdRole, // QString: bound connection id ("" if unbound)
-        BoundLabelRole,       // QString: "Bound to X" / "Unbound"
-        LiveRole,             // bool: bound session is LinkState::Connected
-        DotColorRole,         // QString: semantic token name ("success"/"warning"/"muted")
-        UsbDirectRole,        // bool: synthetic USB-direct pad
-        RemappableRole,       // bool: raw joystick whose routing is user-remappable
+        BoundLabelRole,        // QString: "Bound to X" / "Unbound"
+        LiveRole,              // bool: bound session is LinkState::Connected
+        DotColorRole,          // QString: semantic token name ("success"/"warning"/"muted")
+        UsbDirectRole,         // bool: synthetic USB-direct pad
+        RemappableRole,        // bool: raw joystick whose routing is user-remappable
 
-        HasMotionRole,        // bool: hardware has a gyro/accelerometer
-        HasLightbarRole,      // bool: hardware has an addressable RGB LED
-        BatteryLevelRole,     // int: 0..100, or 255 (0xFF) when unknown
-        BatteryStatusRole,    // int: kBatteryStatus* wire constant
-        BatteryKnownRole,     // bool: batteryLevel != 0xFF (chip is shown)
+        HasMotionRole,     // bool: hardware has a gyro/accelerometer
+        HasLightbarRole,   // bool: hardware has an addressable RGB LED
+        BatteryLevelRole,  // int: 0..100, or 255 (0xFF) when unknown
+        BatteryStatusRole, // int: kBatteryStatus* wire constant
+        BatteryKnownRole,  // bool: batteryLevel != 0xFF (chip is shown)
 
-        GamepadHzRole,        // int: current/peak report Hz (per GamepadHzLiveRole)
-        GamepadHzLiveRole,    // bool: gamepad Hz is a live measurement (USB-direct)
-        GamepadHzShownRole,   // bool: gamepad rate chip is visible
-        MotionHzRole,         // int: IMU sample Hz (current or peak)
-        MotionHzShownRole,    // bool: motion rate chip is visible
-        PollHzRole,           // int: measured USB-direct poll Hz
-        PollHzShownRole,      // bool: poll rate chip is visible
+        GamepadHzRole,      // int: current/peak report Hz (per GamepadHzLiveRole)
+        GamepadHzLiveRole,  // bool: gamepad Hz is a live measurement (USB-direct)
+        GamepadHzShownRole, // bool: gamepad rate chip is visible
+        MotionHzRole,       // int: IMU sample Hz (current or peak)
+        MotionHzShownRole,  // bool: motion rate chip is visible
+        PollHzRole,         // int: measured USB-direct poll Hz
+        PollHzShownRole,    // bool: poll rate chip is visible
 
         // ── USB input-path state (the Standard/Direct control) ──────────────
-        PathPhaseRole,        // QString: FSM phase token ("routed"/"claiming"/...)
-        DesiredPathRole,      // QString: "standard"/"direct"/"auto"
-        PathSupportedRole,    // bool: device is raw-HID-claimable (control shown)
-        ClaimInProgressRole,  // bool: phase == claiming (spinner, control disabled)
-        DirectFailureRole,    // QString: last Direct-claim failure reason ("" if none)
+        PathPhaseRole,       // QString: FSM phase token ("routed"/"claiming"/...)
+        DesiredPathRole,     // QString: "standard"/"direct"/"auto"
+        PathSupportedRole,   // bool: device is raw-HID-claimable (control shown)
+        ClaimInProgressRole, // bool: phase == claiming (spinner, control disabled)
+        DirectFailureRole,   // QString: last Direct-claim failure reason ("" if none)
     };
     Q_ENUM(Roles)
 

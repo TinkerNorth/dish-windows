@@ -394,7 +394,8 @@ void SDLGamepadBridge::runLoop() {
             rebuildJoystickState(ev.jhat.which);
             // A hat registers only on a non-centered direction (a release to
             // center is not an assignment).
-            if (captureEnabled_.load(std::memory_order_relaxed) && captureHatPasses(ev.jhat.value)) {
+            if (captureEnabled_.load(std::memory_order_relaxed) &&
+                captureHatPasses(ev.jhat.value)) {
                 maybeEmitCapture(ev.jhat.which, static_cast<int>(CaptureKind::Hat), ev.jhat.hat,
                                  ev.jhat.value);
             }
@@ -801,9 +802,7 @@ void SDLGamepadBridge::rebuildJoystickState(int iid) {
     const int buttonCount = numButtons < kMaxButtons ? numButtons : kMaxButtons;
     const int hatCount = numHats < kMaxHats ? numHats : kMaxHats;
     for (int i = 0; i < axisCount; ++i) { axes[i] = SDL_JoystickGetAxis(js, i); }
-    for (int i = 0; i < buttonCount; ++i) {
-        buttons[i] = SDL_JoystickGetButton(js, i) != 0;
-    }
+    for (int i = 0; i < buttonCount; ++i) { buttons[i] = SDL_JoystickGetButton(js, i) != 0; }
     for (int i = 0; i < hatCount; ++i) { hats[i] = SDL_JoystickGetHat(js, i); }
 
     JoystickSnapshot snap{};

@@ -25,6 +25,7 @@ using dish::input::JoystickRemap;
 using dish::input::RemapButton;
 using dish::input::TriggerSource;
 using dish::input::TriggerSourceKind;
+using dish::reducer::PathChoice;
 using dish::source::JoystickRemapEntry;
 using dish::source::joystickRemapKeyFor;
 using dish::source::JoystickRemapMap;
@@ -32,7 +33,6 @@ using dish::source::JoystickRemapRepository;
 using dish::source::JoystickRemapStore;
 using dish::source::UsbPathPreferenceRepository;
 using dish::source::UsbPathPreferenceStore;
-using dish::reducer::PathChoice;
 using dish::test::makeSharedSettings;
 using dish::test::StateSourceProbe;
 

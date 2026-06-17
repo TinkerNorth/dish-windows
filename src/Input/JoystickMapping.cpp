@@ -98,22 +98,54 @@ JoystickRemap withAssignment(JoystickRemap base, RemapTarget target, int kind, i
     };
 
     switch (target) {
-    case RemapTarget::A: setButton(RemapButton::A); break;
-    case RemapTarget::B: setButton(RemapButton::B); break;
-    case RemapTarget::X: setButton(RemapButton::X); break;
-    case RemapTarget::Y: setButton(RemapButton::Y); break;
-    case RemapTarget::DpadUp: setDpad(RemapButton::DpadUp); break;
-    case RemapTarget::DpadDown: setDpad(RemapButton::DpadDown); break;
-    case RemapTarget::DpadLeft: setDpad(RemapButton::DpadLeft); break;
-    case RemapTarget::DpadRight: setDpad(RemapButton::DpadRight); break;
-    case RemapTarget::LeftShoulder: setButton(RemapButton::LeftShoulder); break;
-    case RemapTarget::RightShoulder: setButton(RemapButton::RightShoulder); break;
-    case RemapTarget::Back: setButton(RemapButton::Back); break;
-    case RemapTarget::Start: setButton(RemapButton::Start); break;
-    case RemapTarget::LeftThumb: setButton(RemapButton::LeftThumb); break;
-    case RemapTarget::RightThumb: setButton(RemapButton::RightThumb); break;
-    case RemapTarget::LeftStickX: base.leftStickX = index; break;
-    case RemapTarget::LeftStickY: base.leftStickY = index; break;
+    case RemapTarget::A:
+        setButton(RemapButton::A);
+        break;
+    case RemapTarget::B:
+        setButton(RemapButton::B);
+        break;
+    case RemapTarget::X:
+        setButton(RemapButton::X);
+        break;
+    case RemapTarget::Y:
+        setButton(RemapButton::Y);
+        break;
+    case RemapTarget::DpadUp:
+        setDpad(RemapButton::DpadUp);
+        break;
+    case RemapTarget::DpadDown:
+        setDpad(RemapButton::DpadDown);
+        break;
+    case RemapTarget::DpadLeft:
+        setDpad(RemapButton::DpadLeft);
+        break;
+    case RemapTarget::DpadRight:
+        setDpad(RemapButton::DpadRight);
+        break;
+    case RemapTarget::LeftShoulder:
+        setButton(RemapButton::LeftShoulder);
+        break;
+    case RemapTarget::RightShoulder:
+        setButton(RemapButton::RightShoulder);
+        break;
+    case RemapTarget::Back:
+        setButton(RemapButton::Back);
+        break;
+    case RemapTarget::Start:
+        setButton(RemapButton::Start);
+        break;
+    case RemapTarget::LeftThumb:
+        setButton(RemapButton::LeftThumb);
+        break;
+    case RemapTarget::RightThumb:
+        setButton(RemapButton::RightThumb);
+        break;
+    case RemapTarget::LeftStickX:
+        base.leftStickX = index;
+        break;
+    case RemapTarget::LeftStickY:
+        base.leftStickY = index;
+        break;
     case RemapTarget::RightStickX:
         base.rightStickX = index;
         base.useAdaptiveRightStick = false;
@@ -122,16 +154,24 @@ JoystickRemap withAssignment(JoystickRemap base, RemapTarget target, int kind, i
         base.rightStickY = index;
         base.useAdaptiveRightStick = false;
         break;
-    case RemapTarget::LeftTrigger: setTrigger(base.leftTrigger); break;
-    case RemapTarget::RightTrigger: setTrigger(base.rightTrigger); break;
+    case RemapTarget::LeftTrigger:
+        setTrigger(base.leftTrigger);
+        break;
+    case RemapTarget::RightTrigger:
+        setTrigger(base.rightTrigger);
+        break;
     }
     return base;
 }
 
 JoystickRemap withInvert(JoystickRemap base, InvertTarget which, bool on) {
     switch (which) {
-    case InvertTarget::LeftY: base.invertLeftY = on; break;
-    case InvertTarget::RightY: base.invertRightY = on; break;
+    case InvertTarget::LeftY:
+        base.invertLeftY = on;
+        break;
+    case InvertTarget::RightY:
+        base.invertRightY = on;
+        break;
     }
     return base;
 }
@@ -202,10 +242,10 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     // ── Hat → dpad ──────────────────────────────────────────────────────────
     // SDL_HAT_* is a bitmask so diagonals (e.g. up-right) set two dpad bits. A
     // negative hatIndex (or a pad with no hat) leaves the dpad clear.
-    const std::uint8_t h = (remap.hatIndex >= 0 && snap.hats != nullptr &&
-                            remap.hatIndex < snap.hatCount)
-                               ? snap.hats[remap.hatIndex]
-                               : hat::kCentered;
+    const std::uint8_t h =
+        (remap.hatIndex >= 0 && snap.hats != nullptr && remap.hatIndex < snap.hatCount)
+            ? snap.hats[remap.hatIndex]
+            : hat::kCentered;
     if ((h & hat::kUp) != 0) { btn |= B::kDpadUp; }
     if ((h & hat::kDown) != 0) { btn |= B::kDpadDown; }
     if ((h & hat::kLeft) != 0) { btn |= B::kDpadLeft; }

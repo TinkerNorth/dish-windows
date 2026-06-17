@@ -92,8 +92,8 @@ TEST_CASE("connectByServerId/pairByServerId resolve on the stable machineId-pref
     // The id-based invokables match a server by DiscoveredServer::id() (the same
     // key the Widgets onConnectClicked matches), NOT a list index — so a reorder
     // of discoveredServers() between read and call can't connect the wrong box.
-    const auto withMid = sat(QStringLiteral("m1"), QStringLiteral("10.0.0.9"),
-                             DiscoverySource::Broadcast);
+    const auto withMid =
+        sat(QStringLiteral("m1"), QStringLiteral("10.0.0.9"), DiscoverySource::Broadcast);
     CHECK(withMid.id() == QStringLiteral("mid:m1")); // machineId-preferring
 
     // Two servers that differ only by IP but share a machineId collapse to the

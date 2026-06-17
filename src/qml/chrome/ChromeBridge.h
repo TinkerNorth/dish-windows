@@ -29,7 +29,7 @@ class ChromeBridge : public QObject {
     // we paint the solid light Theme.background instead.
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
 
-public:
+  public:
     explicit ChromeBridge(QObject* parent = nullptr);
 
     bool micaActive() const { return m_micaActive; }
@@ -43,11 +43,11 @@ public:
     Q_INVOKABLE void setCaptionRect(const QRect& rect);
     Q_INVOKABLE void setMaximizeButtonRect(const QRect& rect);
 
-signals:
+  signals:
     void micaActiveChanged();
     void darkChanged();
 
-private:
+  private:
     FramelessWindowChrome* m_chrome = nullptr;
     bool m_micaActive = false;
     bool m_dark = true; // app defaults to the dark palette

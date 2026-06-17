@@ -92,8 +92,7 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
     case BoundLabelRole:
         return s.boundStatus.has_value() ? s.boundStatus->label : QString();
     case LiveRole:
-        return s.boundStatus.has_value() &&
-               s.boundStatus->live == models::LinkState::Connected;
+        return s.boundStatus.has_value() && s.boundStatus->live == models::LinkState::Connected;
     case DotColorRole:
         return dotColorToken(s);
     case UsbDirectRole:
@@ -223,13 +222,9 @@ void SlotListModel::setState(const QList<models::ControllerSlot>& slotList) {
     // binding re-reads any role whose value moved. Cheap for the handful of
     // slots a machine ever has, and correct without a per-role diff.
     const int common = newCount < oldCount ? newCount : oldCount;
-    if (common > 0) {
-        emit dataChanged(index(0), index(common - 1));
-    }
+    if (common > 0) { emit dataChanged(index(0), index(common - 1)); }
 
-    if (oldCount != newCount) {
-        emit countChanged();
-    }
+    if (oldCount != newCount) { emit countChanged(); }
 }
 
 } // namespace dish::qml

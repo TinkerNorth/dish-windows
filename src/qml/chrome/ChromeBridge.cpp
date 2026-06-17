@@ -10,31 +10,23 @@ namespace dish::chrome {
 ChromeBridge::ChromeBridge(QObject* parent) : QObject(parent) {}
 
 void ChromeBridge::setMicaActive(bool active) {
-    if (m_micaActive == active) {
-        return;
-    }
+    if (m_micaActive == active) { return; }
     m_micaActive = active;
     emit micaActiveChanged();
 }
 
 void ChromeBridge::setDark(bool dark) {
-    if (m_dark == dark) {
-        return;
-    }
+    if (m_dark == dark) { return; }
     m_dark = dark;
     emit darkChanged();
 }
 
 void ChromeBridge::setCaptionRect(const QRect& rect) {
-    if (m_chrome) {
-        m_chrome->setCaptionRect(rect);
-    }
+    if (m_chrome) { m_chrome->setCaptionRect(rect); }
 }
 
 void ChromeBridge::setMaximizeButtonRect(const QRect& rect) {
-    if (m_chrome) {
-        m_chrome->setMaximizeButtonRect(rect);
-    }
+    if (m_chrome) { m_chrome->setMaximizeButtonRect(rect); }
 }
 
 } // namespace dish::chrome

@@ -145,11 +145,20 @@ struct JoystickRemap {
     // 0-3, shoulders 4/5, back/start 6/7, stick clicks 10/11. Dpad entries
     // default to -1 because the dpad comes from the HAT, not a button (a remap
     // MAY route a dpad direction to a button instead).
-    std::array<int, kRemapButtonCount> buttons{
-        /*DpadUp*/ -1,        /*DpadDown*/ -1, /*DpadLeft*/ -1, /*DpadRight*/ -1,
-        /*Start*/ 7,          /*Back*/ 6,      /*LeftThumb*/ 10, /*RightThumb*/ 11,
-        /*LeftShoulder*/ 4,   /*RightShoulder*/ 5,
-        /*A*/ 0,              /*B*/ 1,         /*X*/ 2,         /*Y*/ 3};
+    std::array<int, kRemapButtonCount> buttons{/*DpadUp*/ -1,
+                                               /*DpadDown*/ -1,
+                                               /*DpadLeft*/ -1,
+                                               /*DpadRight*/ -1,
+                                               /*Start*/ 7,
+                                               /*Back*/ 6,
+                                               /*LeftThumb*/ 10,
+                                               /*RightThumb*/ 11,
+                                               /*LeftShoulder*/ 4,
+                                               /*RightShoulder*/ 5,
+                                               /*A*/ 0,
+                                               /*B*/ 1,
+                                               /*X*/ 2,
+                                               /*Y*/ 3};
 
     int hatIndex = 0; // raw hat index that drives the dpad (-1 = no hat dpad)
 

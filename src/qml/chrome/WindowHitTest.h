@@ -73,11 +73,9 @@ constexpr HitRegion hitTest(const HitTestInput& in) {
     const int x = in.cursor.x;
     const int y = in.cursor.y;
 
-    const bool inside = x >= in.window.left && x < in.window.right &&
-                        y >= in.window.top && y < in.window.bottom;
-    if (!inside) {
-        return HitRegion::Client;
-    }
+    const bool inside =
+        x >= in.window.left && x < in.window.right && y >= in.window.top && y < in.window.bottom;
+    if (!inside) { return HitRegion::Client; }
 
     if (!in.maximized && in.resizeBorder > 0) {
         const bool nearLeft = x < in.window.left + in.resizeBorder;
@@ -85,43 +83,23 @@ constexpr HitRegion hitTest(const HitTestInput& in) {
         const bool nearTop = y < in.window.top + in.resizeBorder;
         const bool nearBottom = y >= in.window.bottom - in.resizeBorder;
 
-        if (nearTop && nearLeft) {
-            return HitRegion::TopLeft;
-        }
-        if (nearTop && nearRight) {
-            return HitRegion::TopRight;
-        }
-        if (nearBottom && nearLeft) {
-            return HitRegion::BottomLeft;
-        }
-        if (nearBottom && nearRight) {
-            return HitRegion::BottomRight;
-        }
-        if (nearLeft) {
-            return HitRegion::Left;
-        }
-        if (nearRight) {
-            return HitRegion::Right;
-        }
-        if (nearTop) {
-            return HitRegion::Top;
-        }
-        if (nearBottom) {
-            return HitRegion::Bottom;
-        }
+        if (nearTop && nearLeft) { return HitRegion::TopLeft; }
+        if (nearTop && nearRight) { return HitRegion::TopRight; }
+        if (nearBottom && nearLeft) { return HitRegion::BottomLeft; }
+        if (nearBottom && nearRight) { return HitRegion::BottomRight; }
+        if (nearLeft) { return HitRegion::Left; }
+        if (nearRight) { return HitRegion::Right; }
+        if (nearTop) { return HitRegion::Top; }
+        if (nearBottom) { return HitRegion::Bottom; }
     }
 
     const bool inMaximize = x >= in.maximizeButton.left && x < in.maximizeButton.right &&
                             y >= in.maximizeButton.top && y < in.maximizeButton.bottom;
-    if (inMaximize) {
-        return HitRegion::MaximizeButton;
-    }
+    if (inMaximize) { return HitRegion::MaximizeButton; }
 
-    const bool inCaption = x >= in.caption.left && x < in.caption.right &&
-                           y >= in.caption.top && y < in.caption.bottom;
-    if (inCaption) {
-        return HitRegion::Caption;
-    }
+    const bool inCaption = x >= in.caption.left && x < in.caption.right && y >= in.caption.top &&
+                           y < in.caption.bottom;
+    if (inCaption) { return HitRegion::Caption; }
 
     return HitRegion::Client;
 }
@@ -131,8 +109,6 @@ constexpr HitRegion hitTest(const HitTestInput& in) {
 // attributes used for those are unsupported/no-ops or misbehave, so the caller
 // must fall back to a solid background and skip them. Build numbers below the
 // threshold (all of Windows 10) return false; 22000 and up return true.
-constexpr bool isWin11OrLater(unsigned long buildNumber) {
-    return buildNumber >= 22000UL;
-}
+constexpr bool isWin11OrLater(unsigned long buildNumber) { return buildNumber >= 22000UL; }
 
 } // namespace dish::chrome

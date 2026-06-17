@@ -12,8 +12,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 using dish::chrome::HitRegion;
-using dish::chrome::HitTestInput;
 using dish::chrome::hitTest;
+using dish::chrome::HitTestInput;
 using dish::chrome::isWin11OrLater;
 using dish::chrome::Point;
 using dish::chrome::Rect;
@@ -121,8 +121,7 @@ TEST_CASE("zero resize border behaves like no resize frame", "[hittest]") {
     CHECK(hitTest(in) == HitRegion::Caption);
 }
 
-TEST_CASE("maximize-button rect outside the caption still wins over client",
-          "[hittest]") {
+TEST_CASE("maximize-button rect outside the caption still wins over client", "[hittest]") {
     // Defensive: a button placed below the caption strip should still be a
     // maximize hit (the button check is independent of the caption check).
     HitTestInput in = make(620, 100);
@@ -134,14 +133,14 @@ TEST_CASE("maximize-button rect outside the caption still wins over client",
 // ── Win11 version gate ──────────────────────────────────────────────────────
 
 TEST_CASE("Win11 gate: 22000 boundary", "[win11gate]") {
-    CHECK_FALSE(isWin11OrLater(21999));  // last Windows 10 insider build
-    CHECK(isWin11OrLater(22000));        // Windows 11 RTM
-    CHECK(isWin11OrLater(22621));        // Win11 22H2
-    CHECK(isWin11OrLater(26100));        // Win11 24H2
+    CHECK_FALSE(isWin11OrLater(21999)); // last Windows 10 insider build
+    CHECK(isWin11OrLater(22000));       // Windows 11 RTM
+    CHECK(isWin11OrLater(22621));       // Win11 22H2
+    CHECK(isWin11OrLater(26100));       // Win11 24H2
 }
 
 TEST_CASE("Win11 gate: Windows 10 builds are false", "[win11gate]") {
     CHECK_FALSE(isWin11OrLater(0));
-    CHECK_FALSE(isWin11OrLater(10240));  // Win10 1507
-    CHECK_FALSE(isWin11OrLater(19045));  // Win10 22H2
+    CHECK_FALSE(isWin11OrLater(10240)); // Win10 1507
+    CHECK_FALSE(isWin11OrLater(19045)); // Win10 22H2
 }

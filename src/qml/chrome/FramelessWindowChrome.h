@@ -33,7 +33,7 @@ namespace dish::chrome {
 // hit-test. Lifetime: owned by the caller (main.cpp), outliving the window.
 class FramelessWindowChrome : public QObject, public QAbstractNativeEventFilter {
     Q_OBJECT
-public:
+  public:
     explicit FramelessWindowChrome(QWindow* window, QObject* parent = nullptr);
     ~FramelessWindowChrome() override;
 
@@ -48,15 +48,14 @@ public:
     // (the "Mica resolved light" mismatch). No-op on pre-Win11.
     void setImmersiveDarkMode(bool dark);
 
-    bool nativeEventFilter(const QByteArray& eventType, void* message,
-                           qintptr* result) override;
+    bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) override;
 
-public slots:
+  public slots:
     // The QML title bar publishes its geometry (logical px, window-local) here.
     void setCaptionRect(const QRect& rect);
     void setMaximizeButtonRect(const QRect& rect);
 
-private:
+  private:
     QWindow* m_window = nullptr;
     QRect m_captionRect;        // logical px
     QRect m_maximizeButtonRect; // logical px

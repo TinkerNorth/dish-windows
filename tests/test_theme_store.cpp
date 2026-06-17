@@ -269,8 +269,7 @@ void applyResolved(ThemeMode mode, Appearance systemReading) {
 
 } // namespace
 
-TEST_CASE("active Theme tokens match the resolved appearance after startup",
-          "[settings][theme]") {
+TEST_CASE("active Theme tokens match the resolved appearance after startup", "[settings][theme]") {
     SECTION("System + OS dark -> dark tokens (the reported repro)") {
         applyResolved(ThemeMode::System, Appearance::Dark);
         REQUIRE(dish::ui::activeAppearance() == Appearance::Dark);

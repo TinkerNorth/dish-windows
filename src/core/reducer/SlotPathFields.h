@@ -99,8 +99,8 @@ inline SlotPathFields slotPathFields(int vendorId, int productId,
 //     comes in a moment later"); Standard wants the synthetic gone.
 // A terminal failure / RestoreStuck / NeedsReplug is NOT switching — those surface
 // an error note, never a perpetual spinner.
-inline bool slotPathSwitching(UsbPhase phase, PathChoice desired, bool usbDirect,
-                              int directPollHz, bool hasFailure) {
+inline bool slotPathSwitching(UsbPhase phase, PathChoice desired, bool usbDirect, int directPollHz,
+                              bool hasFailure) {
     if (phase == UsbPhase::RestoreStuck || phase == UsbPhase::NeedsReplug) { return false; }
     if (hasFailure) { return false; }
     if (phase == UsbPhase::Claiming || phase == UsbPhase::AwaitingFramework) { return true; }

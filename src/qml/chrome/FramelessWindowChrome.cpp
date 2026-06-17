@@ -25,9 +25,7 @@ namespace dish::chrome {
 
 namespace {
 
-HWND hwndOf(QWindow* window) {
-    return window ? reinterpret_cast<HWND>(window->winId()) : nullptr;
-}
+HWND hwndOf(QWindow* window) { return window ? reinterpret_cast<HWND>(window->winId()) : nullptr; }
 
 // Read the OS build number via RtlGetVersion. GetVersionEx lies (it caps at
 // 6.2 unless the app manifests compatibility), and VerifyVersionInfo is
@@ -36,13 +34,10 @@ HWND hwndOf(QWindow* window) {
 unsigned long osBuildNumber() {
     using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
     if (HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll")) {
-        if (auto fn = reinterpret_cast<RtlGetVersionFn>(
-                ::GetProcAddress(ntdll, "RtlGetVersion"))) {
+        if (auto fn = reinterpret_cast<RtlGetVersionFn>(::GetProcAddress(ntdll, "RtlGetVersion"))) {
             RTL_OSVERSIONINFOW info{};
             info.dwOSVersionInfoSize = sizeof(info);
-            if (fn(&info) == 0) {
-                return info.dwBuildNumber;
-            }
+            if (fn(&info) == 0) { return info.dwBuildNumber; }
         }
     }
     return 0;
@@ -51,8 +46,7 @@ unsigned long osBuildNumber() {
 // Scale a logical-pixel window-local rect to physical pixels for the native
 // hit-test, which works in device pixels.
 Rect toPhysical(const QRect& logical, qreal dpr) {
-    return Rect{static_cast<int>(logical.left() * dpr),
-                static_cast<int>(logical.top() * dpr),
+    return Rect{static_cast<int>(logical.left() * dpr), static_cast<int>(logical.top() * dpr),
                 static_cast<int>(logical.right() * dpr) + 1,
                 static_cast<int>(logical.bottom() * dpr) + 1};
 }
@@ -64,9 +58,7 @@ FramelessWindowChrome::FramelessWindowChrome(QWindow* window, QObject* parent)
 
 FramelessWindowChrome::~FramelessWindowChrome() = default;
 
-void FramelessWindowChrome::setCaptionRect(const QRect& rect) {
-    m_captionRect = rect;
-}
+void FramelessWindowChrome::setCaptionRect(const QRect& rect) { m_captionRect = rect; }
 
 void FramelessWindowChrome::setMaximizeButtonRect(const QRect& rect) {
     m_maximizeButtonRect = rect;
@@ -74,9 +66,7 @@ void FramelessWindowChrome::setMaximizeButtonRect(const QRect& rect) {
 
 bool FramelessWindowChrome::applyMicaBackdrop() {
     HWND hwnd = hwndOf(m_window);
-    if (!hwnd) {
-        return false;
-    }
+    if (!hwnd) { return false; }
     if (!isWin11OrLater(osBuildNumber())) {
         // Pre-Win11: the backdrop + dark-mode attributes are unsupported and the
         // immersive-dark attribute had a different (reserved) id on early builds.
@@ -104,23 +94,17 @@ bool FramelessWindowChrome::applyMicaBackdrop() {
 
 void FramelessWindowChrome::setImmersiveDarkMode(bool dark) {
     HWND hwnd = hwndOf(m_window);
-    if (!hwnd || !isWin11OrLater(osBuildNumber())) {
-        return;
-    }
+    if (!hwnd || !isWin11OrLater(osBuildNumber())) { return; }
     const BOOL value = dark ? TRUE : FALSE;
     ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 }
 
-bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType,
-                                              void* message, qintptr* result) {
-    if (eventType != QByteArrayLiteral("windows_generic_MSG")) {
-        return false;
-    }
+bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType, void* message,
+                                              qintptr* result) {
+    if (eventType != QByteArrayLiteral("windows_generic_MSG")) { return false; }
     auto* msg = static_cast<MSG*>(message);
     HWND target = hwndOf(m_window);
-    if (!target || msg->hwnd != target) {
-        return false;
-    }
+    if (!target || msg->hwnd != target) { return false; }
 
     switch (msg->message) {
     case WM_NCCALCSIZE: {
@@ -157,19 +141,41 @@ bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType,
         in.maximized = maximized;
 
         switch (hitTest(in)) {
-        case HitRegion::Caption:        *result = HTCAPTION; break;
+        case HitRegion::Caption:
+            *result = HTCAPTION;
+            break;
         // HTMAXBUTTON is what makes Win11 pop the Snap Layouts flyout over a
         // custom maximize button — HTCLIENT or a plain HTCAPTION never will.
-        case HitRegion::MaximizeButton: *result = HTMAXBUTTON; break;
-        case HitRegion::Left:           *result = HTLEFT; break;
-        case HitRegion::Right:          *result = HTRIGHT; break;
-        case HitRegion::Top:            *result = HTTOP; break;
-        case HitRegion::Bottom:         *result = HTBOTTOM; break;
-        case HitRegion::TopLeft:        *result = HTTOPLEFT; break;
-        case HitRegion::TopRight:       *result = HTTOPRIGHT; break;
-        case HitRegion::BottomLeft:     *result = HTBOTTOMLEFT; break;
-        case HitRegion::BottomRight:    *result = HTBOTTOMRIGHT; break;
-        case HitRegion::Client:         *result = HTCLIENT; break;
+        case HitRegion::MaximizeButton:
+            *result = HTMAXBUTTON;
+            break;
+        case HitRegion::Left:
+            *result = HTLEFT;
+            break;
+        case HitRegion::Right:
+            *result = HTRIGHT;
+            break;
+        case HitRegion::Top:
+            *result = HTTOP;
+            break;
+        case HitRegion::Bottom:
+            *result = HTBOTTOM;
+            break;
+        case HitRegion::TopLeft:
+            *result = HTTOPLEFT;
+            break;
+        case HitRegion::TopRight:
+            *result = HTTOPRIGHT;
+            break;
+        case HitRegion::BottomLeft:
+            *result = HTBOTTOMLEFT;
+            break;
+        case HitRegion::BottomRight:
+            *result = HTBOTTOMRIGHT;
+            break;
+        case HitRegion::Client:
+            *result = HTCLIENT;
+            break;
         }
         return true;
     }

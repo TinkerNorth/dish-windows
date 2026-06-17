@@ -84,17 +84,13 @@ int runQmlApp(dish::AppModel& model) {
         &engine, &QQmlApplicationEngine::objectCreated, qApp,
         [bridge, chromeHolder](QObject* obj, const QUrl&) {
             auto* window = qobject_cast<QQuickWindow*>(obj);
-            if (!window) {
-                return;
-            }
+            if (!window) { return; }
             // The chrome filter outlives the window (parented to the app). Mica
             // + the native hit-test attach once the platform window exists.
             auto* chrome = new dish::chrome::FramelessWindowChrome(window, qApp);
             *chromeHolder = chrome;
             qApp->installNativeEventFilter(chrome);
-            if (bridge) {
-                bridge->setChrome(chrome);
-            }
+            if (bridge) { bridge->setChrome(chrome); }
             const bool mica = chrome->applyMicaBackdrop();
             // Push the resolved STARTUP appearance so a persisted Light mode paints
             // the solid light background + light chrome from the first frame. The
@@ -121,23 +117,17 @@ int runQmlApp(dish::AppModel& model) {
     // After a theme change: re-read the C++ tokens into the QML Theme singleton
     // and flip the native chrome's immersive-dark attribute so the frame matches.
     appVm.setThemeAppliedSink([themeBridge, chromeHolder, bridge](bool dark) {
-        if (themeBridge) {
-            themeBridge->refresh();
-        }
+        if (themeBridge) { themeBridge->refresh(); }
         if (bridge) {
             // Drives Main.qml's transparent-vs-solid background: a light app over
             // a dark desktop must not keep the dark Mica backdrop showing through.
             bridge->setDark(dark);
         }
-        if (*chromeHolder) {
-            (*chromeHolder)->setImmersiveDarkMode(dark);
-        }
+        if (*chromeHolder) { (*chromeHolder)->setImmersiveDarkMode(dark); }
     });
 
     engine.loadFromModule(QStringLiteral("Dish.Chrome"), QStringLiteral("Main"));
-    if (engine.rootObjects().isEmpty()) {
-        return 1;
-    }
+    if (engine.rootObjects().isEmpty()) { return 1; }
 
     return QGuiApplication::exec();
 }

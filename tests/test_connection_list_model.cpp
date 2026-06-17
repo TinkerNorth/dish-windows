@@ -46,10 +46,9 @@ struct RowSpy {
                              firstRow = first;
                              lastRow = last;
                          });
-        QObject::connect(model, &QAbstractItemModel::dataChanged,
-                         [this](const QModelIndex&, const QModelIndex&, const QList<int>&) {
-                             ++changes;
-                         });
+        QObject::connect(
+            model, &QAbstractItemModel::dataChanged,
+            [this](const QModelIndex&, const QModelIndex&, const QList<int>&) { ++changes; });
     }
 };
 
@@ -108,8 +107,7 @@ TEST_CASE("ConnectionListModel: rowCount tracks the pushed rows", "[connmodel][r
     REQUIRE(model.rowCount() == 1);
 }
 
-TEST_CASE("ConnectionListModel: data maps a connected row's roles + tokens",
-          "[connmodel][data]") {
+TEST_CASE("ConnectionListModel: data maps a connected row's roles + tokens", "[connmodel][data]") {
     ConnectionListModel model;
     model.setRows({connectedRow()});
 

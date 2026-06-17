@@ -35,7 +35,7 @@ class ThemeBridge : public QObject {
     Q_PROPERTY(QColor error READ error NOTIFY paletteChanged)
     Q_PROPERTY(QColor warning READ warning NOTIFY paletteChanged)
 
-public:
+  public:
     explicit ThemeBridge(QObject* parent = nullptr);
 
     QColor background() const;
@@ -53,7 +53,7 @@ public:
     // the palette). Every token property re-evaluates off the one paletteChanged.
     Q_INVOKABLE void refresh();
 
-signals:
+  signals:
     void paletteChanged();
 };
 

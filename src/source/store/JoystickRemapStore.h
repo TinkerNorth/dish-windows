@@ -54,9 +54,7 @@ struct JoystickRemapEntry {
     QString key;
     input::JoystickRemap remap;
 
-    bool operator==(const JoystickRemapEntry& o) const {
-        return key == o.key && remap == o.remap;
-    }
+    bool operator==(const JoystickRemapEntry& o) const { return key == o.key && remap == o.remap; }
     bool operator!=(const JoystickRemapEntry& o) const { return !(*this == o); }
 };
 

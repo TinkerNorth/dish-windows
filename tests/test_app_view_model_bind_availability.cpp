@@ -69,8 +69,7 @@ QList<ConnectionSummary> availableForSlot(const QList<ConnectionSummary>& connec
 
 } // namespace
 
-TEST_CASE("bind availability: a connection bound to ANOTHER slot is excluded",
-          "[appvm][bind]") {
+TEST_CASE("bind availability: a connection bound to ANOTHER slot is excluded", "[appvm][bind]") {
     // s:other is online but already routed to slot-B; the picker for slot-A must
     // not offer it (the Widgets `available` filter the QML page was missing).
     const QList<ConnectionSummary> connections{
@@ -103,8 +102,8 @@ TEST_CASE("bind availability: the slot's OWN binding is held over even when offl
         conn("s:mine", LinkState::Saved, QStringLiteral("slot-A")),
         conn("s:free", LinkState::Connected)};
 
-    const auto visible = availableForSlot(connections, QStringLiteral("slot-A"),
-                                          std::optional<QString>("s:mine"));
+    const auto visible =
+        availableForSlot(connections, QStringLiteral("slot-A"), std::optional<QString>("s:mine"));
     // Both: the live unbound one AND the slot's offline holdover.
     REQUIRE(ids(visible) == QList<QString>({"s:mine", "s:free"}));
 }
@@ -115,12 +114,12 @@ TEST_CASE("bind availability: excluded-elsewhere + included-unbound + held-over 
     // dropped, an unbound-available one is offered, and slot-A's own offline
     // binding survives.
     const QList<ConnectionSummary> connections{
-        conn("s:mine", LinkState::Saved, QStringLiteral("slot-A")),     // own holdover (offline)
+        conn("s:mine", LinkState::Saved, QStringLiteral("slot-A")), // own holdover (offline)
         conn("s:elsewhere", LinkState::Connected, QStringLiteral("slot-B")), // bound elsewhere
-        conn("s:free", LinkState::Connected),                          // unbound + available
-        conn("s:offline", LinkState::Saved)};                          // unbound + offline
+        conn("s:free", LinkState::Connected),                                // unbound + available
+        conn("s:offline", LinkState::Saved)};                                // unbound + offline
 
-    const auto visible = availableForSlot(connections, QStringLiteral("slot-A"),
-                                          std::optional<QString>("s:mine"));
+    const auto visible =
+        availableForSlot(connections, QStringLiteral("slot-A"), std::optional<QString>("s:mine"));
     REQUIRE(ids(visible) == QList<QString>({"s:mine", "s:free"}));
 }

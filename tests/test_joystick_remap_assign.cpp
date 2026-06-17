@@ -151,7 +151,8 @@ TEST_CASE("withAssignment dpad via hat vs via button", "[remap][assign]") {
 
     std::array<bool, 12> buttons{};
     buttons[11] = true;
-    auto btnSnap = makeSnap(nullptr, 0, buttons.data(), static_cast<int>(buttons.size()), nullptr, 0);
+    auto btnSnap =
+        makeSnap(nullptr, 0, buttons.data(), static_cast<int>(buttons.size()), nullptr, 0);
     const auto btnSt = mapJoystick(btnSnap, viaBtn);
     REQUIRE((btnSt.wButtons & B::kDpadDown) != 0);
 }
