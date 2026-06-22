@@ -5,6 +5,8 @@
 
 #include "AppModel.h"
 #include "ConnectionsDialog.h"
+#include "DeadzoneSettingsView.h"
+#include "EmulatePicker.h"
 #include "Network/ConnectionHub.h"
 #include "Network/WifiConnectionManager.h"
 #include "NotificationQueue.h"
@@ -13,7 +15,14 @@
 #include "SettingsDialog.h"
 #include "SlotCard.h"
 #include "Theme.h"
+#include "ui/donate/DonatePill.h"
+#include "ui/donate/DonateView.h"
+#include "ui/licenses/LicensesView.h"
+#include "ui/onboarding/HelpView.h"
+#include "ui/onboarding/SetupWizardView.h"
+#include "ui/onboarding/WelcomeDialog.h"
 
+#include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QProgressBar>
@@ -45,8 +54,14 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     statusText_->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));
     settingsButton_ = new QPushButton(tr("Settings"), central);
     manageButton_ = new QPushButton(tr("Manage"), central);
+    // Dismissible "support Dish" pill (Workstream 3b). Self-hides if dismissed
+    // within the last 24h (checked in its ctor); tapping opens the donate screen
+    // (wired below). Docked in the header so it's visible without floating-overlay
+    // plumbing.
+    donatePill_ = new DonatePill(nullptr, central);
     headerRow->addWidget(statusDot_, 0, Qt::AlignVCenter);
     headerRow->addWidget(statusText_, 1, Qt::AlignVCenter);
+    headerRow->addWidget(donatePill_, 0, Qt::AlignVCenter);
     headerRow->addWidget(settingsButton_, 0, Qt::AlignVCenter);
     headerRow->addWidget(manageButton_, 0, Qt::AlignVCenter);
 
@@ -132,6 +147,9 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
     QObject::connect(model_, &AppModel::errorMessage, notifications_,
                      &NotificationQueue::postError);
 
+    // The donate pill is wired below (its widget was created in the header row).
+    QObject::connect(donatePill_, &DonatePill::openRequested, this, &MainWindow::openDonate);
+
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
     QObject::connect(telemetryTimer_, &QTimer::timeout, this, &MainWindow::onTelemetryTick);
@@ -139,6 +157,11 @@ MainWindow::MainWindow(AppModel* model, QWidget* parent) : QMainWindow(parent), 
 
     onStateChanged();
     onTelemetryTick();
+
+    // First-run onboarding gate (Workstream 3a). Deferred to the next event-loop
+    // turn so the dashboard is painted behind the modal welcome pager. Shown only
+    // when the welcome flow hasn't been completed.
+    QTimer::singleShot(0, this, &MainWindow::maybeShowOnboarding);
 }
 
 void MainWindow::onStateChanged() {
@@ -186,6 +209,18 @@ void MainWindow::rebuildHeader() {
 }
 
 void MainWindow::rebuildSlotList() {
+    // Coalesce a re-entrant rebuild rather than recursing into the card teardown
+    // (see rebuildingSlots_ in the header). A stateChanged delivered while we're
+    // mid-rebuild — e.g. a 1 Hz timer tick pumped during widget deletion — sets
+    // the pending flag and returns; the outer call re-runs once on unwind so the
+    // final card set reflects the latest state without ever deleting a card from
+    // inside its own rebuild.
+    if (rebuildingSlots_) {
+        slotRebuildPending_ = true;
+        return;
+    }
+    rebuildingSlots_ = true;
+
     // Note: Qt's `slots` keyword/macro precludes naming a local `slots`.
     const auto& slotItems = model_->state().slotList;
     const auto& conns = model_->state().connections;
@@ -214,7 +249,14 @@ void MainWindow::rebuildSlotList() {
         card->setSlot(s, available);
         QObject::connect(card, &SlotCard::bindRequested, this, &MainWindow::onBindRequested);
         QObject::connect(card, &SlotCard::unbindRequested, this, &MainWindow::onUnbindRequested);
+        QObject::connect(card, &SlotCard::emulateRequested, this, &MainWindow::onEmulateRequested);
         slotsLayout_->insertWidget(slotsLayout_->count() - 1, card);
+    }
+
+    rebuildingSlots_ = false;
+    if (slotRebuildPending_) {
+        slotRebuildPending_ = false;
+        rebuildSlotList();
     }
 }
 
@@ -245,7 +287,73 @@ void MainWindow::onManageClicked() {
 }
 
 void MainWindow::onSettingsClicked() {
-    SettingsDialog dlg(model_->featureSettings(), this);
+    SettingsDialog dlg(model_->featureSettings(), model_->themeStore(), model_->crashStore(),
+                       notifications_, this);
+    // Open the per-device dead-zone / motion page on request (Workstream 2d).
+    QObject::connect(&dlg, &SettingsDialog::deadzonesRequested, this,
+                     &MainWindow::onDeadzonesClicked);
+    // Setup wizard / help / licenses / donate (Workstreams 3a / 3b / 3c).
+    QObject::connect(&dlg, &SettingsDialog::setupWizardRequested, this,
+                     &MainWindow::openSetupWizard);
+    QObject::connect(&dlg, &SettingsDialog::helpRequested, this, &MainWindow::openHelp);
+    QObject::connect(&dlg, &SettingsDialog::licensesRequested, this, &MainWindow::openLicenses);
+    QObject::connect(&dlg, &SettingsDialog::donateRequested, this, &MainWindow::openDonate);
+    dlg.exec();
+}
+
+void MainWindow::openSetupWizard() {
+    SetupWizardView wizard(model_->onboardingStore(), this);
+    wizard.exec();
+}
+
+void MainWindow::openHelp() {
+    HelpView help(notifications_, this);
+    // The Help "Run setup" card relaunches the wizard.
+    QObject::connect(&help, &HelpView::runSetupRequested, this, &MainWindow::openSetupWizard);
+    help.exec();
+}
+
+void MainWindow::openLicenses() {
+    LicensesView view(notifications_, this);
+    view.exec();
+}
+
+void MainWindow::openDonate() {
+    DonateView view(notifications_, this);
+    view.exec();
+}
+
+void MainWindow::maybeShowOnboarding() {
+    // First-run gate: show the welcome pager only when the welcome flow hasn't
+    // been completed. The pager's launch CTA flows into the setup wizard; Skip /
+    // final-Next mark complete and fall through to the dashboard.
+    if (model_->onboardingStore()->welcomeCompleted()) { return; }
+    WelcomeDialog welcome(model_->onboardingStore(), notifications_, this);
+    bool launchWizard = false;
+    QObject::connect(&welcome, &WelcomeDialog::launchWizardRequested, this,
+                     [&launchWizard] { launchWizard = true; });
+    welcome.exec();
+    if (launchWizard) { openSetupWizard(); }
+}
+
+void MainWindow::onDeadzonesClicked() {
+    QList<DeadzoneSettingsView::DeviceRow> rows;
+    for (const auto& d : model_->attachedDevices()) {
+        rows.append({d.id, d.name, d.motionCapable});
+    }
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Dead zones"));
+    dlg.setMinimumWidth(440);
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(0, 0, 0, 0);
+    auto* view = new DeadzoneSettingsView(model_->deadzoneRepository(),
+                                          model_->motionEnabledStore(), rows, &dlg);
+    QObject::connect(view, &DeadzoneSettingsView::closeRequested, &dlg, &QDialog::accept);
+    // Apply a slider change to the live processor immediately (the view already
+    // persisted it). Off the hot path — one call per slider move.
+    QObject::connect(view, &DeadzoneSettingsView::deadzoneChanged, model_,
+                     &AppModel::applyDeadzones);
+    layout->addWidget(view);
     dlg.exec();
 }
 
@@ -254,5 +362,28 @@ void MainWindow::onBindRequested(const QString& slotId, const QString& connectio
 }
 
 void MainWindow::onUnbindRequested(const QString& slotId) { model_->hub()->unbind(slotId); }
+
+void MainWindow::onEmulateRequested(const QString& slotId) {
+    // Kick a best-effort catalog refresh (async; the cache serves immediately on
+    // first open before it lands, then fresh on a later open). Then open the
+    // picker with the currently-available types and the slot's current type.
+    model_->refreshCatalogForSlot(slotId);
+    const auto types = model_->pickableTypesFor(slotId);
+    const int currentType = model_->currentTypeFor(slotId);
+
+    // Name the slot in the dialog header.
+    QString slotName = slotId;
+    for (const auto& s : model_->state().slotList) {
+        if (s.id == slotId) {
+            slotName = s.name;
+            break;
+        }
+    }
+
+    EmulatePicker dlg(types, slotName, currentType, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        model_->setSlotControllerType(slotId, dlg.chosenType());
+    }
+}
 
 } // namespace dish::ui

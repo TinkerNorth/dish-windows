@@ -4,13 +4,16 @@
 #include "SlotCard.h"
 
 #include "BrandIcon.h"
+#include "SlotLiveStats.h"
 #include "Theme.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
+#include <QPointer>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace dish::ui {
 
@@ -74,7 +77,17 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     chipRow->addWidget(lightbarChip_, 0, Qt::AlignVCenter);
     batteryChip_ = new QLabel(this);
     chipRow->addWidget(batteryChip_, 0, Qt::AlignVCenter);
+    // Live-stats readouts (android parity): measured gamepad / motion / USB-direct
+    // poll-rate Hz. Sit at the trailing edge of the chip row, after the stretch,
+    // so they right-align as a compact telemetry cluster and never crowd the
+    // capability pills. Each hides itself when there's nothing to show.
     chipRow->addStretch(1);
+    gamepadRateChip_ = new QLabel(this);
+    chipRow->addWidget(gamepadRateChip_, 0, Qt::AlignVCenter);
+    motionRateChip_ = new QLabel(this);
+    chipRow->addWidget(motionRateChip_, 0, Qt::AlignVCenter);
+    pollRateChip_ = new QLabel(this);
+    chipRow->addWidget(pollRateChip_, 0, Qt::AlignVCenter);
     textLayout->addLayout(chipRow);
 
     bindButton_ = new QPushButton(this);
@@ -86,9 +99,19 @@ SlotCard::SlotCard(QWidget* parent) : QFrame(parent) {
     applyDisabledOpacityEffect(bindButton_);
     QObject::connect(bindButton_, &QPushButton::clicked, this, &SlotCard::onBindClicked);
 
+    // "Emulate" — opens the catalog-driven controller-type picker for a bound
+    // slot. Hidden when unbound (nothing to emulate a pad on yet).
+    emulateButton_ = new QPushButton(tr("Emulate…"), this);
+    emulateButton_->setObjectName(QStringLiteral("outlined"));
+    applyDisabledOpacityEffect(emulateButton_);
+    emulateButton_->setVisible(false);
+    QObject::connect(emulateButton_, &QPushButton::clicked, this,
+                     [this] { emit emulateRequested(slot_.id); });
+
     layout->addWidget(glyph_, 0, Qt::AlignVCenter);
     layout->addWidget(dot_, 0, Qt::AlignVCenter);
     layout->addLayout(textLayout, 1);
+    layout->addWidget(emulateButton_, 0, Qt::AlignVCenter);
     layout->addWidget(bindButton_, 0, Qt::AlignVCenter);
 }
 
@@ -177,6 +200,47 @@ void SlotCard::setSlot(const models::ControllerSlot& slot,
         batteryChip_->setToolTip(tip);
     }
 
+    // Live-stats chips (android parity). The pure SlotLiveStats mapper decides
+    // which to show and whether the value is a live reading or a "~peak"; here we
+    // only format the localized "%1 Hz" / "~%1 Hz" string and apply the tone. A
+    // Hidden chip is hidden so a quiet slot stays uncluttered. A USB-direct pad's
+    // measured rates use the brighter `success` tone (continuous measurement);
+    // routed peaks stay muted — matching android's measured-vs-fact tone split.
+    const bool direct = slot.usbDirect;
+    const auto applyRateChip = [](QLabel* chip, const RateChip& spec, bool measured,
+                                  const QString& live, const QString& peak, const QString& tip) {
+        if (spec.kind == RateChipKind::Hidden) {
+            chip->setVisible(false);
+            return;
+        }
+        chip->setVisible(true);
+        chip->setText(spec.kind == RateChipKind::Live ? live.arg(spec.hz) : peak.arg(spec.hz));
+        chip->setStyleSheet(liveStatChipQss(measured));
+        chip->setToolTip(tip);
+    };
+
+    // "%1 Hz" / "~%1 Hz" are language-neutral (Hz is an SI unit); the "~" marks an
+    // estimate from a peak window rather than a continuous measurement.
+    const QString hzLive = tr("%1 Hz");
+    const QString hzPeak = tr("~%1 Hz");
+
+    const RateChip gp = gamepadRateChip(slot.liveRates, direct);
+    applyRateChip(gamepadRateChip_, gp, direct, hzLive, hzPeak,
+                  gp.kind == RateChipKind::Live
+                      ? tr("Controller report rate (measured).")
+                      : tr("Controller report rate (estimated from recent activity)."));
+
+    // The motion chip only makes sense for a pad that actually has an IMU.
+    const RateChip mo = slot.capabilities.hasMotion ? motionRateChip(slot.liveRates) : RateChip{};
+    applyRateChip(motionRateChip_, mo, direct, hzLive, hzPeak, tr("Motion (gyro) sample rate."));
+
+    const RateChip pr = pollRateChip(slot.liveRates, direct);
+    applyRateChip(pollRateChip_, pr, /*measured=*/true, hzLive, hzPeak,
+                  tr("USB-direct poll rate (measured)."));
+
+    // The Emulate picker only makes sense once the slot is bound to a satellite.
+    emulateButton_->setVisible(slot.boundConnectionId.has_value());
+
     if (slot.boundStatus.has_value()) {
         boundLabel_->setText(tr("Bound to %1").arg(slot.boundStatus->label));
         // Green dot iff the session is actually live (LinkState::Connected).
@@ -203,7 +267,32 @@ void SlotCard::onBindClicked() {
         return;
     }
     if (available_.isEmpty()) { return; }
-    QMenu menu(this);
+
+    // CRASH FIX (bind button): use a NON-BLOCKING popup, never QMenu::exec().
+    //
+    // QMenu::exec() spins a NESTED event loop while this SlotCard sits on the
+    // call stack. During that loop the 1 Hz timers (usbScanTimer_ / inputRate /
+    // autoReconnect) and the queued devicesChanged signal keep firing →
+    // AppModel::rebuild() → stateChanged() → MainWindow::rebuildSlotList(),
+    // which deleteLater()s every SlotCard — including THIS one. Qt processes
+    // that deferred delete inside the nested menu loop, so when exec() returns
+    // it unwinds back through the freed SlotCard / its QPushButton: a
+    // use-after-free. popup() returns immediately (no nested loop, this card
+    // never on the stack across it), so the rebuild can replace the card safely.
+    //
+    // The menu is parented to the top-level window (NOT this card) so it
+    // survives a rebuild that destroys the card while the popup is open, and
+    // self-destructs on close. The chosen action emits the bind through a
+    // QPointer guard: normally the card outlives the (now non-blocking) popup
+    // and we emit as usual. In the rare case a rebuild replaced the card while
+    // the menu was open, the guard is null and we skip — the user simply
+    // re-clicks on the fresh card. Dropping that one stale tap is correct and,
+    // crucially, can never dereference freed memory the way exec() did.
+    QWidget* anchor = window() != nullptr ? window() : static_cast<QWidget*>(this);
+    auto* menu = new QMenu(anchor);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    const QString slotId = slot_.id;
+    QPointer<SlotCard> guard(this);
     // Each entry in the bind picker IS a satellite server (dish-windows is
     // Wi-Fi-only, so no Bluetooth kind to branch on). Use the same v6
     // brand satellite glyph the ConnectionsDialog rows and the SlotCard
@@ -211,12 +300,19 @@ void SlotCard::onBindClicked() {
     // dish-mac SlotCard expanded picker and the dish-android
     // ControllerAdapter.buildConnectionHeader() bind list.
     for (const auto& c : available_) {
-        auto* act = menu.addAction(brandIcon(BrandIconKind::Satellite, c.live, 16, this), c.label);
+        auto* act =
+            menu->addAction(brandIcon(BrandIconKind::Satellite, c.live, 16, anchor), c.label);
         const QString cid = c.id;
-        QObject::connect(act, &QAction::triggered, this,
-                         [this, cid] { emit bindRequested(slot_.id, cid); });
+        // Route the emission through the menu (a stable QObject) rather than the
+        // SlotCard, so a card destroyed while the popup is open can't dangle the
+        // receiver. The bindRequested signal must still originate from a live
+        // SlotCard for MainWindow's connect; emit it from the guarded card when
+        // it's alive.
+        QObject::connect(act, &QAction::triggered, menu, [guard, slotId, cid] {
+            if (guard) { emit guard->bindRequested(slotId, cid); }
+        });
     }
-    menu.exec(bindButton_->mapToGlobal(QPoint(0, bindButton_->height())));
+    menu->popup(bindButton_->mapToGlobal(QPoint(0, bindButton_->height())));
 }
 
 } // namespace dish::ui

@@ -58,7 +58,7 @@ TEST_CASE("lightbarModeToKey uses the dish-mac vocabulary", "[featuresettings][l
     REQUIRE(lightbarModeToKey(LightbarMode::Off) == QStringLiteral("off"));
 }
 
-TEST_CASE("lightbarModeFromKey is lenient — unknown keys fall back to FollowGame",
+TEST_CASE("lightbarModeFromKey is lenient -- unknown keys fall back to FollowGame",
           "[featuresettings][lightbar]") {
     // First launch (empty), a typo, or a forward-newer value all default to
     // the documented FollowGame rather than disabling the light bar.

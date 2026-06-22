@@ -5,28 +5,23 @@
 
 namespace dish::ui {
 
-NotificationQueue::NotificationQueue(QObject* parent) : QObject(parent) {}
+NotificationQueue::NotificationQueue(QObject* parent)
+    : QObject(parent), source_(new source::DishNotifications(this)) {
+    // Re-emit the source channel's events under the names the renderer binds to,
+    // so NotificationToastHost (READS-ONLY) stays wired unchanged.
+    QObject::connect(source_, &source::DishNotifications::notificationPosted, this,
+                     &NotificationQueue::notificationAdded);
+    QObject::connect(source_, &source::DishNotifications::notificationDismissed, this,
+                     &NotificationQueue::notificationDismissed);
+}
 
 int NotificationQueue::post(models::DishNotification notification) {
-    // Assign the id centrally so callers can hand us a literal struct without
-    // having to thread a counter through every emit site. Matches Android's
-    // `DishNotifications.post`: the constructor is internal, the id is
-    // monotonic, the caller gets it back as a dismiss handle.
-    const int id = nextId_++;
-    notification.id = id;
-    emit notificationAdded(notification);
-    return id;
+    // Delegate to the source: it owns id assignment + duration defaults.
+    return source_->post(std::move(notification));
 }
 
-int NotificationQueue::postError(const QString& message) {
-    models::DishNotification n;
-    n.severity = models::DishNotification::Severity::Error;
-    n.kind = QStringLiteral("error");
-    n.message = message;
-    n.durationMs = models::DishNotification::kDurationLongMs;
-    return post(std::move(n));
-}
+int NotificationQueue::postError(const QString& message) { return source_->postError(message); }
 
-void NotificationQueue::dismiss(int id) { emit notificationDismissed(id); }
+void NotificationQueue::dismiss(int id) { source_->dismiss(id); }
 
 } // namespace dish::ui

@@ -4,6 +4,7 @@
 #include "SatelliteClient.h"
 
 #include "Util/Endian.h"
+#include "core/wire/SessionCrypto.h"
 
 #include <sodium.h>
 
@@ -14,13 +15,19 @@ namespace dish::net {
 
 using util::putU16Be;
 using util::putU32Be;
+using util::readU16Be;
 
-// Windows has no MSG_NOSIGNAL; it doesn't generate SIGPIPE either, so 0 is
-// the correct hot-path flag. Defining the macro avoids littering #ifdefs
-// across the call sites that the dish-linux file already uses.
+// Windows has no MSG_NOSIGNAL; it doesn't generate SIGPIPE either, so 0 is the
+// correct hot-path flag.
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
+
+namespace {
+// 16-byte Poly1305 tag appended by the AEAD.
+constexpr std::size_t kAuthTag = 16;
+constexpr std::size_t kHeaderSize = 8; // token(4) + counter(4)
+} // namespace
 
 SatelliteClient::SatelliteClient() {
     if (sodium_init() < 0) {
@@ -34,16 +41,12 @@ bool SatelliteClient::openSocket(const std::string& ip, int port) {
     const SOCKET s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == INVALID_SOCKET) { return false; }
 
-    // DSCP EF (Expedited Forwarding). Best-effort — Windows since Vista
-    // strips IP_TOS in setsockopt by default for non-admin processes, but
-    // the call doesn't error so we set it anyway in case the user has the
-    // `DisableUserTOSSetting=0` registry override on. Matches the Android
-    // JNI / Linux / Mac wire-shape exactly.
+    // DSCP EF (Expedited Forwarding). Best-effort — Windows strips IP_TOS for
+    // non-admin processes by default, but the call doesn't error.
     DWORD tos = 0xB8;
     ::setsockopt(s, IPPROTO_IP, IP_TOS, reinterpret_cast<const char*>(&tos), sizeof(tos));
 
     // 500 ms recv timeout so the ACK loop can poll `ackRunning_` cleanly.
-    // Winsock's SO_RCVTIMEO is a DWORD of milliseconds, not a timeval.
     DWORD rtv = 500;
     ::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&rtv), sizeof(rtv));
 
@@ -72,11 +75,19 @@ void SatelliteClient::closeSocket() {
 void SatelliteClient::setConnectionParams(const std::array<std::uint8_t, 4>& token,
                                           const std::array<std::uint8_t, 32>& key) {
     token_ = token;
+    tokenBe_ = util::readU32Be(token.data()); // the 4 raw token bytes are already big-endian
     key_ = key;
-    counter_.reset();
+    // Counters restart at 1 every PUT (no cross-session nonce reuse); recv guard
+    // resets so the first server packet is accepted.
+    sendCounter_.store(1, std::memory_order_relaxed);
+    lastRecvCounter_ = 0;
     missedAcks_.store(0, std::memory_order_relaxed);
     connectionAlive_.store(true, std::memory_order_relaxed);
-    lastControllerAck_.store(-1, std::memory_order_relaxed);
+    serverEpoch_.store(-1, std::memory_order_relaxed);
+    serverBitmap_.store(-1, std::memory_order_relaxed);
+    backendAvailable_.store(-1, std::memory_order_relaxed);
+    activeControllerCount_.store(-1, std::memory_order_relaxed);
+    sessionCloseReason_.store(-1, std::memory_order_relaxed);
 }
 
 void SatelliteClient::sendReport(int controllerIndex, std::uint16_t buttons, std::uint8_t lt,
@@ -98,35 +109,15 @@ void SatelliteClient::sendReport(int controllerIndex, std::uint16_t buttons, std
     storeLe16(7, ly);
     storeLe16(9, rx);
     storeLe16(11, ry);
-    sendEncrypted(kMsgGamepadData, payload, sizeof(payload));
-}
-
-void SatelliteClient::controllerAdd(int index, std::uint16_t capabilities) {
-    std::uint8_t payload[3]{};
-    payload[0] = static_cast<std::uint8_t>(index);
-    putU16Be(&payload[1], capabilities);
-    sendEncrypted(kMsgControllerAdd, payload, sizeof(payload));
-}
-
-void SatelliteClient::controllerRemove(int index) {
-    const std::uint8_t payload[1] = {static_cast<std::uint8_t>(index)};
-    sendEncrypted(kMsgControllerRemove, payload, sizeof(payload));
-}
-
-void SatelliteClient::sendControllerType(int index, int type) {
-    const std::uint8_t payload[2] = {static_cast<std::uint8_t>(index),
-                                     static_cast<std::uint8_t>(type)};
-    sendEncrypted(kMsgControllerType, payload, sizeof(payload));
+    sendEncrypted(kMsgInput, payload, sizeof(payload));
 }
 
 std::array<std::uint8_t, 17> SatelliteClient::encodeMotionPayload(
     std::uint8_t controllerIndex, std::int16_t gyroX, std::int16_t gyroY, std::int16_t gyroZ,
     std::int16_t accelX, std::int16_t accelY, std::int16_t accelZ, std::uint32_t timestampDeltaUs) {
-    // ctrlIdx(1) + 6×int16 LE + uint32 LE = 1 + 12 + 4 = 17 bytes.
-    // The receiver decodes this with decodeMotionReport() in
-    // satellite/src/core/types.h — explicit little-endian byte-shifts, NOT a
-    // struct memcpy — so the wire stays byte-order- and struct-layout-
-    // independent. Senders therefore write the matching LE layout explicitly.
+    // ctrlIdx(1) + 6×int16 LE + uint32 LE = 17 bytes. The receiver decodes with
+    // decodeMotionReport() (explicit LE byte-shifts), so write the matching LE
+    // layout explicitly — struct-layout-independent.
     std::array<std::uint8_t, 17> out{};
     out[0] = controllerIndex;
     auto storeLe16 = [&out](int off, std::int16_t v) {
@@ -171,12 +162,15 @@ void SatelliteClient::sendBattery(int controllerIndex, std::uint8_t level, std::
     sendEncrypted(kMsgBattery, payload.data(), payload.size());
 }
 
-std::array<std::uint8_t, 12> SatelliteClient::encodeTouchpadPayload(
+std::array<std::uint8_t, 16> SatelliteClient::encodeTouchpadPayload(
     std::uint8_t controllerIndex, bool finger0Active, std::uint8_t finger0Id, std::int16_t finger0X,
     std::int16_t finger0Y, bool finger1Active, std::uint8_t finger1Id, std::int16_t finger1X,
-    std::int16_t finger1Y, bool buttonPressed) {
-    // ctrlIdx(1) + flags(1) + f0(id1 + x2 + y2) + f1(id1 + x2 + y2) = 12 bytes.
-    std::array<std::uint8_t, 12> out{};
+    std::int16_t finger1Y, bool buttonPressed, std::uint32_t eventTimeMs) {
+    // ctrlIdx(1) + flags(1) + f0(id1 + x2 + y2) + f1(id1 + x2 + y2) +
+    // eventTimeMs(u32 LE) = 16 bytes. The trailing eventTimeMs is the
+    // protocol-1 addition — the server now requires the 15-byte post-ctrlIdx
+    // body (msgLen >= 16 inner) or it drops the packet.
+    std::array<std::uint8_t, 16> out{};
     out[0] = controllerIndex;
     std::uint8_t flags = 0;
     if (finger0Active) { flags |= 0x01U; }
@@ -194,46 +188,50 @@ std::array<std::uint8_t, 12> SatelliteClient::encodeTouchpadPayload(
     out[7] = finger1Id;
     storeLe16(8, finger1X);
     storeLe16(10, finger1Y);
+    out[12] = static_cast<std::uint8_t>(eventTimeMs & 0xFFU);
+    out[13] = static_cast<std::uint8_t>((eventTimeMs >> 8) & 0xFFU);
+    out[14] = static_cast<std::uint8_t>((eventTimeMs >> 16) & 0xFFU);
+    out[15] = static_cast<std::uint8_t>((eventTimeMs >> 24) & 0xFFU);
     return out;
 }
 
 void SatelliteClient::sendTouchpad(int controllerIndex, bool finger0Active, std::uint8_t finger0Id,
                                    std::int16_t finger0X, std::int16_t finger0Y, bool finger1Active,
                                    std::uint8_t finger1Id, std::int16_t finger1X,
-                                   std::int16_t finger1Y, bool buttonPressed) {
+                                   std::int16_t finger1Y, bool buttonPressed,
+                                   std::uint32_t eventTimeMs) {
     const auto payload = encodeTouchpadPayload(
         static_cast<std::uint8_t>(controllerIndex), finger0Active, finger0Id, finger0X, finger0Y,
-        finger1Active, finger1Id, finger1X, finger1Y, buttonPressed);
+        finger1Active, finger1Id, finger1X, finger1Y, buttonPressed, eventTimeMs);
     sendEncrypted(kMsgTouchpad, payload.data(), payload.size());
 }
 
 void SatelliteClient::sendEncrypted(std::uint16_t msgType, const std::uint8_t* payload,
                                     std::size_t len) {
     if (sock_ == INVALID_SOCKET) { return; }
-    // Inner: msgType(BE16) + payloadLen(BE16) + payload
+    // Inner: msgType(BE16) + payloadLen(BE16) + payload.
     const std::size_t innerLen = 4 + len;
     std::vector<std::uint8_t> inner(innerLen);
     putU16Be(inner.data(), msgType);
     putU16Be(inner.data() + 2, static_cast<std::uint16_t>(len));
     if (len > 0) { std::memcpy(inner.data() + 4, payload, len); }
 
-    const auto ctr = static_cast<std::uint32_t>(counter_.next());
+    // Monotonic per-direction counter, starting at 1; never wraps (the session
+    // self-heals via re-PUT before exhaustion — see ConnectionManager).
+    const std::uint32_t ctr = sendCounter_.fetch_add(1, std::memory_order_relaxed);
 
-    std::uint8_t nonce[12] = {0};
-    putU32Be(&nonce[8], ctr);
-
-    // Packet: token(4) + counter(4) + ciphertext + 16-byte tag.
-    std::vector<std::uint8_t> packet(8 + innerLen + crypto_aead_chacha20poly1305_IETF_ABYTES);
+    // Packet: token(4) | counter(4 BE) | ciphertext+tag. The AEAD nonce
+    // (dir|0×7|counter) and AAD (token BE) are built inside wire::encryptPacket.
+    std::vector<std::uint8_t> packet(kHeaderSize + innerLen + kAuthTag);
     std::memcpy(packet.data(), token_.data(), 4);
     putU32Be(packet.data() + 4, ctr);
 
     unsigned long long cipherLen = 0;
-    if (crypto_aead_chacha20poly1305_ietf_encrypt(packet.data() + 8, &cipherLen, inner.data(),
-                                                  inner.size(), token_.data(), token_.size(),
-                                                  nullptr, nonce, key_.data()) != 0) {
+    if (!wire::encryptPacket(key_.data(), wire::kDirClientToServer, ctr, tokenBe_, inner.data(),
+                             inner.size(), packet.data() + kHeaderSize, &cipherLen)) {
         return;
     }
-    packet.resize(8 + cipherLen);
+    packet.resize(kHeaderSize + cipherLen);
 
     std::lock_guard<std::mutex> lock(sendLock_);
     if (sock_ == INVALID_SOCKET) { return; }
@@ -296,44 +294,47 @@ void SatelliteClient::receiveLoop() {
 }
 
 void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
-    if (n < 8 + crypto_aead_chacha20poly1305_IETF_ABYTES) { return; }
+    if (n < kHeaderSize + kAuthTag) { return; }
     if (std::memcmp(buf, token_.data(), 4) != 0) { return; }
 
-    std::uint8_t nonce[12] = {0};
-    std::memcpy(&nonce[8], buf + 4, 4);
+    const std::uint32_t counter = util::readU32Be(buf + 4);
+    // Per-direction replay guard (server→client): drop counter <= last seen
+    // (first packet exempt while lastRecvCounter_ == 0). The receive loop is a
+    // single thread, so the guard needs no lock.
+    if (lastRecvCounter_ != 0 && counter <= lastRecvCounter_) { return; }
 
-    std::vector<std::uint8_t> plain(n - 8);
+    std::vector<std::uint8_t> plain(n - kHeaderSize);
     unsigned long long plainLen = 0;
-    if (crypto_aead_chacha20poly1305_ietf_decrypt(plain.data(), &plainLen, nullptr, buf + 8, n - 8,
-                                                  token_.data(), token_.size(), nonce,
-                                                  key_.data()) != 0) {
+    if (!wire::decryptPacket(key_.data(), wire::kDirServerToClient, counter, tokenBe_,
+                             buf + kHeaderSize, n - kHeaderSize, plain.data(), &plainLen)) {
         return;
     }
+    lastRecvCounter_ = counter;
     if (plainLen < 4) { return; }
-    const std::uint16_t msgType = util::readU16Be(plain.data());
-    const std::uint16_t msgLen = util::readU16Be(plain.data() + 2);
+    const std::uint16_t msgType = readU16Be(plain.data());
+    // Inner payload starts after the 4-byte type+length header.
+    const std::uint8_t* body = plain.data() + 4;
+    const std::size_t bodyLen = static_cast<std::size_t>(plainLen) - 4;
 
     if (msgType == kMsgHeartbeatAck) {
         missedAcks_.store(0, std::memory_order_relaxed);
         connectionAlive_.store(true, std::memory_order_relaxed);
-    } else if (msgType == kMsgControllerAck && msgLen >= 4 && plainLen >= 8) {
-        const std::uint16_t reqType = util::readU16Be(plain.data() + 4);
-        const std::uint8_t idx = plain[6];
-        const std::uint8_t result = plain[7];
-        const std::int32_t packed = (static_cast<std::int32_t>(reqType) << 16) |
-                                    (static_cast<std::int32_t>(idx) << 8) |
-                                    static_cast<std::int32_t>(result);
-        lastControllerAck_.store(packed, std::memory_order_relaxed);
-    } else if (msgType == kMsgServerStatus && msgLen >= 2 && plainLen >= 6) {
-        vigemAvailable_.store(plain[4] == 0 ? 0 : 1, std::memory_order_relaxed);
-        activeControllerCount_.store(static_cast<std::int8_t>(plain[5]), std::memory_order_relaxed);
+        if (const auto ack = parseHeartbeatAck(body, bodyLen)) {
+            backendAvailable_.store(ack->backendAvailable ? 1 : 0, std::memory_order_relaxed);
+            activeControllerCount_.store(static_cast<std::int8_t>(ack->totalActiveControllers),
+                                         std::memory_order_relaxed);
+            serverEpoch_.store(static_cast<std::int32_t>(ack->epoch), std::memory_order_relaxed);
+            serverBitmap_.store(static_cast<std::int32_t>(ack->activeBitmap),
+                                std::memory_order_relaxed);
+            HeartbeatAckHandler handler;
+            {
+                std::lock_guard<std::mutex> lock(ackHandlerMtx_);
+                handler = ackHandler_;
+            }
+            if (handler) { handler(*ack); }
+        }
     } else if (msgType == kMsgRumble) {
-        // The inner header bytes are at plain[0..3]; the payload starts at +4.
-        // parseRumbleMessage works on the payload region for parity with the
-        // unit-test seam, so adjust the pointer/length accordingly.
-        if (plainLen < 4) { return; }
-        const auto rm =
-            parseRumbleMessage(plain.data() + 4, static_cast<std::size_t>(plainLen) - 4);
+        const auto rm = parseRumbleMessage(body, bodyLen);
         if (!rm) { return; }
         RumbleHandler handler;
         {
@@ -342,9 +343,7 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
         }
         if (handler) { handler(*rm); }
     } else if (msgType == kMsgLightbar) {
-        if (plainLen < 4) { return; }
-        const auto lm =
-            parseLightbarMessage(plain.data() + 4, static_cast<std::size_t>(plainLen) - 4);
+        const auto lm = parseLightbarMessage(body, bodyLen);
         if (!lm) { return; }
         LightbarHandler handler;
         {
@@ -352,6 +351,19 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
             handler = lightbarHandler_;
         }
         if (handler) { handler(*lm); }
+    } else if (msgType == kMsgSessionClose) {
+        if (bodyLen < 1) { return; }
+        const std::uint8_t reason = body[0];
+        sessionCloseReason_.store(static_cast<std::int32_t>(reason), std::memory_order_relaxed);
+        // The session is gone server-side now; mark dead so the alive-poll
+        // doesn't wait out the full death window.
+        connectionAlive_.store(false, std::memory_order_relaxed);
+        CloseHandler handler;
+        {
+            std::lock_guard<std::mutex> lock(closeHandlerMtx_);
+            handler = closeHandler_;
+        }
+        if (handler) { handler(reason); }
     }
 }
 
@@ -363,6 +375,30 @@ void SatelliteClient::setRumbleHandler(RumbleHandler handler) {
 void SatelliteClient::setLightbarHandler(LightbarHandler handler) {
     std::lock_guard<std::mutex> lock(lightbarHandlerMtx_);
     lightbarHandler_ = std::move(handler);
+}
+
+void SatelliteClient::setHeartbeatAckHandler(HeartbeatAckHandler handler) {
+    std::lock_guard<std::mutex> lock(ackHandlerMtx_);
+    ackHandler_ = std::move(handler);
+}
+
+void SatelliteClient::setCloseHandler(CloseHandler handler) {
+    std::lock_guard<std::mutex> lock(closeHandlerMtx_);
+    closeHandler_ = std::move(handler);
+}
+
+std::optional<SatelliteClient::HeartbeatAck>
+SatelliteClient::parseHeartbeatAck(const std::uint8_t* payload, std::size_t len) {
+    // backendAvailable(1) + totalActiveControllers(1) + epoch(u16 BE) +
+    // activeBitmap(u16 BE) = 6 bytes. A bare ack from a pre-protocol-1 server
+    // is shorter → nullopt (liveness still counts, reconcile doesn't).
+    if (payload == nullptr || len < proto::kHeartbeatAckPayloadBytes) { return std::nullopt; }
+    HeartbeatAck a;
+    a.backendAvailable = payload[0] != 0;
+    a.totalActiveControllers = payload[1];
+    a.epoch = readU16Be(payload + 2);
+    a.activeBitmap = readU16Be(payload + 4);
+    return a;
 }
 
 std::optional<SatelliteClient::LightbarMessage>
@@ -379,13 +415,13 @@ SatelliteClient::parseLightbarMessage(const std::uint8_t* payload, std::size_t l
 
 std::optional<SatelliteClient::RumbleMessage>
 SatelliteClient::parseRumbleMessage(const std::uint8_t* payload, std::size_t len) {
-    // Fixed 7-byte payload: ctrlIdx + strong + weak + dur.
+    // Fixed 7-byte payload: ctrlIdx + strong + weak + dur (all BE).
     if (payload == nullptr || len < kRumblePayloadLen) { return std::nullopt; }
     RumbleMessage rm;
     rm.controllerIndex = payload[0];
-    rm.strongMagnitude = util::readU16Be(payload + 1);
-    rm.weakMagnitude = util::readU16Be(payload + 3);
-    rm.durationMs = util::readU16Be(payload + 5);
+    rm.strongMagnitude = readU16Be(payload + 1);
+    rm.weakMagnitude = readU16Be(payload + 3);
+    rm.durationMs = readU16Be(payload + 5);
     return rm;
 }
 

@@ -3,9 +3,9 @@
 
 #include "GamepadInputProcessor.h"
 
-#include <algorithm>
+#include "core/input/Deadzones.h"
+
 #include <chrono>
-#include <cmath>
 
 namespace dish::input {
 
@@ -41,6 +41,11 @@ void GamepadInputProcessor::publish(const DeviceId& id, const DeviceState& state
         ++telEvents_;
         ++telSends_;
         ++telTotalSent_;
+        // Bump the per-device gamepad live-rate counter under the lock we're
+        // already holding — allocation-free after the first event (the node is
+        // reused), no new lock on the send path. The InputRateStore samples this
+        // ~1 Hz to derive the displayed gamepad Hz.
+        rateCounters_[id].gamepad.fetch_add(1, std::memory_order_relaxed);
         snapshot = sender_;
     }
     if (snapshot) {
@@ -70,6 +75,19 @@ void GamepadInputProcessor::remove(const DeviceId& id) {
     states_.erase(id);
     deadzones_.erase(id);
     lastMotionUs_.erase(id);
+    // Drop the live-rate counters too, so a device that re-attaches under the
+    // same id starts its counter from 0 and the tracker re-baselines cleanly
+    // rather than seeing a counter that appears to leap forward.
+    rateCounters_.erase(id);
+}
+
+GamepadInputProcessor::InputRateCounters
+GamepadInputProcessor::inputCounters(const DeviceId& id) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = rateCounters_.find(id);
+    if (it == rateCounters_.end()) { return InputRateCounters{}; }
+    return InputRateCounters{it->second.gamepad.load(std::memory_order_relaxed),
+                             it->second.motion.load(std::memory_order_relaxed)};
 }
 
 bool GamepadInputProcessor::publishMotionAt(const DeviceId& id, const MotionSample& sample,
@@ -98,6 +116,11 @@ bool GamepadInputProcessor::publishMotionAt(const DeviceId& id, const MotionSamp
         }
         gate.lastUs = nowUs;
         gate.hasEmitted = true;
+        // Count only forwarded motion samples (we got past the rate-limit gate),
+        // matching what actually reaches the wire — counting dropped attempts
+        // would over-report a stream the gate is throttling. Same already-held
+        // lock; no new lock on the send path.
+        rateCounters_[id].motion.fetch_add(1, std::memory_order_relaxed);
         snapshot = motionSender_;
     }
     if (snapshot) {
@@ -148,29 +171,22 @@ GamepadInputProcessor::TelemetrySnapshot GamepadInputProcessor::drainTelemetry()
     return snap;
 }
 
-std::int16_t scaleAxis(float v, float maxMagnitude) {
-    const auto clamped = std::clamp(v, -1.0f, 1.0f);
-    const auto scaled = static_cast<int>(clamped * maxMagnitude);
-    return static_cast<std::int16_t>(
-        std::clamp(scaled, static_cast<int>(INT16_MIN), static_cast<int>(INT16_MAX)));
-}
+// These three forward to the pure, host-testable core/input layer (Workstream
+// 2d extracted the arithmetic there). They stay declared on this header so the
+// processor's existing callers + tests keep their call sites unchanged.
+std::int16_t scaleAxis(float v, float maxMagnitude) { return deadzone::scaleAxis(v, maxMagnitude); }
 
-std::uint8_t scaleTrigger(float v) {
-    const auto clamped = std::clamp(v, 0.0f, 1.0f);
-    const auto scaled = static_cast<int>(std::lround(clamped * 255.0f));
-    return static_cast<std::uint8_t>(std::clamp(scaled, 0, 255));
-}
+std::uint8_t scaleTrigger(float v) { return deadzone::scaleTrigger(v); }
 
 GamepadInputProcessor::DeviceState applyDeadzones(const GamepadInputProcessor::DeviceState& state,
                                                   const GamepadInputProcessor::Deadzones& dz) {
     auto out = state;
-    const auto stickFlat = static_cast<std::int32_t>(dz.stickFlat);
-    if (std::abs(static_cast<std::int32_t>(out.lx)) <= stickFlat) { out.lx = 0; }
-    if (std::abs(static_cast<std::int32_t>(out.ly)) <= stickFlat) { out.ly = 0; }
-    if (std::abs(static_cast<std::int32_t>(out.rx)) <= stickFlat) { out.rx = 0; }
-    if (std::abs(static_cast<std::int32_t>(out.ry)) <= stickFlat) { out.ry = 0; }
-    if (out.lt <= dz.triggerFlat) { out.lt = 0; }
-    if (out.rt <= dz.triggerFlat) { out.rt = 0; }
+    out.lx = deadzone::applyStick(out.lx, dz.stickFlat);
+    out.ly = deadzone::applyStick(out.ly, dz.stickFlat);
+    out.rx = deadzone::applyStick(out.rx, dz.stickFlat);
+    out.ry = deadzone::applyStick(out.ry, dz.stickFlat);
+    out.lt = deadzone::applyTrigger(out.lt, dz.triggerFlat);
+    out.rt = deadzone::applyTrigger(out.rt, dz.triggerFlat);
     return out;
 }
 

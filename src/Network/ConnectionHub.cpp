@@ -62,7 +62,10 @@ void ConnectionHub::rebuild() {
         // - SessionState::Idle / null:
         //     in discoveredIds      -> LinkState::Ready
         //     not in discoveredIds  -> LinkState::Saved
-        models::LinkState live;
+        // Baseline default; every branch below reassigns it. The explicit
+        // initializer silences MSVC C4701 (the switch is exhaustive but has no
+        // default, so the compiler can't prove every path assigns).
+        models::LinkState live = models::LinkState::Saved;
         if (conn != nullptr) {
             switch (conn->state()) {
             case SessionState::Live:
@@ -159,8 +162,9 @@ ConnectionHub::TouchpadSender ConnectionHub::touchpadSenderForSlot(const QString
     auto* conn = wifi_->get(cid);
     if (conn == nullptr) { return {}; }
     return [conn](bool f0a, std::uint8_t f0id, std::int16_t f0x, std::int16_t f0y, bool f1a,
-                  std::uint8_t f1id, std::int16_t f1x, std::int16_t f1y, bool button) {
-        conn->sendTouchpad(f0a, f0id, f0x, f0y, f1a, f1id, f1x, f1y, button);
+                  std::uint8_t f1id, std::int16_t f1x, std::int16_t f1y, bool button,
+                  std::uint32_t eventTimeMs) {
+        conn->sendTouchpad(f0a, f0id, f0x, f0y, f1a, f1id, f1x, f1y, button, eventTimeMs);
     };
 }
 
