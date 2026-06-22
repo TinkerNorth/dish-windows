@@ -1,0 +1,151 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (C) 2026 Dish contributors.
+//
+// Protocol-1 REST control-plane decision logic + request-shape coverage, all
+// socket-free: the RestVerdict / Approval classifiers (terminal-401, 409, 503,
+// unreachable), the hmacProof header value the gateway attaches, and the UDP
+// send framing the session installs (counter-from-1, client→server direction
+// byte, token AAD) reconstructed and verified as the satellite would decrypt it.
+
+#include "core/reducer/RestOutcome.h"
+#include "core/wire/SessionCrypto.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <array>
+#include <cstdint>
+#include <cstring>
+
+namespace reducer = dish::reducer;
+namespace wire = dish::wire;
+
+// ── classifyRest (authed PUT/GET/DELETE) ────────────────────────────────────
+
+namespace {
+reducer::RestReply reply(int status, bool parsed, const char* code = "") {
+    reducer::RestReply r;
+    r.status = status;
+    r.bodyParsed = parsed;
+    r.code = code;
+    return r;
+}
+} // namespace
+
+TEST_CASE("classifyRest: 2xx with a parsed body is Ok", "[rest][classify]") {
+    REQUIRE(reducer::classifyRest(reply(200, true)) == reducer::RestVerdict::Ok);
+    REQUIRE(reducer::classifyRest(reply(204, true)) == reducer::RestVerdict::Ok);
+}
+
+TEST_CASE("classifyRest: 401 NOT_PAIRED / BAD_PROOF is terminal Unauthorized", "[rest][classify]") {
+    REQUIRE(reducer::classifyRest(reply(401, true, "NOT_PAIRED")) ==
+            reducer::RestVerdict::Unauthorized);
+    REQUIRE(reducer::classifyRest(reply(401, true, "BAD_PROOF")) ==
+            reducer::RestVerdict::Unauthorized);
+    REQUIRE(reducer::restVerdictTerminal(reducer::RestVerdict::Unauthorized));
+    REQUIRE_FALSE(reducer::restVerdictRetryable(reducer::RestVerdict::Unauthorized));
+}
+
+TEST_CASE("classifyRest: 409 is terminal VersionMismatch", "[rest][classify]") {
+    REQUIRE(reducer::classifyRest(reply(409, true)) == reducer::RestVerdict::VersionMismatch);
+    REQUIRE(reducer::restVerdictTerminal(reducer::RestVerdict::VersionMismatch));
+}
+
+TEST_CASE("classifyRest: 503 is retryable ShuttingDown", "[rest][classify]") {
+    REQUIRE(reducer::classifyRest(reply(503, true)) == reducer::RestVerdict::ShuttingDown);
+    REQUIRE(reducer::restVerdictRetryable(reducer::RestVerdict::ShuttingDown));
+    REQUIRE_FALSE(reducer::restVerdictTerminal(reducer::RestVerdict::ShuttingDown));
+}
+
+TEST_CASE("classifyRest: status 0 / unparsed body is Unreachable", "[rest][classify]") {
+    REQUIRE(reducer::classifyRest(reply(0, false)) == reducer::RestVerdict::Unreachable);
+    REQUIRE(reducer::classifyRest(reply(200, false)) == reducer::RestVerdict::Unreachable);
+    REQUIRE(reducer::restVerdictRetryable(reducer::RestVerdict::Unreachable));
+}
+
+TEST_CASE("classifyRest: other 5xx with a body is a retryable ServerError", "[rest][classify]") {
+    REQUIRE(reducer::classifyRest(reply(500, true)) == reducer::RestVerdict::ServerError);
+    REQUIRE(reducer::restVerdictRetryable(reducer::RestVerdict::ServerError));
+}
+
+// ── classifyApproval (Path-B GET /api/pair/status) ──────────────────────────
+
+TEST_CASE("classifyApproval: approved with a key", "[rest][approval]") {
+    reducer::ApprovalReply r;
+    r.status = 200;
+    r.bodyParsed = true;
+    r.statusStr = "approved";
+    r.hasSharedKey = true;
+    REQUIRE(reducer::classifyApproval(r) == reducer::ApprovalVerdict::Approved);
+}
+
+TEST_CASE("classifyApproval: approved without a key is still Pending", "[rest][approval]") {
+    // The staged key is single-use; an "approved" with no key (already consumed)
+    // must not be mistaken for a fresh grant.
+    reducer::ApprovalReply r;
+    r.status = 200;
+    r.bodyParsed = true;
+    r.statusStr = "approved";
+    r.hasSharedKey = false;
+    REQUIRE(reducer::classifyApproval(r) == reducer::ApprovalVerdict::Pending);
+}
+
+TEST_CASE("classifyApproval: denied / pending / none / unreachable", "[rest][approval]") {
+    auto verdict = [](const char* status, int httpStatus, bool parsed) {
+        reducer::ApprovalReply r;
+        r.status = httpStatus;
+        r.bodyParsed = parsed;
+        r.statusStr = status;
+        return reducer::classifyApproval(r);
+    };
+    REQUIRE(verdict("denied", 200, true) == reducer::ApprovalVerdict::Declined);
+    REQUIRE(verdict("pending", 200, true) == reducer::ApprovalVerdict::Pending);
+    REQUIRE(verdict("none", 200, true) == reducer::ApprovalVerdict::Pending);
+    REQUIRE(verdict("pending", 0, false) == reducer::ApprovalVerdict::Unreachable);
+}
+
+// ── hmacProof header value (authed REST) ────────────────────────────────────
+
+TEST_CASE("hmacProof header value matches the pinned interop vector", "[rest][auth]") {
+    // The gateway attaches X-Hmac-Proof = computeHmacProof(pairingKey, deviceId).
+    // pairingKey = 01 02 .. 20; deviceId = "device-1". Pin the SAME vector the
+    // satellite + android assert so the authed routes interoperate.
+    std::array<std::uint8_t, wire::kCryptoKeySize> key{};
+    for (std::size_t i = 0; i < key.size(); ++i) { key[i] = static_cast<std::uint8_t>(i + 1); }
+    REQUIRE(wire::computeHmacProof(key.data(), "device-1") ==
+            "05a035a10c55fdfe254c9df5df55a614ac128b123a5de225ea33b41f1d4eedde");
+}
+
+// ── UDP send framing the session installs (counter-from-1, dir byte, AAD) ───
+
+TEST_CASE("the client-to-server send framing decrypts as the satellite expects", "[rest][wire]") {
+    // Reconstruct one packet the way SatelliteClient builds it: the FIRST send
+    // uses counter 1 (NOT 0 — the pre-protocol-1 off-by-one), nonce direction
+    // CLIENT_TO_SERVER, AAD = token(4 BE). The satellite decrypts the opposite
+    // way; here we prove the bytes round-trip under those exact parameters.
+    std::array<std::uint8_t, wire::kCryptoKeySize> sessionKey{};
+    sessionKey[0] = 0xAB; // arbitrary derived key
+    const std::uint32_t token = 0x0007a1b2u;
+
+    // A heartbeat inner frame: type(2 BE) | len(2 BE) | (empty payload).
+    const std::uint8_t inner[4] = {0x00, 0x02, 0x00, 0x00};
+
+    std::uint8_t ct[64];
+    unsigned long long ctLen = 0;
+    REQUIRE(wire::encryptPacket(sessionKey.data(), wire::kDirClientToServer, /*counter=*/1, token,
+                                inner, sizeof(inner), ct, &ctLen));
+
+    // The satellite decrypts with the client→server direction + the SAME
+    // counter 1 + token AAD. Counter 0 (the old origin) must NOT decrypt.
+    std::uint8_t pt[64];
+    unsigned long long ptLen = 0;
+    REQUIRE(wire::decryptPacket(sessionKey.data(), wire::kDirClientToServer, 1, token, ct,
+                                static_cast<std::size_t>(ctLen), pt, &ptLen));
+    REQUIRE(ptLen == sizeof(inner));
+    REQUIRE(std::memcmp(pt, inner, sizeof(inner)) == 0);
+
+    // Off-by-one (counter 0) and a missing direction byte both fail auth.
+    REQUIRE_FALSE(wire::decryptPacket(sessionKey.data(), wire::kDirClientToServer, 0, token, ct,
+                                      static_cast<std::size_t>(ctLen), pt, &ptLen));
+    REQUIRE_FALSE(wire::decryptPacket(sessionKey.data(), wire::kDirServerToClient, 1, token, ct,
+                                      static_cast<std::size_t>(ctLen), pt, &ptLen));
+}

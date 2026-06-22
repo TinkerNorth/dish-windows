@@ -18,6 +18,7 @@ class AppModel;
 
 namespace dish::ui {
 
+class DonatePill;
 class NotificationQueue;
 class NotificationToastHost;
 
@@ -37,8 +38,21 @@ class MainWindow : public QMainWindow {
     void onTelemetryTick();
     void onManageClicked();
     void onSettingsClicked();
+    // Open the per-device dead-zone / motion settings page (Workstream 2d).
+    void onDeadzonesClicked();
+    // Onboarding gate (Workstream 3a): on first launch, if the welcome flow
+    // hasn't been completed, show the welcome pager before the dashboard. The
+    // pager's launch CTA / a Help "Run setup" flows into the setup wizard.
+    void maybeShowOnboarding();
+    void openSetupWizard();
+    void openHelp();
+    // About-section screens (Workstreams 3b / 3c).
+    void openLicenses();
+    void openDonate();
     void onBindRequested(const QString& slotId, const QString& connectionId);
     void onUnbindRequested(const QString& slotId);
+    // Open the catalog-driven Emulate picker for a bound slot (Workstream 2c).
+    void onEmulateRequested(const QString& slotId);
 
     AppModel* model_;
 
@@ -59,12 +73,24 @@ class MainWindow : public QMainWindow {
     QTimer* telemetryTimer_;
     quint64 telemetryTotal_ = 0;
 
+    // Re-entrancy guard for rebuildSlotList(). Deleting SlotCards (deleteLater)
+    // and the AppModel state churn can pump the event loop; a stateChanged that
+    // lands while we're mid-rebuild must NOT recursively tear down the cards
+    // we're in the middle of replacing (that is how a card gets freed under its
+    // own stack). When re-entered we just note it and re-run once on unwind.
+    bool rebuildingSlots_ = false;
+    bool slotRebuildPending_ = false;
+
     // Owned by `this` (Qt parent semantics). The queue is the typed
     // replacement for the legacy single-banner errorMessage signal — every
     // emitted error toast goes through it. The host is the bottom-anchored
     // strip that renders the stack. Both are wired by MainWindow's ctor.
     NotificationQueue* notifications_ = nullptr;
     NotificationToastHost* toastHost_ = nullptr;
+
+    // Dismissible "support Dish" pill (Workstream 3b), docked bottom-right of the
+    // header. Tapping it opens the donate screen; its × hides it for 24h.
+    DonatePill* donatePill_ = nullptr;
 };
 
 } // namespace dish::ui

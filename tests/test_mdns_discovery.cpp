@@ -5,7 +5,7 @@
 // (compression-pointer + bounds handling), the response → DiscoveredServer
 // decode, and the two-path discovery merge / source tagging.
 
-#include "Network/MdnsDiscovery.h"
+#include "source/connection/MdnsDiscovery.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -86,6 +86,9 @@ std::vector<std::uint8_t> ptrRdata(const std::string& target) {
     return r;
 }
 
+// Build a TXT entry "key=value" string.
+std::string kv(const std::string& key, const std::string& value) { return key + "=" + value; }
+
 // Header for a response carrying `answerCount` answer records, no questions.
 std::vector<std::uint8_t> responseHeader(int answerCount) {
     std::vector<std::uint8_t> v;
@@ -96,14 +99,6 @@ std::vector<std::uint8_t> responseHeader(int answerCount) {
     put16(v, 0); // nscount
     put16(v, 0); // arcount
     return v;
-}
-
-DiscoveredServer makeServer(const QString& name, const QString& ip, int udp = 9876) {
-    DiscoveredServer s;
-    s.name = name;
-    s.ip = ip;
-    s.udpPort = udp;
-    return s;
 }
 
 } // namespace
@@ -170,6 +165,18 @@ TEST_CASE("parseResponse decodes a full satellite response", "[mdns]") {
     CHECK(out->httpPort == 9877);
     CHECK(out->name == QStringLiteral("sat-1"));
     CHECK(out->source == DiscoverySource::Mdns);
+    CHECK(out->machineId.isEmpty()); // no mid TXT in this packet
+}
+
+TEST_CASE("parseResponse plumbs the machineId from the mid TXT key", "[mdns]") {
+    auto pkt = responseHeader(3);
+    appendRr(pkt, "sat._satellite._udp.local", 33, srvRdata(9876, "sat.local"));
+    appendRr(pkt, "sat._satellite._udp.local", 16, txtRdata({kv("mid", "boxabc"), "udp=9876"}));
+    appendRr(pkt, "sat.local", 1, {10, 0, 0, 5});
+
+    const auto out = detail::parseResponse(pkt.data(), pkt.size());
+    REQUIRE(out.has_value());
+    CHECK(out->machineId == QStringLiteral("boxabc"));
 }
 
 TEST_CASE("parseResponse reads ports from TXT when SRV is absent", "[mdns]") {
@@ -225,50 +232,6 @@ TEST_CASE("parseResponse rejects an rdlen that overruns the packet", "[mdns]") {
     CHECK_FALSE(detail::parseResponse(pkt.data(), pkt.size()).has_value());
 }
 
-// ── Discovery merge ─────────────────────────────────────────────────────────
-
-TEST_CASE("mergeDiscovered tags a broadcast-only server", "[mdns]") {
-    const auto m = mergeDiscovered({makeServer("A", "10.0.0.1")}, {});
-    REQUIRE(m.size() == 1);
-    CHECK(m[0].source == DiscoverySource::Broadcast);
-}
-
-TEST_CASE("mergeDiscovered tags an mDNS-only server", "[mdns]") {
-    const auto m = mergeDiscovered({}, {makeServer("B", "10.0.0.2")});
-    REQUIRE(m.size() == 1);
-    CHECK(m[0].source == DiscoverySource::Mdns);
-}
-
-TEST_CASE("mergeDiscovered tags a server heard on both paths as Both", "[mdns]") {
-    const auto m =
-        mergeDiscovered({makeServer("Sat", "10.0.0.9")}, {makeServer("Sat", "10.0.0.9")});
-    REQUIRE(m.size() == 1);
-    CHECK(m[0].source == DiscoverySource::Both);
-}
-
-TEST_CASE("mergeDiscovered keeps distinct servers and sorts by name", "[mdns]") {
-    const auto m =
-        mergeDiscovered({makeServer("Zulu", "10.0.0.3"), makeServer("Alpha", "10.0.0.1")},
-                        {makeServer("Mike", "10.0.0.2")});
-    REQUIRE(m.size() == 3);
-    CHECK(m[0].name == QStringLiteral("Alpha"));
-    CHECK(m[1].name == QStringLiteral("Mike"));
-    CHECK(m[2].name == QStringLiteral("Zulu"));
-}
-
-TEST_CASE("mergeDiscovered treats same ip + different port as distinct", "[mdns]") {
-    const auto m = mergeDiscovered({makeServer("One", "10.0.0.1", 9876)},
-                                   {makeServer("Two", "10.0.0.1", 9900)});
-    CHECK(m.size() == 2);
-}
-
-TEST_CASE("mergeDiscovered yields an empty list for empty inputs", "[mdns]") {
-    CHECK(mergeDiscovered({}, {}).isEmpty());
-}
-
-TEST_CASE("discoverySourceLabel maps each source to a stable label", "[mdns]") {
-    using dish::models::discoverySourceLabel;
-    CHECK(discoverySourceLabel(DiscoverySource::Broadcast) == QStringLiteral("UDP broadcast"));
-    CHECK(discoverySourceLabel(DiscoverySource::Mdns) == QStringLiteral("mDNS"));
-    CHECK(discoverySourceLabel(DiscoverySource::Both) == QStringLiteral("mDNS + broadcast"));
-}
+// The two-path discovery merge + source tagging + pinId moved to
+// test_discovery_gateway.cpp (DiscoveryGateway owns mergeDiscovered now), and
+// the TXT→DiscoveredServer mapping layer lives in test_mdns_mapping.cpp.

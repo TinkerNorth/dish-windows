@@ -71,19 +71,32 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
     rememberedList_ = new QListWidget(this);
     layout->addWidget(rememberedList_, 1);
 
+    // Reconnect lets the user connect a REMEMBERED satellite by its last-known
+    // endpoint without first re-scanning — the gap that forced "scan, wait for
+    // it to appear, THEN connect". The pairing key persists (no PIN); if the box
+    // moved, the manager relearns the address via discovery + backoff.
+    reconnectButton_ = new QPushButton(tr("Connect"), this);
+    reconnectButton_->setObjectName(QStringLiteral("primary"));
+    applyDisabledOpacityEffect(reconnectButton_);
     auto* forgetBtn = new QPushButton(tr("Forget"), this);
     // Forget is local + instant, so it does not get the spinner treatment.
     // It still gets the canonical 0.4 disabled-alpha rule for consistency.
     applyDisabledOpacityEffect(forgetBtn);
     auto* row2 = new QHBoxLayout;
     row2->addStretch(1);
+    row2->addWidget(reconnectButton_);
     row2->addWidget(forgetBtn);
     layout->addLayout(row2);
 
     QObject::connect(scanButton_, &QPushButton::clicked, this, &ConnectionsDialog::onScanClicked);
     QObject::connect(connectButton_, &QPushButton::clicked, this,
                      &ConnectionsDialog::onConnectClicked);
+    QObject::connect(reconnectButton_, &QPushButton::clicked, this,
+                     &ConnectionsDialog::onReconnectClicked);
     QObject::connect(forgetBtn, &QPushButton::clicked, this, &ConnectionsDialog::onForgetClicked);
+    // The remembered-row selection drives whether Reconnect is enabled.
+    QObject::connect(rememberedList_, &QListWidget::itemSelectionChanged, this,
+                     &ConnectionsDialog::refreshActionState);
 
     QObject::connect(model_->wifi(), &net::WifiConnectionManager::discoveredChanged, this,
                      &ConnectionsDialog::rebuildLists);
@@ -128,6 +141,17 @@ void ConnectionsDialog::refreshActionState() {
     // should re-enable iff there is a selection. Connect remains a no-op
     // if the row vanished between click and refresh.
     connectButton_->setIdleEnabled(true);
+
+    // Reconnect targets the selected REMEMBERED row; enabled when one is
+    // selected and it isn't already live (no point reconnecting a live session).
+    auto* rememberedItem = rememberedList_->currentItem();
+    bool canReconnect = false;
+    if (rememberedItem != nullptr) {
+        const auto rid = rememberedItem->data(Qt::UserRole).toString();
+        auto* conn = model_->wifi()->get(rid);
+        canReconnect = conn == nullptr || conn->state() != net::SessionState::Live;
+    }
+    reconnectButton_->setEnabled(canReconnect);
 }
 
 void ConnectionsDialog::rebuildLists() {
@@ -164,6 +188,33 @@ void ConnectionsDialog::onConnectClicked() {
     for (const auto& s : model_->wifi()->discoveredServers()) {
         if (s.id() == wantedId) {
             model_->wifi()->connectTo(s);
+            return;
+        }
+    }
+}
+
+void ConnectionsDialog::onReconnectClicked() {
+    auto* item = rememberedList_->currentItem();
+    if (item == nullptr) { return; }
+    const auto wantedId = item->data(Qt::UserRole).toString();
+    // Prefer the freshest discovered endpoint if this satellite happens to be in
+    // the current scan (same machineId id) — its IP is guaranteed current.
+    for (const auto& s : model_->wifi()->discoveredServers()) {
+        if (s.id() == wantedId) {
+            model_->wifi()->connectTo(s);
+            return;
+        }
+    }
+    // Not in the current scan: kick a discovery pass so a moved box is relearned
+    // (the manager persists any new IP and re-attempts on scan completion), AND
+    // attempt the last-known persisted endpoint right now. The key persists (no
+    // PIN); if the box is still at its last address this connects immediately,
+    // and if it moved the scan-driven relearn picks it up — either way the user
+    // no longer has to manually rescan first.
+    model_->wifi()->startDiscovery();
+    for (const auto& r : model_->wifi()->remembered()) {
+        if (r.id == wantedId) {
+            model_->wifi()->connectTo(r.toDiscovered());
             return;
         }
     }

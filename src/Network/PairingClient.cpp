@@ -32,106 +32,146 @@ models::PairResponse makeError(const char* msg) {
     models::PairResponse r;
     r.ok = false;
     r.error = QString::fromLatin1(msg);
-    // Synthesized network-error responses are unreachable by construction —
-    // we never made it far enough to receive a JSON body. fromJson flips this
-    // to true on the success path.
+    // Synthesized network-error responses are unreachable by construction — we
+    // never made it far enough to receive a JSON body. fromJson flips this to
+    // true on the success path. httpStatus stays 0 (no HTTP response).
     r.reachable = false;
     return r;
+}
+
+// One blocking HTTPS exchange. `method` is POST/GET/DELETE; `body` empty = no
+// body. Returns (status, body, reachable). Drives a nested QEventLoop so the
+// public API stays blocking from a QtConcurrent worker thread.
+struct BlockingReply {
+    int status = 0;
+    QByteArray body;
+    bool reachable = false;
+};
+
+BlockingReply blockingRequest(const QString& url, const QByteArray& method, const QByteArray& body,
+                              const QString& deviceId, const QString& hmacProof) {
+    QNetworkRequest req((QUrl(url)));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!deviceId.isEmpty()) { req.setRawHeader("X-Device-Id", deviceId.toUtf8()); }
+    if (!hmacProof.isEmpty()) { req.setRawHeader("X-Hmac-Proof", hmacProof.toUtf8()); }
+
+    // Self-signed cert accepted without verification (TOFU pinning is a later
+    // wave). The manager is stack-local so it (and the reply) belong to this
+    // worker thread; the nested event loop pumps its signals.
+    QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
+    tls.setPeerVerifyMode(QSslSocket::VerifyNone);
+    req.setSslConfiguration(tls);
+
+    QNetworkAccessManager nam;
+    nam.setTransferTimeout(kTimeoutMs);
+
+    QEventLoop loop;
+    QNetworkReply* reply = body.isEmpty() ? nam.sendCustomRequest(req, method)
+                                          : nam.sendCustomRequest(req, method, body);
+    QObject::connect(reply, &QNetworkReply::sslErrors, reply,
+                     [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+
+    QTimer guard;
+    guard.setSingleShot(true);
+    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
+    guard.start(kTimeoutMs + 1000);
+    loop.exec();
+
+    BlockingReply out;
+    if (!reply->isFinished()) {
+        reply->abort();
+        reply->deleteLater();
+        return out; // status 0, unreachable
+    }
+    const auto statusVar = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    out.status = statusVar.isValid() ? statusVar.toInt() : 0;
+    out.body = reply->readAll();
+    out.reachable = out.status != 0 || !out.body.isEmpty();
+    reply->deleteLater();
+    return out;
+}
+
+QJsonObject parseObject(const QByteArray& body) {
+    if (body.isEmpty()) { return {}; }
+    QJsonParseError err{};
+    const auto doc = QJsonDocument::fromJson(body, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) { return {}; }
+    return doc.object();
 }
 
 } // namespace
 
 PairingClient::Outcome PairingClient::classify(const models::PairResponse& response) {
-    if (response.ok && response.sharedKey.has_value() && !response.sharedKey->isEmpty()) {
+    reducer::PairReply r;
+    r.status = response.httpStatus;
+    r.bodyParsed = response.reachable;
+    r.ok = response.ok;
+    r.pending = response.pending;
+    r.hasSharedKey = response.sharedKey.has_value() && !response.sharedKey->isEmpty();
+    switch (reducer::classifyPair(r)) {
+    case reducer::PairVerdict::Success:
         return Success{*response.sharedKey};
+    case reducer::PairVerdict::Pending:
+        return Pending{};
+    case reducer::PairVerdict::AuthRequired:
+        return AuthRequired{};
+    case reducer::PairVerdict::VersionMismatch:
+        return VersionMismatch{};
+    case reducer::PairVerdict::Unreachable:
+        break;
     }
-    if (response.reachable) { return AuthRequired{}; }
-    return Unreachable{response.error.value_or(
-        QCoreApplication::translate(kTrContext, "Server unreachable"))};
+    return Unreachable{
+        response.error.value_or(QCoreApplication::translate(kTrContext, "Server unreachable"))};
 }
 
-// Pairing is now POST /api/pair on the satellite's HTTPS client server (it was
-// previously a bespoke raw-TCP JSON line-protocol). The request and response
-// JSON shapes are unchanged — only the transport differs.
-//
-// pair() is a blocking call invoked from a QtConcurrent worker thread
-// (WifiConnectionManager::pairAndConnect). QNetworkAccessManager is async, so
-// we create a manager local to this thread and drive a nested QEventLoop until
-// the reply finishes (or a timer trips), keeping the public API blocking.
 models::PairResponse PairingClient::pair(const QString& ip, int port, const QString& deviceId,
-                                         const QString& deviceName, const QString& pin) {
+                                         const QString& deviceName, const QString& pin,
+                                         const QString& clientPin) {
     const QString url = QStringLiteral("https://%1:%2/api/pair").arg(ip).arg(port);
-    const QJsonObject reqObj{{"deviceId", deviceId}, {"deviceName", deviceName}, {"pin", pin}};
+    const QJsonObject reqObj{
+        {"deviceId", deviceId},
+        {"deviceName", deviceName},
+        {"protocolVersion", proto::kProtocolVersion},
+        {"pin", pin},
+        {"clientPin", clientPin},
+    };
     const auto body = QJsonDocument(reqObj).toJson(QJsonDocument::Compact);
+    const auto reply = blockingRequest(url, "POST", body, {}, {});
+    if (!reply.reachable) { return makeError("connect failed"); }
+    auto r = models::PairResponse::fromJson(parseObject(reply.body));
+    r.httpStatus = reply.status;
+    return r;
+}
 
-    QNetworkRequest req((QUrl(url)));
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+models::PairResponse PairingClient::rotateKey(const QString& ip, int port, const QString& deviceId,
+                                              const QString& deviceName, const QString& hmacProof) {
+    const QString url = QStringLiteral("https://%1:%2/api/pair").arg(ip).arg(port);
+    const QJsonObject reqObj{
+        {"deviceId", deviceId},
+        {"deviceName", deviceName},
+        {"protocolVersion", proto::kProtocolVersion},
+        {"hmacProof", hmacProof},
+    };
+    const auto body = QJsonDocument(reqObj).toJson(QJsonDocument::Compact);
+    const auto reply = blockingRequest(url, "POST", body, {}, {});
+    if (!reply.reachable) { return makeError("connect failed"); }
+    auto r = models::PairResponse::fromJson(parseObject(reply.body));
+    r.httpStatus = reply.status;
+    return r;
+}
 
-    // The satellite presents a self-signed certificate. By approved project
-    // decision the dish accepts it without verification or pinning — the
-    // equivalent of `curl --insecure`. Disable both peer (certificate-chain)
-    // and host-name verification.
-    QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
-    tls.setPeerVerifyMode(QSslSocket::VerifyNone);
-    req.setSslConfiguration(tls);
-
-    // The manager is stack-local so it (and the reply) belong to this worker
-    // thread; the nested event loop below pumps its signals.
-    QNetworkAccessManager nam;
-    nam.setTransferTimeout(kTimeoutMs);
-
-    QEventLoop loop;
-    QNetworkReply* reply = nam.post(req, body);
-
-    // Belt-and-braces: with VerifyNone no sslErrors should fire, but if the
-    // platform backend still reports any, swallow them so a self-signed cert
-    // never aborts the handshake.
-    QObject::connect(reply, &QNetworkReply::sslErrors, reply,
-                     [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-
-    // setTransferTimeout already bounds the request, but a hard backstop
-    // guarantees the loop exits even if the reply never emits finished().
-    QTimer guard;
-    guard.setSingleShot(true);
-    QObject::connect(&guard, &QTimer::timeout, &loop, &QEventLoop::quit);
-    guard.start(kTimeoutMs + 1000);
-
-    loop.exec();
-
-    if (!reply->isFinished()) {
-        reply->abort();
-        reply->deleteLater();
-        return makeError("connect timeout");
-    }
-
-    if (reply->error() != QNetworkReply::NoError) {
-        // POST /api/pair always answers HTTP 200 with a JSON body — even on a
-        // bad PIN. So any QNetworkReply error here is a genuine transport
-        // failure (TLS handshake, connection refused, DNS, timeout); treat it
-        // as unreachable, mirroring the old socket-error paths.
-        const QByteArray payload = reply->readAll();
-        reply->deleteLater();
-        if (!payload.isEmpty()) {
-            QJsonParseError perr{};
-            const auto doc = QJsonDocument::fromJson(payload, &perr);
-            if (perr.error == QJsonParseError::NoError && doc.isObject()) {
-                return models::PairResponse::fromJson(doc.object());
-            }
-        }
-        return makeError("connect failed");
-    }
-
-    const QByteArray payload = reply->readAll();
-    reply->deleteLater();
-    if (payload.isEmpty()) { return makeError("no response"); }
-
-    QJsonParseError err{};
-    const auto doc = QJsonDocument::fromJson(payload, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-        return makeError("malformed response");
-    }
-    return models::PairResponse::fromJson(doc.object());
+models::PairResponse PairingClient::pairStatus(const QString& ip, int port,
+                                               const QString& deviceId) {
+    const QString url = QStringLiteral("https://%1:%2/api/pair/status?deviceId=%3")
+                            .arg(ip)
+                            .arg(port)
+                            .arg(QString::fromUtf8(QUrl::toPercentEncoding(deviceId)));
+    const auto reply = blockingRequest(url, "GET", {}, {}, {});
+    if (!reply.reachable) { return makeError("connect failed"); }
+    auto r = models::PairResponse::fromStatusJson(parseObject(reply.body));
+    r.httpStatus = reply.status;
+    return r;
 }
 
 } // namespace dish::net

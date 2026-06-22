@@ -3,8 +3,17 @@
 
 #include "AppModel.h"
 #include "Network/WinsockInit.h"
-#include "UI/MainWindow.h"
+#include "UI/CrashHandler.h"
 #include "UI/Theme.h"
+
+#ifdef DISH_QML
+// The Qt Quick chrome path (built only when the DISH_QML option is ON). When
+// OFF, none of the Quick headers/libs are referenced and the build is the exact
+// Widgets app.
+#include "qml/QmlEntryPoint.h"
+#else
+#include "UI/MainWindow.h"
+#endif
 
 #include <QApplication>
 #include <QIcon>
@@ -16,6 +25,12 @@
 #include <cstdio>
 
 int main(int argc, char* argv[]) {
+    // Arm crash diagnostics FIRST — before any other subsystem can fault — so an
+    // unhandled SEH (access violation, etc.) or a debug-CRT assert writes a
+    // minidump + a symbolized crash.log to %LOCALAPPDATA%\Dish\ for the user to
+    // send. Dependency-light and self-guarding; see UI/CrashHandler.cpp.
+    dish::crash::install();
+
     // Initialize Winsock for the lifetime of `main`. Every network call in
     // the app (LANDiscovery, PairingClient, the per-session SatelliteClient
     // threads) assumes Winsock is up; this RAII guard guarantees it. The
@@ -48,8 +63,8 @@ int main(int argc, char* argv[]) {
     const QString localeName = QLocale::system().name();
     if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n"))) {
         QCoreApplication::installTranslator(&translator);
-    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"), QStringLiteral("_"),
-                               QStringLiteral(".qm"))) {
+    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"),
+                               QStringLiteral("_"), QStringLiteral(".qm"))) {
         // Two-step fallback so QLocale::system().name() values that are
         // language-only (e.g. "de") still find dish_de.qm.
         QCoreApplication::installTranslator(&translator);
@@ -62,12 +77,25 @@ int main(int argc, char* argv[]) {
     // multi-resolution .ico via AUTORCC; QIcon picks the best size per DPI.
     app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
 
+#ifndef DISH_QML
+    // applyDishTheme styles QWidgets (global QPalette + QSS) — meaningless and
+    // unused on the Quick path, where ThemeBridge feeds the same tokens to QML.
     dish::ui::applyDishTheme(app);
+#endif
 
     dish::AppModel model;
+
+#ifdef DISH_QML
+    // The AppModel is exposed to QML as the `App` context property (an
+    // AppViewModel adapter) inside runQmlApp. Core init above is identical to the
+    // Widgets path and in the same order; only the window construction differs.
+    model.start();
+    return dish::qml::runQmlApp(model);
+#else
     dish::ui::MainWindow window(&model);
     window.show();
     model.start();
 
     return app.exec();
+#endif
 }

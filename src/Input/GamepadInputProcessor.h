@@ -133,6 +133,27 @@ class GamepadInputProcessor {
         std::uint64_t totalSent = 0;
     };
 
+    // Cumulative per-device live-input counters, the seam the InputRateStore
+    // samples to derive Hz. `gamepad` is bumped once per published report
+    // (publish), `motion` once per *forwarded* IMU sample (the rate-limited
+    // publishMotion — counting attempts would over-report a stream the gate is
+    // throttling). Both the SDL path and the USB-direct path reach the wire
+    // through this processor, so both feed these automatically. Monotonic within
+    // a device's lifetime; remove() drops the entry so a re-attach re-baselines.
+    // Mirrors the android JNI getDeviceInputEventCount / getDeviceMotionCount the
+    // android InputRateStore reads — here the count lives in C++ rather than over
+    // JNI, but the contract (a monotonic per-device event tally) is identical.
+    struct InputRateCounters {
+        std::uint64_t gamepadEvents = 0;
+        std::uint64_t motionEvents = 0;
+    };
+
+    // Read the current cumulative counters for `id` (0/0 if the device has never
+    // emitted). Off the hot path: the InputRateStore calls this once per ~1 Hz
+    // sample on the Qt main thread. Takes the same mtx_ the publish path holds,
+    // for a tiny read — no new lock is introduced on the per-event send path.
+    InputRateCounters inputCounters(const DeviceId& id) const;
+
     void setReportSender(ReportSender sender);
     void setMotionSender(MotionSender sender);
     void setBatterySender(BatterySender sender);
@@ -171,7 +192,9 @@ class GamepadInputProcessor {
     TelemetrySnapshot drainTelemetry();
 
   private:
-    std::mutex mtx_;
+    // mutable so the const inputCounters() read can take the same lock the
+    // publish path holds — a lock is conceptually not part of the object's value.
+    mutable std::mutex mtx_;
     std::unordered_map<DeviceId, DeviceState> states_;
     std::unordered_map<DeviceId, Deadzones> deadzones_;
     ReportSender sender_;
@@ -191,6 +214,21 @@ class GamepadInputProcessor {
         bool hasEmitted = false;
     };
     std::unordered_map<DeviceId, MotionGate> lastMotionUs_;
+
+    // Per-device cumulative live-input counters fed from the hot path. The two
+    // atomics are bumped with a relaxed fetch_add inside the SAME mtx_ critical
+    // section publish()/publishMotionAt() already hold — so the send path gains
+    // NO new lock and NO per-event allocation (the map node is created on a
+    // device's first event, then reused). They are atomic so inputCounters()'
+    // read is well-defined even though it shares mtx_ for the map lookup; the
+    // counter value itself never needs the lock to be torn (a single 64-bit
+    // atomic load). std::atomic is neither copyable nor movable, but the map's
+    // operator[] default-constructs the node in place, so it never moves them.
+    struct AtomicInputCounters {
+        std::atomic<std::uint64_t> gamepad{0};
+        std::atomic<std::uint64_t> motion{0};
+    };
+    std::unordered_map<DeviceId, AtomicInputCounters> rateCounters_;
 
     int telEvents_ = 0;
     int telSends_ = 0;
