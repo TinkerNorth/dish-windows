@@ -128,6 +128,10 @@ set(DISH_TEST_SOURCES
     test_dish_notifications.cpp
     test_input_rate_tracker.cpp
     test_input_rate_store.cpp
+    # Heartbeat-RTT latency window (pure): ping-clock arming (in-flight guard +
+    # loss reclaim), 64-sample slide + validity clamp, median/2 one-way estimate,
+    # deterministic "~3.4 ms" formatting (android #138 parity).
+    test_latency_window.cpp
     test_slot_live_stats.cpp
     test_motion_indicator_state.cpp
     test_winsock_init.cpp

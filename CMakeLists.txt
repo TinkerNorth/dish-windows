@@ -174,6 +174,10 @@ set(DISH_CORE_SOURCES
     # motion-indicator precedence ladder + meter-visibility conjunctions.
     src/core/reducer/InputRateTracker.h
     src/core/reducer/MotionIndicatorState.h
+    # core/reducer — heartbeat-RTT latency window (pure, Qt-free): the 64-sample
+    # sliding median/2 one-way estimate + ping-clock arming rule behind the
+    # per-connection latency readout (android #138 parity).
+    src/core/reducer/LatencyWindow.h
     # core/input — pure, Qt-free XUSB/HID layout math + deadzone/scale + the
     # host-testable physical-motion convert/filter (Workstream 2d). Header-only.
     src/core/input/GamepadButtonLayouts.h
