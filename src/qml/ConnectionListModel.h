@@ -32,17 +32,21 @@ class ConnectionListModel : public QAbstractListModel {
   public:
     enum Roles {
         IdRole = Qt::UserRole + 1,
-        LabelRole,       // QString: server name (or ip when name empty)
-        IpRole,          // QString
-        UdpPortRole,     // int
-        LinkStateRole,   // QString token: "found"/"stale"/"saved"/"ready"/
-                         //               "connecting"/"connected"/"unstable"
-        ChipRole,        // QString token: status-chip key (see contract)
-        DotColorRole,    // QString token: "success"/"primary"/"warning"/"muted"
-        GlyphRole,       // QString token: "satelliteBase"/"satelliteConnected"/
-                         //               "satelliteOff"
-        BoundSlotIdRole, // QString: bound slot id ("" if unbound)
-        LiveLinkRole,    // bool: link is actively streaming (Connected/Unstable)
+        LabelRole,          // QString: server name (or ip when name empty)
+        IpRole,             // QString
+        UdpPortRole,        // int
+        LinkStateRole,      // QString token: "found"/"stale"/"saved"/"ready"/
+                            //               "connecting"/"connected"/"unstable"
+        ChipRole,           // QString token: status-chip key (see contract)
+        DotColorRole,       // QString token: "success"/"primary"/"warning"/"muted"
+        GlyphRole,          // QString token: "satelliteBase"/"satelliteConnected"/
+                            //               "satelliteOff"
+        BoundSlotIdRole,    // QString: bound slot id ("" if unbound)
+        LiveLinkRole,       // bool: link is actively streaming (Connected/Unstable)
+        LatencyTextRole,    // QString: pre-formatted one-way latency "~3.4 ms"
+                            //          (median heartbeat-RTT/2); "" until a live
+                            //          session has RTT samples
+        LatencySamplesRole, // int: RTT samples in the window (gates the caption)
     };
     Q_ENUM(Roles)
 

@@ -73,6 +73,14 @@ class WifiConnection : public QObject {
     std::optional<QString> boundSlotId() const { return boundSlotId_; }
     std::shared_ptr<SatelliteClient> client() const { return clientRef_.get(); }
 
+    // Latest one-way latency readout for the live session: median heartbeat-
+    // RTT/2 (ms, rounded to the 0.1 ms display precision) + the RTT sample
+    // count. 0 / 0 while no session is live or the window is unseeded. Refreshed
+    // by the 1 s alive-poll off the client's latencySnapshot(); zeroed with the
+    // session in teardownClient so a dead row never shows a stale figure.
+    double latencyOneWayMs() const { return latencyOneWayMs_; }
+    int latencySamples() const { return latencySamples_; }
+
     // The epoch the satellite stamped on our last PUT/GET — the reference the
     // heartbeat-ack epoch is compared against. -1 until the first PUT lands.
     int lastAppliedEpoch() const { return lastAppliedEpoch_; }
@@ -157,6 +165,11 @@ class WifiConnection : public QObject {
 
   signals:
     void changed();
+    // The latency readout moved (the 1 s alive-poll saw a new display value).
+    // Deliberately NOT `changed`: that signal fans out into the hub/AppModel
+    // rebuild cascade, which a per-second cosmetic tick must not thrash — the
+    // same patch-not-rebuild rule the slot live-rates follow.
+    void telemetryChanged();
     // Transient one-shot — a controller descriptor failed to apply server-side.
     void errorOccurred(const QString& message);
     // A slot's descriptor changed while the session is live → the manager
@@ -174,6 +187,9 @@ class WifiConnection : public QObject {
     std::optional<QString> boundSlotId_;
     int lastAppliedEpoch_ = -1;
     bool mouseControlGranted_ = false;
+    // Display-rounded latency readout (see the accessors). Main-thread only.
+    double latencyOneWayMs_ = 0.0;
+    int latencySamples_ = 0;
 
     // slotId → desired binding. A QHash would do, but std::map keeps the
     // descriptor iteration order deterministic (by slot id) for reproducible PUTs.

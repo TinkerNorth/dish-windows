@@ -250,6 +250,8 @@ mirrors `ConnectionsDialog` rows). Same minimal-signal behavior as §2.
 | `glyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"` — pick the brand glyph variant. |
 | `boundSlotId` | `string` | Slot id bound to this connection ("" when unbound). |
 | `liveLink` | `bool` | Link is actively streaming (`Connected` or `Unstable`). **Gates the per-row Disconnect/Reconnect buttons**: enable `disconnectConnection(connectionId)` only when `liveLink`; enable `reconnectConnection(connectionId)` only when NOT `liveLink`. |
+| `latencyText` | `string` | Pre-formatted one-way latency, e.g. `"~3.4 ms"` (median heartbeat-RTT/2 over a sliding 64-ping window, ~1 Hz refresh). `""` until a live session has RTT samples. |
+| `latencySamples` | `int` | RTT samples currently in the window (0–64). Gate the latency caption on `linkState === "connected" && latencySamples > 0` and show the count beside the figure (`"~3.4 ms · last 64 pings"`). |
 
 > `connectionModel` carries the REMEMBERED/derived rows. The FOUND list of
 > not-yet-remembered discovered servers comes from the `App.discoveredServers`

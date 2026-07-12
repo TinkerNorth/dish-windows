@@ -197,6 +197,8 @@ Kit.Page {
             required property string dotColor
             required property string glyph
             required property bool liveLink
+            required property string latencyText
+            required property int latencySamples
 
             width: parent ? parent.width : implicitWidth
 
@@ -228,14 +230,31 @@ Kit.Page {
                     }
                 }
 
-                RowLayout {
-                    spacing: 6
-                    Kit.StatusDot { token: rememberedCard.dotColor; Layout.alignment: Qt.AlignVCenter }
+                ColumnLayout {
+                    spacing: 2
+                    RowLayout {
+                        spacing: 6
+                        Kit.StatusDot { token: rememberedCard.dotColor; Layout.alignment: Qt.AlignVCenter }
+                        Label {
+                            text: page.chipText(rememberedCard.chip)
+                            color: Theme.muted
+                            font.pixelSize: 12
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+                    // One-way latency caption (median heartbeat-RTT/2 over the
+                    // sliding window); the sample count travels with the figure
+                    // so a barely-seeded window reads as tentative. Shown only
+                    // while the link is online and the window has samples.
                     Label {
-                        text: page.chipText(rememberedCard.chip)
+                        visible: rememberedCard.linkState === "connected"
+                                 && rememberedCard.latencySamples > 0
+                        text: qsTr("%1 · last %2 pings")
+                                  .arg(rememberedCard.latencyText)
+                                  .arg(rememberedCard.latencySamples)
                         color: Theme.muted
-                        font.pixelSize: 12
-                        Layout.alignment: Qt.AlignVCenter
+                        font.pixelSize: 11
+                        Layout.alignment: Qt.AlignRight
                     }
                 }
 

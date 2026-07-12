@@ -13,6 +13,10 @@ namespace dish {
 class AppModel;
 }
 
+namespace dish::models {
+struct RememberedWifi;
+}
+
 namespace dish::ui {
 
 class DishLoaderButton;
@@ -40,6 +44,13 @@ class ConnectionsDialog : public QDialog {
     // can drive a single update path. Determining "is the current Connect
     // target pairing in-flight" lives here.
     void refreshActionState();
+    // One remembered row's display text: "<name> • <ip>[ • online[ · ~3.4 ms]]".
+    // The latency readout (median heartbeat-RTT/2) rides the online tag while
+    // the session is live and its RTT window has samples.
+    QString rememberedRowText(const models::RememberedWifi& r) const;
+    // Patch remembered-row texts IN PLACE on the 1 s latency tick — a full
+    // rebuildLists would clear the user's selection every second.
+    void refreshRememberedTexts();
 
     AppModel* model_;
     QListWidget* discoveredList_;
