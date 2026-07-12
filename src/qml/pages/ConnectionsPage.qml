@@ -41,6 +41,14 @@ Kit.Page {
         function onStateChanged() { page.pairTick++; }
     }
 
+    // Scan on open (android #125 parity): entering the destination surfaces
+    // reachable satellites without an extra Scan tap, and the same pass
+    // re-homes a remembered satellite whose box moved to a new address. The
+    // shell recreates the page on each rail visit, so this fires per entry;
+    // startDiscovery() is guarded manager-side, so a scan already in flight
+    // is never double-triggered.
+    Component.onCompleted: if (!App.scanning) App.startDiscovery()
+
     // Localized chip text for a ConnectionListModel `chip` token. Kept in QML
     // because it is pure presentation (the C++ vends the token, not the copy).
     function chipText(token) {

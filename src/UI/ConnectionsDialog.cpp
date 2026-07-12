@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 namespace dish::ui {
@@ -119,6 +120,13 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
 
     rebuildLists();
     refreshActionState();
+}
+
+void ConnectionsDialog::showEvent(QShowEvent* event) {
+    QDialog::showEvent(event);
+    // Scan on open: the guarded startDiscovery (no-op mid-scan) makes this safe
+    // on every show; scanningChanged drives the spinner via refreshActionState.
+    model_->wifi()->startDiscovery();
 }
 
 void ConnectionsDialog::refreshActionState() {

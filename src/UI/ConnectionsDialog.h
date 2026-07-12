@@ -28,6 +28,14 @@ class ConnectionsDialog : public QDialog {
   public:
     ConnectionsDialog(AppModel* model, QWidget* parent = nullptr);
 
+  protected:
+    // Opening the dialog kicks the same discovery pass the Scan button runs
+    // (android #125 parity: ConnectionsActivity.onStart → startDiscovery), so
+    // reachable satellites surface without an extra tap and a remembered
+    // satellite whose box moved is re-homed. startDiscovery() no-ops while a
+    // scan is in flight, so a re-show mid-scan never double-triggers.
+    void showEvent(QShowEvent* event) override;
+
   private:
     void rebuildLists();
     void onScanClicked();
