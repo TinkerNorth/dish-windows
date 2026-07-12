@@ -27,6 +27,14 @@ namespace {
 // 16-byte Poly1305 tag appended by the AEAD.
 constexpr std::size_t kAuthTag = 16;
 constexpr std::size_t kHeaderSize = 8; // token(4) + counter(4)
+
+// Monotonic microseconds for the heartbeat ping clock. steady_clock never runs
+// backwards; 0 is reserved as the "no ping in flight" sentinel.
+std::int64_t nowSteadyUs() {
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
 } // namespace
 
 SatelliteClient::SatelliteClient() {
@@ -88,6 +96,14 @@ void SatelliteClient::setConnectionParams(const std::array<std::uint8_t, 4>& tok
     backendAvailable_.store(-1, std::memory_order_relaxed);
     activeControllerCount_.store(-1, std::memory_order_relaxed);
     sessionCloseReason_.store(-1, std::memory_order_relaxed);
+    // The ping clock + RTT window restart with the session: a stale in-flight
+    // stamp must not pair with the new session's first ack, and the readout
+    // must answer this session only.
+    pingSentUs_.store(0, std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> lock(latencyMtx_);
+        latencyWindow_.reset();
+    }
 }
 
 void SatelliteClient::sendReport(int controllerIndex, std::uint16_t buttons, std::uint8_t lt,
@@ -255,6 +271,14 @@ void SatelliteClient::heartbeatLoop() {
     using namespace std::chrono;
     while (heartbeatRunning_.load(std::memory_order_relaxed)) {
         sendEncrypted(kMsgHeartbeatPing, nullptr, 0);
+        // The RTT clock starts here, on this session's own stamp. Arm only when
+        // no ping is outstanding (or the outstanding one aged past the loss
+        // cap) — overwriting would pair a late ack with the newer ping's stamp
+        // and read artificially low (reducer::shouldArmPing).
+        const std::int64_t now = nowSteadyUs();
+        if (reducer::shouldArmPing(pingSentUs_.load(std::memory_order_relaxed), now)) {
+            pingSentUs_.store(now, std::memory_order_relaxed);
+        }
         const int missed = missedAcks_.fetch_add(1, std::memory_order_relaxed) + 1;
         if (missed >= kHeartbeatMissMax) {
             connectionAlive_.store(false, std::memory_order_relaxed);
@@ -317,6 +341,16 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
     const std::size_t bodyLen = static_cast<std::size_t>(plainLen) - 4;
 
     if (msgType == kMsgHeartbeatAck) {
+        // Pair the ack with the in-flight ping: consume the clock (exchange, so
+        // a duplicate ack can't double-count) and slide the RTT into the window.
+        // push() itself drops a sample past the loss cap — a reclaimed ping's
+        // stale ack never skews the median.
+        const std::int64_t sent = pingSentUs_.exchange(0, std::memory_order_relaxed);
+        if (sent != 0) {
+            const double rttMs = static_cast<double>(nowSteadyUs() - sent) / 1000.0;
+            std::lock_guard<std::mutex> lock(latencyMtx_);
+            latencyWindow_.push(rttMs);
+        }
         missedAcks_.store(0, std::memory_order_relaxed);
         connectionAlive_.store(true, std::memory_order_relaxed);
         if (const auto ack = parseHeartbeatAck(body, bodyLen)) {
@@ -385,6 +419,11 @@ void SatelliteClient::setHeartbeatAckHandler(HeartbeatAckHandler handler) {
 void SatelliteClient::setCloseHandler(CloseHandler handler) {
     std::lock_guard<std::mutex> lock(closeHandlerMtx_);
     closeHandler_ = std::move(handler);
+}
+
+SatelliteClient::LatencySnapshot SatelliteClient::latencySnapshot() const {
+    std::lock_guard<std::mutex> lock(latencyMtx_);
+    return {latencyWindow_.oneWayP50Ms(), latencyWindow_.count()};
 }
 
 std::optional<SatelliteClient::HeartbeatAck>

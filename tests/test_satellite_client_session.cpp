@@ -3,9 +3,9 @@
 //
 // SatelliteClient session-level invariants that don't need a socket: the send
 // counter starts at 1 (the protocol-1 fix to the pre-1 off-by-one), the
-// enriched-ack / close-notify state resets on each setConnectionParams, and the
-// heartbeat cadence/miss thresholds match the contract (2s / 2-miss
-// not-responding / 5-miss dead).
+// enriched-ack / close-notify / latency-window state resets on each
+// setConnectionParams, and the heartbeat cadence/miss thresholds match the
+// contract (2s / 2-miss not-responding / 5-miss dead).
 
 #include "Network/SatelliteClient.h"
 
@@ -43,6 +43,17 @@ TEST_CASE("setConnectionParams resets reconcile/close state to -1", "[satellite]
     REQUIRE(c.activeControllerCount() == -1);
     REQUIRE(c.sessionCloseReason() == -1);
     REQUIRE(c.isAlive());
+}
+
+TEST_CASE("setConnectionParams starts the latency window empty", "[satellite][latency]") {
+    // The readout is per-session: a re-key (token/salt/key rotate) must leave
+    // the RTT window empty so the chip only ever reflects the live session.
+    // The window math itself is pinned in test_latency_window.cpp.
+    SatelliteClient c;
+    c.setConnectionParams(token4(), key32());
+    const auto snap = c.latencySnapshot();
+    REQUIRE(snap.samples == 0);
+    REQUIRE(snap.oneWayMs == 0.0);
 }
 
 TEST_CASE("a fresh client re-keyed twice keeps the counter at 1", "[satellite][counter]") {
