@@ -111,7 +111,9 @@ jobs:
       - name: qmllint (QML static analysis)
         shell: pwsh
         run: |
-          $files = git ls-files 'src/qml/**/*.qml'
+          # git's * crosses directory levels, so this catches the top-level
+          # Main/AppShell/WindowTitleBar too ('src/qml/**/*.qml' would not).
+          $files = git ls-files 'src/qml/*.qml'
           & "$env:QT_ROOT_DIR/bin/qmllint.exe" `
             -I build `
             -I "$env:QT_ROOT_DIR/qml" `
