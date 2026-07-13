@@ -64,6 +64,8 @@ cm::ConnectionRow connectedRow(const std::string& id = "conn-1") {
     r.glyph = rd::ConnectionGlyph::SatelliteConnected;
     r.dotColor = rd::DotColor::Success;
     r.chip = rd::StatusChipKey::Online;
+    r.latencyOneWayMs = 3.4;
+    r.latencySamples = 64;
     return r;
 }
 
@@ -89,10 +91,12 @@ QVariant roleOf(const ConnectionListModel& model, int row, int role) {
 TEST_CASE("ConnectionListModel: roleNames covers every Roles enumerator", "[connmodel][roles]") {
     ConnectionListModel model;
     const auto names = model.roleNames();
-    REQUIRE(names.size() == 10);
+    REQUIRE(names.size() == 12);
     REQUIRE(names.value(ConnectionListModel::IdRole) == QByteArray("connectionId"));
     REQUIRE(names.value(ConnectionListModel::ChipRole) == QByteArray("chip"));
     REQUIRE(names.value(ConnectionListModel::LiveLinkRole) == QByteArray("liveLink"));
+    REQUIRE(names.value(ConnectionListModel::LatencyTextRole) == QByteArray("latencyText"));
+    REQUIRE(names.value(ConnectionListModel::LatencySamplesRole) == QByteArray("latencySamples"));
     QSet<QByteArray> unique;
     for (const auto& n : names) { unique.insert(n); }
     REQUIRE(unique.size() == names.size());
@@ -121,6 +125,10 @@ TEST_CASE("ConnectionListModel: data maps a connected row's roles + tokens", "[c
     REQUIRE(roleOf(model, 0, ConnectionListModel::GlyphRole).toString() == "satelliteConnected");
     REQUIRE(roleOf(model, 0, ConnectionListModel::BoundSlotIdRole).toString() == "slot-1");
     REQUIRE(roleOf(model, 0, ConnectionListModel::LiveLinkRole).toBool());
+    // The latency readout is pre-formatted by the pure core helper so both UIs
+    // render the identical figure; the sample count gates + captions it.
+    REQUIRE(roleOf(model, 0, ConnectionListModel::LatencyTextRole).toString() == "~3.4 ms");
+    REQUIRE(roleOf(model, 0, ConnectionListModel::LatencySamplesRole).toInt() == 64);
 }
 
 TEST_CASE("ConnectionListModel: a saved row maps offline tokens + a non-live link",
@@ -133,6 +141,10 @@ TEST_CASE("ConnectionListModel: a saved row maps offline tokens + a non-live lin
     REQUIRE(roleOf(model, 0, ConnectionListModel::GlyphRole).toString() == "satelliteOff");
     REQUIRE(roleOf(model, 0, ConnectionListModel::BoundSlotIdRole).toString().isEmpty());
     REQUIRE_FALSE(roleOf(model, 0, ConnectionListModel::LiveLinkRole).toBool());
+    // No live session -> no samples -> the latency text stays empty (the QML
+    // caption additionally gates on linkState === "connected").
+    REQUIRE(roleOf(model, 0, ConnectionListModel::LatencyTextRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, ConnectionListModel::LatencySamplesRole).toInt() == 0);
 }
 
 TEST_CASE("ConnectionListModel: appending emits rowsInserted only for the delta",

@@ -1,6 +1,6 @@
 name: Security
 
-# PR-time security gates for dish-linux. Pulls the shared jobs from
+# PR-time security gates for dish-windows. Pulls the shared jobs from
 # this repo's local copy of `_security.yml` (action-pin lint, allowlist-
 # expiry, OSV-Scanner, dependency-review, gitleaks). CodeQL lives in
 # codeql.yml because it has its own matrix.

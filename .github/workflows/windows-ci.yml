@@ -77,12 +77,18 @@ jobs:
           $files = git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp' 'tests/*.h'
           clang-format --dry-run --Werror $files
 
-      - name: Configure (Debug, tests on)
+      - name: Configure (Debug, tests + QML UI on)
         shell: pwsh
         run: |
+          # DISH_QML=ON so the Qt Quick tree (the Dish.Chrome module, the chrome
+          # C++, the QmlEntryPoint) actually compiles in CI alongside the tests.
+          # The SHIPPED default stays the Widgets UI: the Release/artifact build
+          # below deliberately does not set DISH_QML — flipping the product
+          # default is the owner's call, not CI's.
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Debug `
             -DDISH_BUILD_TESTS=ON `
+            -DDISH_QML=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
@@ -91,6 +97,27 @@ jobs:
       - name: Run tests
         working-directory: build
         run: ctest --output-on-failure --parallel
+
+      # Lint the Qt Quick sources. Runs after the Debug build because the
+      # Dish.Chrome module's qmldir/qmltypes are generated into build/ by
+      # qt_add_qml_module — importing pages resolve against them (-I build).
+      # Every category gates, with ONE documented downgrade:
+      #   * unqualified — `App`, a runtime context property the linter cannot
+      #     see (QML_CONTRACT.md documents it as the accepted limitation until
+      #     App becomes a compiled singleton).
+      # unresolved-type needs no exception: the module declares
+      # DEPENDENCIES QtQuick, so Theme's QColor properties resolve statically.
+      - name: qmllint (QML static analysis)
+        shell: pwsh
+        run: |
+          # git's * crosses directory levels, so this catches the top-level
+          # Main/AppShell/WindowTitleBar too ('src/qml/**/*.qml' would not).
+          $files = git ls-files 'src/qml/*.qml'
+          & "$env:QT_ROOT_DIR/bin/qmllint.exe" `
+            -I build `
+            -I "$env:QT_ROOT_DIR/qml" `
+            --unqualified info `
+            $files
 
       - name: clang-tidy
         shell: pwsh

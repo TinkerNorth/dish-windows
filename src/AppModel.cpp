@@ -178,8 +178,8 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
         return hasGyro && motionEnabledStore_.isEnabled(slotId.toStdString());
     });
 
-    // And the controller type (Xbox / PlayStation) so the controller-add can
-    // send the right MSG_CONTROLLER_TYPE hint — a DualSense → virtual DS4. The
+    // And the controller type (Xbox / PlayStation) so the slot's REST
+    // descriptor declares the right `type` — a DualSense → virtual DS4. The
     // user's Emulate override (ControllerTypeStore, Workstream 2c) wins over the
     // SDL hardware classification; resolveControllerType applies that ladder so
     // the choice is threaded into the descriptor PUT.

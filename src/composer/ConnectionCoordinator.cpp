@@ -54,6 +54,12 @@ ConnectionCoordinator::ConnectionCoordinator(net::WifiConnectionManager* wifi,
         refreshDiscovered();
         refreshRemembered();
     });
+    // The 1 s telemetry tick (latency readout) re-derives the sessions snapshot
+    // WITHOUT the poolChanged fan-out (hub/AppModel rebuilds): only the derived
+    // rows move, and the composer's distinct-until-changed passes just the real
+    // display changes through.
+    QObject::connect(wifi_, &net::WifiConnectionManager::poolTelemetryChanged, this,
+                     [this] { refreshSessions(); });
     // ConnectionHub owns the binding table; its `changed` fires after a
     // bind/unbind, so mirror the bindings upstream off it.
     QObject::connect(hub_, &net::ConnectionHub::changed, this,
@@ -84,6 +90,10 @@ void ConnectionCoordinator::refreshSessions() {
         s.name = server.name.toStdString();
         s.ip = server.ip.toStdString();
         s.udpPort = server.udpPort;
+        // Already display-rounded by the connection's alive-poll, so the
+        // snapshot's exact == keys distinct-until-changed on visible moves.
+        s.latencyOneWayMs = conn->latencyOneWayMs();
+        s.latencySamples = conn->latencySamples();
         next.push_back(std::move(s));
         // A parked-Stale session also marks its id stale, so a remembered row at
         // the same id reads "Needs pairing" even after the live row is gone.

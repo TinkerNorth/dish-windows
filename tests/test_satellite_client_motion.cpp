@@ -118,8 +118,8 @@ TEST_CASE("MSG constants match the wire-protocol spec (types.h)", "[constants]")
 }
 
 // ---------------------------------------------------------------------------
-// CAP_MOTION — the per-controller capability bit advertised in
-// MSG_CONTROLLER_ADD only when the bound pad actually has an IMU. An Xbox pad
+// CAP_MOTION — the per-controller capability bit advertised in the slot's
+// REST descriptor only when the bound pad actually has an IMU. An Xbox pad
 // has no gyro/accelerometer and must NOT advertise it; the receiver still
 // accepts best-effort motion either way, but the bit drives the web UI's
 // motionCapable flag. Mirrors the withLightbarCapability tests.

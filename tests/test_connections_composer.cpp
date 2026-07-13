@@ -98,6 +98,26 @@ TEST_CASE("composer transform: a live session row is Connected and carries its b
     REQUIRE(rows[0].chip == dish::reducer::StatusChipKey::Online);
 }
 
+TEST_CASE("composer transform: a live session's latency readout lands on its row",
+          "[composer][transform]") {
+    // The one-way readout (median heartbeat-RTT/2 + sample count) rides the
+    // session snapshot onto the derived row; a remembered-only satellite has no
+    // session, so its row keeps the 0 / 0 default and the UI shows no caption.
+    auto live = session("mid:a", SessionPresence::Live, "10.0.0.1", 9876, "Pc");
+    live.latencyOneWayMs = 3.4;
+    live.latencySamples = 64;
+    const auto rows = buildConnectionSummaries({live},
+                                               {rememberedSat("mid:a", "10.0.0.1", 9876, "Pc"),
+                                                rememberedSat("mid:b", "10.0.0.2", 9876, "Tv")},
+                                               {}, {}, {});
+    REQUIRE(rows.size() == 2);
+    REQUIRE(rows[0].id == "mid:a"); // sorted by label: "Pc" < "Tv"
+    REQUIRE(rows[0].latencyOneWayMs == 3.4);
+    REQUIRE(rows[0].latencySamples == 64);
+    REQUIRE(rows[1].latencyOneWayMs == 0.0);
+    REQUIRE(rows[1].latencySamples == 0);
+}
+
 TEST_CASE("composer transform: a live session prefers its own (fresher) address over remembered",
           "[composer][transform]") {
     // Remembered at the old IP; the live session re-pointed to a new one.

@@ -319,6 +319,18 @@ Windows-relevant pure layer).
 
 ---
 
+## Post-audit ledger additions (android features shipped after the audit)
+
+Behaviors android landed after PROMPT_05's row-walk froze the matrix above.
+Same reading rules; the counts in the Summary deliberately stay as-of-audit.
+
+| ✓ | Android behavior (PR) | Android test file | Windows test file(s) | Status | Notes |
+|---|---|---|---|---|---|
+| [x] | One-way latency readout — heartbeat-RTT ping clock (in-flight guard + 5 s loss reclaim), sliding 64-sample window, displayed median/2 + sample count (#138) | ui/diagnostics/LatencyPanelTest.kt (+ hotpath_latency.cpp policy, untested on android) | test_latency_window.cpp; test_satellite_client_session.cpp (per-session reset); test_connections_composer.cpp + test_connection_list_model.cpp (row/role threading) | covered | The MECHANISM is mirrored 1:1 (arming rule, validity clamp, nearest-rank p50/2, count-beside-figure). Surfaced on the Connections rows (both UIs), not a diagnostics screen. **Deferred follow-ups, deliberately out of scope:** the diagnostics screen itself, heartbeat probe mode (densified pings while a latency panel is open), the RTT sparkline, and the stage-1 hot-path benchmark — android gates all four behind its debug-only bench surface. |
+| [x] | Scan on Connections open — entering the screen starts the guarded discovery pass (re-homes moved satellites) (#125) | — (android shipped it as an `onStart` wiring change with no unit test) | — (UI wiring: QML `Component.onCompleted` + Widgets `showEvent`; the single-flight guard it leans on is the existing `startDiscovery` scanning_ gate) | covered (wiring) | Both UIs call the same guarded `startDiscovery()` the Scan button uses; a scan already in flight is a no-op, matching android's `compareAndSet` semantics. No pure rule to pin beyond the guard the manager already carries. |
+
+---
+
 ## Test-discipline audit
 
 Audited the whole `tests/` tree against the Wave 0 / `PROMPT_00` invariants.

@@ -51,10 +51,8 @@ Kit.ContentDialog {
         typeListView.currentIndex = sel;
     }
 
-    // contentColumn is a frozen Kit.ContentDialog alias (QML_UI_KIT.md §4);
-    // the linter cannot see the alias target's children list (known limit).
-    contentColumn.children: [
-        Label { // qmllint disable missing-property
+    body: [
+        Label {
             text: qsTr("Choose how this controller appears to the host.")
             color: Theme.muted
             font.pixelSize: 12
@@ -63,13 +61,13 @@ Kit.ContentDialog {
         // ── The catalog fetch's four states, each rendered distinctly (was a
         // single static hint that conflated loading / empty / error). All bind
         // App's AsyncState projection so they clear reactively when the GET lands. ──
-        Kit.LoadingSpinner { // qmllint disable missing-property
+        Kit.LoadingSpinner {
             // In-flight with nothing cached yet → a spinner, not a blank list.
             visible: App.emulateLoading
             text: qsTr("Loading controller types…")
             Layout.fillWidth: true
         },
-        Kit.ErrorBanner { // qmllint disable missing-property
+        Kit.ErrorBanner {
             // The fetch failed: show the typed reason + a Retry. If we have stale
             // cached types they still render below; this banner sits above them.
             visible: App.emulateError.length > 0
@@ -78,7 +76,7 @@ Kit.ContentDialog {
             onRetryRequested: picker.retryRequested()
             Layout.fillWidth: true
         },
-        Label { // qmllint disable missing-property
+        Label {
             // Stale-while-revalidate cue: we're showing cached types from a prior
             // fetch while a background refresh is in flight (App.emulateStale).
             // Distinct from the cold-load spinner above (which shows only when there
@@ -90,7 +88,7 @@ Kit.ContentDialog {
             font.italic: true
             Layout.fillWidth: true
         },
-        Label { // qmllint disable missing-property
+        Label {
             // Genuinely empty: not loading, no error, and the catalog offered
             // nothing (or the slot is unbound) — distinct from the two states above.
             visible: !App.emulateLoading && App.emulateError.length === 0
@@ -101,7 +99,7 @@ Kit.ContentDialog {
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
         },
-        ListView { // qmllint disable missing-property
+        ListView {
             id: typeListView
             visible: picker.types.length > 0
             Layout.fillWidth: true

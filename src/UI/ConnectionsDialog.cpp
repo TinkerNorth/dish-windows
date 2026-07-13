@@ -7,11 +7,13 @@
 #include "BrandIcon.h"
 #include "DishLoaders.h"
 #include "Theme.h"
+#include "core/reducer/LatencyWindow.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 namespace dish::ui {
@@ -111,9 +113,20 @@ ConnectionsDialog::ConnectionsDialog(AppModel* model, QWidget* parent)
                      &ConnectionsDialog::refreshActionState);
     QObject::connect(model_->hub(), &net::ConnectionHub::changed, this,
                      &ConnectionsDialog::rebuildLists);
+    // The 1 s latency tick patches remembered-row texts in place (selection
+    // preserved); structural changes still come through the rebuild paths above.
+    QObject::connect(model_->wifi(), &net::WifiConnectionManager::poolTelemetryChanged, this,
+                     &ConnectionsDialog::refreshRememberedTexts);
 
     rebuildLists();
     refreshActionState();
+}
+
+void ConnectionsDialog::showEvent(QShowEvent* event) {
+    QDialog::showEvent(event);
+    // Scan on open: the guarded startDiscovery (no-op mid-scan) makes this safe
+    // on every show; scanningChanged drives the spinner via refreshActionState.
+    model_->wifi()->startDiscovery();
 }
 
 void ConnectionsDialog::refreshActionState() {
@@ -165,18 +178,43 @@ void ConnectionsDialog::rebuildLists() {
     }
     rememberedList_->clear();
     for (const auto& r : model_->wifi()->remembered()) {
-        auto* conn = model_->wifi()->get(r.id);
-        const QString liveTag = (conn != nullptr && conn->state() == net::SessionState::Live)
-                                    ? tr(" \u2022 online")
-                                    : QString();
-        auto* item = new QListWidgetItem(
-            QStringLiteral("%1 \u2022 %2%3").arg(r.name.isEmpty() ? r.ip : r.name, r.ip, liveTag));
+        auto* item = new QListWidgetItem(rememberedRowText(r));
         item->setData(Qt::UserRole, r.id);
         rememberedList_->addItem(item);
     }
     // Clearing the lists drops the selection \u2014 Connect/Pair targets the
     // selected row, so its idle-disabled state needs a refresh as well.
     refreshActionState();
+}
+
+QString ConnectionsDialog::rememberedRowText(const models::RememberedWifi& r) const {
+    auto* conn = model_->wifi()->get(r.id);
+    const bool live = conn != nullptr && conn->state() == net::SessionState::Live;
+    QString liveTag = live ? tr(" \u2022 online") : QString();
+    // Append the one-way latency readout while streaming (median heartbeat-
+    // RTT/2, formatted by the same pure core helper the QML row uses).
+    if (live && conn->latencySamples() > 0) {
+        liveTag +=
+            QStringLiteral(" \u00B7 %1")
+                .arg(QString::fromStdString(reducer::formatLatencyMs(conn->latencyOneWayMs())));
+    }
+    return QStringLiteral("%1 \u2022 %2%3").arg(r.name.isEmpty() ? r.ip : r.name, r.ip, liveTag);
+}
+
+void ConnectionsDialog::refreshRememberedTexts() {
+    // Match rows by their stable id (not index) so a text patch can never land
+    // on the wrong row if the remembered set shifted under a pending rebuild.
+    const auto remembered = model_->wifi()->remembered();
+    for (int i = 0; i < rememberedList_->count(); ++i) {
+        auto* item = rememberedList_->item(i);
+        const QString id = item->data(Qt::UserRole).toString();
+        for (const auto& r : remembered) {
+            if (r.id == id) {
+                item->setText(rememberedRowText(r));
+                break;
+            }
+        }
+    }
 }
 
 void ConnectionsDialog::onScanClicked() { model_->wifi()->startDiscovery(); }

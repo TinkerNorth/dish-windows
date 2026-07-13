@@ -27,11 +27,13 @@ hex. Controls are the **Basic** style; every kit control is custom-painted from
 - **Theme access:** `import Dish.Chrome` then `Theme.primary`, `Theme.surface`,
   `Theme.onSurface`, `Theme.muted`, `Theme.outline`, `Theme.success`,
   `Theme.warning`, `Theme.error`, `Theme.background`, `Theme.surfaceDim`.
-- **qmllint note:** linting against the module reports `QColor … not found
-  [unresolved-type]` for every `Theme.*` color — this is a known qmllint
-  limitation (the singleton returns `QColor` without a declared QtGui qmltypes
-  dependency). It is NOT an error; ignore those specific warnings. Keep your QML
-  otherwise warning-clean (no `unqualified`/`missing-property`/`unused-imports`).
+- **qmllint note:** the module declares `DEPENDENCIES QtQuick`
+  (CMakeLists.txt), so `Theme.*`'s `QColor` properties resolve statically and
+  `unresolved-type` is a real error again — keep QML warning-clean
+  (`missing-property`/`unused-imports`/`unresolved-type` all gate CI). The one
+  remaining accepted limitation is `unqualified` on `App`: it is a runtime
+  context property (see QML_CONTRACT.md), invisible to static analysis until
+  it moves to a compiled singleton, so CI downgrades only that category.
 
 ---
 
@@ -244,7 +246,7 @@ above the shell automatically.
 | `acceptText` | string | `"OK"` | Primary footer button label. |
 | `rejectText` | string | `"Cancel"` | Outline footer button label. |
 | `acceptEnabled` | bool | `true` | Enable/disable the accept button (e.g. until input valid). |
-| `contentColumn` | (alias) | — | The body `ColumnLayout`; inject fields via its `children`/`data`, or declare children of `contentColumn`. |
+| `body` | list<QtObject> (alias) | — | The dialog body: assign the field items (`body: [ ... ]`). Aliases the internal column's `data` list, so the type is statically known to tooling. |
 | `accepted()` | signal | — | Accept clicked. **The dialog does NOT auto-close on accept** — call `close()` yourself after a successful action (keep open on error). |
 | `rejected()` | signal | — | Reject clicked (auto-closes). |
 
@@ -268,8 +270,8 @@ Kit.Page {
         acceptText: qsTr("Pair")
         acceptEnabled: pinField.text.length === 6
 
-        // Body controls are children of contentColumn:
-        contentColumn.children: [
+        // Body controls:
+        body: [
             Kit.KitTextField {
                 id: pinField
                 placeholderText: qsTr("6-digit PIN")

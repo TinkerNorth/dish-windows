@@ -25,6 +25,7 @@
 #pragma once
 
 #include "core/model/Protocol.h"
+#include "core/reducer/LatencyWindow.h"
 
 // Winsock headers must appear before any windows.h pull-in that could include
 // the older winsock.h. <ws2tcpip.h> declares sockaddr_in / inet_pton; pulled
@@ -251,6 +252,17 @@ class SatelliteClient {
     // Current send counter (next value to use), for the proactive-re-PUT guard.
     std::uint32_t sendCounter() const { return sendCounter_.load(std::memory_order_relaxed); }
 
+    // One-way latency estimate off the heartbeat round trip: median of the
+    // sliding RTT window halved + the sample count the UI shows beside the
+    // figure (core/reducer/LatencyWindow). Zeroed by setConnectionParams (the
+    // readout answers THIS session). Poll from the main-thread alive tick;
+    // samples land on the receive thread under the same lock.
+    struct LatencySnapshot {
+        double oneWayMs = 0.0;
+        int samples = 0;
+    };
+    LatencySnapshot latencySnapshot() const;
+
   private:
     void sendEncrypted(std::uint16_t msgType, const std::uint8_t* payload, std::size_t len);
     void heartbeatLoop();
@@ -274,6 +286,17 @@ class SatelliteClient {
     std::atomic<bool> ackRunning_{false};
     std::thread heartbeatThread_;
     std::thread ackThread_;
+
+    // Monotonic stamp (µs) of the heartbeat ping currently in flight; 0 = none.
+    // Armed by the heartbeat thread (per reducer::shouldArmPing — never
+    // overwritten while a ping is outstanding), consumed by the receive thread's
+    // ack handler via exchange(0). Lives on the client (one per session) so
+    // concurrent satellites can never cross-pair a ping with another's ack.
+    std::atomic<std::int64_t> pingSentUs_{0};
+    // The sliding RTT window behind latencySnapshot(). The receive thread
+    // pushes; the main-thread poll reads — both under latencyMtx_.
+    mutable std::mutex latencyMtx_;
+    reducer::LatencyWindow latencyWindow_;
 
     std::atomic<int> missedAcks_{0};
     std::atomic<bool> connectionAlive_{true};

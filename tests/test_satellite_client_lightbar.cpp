@@ -76,7 +76,7 @@ TEST_CASE("MSG_LIGHTBAR constant pins the wire value", "[lightbar][constants]") 
 
 // ---------------------------------------------------------------------------
 // CAP_LIGHTBAR (Task 1.4) — the per-controller capability bit advertised in
-// MSG_CONTROLLER_ADD when the bound pad has an addressable RGB LED.
+// the slot's REST descriptor when the bound pad has an addressable RGB LED.
 // ---------------------------------------------------------------------------
 
 TEST_CASE("CAP_LIGHTBAR constant pins the wire value", "[lightbar][caps]") {

@@ -355,16 +355,14 @@ Kit.Page {
         // A selection is required before the bind can apply.
         acceptEnabled: bindList.currentIndex >= 0
 
-        // contentColumn is a frozen Kit.ContentDialog alias (QML_UI_KIT.md §4);
-        // the linter cannot see the alias target's children list (known limit).
-        contentColumn.children: [
-            Label { // qmllint disable missing-property
+        body: [
+            Label {
                 text: qsTr("Choose a connection to route this controller to.")
                 color: Theme.muted
                 font.pixelSize: 12
                 Layout.fillWidth: true
             },
-            ListView { // qmllint disable missing-property
+            ListView {
                 id: bindList
                 Layout.fillWidth: true
                 implicitHeight: Math.min(contentHeight, 240)

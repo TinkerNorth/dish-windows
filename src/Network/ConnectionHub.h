@@ -59,15 +59,15 @@ class ConnectionHub : public QObject {
 
     // Predicate answering "does the physical pad behind this slot have an
     // addressable RGB LED?". Installed by AppModel (which owns the SDL bridge
-    // that detects the LED). bind() consults it so the resulting
-    // MSG_CONTROLLER_ADD advertises CAP_LIGHTBAR for an LED-bearing pad. When
-    // unset, slots are treated as having no lightbar.
+    // that detects the LED). bind() consults it so the slot's REST descriptor
+    // advertises CAP_LIGHTBAR for an LED-bearing pad. When unset, slots are
+    // treated as having no lightbar.
     using LightbarCapabilityFn = std::function<bool(const QString& slotId)>;
     void setLightbarCapabilityFn(LightbarCapabilityFn fn) { lightbarCapabilityFn_ = std::move(fn); }
 
     // Predicate answering "does the physical pad behind this slot have a
     // motion sensor (gyro/accelerometer)?". Same shape / install path as
-    // LightbarCapabilityFn — bind() consults it so MSG_CONTROLLER_ADD
+    // LightbarCapabilityFn — bind() consults it so the REST descriptor
     // advertises CAP_MOTION per-device. Unset → treated as no motion.
     using MotionCapabilityFn = std::function<bool(const QString& slotId)>;
     void setMotionCapabilityFn(MotionCapabilityFn fn) { motionCapabilityFn_ = std::move(fn); }
@@ -75,7 +75,7 @@ class ConnectionHub : public QObject {
     // Resolver answering "what satellite controller type is the pad behind
     // this slot?" (CONTROLLER_TYPE_XBOX / _PLAYSTATION). Installed by AppModel
     // off the SDL bridge's per-device classification; bind() threads the
-    // result into the MSG_CONTROLLER_TYPE (0x0008) hint so a DualSense
+    // result into the REST descriptor's `type` field so a DualSense
     // registers as a virtual DS4. Unset → CONTROLLER_TYPE_XBOX.
     using ControllerTypeFn = std::function<int(const QString& slotId)>;
     void setControllerTypeFn(ControllerTypeFn fn) { controllerTypeFn_ = std::move(fn); }

@@ -86,6 +86,12 @@ std::vector<ConnectionRow> buildConnectionSummaries(
         row.ip = ip;
         row.udpPort = udpPort;
         row.boundSlotId = boundSlotFor(id, bindings);
+        // The latency readout travels only with a live session's snapshot — a
+        // remembered-only row keeps the 0 / 0 default.
+        if (conn != nullptr) {
+            row.latencyOneWayMs = conn->latencyOneWayMs;
+            row.latencySamples = conn->latencySamples;
+        }
         row.glyph = reducer::glyphForConnection(row.kind, live);
         row.dotColor = reducer::dotColorForState(live);
         row.chip = reducer::statusChipKey(live);
