@@ -13,6 +13,10 @@ namespace dish {
 class AppModel;
 }
 
+namespace dish::models {
+struct RememberedWifi;
+}
+
 namespace dish::ui {
 
 class DishLoaderButton;
@@ -23,6 +27,14 @@ class ConnectionsDialog : public QDialog {
     Q_OBJECT
   public:
     ConnectionsDialog(AppModel* model, QWidget* parent = nullptr);
+
+  protected:
+    // Opening the dialog kicks the same discovery pass the Scan button runs
+    // (android #125 parity: ConnectionsActivity.onStart → startDiscovery), so
+    // reachable satellites surface without an extra tap and a remembered
+    // satellite whose box moved is re-homed. startDiscovery() no-ops while a
+    // scan is in flight, so a re-show mid-scan never double-triggers.
+    void showEvent(QShowEvent* event) override;
 
   private:
     void rebuildLists();
@@ -40,6 +52,13 @@ class ConnectionsDialog : public QDialog {
     // can drive a single update path. Determining "is the current Connect
     // target pairing in-flight" lives here.
     void refreshActionState();
+    // One remembered row's display text: "<name> • <ip>[ • online[ · ~3.4 ms]]".
+    // The latency readout (median heartbeat-RTT/2) rides the online tag while
+    // the session is live and its RTT window has samples.
+    QString rememberedRowText(const models::RememberedWifi& r) const;
+    // Patch remembered-row texts IN PLACE on the 1 s latency tick — a full
+    // rebuildLists would clear the user's selection every second.
+    void refreshRememberedTexts();
 
     AppModel* model_;
     QListWidget* discoveredList_;

@@ -218,8 +218,8 @@ void SDLGamepadBridge::runLoop() {
             // pads. Drives the per-controller CAP_LIGHTBAR advertisement.
             const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
             // Classify SDL's negotiated type into the satellite Xbox /
-            // PlayStation kind so the connection layer can send the right
-            // MSG_CONTROLLER_TYPE hint (a DualSense → virtual DS4).
+            // PlayStation kind so the connection layer can declare the right
+            // descriptor `type` (a DualSense → virtual DS4).
             const auto type = SDL_GameControllerGetType(gc);
             const std::uint8_t ctrlType = sdlTypeToControllerType(type);
             // The pad's USB identity, classified once here for the twin-dedup

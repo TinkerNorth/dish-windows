@@ -41,6 +41,14 @@ Kit.Page {
         function onStateChanged() { page.pairTick++; }
     }
 
+    // Scan on open (android #125 parity): entering the destination surfaces
+    // reachable satellites without an extra Scan tap, and the same pass
+    // re-homes a remembered satellite whose box moved to a new address. The
+    // shell recreates the page on each rail visit, so this fires per entry;
+    // startDiscovery() is guarded manager-side, so a scan already in flight
+    // is never double-triggered.
+    Component.onCompleted: if (!App.scanning) App.startDiscovery()
+
     // Localized chip text for a ConnectionListModel `chip` token. Kept in QML
     // because it is pure presentation (the C++ vends the token, not the copy).
     function chipText(token) {
@@ -197,6 +205,8 @@ Kit.Page {
             required property string dotColor
             required property string glyph
             required property bool liveLink
+            required property string latencyText
+            required property int latencySamples
 
             width: parent ? parent.width : implicitWidth
 
@@ -228,14 +238,31 @@ Kit.Page {
                     }
                 }
 
-                RowLayout {
-                    spacing: 6
-                    Kit.StatusDot { token: rememberedCard.dotColor; Layout.alignment: Qt.AlignVCenter }
+                ColumnLayout {
+                    spacing: 2
+                    RowLayout {
+                        spacing: 6
+                        Kit.StatusDot { token: rememberedCard.dotColor; Layout.alignment: Qt.AlignVCenter }
+                        Label {
+                            text: page.chipText(rememberedCard.chip)
+                            color: Theme.muted
+                            font.pixelSize: 12
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+                    // One-way latency caption (median heartbeat-RTT/2 over the
+                    // sliding window); the sample count travels with the figure
+                    // so a barely-seeded window reads as tentative. Shown only
+                    // while the link is online and the window has samples.
                     Label {
-                        text: page.chipText(rememberedCard.chip)
+                        visible: rememberedCard.linkState === "connected"
+                                 && rememberedCard.latencySamples > 0
+                        text: qsTr("%1 · last %2 pings")
+                                  .arg(rememberedCard.latencyText)
+                                  .arg(rememberedCard.latencySamples)
                         color: Theme.muted
-                        font.pixelSize: 12
-                        Layout.alignment: Qt.AlignVCenter
+                        font.pixelSize: 11
+                        Layout.alignment: Qt.AlignRight
                     }
                 }
 
@@ -315,7 +342,7 @@ Kit.Page {
             pairDialog.open();
         }
 
-        contentColumn.children: [
+        body: [
             // ── REVERSE: the PIN to type on the satellite (sent on open) ──
             Label {
                 text: qsTr("Show this PIN on %1 to approve").arg(pairDialog.serverName)

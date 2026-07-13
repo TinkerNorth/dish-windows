@@ -174,6 +174,10 @@ set(DISH_CORE_SOURCES
     # motion-indicator precedence ladder + meter-visibility conjunctions.
     src/core/reducer/InputRateTracker.h
     src/core/reducer/MotionIndicatorState.h
+    # core/reducer — heartbeat-RTT latency window (pure, Qt-free): the 64-sample
+    # sliding median/2 one-way estimate + ping-clock arming rule behind the
+    # per-connection latency readout (android #138 parity).
+    src/core/reducer/LatencyWindow.h
     # core/input — pure, Qt-free XUSB/HID layout math + deadzone/scale + the
     # host-testable physical-motion convert/filter (Workstream 2d). Header-only.
     src/core/input/GamepadButtonLayouts.h
@@ -507,6 +511,10 @@ if(DISH_QML)
     qt_add_qml_module(Dish
         URI Dish.Chrome
         VERSION 1.0
+        # Declared so tooling (qmllint/qmlcachegen) loads QtQuick's type
+        # database when analysing this module: the Theme/Chrome singletons
+        # expose QColor properties that are otherwise unresolvable statically.
+        DEPENDENCIES QtQuick
         QML_FILES
             src/qml/Main.qml
             src/qml/WindowTitleBar.qml

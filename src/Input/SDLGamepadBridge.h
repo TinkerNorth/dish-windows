@@ -56,12 +56,13 @@ class SDLGamepadBridge : public QObject {
     //
     // `hasLightbar` is true iff SDL_GameControllerHasLED reported an
     // addressable RGB LED for the device (DualSense / DualShock 4). It drives
-    // the SlotCard lightbar chip and the CAP_LIGHTBAR bit in MSG_CONTROLLER_ADD.
+    // the SlotCard lightbar chip and the CAP_LIGHTBAR bit in the slot's REST
+    // descriptor.
     //
     // `controllerType` is the satellite virtual-device kind for this pad:
     // CONTROLLER_TYPE_PLAYSTATION (1) for a PS3/PS4/PS5 pad as classified by
     // SDL_GameControllerGetType, CONTROLLER_TYPE_XBOX (0) for everything else.
-    // It feeds the MSG_CONTROLLER_TYPE (0x0008) hint so a DualSense registers
+    // It feeds the REST descriptor's `type` field so a DualSense registers
     // as a virtual DS4 (touchpad / IMU / lightbar surface) instead of an Xbox
     // 360 pad. Values mirror satellite/src/core/types.h CONTROLLER_TYPE_*.
     //
@@ -229,8 +230,8 @@ class SDLGamepadBridge : public QObject {
     // Per-device satellite controller type (CONTROLLER_TYPE_XBOX /
     // CONTROLLER_TYPE_PLAYSTATION), classified once at attach from
     // SDL_GameControllerGetType. Surfaced through devices() as
-    // Device::controllerType so the connection layer can send the right
-    // MSG_CONTROLLER_TYPE hint. Same lifecycle / locking as motionCapable_;
+    // Device::controllerType so the connection layer can declare the right
+    // descriptor `type`. Same lifecycle / locking as motionCapable_;
     // a device absent from the map defaults to CONTROLLER_TYPE_XBOX.
     std::unordered_map<int, std::uint8_t> controllerType_;
 

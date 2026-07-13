@@ -37,10 +37,17 @@ struct SessionSnapshot {
     std::string name; // server display name (may be empty)
     std::string ip;
     int udpPort = 0;
+    // One-way latency readout for a live session (median heartbeat-RTT/2, ms,
+    // already display-rounded by the WifiConnection poll) + the RTT sample
+    // count. 0 / 0 while idle or unseeded. Exact == is safe: both sides carry
+    // the same rounded value, so distinct-until-changed keys on display moves.
+    double latencyOneWayMs = 0.0;
+    int latencySamples = 0;
 
     bool operator==(const SessionSnapshot& o) const {
         return id == o.id && presence == o.presence && name == o.name && ip == o.ip &&
-               udpPort == o.udpPort;
+               udpPort == o.udpPort && latencyOneWayMs == o.latencyOneWayMs &&
+               latencySamples == o.latencySamples;
     }
     bool operator!=(const SessionSnapshot& o) const { return !(*this == o); }
 };
@@ -82,12 +89,18 @@ struct ConnectionRow {
     reducer::ConnectionGlyph glyph = reducer::ConnectionGlyph::SatelliteBase;
     reducer::DotColor dotColor = reducer::DotColor::Muted;
     reducer::StatusChipKey chip = reducer::StatusChipKey::Offline;
+    // One-way latency readout carried from the live session's snapshot (0 / 0
+    // for a remembered-only row). The UI gates the caption on a Connected row
+    // with latencySamples > 0 and shows the count beside the figure.
+    double latencyOneWayMs = 0.0;
+    int latencySamples = 0;
 
     bool operator==(const ConnectionRow& o) const {
         return id == o.id && label == o.label && live == o.live && kind == o.kind &&
                detailKey == o.detailKey && ip == o.ip && udpPort == o.udpPort &&
                boundSlotId == o.boundSlotId && glyph == o.glyph && dotColor == o.dotColor &&
-               chip == o.chip;
+               chip == o.chip && latencyOneWayMs == o.latencyOneWayMs &&
+               latencySamples == o.latencySamples;
     }
     bool operator!=(const ConnectionRow& o) const { return !(*this == o); }
 };

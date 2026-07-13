@@ -4,6 +4,7 @@
 #include "qml/ConnectionListModel.h"
 
 #include "core/reducer/ConnectionRows.h"
+#include "core/reducer/LatencyWindow.h"
 
 namespace dish::qml {
 
@@ -113,6 +114,13 @@ QVariant ConnectionListModel::data(const QModelIndex& index, int role) const {
         return QString::fromStdString(r.boundSlotId);
     case LiveLinkRole:
         return rd::isLiveLink(r.live);
+    case LatencyTextRole:
+        // Pre-formatted here (the pure core formatter) so both UIs render the
+        // identical figure; empty until the window has samples.
+        return r.latencySamples > 0 ? QString::fromStdString(rd::formatLatencyMs(r.latencyOneWayMs))
+                                    : QString();
+    case LatencySamplesRole:
+        return r.latencySamples;
     default:
         return {};
     }
@@ -120,10 +128,18 @@ QVariant ConnectionListModel::data(const QModelIndex& index, int role) const {
 
 QHash<int, QByteArray> ConnectionListModel::roleNames() const {
     return {
-        {IdRole, "connectionId"},   {LabelRole, "label"},         {IpRole, "ip"},
-        {UdpPortRole, "udpPort"},   {LinkStateRole, "linkState"}, {ChipRole, "chip"},
-        {DotColorRole, "dotColor"}, {GlyphRole, "glyph"},         {BoundSlotIdRole, "boundSlotId"},
+        {IdRole, "connectionId"},
+        {LabelRole, "label"},
+        {IpRole, "ip"},
+        {UdpPortRole, "udpPort"},
+        {LinkStateRole, "linkState"},
+        {ChipRole, "chip"},
+        {DotColorRole, "dotColor"},
+        {GlyphRole, "glyph"},
+        {BoundSlotIdRole, "boundSlotId"},
         {LiveLinkRole, "liveLink"},
+        {LatencyTextRole, "latencyText"},
+        {LatencySamplesRole, "latencySamples"},
     };
 }
 

@@ -97,6 +97,10 @@ class WifiConnectionManager : public QObject {
 
   signals:
     void poolChanged();
+    // A per-connection telemetry readout moved (the 1 s latency tick). Kept
+    // separate from poolChanged so the hub/AppModel rebuild cascade never runs
+    // for a cosmetic figure — only the row-level consumers re-derive off it.
+    void poolTelemetryChanged();
     void discoveredChanged();
     void scanningChanged();
     void pairingInFlightChanged();

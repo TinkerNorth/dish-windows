@@ -185,6 +185,8 @@ WifiConnection* WifiConnectionManager::ensureConnection(const models::Discovered
     auto* conn = new WifiConnection(id, server, this);
     connections_.insert(id, conn);
     QObject::connect(conn, &WifiConnection::changed, this, &WifiConnectionManager::poolChanged);
+    QObject::connect(conn, &WifiConnection::telemetryChanged, this,
+                     &WifiConnectionManager::poolTelemetryChanged);
     QObject::connect(conn, &WifiConnection::errorOccurred, this,
                      [this](const QString& msg) { emit connectionEvent(makeError(msg)); });
     wireSlotSync(conn);
