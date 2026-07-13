@@ -342,6 +342,10 @@ Kit.Page {
             pairDialog.open();
         }
 
+        // qmllint cannot resolve .children through the ContentDialog's
+        // contentColumn property alias (kit/ContentDialog.qml:35); this is the
+        // kit's documented usage and renders fine. Scope-disable the check.
+        // qmllint disable missing-property
         contentColumn.children: [
             // ── REVERSE: the PIN to type on the satellite (sent on open) ──
             Label {
@@ -419,6 +423,7 @@ Kit.Page {
                 Layout.fillWidth: true
             }
         ]
+        // qmllint enable missing-property
 
         // Footer = the FORWARD submit. Reverse completes on its own (approval).
         onAccepted: {
