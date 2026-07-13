@@ -13,7 +13,7 @@
 //   Kit.ContentDialog {
 //       id: pairDialog
 //       heading: qsTr("Pair with Living-Room")
-//       contentColumn.children: [ /* fields */ ]
+//       body: [ /* fields */ ]
 //       // footer buttons are provided as `acceptText` / `rejectText`;
 //       // accepted()/rejected() fire on click.
 //   }
@@ -31,8 +31,11 @@ Popup {
     property string acceptText: qsTr("OK")
     property string rejectText: qsTr("Cancel")
     property bool acceptEnabled: true
-    // Pages inject their body controls into this column.
-    property alias contentColumn: bodyColumn
+    // Pages inject their body controls here. Aliased straight to the body
+    // column's data list so the property carries a concrete list type — an
+    // object alias would hide the target's members from qmllint and force
+    // every call site to suppress missing-property.
+    property alias body: bodyColumn.data
 
     signal accepted()
     signal rejected()

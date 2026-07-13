@@ -511,6 +511,10 @@ if(DISH_QML)
     qt_add_qml_module(Dish
         URI Dish.Chrome
         VERSION 1.0
+        # Declared so tooling (qmllint/qmlcachegen) loads QtQuick's type
+        # database when analysing this module: the Theme/Chrome singletons
+        # expose QColor properties that are otherwise unresolvable statically.
+        DEPENDENCIES QtQuick
         QML_FILES
             src/qml/Main.qml
             src/qml/WindowTitleBar.qml

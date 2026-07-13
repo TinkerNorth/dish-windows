@@ -101,13 +101,12 @@ jobs:
       # Lint the Qt Quick sources. Runs after the Debug build because the
       # Dish.Chrome module's qmldir/qmltypes are generated into build/ by
       # qt_add_qml_module — importing pages resolve against them (-I build).
-      # The two documented false-positive categories (docs/QML_UI_KIT.md
-      # "qmllint note") are downgraded to info — still printed, never fatal:
-      #   * unresolved-type — the Theme singleton's QColor properties (no
-      #     declared QtGui qmltypes dependency);
+      # Every category gates, with ONE documented downgrade:
       #   * unqualified — `App`, a runtime context property the linter cannot
-      #     see (QML_CONTRACT.md documents it as the accepted limitation).
-      # Everything else (missing-property, unused-imports, …) fails the gate.
+      #     see (QML_CONTRACT.md documents it as the accepted limitation until
+      #     App becomes a compiled singleton).
+      # unresolved-type needs no exception: the module declares
+      # DEPENDENCIES QtQuick, so Theme's QColor properties resolve statically.
       - name: qmllint (QML static analysis)
         shell: pwsh
         run: |
@@ -117,7 +116,6 @@ jobs:
           & "$env:QT_ROOT_DIR/bin/qmllint.exe" `
             -I build `
             -I "$env:QT_ROOT_DIR/qml" `
-            --unresolved-type info `
             --unqualified info `
             $files
 
