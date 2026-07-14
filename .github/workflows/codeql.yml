@@ -3,9 +3,9 @@ name: CodeQL
 # Source-level static analysis for dish-windows (C++ / Qt6 / SDL2 / Winsock).
 #
 # Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
-#   actions/checkout          @ v4.2.2  → 11bd71901bbe5b1630ceea73d27597364c9af683
-#   github/codeql-action/*    @ v3.27.0 → 662472033e021d55d94146f66f6058822b0b39fd
-#   ilammy/msvc-dev-cmd       @ v1.13.0 → a102174a2b586eec2ea151a69e6fd14404a8ce7c
+#   actions/checkout          @ v6.0.2  → de0fac2e4500dabe0009e67214ff5f5447ce83dd
+#   github/codeql-action/*    @ v4.35.5 → 9e0d7b8d25671d64c341c19c0152d693099fb5ba
+#   ilammy/msvc-dev-cmd       @ v1.13.0 → 0b201ec74fa43914dc39ae48a89fd1d8cb592756
 #   jurplel/install-qt-action @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
 #   lukka/run-vcpkg           @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
 
