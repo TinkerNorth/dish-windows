@@ -19,11 +19,11 @@ on:
 # wholesale — see HANDOFF.md item 6.
 #
 # Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
-#   actions/checkout                @ v4.2.2  → 11bd71901bbe5b1630ceea73d27597364c9af683
-#   actions/upload-artifact         @ v4.4.3  → b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
-#   anchore/sbom-action             @ v0.17.4 → 8d0a6505bf28ced3e85154d13dc6af83299e13f1
-#   softprops/action-gh-release     @ v2.0.8  → c062e08bd532815e2082a85e87e3ef29c3e6d191
-#   ilammy/msvc-dev-cmd             @ v1.13.0 → a102174a2b586eec2ea151a69e6fd14404a8ce7c
+#   actions/checkout                @ v6.0.2  → de0fac2e4500dabe0009e67214ff5f5447ce83dd
+#   actions/upload-artifact         @ v7.0.1  → 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+#   anchore/sbom-action             @ v0.24.0 → e22c389904149dbc22b58101806040fa8d37a610
+#   softprops/action-gh-release     @ v3.0.0  → b4309332981a82ec1c5618f44dd2e27cc8bfbfda
+#   ilammy/msvc-dev-cmd             @ v1.13.0 → 0b201ec74fa43914dc39ae48a89fd1d8cb592756
 #   jurplel/install-qt-action       @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
 #   lukka/run-vcpkg                 @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
 
