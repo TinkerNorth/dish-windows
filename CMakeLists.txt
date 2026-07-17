@@ -340,13 +340,13 @@ set(DISH_CORE_SOURCES
     src/UI/Theme.cpp
     # ui/licenses — the license-manifest DTO + parse + pure mapping rules
     # (Workstream 3c). Pure (no QWidget), host-testable; LicensesView renders it.
-    src/ui/licenses/LicenseManifest.h
-    src/ui/licenses/LicenseManifest.cpp
+    src/UI/licenses/LicenseManifest.h
+    src/UI/licenses/LicenseManifest.cpp
     # ui/donate — the PURE donate-pill dismiss-window decision + persistence
     # helpers (Workstream 3b), split out of the widget so they're host-testable.
     # Only the logic .cpp is in dish_core; the DonatePill.h widget (Q_OBJECT) is
     # moc'd in the Dish exe (DISH_UI_SOURCES) to avoid a duplicate meta-object.
-    src/ui/donate/DonatePillLogic.cpp
+    src/UI/donate/DonatePillLogic.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
@@ -448,22 +448,22 @@ set(DISH_UI_SOURCES
     # (list view over the bundled manifest), the crash-reporting toggle row
     # (3e-owned factory inserted into 3d's Settings column), and the shared
     # external-link helper.
-    src/ui/common/ExternalLink.h
-    src/ui/common/ExternalLink.cpp
-    src/ui/onboarding/WelcomeDialog.h
-    src/ui/onboarding/WelcomeDialog.cpp
-    src/ui/onboarding/SetupWizardView.h
-    src/ui/onboarding/SetupWizardView.cpp
-    src/ui/onboarding/HelpView.h
-    src/ui/onboarding/HelpView.cpp
-    src/ui/donate/DonateView.h
-    src/ui/donate/DonateView.cpp
-    src/ui/donate/DonatePill.h
-    src/ui/donate/DonatePill.cpp
-    src/ui/licenses/LicensesView.h
-    src/ui/licenses/LicensesView.cpp
-    src/ui/settings/CrashReportingRow.h
-    src/ui/settings/CrashReportingRow.cpp
+    src/UI/common/ExternalLink.h
+    src/UI/common/ExternalLink.cpp
+    src/UI/onboarding/WelcomeDialog.h
+    src/UI/onboarding/WelcomeDialog.cpp
+    src/UI/onboarding/SetupWizardView.h
+    src/UI/onboarding/SetupWizardView.cpp
+    src/UI/onboarding/HelpView.h
+    src/UI/onboarding/HelpView.cpp
+    src/UI/donate/DonateView.h
+    src/UI/donate/DonateView.cpp
+    src/UI/donate/DonatePill.h
+    src/UI/donate/DonatePill.cpp
+    src/UI/licenses/LicensesView.h
+    src/UI/licenses/LicensesView.cpp
+    src/UI/settings/CrashReportingRow.h
+    src/UI/settings/CrashReportingRow.cpp
     src/main.cpp
     # Windows resource file embeds the application icon + version metadata
     # so the .exe shows a real Dish icon in Explorer / taskbar.
