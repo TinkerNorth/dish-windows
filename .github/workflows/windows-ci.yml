@@ -22,6 +22,7 @@ jobs:
   ci:
     name: Build, test, lint, format
     runs-on: windows-2022
+    timeout-minutes: 60
 
     env:
       # vcpkg manifest mode: lukka/run-vcpkg will read vcpkg.json and install
@@ -92,7 +93,7 @@ jobs:
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel 4
 
       - name: Run tests
         working-directory: build
@@ -128,7 +129,7 @@ jobs:
             -DDISH_BUILD_TESTS=OFF `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           # Build first so generated mocs exist for clang-tidy.
-          cmake --build build-tidy --parallel
+          cmake --build build-tidy --parallel 4
           # Only run clang-tidy on .cpp files. Headers are analyzed
           # transitively via HeaderFilterRegex in .clang-tidy. Passing
           # .h files directly trips clang-diagnostic-pragma-once-outside-header
@@ -155,7 +156,7 @@ jobs:
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build release binary
-        run: cmake --build build-release --parallel --target Dish
+        run: cmake --build build-release --parallel 4 --target Dish
 
       - name: Stage release artifact (exe + Qt runtime DLLs)
         shell: pwsh

@@ -52,6 +52,7 @@ jobs:
     name: Build Windows release
     needs: [gates]
     runs-on: windows-2022
+    timeout-minutes: 60
 
     env:
       VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
@@ -94,7 +95,7 @@ jobs:
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
-        run: cmake --build build --parallel --target Dish
+        run: cmake --build build --parallel 4 --target Dish
 
       - name: Bundle Qt runtime DLLs
         shell: pwsh
