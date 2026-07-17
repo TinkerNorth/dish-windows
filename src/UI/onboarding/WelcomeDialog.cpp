@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 
-#include "ui/onboarding/WelcomeDialog.h"
+#include "UI/onboarding/WelcomeDialog.h"
 
 #include "UI/Theme.h"
 #include "source/store/OnboardingPreferenceStore.h"
-#include "ui/common/ExternalLink.h"
+#include "UI/common/ExternalLink.h"
 
 #include <QHBoxLayout>
 #include <QLabel>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 
-#include "ui/onboarding/SetupWizardView.h"
+#include "UI/onboarding/SetupWizardView.h"
 
 #include "UI/Theme.h"
 #include "source/store/OnboardingPreferenceStore.h"

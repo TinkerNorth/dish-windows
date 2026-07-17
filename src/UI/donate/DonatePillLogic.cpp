@@ -6,7 +6,7 @@
 // live in dish_core and are host-testable without a QWidget / a clock. The
 // widget in DonatePill.cpp consumes these. See DonatePill.h.
 
-#include "ui/donate/DonatePill.h"
+#include "UI/donate/DonatePill.h"
 
 #include <QSettings>
 

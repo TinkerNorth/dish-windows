@@ -8,7 +8,7 @@
 // plus a persistence round-trip over an injected QSettings (simulating a
 // relaunch). The animation is not under test; the behaviour is the window.
 
-#include "ui/donate/DonatePill.h"
+#include "UI/donate/DonatePill.h"
 
 #include "QSettingsFixture.h"
 

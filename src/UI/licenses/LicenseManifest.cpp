@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 
-#include "ui/licenses/LicenseManifest.h"
+#include "UI/licenses/LicenseManifest.h"
 
 #include <QFile>
 #include <QJsonArray>

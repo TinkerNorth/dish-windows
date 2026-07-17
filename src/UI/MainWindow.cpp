@@ -15,12 +15,12 @@
 #include "SettingsDialog.h"
 #include "SlotCard.h"
 #include "Theme.h"
-#include "ui/donate/DonatePill.h"
-#include "ui/donate/DonateView.h"
-#include "ui/licenses/LicensesView.h"
-#include "ui/onboarding/HelpView.h"
-#include "ui/onboarding/SetupWizardView.h"
-#include "ui/onboarding/WelcomeDialog.h"
+#include "UI/donate/DonatePill.h"
+#include "UI/donate/DonateView.h"
+#include "UI/licenses/LicensesView.h"
+#include "UI/onboarding/HelpView.h"
+#include "UI/onboarding/SetupWizardView.h"
+#include "UI/onboarding/WelcomeDialog.h"
 
 #include <QDialog>
 #include <QHBoxLayout>

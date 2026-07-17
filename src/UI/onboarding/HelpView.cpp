@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 
-#include "ui/onboarding/HelpView.h"
+#include "UI/onboarding/HelpView.h"
 
 #include "UI/Theme.h"
-#include "ui/common/ExternalLink.h"
+#include "UI/common/ExternalLink.h"
 
 #include <QFrame>
 #include <QHBoxLayout>

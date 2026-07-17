@@ -6,7 +6,7 @@
 #include "FeatureSettings.h"
 #include "Theme.h"
 #include "source/store/CrashReportingStore.h"
-#include "ui/settings/CrashReportingRow.h"
+#include "UI/settings/CrashReportingRow.h"
 
 #include <QButtonGroup>
 #include <QComboBox>
