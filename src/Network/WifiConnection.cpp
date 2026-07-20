@@ -80,6 +80,7 @@ void WifiConnection::teardownClient() {
     // right after, so no separate telemetryChanged is needed.
     latencyOneWayMs_ = 0.0;
     latencySamples_ = 0;
+    rekeyRequested_ = false;
     // A dropped session leaves no virtual pads applied — clear the registered
     // flags so streams gate off until the next PUT re-applies them.
     for (auto& [slotId, b] : slots_) { b.registered = false; }
@@ -89,7 +90,8 @@ void WifiConnection::markConnected(std::shared_ptr<SatelliteClient> client,
                                    const QString& connectionId, int epoch, bool mouseControlGranted,
                                    std::function<void()> onDead,
                                    std::function<void(std::uint8_t)> onClose,
-                                   std::function<void()> onReconcile) {
+                                   std::function<void()> onReconcile,
+                                   std::function<void()> onRekey) {
     if (state_ != SessionState::Linking) { return; }
     clientRef_.set(client);
     connectionId_ = connectionId;
@@ -99,6 +101,8 @@ void WifiConnection::markConnected(std::shared_ptr<SatelliteClient> client,
     onDead_ = std::move(onDead);
     onClose_ = std::move(onClose);
     onReconcile_ = std::move(onReconcile);
+    onRekey_ = std::move(onRekey);
+    rekeyRequested_ = false;
 
     if (rumbleHandler_) { client->setRumbleHandler(rumbleHandler_); }
     if (lightbarHandler_) { client->setLightbarHandler(lightbarHandler_); }
@@ -117,41 +121,53 @@ void WifiConnection::markConnected(std::shared_ptr<SatelliteClient> client,
     }
     aliveTimer_ = new QTimer(this);
     aliveTimer_->setInterval(1000);
-    QObject::connect(aliveTimer_, &QTimer::timeout, this, [this] {
-        const auto c = clientRef_.get();
-        if (!c) { return; }
-        // Refresh the latency readout each tick, rounded to the 0.1 ms display
-        // precision so sub-jitter median moves don't re-emit. telemetryChanged
-        // (not changed) keeps the 1 Hz tick off the rebuild cascade.
-        const auto latency = c->latencySnapshot();
-        const double rounded =
-            latency.samples > 0 ? std::lround(latency.oneWayMs * 10.0) / 10.0 : 0.0;
-        if (rounded != latencyOneWayMs_ || latency.samples != latencySamples_) {
-            latencyOneWayMs_ = rounded;
-            latencySamples_ = latency.samples;
-            emit telemetryChanged();
-        }
-        // An authenticated close-notify is terminal NOW: the session is already
-        // gone server-side, so don't wait out the heartbeat death window.
-        const std::int32_t closeReason = c->sessionCloseReason();
-        if (closeReason >= 0) {
-            const auto cb = onClose_;
-            if (cb) { cb(static_cast<std::uint8_t>(closeReason)); }
-            return;
-        }
-        if (!c->isAlive()) {
-            const auto cb = onDead_;
-            if (cb) { cb(); }
-            return;
-        }
-        // Alive: nudge the reconcile (the manager re-checks epoch/bitmap drift
-        // against applied and only does the GET-then-rePUT when it actually
-        // diverged).
-        const auto cb = onReconcile_;
-        if (cb) { cb(); }
-    });
+    QObject::connect(aliveTimer_, &QTimer::timeout, this, &WifiConnection::onAliveTick);
     aliveTimer_->start();
     emit changed();
+}
+
+void WifiConnection::onAliveTick() {
+    const auto c = clientRef_.get();
+    if (!c) { return; }
+    // Refresh the latency readout each tick, rounded to the 0.1 ms display
+    // precision so sub-jitter median moves don't re-emit. telemetryChanged
+    // (not changed) keeps the 1 Hz tick off the rebuild cascade.
+    const auto latency = c->latencySnapshot();
+    const double rounded = latency.samples > 0 ? std::lround(latency.oneWayMs * 10.0) / 10.0 : 0.0;
+    if (rounded != latencyOneWayMs_ || latency.samples != latencySamples_) {
+        latencyOneWayMs_ = rounded;
+        latencySamples_ = latency.samples;
+        emit telemetryChanged();
+    }
+    // An authenticated close-notify is terminal NOW: the session is already
+    // gone server-side, so don't wait out the heartbeat death window.
+    const std::int32_t closeReason = c->sessionCloseReason();
+    if (closeReason >= 0) {
+        const auto cb = onClose_;
+        if (cb) { cb(static_cast<std::uint8_t>(closeReason)); }
+        return;
+    }
+    if (!c->isAlive()) {
+        const auto cb = onDead_;
+        if (cb) { cb(); }
+        return;
+    }
+    // Alive: nudge the reconcile (the manager re-checks epoch/bitmap drift
+    // against applied and only does the GET-then-rePUT when it actually
+    // diverged).
+    const auto cb = onReconcile_;
+    if (cb) { cb(); }
+    // Proactive re-key before the send counter can exhaust (contract §Crypto:
+    // re-PUT past 0xF0000000). A session that exhausts anyway goes silent in
+    // SatelliteClient and heals via the death-retry re-PUT.
+    if (reducer::counterNeedsRepush(c->sendCounter())) {
+        if (!rekeyRequested_ && onRekey_) {
+            rekeyRequested_ = true;
+            onRekey_();
+        }
+    } else {
+        rekeyRequested_ = false;
+    }
 }
 
 void WifiConnection::markDisconnected() {

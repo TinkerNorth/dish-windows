@@ -93,11 +93,13 @@ class WifiConnection : public QObject {
     void markConnecting();
     // Adopt the UDP tuple + applied state from a session PUT response. `onDead`
     // fires on heartbeat death; `onClose` on an authenticated close-notify (the
-    // reason byte); `onReconcile` when the enriched-ack epoch/bitmap drifts.
+    // reason byte); `onReconcile` when the enriched-ack epoch/bitmap drifts;
+    // `onRekey` once per approach when the send counter crosses the proactive
+    // re-PUT threshold (contract §Crypto).
     void markConnected(std::shared_ptr<SatelliteClient> client, const QString& connectionId,
                        int epoch, bool mouseControlGranted, std::function<void()> onDead,
                        std::function<void(std::uint8_t reason)> onClose,
-                       std::function<void()> onReconcile);
+                       std::function<void()> onReconcile, std::function<void()> onRekey);
     void markDisconnected();
     // Like markDisconnected, but lands in Stale (the "Needs pairing" chip cue)
     // instead of Idle. Used by the terminal-401 / unpaired / silent-retry paths.
@@ -180,6 +182,10 @@ class WifiConnection : public QObject {
     void slotRemoved(int ctrlIdx);
 
   private:
+    // Test-only seam so the alive-tick wiring is drivable without the 1 s
+    // timer. Declared but never defined in production.
+    friend class WifiConnectionTestAccess;
+
     QString id_;
     models::DiscoveredServer server_;
     SessionState state_ = SessionState::Idle;
@@ -202,6 +208,11 @@ class WifiConnection : public QObject {
     std::function<void()> onDead_;
     std::function<void(std::uint8_t reason)> onClose_;
     std::function<void()> onReconcile_;
+    std::function<void()> onRekey_;
+    // Single-fire latch for onRekey_: re-armed only once the re-key lands (the
+    // fresh counter drops back under the threshold), so a slow/failed re-PUT
+    // is not re-requested every tick.
+    bool rekeyRequested_ = false;
 
     RumbleHandler rumbleHandler_;
     LightbarHandler lightbarHandler_;
@@ -210,6 +221,9 @@ class WifiConnection : public QObject {
     // hasLightbar + the analog-trigger/rumble base).
     models::ControllerDescriptor descriptorOf(const SlotBinding& b) const;
     int lowestFreeIndex() const;
+    // The 1 s alive-poll body: latency refresh, close-notify/death dispatch,
+    // reconcile nudge, proactive re-key.
+    void onAliveTick();
     void teardownClient();
 };
 
