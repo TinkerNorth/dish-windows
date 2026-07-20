@@ -10,14 +10,18 @@
 #include "Network/SatelliteClient.h"
 #include "Network/WinsockInit.h"
 #include "core/reducer/Reconcile.h"
+#include "core/wire/SessionCrypto.h"
 #include "satellite_client_test_access.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <set>
+#include <thread>
+#include <utility>
 #include <vector>
 
 using dish::net::SatelliteClient;
@@ -153,4 +157,56 @@ TEST_CASE("a session never repeats a counter value under one key; re-key restart
     const auto fresh = recvDatagram(lb.fd);
     REQUIRE(fresh.has_value());
     CHECK(counterOf(*fresh) == 1);
+}
+
+TEST_CASE("a live re-key never tears the (key, token, counter) draw", "[send_counter]") {
+    // Hammer the send path from two threads while the owner thread re-keys
+    // through many generations. Every packet on the wire must decrypt under
+    // the key its token selects, and no (token, counter) pair may repeat —
+    // torn material (old key + fresh counter, or half-swapped token/key)
+    // fails one of the two.
+    LoopbackClient lb;
+    const int rcvbuf = 1 << 20; // best effort — drops are fine, mixups are not
+    ::setsockopt(lb.fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&rcvbuf),
+                 sizeof(rcvbuf));
+
+    constexpr std::uint8_t kGens = 40;
+    const auto tokenFor = [](std::uint8_t gen) {
+        return std::array<std::uint8_t, 4>{0xA0, 0x00, 0x00, gen};
+    };
+    const auto keyFor = [](std::uint8_t gen) {
+        return LoopbackClient::key(static_cast<std::uint8_t>(gen ^ 0x5A));
+    };
+    lb.client.setConnectionParams(tokenFor(0), keyFor(0));
+
+    const auto sender = [&lb] {
+        for (int i = 0; i < 1500; ++i) { lb.sendOne(); }
+    };
+    std::thread a(sender);
+    std::thread b(sender);
+    for (std::uint8_t gen = 1; gen <= kGens; ++gen) {
+        std::this_thread::sleep_for(std::chrono::microseconds(300));
+        lb.client.setConnectionParams(tokenFor(gen), keyFor(gen));
+    }
+    a.join();
+    b.join();
+
+    std::set<std::pair<std::uint8_t, std::uint32_t>> seen;
+    int decrypted = 0;
+    while (const auto pkt = recvDatagram(lb.fd)) {
+        REQUIRE(pkt->size() >= 8 + 16);
+        REQUIRE((*pkt)[0] == 0xA0);
+        const std::uint8_t gen = (*pkt)[3];
+        REQUIRE(gen <= kGens);
+        const std::uint32_t ctr = counterOf(*pkt);
+        const std::uint32_t tokenBe = (0xA0u << 24) | gen;
+        std::vector<std::uint8_t> plain(pkt->size() - 8);
+        unsigned long long plainLen = 0;
+        REQUIRE(dish::wire::decryptPacket(keyFor(gen).data(), dish::wire::kDirClientToServer, ctr,
+                                          tokenBe, pkt->data() + 8, pkt->size() - 8, plain.data(),
+                                          &plainLen));
+        REQUIRE(seen.insert({gen, ctr}).second); // nonce (dir|counter) unique per key
+        decrypted++;
+    }
+    CHECK(decrypted > 0);
 }
