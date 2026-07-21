@@ -592,6 +592,10 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 /*onReconcile=*/
                 [this, id, server] {
                     if (auto* c = connections_.value(id, nullptr)) { reconcile(c, server); }
+                },
+                /*onRekey=*/
+                [this, id, server] {
+                    if (auto* c = connections_.value(id, nullptr)) { rekey(c, server); }
                 });
             // Fold the PUT's apply results into the slot state (registers the
             // live slots; surfaces failures).
@@ -653,6 +657,66 @@ void WifiConnectionManager::reconcile(WifiConnection* conn,
                           c->markConnecting();
                           openSession(c, server, ConnectIntent::RetryAfterDeath);
                       });
+}
+
+void WifiConnectionManager::rekey(WifiConnection* conn, const models::DiscoveredServer& server) {
+    const QString id = conn->id();
+    if (conn->state() != SessionState::Live) { return; }
+    const auto client = conn->client();
+    if (!client) { return; }
+    const auto creds = credentialsFor(id);
+    if (!creds.has_value()) { return; }
+    const auto pairingKey = creds->pairingKey;
+    // Failures stay silent: heartbeat death / terminal-auth already surface
+    // them, and a session that truly exhausts goes silent and self-heals via
+    // the death-retry re-PUT.
+    http_->putSession(
+        server.ip, server.httpPort, deviceId_, deviceName_, creds->proof,
+        conn->desiredDescriptors(), conn->wantsMouseControl(),
+        [this, id, client, pairingKey](const models::SessionResponse& resp) {
+            auto* c = connections_.value(id, nullptr);
+            if (c == nullptr) { return; }
+            using reducer::RestVerdict;
+            reducer::RestReply rr;
+            rr.status = resp.httpStatus;
+            rr.bodyParsed = resp.reachable;
+            rr.code = resp.code.value_or(QString()).toStdString();
+            const RestVerdict verdict = classifyRest(rr);
+            if (verdict == RestVerdict::Unauthorized) {
+                onTerminalAuthFailure(c, id, ConnectIntent::RetryAfterDeath);
+                return;
+            }
+            // A death+reconnect during the PUT flight replaced the session —
+            // applying the stale material would re-arm the dead client and
+            // stamp a stale epoch onto the new session.
+            if (c->state() != SessionState::Live || c->client() != client) { return; }
+            if (verdict != RestVerdict::Ok || !resp.token.has_value() ||
+                !resp.sessionSalt.has_value()) {
+                return;
+            }
+            const auto tok = util::fromHex(resp.token->toStdString());
+            const auto salt = util::fromHex(resp.sessionSalt->toStdString());
+            if (!tok || tok->size() != 4 || !salt || salt->size() != wire::kSessionSaltSize) {
+                return;
+            }
+            std::array<std::uint8_t, 4> token{};
+            std::copy_n(tok->begin(), 4, token.begin());
+            std::array<std::uint8_t, wire::kSessionSaltSize> saltArr{};
+            std::copy_n(salt->begin(), wire::kSessionSaltSize, saltArr.begin());
+            const std::uint32_t tokenBe = (static_cast<std::uint32_t>(token[0]) << 24) |
+                                          (static_cast<std::uint32_t>(token[1]) << 16) |
+                                          (static_cast<std::uint32_t>(token[2]) << 8) |
+                                          static_cast<std::uint32_t>(token[3]);
+            std::array<std::uint8_t, 32> sessionKey{};
+            wire::deriveSessionKey(pairingKey.data(), saltArr.data(), tokenBe, sessionKey.data());
+            // Same socket, fresh token/key, counters restart at 1 — the hot
+            // path never blips. connectionId is stable across PUTs (contract
+            // §Session), so the id and slot state carry over.
+            client->setConnectionParams(token, sessionKey);
+            // Adopt the re-PUT's epoch so the next enriched ack doesn't read
+            // as drift.
+            c->adoptEpoch(resp.epoch);
+        });
 }
 
 void WifiConnectionManager::syncSlot(const QString& id, const QString& slotId) {

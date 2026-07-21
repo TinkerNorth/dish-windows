@@ -273,7 +273,8 @@ TEST_CASE("session: markConnected from Idle is rejected and leaves state Idle", 
     // markConnected only takes effect from Linking; from Idle it is a no-op and
     // must not promote to Live (mirrors android's IDLE-rejection guard).
     auto client = std::make_shared<SatelliteClient>();
-    conn.markConnected(client, QStringLiteral("cid"), 1, false, [] {}, [](std::uint8_t) {}, [] {});
+    conn.markConnected(
+        client, QStringLiteral("cid"), 1, false, [] {}, [](std::uint8_t) {}, [] {}, [] {});
     REQUIRE(conn.state() == SessionState::Idle);
 }
 

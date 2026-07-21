@@ -124,6 +124,9 @@ class WifiConnectionManager : public QObject {
                      ConnectIntent intent);
     // GET-then-maybe-rePUT reconcile, fired when the enriched ack drifts.
     void reconcile(WifiConnection* conn, const models::DiscoveredServer& server);
+    // Proactive re-key (contract §Crypto): re-PUT for fresh token/salt/key on
+    // the SAME socket before the send counter can exhaust — no state blip.
+    void rekey(WifiConnection* conn, const models::DiscoveredServer& server);
     // Single-slot converge while live (PUT .../controllers/{idx}).
     void syncSlot(const QString& id, const QString& slotId);
     // Slot delete while live (DELETE .../controllers/{idx}).
