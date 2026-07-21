@@ -18,14 +18,19 @@
 //
 // Thread-safety:
 //   * sendReport() is called directly from the SDL gamepad thread for minimum
-//     latency and is lock-free except for the duration of one ::sendto.
+//     latency; it holds materialMtx_ only to draw (key, token, counter)
+//     together and sendLock_ only for the one ::sendto.
 //   * Public lifecycle calls (open/close, setConnectionParams, start/stop) are
 //     expected to be invoked from a single owner thread (typically Qt main).
+//     setConnectionParams MAY run against a live session (proactive re-key):
+//     materialMtx_ makes the material swap atomic vs both loops.
 
 #pragma once
 
+#include "Util/AtomicCounter.h"
 #include "core/model/Protocol.h"
 #include "core/reducer/LatencyWindow.h"
+#include "core/reducer/Reconcile.h"
 
 // Winsock headers must appear before any windows.h pull-in that could include
 // the older winsock.h. <ws2tcpip.h> declares sockaddr_in / inet_pton; pulled
@@ -249,8 +254,10 @@ class SatelliteClient {
     std::int32_t sessionCloseReason() const {
         return sessionCloseReason_.load(std::memory_order_relaxed);
     }
-    // Current send counter (next value to use), for the proactive-re-PUT guard.
-    std::uint32_t sendCounter() const { return sendCounter_.load(std::memory_order_relaxed); }
+    // Current send counter (next value to use), for the proactive-re-PUT guard
+    // (reducer::counterNeedsRepush). Clamped, not truncated: past exhaustion
+    // the poll must keep reading re-PUT needed, never wrap under the threshold.
+    std::uint32_t sendCounter() const { return reducer::clampedSendCounter(sendCounter_.load()); }
 
     // One-way latency estimate off the heartbeat round trip: median of the
     // sliding RTT window halved + the sample count the UI shows beside the
@@ -264,6 +271,10 @@ class SatelliteClient {
     LatencySnapshot latencySnapshot() const;
 
   private:
+    // Test-only seam to park the send counter near exhaustion. Declared but
+    // never defined in production.
+    friend class SatelliteClientTestAccess;
+
     void sendEncrypted(std::uint16_t msgType, const std::uint8_t* payload, std::size_t len);
     void heartbeatLoop();
     void receiveLoop();
@@ -271,14 +282,23 @@ class SatelliteClient {
 
     SOCKET sock_ = INVALID_SOCKET;
     sockaddr_in dest_{};
+    // Session material + both counters live behind materialMtx_: a proactive
+    // re-key swaps them on a LIVE session, and pairing an old key with a fresh
+    // counter (or a stale replay mark with a fresh session) breaks the nonce
+    // invariant. Senders draw (key, token, counter) in one hold and encrypt on
+    // the copies; the receive loop snapshots the same way.
+    mutable std::mutex materialMtx_;
     std::array<std::uint8_t, 4> token_{};
     std::uint32_t tokenBe_ = 0; // token as a host u32 (the 4 raw BE bytes), for AAD
     std::array<std::uint8_t, 32> key_{};
-    // Per-direction send counter, starting at 1 (contract §Crypto). Plain
-    // atomic increment; the send lock serialises the ::sendto, not this.
-    std::atomic<std::uint32_t> sendCounter_{1};
+    // Per-direction send counter, starting at 1 (contract §Crypto). 64-bit so
+    // exhaustion parks the sender silent instead of wrapping the 32-bit wire
+    // field into nonce reuse. Atomic for the lock-free sendCounter() poll;
+    // draws pair with the key under materialMtx_.
+    util::AtomicCounter sendCounter_{1};
     // Receiver replay guard (server→client direction): drop counter <=
-    // lastRecvCounter_ (first packet exempt while it is 0).
+    // lastRecvCounter_ (first packet exempt while it is 0). Advanced only by
+    // the receive thread; reset under materialMtx_ by a re-key.
     std::uint32_t lastRecvCounter_ = 0;
     std::mutex sendLock_;
 

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <vector>
 
 namespace dish::reducer {
@@ -126,6 +127,24 @@ inline constexpr std::uint32_t kCounterRepushThreshold = 0xF0000000u;
 
 inline bool counterNeedsRepush(std::uint32_t sendCounter) {
     return sendCounter >= kCounterRepushThreshold;
+}
+
+// Largest counter the 4-byte wire field can carry.
+inline constexpr std::uint64_t kCounterWireMax = 0xFFFFFFFFull;
+
+// 64-bit draw → the 32-bit wire counter, or nullopt once the space is
+// exhausted: the sender goes SILENT (sealing a second plaintext under one
+// (key, nonce) leaks keystream).
+inline std::optional<std::uint32_t> wireSendCounter(std::uint64_t sequence) {
+    if (sequence > kCounterWireMax) { return std::nullopt; }
+    return static_cast<std::uint32_t>(sequence);
+}
+
+// 64-bit next-to-use → the u32 the repush poll compares. Clamped, not
+// truncated: past exhaustion the poll must keep reading re-PUT needed, never
+// wrap back under the threshold.
+inline std::uint32_t clampedSendCounter(std::uint64_t sequence) {
+    return static_cast<std::uint32_t>(std::min(sequence, kCounterWireMax));
 }
 
 } // namespace dish::reducer

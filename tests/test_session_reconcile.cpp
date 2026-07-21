@@ -152,3 +152,26 @@ TEST_CASE("counterNeedsRepush fires once the send counter crosses 0xF0000000",
     REQUIRE(reducer::counterNeedsRepush(0xF0000000u));
     REQUIRE(reducer::counterNeedsRepush(0xFFFFFFFFu));
 }
+
+TEST_CASE("wireSendCounter passes the 32-bit space through and goes silent past it",
+          "[reconnect][counter]") {
+    REQUIRE(reducer::wireSendCounter(1) == 1u);
+    REQUIRE(reducer::wireSendCounter(0xF0000000ull) == 0xF0000000u);
+    REQUIRE(reducer::wireSendCounter(0xFFFFFFFFull) == 0xFFFFFFFFu);
+    // Past 2^32-1 there is no wire value: the sender must go silent, never
+    // truncate into a reused (key, nonce).
+    REQUIRE_FALSE(reducer::wireSendCounter(0x100000000ull).has_value());
+    REQUIRE_FALSE(reducer::wireSendCounter(0xFFFFFFFFFFFFFFFFull).has_value());
+}
+
+TEST_CASE("clampedSendCounter clamps past exhaustion so the repush poll never wraps",
+          "[reconnect][counter]") {
+    REQUIRE(reducer::clampedSendCounter(1) == 1u);
+    REQUIRE(reducer::clampedSendCounter(0xEFFFFFFFull) == 0xEFFFFFFFu);
+    REQUIRE(reducer::clampedSendCounter(0xFFFFFFFFull) == 0xFFFFFFFFu);
+    REQUIRE(reducer::clampedSendCounter(0x100000000ull) == 0xFFFFFFFFu);
+    REQUIRE(reducer::clampedSendCounter(0xFFFFFFFFFFFFFFFFull) == 0xFFFFFFFFu);
+    // The composition the alive tick polls: past exhaustion the guard keeps
+    // reading re-PUT needed instead of wrapping back under the threshold.
+    REQUIRE(reducer::counterNeedsRepush(reducer::clampedSendCounter(0x100000000ull)));
+}
