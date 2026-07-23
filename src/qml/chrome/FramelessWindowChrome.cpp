@@ -25,7 +25,9 @@ namespace dish::chrome {
 
 namespace {
 
-HWND hwndOf(QWindow* window) { return window ? reinterpret_cast<HWND>(window->winId()) : nullptr; }
+HWND hwndOf(QWindow* window) {
+    return window != nullptr ? reinterpret_cast<HWND>(window->winId()) : nullptr;
+}
 
 // Read the OS build number via RtlGetVersion. GetVersionEx lies (it caps at
 // 6.2 unless the app manifests compatibility), and VerifyVersionInfo is
