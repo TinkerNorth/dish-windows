@@ -59,7 +59,7 @@ license — the project is LGPL-3.0-or-later end-to-end (`LICENSE`,
 Build + style:
 
 - `windows-ci.yml`: `clang-format --dry-run --Werror`, Debug build +
-  `ctest` (Catch2 suite under `tests/`), `clang-tidy -p build-tidy` over
+  `ctest` (Catch2 suite under `tests/`), `clang-tidy -p build` over
   `src/` (UI excluded — MOC false-positives), Release build that uploads
   the Qt-bundled `dish.exe` as a CI artifact.
 

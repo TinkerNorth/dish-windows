@@ -85,10 +85,13 @@ jobs:
           # The SHIPPED default stays the Widgets UI: the Release/artifact build
           # below deliberately does not set DISH_QML — flipping the product
           # default is the owner's call, not CI's.
+          # EXPORT_COMPILE_COMMANDS so the clang-tidy step can reuse this tree
+          # instead of configuring and building a second one.
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Debug `
             -DDISH_BUILD_TESTS=ON `
             -DDISH_QML=ON `
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
@@ -122,18 +125,13 @@ jobs:
       - name: clang-tidy
         shell: pwsh
         run: |
-          # DISH_QML=ON so the src/qml TUs are in compile_commands.json with real
-          # Qt6::Qml include dirs. Without it they are absent and clang-tidy
-          # interpolates a sibling TU's command, reporting bogus missing-header
-          # errors (e.g. QQmlApplicationEngine) instead of analysing them.
-          cmake -S . -B build-tidy -G Ninja `
-            -DCMAKE_BUILD_TYPE=Debug `
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
-            -DDISH_BUILD_TESTS=OFF `
-            -DDISH_QML=ON `
-            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          # Build first so generated mocs exist for clang-tidy.
-          cmake --build build-tidy --parallel
+          # Reuse the Debug tree instead of configuring + building a second one:
+          # it already exports compile_commands.json, is DISH_QML=ON (so the
+          # src/qml TUs carry real Qt6::Qml include dirs rather than a sibling
+          # TU's interpolated command), and is already built, so the generated
+          # mocs clang-tidy needs exist. DISH_BUILD_TESTS only gates
+          # add_subdirectory(tests) and adds no compile definitions, so the
+          # src/*.cpp entries are identical to the old tests-off tidy tree.
           # Only run clang-tidy on .cpp files. Headers are analyzed
           # transitively via HeaderFilterRegex in .clang-tidy. Passing
           # .h files directly trips clang-diagnostic-pragma-once-outside-header
@@ -146,7 +144,7 @@ jobs:
           # them as fatal under the project's -Werror equivalent.
           $files = git ls-files 'src/*.cpp' | Where-Object { $_ -notlike 'src/UI/*' }
           foreach ($f in $files) {
-            clang-tidy -p build-tidy --quiet `
+            clang-tidy -p build --quiet `
               --extra-arg-before=-Wno-unused-command-line-argument `
               $f
           }
