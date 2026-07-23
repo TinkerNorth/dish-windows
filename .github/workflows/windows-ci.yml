@@ -122,10 +122,15 @@ jobs:
       - name: clang-tidy
         shell: pwsh
         run: |
+          # DISH_QML=ON so the src/qml TUs are in compile_commands.json with real
+          # Qt6::Qml include dirs. Without it they are absent and clang-tidy
+          # interpolates a sibling TU's command, reporting bogus missing-header
+          # errors (e.g. QQmlApplicationEngine) instead of analysing them.
           cmake -S . -B build-tidy -G Ninja `
             -DCMAKE_BUILD_TYPE=Debug `
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
             -DDISH_BUILD_TESTS=OFF `
+            -DDISH_QML=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           # Build first so generated mocs exist for clang-tidy.
           cmake --build build-tidy --parallel

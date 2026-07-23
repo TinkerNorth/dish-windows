@@ -512,8 +512,10 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
     const bool wantsMouse = conn->wantsMouseControl();
     const auto pairingKey = creds->pairingKey;
     // Snapshot the (ctrlIdx, type) set we are about to send, so the response
-    // callback can converge any slot changes that race the round-trip.
-    const auto sentDescriptors = descriptorsToDesired(descriptors);
+    // callback can converge any slot changes that race the round-trip. NOT const:
+    // a const capture is copied (not moved) when the closure moves into the
+    // std::function, and that copy can throw out of the closure's move ctor.
+    auto sentDescriptors = descriptorsToDesired(descriptors);
 
     http_->putSession(
         server.ip, server.httpPort, deviceId_, deviceName_, proof, descriptors, wantsMouse,

@@ -6,12 +6,15 @@
 #include "LightbarRouting.h"
 #include "composer/StreamingSlotCount.h"
 #include "core/input/UsbReportParsers.h"
+#include "core/reducer/PickerVisibility.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/SlotPathFields.h"
 #include "core/reducer/TouchpadRouting.h"
 #include "core/reducer/UsbTwinDedup.h"
 
+#include <chrono>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_set>
@@ -19,9 +22,6 @@
 
 #include <QApplication>
 #include <QLocale>
-
-#include <chrono>
-#include <vector>
 
 namespace dish {
 
@@ -54,12 +54,13 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
       inhibitor_(std::move(inhibitor)), wakeComposer_(streamingSlotCount_, shouldKeepScreenOn_),
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
-      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
-      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
-      motionEnabledStore_(&motionPrefRepo_), themeController_(themeStore_.state(), qApp),
+      themeController_(themeStore_.state(), qApp),
       crashController_(crashStore_.state(), &crashBackend_),
-      joystickRemapStore_(&joystickRemapRepo_), usbPathStore_(&usbPathRepo_), usbObserver_(this),
-      usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
+      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
+      motionEnabledStore_(&motionPrefRepo_), joystickRemapStore_(&joystickRemapRepo_),
+      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
+      usbPathStore_(&usbPathRepo_), usbObserver_(this), usbScanTimer_(new QTimer(this)),
+      inputRateTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -761,16 +762,16 @@ void AppModel::rebuild() {
     QHash<QString, net::ConnectionHub::TouchpadSender> nextTouchpad;
     for (const auto& slot : state_.slotList) {
         if (auto sender = hub_->reportSenderForSlot(slot.id)) {
-            nextRouting.insert(slot.id, std::move(sender));
+            nextRouting.insert(slot.id, sender);
         }
         if (auto sender = hub_->motionSenderForSlot(slot.id)) {
-            nextMotion.insert(slot.id, std::move(sender));
+            nextMotion.insert(slot.id, sender);
         }
         if (auto sender = hub_->batterySenderForSlot(slot.id)) {
-            nextBattery.insert(slot.id, std::move(sender));
+            nextBattery.insert(slot.id, sender);
         }
         if (auto sender = hub_->touchpadSenderForSlot(slot.id)) {
-            nextTouchpad.insert(slot.id, std::move(sender));
+            nextTouchpad.insert(slot.id, sender);
         }
     }
     {
@@ -857,19 +858,14 @@ void AppModel::onInputRatesChanged(const source::SlotInputRatesMap& rates) {
 // ── Workstream 2c: catalog-driven Emulate picker ─────────────────────────────
 
 int AppModel::resolveControllerType(const QString& slotId) const {
-    // 1) The user's Emulate override (keyed by the slot's bound connection).
     const QString connId = hub_->bindings().value(slotId);
-    if (!connId.isEmpty()) {
-        if (auto override = typeStore_.typeFor(connId.toStdString(), slotId.toStdString())) {
-            return *override;
-        }
-    }
-    // 2) The pad's SDL hardware classification.
-    for (const auto& d : bridge_->devices()) {
-        if (d.id == slotId) { return d.controllerType; }
-    }
-    // 3) Default Xbox.
-    return proto::kControllerTypeXbox;
+    if (connId.isEmpty()) { return proto::kControllerTypeXbox; }
+    // The user's Emulate override wins; absent that the default is the bound
+    // satellite catalog's first offered type (the picker's first row), then Xbox.
+    const auto userOverride = typeStore_.typeFor(connId.toStdString(), slotId.toStdString());
+    std::optional<models::CatalogDto> cached;
+    if (auto* conn = wifi_->get(connId)) { cached = catalogRepo_.cached(conn->server().id()); }
+    return reducer::seedControllerType(userOverride, cached);
 }
 
 int AppModel::currentTypeFor(const QString& slotId) const { return resolveControllerType(slotId); }

@@ -18,7 +18,7 @@ namespace {
 // The default satellite controller type a restored Direct binding re-registers
 // as when there was never an explicit type choice. Mirrors android's
 // CONTROLLER_TYPE_XBOX default in bindTo. (0 == CONTROLLER_TYPE_XBOX, per
-// satellite/src/core/types.h, matching SDLGamepadBridge::Device::controllerType.)
+// satellite/src/core/types.h and proto::kControllerTypeXbox.)
 constexpr int kControllerTypeXbox = 0;
 
 } // namespace

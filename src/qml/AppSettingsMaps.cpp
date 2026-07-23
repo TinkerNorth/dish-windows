@@ -6,7 +6,7 @@
 #include "Input/SDLGamepadBridge.h"
 #include "repository/DeadzoneRepository.h"
 #include "source/store/MotionEnabledStore.h"
-#include "ui/licenses/LicenseManifest.h"
+#include "UI/licenses/LicenseManifest.h"
 
 #include <QVariantMap>
 

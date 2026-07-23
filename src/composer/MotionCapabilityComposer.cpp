@@ -27,9 +27,10 @@ bool carriesMotion(const std::string& slotId, const MotionBindings& bindings,
 }
 
 // True iff the host has a motion sink for the slot's controller type. The
-// satellite only sinks motion for PlayStation-typed slots; an unknown binding,
-// a non-satellite connection, or an unknown type all default to true (no false
-// warning) — the limiting case is an explicitly Xbox-typed satellite slot.
+// satellite sinks motion only for PlayStation- and DualSense-typed slots (both
+// ride the DS4 report set); an unknown binding, a non-satellite connection, or an
+// unknown type all default to true (no false warning) — the limiting case is an
+// explicitly Xbox- (or Switch Pro-) typed satellite slot.
 bool hostSinkForType(const std::string& slotId, const MotionBindings& bindings,
                      const MotionConnectionList& connections) {
     const auto it = bindings.find(slotId);
@@ -39,7 +40,9 @@ bool hostSinkForType(const std::string& slotId, const MotionBindings& bindings,
     if (!conn->isSatellite) { return true; }
     const auto typeIt = conn->slotControllerTypes.find(slotId);
     if (typeIt == conn->slotControllerTypes.end()) { return true; }
-    return typeIt->second == static_cast<int>(proto::kControllerTypePlayStation);
+    const int type = typeIt->second;
+    return type == static_cast<int>(proto::kControllerTypePlayStation) ||
+           type == static_cast<int>(proto::kControllerTypeDualSense);
 }
 
 // The satellite backend status observed for the slot's bound connection, keyed

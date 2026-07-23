@@ -22,6 +22,7 @@
 
 #include <optional>
 
+using dish::models::CatalogDto;
 using dish::models::CatalogFeatureDto;
 using dish::models::CatalogTypeDto;
 using dish::models::ConnectionSummary;
@@ -30,6 +31,7 @@ using dish::reducer::connectionsVisibleInPicker;
 using dish::reducer::isAvailableForPicker;
 using dish::reducer::isFeatureOffered;
 using dish::reducer::isTypeOfferable;
+using dish::reducer::seedControllerType;
 
 namespace {
 
@@ -45,6 +47,13 @@ QList<QString> ids(const QList<ConnectionSummary>& list) {
     QList<QString> out;
     for (const auto& c : list) { out.push_back(c.id); }
     return out;
+}
+
+CatalogTypeDto typeRow(int id, const QString& name) {
+    CatalogTypeDto t;
+    t.id = id;
+    t.name = name;
+    return t;
 }
 
 const std::optional<QString> kUnbound = std::nullopt;
@@ -326,4 +335,50 @@ TEST_CASE("picker: a known but unsupported feature is not offered", "[picker][ca
     t.features.insert("motion", motion);
     const QList<QString> known{"rumble", "motion", "lightbar", "analogTriggers", "touchpad"};
     REQUIRE_FALSE(isFeatureOffered(t, "motion", known));
+}
+
+// ── seedControllerType (the picker's default/seed selection) ─────────────────
+
+TEST_CASE("seed: defaults to the catalog's first offered type (id 0)", "[picker][catalog]") {
+    CatalogDto c;
+    c.controllerTypes.push_back(typeRow(0, "Xbox 360 Controller"));
+    c.controllerTypes.push_back(typeRow(1, "DualShock 4"));
+    REQUIRE(seedControllerType(std::nullopt, c) == 0);
+}
+
+TEST_CASE("seed: defaults to the catalog's first offered type when it is id 1",
+          "[picker][catalog]") {
+    CatalogDto c;
+    c.controllerTypes.push_back(typeRow(1, "DualShock 4"));
+    c.controllerTypes.push_back(typeRow(0, "Xbox 360 Controller"));
+    REQUIRE(seedControllerType(std::nullopt, c) == 1);
+}
+
+TEST_CASE("seed: the user override wins over the catalog default", "[picker][catalog]") {
+    CatalogDto c;
+    c.controllerTypes.push_back(typeRow(1, "DualShock 4"));
+    REQUIRE(seedControllerType(3, c) == 3);
+}
+
+TEST_CASE("seed: no cached catalog falls back to Xbox (0)", "[picker][catalog]") {
+    REQUIRE(seedControllerType(std::nullopt, std::nullopt) == 0);
+}
+
+TEST_CASE("seed: the override still wins with no catalog cached", "[picker][catalog]") {
+    REQUIRE(seedControllerType(2, std::nullopt) == 2);
+}
+
+TEST_CASE("seed: skips a nameless first row - the default is the first OFFERABLE type",
+          "[picker][catalog]") {
+    CatalogDto c;
+    CatalogTypeDto ghost; // no name/shortName -> not offerable, so not the picker's first row
+    ghost.id = 9;
+    ghost.slug = "ghost";
+    c.controllerTypes.push_back(ghost);
+    c.controllerTypes.push_back(typeRow(1, "DualShock 4"));
+    REQUIRE(seedControllerType(std::nullopt, c) == 1);
+}
+
+TEST_CASE("seed: a cached-but-empty catalog falls back to Xbox (0)", "[picker][catalog]") {
+    REQUIRE(seedControllerType(std::nullopt, CatalogDto{}) == 0);
 }

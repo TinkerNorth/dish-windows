@@ -86,7 +86,7 @@ void WifiConnection::teardownClient() {
     for (auto& [slotId, b] : slots_) { b.registered = false; }
 }
 
-void WifiConnection::markConnected(std::shared_ptr<SatelliteClient> client,
+void WifiConnection::markConnected(const std::shared_ptr<SatelliteClient>& client,
                                    const QString& connectionId, int epoch, bool mouseControlGranted,
                                    std::function<void()> onDead,
                                    std::function<void(std::uint8_t)> onClose,
@@ -292,6 +292,7 @@ std::uint16_t WifiConnection::registeredBitmap() const {
 
 bool WifiConnection::matchesAppliedView(const models::SessionViewDto& view) const {
     std::vector<reducer::DesiredSlot> desired;
+    desired.reserve(slots_.size());
     for (const auto& [slotId, b] : slots_) {
         desired.push_back({static_cast<std::uint8_t>(b.controllerIndex),
                            static_cast<std::uint8_t>(b.controllerType)});

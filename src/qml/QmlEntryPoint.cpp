@@ -10,7 +10,7 @@
 #include "qml/chrome/ChromeBridge.h"
 #include "qml/chrome/FramelessWindowChrome.h"
 #include "qml/chrome/ThemeBridge.h"
-#include "ui/common/ExternalLink.h"
+#include "UI/common/ExternalLink.h"
 
 #include "UI/Theme.h"
 

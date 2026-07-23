@@ -264,7 +264,7 @@ TEST_CASE("toCapBits is zero on a slot the user has disabled, even with a gyro",
     CHECK(latestFor(probe, kSlot)->toCapBits() == 0);
 }
 
-// ── Composer: hostHasSinkForType (5) ─────────────────────────────────────────
+// ── Composer: hostHasSinkForType (7) ─────────────────────────────────────────
 
 TEST_CASE("hostHasSinkForType is true for a PlayStation-typed satellite slot", "[motion-cap]") {
     Observable<MotionDeviceList> devices{{device(kSlot, true)}};
@@ -277,6 +277,34 @@ TEST_CASE("hostHasSinkForType is true for a PlayStation-typed satellite slot", "
     ComposerProbe<MotionCapabilityMap> probe(composer.state());
 
     CHECK(latestFor(probe, kSlot)->hostHasSinkForType == true);
+}
+
+TEST_CASE("hostHasSinkForType is true for a DualSense-typed satellite slot", "[motion-cap]") {
+    Observable<MotionDeviceList> devices{{device(kSlot, true)}};
+    Observable<MotionBindings> bindings{{{kSlot, "sat-A"}}};
+    // DualSense rides the same DS4 report set as PlayStation on the satellite.
+    Observable<MotionConnectionList> conns{
+        {satellite("sat-A", true, {{kSlot, dish::proto::kControllerTypeDualSense}})}};
+    Observable<MotionEnabledMap> enabled{{}};
+    Observable<SatelliteMotionBackendStatusMap> backend{{}};
+    MotionCapabilityComposer composer(devices, bindings, conns, enabled, backend);
+    ComposerProbe<MotionCapabilityMap> probe(composer.state());
+
+    CHECK(latestFor(probe, kSlot)->hostHasSinkForType == true);
+}
+
+TEST_CASE("hostHasSinkForType is false for a Switch Pro-typed satellite slot", "[motion-cap]") {
+    Observable<MotionDeviceList> devices{{device(kSlot, true)}};
+    Observable<MotionBindings> bindings{{{kSlot, "sat-A"}}};
+    // Only PlayStation / DualSense ride the DS4 sink; Switch Pro does not.
+    Observable<MotionConnectionList> conns{
+        {satellite("sat-A", true, {{kSlot, dish::proto::kControllerTypeSwitchPro}})}};
+    Observable<MotionEnabledMap> enabled{{}};
+    Observable<SatelliteMotionBackendStatusMap> backend{{}};
+    MotionCapabilityComposer composer(devices, bindings, conns, enabled, backend);
+    ComposerProbe<MotionCapabilityMap> probe(composer.state());
+
+    CHECK(latestFor(probe, kSlot)->hostHasSinkForType == false);
 }
 
 TEST_CASE("hostHasSinkForType is false for an Xbox-typed satellite slot", "[motion-cap]") {

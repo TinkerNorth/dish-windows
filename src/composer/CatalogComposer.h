@@ -69,7 +69,8 @@ struct CatalogSnapshot {
 
 // The slugs the client ships bundled art/translations for. A type whose slug is
 // in here is `known`; everything else renders purely from server strings. Kept
-// in lockstep with the protocol-1 controller types (xbox360 / ds4).
+// in lockstep with the protocol-1 controller types (xbox360 / ds4 / dualsense /
+// switchpro).
 QList<QString> knownTypeSlugs();
 
 // Derive the offerable picker rows from a catalog. Every controllerType that
