@@ -59,12 +59,13 @@ class SDLGamepadBridge : public QObject {
     // the SlotCard lightbar chip and the CAP_LIGHTBAR bit in the slot's REST
     // descriptor.
     //
-    // `controllerType` is the satellite virtual-device kind for this pad:
-    // CONTROLLER_TYPE_PLAYSTATION (1) for a PS3/PS4/PS5 pad as classified by
-    // SDL_GameControllerGetType, CONTROLLER_TYPE_XBOX (0) for everything else.
-    // It feeds the REST descriptor's `type` field so a DualSense registers
-    // as a virtual DS4 (touchpad / IMU / lightbar surface) instead of an Xbox
-    // 360 pad. Values mirror satellite/src/core/types.h CONTROLLER_TYPE_*.
+    // `controllerType` is the satellite virtual-device kind for this pad — the
+    // slot's DEFAULT type as classified from SDL_GameControllerGetType:
+    // CONTROLLER_TYPE_DUALSENSE (2) for a PS5 pad, CONTROLLER_TYPE_SWITCHPRO (3)
+    // for a Switch Pro, CONTROLLER_TYPE_PLAYSTATION (1) for the older DualShock
+    // (PS3/PS4), CONTROLLER_TYPE_XBOX (0) for everything else. It feeds the REST
+    // descriptor's `type` field; the user's Emulate override wins over it. Values
+    // mirror satellite/src/core/types.h CONTROLLER_TYPE_* / proto::kControllerType*.
     //
     // `batteryLevel` / `batteryStatus` carry the most recent battery sample
     // for the device — the same (level, status) pair pollBatteries() forwards

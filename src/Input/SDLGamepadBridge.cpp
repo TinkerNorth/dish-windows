@@ -78,25 +78,31 @@ BatteryReading powerLevelToWire(SDL_JoystickPowerLevel pl) {
 
 constexpr std::chrono::seconds kBatteryPollInterval{30};
 
-// Satellite controller-type wire constants — mirrors
-// satellite/src/core/types.h CONTROLLER_TYPE_XBOX / CONTROLLER_TYPE_PLAYSTATION.
+// Satellite controller-type wire constants — mirror
+// satellite/src/core/types.h CONTROLLER_TYPE_* and proto::kControllerType*.
 constexpr std::uint8_t kControllerTypeXbox = 0;
 constexpr std::uint8_t kControllerTypePlayStation = 1;
+constexpr std::uint8_t kControllerTypeDualSense = 2;
+constexpr std::uint8_t kControllerTypeSwitchPro = 3;
 
-// Classify SDL's negotiated controller type into the satellite's cosmetic
-// virtual-device kind. SDL reports a fine-grained enum (Xbox 360 / Xbox One /
-// PS3 / PS4 / PS5 / Switch Pro / Amazon Luna / …); the satellite only
-// distinguishes Xbox from PlayStation. Any PlayStation pad (PS3/PS4/PS5) maps
-// to CONTROLLER_TYPE_PLAYSTATION so the receiver picks the DS4 virtual device
-// (touchpad + IMU + lightbar surface); everything else — including unknown
-// pads — maps to CONTROLLER_TYPE_XBOX, matching the protocol's
-// "treat anything outside the documented set as Xbox" forward-compat rule.
+// Classify SDL's negotiated controller type into the satellite virtual-device
+// kind used as the slot's DEFAULT type. SDL reports a fine-grained enum (Xbox
+// 360 / Xbox One / PS3 / PS4 / PS5 / Switch Pro / Amazon Luna / …): a PS5 pad
+// maps to CONTROLLER_TYPE_DUALSENSE, a Switch Pro to CONTROLLER_TYPE_SWITCHPRO,
+// the older DualShock (PS3/PS4) to CONTROLLER_TYPE_PLAYSTATION (the virtual DS4
+// surface); everything else — including unknown pads — to CONTROLLER_TYPE_XBOX,
+// matching the protocol's "treat anything outside the documented set as Xbox"
+// forward-compat rule. Only the default classification: the catalog gates
+// offerability and the user's type override wins.
 std::uint8_t sdlTypeToControllerType(SDL_GameControllerType type) {
     switch (type) {
     case SDL_CONTROLLER_TYPE_PS3:
     case SDL_CONTROLLER_TYPE_PS4:
-    case SDL_CONTROLLER_TYPE_PS5:
         return kControllerTypePlayStation;
+    case SDL_CONTROLLER_TYPE_PS5:
+        return kControllerTypeDualSense;
+    case SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_PRO:
+        return kControllerTypeSwitchPro;
     default:
         return kControllerTypeXbox;
     }
