@@ -31,7 +31,6 @@ source::ThemeMode themeModeFromInt(int value) {
     case 1:
         return source::ThemeMode::Dark;
     case 2:
-        return source::ThemeMode::System;
     default:
         // Lenient, mirroring themeModeFromStorage's unknown -> System default.
         return source::ThemeMode::System;

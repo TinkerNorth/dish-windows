@@ -22,11 +22,11 @@ void ChromeBridge::setDark(bool dark) {
 }
 
 void ChromeBridge::setCaptionRect(const QRect& rect) {
-    if (m_chrome) { m_chrome->setCaptionRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setCaptionRect(rect); }
 }
 
 void ChromeBridge::setMaximizeButtonRect(const QRect& rect) {
-    if (m_chrome) { m_chrome->setMaximizeButtonRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setMaximizeButtonRect(rect); }
 }
 
 } // namespace dish::chrome

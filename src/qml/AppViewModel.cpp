@@ -42,10 +42,6 @@ namespace dish::qml {
 
 namespace {
 
-// "Bound to <ip> • UDP <port>" detail not needed here — the header strings
-// mirror MainWindow::rebuildHeader, which keys off ConnectionSummary only.
-QString tr(const char* s) { return QCoreApplication::translate("AppViewModel", s); }
-
 // models::LinkState and reducer::UiLinkState are the SAME 7-value enum in the
 // same order (the latter is the Qt-free mirror); the picker rows carry a
 // models::LinkState, so cross over to feed the reducer render-key mappers.

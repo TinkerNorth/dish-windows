@@ -9,6 +9,8 @@
 #include <dwmapi.h>
 #include <windowsx.h>
 
+#include <cstring>
+
 // Some SDK headers predate these; define defensively so the build doesn't hinge
 // on the installed Windows SDK version.
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
@@ -35,17 +37,23 @@ HWND hwndOf(QWindow* window) {
 // Win11 gate needs.
 unsigned long osBuildNumber() {
     using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
-    if (HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll")) {
-        // Via void*: FARPROC has an unrelated signature, so a direct function-
-        // pointer cast trips -Wcast-function-type-mismatch.
-        if (auto fn = reinterpret_cast<RtlGetVersionFn>(
-                reinterpret_cast<void*>(::GetProcAddress(ntdll, "RtlGetVersion")))) {
-            RTL_OSVERSIONINFOW info{};
-            info.dwOSVersionInfoSize = sizeof(info);
-            if (fn(&info) == 0) { return info.dwBuildNumber; }
-        }
-    }
-    return 0;
+    const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+    if (ntdll == nullptr) { return 0; }
+    const FARPROC proc = ::GetProcAddress(ntdll, "RtlGetVersion");
+    if (proc == nullptr) { return 0; }
+
+    // Copy the bits instead of casting: FARPROC's signature is unrelated, so a
+    // direct function-pointer cast trips -Wcast-function-type-mismatch and
+    // laundering it through void* trips bugprone-casting-through-void.
+    RtlGetVersionFn rtlGetVersion = nullptr;
+    static_assert(sizeof(rtlGetVersion) == sizeof(proc), "same-width function pointers");
+    std::memcpy(static_cast<void*>(&rtlGetVersion), static_cast<const void*>(&proc),
+                sizeof(rtlGetVersion));
+
+    RTL_OSVERSIONINFOW info{};
+    info.dwOSVersionInfoSize = sizeof(info);
+    if (rtlGetVersion(&info) != 0) { return 0; }
+    return info.dwBuildNumber;
 }
 
 // Scale a logical-pixel window-local rect to physical pixels for the native
@@ -71,7 +79,7 @@ void FramelessWindowChrome::setMaximizeButtonRect(const QRect& rect) {
 
 bool FramelessWindowChrome::applyMicaBackdrop() {
     HWND hwnd = hwndOf(m_window);
-    if (!hwnd) { return false; }
+    if (hwnd == nullptr) { return false; }
     if (!isWin11OrLater(osBuildNumber())) {
         // Pre-Win11: the backdrop + dark-mode attributes are unsupported and the
         // immersive-dark attribute had a different (reserved) id on early builds.
@@ -99,7 +107,7 @@ bool FramelessWindowChrome::applyMicaBackdrop() {
 
 void FramelessWindowChrome::setImmersiveDarkMode(bool dark) {
     HWND hwnd = hwndOf(m_window);
-    if (!hwnd || !isWin11OrLater(osBuildNumber())) { return; }
+    if (hwnd == nullptr || !isWin11OrLater(osBuildNumber())) { return; }
     const BOOL value = dark ? TRUE : FALSE;
     ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 }
@@ -109,7 +117,7 @@ bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType, void*
     if (eventType != QByteArrayLiteral("windows_generic_MSG")) { return false; }
     auto* msg = static_cast<MSG*>(message);
     HWND target = hwndOf(m_window);
-    if (!target || msg->hwnd != target) { return false; }
+    if (target == nullptr || msg->hwnd != target) { return false; }
 
     switch (msg->message) {
     case WM_NCCALCSIZE: {
@@ -130,7 +138,7 @@ bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType, void*
         const int gx = GET_X_LPARAM(msg->lParam);
         const int gy = GET_Y_LPARAM(msg->lParam);
 
-        const qreal dpr = m_window ? m_window->devicePixelRatio() : 1.0;
+        const qreal dpr = m_window != nullptr ? m_window->devicePixelRatio() : 1.0;
 
         WINDOWPLACEMENT wp{sizeof(wp), 0, 0, {}, {}, {}};
         ::GetWindowPlacement(target, &wp);

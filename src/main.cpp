@@ -37,12 +37,13 @@ int main(int argc, char* argv[]) {
     // POSIX siblings have no equivalent — sockets just work.
     dish::net::WinsockInit winsock;
     if (!winsock.ok()) {
-        std::fprintf(stderr, "dish: WSAStartup failed\n");
+        // The exit code carries the failure; a broken stderr adds nothing here.
+        (void)std::fprintf(stderr, "dish: WSAStartup failed\n");
         return 1;
     }
 
     if (sodium_init() < 0) {
-        std::fprintf(stderr, "dish: libsodium initialisation failed\n");
+        (void)std::fprintf(stderr, "dish: libsodium initialisation failed\n");
         return 1;
     }
 
@@ -61,12 +62,12 @@ int main(int argc, char* argv[]) {
     // for the lifetime of the QApplication via the `static` qualifier.
     static QTranslator translator;
     const QString localeName = QLocale::system().name();
-    if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n"))) {
-        QCoreApplication::installTranslator(&translator);
-    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"),
-                               QStringLiteral("_"), QStringLiteral(".qm"))) {
-        // Two-step fallback so QLocale::system().name() values that are
-        // language-only (e.g. "de") still find dish_de.qm.
+    // The second load is the fallback so QLocale::system().name() values that are
+    // language-only (e.g. "de") still find dish_de.qm; || short-circuits, so it
+    // only runs when the exact-locale load missed.
+    if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n")) ||
+        translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"), QStringLiteral("_"),
+                        QStringLiteral(".qm"))) {
         QCoreApplication::installTranslator(&translator);
     }
 
