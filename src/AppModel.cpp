@@ -6,12 +6,14 @@
 #include "LightbarRouting.h"
 #include "composer/StreamingSlotCount.h"
 #include "core/input/UsbReportParsers.h"
+#include "core/reducer/PickerVisibility.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/SlotPathFields.h"
 #include "core/reducer/TouchpadRouting.h"
 #include "core/reducer/UsbTwinDedup.h"
 
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_set>
@@ -857,19 +859,14 @@ void AppModel::onInputRatesChanged(const source::SlotInputRatesMap& rates) {
 // ── Workstream 2c: catalog-driven Emulate picker ─────────────────────────────
 
 int AppModel::resolveControllerType(const QString& slotId) const {
-    // 1) The user's Emulate override (keyed by the slot's bound connection).
     const QString connId = hub_->bindings().value(slotId);
-    if (!connId.isEmpty()) {
-        if (auto override = typeStore_.typeFor(connId.toStdString(), slotId.toStdString())) {
-            return *override;
-        }
-    }
-    // 2) The pad's SDL hardware classification.
-    for (const auto& d : bridge_->devices()) {
-        if (d.id == slotId) { return d.controllerType; }
-    }
-    // 3) Default Xbox.
-    return proto::kControllerTypeXbox;
+    if (connId.isEmpty()) { return proto::kControllerTypeXbox; }
+    // The user's Emulate override wins; absent that the default is the bound
+    // satellite catalog's first offered type (the picker's first row), then Xbox.
+    const auto userOverride = typeStore_.typeFor(connId.toStdString(), slotId.toStdString());
+    std::optional<models::CatalogDto> cached;
+    if (auto* conn = wifi_->get(connId)) { cached = catalogRepo_.cached(conn->server().id()); }
+    return reducer::seedControllerType(userOverride, cached);
 }
 
 int AppModel::currentTypeFor(const QString& slotId) const { return resolveControllerType(slotId); }

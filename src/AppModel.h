@@ -157,7 +157,7 @@ class AppModel : public QObject {
     QList<composer::PickableType> pickableTypesFor(const QString& slotId) const;
 
     // The slot's current emulated type id (the user override if set, else the
-    // pad's hardware classification, else Xbox). Pre-selects the picker.
+    // bound satellite catalog's first offered type, else Xbox). Pre-selects the picker.
     int currentTypeFor(const QString& slotId) const;
 
     // Apply the user's Emulate choice: write the override into the type store
@@ -264,9 +264,10 @@ class AppModel : public QObject {
     void onInputRatesChanged(const source::SlotInputRatesMap& rates);
 
     // Resolve the controller type to advertise for a slot: the user's Emulate
-    // override (ControllerTypeStore) wins; absent that, the pad's SDL hardware
-    // classification; absent that, Xbox. This is what bind()/attachSlot threads
-    // into the descriptor PUT, so an Emulate choice reaches the satellite.
+    // override (ControllerTypeStore) wins; absent that, the bound satellite
+    // catalog's first offered type; absent that, Xbox. This is what bind()/
+    // attachSlot threads into the descriptor PUT, so an Emulate choice reaches
+    // the satellite.
     int resolveControllerType(const QString& slotId) const;
 
     std::unique_ptr<net::ConnectionStore> store_;

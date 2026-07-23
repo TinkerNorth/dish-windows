@@ -59,14 +59,6 @@ class SDLGamepadBridge : public QObject {
     // the SlotCard lightbar chip and the CAP_LIGHTBAR bit in the slot's REST
     // descriptor.
     //
-    // `controllerType` is the satellite virtual-device kind for this pad — the
-    // slot's DEFAULT type as classified from SDL_GameControllerGetType:
-    // CONTROLLER_TYPE_DUALSENSE (2) for a PS5 pad, CONTROLLER_TYPE_SWITCHPRO (3)
-    // for a Switch Pro, CONTROLLER_TYPE_PLAYSTATION (1) for the older DualShock
-    // (PS3/PS4), CONTROLLER_TYPE_XBOX (0) for everything else. It feeds the REST
-    // descriptor's `type` field; the user's Emulate override wins over it. Values
-    // mirror satellite/src/core/types.h CONTROLLER_TYPE_* / proto::kControllerType*.
-    //
     // `batteryLevel` / `batteryStatus` carry the most recent battery sample
     // for the device — the same (level, status) pair pollBatteries() forwards
     // onto the wire (the controller's own charge for a wireless pad, the host
@@ -80,7 +72,6 @@ class SDLGamepadBridge : public QObject {
         bool hasLightbar = false;
         std::uint8_t batteryLevel = 0xFF;
         std::uint8_t batteryStatus = 0;
-        std::uint8_t controllerType = 0; // CONTROLLER_TYPE_XBOX
         // The pad's USB identity (SDL_GameControllerGetVendor/Product). 0 when SDL
         // could not report it. Surfaced so AppModel can pair an SDL device with a
         // USB-direct (raw-HID) twin of the same model for the twin-dedup
@@ -228,17 +219,9 @@ class SDLGamepadBridge : public QObject {
     // advertise CAP_LIGHTBAR. Same lifecycle / locking as motionCapable_.
     std::unordered_set<int> lightbarCapable_;
 
-    // Per-device satellite controller type (CONTROLLER_TYPE_XBOX /
-    // CONTROLLER_TYPE_PLAYSTATION), classified once at attach from
-    // SDL_GameControllerGetType. Surfaced through devices() as
-    // Device::controllerType so the connection layer can declare the right
-    // descriptor `type`. Same lifecycle / locking as motionCapable_;
-    // a device absent from the map defaults to CONTROLLER_TYPE_XBOX.
-    std::unordered_map<int, std::uint8_t> controllerType_;
-
     // Per-device USB identity (vid, pid) classified once at attach. Surfaced via
     // devices() for the twin-dedup pairing. Same lifecycle / locking as
-    // controllerType_; a device absent reads (0, 0).
+    // motionCapable_; a device absent reads (0, 0).
     struct UsbIdentity {
         int vendorId = 0;
         int productId = 0;

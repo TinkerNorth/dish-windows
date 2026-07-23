@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Models/Models.h"
+#include "core/model/Protocol.h"
 
 #include <QList>
 #include <QString>
@@ -72,6 +73,21 @@ connectionsVisibleInPicker(const QList<models::ConnectionSummary>& all,
 // "unknown controller-TYPE id/slug DOES render" rule.
 inline bool isTypeOfferable(const models::CatalogTypeDto& type) {
     return !type.name.isEmpty() || !type.shortName.isEmpty();
+}
+
+// The slot's seed/default controller type, as a pure ladder: the user's Emulate
+// override when set; else the first type the catalog OFFERS (isTypeOfferable — the
+// picker's first row, in the server's curated order); else Xbox when no catalog is
+// cached. Keeps the pre-selected default in lockstep with the picker's first row.
+inline int seedControllerType(std::optional<int> userOverride,
+                              const std::optional<models::CatalogDto>& catalog) {
+    if (userOverride) { return *userOverride; }
+    if (catalog) {
+        for (const auto& t : catalog->controllerTypes) {
+            if (isTypeOfferable(t)) { return t.id; }
+        }
+    }
+    return proto::kControllerTypeXbox;
 }
 
 // A catalog FEATURE is offered only when the client recognises its slug AND the
