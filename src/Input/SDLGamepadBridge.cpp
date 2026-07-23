@@ -78,30 +78,6 @@ BatteryReading powerLevelToWire(SDL_JoystickPowerLevel pl) {
 
 constexpr std::chrono::seconds kBatteryPollInterval{30};
 
-// Satellite controller-type wire constants — mirrors
-// satellite/src/core/types.h CONTROLLER_TYPE_XBOX / CONTROLLER_TYPE_PLAYSTATION.
-constexpr std::uint8_t kControllerTypeXbox = 0;
-constexpr std::uint8_t kControllerTypePlayStation = 1;
-
-// Classify SDL's negotiated controller type into the satellite's cosmetic
-// virtual-device kind. SDL reports a fine-grained enum (Xbox 360 / Xbox One /
-// PS3 / PS4 / PS5 / Switch Pro / Amazon Luna / …); the satellite only
-// distinguishes Xbox from PlayStation. Any PlayStation pad (PS3/PS4/PS5) maps
-// to CONTROLLER_TYPE_PLAYSTATION so the receiver picks the DS4 virtual device
-// (touchpad + IMU + lightbar surface); everything else — including unknown
-// pads — maps to CONTROLLER_TYPE_XBOX, matching the protocol's
-// "treat anything outside the documented set as Xbox" forward-compat rule.
-std::uint8_t sdlTypeToControllerType(SDL_GameControllerType type) {
-    switch (type) {
-    case SDL_CONTROLLER_TYPE_PS3:
-    case SDL_CONTROLLER_TYPE_PS4:
-    case SDL_CONTROLLER_TYPE_PS5:
-        return kControllerTypePlayStation;
-    default:
-        return kControllerTypeXbox;
-    }
-}
-
 // SDL_GameController axes are int16 [-32768, 32767]; pass through directly.
 std::int16_t axisValue(SDL_GameController* gc, SDL_GameControllerAxis axis) {
     return SDL_GameControllerGetAxis(gc, axis);
@@ -145,14 +121,10 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
                    motionCapable_.count(iid) != 0,
                    lightbarCapable_.count(iid) != 0,
                    0xFF,
-                   0,
-                   kControllerTypeXbox};
+                   0};
         if (auto it = lastBattery_.find(iid); it != lastBattery_.end()) {
             dev.batteryLevel = it->second.level;
             dev.batteryStatus = it->second.status;
-        }
-        if (auto it = controllerType_.find(iid); it != controllerType_.end()) {
-            dev.controllerType = it->second;
         }
         if (auto it = usbIdentity_.find(iid); it != usbIdentity_.end()) {
             dev.vendorId = it->second.vendorId;
@@ -217,11 +189,8 @@ void SDLGamepadBridge::runLoop() {
             // third-party pads); SDL_FALSE for Xbox / Switch Pro / generic
             // pads. Drives the per-controller CAP_LIGHTBAR advertisement.
             const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
-            // Classify SDL's negotiated type into the satellite Xbox /
-            // PlayStation kind so the connection layer can declare the right
-            // descriptor `type` (a DualSense → virtual DS4).
+            // SDL's negotiated type — used only for the DEVCAPS diagnostic below.
             const auto type = SDL_GameControllerGetType(gc);
-            const std::uint8_t ctrlType = sdlTypeToControllerType(type);
             // The pad's USB identity, classified once here for the twin-dedup
             // pairing (AppModel matches it against a USB-direct synthetic of the
             // same model). SDL returns 0 when it can't read the descriptor.
@@ -234,7 +203,6 @@ void SDLGamepadBridge::runLoop() {
                 deviceNames_[iid] = deviceName;
                 if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
                 if (hasLed) { lightbarCapable_.insert(iid); }
-                controllerType_[iid] = ctrlType;
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
             }
@@ -277,7 +245,6 @@ void SDLGamepadBridge::runLoop() {
                 deviceNames_.erase(iid);
                 motionCapable_.erase(iid);
                 lightbarCapable_.erase(iid);
-                controllerType_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
                 lastBattery_.erase(iid);
@@ -318,7 +285,6 @@ void SDLGamepadBridge::runLoop() {
                 openJoysticks_[iid] = js;
                 deviceIds_[iid] = deviceId;
                 deviceNames_[iid] = deviceName;
-                controllerType_[iid] = kControllerTypeXbox;
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
             }
@@ -354,7 +320,6 @@ void SDLGamepadBridge::runLoop() {
                     deviceIds_.erase(it);
                 }
                 deviceNames_.erase(iid);
-                controllerType_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
                 lastBattery_.erase(iid);

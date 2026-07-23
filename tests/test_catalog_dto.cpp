@@ -18,6 +18,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+using dish::composer::knownTypeSlugs;
 using dish::composer::offerableTypes;
 using dish::composer::PickableType;
 using dish::models::CatalogDto;
@@ -66,24 +67,38 @@ TEST_CASE("offerableTypes renders both known and unknown types from the catalog"
         "controllerTypes":[
           {"id":0,"slug":"xbox360","name":"Xbox 360 Controller","shortName":"Xbox","description":"a"},
           {"id":1,"slug":"ds4","name":"DualShock 4","shortName":"PlayStation","description":"b"},
-          {"id":7,"slug":"hyperpad","name":"HyperPad 9000","shortName":"Hyper","description":"c"}
+          {"id":2,"slug":"dualsense","name":"DualSense","shortName":"DualSense","description":"c"},
+          {"id":3,"slug":"switchpro","name":"Switch Pro","shortName":"Switch","description":"d"},
+          {"id":7,"slug":"hyperpad","name":"HyperPad 9000","shortName":"Hyper","description":"e"}
         ],
         "hostFeatures":{}
     })"));
 
     const QList<PickableType> rows = offerableTypes(catalog);
-    REQUIRE(rows.size() == 3);
+    REQUIRE(rows.size() == 5);
     // Catalog order is preserved.
     REQUIRE(rows[0].type == 0);
     REQUIRE(rows[0].slug == "xbox360");
     REQUIRE(rows[0].known); // the client bundles art/translations for xbox360
     REQUIRE(rows[1].slug == "ds4");
     REQUIRE(rows[1].known);
+    // dualsense (2) / switchpro (3) are bundled known slugs too.
+    REQUIRE(rows[2].type == 2);
+    REQUIRE(rows[2].slug == "dualsense");
+    REQUIRE(rows[2].known);
+    REQUIRE(rows[3].type == 3);
+    REQUIRE(rows[3].slug == "switchpro");
+    REQUIRE(rows[3].known);
     // The forward-compat type renders from server strings and is flagged as not
     // bundled (no local art/translations).
-    REQUIRE(rows[2].type == 7);
-    REQUIRE(rows[2].name == "HyperPad 9000");
-    REQUIRE_FALSE(rows[2].known);
+    REQUIRE(rows[4].type == 7);
+    REQUIRE(rows[4].name == "HyperPad 9000");
+    REQUIRE_FALSE(rows[4].known);
+
+    // knownTypeSlugs itself now carries the two new bundled slugs.
+    const QList<QString> known = knownTypeSlugs();
+    REQUIRE(known.contains(QStringLiteral("dualsense")));
+    REQUIRE(known.contains(QStringLiteral("switchpro")));
 }
 
 TEST_CASE("offerableTypes drops a nameless catalog row", "[catalog][forwardcompat]") {

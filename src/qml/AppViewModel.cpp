@@ -23,7 +23,7 @@
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
 #include "UI/Theme.h"
-#include "ui/licenses/LicenseManifest.h"
+#include "UI/licenses/LicenseManifest.h"
 
 #include <QCoreApplication>
 #include <QDesktopServices>

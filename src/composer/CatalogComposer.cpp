@@ -9,8 +9,10 @@ namespace dish::composer {
 
 QList<QString> knownTypeSlugs() {
     // The protocol-1 controller types the client bundles art/translations for.
-    // Kept in lockstep with proto::kControllerType* (xbox360 = 0, ds4 = 1).
-    return {QStringLiteral("xbox360"), QStringLiteral("ds4")};
+    // Kept in lockstep with proto::kControllerType* (xbox360 = 0, ds4 = 1,
+    // dualsense = 2, switchpro = 3).
+    return {QStringLiteral("xbox360"), QStringLiteral("ds4"), QStringLiteral("dualsense"),
+            QStringLiteral("switchpro")};
 }
 
 QList<PickableType> offerableTypes(const models::CatalogDto& catalog) {

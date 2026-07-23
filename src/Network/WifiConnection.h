@@ -96,7 +96,7 @@ class WifiConnection : public QObject {
     // reason byte); `onReconcile` when the enriched-ack epoch/bitmap drifts;
     // `onRekey` once per approach when the send counter crosses the proactive
     // re-PUT threshold (contract §Crypto).
-    void markConnected(std::shared_ptr<SatelliteClient> client, const QString& connectionId,
+    void markConnected(const std::shared_ptr<SatelliteClient>& client, const QString& connectionId,
                        int epoch, bool mouseControlGranted, std::function<void()> onDead,
                        std::function<void(std::uint8_t reason)> onClose,
                        std::function<void()> onReconcile, std::function<void()> onRekey);

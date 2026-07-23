@@ -31,7 +31,7 @@ Reduction reduceRouted(const UsbController& c, const UsbEvent& event) {
         n.frameworkId = up->id;
         return stay(std::move(n));
     }
-    if (as<event::FrameworkDown>(event)) {
+    if (as<event::FrameworkDown>(event) != nullptr) {
         // Framework dropped while routed (cable jiggle or claim aftermath); wait
         // for it to return.
         UsbController n = c;
@@ -40,13 +40,13 @@ Reduction reduceRouted(const UsbController& c, const UsbEvent& event) {
         n.userInitiated = false;
         return Reduction{std::move(n), {effect::StartTimeout{}}};
     }
-    if (as<event::PermissionGranted>(event)) {
+    if (as<event::PermissionGranted>(event) != nullptr) {
         UsbController granted = c;
         granted.hasPermission = true;
         if (granted.desired == PathChoice::Direct) { return startClaim(std::move(granted)); }
         return stay(std::move(granted));
     }
-    if (as<event::PermissionDenied>(event)) {
+    if (as<event::PermissionDenied>(event) != nullptr) {
         if (c.desired == PathChoice::Direct) {
             UsbController n = c;
             n.desired = PathChoice::Standard;
@@ -119,7 +119,7 @@ Reduction reduceClaiming(const UsbController& c, const UsbEvent& event) {
         n.frameworkId = up->id;
         return stay(std::move(n));
     }
-    if (as<event::PermissionGranted>(event)) {
+    if (as<event::PermissionGranted>(event) != nullptr) {
         UsbController n = c;
         n.hasPermission = true;
         return stay(std::move(n));
@@ -178,7 +178,7 @@ Reduction reduceAwaiting(const UsbController& c, const UsbEvent& event) {
         n.failure.reset();
         return Reduction{std::move(n), std::move(fx)};
     }
-    if (as<event::Timeout>(event)) {
+    if (as<event::Timeout>(event) != nullptr) {
         if (c.syntheticId.has_value()) {
             // Return-to-Standard never re-enumerated. Don't silently re-claim
             // Direct under the user; surface the stuck state with a live toggle.
@@ -201,7 +201,7 @@ Reduction reduceAwaiting(const UsbController& c, const UsbEvent& event) {
             {effect::MarkNeedsReplug{}, effect::MarkFailure{DirectClaimFailure::Dropped},
              effect::SetPref{PathChoice::Standard}, effect::Notify{UsbNotice::NeedsReplug}}};
     }
-    if (as<event::PermissionGranted>(event)) {
+    if (as<event::PermissionGranted>(event) != nullptr) {
         UsbController n = c;
         n.hasPermission = true;
         return stay(std::move(n));
@@ -236,7 +236,7 @@ Reduction reduceRestoreStuck(const UsbController& c, const UsbEvent& event) {
                          {effect::SetPref{PathChoice::Direct}, effect::ClearFailure{},
                           effect::Notify{UsbNotice::RolledBackToDirect}}};
     }
-    if (as<event::ClaimFailed>(event)) {
+    if (as<event::ClaimFailed>(event) != nullptr) {
         // Reclaim failed too: the device is gone. The synthetic placeholder is
         // dropped by the Reclaim effector; surface a Dropped reason so the
         // NeedsReplug card asks for a physical replug.
@@ -268,7 +268,7 @@ Reduction reduceRestoreStuck(const UsbController& c, const UsbEvent& event) {
         n.failure.reset();
         return Reduction{std::move(n), std::move(fx)};
     }
-    if (as<event::PermissionGranted>(event)) {
+    if (as<event::PermissionGranted>(event) != nullptr) {
         UsbController n = c;
         n.hasPermission = true;
         return stay(std::move(n));
@@ -291,7 +291,7 @@ Reduction reduceNeedsReplug(const UsbController& c, const UsbEvent& event) {
         n.userInitiated = ch->userInitiated;
         return stay(std::move(n));
     }
-    if (as<event::PermissionGranted>(event)) {
+    if (as<event::PermissionGranted>(event) != nullptr) {
         UsbController n = c;
         n.hasPermission = true;
         return stay(std::move(n));
