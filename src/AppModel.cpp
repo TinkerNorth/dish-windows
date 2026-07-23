@@ -12,6 +12,7 @@
 #include "core/reducer/TouchpadRouting.h"
 #include "core/reducer/UsbTwinDedup.h"
 
+#include <chrono>
 #include <map>
 #include <optional>
 #include <set>
@@ -21,9 +22,6 @@
 
 #include <QApplication>
 #include <QLocale>
-
-#include <chrono>
-#include <vector>
 
 namespace dish {
 
@@ -56,12 +54,13 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
       inhibitor_(std::move(inhibitor)), wakeComposer_(streamingSlotCount_, shouldKeepScreenOn_),
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
-      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
-      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
-      motionEnabledStore_(&motionPrefRepo_), themeController_(themeStore_.state(), qApp),
+      themeController_(themeStore_.state(), qApp),
       crashController_(crashStore_.state(), &crashBackend_),
-      joystickRemapStore_(&joystickRemapRepo_), usbPathStore_(&usbPathRepo_), usbObserver_(this),
-      usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
+      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
+      motionEnabledStore_(&motionPrefRepo_), joystickRemapStore_(&joystickRemapRepo_),
+      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
+      usbPathStore_(&usbPathRepo_), usbObserver_(this), usbScanTimer_(new QTimer(this)),
+      inputRateTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -763,16 +762,16 @@ void AppModel::rebuild() {
     QHash<QString, net::ConnectionHub::TouchpadSender> nextTouchpad;
     for (const auto& slot : state_.slotList) {
         if (auto sender = hub_->reportSenderForSlot(slot.id)) {
-            nextRouting.insert(slot.id, std::move(sender));
+            nextRouting.insert(slot.id, sender);
         }
         if (auto sender = hub_->motionSenderForSlot(slot.id)) {
-            nextMotion.insert(slot.id, std::move(sender));
+            nextMotion.insert(slot.id, sender);
         }
         if (auto sender = hub_->batterySenderForSlot(slot.id)) {
-            nextBattery.insert(slot.id, std::move(sender));
+            nextBattery.insert(slot.id, sender);
         }
         if (auto sender = hub_->touchpadSenderForSlot(slot.id)) {
-            nextTouchpad.insert(slot.id, std::move(sender));
+            nextTouchpad.insert(slot.id, sender);
         }
     }
     {

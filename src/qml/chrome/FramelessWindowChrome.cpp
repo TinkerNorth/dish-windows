@@ -34,7 +34,10 @@ HWND hwndOf(QWindow* window) { return window ? reinterpret_cast<HWND>(window->wi
 unsigned long osBuildNumber() {
     using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
     if (HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll")) {
-        if (auto fn = reinterpret_cast<RtlGetVersionFn>(::GetProcAddress(ntdll, "RtlGetVersion"))) {
+        // Via void*: FARPROC has an unrelated signature, so a direct function-
+        // pointer cast trips -Wcast-function-type-mismatch.
+        if (auto fn = reinterpret_cast<RtlGetVersionFn>(
+                reinterpret_cast<void*>(::GetProcAddress(ntdll, "RtlGetVersion")))) {
             RTL_OSVERSIONINFOW info{};
             info.dwOSVersionInfoSize = sizeof(info);
             if (fn(&info) == 0) { return info.dwBuildNumber; }
