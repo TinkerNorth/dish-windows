@@ -5,6 +5,10 @@
 // recessed pill; clicking opens an in-scene menu of options. Emits
 // picked(option) — the selected value streams back through `value`.
 
+// Bound: the Repeater delegate references the outer `control` id alongside its
+// `required` model props — static resolution needs bound component behavior.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import Dish.Chrome
@@ -64,20 +68,21 @@ Rectangle {
         Repeater {
             model: control.options
             delegate: MenuItem {
+                id: item
                 required property string modelData
                 text: modelData
 
                 contentItem: Text {
-                    text: parent.modelData
+                    text: item.modelData
                     font.pixelSize: Tokens.textSummary
-                    color: parent.modelData === control.value ? Theme.primary : Theme.onSurface
+                    color: item.modelData === control.value ? Theme.primary : Theme.onSurface
                     verticalAlignment: Text.AlignVCenter
                 }
                 background: Rectangle {
-                    color: parent.highlighted ? Theme.primaryHover : "transparent"
+                    color: item.highlighted ? Theme.primaryHover : "transparent"
                     radius: 4
                 }
-                onTriggered: control.picked(modelData)
+                onTriggered: control.picked(item.modelData)
             }
         }
     }

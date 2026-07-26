@@ -46,8 +46,8 @@ ColumnLayout {
 
     BrandGlyph {
         glyph: empty.glyph
-        width: 40
-        height: 40
+        Layout.preferredWidth: 40
+        Layout.preferredHeight: 40
         visible: empty.glyph.length > 0
         Layout.alignment: Qt.AlignHCenter
     }

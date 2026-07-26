@@ -7,6 +7,10 @@
 // the change and the selected state streams back through `value`, so the
 // control never holds its own truth.
 
+// Bound: the Repeater delegate references the outer `control` id alongside its
+// `required` model props — static resolution needs bound component behavior.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Dish.Chrome
 
@@ -21,8 +25,11 @@ Rectangle {
 
     signal picked(string option)
 
-    implicitWidth: row.implicitWidth + 2 * row.anchors.margins
-    implicitHeight: row.implicitHeight + 2 * row.anchors.margins
+    // The recessed frame insets its segments by 2px (dense) / 3px.
+    readonly property int framePad: small ? 2 : 3
+
+    implicitWidth: row.implicitWidth + 2 * framePad
+    implicitHeight: row.implicitHeight + 2 * framePad
     radius: small ? Tokens.radiusButton : Tokens.radiusCard
     color: Theme.surfaceDim
     border.width: 1
@@ -32,7 +39,6 @@ Rectangle {
     Row {
         id: row
         anchors.centerIn: parent
-        anchors.margins: control.small ? 2 : 3
         spacing: control.small ? 3 : 4
 
         Repeater {
