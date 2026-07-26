@@ -27,6 +27,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Dish.Chrome
 import "kit" as Kit
+import "onboarding" as Onboarding
 
 Item {
     id: shell
@@ -62,6 +63,12 @@ Item {
     function pushDetail(url, title) {
         shell.currentTitle = title;
         contentStack.push(Qt.resolvedUrl(url));
+    }
+
+    // Open the 3-step setup guide dialog over the shell (the welcome hand-off
+    // and the Settings "Setup guide" row both land here).
+    function openSetupGuide() {
+        setupGuide.open();
     }
 
     // What the header renders for the current page: the page's own header*
@@ -312,5 +319,11 @@ Item {
     Connections {
         target: App
         function onErrorMessage(message) { toastHost.show(message); }
+    }
+
+    // The setup guide rides the shell so both entry points (welcome hand-off,
+    // Settings row) share one instance over the same scrim.
+    Onboarding.SetupGuideDialog {
+        id: setupGuide
     }
 }
