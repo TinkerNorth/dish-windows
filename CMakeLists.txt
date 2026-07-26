@@ -502,7 +502,9 @@ if(DISH_QML)
         src/qml/chrome/ChromeBridge.h
         src/qml/chrome/ChromeBridge.cpp
         src/qml/chrome/ThemeBridge.h
-        src/qml/chrome/ThemeBridge.cpp)
+        src/qml/chrome/ThemeBridge.cpp
+        src/qml/chrome/TokensBridge.h
+        src/qml/chrome/TokensBridge.cpp)
 
     # The QML module. URI Dish.Chrome ties the .qml files and the QML_ELEMENT
     # bridges into one import. The singletons (ChromeBridge/ThemeBridge) are
@@ -519,7 +521,7 @@ if(DISH_QML)
             src/qml/Main.qml
             src/qml/WindowTitleBar.qml
             src/qml/AppShell.qml
-            # Shared component kit (A2) — styled from Theme tokens on Basic.
+            # Shared component kit (A2) — styled from Theme + Tokens on Basic.
             src/qml/kit/SectionHeader.qml
             src/qml/kit/KitButton.qml
             src/qml/kit/OutlineButton.qml
@@ -530,6 +532,17 @@ if(DISH_QML)
             src/qml/kit/KitTextField.qml
             src/qml/kit/Page.qml
             src/qml/kit/ContentDialog.qml
+            # Design-system primitives added for the flows redesign (the JSX
+            # showcase's FEyebrow/FSeg/FCombo/FSlider/FRadio/FRowBtn/chips).
+            src/qml/kit/Eyebrow.qml
+            src/qml/kit/SegmentedControl.qml
+            src/qml/kit/ComboButton.qml
+            src/qml/kit/SliderRow.qml
+            src/qml/kit/RadioMark.qml
+            src/qml/kit/RowButton.qml
+            src/qml/kit/CapabilityChip.qml
+            src/qml/kit/LiveStat.qml
+            src/qml/kit/DishProgressBar.qml
             # State components — shared loading / error / empty states + the
             # global transient toast host, so every page binds all four UI states
             # (loading / error / empty / content) the same way. See ARCHITECTURE.md

@@ -4,6 +4,7 @@
 #include "qml/AppViewModel.h"
 
 #include "AppModel.h"
+#include "FeatureSettings.h"
 #include "Input/GamepadInputProcessor.h"
 #include "Input/JoystickMapping.h"
 #include "Input/SDLGamepadBridge.h"
@@ -176,6 +177,24 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
         false);
     onboardingNeeded_ = !model_->onboardingStore()->welcomeCompleted();
 
+    // The keep-awake pill follows the wake composer's streaming count. Folded
+    // into stateChanged (a wake flip always rides a binding/liveness change,
+    // but the subscription is what actually catches it).
+    keepAwakeSub_ = model_->keepAwakeCount().subscribe(
+        [this](const int& count) {
+            const bool active = count > 0;
+            if (active != keepAwakeActive_) {
+                keepAwakeActive_ = active;
+                emit stateChanged();
+            }
+        },
+        true);
+
+    // An external light-bar mutation (nothing mutates it but us today, yet the
+    // store could grow callers) re-reads through the one NOTIFY.
+    QObject::connect(model_->featureSettings(), &FeatureSettings::changed, this,
+                     [this] { emit lightbarChanged(); });
+
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
     QObject::connect(telemetryTimer_, &QTimer::timeout, this, &AppViewModel::onTelemetryTick);
@@ -224,6 +243,16 @@ void AppViewModel::onStateChanged() {
 
     busy_ = st.busy;
 
+    // Shell-header primitives (contract A2): the pages assemble the design's
+    // sub-lines ("2 of 3 online · nothing bound") from these in QML.
+    slotCount_ = static_cast<int>(st.slotList.size());
+    int bound = 0;
+    for (const auto& s : st.slotList) {
+        if (s.boundConnectionId.has_value()) { ++bound; }
+    }
+    boundSlotCount_ = bound;
+    firstOnlineName_ = firstLabel;
+
     pairingActive_ = st.pairingTarget.has_value();
     pairingServerName_ = pairingActive_ ? st.pairingTarget->name : QString();
 
@@ -252,6 +281,30 @@ void AppViewModel::onTelemetryTick() {
     sendsPerSec_ = snap.sends;
     totalSent_ = snap.totalSent;
     emit telemetryChanged();
+}
+
+// Derived from the live discovered list on read (UI cadence, list is tiny) so
+// no second cache can drift from discoveredServers().
+int AppViewModel::foundCount() const { return static_cast<int>(discoveredServers().size()); }
+
+bool AppViewModel::railCollapsed() const { return uiPrefs_.railCollapsed(); }
+
+void AppViewModel::setRailCollapsed(bool collapsed) {
+    if (uiPrefs_.railCollapsed() == collapsed) { return; }
+    uiPrefs_.setRailCollapsed(collapsed);
+    emit railCollapsedChanged();
+}
+
+bool AppViewModel::lightbarFollowGame() const {
+    return model_->featureSettings()->lightbarMode() == LightbarMode::FollowGame;
+}
+
+void AppViewModel::setLightbarFollowGame(bool followGame) {
+    model_->featureSettings()->setLightbarMode(followGame ? LightbarMode::FollowGame
+                                                          : LightbarMode::Off);
+    // FeatureSettings::changed also fires; the extra emit keeps the property
+    // NOTIFY correct even if that connect is ever removed.
+    emit lightbarChanged();
 }
 
 void AppViewModel::bindSlot(const QString& slotId, const QString& connectionId) {

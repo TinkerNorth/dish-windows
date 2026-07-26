@@ -430,6 +430,15 @@ struct ControllerSlot {
     QString name;
     std::optional<QString> boundConnectionId;
     std::optional<ConnectionSummary> boundStatus;
+    // The resolved emulation type's localized short name ("Xbox 360",
+    // "DualShock 4") for the bound sub-line's "· as <type>" suffix. Empty when
+    // unbound or the catalog offers no name (the row then omits the suffix
+    // rather than guessing).
+    QString emulateName;
+    // True while the pad is attaching (SDL saw the device but the slot hasn't
+    // settled) — the card renders the busy "Registering controller…" state
+    // instead of chips/actions.
+    bool registering = false;
     // Hardware capabilities detected by SDLGamepadBridge when the device
     // attached. Drives the capability indicator in SlotCard.
     ControllerCapabilities capabilities;

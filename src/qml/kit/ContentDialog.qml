@@ -27,10 +27,16 @@ import Dish.Chrome
 Popup {
     id: dialog
 
+    // The mono accent micro-label above the heading ("PAIRING", "BIND", ...).
+    property string eyebrow: ""
     property string heading: ""
+    // An empty accept/reject text hides that button (the reverse-pairing sheet
+    // offers only Cancel; a pure-info sheet only Next).
     property string acceptText: qsTr("OK")
     property string rejectText: qsTr("Cancel")
     property bool acceptEnabled: true
+    // The design's dialog widths run 400-470 by task; default to the FDlg base.
+    property int preferredWidth: 430
     // Pages inject their body controls here. Aliased straight to the body
     // column's data list so the property carries a concrete list type — an
     // object alias would hide the target's members from qmllint and force
@@ -43,58 +49,72 @@ Popup {
     modal: true
     dim: true
     anchors.centerIn: Overlay.overlay
-    width: Math.min(420, (parent ? parent.width : 420) - 48)
+    width: Math.min(preferredWidth, (parent ? parent.width : preferredWidth) - 48)
     padding: 0
     closePolicy: Popup.CloseOnEscape
 
-    // Dim scrim behind the dialog; the surface itself is the Card below.
+    // The design scrim: deep-space ink at 55%, not neutral black.
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.5)
+        color: Qt.rgba(3 / 255, 5 / 255, 16 / 255, 0.55)
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Tokens.radiusCard
         color: Theme.surface
         border.width: 1
         border.color: Theme.outline
     }
 
     contentItem: ColumnLayout {
-        spacing: 16
+        spacing: Tokens.s6
+
+        Eyebrow {
+            text: dialog.eyebrow
+            visible: dialog.eyebrow.length > 0
+            Layout.fillWidth: true
+            Layout.topMargin: Tokens.s9
+            Layout.leftMargin: Tokens.s9
+            Layout.rightMargin: Tokens.s9
+        }
 
         Label {
             text: dialog.heading
             visible: dialog.heading.length > 0
             color: Theme.onSurface
-            font.pixelSize: 16
+            font.pixelSize: Tokens.textHeading
             font.bold: true
+            wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            Layout.topMargin: 20
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            // The eyebrow, when present, owns the top inset; tuck the heading
+            // right under it (the FDlg -4px pull).
+            Layout.topMargin: dialog.eyebrow.length > 0 ? -Tokens.s2 : Tokens.s9
+            Layout.leftMargin: Tokens.s9
+            Layout.rightMargin: Tokens.s9
         }
 
         ColumnLayout {
             id: bodyColumn
-            spacing: 12
+            spacing: Tokens.s6
             Layout.fillWidth: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.leftMargin: Tokens.s9
+            Layout.rightMargin: Tokens.s9
         }
 
         RowLayout {
-            spacing: 8
+            spacing: Tokens.s4
             Layout.alignment: Qt.AlignRight
-            Layout.bottomMargin: 20
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.bottomMargin: Tokens.s9
+            Layout.leftMargin: Tokens.s9
+            Layout.rightMargin: Tokens.s9
 
             OutlineButton {
                 text: dialog.rejectText
+                visible: dialog.rejectText.length > 0
                 onClicked: { dialog.rejected(); dialog.close(); }
             }
             KitButton {
                 text: dialog.acceptText
+                visible: dialog.acceptText.length > 0
                 enabled: dialog.acceptEnabled
                 onClicked: dialog.accepted()   // page decides whether to close
             }

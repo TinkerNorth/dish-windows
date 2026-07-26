@@ -99,6 +99,10 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return s.usbDirect;
     case RemappableRole:
         return s.remappable;
+    case EmulateNameRole:
+        return s.emulateName;
+    case RegisteringRole:
+        return s.registering;
 
     case HasMotionRole:
         return s.capabilities.hasMotion;
@@ -176,6 +180,8 @@ QHash<int, QByteArray> SlotListModel::roleNames() const {
         {DotColorRole, "dotColor"},
         {UsbDirectRole, "usbDirect"},
         {RemappableRole, "remappable"},
+        {EmulateNameRole, "emulateName"},
+        {RegisteringRole, "registering"},
         {HasMotionRole, "hasMotion"},
         {HasLightbarRole, "hasLightbar"},
         {BatteryLevelRole, "batteryLevel"},

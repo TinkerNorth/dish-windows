@@ -43,12 +43,12 @@ RowLayout {
         onToggled: row.toggled(checked)
 
         indicator: Rectangle {
-            implicitWidth: 40
+            implicitWidth: 38
             implicitHeight: 22
             radius: height / 2
             color: sw.checked ? Theme.primary : Theme.surfaceDim
             border.width: 1
-            border.color: sw.checked ? Theme.primary : Theme.outline
+            border.color: sw.checked ? "transparent" : Theme.outline
 
             Rectangle {
                 width: 16
@@ -56,7 +56,7 @@ RowLayout {
                 radius: 8
                 y: 3
                 x: sw.checked ? parent.width - width - 3 : 3
-                color: sw.checked ? Theme.background : Theme.muted
+                color: sw.checked ? Theme.onPrimary : Theme.muted
                 Behavior on x { NumberAnimation { duration: 120 } }
             }
         }

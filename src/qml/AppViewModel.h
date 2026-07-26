@@ -22,6 +22,7 @@
 #include "source/store/CrashReportingStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
+#include "source/store/UiPreferenceStore.h"
 
 #include <QObject>
 #include <QString>
@@ -123,6 +124,26 @@ class AppViewModel : public QObject {
     Q_PROPERTY(QString donateKofiUrl READ donateKofiUrl CONSTANT)
     Q_PROPERTY(QString donateBmacUrl READ donateBmacUrl CONSTANT)
 
+    // ── Shell header + rail (contract A2) ────────────────────────────────────
+    // Primitive counts the pages compose their header sub-lines from (the
+    // design's "2 found · nothing remembered yet" / "2 of 3 online · nothing
+    // bound" strings are assembled in QML so the words stay in qsTr catalogs).
+    Q_PROPERTY(int slotCount READ slotCount NOTIFY stateChanged)
+    Q_PROPERTY(int boundSlotCount READ boundSlotCount NOTIFY stateChanged)
+    Q_PROPERTY(QString firstOnlineName READ firstOnlineName NOTIFY stateChanged)
+    Q_PROPERTY(int foundCount READ foundCount NOTIFY discoveredChanged)
+    // True while the display-sleep inhibitor is held (a slot is streaming) —
+    // drives the header's "STREAMING · DISPLAY KEPT AWAKE" pill.
+    Q_PROPERTY(bool keepAwakeActive READ keepAwakeActive NOTIFY stateChanged)
+    // The collapsible navigation rail's persisted state (48px icon rail vs
+    // 236px labeled pane). Written by the title-bar hamburger.
+    Q_PROPERTY(
+        bool railCollapsed READ railCollapsed WRITE setRailCollapsed NOTIFY railCollapsedChanged)
+    // The light-bar forwarding preference (Follow game / Off), surfaced so the
+    // QML Settings page carries the control the Widgets SettingsView had.
+    Q_PROPERTY(bool lightbarFollowGame READ lightbarFollowGame WRITE setLightbarFollowGame NOTIFY
+                   lightbarChanged)
+
   public:
     explicit AppViewModel(dish::AppModel* model, QObject* parent = nullptr);
 
@@ -157,6 +178,16 @@ class AppViewModel : public QObject {
     QString donateSponsorsUrl() const;
     QString donateKofiUrl() const;
     QString donateBmacUrl() const;
+
+    int slotCount() const { return slotCount_; }
+    int boundSlotCount() const { return boundSlotCount_; }
+    QString firstOnlineName() const { return firstOnlineName_; }
+    int foundCount() const;
+    bool keepAwakeActive() const { return keepAwakeActive_; }
+    bool railCollapsed() const;
+    Q_INVOKABLE void setRailCollapsed(bool collapsed);
+    bool lightbarFollowGame() const;
+    Q_INVOKABLE void setLightbarFollowGame(bool followGame);
 
     // The external-open sink: the QmlEntryPoint injects the real ExternalLink
     // path (which routes a failure through the NotificationQueue toast, matching
@@ -330,6 +361,13 @@ class AppViewModel : public QObject {
     // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().
     void deadzonesChanged();
 
+    // The rail collapse preference flipped (persisted; NOTIFY for railCollapsed).
+    void railCollapsedChanged();
+
+    // The light-bar preference flipped (NOTIFY for lightbarFollowGame). Folds
+    // FeatureSettings::changed so an external mutation re-reads too.
+    void lightbarChanged();
+
     // A one-shot pairing-success edge (a session reached Connected after a pair).
     // Mirrors the rising edge of a connection going live; the QML pairing sheet
     // closes on it. Best-effort, fired at most once per live transition.
@@ -364,6 +402,10 @@ class AppViewModel : public QObject {
     int onlineCount_ = 0;
     int connectionCount_ = 0;
     bool busy_ = false;
+    int slotCount_ = 0;
+    int boundSlotCount_ = 0;
+    QString firstOnlineName_;
+    bool keepAwakeActive_ = false;
 
     int eventsPerSec_ = 0;
     int sendsPerSec_ = 0;
@@ -394,6 +436,11 @@ class AppViewModel : public QObject {
     arch::Observable<source::ThemeMode>::Subscription themeSub_;
     arch::Observable<bool>::Subscription crashSub_;
     arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
+    arch::Observable<int>::Subscription keepAwakeSub_;
+
+    // Rail-collapse persistence. UI-shell-only state, so the store lives here
+    // rather than on AppModel — the view model IS the shell's C++ edge.
+    source::UiPreferenceStore uiPrefs_;
 };
 
 } // namespace dish::qml

@@ -28,12 +28,22 @@ class ThemeBridge : public QObject {
     Q_PROPERTY(QColor surface READ surface NOTIFY paletteChanged)
     Q_PROPERTY(QColor surfaceDim READ surfaceDim NOTIFY paletteChanged)
     Q_PROPERTY(QColor primary READ primary NOTIFY paletteChanged)
+    Q_PROPERTY(QColor primaryDark READ primaryDark NOTIFY paletteChanged)
+    Q_PROPERTY(QColor onPrimary READ onPrimary NOTIFY paletteChanged)
     Q_PROPERTY(QColor onSurface READ onSurface NOTIFY paletteChanged)
     Q_PROPERTY(QColor muted READ muted NOTIFY paletteChanged)
     Q_PROPERTY(QColor outline READ outline NOTIFY paletteChanged)
     Q_PROPERTY(QColor success READ success NOTIFY paletteChanged)
     Q_PROPERTY(QColor error READ error NOTIFY paletteChanged)
     Q_PROPERTY(QColor warning READ warning NOTIFY paletteChanged)
+    // Inline-alpha tints derived from the ACTIVE accent at read time (the token
+    // sheet carries them as rgba literals; deriving keeps them in lockstep with
+    // a palette swap for free). Alphas differ per appearance — a light accent
+    // needs a quieter wash (design tokens/colors.css).
+    Q_PROPERTY(QColor primaryHover READ primaryHover NOTIFY paletteChanged)
+    Q_PROPERTY(QColor primaryPress READ primaryPress NOTIFY paletteChanged)
+    Q_PROPERTY(QColor primaryFill READ primaryFill NOTIFY paletteChanged)
+    Q_PROPERTY(QColor warningFill READ warningFill NOTIFY paletteChanged)
 
   public:
     explicit ThemeBridge(QObject* parent = nullptr);
@@ -42,12 +52,18 @@ class ThemeBridge : public QObject {
     QColor surface() const;
     QColor surfaceDim() const;
     QColor primary() const;
+    QColor primaryDark() const;
+    QColor onPrimary() const;
     QColor onSurface() const;
     QColor muted() const;
     QColor outline() const;
     QColor success() const;
     QColor error() const;
     QColor warning() const;
+    QColor primaryHover() const;
+    QColor primaryPress() const;
+    QColor primaryFill() const;
+    QColor warningFill() const;
 
     // Re-read the active C++ Theme tokens (call after setActiveAppearance swapped
     // the palette). Every token property re-evaluates off the one paletteChanged.

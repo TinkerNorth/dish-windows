@@ -88,6 +88,9 @@ class AppModel : public QObject {
     input::GamepadInputProcessor* processor() { return &processor_; }
     input::SDLGamepadBridge* bridge() { return bridge_; }
     composer::WakeStateController* wake() { return &wakeController_; }
+    // Observable count of streaming slots holding the display awake (>0 == the
+    // inhibitor is held). The QML header pill subscribes; read-only.
+    arch::Observable<int>& keepAwakeCount() { return shouldKeepScreenOn_; }
     // Feature-forwarding preferences (light bar on/off). Owned by the model;
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }

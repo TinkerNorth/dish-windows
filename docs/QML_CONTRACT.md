@@ -1,8 +1,16 @@
-# QML Contract (frozen — A1)
+# QML Contract (frozen — A2)
 
 This is the FROZEN exposure contract the Qt Quick UI binds against. Page agents
 code ONLY against this document. Do not re-read the C++; if something you need is
 missing, flag it rather than reaching past this surface.
+
+A2 (the flows redesign) extends A1 additively — every A1 binding keeps working.
+The additions are listed in **§7 A2 addendum** at the end: shell-header
+primitives (counts + keep-awake pill), the collapsible-rail preference, the
+light-bar setting, two new slot roles, and the `Tokens` metrics singleton
+beside `Theme`. The two index-based invokables A1 still listed as DEPRECATED
+(`connectByIndex`, index-based `pairWithPin`) were REMOVED from the C++ in R14
+and are gone from this doc.
 
 The whole surface is reached through one context property, **`App`** (an
 `AppViewModel`), registered by `QmlEntryPoint::runQmlApp` on the root context. It
@@ -88,13 +96,11 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `startDiscovery()` | — | Begin a satellite discovery scan (Connections page "Scan"). |
 | `isScanning()` | → `bool` | Whether a scan is in flight. Prefer the reactive `scanning` property for bindings. |
 | `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
-| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. **Prefer this over `connectByIndex`.** |
-| `connectByIndex(discoveredIndex)` | `int` | **DEPRECATED** (racy if the list reorders between read and call). Connect to the discovered server at that index (no-op if out of range). Use `connectByServerId`. |
+| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. |
 | `reconnectConnection(connectionId)` | `string` | Reconnect a REMEMBERED satellite by id WITHOUT a rescan requirement and WITHOUT re-pairing (the key persists). If the id is in the current scan, connects the fresh endpoint; else kicks a discovery relearn AND attempts the last-known endpoint now. Gate the button on the row NOT being `liveLink`. |
 | `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered row + pairing key survive (contrast `forgetConnection`). Gate the button on the row's `liveLink` role. |
 | `forgetConnection(connectionId)` | `string` | Forget a remembered connection (unbinds its slots, drops key/pin/row). |
-| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable `id` (de-raced; resolves out of the live list). **Prefer this over `pairWithPin`.** Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
-| `pairWithPin(discoveredIndex, pin)` | `int, string` | **DEPRECATED** (racy if the list reorders). Submit a 6-digit PIN for the discovered server at that index. Use `pairByServerId`. |
+| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable `id` (de-raced; resolves out of the live list). Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
 | `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers`). Drives the Pair button's spinner+disabled state. |
 | `clearPairingTarget()` | — | Drop the one-shot pairing trigger (call before opening the pairing sheet to avoid re-entry). |
 | `requestReversePairing(serverId)` | `string` | Start HOST-INITIATED (reverse) pairing for the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). The dish generates + shows a 4-digit PIN (`reversePairingPin`); the operator types it on the satellite. Watch `reversePairingPhase` for the outcome and `App.errorMessage` for the decline/timeout reason. A second call cancels the first. |
@@ -315,7 +321,7 @@ TextField { id: pinField; maximumLength: 6 }
 Button {
     text: qsTr("Pair")
     enabled: !App.isPairingInFlight(App.discoveredServers()[0].id)
-    onClicked: App.pairWithPin(0, pinField.text)
+    onClicked: App.pairByServerId(App.discoveredServers()[0].id, pinField.text)
 }
 Connections {
     target: App
@@ -332,3 +338,71 @@ function openEmulate(slotId) {
     App.setControllerType(slotId, chosenType);
 }
 ```
+
+---
+
+## 7. A2 addendum — the flows redesign surface
+
+Additive over A1. Everything below exists and is wired; page agents bind these
+exactly like the A1 surface.
+
+### 7.1 New `App` properties
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `slotCount` | `int` | `stateChanged` | Rows in `slotModel` (mirrored so bindings never poke the model for a count). |
+| `boundSlotCount` | `int` | `stateChanged` | Slots currently bound to a connection — drives the "· nothing bound" suffix. |
+| `firstOnlineName` | `string` | `stateChanged` | Label of the first `Connected` connection ("Living-room Satellite online · …"); empty when none. |
+| `foundCount` | `int` | `discoveredChanged` | Size of the FOUND list ("2 found · nothing remembered yet"). |
+| `keepAwakeActive` | `bool` | `stateChanged` | True while the display-sleep inhibitor is held — render the header pill `STREAMING · DISPLAY KEPT AWAKE`. |
+| `railCollapsed` | `bool` (RW) | `railCollapsedChanged` | The nav rail's persisted collapse state (48px icons vs 236px labels). The title-bar hamburger calls `App.setRailCollapsed(!App.railCollapsed)`. |
+| `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding preference (design combo: true = "Follow game", false = "Off"). Settings page binds `App.setLightbarFollowGame(x)`. |
+
+Header sub-lines are ASSEMBLED IN QML from these primitives (each page owns its
+wording via `qsTr`):
+- Controllers: no connections → "No connections yet — pair a Satellite to get
+  started" (dot muted); one online, nothing bound → `firstOnlineName` + " online
+  · nothing bound" (dot primary); else `onlineCount of connectionCount online`
+  (+ " · nothing bound" when `boundSlotCount === 0`; dot success).
+- Connections: nothing remembered → `foundCount` + " found · nothing remembered
+  yet" (dot muted); else `onlineCount` streaming · `connectionCount` remembered
+  (dot success when any online, warning when none).
+
+### 7.2 New `slotModel` roles
+
+| Role | Type | Meaning |
+|---|---|---|
+| `emulateName` | `string` | Resolved emulation type short name for the bound sub-line's "· as DualShock 4" suffix. Empty → omit the suffix. |
+| `registering` | `bool` | Attach in flight — render the busy card (glyph + "Registering controller…" + indeterminate bar) instead of chips/actions. |
+
+### 7.3 `Tokens` singleton (`import Dish.Chrome`)
+
+Non-color design tokens beside `Theme`: type scale (`textStatus 17, textTitle
+20, textHeading 16, textBase 13, textSummary 12, textMeta 11, textChip 10`),
+`sectionLetterSpacing 1.5`, `monoFamily` (platform monospace), spacing `s1..s9 =
+2,4,6,8,10,12,14,16,20` + `pagePadding 24`, radii (`radiusChip 5, radiusButton
+6, radiusCard 8, radiusBar 2`), shell metrics (`titleBarHeight 44,
+captionButtonWidth 46, railCompact 48, railExpanded 236, navItemHeight 40,
+hitRow 44, dotSize 8`), `disabledOpacity 0.4`. Never hard-code these numbers in
+pages.
+
+### 7.4 `Theme` singleton additions
+
+`primaryDark`, `onPrimary`, and the derived washes `primaryHover`,
+`primaryPress`, `primaryFill`, `warningFill` (all NOTIFY `paletteChanged`).
+Text on a filled accent control is ALWAYS `Theme.onPrimary` (not
+`Theme.background`).
+
+### 7.5 Kit inventory for the redesign
+
+New: `Eyebrow`, `SegmentedControl` (options/value/small/busy + picked),
+`ComboButton` (options/value + picked), `SliderRow` (label/value/maxValue +
+committed), `RadioMark` (selected), `RowButton` (title/subtitle + clicked),
+`CapabilityChip` (text/present/low), `LiveStat` (text/live),
+`DishProgressBar` (indeterminate/value).
+Restyled to the ds spec (API unchanged unless noted): `KitButton` (primary
+fill), `OutlineButton` (accent border), `Card` (radius 8, 12/14 inset),
+`SectionHeader` (now a Row with optional `glyph`; accent mono), `KitTextField`,
+`LabeledSwitch`, `EmptyState` (+ `glyph` property), `ContentDialog` (+ `eyebrow`,
+`preferredWidth`; empty `acceptText`/`rejectText` hides that button),
+`NotificationToastHost` (+ "warning" severity).

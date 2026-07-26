@@ -100,10 +100,12 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     const auto names = model.roleNames();
     // One entry per declared role (Id..DirectFailure). If a role is added without
     // a name, this count drifts and the test flags it.
-    REQUIRE(names.size() == 26);
+    REQUIRE(names.size() == 28);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
     REQUIRE(names.value(SlotListModel::RemappableRole) == QByteArray("remappable"));
+    REQUIRE(names.value(SlotListModel::EmulateNameRole) == QByteArray("emulateName"));
+    REQUIRE(names.value(SlotListModel::RegisteringRole) == QByteArray("registering"));
     REQUIRE(names.value(SlotListModel::GamepadHzShownRole) == QByteArray("gamepadHzShown"));
     REQUIRE(names.value(SlotListModel::PollHzShownRole) == QByteArray("pollHzShown"));
     REQUIRE(names.value(SlotListModel::PathPhaseRole) == QByteArray("pathPhase"));

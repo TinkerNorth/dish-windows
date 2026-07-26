@@ -33,6 +33,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Effects
 import QtQuick.Layouts
 import Dish.Chrome
 
@@ -66,7 +67,8 @@ Item {
     function show(message, severity) {
         if (!message || message.length === 0)
             return;
-        const sev = (severity === "info" || severity === "success") ? severity : "error";
+        const sev = (severity === "info" || severity === "success" || severity === "warning")
+                  ? severity : "error";
         // DROP_OLDEST: trim from the front until there's room for the new one.
         while (toastModel.count >= host.maxVisible)
             toastModel.remove(0);
@@ -91,7 +93,7 @@ Item {
         id: stack
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottomMargin: 24
+        anchors.bottomMargin: 18
         spacing: 8
 
         Repeater {
@@ -110,59 +112,66 @@ Item {
                 width: implicitWidth
                 height: implicitHeight
 
-                // Severity → accent colour (the leading rail bar). Error/info/
-                // success map onto the same Theme tones the rest of the kit uses.
+                // Severity → accent colour (the leading rail bar). The tone map
+                // mirrors the ds Toast: error / warning / success / info.
                 readonly property color accent: toast.severity === "success" ? Theme.success
                                               : toast.severity === "info" ? Theme.primary
+                                              : toast.severity === "warning" ? Theme.warning
                                               : Theme.error
 
                 Rectangle {
                     id: pill
-                    // The pill surface — a Card-like panel so the toast reads as a
-                    // floating surface over the Mica/content, with a coloured rail.
-                    implicitWidth: Math.min(pillRow.implicitWidth + 28, 420)
-                    implicitHeight: Math.max(pillRow.implicitHeight + 20, 40)
-                    radius: 10
+                    // The ONE elevated Dish surface: a surface pill with a 3px
+                    // tone rule down the left edge and a soft shadow.
+                    implicitWidth: Math.min(pillRow.implicitWidth + 28, 380)
+                    implicitHeight: Math.max(pillRow.implicitHeight + 24, 40)
+                    radius: Tokens.radiusButton
                     color: Theme.surface
                     border.width: 1
                     border.color: Theme.outline
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        shadowEnabled: true
+                        shadowBlur: 0.8
+                        shadowVerticalOffset: 8
+                        shadowColor: Qt.rgba(0, 0, 0, 0.45)
+                    }
 
-                    // Leading severity rail down the left edge.
+                    // Leading severity rule down the left edge (squared — it
+                    // reads as a rule, not a bar).
                     Rectangle {
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        width: 4
-                        radius: 2
+                        width: 3
                         color: toast.accent
                     }
 
                     RowLayout {
                         id: pillRow
                         anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 12
-                        anchors.topMargin: 10
-                        anchors.bottomMargin: 10
-                        spacing: 10
-
-                        // A small severity dot echoes the rail for quick scanning.
-                        Rectangle {
-                            implicitWidth: 8
-                            implicitHeight: 8
-                            radius: 4
-                            color: toast.accent
-                            Layout.alignment: Qt.AlignVCenter
-                        }
+                        anchors.leftMargin: Tokens.s7
+                        anchors.rightMargin: Tokens.s6
+                        anchors.topMargin: Tokens.s6
+                        anchors.bottomMargin: Tokens.s6
+                        spacing: Tokens.s5
 
                         Label {
                             text: toast.message
                             color: Theme.onSurface
-                            font.pixelSize: 13
+                            font.pixelSize: Tokens.textSummary
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
-                            Layout.maximumWidth: 340
+                            Layout.maximumWidth: 320
                             Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        // Explicit dismiss affordance (the ds Toast ✕).
+                        Label {
+                            text: "✕"
+                            color: Theme.muted
+                            font.pixelSize: 14
+                            Layout.alignment: Qt.AlignTop
                         }
                     }
 

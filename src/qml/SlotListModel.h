@@ -47,6 +47,8 @@ class SlotListModel : public QAbstractListModel {
         DotColorRole,          // QString: semantic token name ("success"/"warning"/"muted")
         UsbDirectRole,         // bool: synthetic USB-direct pad
         RemappableRole,        // bool: raw joystick whose routing is user-remappable
+        EmulateNameRole,       // QString: resolved type short name ("" hides the suffix)
+        RegisteringRole,       // bool: attach in flight — card renders the busy state
 
         HasMotionRole,     // bool: hardware has a gyro/accelerometer
         HasLightbarRole,   // bool: hardware has an addressable RGB LED
