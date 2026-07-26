@@ -573,7 +573,10 @@ if(DISH_QML)
             src/qml/onboarding/WelcomeScreen.qml
             src/qml/onboarding/SetupWizardScreen.qml
             src/qml/onboarding/HelpScreen.qml
-            src/qml/onboarding/OnboardingNavBar.qml)
+            src/qml/onboarding/OnboardingNavBar.qml
+            # The 3-step setup guide as an in-window dialog (design f-a2) —
+            # opened from Settings and from the welcome hand-off.
+            src/qml/onboarding/SetupGuideDialog.qml)
 
     # The qmltyperegistrar emits a registration .cpp that #includes the bridge
     # headers by BASENAME (ChromeBridge.h, ThemeBridge.h), so their directory
