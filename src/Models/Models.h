@@ -189,6 +189,15 @@ struct SessionViewControllerDto {
     bool active = false;
     int appliedType = proto::kControllerTypeXbox;
     QString touchpadMode;
+    // Applied caps word folded from the view's `caps` object. `capsPresent`
+    // distinguishes "server omitted the block" (older satellite) from an
+    // all-false fold, so reconcile only compares caps it was actually told.
+    std::uint16_t caps = 0;
+    bool capsPresent = false;
+    // Per-controller motion delivery truth (absent on older satellites): does
+    // the applied type have a motion sink, and is the backend healthy for it.
+    std::optional<bool> motionSinkSupportedForType;
+    std::optional<bool> motionBackendOk;
 
     static SessionViewControllerDto fromJson(const QJsonObject& obj);
 };
@@ -197,6 +206,8 @@ struct SessionViewControllerDto {
 struct SessionViewDto {
     std::optional<QString> connectionId;
     int epoch = 0;
+    int protocolVersion = proto::kProtocolVersion;
+    int maxControllers = 16;
     QList<SessionViewControllerDto> controllers;
     HostFeatureGrant mouseControl;
     std::optional<QString> error;
@@ -212,8 +223,17 @@ struct SessionViewDto {
     static SessionViewDto fromJson(const QJsonObject& obj);
 };
 
+// One entry of the capabilities `host` block: the receiver's own inventory for
+// a feature slug. `supported` is the static fact; `available` is a coarse
+// runtime read (bus open), absent when the server doesn't report it.
+struct HostCapabilityDto {
+    bool supported = false;
+    std::optional<bool> available;
+};
+
 // GET /api/server/capabilities: current DYNAMIC backend health. Gates the
-// motion/DS4 UI on live backend availability.
+// motion/DS4 UI on live backend availability. Unauthenticated, so it is the
+// only pre-pairing signal that the receiver's driver stack is broken.
 struct CapabilitiesDto {
     int protocolVersion = proto::kProtocolVersion;
     QString serverVersion;
@@ -223,6 +243,15 @@ struct CapabilitiesDto {
     bool backendAvailable = false;
     std::optional<QString> backendErrorCode;
     bool motionAvailable = false;
+    // The `host` capability inventory (contract §capabilities). `hasHostBlock`
+    // is the presence signal — an older satellite omits the block entirely and
+    // the client falls back to catalog-era defaults rather than reading four
+    // false entries as "receiver can do nothing".
+    bool hasHostBlock = false;
+    HostCapabilityDto hostCatalog;
+    HostCapabilityDto hostMouseControl;
+    HostCapabilityDto hostKeyboardControl;
+    HostCapabilityDto hostRumble;
     int httpStatus = 0;
     bool reachable = false;
 
@@ -235,6 +264,18 @@ struct CapabilitiesDto {
 struct CatalogFeatureDto {
     bool supported = false;
     std::optional<QString> requires_; // structured code e.g. "vigembus>=1.17"
+    // Explicit mode slugs offered for this feature (e.g. touchpad → ["ds4"]).
+    // Empty = a pre-modes catalog; the client falls back to its prior
+    // assumption rather than gating the feature off.
+    QStringList modes;
+};
+
+// OPTIONAL physical-pad identity hint on an offered type: which detected pad
+// this virtual type is the natural default for. The mapping policy lives on
+// the server so new hardware needs no client release.
+struct CatalogEmulatesDto {
+    QString sdlType;  // clients' SDL_GameControllerType vocabulary (ps4, ps5, …)
+    QStringList usb;  // lowercase "vid:pid" identities
 };
 
 struct CatalogTypeDto {
@@ -247,6 +288,7 @@ struct CatalogTypeDto {
     QString imageEtag;
     // Feature slug → support. Keys are protocol constants (rumble, motion, …).
     QHash<QString, CatalogFeatureDto> features;
+    std::optional<CatalogEmulatesDto> emulates;
 
     static CatalogTypeDto fromJson(const QJsonObject& obj);
 };
@@ -259,6 +301,11 @@ struct CatalogHostFeatureDto {
 struct CatalogDto {
     QString locale;
     int protocolVersion = proto::kProtocolVersion;
+    // Catalog SCHEMA version, distinct from the wire protocol and the build.
+    // A response omitting the field is the legacy v1 catalog (xbox360 + ds4,
+    // no emulates) — absent reads as 1 so clients can branch on schema level
+    // instead of sniffing for fields.
+    int catalogVersion = 1;
     QString serverVersion;
     QString etag; // "<serverVersion>+<locale>" — cache key for If-None-Match
     QList<CatalogTypeDto> controllerTypes;

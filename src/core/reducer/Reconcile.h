@@ -15,6 +15,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -23,19 +24,23 @@
 namespace dish::reducer {
 
 // One desired controller slot, reduced to what reconcile compares on: index +
-// emulation type. (caps/touchpadMode also converge via re-PUT, but the
-// server's applied view reports type, so type is the comparison key — matching
-// android's matchesAppliedView desired==applied on ctrlIdx→appliedType.)
+// emulation type + touchpad mode. The mode joined the key when it stopped
+// being a constant: a server-side mode reset would otherwise be invisible to
+// the loop and touchpad packets would silently die (contract §Session view).
 struct DesiredSlot {
     std::uint8_t ctrlIdx = 0;
     std::uint8_t type = 0;
+    std::uint8_t touchpadMode = 2; // proto::kTouchpadModeOff
 };
 
-// One applied controller from a GET /api/connections/{id} response.
+// One applied controller from a GET /api/connections/{id} response. A nullopt
+// touchpadMode means the server predates reporting it — the comparison then
+// skips the mode arm for that slot instead of forcing an endless re-PUT.
 struct AppliedSlot {
     std::uint8_t ctrlIdx = 0;
     std::uint8_t appliedType = 0;
     bool active = true;
+    std::optional<std::uint8_t> touchpadMode;
 };
 
 // The 16-bit active-controller bitmap the client expects, derived from the
@@ -72,13 +77,21 @@ inline bool reconcileNeeded(int serverEpoch, int serverBitmap, int lastAppliedEp
 inline bool appliedMatchesDesired(const std::vector<DesiredSlot>& desired,
                                   const std::vector<AppliedSlot>& applied,
                                   bool mouseWantsVsGrantedMatch = true) {
-    std::map<std::uint8_t, std::uint8_t> want;
-    for (const auto& d : desired) { want[d.ctrlIdx] = d.type; }
-    std::map<std::uint8_t, std::uint8_t> have;
+    if (!mouseWantsVsGrantedMatch) { return false; }
+    std::map<std::uint8_t, DesiredSlot> want;
+    for (const auto& d : desired) { want[d.ctrlIdx] = d; }
+    std::size_t activeCount = 0;
     for (const auto& a : applied) {
-        if (a.active) { have[a.ctrlIdx] = a.appliedType; }
+        if (!a.active) { continue; }
+        ++activeCount;
+        const auto it = want.find(a.ctrlIdx);
+        if (it == want.end()) { return false; }
+        if (it->second.type != a.appliedType) { return false; }
+        if (a.touchpadMode.has_value() && *a.touchpadMode != it->second.touchpadMode) {
+            return false;
+        }
     }
-    return want == have && mouseWantsVsGrantedMatch;
+    return activeCount == want.size();
 }
 
 // ── Late-slot converge ──────────────────────────────────────────────────────

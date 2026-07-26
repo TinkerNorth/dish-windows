@@ -225,12 +225,34 @@ TEST_CASE("SessionViewDto parses the contract's GET example", "[models][session]
     })"));
     REQUIRE(*v.connectionId == "conn_ab12cd34");
     REQUIRE(v.epoch == 3);
+    REQUIRE(v.protocolVersion == 1);
+    REQUIRE(v.maxControllers == 16);
     REQUIRE(v.controllers.size() == 1);
     REQUIRE(v.controllers.first().ctrlIdx == 0);
     REQUIRE(v.controllers.first().active);
     REQUIRE(v.controllers.first().appliedType == 0);
     REQUIRE(v.controllers.first().touchpadMode == "off");
+    REQUIRE(v.controllers.first().capsPresent);
+    REQUIRE(v.controllers.first().caps ==
+            (proto::kCapRumble | proto::kCapMotion | proto::kCapAnalogTriggers));
+    REQUIRE(v.controllers.first().motionSinkSupportedForType == true);
+    REQUIRE(v.controllers.first().motionBackendOk == true);
     REQUIRE(v.mouseControl.granted);
+}
+
+TEST_CASE("SessionViewControllerDto without caps/motion blocks reads as not-reported",
+          "[models][session]") {
+    // An older satellite omits both blocks; the parse must distinguish "not
+    // told" from "told all-false" so reconcile never fights a server that
+    // simply predates the fields.
+    const auto v = SessionViewDto::fromJson(parse(R"({
+        "connectionId":"c","epoch":1,
+        "controllers":[{"ctrlIdx":0,"active":true,"appliedType":1}]
+    })"));
+    REQUIRE_FALSE(v.controllers.first().capsPresent);
+    REQUIRE(v.controllers.first().caps == 0);
+    REQUIRE_FALSE(v.controllers.first().motionSinkSupportedForType.has_value());
+    REQUIRE_FALSE(v.controllers.first().motionBackendOk.has_value());
 }
 
 // ── CapabilitiesDto (GET /api/server/capabilities) ──────────────────────────
@@ -241,7 +263,13 @@ TEST_CASE("CapabilitiesDto parses the contract's capabilities example", "[models
         "serverVersion":"1.6.0",
         "maxControllers":16,
         "backend":{"id":"vigem","supported":true,"available":true,"errorCode":null},
-        "motion":{"available":true}
+        "motion":{"available":true},
+        "host":{
+          "catalog":{"supported":true},
+          "mouseControl":{"supported":true,"available":true},
+          "keyboardControl":{"supported":false},
+          "rumble":{"supported":true,"available":true}
+        }
     })"));
     REQUIRE(c.serverVersion == "1.6.0");
     REQUIRE(c.maxControllers == 16);
@@ -250,6 +278,23 @@ TEST_CASE("CapabilitiesDto parses the contract's capabilities example", "[models
     REQUIRE(c.backendAvailable);
     REQUIRE_FALSE(c.backendErrorCode.has_value()); // null → unset
     REQUIRE(c.motionAvailable);
+    REQUIRE(c.hasHostBlock);
+    REQUIRE(c.hostCatalog.supported);
+    REQUIRE(c.hostMouseControl.supported);
+    REQUIRE(c.hostMouseControl.available == true);
+    REQUIRE_FALSE(c.hostKeyboardControl.supported);
+    // keyboardControl carries no `available` — coarse runtime read is absent.
+    REQUIRE_FALSE(c.hostKeyboardControl.available.has_value());
+    REQUIRE(c.hostRumble.supported);
+}
+
+TEST_CASE("CapabilitiesDto without a host block reads hasHostBlock=false", "[models][catalog]") {
+    // Contract: absence means "older satellite, fall back to the default" —
+    // it must never read as a receiver that can do nothing.
+    const auto c = CapabilitiesDto::fromJson(
+        parse(R"({"backend":{"id":"vigem","supported":true,"available":true}})"));
+    REQUIRE_FALSE(c.hasHostBlock);
+    REQUIRE_FALSE(c.hostCatalog.supported);
 }
 
 TEST_CASE("CapabilitiesDto surfaces a backend errorCode", "[models][catalog]") {
@@ -284,6 +329,8 @@ TEST_CASE("CatalogDto parses controllerTypes + hostFeatures from the contract ex
     })"));
     REQUIRE(c.locale == "en");
     REQUIRE(c.serverVersion == "1.6.0");
+    // No catalogVersion in this payload → the legacy v1 catalog, per contract.
+    REQUIRE(c.catalogVersion == 1);
     REQUIRE(c.controllerTypes.size() == 2);
     REQUIRE(c.controllerTypes[0].id == 0);
     REQUIRE(c.controllerTypes[0].slug == "xbox360");
@@ -297,6 +344,36 @@ TEST_CASE("CatalogDto parses controllerTypes + hostFeatures from the contract ex
     REQUIRE(*c.controllerTypes[1].features.value("motion").requires_ == "vigembus>=1.17");
     REQUIRE(c.hostFeatures.value("mouseControl").supported);
     REQUIRE(c.hostFeatures.value("mouseControl").modes == QStringList{"off", "ds4", "mouse"});
+}
+
+TEST_CASE("CatalogDto parses catalogVersion, per-type feature modes, and emulates",
+          "[models][catalog]") {
+    const auto c = CatalogDto::fromJson(parse(R"({
+        "locale":"en","protocolVersion":1,"serverVersion":"1.6.0","catalogVersion":2,
+        "controllerTypes":[
+          {"id":1,"slug":"ds4","name":"DualShock 4","shortName":"PlayStation",
+           "description":"PlayStation controller.",
+           "features":{"touchpad":{"supported":true,"modes":["ds4"]},
+                       "rumble":{"supported":true}},
+           "emulates":{"sdlType":"ps4","usb":["054C:05C4","054c:09cc"]}}
+        ]
+    })"));
+    REQUIRE(c.catalogVersion == 2);
+    const auto& ds4 = c.controllerTypes.first();
+    REQUIRE(ds4.features.value("touchpad").modes == QStringList{"ds4"});
+    // Absent modes on a feature is a pre-modes catalog, not an empty offer.
+    REQUIRE(ds4.features.value("rumble").modes.isEmpty());
+    REQUIRE(ds4.emulates.has_value());
+    REQUIRE(ds4.emulates->sdlType == "ps4");
+    // usb identities normalize to lowercase — SDL/hidapi report either case.
+    REQUIRE(ds4.emulates->usb == QStringList{"054c:05c4", "054c:09cc"});
+}
+
+TEST_CASE("CatalogTypeDto without emulates reads as no hint", "[models][catalog]") {
+    const auto c = CatalogDto::fromJson(parse(R"({
+        "controllerTypes":[{"id":0,"slug":"xbox360","name":"X","features":{}}]
+    })"));
+    REQUIRE_FALSE(c.controllerTypes.first().emulates.has_value());
 }
 
 // ── ControllerDescriptor → JSON (the session-PUT request body) ──────────────
