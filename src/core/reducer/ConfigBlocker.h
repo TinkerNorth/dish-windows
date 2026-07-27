@@ -67,11 +67,11 @@ struct BlockerHostRow {
 // draft.hostId); `knownHostLabels` is the remembered id->label map a forgotten
 // host's blocker falls back to; `dismissedUnsteadyHostIds` are per-host
 // unsteady-warning dismissals.
-inline ConfigBlocker
-configBlockerFor(bool loaded, bool controllerPresent, const std::optional<std::string>& hostId,
-                 const std::vector<BlockerHostRow>& connections,
-                 const std::map<std::string, std::string>& knownHostLabels,
-                 const std::set<std::string>& dismissedUnsteadyHostIds) {
+inline ConfigBlocker configBlockerFor(bool loaded, bool controllerPresent,
+                                      const std::optional<std::string>& hostId,
+                                      const std::vector<BlockerHostRow>& connections,
+                                      const std::map<std::string, std::string>& knownHostLabels,
+                                      const std::set<std::string>& dismissedUnsteadyHostIds) {
     if (!loaded) { return {}; }
     if (!controllerPresent) { return ConfigBlocker{ConfigBlockerKind::InputLost, {}, false}; }
     if (!hostId.has_value()) { return {}; }

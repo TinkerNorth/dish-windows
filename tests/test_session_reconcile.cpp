@@ -94,7 +94,7 @@ TEST_CASE("appliedMatchesDesired: a mouse-grant mismatch forces re-PUT", "[recon
 TEST_CASE("appliedMatchesDesired: a touchpad-mode drift forces re-PUT", "[reconcile][converge]") {
     // A server-side mode reset (e.g. session rebuilt without the ds4 pad
     // render) must not be invisible — touchpad packets would silently die.
-    std::vector<DesiredSlot> desired = {{0, 1, /*touchpadMode=*/0}}; // want ds4
+    std::vector<DesiredSlot> desired = {{0, 1, /*touchpadMode=*/0}};       // want ds4
     std::vector<AppliedSlot> applied = {{0, 1, true, /*touchpadMode=*/2}}; // got off
     REQUIRE_FALSE(reducer::appliedMatchesDesired(desired, applied));
     applied = {{0, 1, true, /*touchpadMode=*/0}};

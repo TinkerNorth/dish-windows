@@ -57,8 +57,7 @@ int runQmlApp(dish::AppModel& model) {
     // setThemeMode re-themes live via the AppViewModel theme-applied sink below.
     {
         const auto mode = model.themeStore()->mode();
-        const auto appearance = mode == dish::source::ThemeMode::Light
-                                    ? dish::ui::Appearance::Light
+        const auto appearance = mode == dish::source::ThemeMode::Light ? dish::ui::Appearance::Light
                                 : mode == dish::source::ThemeMode::Dark
                                     ? dish::ui::Appearance::Dark
                                     : dish::ui::detectSystemAppearance();

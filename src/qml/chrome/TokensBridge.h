@@ -40,15 +40,15 @@ class TokensBridge : public QObject {
     Q_PROPERTY(QString monoFamily READ monoFamily CONSTANT)
 
     // ── Spacing scale (px) ───────────────────────────────────────────────────
-    Q_PROPERTY(int s1 READ s1 CONSTANT) // 2
-    Q_PROPERTY(int s2 READ s2 CONSTANT) // 4
-    Q_PROPERTY(int s3 READ s3 CONSTANT) // 6
-    Q_PROPERTY(int s4 READ s4 CONSTANT) // 8
-    Q_PROPERTY(int s5 READ s5 CONSTANT) // 10
-    Q_PROPERTY(int s6 READ s6 CONSTANT) // 12
-    Q_PROPERTY(int s7 READ s7 CONSTANT) // 14
-    Q_PROPERTY(int s8 READ s8 CONSTANT) // 16
-    Q_PROPERTY(int s9 READ s9 CONSTANT) // 20
+    Q_PROPERTY(int s1 READ s1 CONSTANT)                   // 2
+    Q_PROPERTY(int s2 READ s2 CONSTANT)                   // 4
+    Q_PROPERTY(int s3 READ s3 CONSTANT)                   // 6
+    Q_PROPERTY(int s4 READ s4 CONSTANT)                   // 8
+    Q_PROPERTY(int s5 READ s5 CONSTANT)                   // 10
+    Q_PROPERTY(int s6 READ s6 CONSTANT)                   // 12
+    Q_PROPERTY(int s7 READ s7 CONSTANT)                   // 14
+    Q_PROPERTY(int s8 READ s8 CONSTANT)                   // 16
+    Q_PROPERTY(int s9 READ s9 CONSTANT)                   // 20
     Q_PROPERTY(int pagePadding READ pagePadding CONSTANT) // 24 — content side margins
 
     // ── Radii (px) ───────────────────────────────────────────────────────────
@@ -58,13 +58,13 @@ class TokensBridge : public QObject {
     Q_PROPERTY(int radiusBar READ radiusBar CONSTANT)       // 2
 
     // ── Shell metrics (the V1 Fluent blended-titlebar + collapsible rail) ────
-    Q_PROPERTY(int titleBarHeight READ titleBarHeight CONSTANT)   // 44
+    Q_PROPERTY(int titleBarHeight READ titleBarHeight CONSTANT)         // 44
     Q_PROPERTY(int captionButtonWidth READ captionButtonWidth CONSTANT) // 46
-    Q_PROPERTY(int railCompact READ railCompact CONSTANT)         // 48 (== hamburger cell)
-    Q_PROPERTY(int railExpanded READ railExpanded CONSTANT)       // 236
-    Q_PROPERTY(int navItemHeight READ navItemHeight CONSTANT)     // 40
-    Q_PROPERTY(int hitRow READ hitRow CONSTANT)                   // 44 — comfortable row
-    Q_PROPERTY(int dotSize READ dotSize CONSTANT)                 // 8 — status dot
+    Q_PROPERTY(int railCompact READ railCompact CONSTANT)               // 48 (== hamburger cell)
+    Q_PROPERTY(int railExpanded READ railExpanded CONSTANT)             // 236
+    Q_PROPERTY(int navItemHeight READ navItemHeight CONSTANT)           // 40
+    Q_PROPERTY(int hitRow READ hitRow CONSTANT)                         // 44 — comfortable row
+    Q_PROPERTY(int dotSize READ dotSize CONSTANT)                       // 8 — status dot
 
     // The canonical "not actionable" treatment: the whole control at 0.4.
     Q_PROPERTY(qreal disabledOpacity READ disabledOpacity CONSTANT)

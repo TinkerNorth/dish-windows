@@ -149,9 +149,8 @@ class TouchpadModeRepository : public arch::KeyedRepository<QString, TouchpadMod
             if (!v.isObject()) { continue; }
             const auto obj = v.toObject();
             const QString sat = obj.value(QLatin1String("sat")).toString();
-            const QString key = obj.contains(QLatin1String("k"))
-                                    ? obj.value(QLatin1String("k")).toString()
-                                    : sat;
+            const QString key =
+                obj.contains(QLatin1String("k")) ? obj.value(QLatin1String("k")).toString() : sat;
             if (key.isEmpty()) { continue; }
             out.push_back(
                 Row{key, TouchpadModePreference{sat, obj.value(QLatin1String("mode")).toString()}});
@@ -162,8 +161,8 @@ class TouchpadModeRepository : public arch::KeyedRepository<QString, TouchpadMod
     void writeRows(const std::vector<Row>& rows) {
         QJsonArray arr;
         for (const auto& r : rows) {
-            arr.append(QJsonObject{
-                {"k", r.key}, {"sat", r.value.satelliteId}, {"mode", r.value.mode}});
+            arr.append(
+                QJsonObject{{"k", r.key}, {"sat", r.value.satelliteId}, {"mode", r.value.mode}});
         }
         settings_->setValue(QLatin1String(kTouchpadModeListKey),
                             QJsonDocument(arr).toJson(QJsonDocument::Compact));

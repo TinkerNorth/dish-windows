@@ -33,7 +33,8 @@ class UiPreferenceStore : public arch::StateSource<UiPreferences> {
     UiPreferenceStore() : UiPreferenceStore(std::make_unique<QSettings>()) {}
 
     explicit UiPreferenceStore(std::unique_ptr<QSettings> settings)
-        : arch::StateSource<UiPreferences>(readInitial(*settings)), settings_(std::move(settings)) {}
+        : arch::StateSource<UiPreferences>(readInitial(*settings)), settings_(std::move(settings)) {
+    }
 
     bool railCollapsed() const { return state().value().railCollapsed; }
 

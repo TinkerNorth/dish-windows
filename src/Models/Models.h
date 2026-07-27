@@ -274,8 +274,8 @@ struct CatalogFeatureDto {
 // this virtual type is the natural default for. The mapping policy lives on
 // the server so new hardware needs no client release.
 struct CatalogEmulatesDto {
-    QString sdlType;  // clients' SDL_GameControllerType vocabulary (ps4, ps5, …)
-    QStringList usb;  // lowercase "vid:pid" identities
+    QString sdlType; // clients' SDL_GameControllerType vocabulary (ps4, ps5, …)
+    QStringList usb; // lowercase "vid:pid" identities
 };
 
 struct CatalogTypeDto {
