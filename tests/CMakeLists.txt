@@ -90,6 +90,18 @@ set(DISH_TEST_SOURCES
     # manager poll methods open real Winsock the test process would join, so the
     # branching is tested here, not by driving the manager.
     test_reverse_pairing.cpp
+    # Release-parity wave — tests for the five headers that landed without them:
+    # the canonical BatteryUi projection + chip tokens (android MainUiState arm),
+    # the binding-config blocker rule (all 13 android ConfigUiStateBlockerTest
+    # cases), the pure ds4>mouse>off touchpad-mode resolve (android
+    # TouchpadRouting.wireMode + the CapabilityResolver ds4-mode catalog gate),
+    # and the per-satellite touchpad-mode repository (RepositoryContract) +
+    # store (hydrate/persist/republish) pair.
+    test_battery_ui.cpp
+    test_config_blocker.cpp
+    test_touchpad_mode_resolve.cpp
+    test_touchpad_mode_repository.cpp
+    test_touchpad_mode_store.cpp
     # Forward (Path A, user-types-a-PIN) pairing lifecycle — the PURE total FSM
     # (reducePairing over every PairPhase x PairEvent) giving forward pairing the
     # same first-class, typed, retained lifecycle reverse pairing already has.
