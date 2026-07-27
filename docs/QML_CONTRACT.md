@@ -426,3 +426,82 @@ fill), `OutlineButton` (accent border), `Card` (radius 8, 12/14 inset),
 `LabeledSwitch`, `EmptyState` (+ `glyph` property), `ContentDialog` (+ `eyebrow`,
 `preferredWidth`; empty `acceptText`/`rejectText` hides that button),
 `NotificationToastHost` (+ "warning" severity).
+
+---
+
+## 8. A3 addendum — the Home flow surface
+
+Additive over A2 (design frames 17 "Home — signal path" + 18 "Action card —
+states" + the revised rail, synced 2026-07-27).
+
+### 8.1 New `App` property
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `streamingSlotCount` | `int` | `stateChanged` | Slots actively streaming (bound AND the link `Connected`) — the Home header's "N controllers streaming" count. The same pure `composer::streamingSlotCount` rule the wake controller inhibits the display on, so the header and the keep-awake pill can never disagree. |
+
+### 8.2 New `slotModel` roles — the bound-satellite join
+
+The Home signal-path row's right cell + wire latency, joined per slot by
+`boundConnectionId` against the coordinator's derived connection rows. The
+tokens are the SAME vocabulary §3 exposes, so the satellite cell renders
+identically to a Connections-page row by construction. ALL empty / zero for an
+unbound slot or a binding whose row has vanished — render the ghost "Bind…"
+action card then. Refreshes ride the coordinator's `connectionsChanged` (the
+~1 Hz latency tick emits `dataChanged` scoped to these roles only).
+
+| Role | Type | Meaning |
+|---|---|---|
+| `satIp` | `string` | Bound satellite ip ("" when unbound / row vanished). |
+| `satLinkState` | `string` | Link-state token (`"connected"`/`"unstable"`/…, §3 vocabulary). |
+| `satChip` | `string` | Status-chip key (localize like the Connections rows). |
+| `satDotColor` | `string` | `"success"`/`"primary"`/`"warning"`/`"muted"`. |
+| `satGlyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"`. |
+| `satLatencyText` | `string` | Pre-formatted `"~3.4 ms"` — same formatter + samples gate as §3's `latencyText`. |
+| `satLatencySamples` | `int` | RTT samples in the window. Gate the wire's latency half on `satLatencySamples > 0 && (satLinkState === "connected" \|\| satChip === "unstable")`. |
+
+The satellite cell's display name is the existing `boundLabel` role.
+
+### 8.3 `Theme` singleton additions — the donation accent
+
+`pulse` (the pulse-pink donation hue — `#FF6FB5` dark, AA-darkened on light),
+`pulseFill` (12 % wash), `pulseEdge` (35 % outline); all NOTIFY
+`paletteChanged`. The ONE hue Dish uses beyond cyan, reserved for the Support
+Dish surface and its rail heart. Text on a filled pulse control is
+`Theme.onPrimary` (deep ink dark / white light), like any filled accent.
+
+### 8.4 Kit + shared-dialog additions
+
+* `ActionCard` (kit) — the dashed action card (frame 18): `title`, `subtitle`,
+  `showPlus`, `clicked()`. Rest = `Theme.primaryFill`, hover/press deepen to
+  the 18/24 % accent washes, keyboard focus = solid border + 2px ring,
+  disabled = 0.4 opacity. Used for Home's "+ Add a controller" and the unbound
+  pad's "Bind…" ghost.
+* `BindChooserDialog` (pages) — the shared bind chooser (FBindDlg), extracted
+  from ControllersPage and also driven by Home's ghost card:
+  `openFor(slotId, slotName)` pulls the filtered pick-list
+  (`availableConnectionsForSlot`) and accept applies `bindSlot`.
+
+### 8.5 Shell — destinations + the rail
+
+`AppShell.destinations` is now Home (`pages/HomePage.qml`, dish glyph, the
+DEFAULT destination) · Controllers · Connections up top, then Support Dish
+(`pages/DonatePage.qml`, the pulse heart — `heart: true` draws the ♥ text
+glyph in `Theme.pulse` instead of a brand SVG) and Settings (the new `gear`
+brand glyph) pinned to the footer. Between the top group and the footer sits
+the pane-density "+ Add" action (solid accent outline, collapses to the bare
++), wired — like Home's "+ Add a controller" card — to
+`shellApi.openSetupGuideAt(1)`: the setup guide's Controller step IS the
+add-a-controller explainer (pads auto-appear on Windows). `openSetupGuide()`
+still opens at step 0; `SetupGuideDialog.initialStep` carries the seed.
+
+Hard-coded destination indices shifted: Connections is `selectDestination(2)`.
+
+### 8.6 Home header assembly (wording owned by HomePage)
+
+Fresh install (no slots, no connections) → the getting-started nudge (muted);
+`streamingSlotCount > 0` → "N controllers streaming · M satellites online"
+(success); `onlineCount > 0` → "M satellites online · nothing streaming"
+(primary); else "Nothing streaming" (muted). The floating footer pill
+("STREAMING — DO NOT CLOSE") gates on `keepAwakeActive`, the same signal as
+the Controllers header pill.

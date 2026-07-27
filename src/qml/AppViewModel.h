@@ -137,6 +137,10 @@ class AppViewModel : public QObject {
     // bound" strings are assembled in QML so the words stay in qsTr catalogs).
     Q_PROPERTY(int slotCount READ slotCount NOTIFY stateChanged)
     Q_PROPERTY(int boundSlotCount READ boundSlotCount NOTIFY stateChanged)
+    // Slots actively streaming (bound AND the link Connected) — the Home
+    // header's "N controllers streaming" count. Same composer::streamingSlotCount
+    // rule the wake controller inhibits the display on.
+    Q_PROPERTY(int streamingSlotCount READ streamingSlotCount NOTIFY stateChanged)
     Q_PROPERTY(QString firstOnlineName READ firstOnlineName NOTIFY stateChanged)
     Q_PROPERTY(int foundCount READ foundCount NOTIFY discoveredChanged)
     // True while the display-sleep inhibitor is held (a slot is streaming) —
@@ -189,6 +193,7 @@ class AppViewModel : public QObject {
 
     int slotCount() const { return slotCount_; }
     int boundSlotCount() const { return boundSlotCount_; }
+    int streamingSlotCount() const { return streamingSlotCount_; }
     QString firstOnlineName() const { return firstOnlineName_; }
     int foundCount() const;
     bool keepAwakeActive() const { return keepAwakeActive_; }
@@ -414,6 +419,7 @@ class AppViewModel : public QObject {
     bool busy_ = false;
     int slotCount_ = 0;
     int boundSlotCount_ = 0;
+    int streamingSlotCount_ = 0;
     QString firstOnlineName_;
     bool keepAwakeActive_ = false;
 

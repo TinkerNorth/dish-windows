@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The app shell (V1 Fluent): a COLLAPSIBLE left rail (Controllers /
-// Connections up top, Settings pinned to the footer with the version line) and
-// a content column with a per-page header (back chevron · title · pill ·
-// dot+sub line) over a StackView. Collapsed, the rail is a 48px icon strip
-// continuing the title bar's hamburger cell; expanded it is a 236px labeled
-// pane. The state persists via App.railCollapsed (the hamburger toggles it).
+// The app shell (V1 Fluent): a COLLAPSIBLE left rail (Home / Controllers /
+// Connections up top; the compact "+ Add" action, then Support Dish and
+// Settings pinned to the footer with the version line) and a content column
+// with a per-page header (back chevron · title · pill · dot+sub line) over a
+// StackView. Collapsed, the rail is a 48px icon strip continuing the title
+// bar's hamburger cell; expanded it is a 236px labeled pane. The state
+// persists via App.railCollapsed (the hamburger toggles it).
 //
 // Overlays are IN-SCENE: dialogs are Kit.ContentDialog popups over a scrim and
 // transient errors land in the one toast host below — no extra OS windows.
@@ -33,12 +34,17 @@ Item {
     id: shell
 
     // The destinations. `source` is the page component file the StackView roots
-    // to when the rail item is chosen. The first two render at the rail top;
-    // the last (Settings) is pinned to the rail footer per the design.
+    // to when the rail item is chosen. The first three render at the rail top;
+    // the last two (Support Dish above Settings) pin to the rail footer per the
+    // design. Support Dish draws the pulse-pink heart instead of a brand glyph
+    // (`heart` flag) — the one hue Dish uses beyond cyan, reserved for
+    // donations.
     readonly property var destinations: [
-        { key: "controllers", label: qsTr("Controllers"), glyph: "satellite",               source: "pages/ControllersPage.qml" },
-        { key: "connections", label: qsTr("Connections"), glyph: "satellite-broadcasting",  source: "pages/ConnectionsPage.qml" },
-        { key: "settings",    label: qsTr("Settings"),    glyph: "dish",                    source: "pages/SettingsPage.qml" }
+        { key: "home",        label: qsTr("Home"),         glyph: "dish",                   heart: false, source: "pages/HomePage.qml" },
+        { key: "controllers", label: qsTr("Controllers"),  glyph: "satellite",              heart: false, source: "pages/ControllersPage.qml" },
+        { key: "connections", label: qsTr("Connections"),  glyph: "satellite-broadcasting", heart: false, source: "pages/ConnectionsPage.qml" },
+        { key: "support",     label: qsTr("Support Dish"), glyph: "",                       heart: true,  source: "pages/DonatePage.qml" },
+        { key: "settings",    label: qsTr("Settings"),     glyph: "gear",                   heart: false, source: "pages/SettingsPage.qml" }
     ]
 
     property int currentIndex: 0
@@ -66,8 +72,15 @@ Item {
     }
 
     // Open the 3-step setup guide dialog over the shell (the welcome hand-off
-    // and the Settings "Setup guide" row both land here).
+    // and the Settings "Setup guide" row both land here). openSetupGuideAt
+    // lands on a specific step — the Home "+ Add a controller" card and the
+    // rail's "+ Add" open straight onto the Controller step (pads auto-appear
+    // on Windows; the step IS the add-a-controller explainer).
     function openSetupGuide() {
+        shell.openSetupGuideAt(0);
+    }
+    function openSetupGuideAt(step) {
+        setupGuide.initialStep = step;
         setupGuide.open();
     }
 
@@ -140,9 +153,21 @@ Item {
                     // Fixed icon cell (railCompact minus the item margins) so the
                     // glyph column doesn't shift as the rail animates.
                     Kit.BrandGlyph {
+                        visible: !railItem.dest.heart
                         glyph: railItem.dest.glyph
                         width: 18
                         height: 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: (Tokens.railCompact - 8) / 2 - width / 2
+                    }
+                    // Support Dish draws the pulse-pink heart (the design's
+                    // FHeartNav) — a text glyph, not a brand SVG, so it rides
+                    // the palette's pulse token in both appearances.
+                    Label {
+                        visible: railItem.dest.heart === true
+                        text: "♥"   // ♥ — brand glyph, not localized
+                        color: Theme.pulse
+                        font.pixelSize: 15
                         anchors.verticalCenter: parent.verticalCenter
                         x: (Tokens.railCompact - 8) / 2 - width / 2
                     }
@@ -170,8 +195,65 @@ Item {
 
                 RailItem { destIndex: 0; Layout.fillWidth: true; Layout.margins: 2 }
                 RailItem { destIndex: 1; Layout.fillWidth: true; Layout.margins: 2 }
+                RailItem { destIndex: 2; Layout.fillWidth: true; Layout.margins: 2 }
 
-                Item { Layout.fillHeight: true }   // pin Settings to the footer
+                Item { Layout.fillHeight: true }   // pin the footer cluster
+
+                // The pane-density "+ Add" action (design frame 18's compact
+                // sibling of the dashed action card): a solid accent outline
+                // over the primary-fill wash, deepening 18 → 24 % on hover /
+                // press; collapsed it is the bare centered +. Opens the setup
+                // guide's Controller step, same as Home's "+ Add a controller".
+                AbstractButton {
+                    id: railAdd
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                    Layout.topMargin: 2
+                    Layout.bottomMargin: 8
+                    implicitHeight: 36
+                    hoverEnabled: true
+
+                    onClicked: shell.openSetupGuideAt(1)
+
+                    background: Rectangle {
+                        radius: Tokens.radiusButton
+                        color: railAdd.down
+                               ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.24)
+                             : railAdd.hovered
+                               ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
+                             : Theme.primaryFill
+                        border.width: 1
+                        border.color: Theme.primary
+                    }
+                    contentItem: Item {
+                        // Fixed + cell (railCompact minus the button margins) so
+                        // the glyph column holds as the rail animates; the label
+                        // fades exactly like a RailItem's.
+                        Text {
+                            text: "+"
+                            color: Theme.primary
+                            font.pixelSize: 15
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: (Tokens.railCompact - 12) / 2 - width / 2
+                        }
+                        Label {
+                            text: qsTr("Add")
+                            color: Theme.primary
+                            font.pixelSize: Tokens.textBase
+                            font.weight: Font.DemiBold
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: Tokens.railCompact - 12
+                            opacity: shell.collapsed ? 0 : 1
+                            visible: opacity > 0
+                            Behavior on opacity { NumberAnimation { duration: 100 } }
+                        }
+                    }
+
+                    ToolTip.visible: hovered && shell.collapsed
+                    ToolTip.delay: 800
+                    ToolTip.text: qsTr("Add a controller")
+                }
 
                 Rectangle {
                     Layout.fillWidth: true
@@ -183,7 +265,8 @@ Item {
                     color: Theme.outline
                 }
 
-                RailItem { destIndex: 2; Layout.fillWidth: true; Layout.margins: 2 }
+                RailItem { destIndex: 3; Layout.fillWidth: true; Layout.margins: 2 }
+                RailItem { destIndex: 4; Layout.fillWidth: true; Layout.margins: 2 }
 
                 Label {
                     text: qsTr("Dish %1").arg(App.appVersion)

@@ -360,6 +360,7 @@ set(DISH_CORE_SOURCES
     # NOT Qml/Quick — so they live here and the unit tests link them directly. The
     # QML registration (context property + qmlRegisterUncreatableType) is in the
     # exe's QmlEntryPoint, not here.
+    src/qml/RenderTokens.h
     src/qml/SlotListModel.h
     src/qml/SlotListModel.cpp
     src/qml/ConnectionListModel.h
@@ -483,6 +484,9 @@ qt_add_qml_module(Dish
         src/qml/kit/CapabilityChip.qml
         src/qml/kit/LiveStat.qml
         src/qml/kit/DishProgressBar.qml
+        # The dashed action card (design frame 18 "Action card — states") —
+        # the Home "+ Add a controller" / "Bind…" invitation control.
+        src/qml/kit/ActionCard.qml
         # State components — shared loading / error / empty states + the
         # global transient toast host, so every page binds all four UI states
         # (loading / error / empty / content) the same way. See ARCHITECTURE.md
@@ -492,6 +496,7 @@ qt_add_qml_module(Dish
         src/qml/kit/EmptyState.qml
         src/qml/kit/NotificationToastHost.qml
         # Nav destinations (placeholders; page agents replace bodies).
+        src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml
         src/qml/pages/ConnectionsPage.qml
         src/qml/pages/SettingsPage.qml
@@ -507,6 +512,9 @@ qt_add_qml_module(Dish
         # EmulatePicker is referenced by bare type name from ControllersPage,
         # so it must register into the same Dish.Chrome module.
         src/qml/pages/EmulatePicker.qml
+        # The shared bind chooser (design FBindDlg) — bare type name from
+        # ControllersPage and HomePage.
+        src/qml/pages/BindChooserDialog.qml
         # The shared both-paths-at-once pairing sheet — bare type name from
         # ConnectionsPage, "../pages" import from the setup-guide wizard.
         src/qml/pages/PairingDialog.qml

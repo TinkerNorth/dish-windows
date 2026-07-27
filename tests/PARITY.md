@@ -526,21 +526,52 @@ SetupWizard/OnboardingNavBar screens — superseded by the live 3-step
 **Ports landed but NOT yet wired (headers + partial tests, integration
 pending):** `core/input/UsbHidLayout.h` (android HidLayout/decodeFromLayout —
 the HidP caps builder + gateway use are open), `core/reducer/CatalogFeatureGate.h`
-(descriptor caps ∩ catalog type features), `core/catalog/BundledCatalog.h`
-(offline capability sets), `composer/TouchpadModeComposer.h` (the store-fold —
-the hub resolver currently computes the ladder directly).
+(descriptor caps ∩ catalog type features — referenced only from the
+`AppModel::resolveTouchpadMode` comment, no call site),
+`core/catalog/BundledCatalog.h` (offline capability sets — reached only from
+`LegacyCatalogTranslator.h` / `CatalogFeatureGate.h`, themselves unwired).
 
-**Still-open android deltas (tracked for post-release):** per-path rumble
-capability + the USB-direct OUTPUT write path (rumble/lightbar encoders +
-gateway write — today rumble is advertised on Direct with no actuator);
-`claim()` HID-collection re-check + ranking + the kKnown model-table port;
-the six-layer capability fold (`Capability.kt`) + `RumbleEnabledStore` + host
-feature/runtime stores; `GET /api/server/capabilities` consumption + the
-motion sink/backend feed (R10 wiring); guided-setup live-state depth
-(`SetupUsb` recovery flows); the departed-device binding sweep +
-`SlotTopologyComposer/Controller`; catalog prewarm-on-Live; stored-type
-clamp-to-catalog call site; QML translation fill (312 new source strings per
-locale ride the catalogs untranslated; English fallback ships).
+`composer/TouchpadModeComposer.h` was listed here in error: no such header was
+ever written. The store-fold is unbuilt, consistent with the D2 SKIP rows for
+`TouchpadModeComposerTest` (§2.8 and the D2 SKIP ledger); the hub resolver
+computes the ladder directly. What DID land is the trio
+`core/reducer/TouchpadModeResolve.h` + `repository/TouchpadModeRepository.h` +
+`source/store/TouchpadModeStore.h`.
+
+**Still-open android deltas (tracked for post-release).** Re-verified against
+the tree at `3b8c822` (symbol-presence + call-site audit); the list below is
+that audit, not the original 3ea439a snapshot.
+
+- **Per-path rumble capability + the USB-direct OUTPUT write path** (rumble /
+  lightbar encoders + gateway write). Today rumble is advertised on Direct
+  with no actuator: `WinHidGateway` only *detects* the endpoint
+  (`info.hasOutEndpoint = caps.OutputReportByteLength > 0`) and no
+  `HidD_SetOutputReport` / `WriteFile` call exists anywhere.
+- **`claim()` HID-collection re-check + ranking + the kKnown model-table
+  port.** No `kKnown` table and no ranking/re-check symbols in the tree.
+- **The six-layer capability fold (`Capability.kt`) + `RumbleEnabledStore` +
+  host feature/runtime stores.** No `RumbleEnabledStore` under
+  `src/source/store/`; rumble delivery at `AppModel`'s rumble handler is
+  ungated, unlike the adjacent lightbar path (which honours
+  `FeatureSettings::lightbarFollowGame`).
+- **`GET /api/server/capabilities` consumption + the motion sink/backend feed
+  (R10 wiring).** The client half EXISTS — `HTTPClient::getCapabilities` —
+  but has zero callers in `src/` or `tests/`. The gap is consumption only.
+- **Guided-setup live-state depth (`SetupUsb` recovery flows).** The wizard's
+  Connect step went live in `ee8cb9c`; the USB recovery depth did not. No
+  `SetupUsb` anything in the tree.
+- **`SlotTopologyComposer` / `SlotTopologyController`.** Absent. NB the
+  departed-device binding sweep this item used to be paired with LANDED in
+  `ee8cb9c` + `e110a23` (see the post-addendum note below) — the two were
+  split because only this half is still open.
+- **Catalog prewarm-on-Live.** No `prewarm` anywhere in `src/`.
+- **Stored-type clamp-to-catalog — the CLAMP ITSELF, not just its call
+  site.** Previously worded as a missing call site, which understated it:
+  `src/core/catalog/` holds only `BundledCatalog.h` +
+  `LegacyCatalogTranslator.h`, and every `clamp` in the tree belongs to
+  Backoff / BatteryRouting / LatencyWindow / Reconcile. Nothing to call yet.
+- **QML translation fill.** Exactly 312 `type="unfinished"` entries in each of
+  the five catalogs (`bs`, `de`, `es`, `fr`, `pt_BR`). English fallback ships.
 
 **Deliberate exclusions reaffirmed (not regressions):** the Diagnostics
 screen/inspector/probe/bench (the design's 16 frames exclude it; the latency
@@ -605,3 +636,47 @@ no-real-sockets invariant stands), the touch-capable "Needs Direct" nudge
   `test_found_visibility.cpp` (7 cases: one-spot, scan order, DHCP-move fold
   on `mid:`, legacy `wifi:ip:port` fold, mid-pair suppression,
   forget-reappearance, input purity).
+
+### The Home flow (design sync 2026-07-27 — frames 17/18 + the revised rail)
+
+The design project grew a "06 · HOME" section (Home — signal path; Action
+card — states) and revised the rail (Home on top, a pane "+ Add", Support
+Dish as a pulse-pink heart destination above a gear-glyphed Settings).
+Implemented end-to-end, screenshot-verified against the frames by driving the
+built app:
+
+- **Home destination** (`pages/HomePage.qml`, the new default): one wiring row
+  per pad — pad card → wire (measured rate `·` one-way latency over the dish
+  glyph; solid accent live, dashed outline dead/"idle") → satellite card (the
+  §3 row vocabulary) or the dashed "Bind…" ghost; the "+ Add a controller"
+  invitation row; the keep-awake floating pill ("Streaming — do not close").
+- **Data**: the slot model gained the bound-satellite JOIN roles (`satIp`,
+  `satLinkState`, `satChip`, `satDotColor`, `satGlyph`, `satLatencyText`,
+  `satLatencySamples`) — joined in C++ by `boundConnectionId` against the
+  coordinator's derived rows, same render-token vocabulary + latency
+  formatter/gate as `ConnectionListModel` (shared `qml/RenderTokens.h`, so the
+  three surfaces cannot drift). Pinned in `test_slot_list_model.cpp` (6 new
+  cases: join, unbound/vanished-row empties, samples gate, roles-scoped
+  `dataChanged`, no-slot no-op). `App.streamingSlotCount` re-projects the
+  EXISTING `composer::streamingSlotCount` (the wake rule) for the header.
+- **Action-card vocabulary** (`kit/ActionCard.qml`): rest `primaryFill`,
+  hover 18 %, pressed 24 %, keyboard focus solid-border + ring, disabled 0.4 —
+  the frame-18 ladder; pane density = the rail's "+ Add" (opens the setup
+  guide's Controller step via the new `openSetupGuideAt`; the wizard gained
+  `initialStep`).
+- **Bind chooser extracted** to the shared `pages/BindChooserDialog.qml`
+  (ControllersPage + HomePage; behavior unchanged, ControllersPage's inline
+  copy deleted). Hard-coded destination index updated (Connections → 2).
+- **Pulse tokens**: `ThemePalette.pulse` (android `colorPulse` #FF6FB5; light
+  AA-darkens to #C2417F per the palette's documented on-light shift) →
+  `Theme.pulse`/`pulseFill`/`pulseEdge` in the QML bridge; the palette
+  completeness test now covers it. DonatePage restyled to frame f-e3 (pulse
+  hero + CTA + rails + condensed pays-for card, 330px/flex two-column grid);
+  the rail heart is a ♥ text glyph in `Theme.pulse`. `gear.svg` added to the
+  brand set (qrc) for Settings.
+- **Fixes surfaced while driving the app**: fractional `font.pixelSize`
+  literals fail qmlcachegen-compiled component creation (int-typed) — the
+  restyled DonatePage silently refused to load until 10.5/11.5/12.5 became
+  tokens; `BrandGlyph` now maps an empty glyph to an empty source (was
+  warning `qrc:/brand/.svg` on every hidden-glyph create).
+- Contract: `docs/QML_CONTRACT.md` §8 "A3 addendum — the Home flow surface".

@@ -50,6 +50,12 @@ QColor ThemeBridge::primaryFill() const {
 }
 QColor ThemeBridge::warningFill() const { return withAlpha(dish::ui::Theme::warning, 41); }
 
+// Donation accent (design overlays: PULSE #FF6FB5, PULSE_FILL 12 %, PULSE_EDGE
+// 35 % — the alphas are appearance-invariant; the base hue AA-darkens on light).
+QColor ThemeBridge::pulse() const { return QColor::fromRgba(dish::ui::Theme::pulse); }
+QColor ThemeBridge::pulseFill() const { return withAlpha(dish::ui::Theme::pulse, 31); }
+QColor ThemeBridge::pulseEdge() const { return withAlpha(dish::ui::Theme::pulse, 89); }
+
 void ThemeBridge::refresh() { emit paletteChanged(); }
 
 } // namespace dish::chrome

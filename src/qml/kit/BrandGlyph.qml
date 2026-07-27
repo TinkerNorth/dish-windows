@@ -20,7 +20,9 @@ Image {
     // Bare brand asset name, e.g. "satellite-connected" (no dir, no ".svg").
     property string glyph: "satellite"
 
-    source: "qrc:/brand/" + root.glyph + ".svg"
+    // An empty glyph (a hidden slot, e.g. SectionHeader/rail items without an
+    // icon) must not attempt a load — "qrc:/brand/.svg" warns on every create.
+    source: root.glyph.length > 0 ? "qrc:/brand/" + root.glyph + ".svg" : ""
     // SVGs render crisp at any raster size if we request the exact target px.
     sourceSize.width: width
     sourceSize.height: height

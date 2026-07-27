@@ -39,6 +39,9 @@ struct ThemePalette {
     QRgb success;
     QRgb error;
     QRgb warning;
+    // The donation accent ("pulse" — dish-android colorPulse). The ONE hue Dish
+    // uses beyond cyan, reserved for the Support Dish surface + its rail entry.
+    QRgb pulse;
 };
 
 // Which appearance the app is rendering. SYSTEM is resolved to one of
@@ -78,6 +81,7 @@ struct Theme {
     static QRgb success;
     static QRgb error;
     static QRgb warning;
+    static QRgb pulse;
 };
 
 // Swap the active palette (the Theme::* tokens above). Pure state mutation;

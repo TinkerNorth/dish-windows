@@ -11,6 +11,7 @@
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "composer/StreamingSlotCount.h"
 #include "core/input/Deadzones.h"
 #include "core/reducer/ConnectionRows.h"
 #include "core/reducer/FoundVisibility.h"
@@ -255,6 +256,19 @@ void AppViewModel::onStateChanged() {
     boundSlotCount_ = bound;
     firstOnlineName_ = firstLabel;
 
+    // The Home header's "N controllers streaming" — the SAME pure
+    // composer::streamingSlotCount the wake controller keys the display on
+    // (bound AND Connected), fed from this state slice's bindings x links.
+    {
+        QHash<QString, QString> bindings;
+        for (const auto& s : st.slotList) {
+            if (s.boundConnectionId.has_value()) { bindings.insert(s.id, *s.boundConnectionId); }
+        }
+        QHash<QString, models::LinkState> links;
+        for (const auto& c : conns) { links.insert(c.id, c.live); }
+        streamingSlotCount_ = composer::streamingSlotCount(bindings, links);
+    }
+
     pairingActive_ = st.pairingTarget.has_value();
     pairingServerName_ = pairingActive_ ? st.pairingTarget->name : QString();
     pairingServerId_ = pairingActive_ ? st.pairingTarget->id() : QString();
@@ -277,6 +291,9 @@ void AppViewModel::onStateChanged() {
 void AppViewModel::onConnectionsChanged() {
     const auto rows = model_->connections()->connections().value();
     connectionModel_.setRows(rows);
+    // The slot model's bound-satellite join (the Home signal-path right cell +
+    // wire latency) reads through the same derived rows.
+    slotModel_.setConnectionRows(rows);
 
     // The FOUND list is the discovered scan MINUS these row ids (the one-spot
     // rule, reducer::serversVisibleInFound), so a membership move — a pair

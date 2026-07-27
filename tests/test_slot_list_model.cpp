@@ -12,7 +12,9 @@
 // input IS that slice; it owns no store of its own.
 
 #include "Models/Models.h"
+#include "composer/ConnectionsComposer.h"
 #include "core/reducer/DirectClaimFailure.h"
+#include "core/reducer/LatencyWindow.h"
 #include "core/reducer/PathChoice.h"
 #include "core/reducer/UsbPathMachine.h"
 #include "qml/SlotListModel.h"
@@ -98,9 +100,9 @@ QVariant roleOf(const SlotListModel& model, int row, int role) {
 TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel][roles]") {
     SlotListModel model;
     const auto names = model.roleNames();
-    // One entry per declared role (Id..DirectFailure). If a role is added without
-    // a name, this count drifts and the test flags it.
-    REQUIRE(names.size() == 28);
+    // One entry per declared role (Id..SatLatencySamples). If a role is added
+    // without a name, this count drifts and the test flags it.
+    REQUIRE(names.size() == 35);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
     REQUIRE(names.value(SlotListModel::RemappableRole) == QByteArray("remappable"));
@@ -113,6 +115,13 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     REQUIRE(names.value(SlotListModel::PathSupportedRole) == QByteArray("pathSupported"));
     REQUIRE(names.value(SlotListModel::ClaimInProgressRole) == QByteArray("claimInProgress"));
     REQUIRE(names.value(SlotListModel::DirectFailureRole) == QByteArray("directFailure"));
+    REQUIRE(names.value(SlotListModel::SatIpRole) == QByteArray("satIp"));
+    REQUIRE(names.value(SlotListModel::SatLinkStateRole) == QByteArray("satLinkState"));
+    REQUIRE(names.value(SlotListModel::SatChipRole) == QByteArray("satChip"));
+    REQUIRE(names.value(SlotListModel::SatDotColorRole) == QByteArray("satDotColor"));
+    REQUIRE(names.value(SlotListModel::SatGlyphRole) == QByteArray("satGlyph"));
+    REQUIRE(names.value(SlotListModel::SatLatencyTextRole) == QByteArray("satLatencyText"));
+    REQUIRE(names.value(SlotListModel::SatLatencySamplesRole) == QByteArray("satLatencySamples"));
     // No duplicate role names (each maps a distinct delegate property).
     QSet<QByteArray> unique;
     for (const auto& n : names) { unique.insert(n); }
@@ -367,4 +376,109 @@ TEST_CASE(
     s.pathPhase = r::UsbPhase::RestoreStuck;
     model.setState({s});
     REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "restoreStuck");
+}
+
+// ── Bound-satellite join (the Home signal-path right cell) ───────────────────
+
+namespace {
+
+// A connected connection row for the join, carrying the render keys + latency
+// exactly as the ConnectionsComposer derives them.
+dish::composer::ConnectionRow connectedRow(const std::string& id = "conn-1") {
+    dish::composer::ConnectionRow row;
+    row.id = id;
+    row.label = "Living Room";
+    row.live = r::UiLinkState::Connected;
+    row.ip = "192.168.1.24";
+    row.udpPort = 47811;
+    row.glyph = r::ConnectionGlyph::SatelliteConnected;
+    row.dotColor = r::DotColor::Success;
+    row.chip = r::StatusChipKey::Online;
+    row.latencyOneWayMs = 3.4;
+    row.latencySamples = 64;
+    return row;
+}
+
+} // namespace
+
+TEST_CASE("SlotListModel: a bound slot joins its connection row's render tokens",
+          "[slotmodel][satjoin]") {
+    SlotListModel model;
+    model.setState({richSlot()}); // bound to "conn-1"
+    model.setConnectionRows({connectedRow()});
+
+    REQUIRE(roleOf(model, 0, SlotListModel::SatIpRole).toString() == "192.168.1.24");
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLinkStateRole).toString() == "connected");
+    REQUIRE(roleOf(model, 0, SlotListModel::SatChipRole).toString() == "online");
+    REQUIRE(roleOf(model, 0, SlotListModel::SatDotColorRole).toString() == "success");
+    REQUIRE(roleOf(model, 0, SlotListModel::SatGlyphRole).toString() == "satelliteConnected");
+    // Same formatter + samples gate as ConnectionListModel — the Home wire
+    // label and the Connections row can never disagree.
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencyTextRole).toString() ==
+            QString::fromStdString(dish::reducer::formatLatencyMs(3.4)));
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencySamplesRole).toInt() == 64);
+}
+
+TEST_CASE("SlotListModel: an unbound slot's join roles are the inert empties",
+          "[slotmodel][satjoin]") {
+    SlotListModel model;
+    model.setState({plainSlot()});
+    model.setConnectionRows({connectedRow()}); // a row exists, but nothing binds it
+
+    REQUIRE(roleOf(model, 0, SlotListModel::SatIpRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLinkStateRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatChipRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatDotColorRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatGlyphRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencyTextRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencySamplesRole).toInt() == 0);
+}
+
+TEST_CASE("SlotListModel: a binding whose row has vanished degrades to the empties",
+          "[slotmodel][satjoin]") {
+    // A forget can drop the row while the slot still carries the (stale)
+    // binding for a beat — the Home cell must render the ghost, not garbage.
+    SlotListModel model;
+    model.setState({richSlot()}); // bound to "conn-1"
+    model.setConnectionRows({connectedRow("conn-OTHER")});
+
+    REQUIRE(roleOf(model, 0, SlotListModel::SatIpRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatChipRole).toString().isEmpty());
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencySamplesRole).toInt() == 0);
+}
+
+TEST_CASE("SlotListModel: the latency text stays empty until the window has samples",
+          "[slotmodel][satjoin]") {
+    SlotListModel model;
+    model.setState({richSlot()});
+    auto row = connectedRow();
+    row.latencySamples = 0; // value carried but unseeded
+    model.setConnectionRows({row});
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencyTextRole).toString().isEmpty());
+}
+
+TEST_CASE("SlotListModel: setConnectionRows patches in place - no reset, no countChanged",
+          "[slotmodel][satjoin][signals]") {
+    SlotListModel model;
+    model.setState({richSlot()});
+
+    RowSpy spy(&model);
+    int countEmissions = 0;
+    QObject::connect(&model, &SlotListModel::countChanged, [&countEmissions] { ++countEmissions; });
+
+    model.setConnectionRows({connectedRow()});
+
+    REQUIRE(spy.inserts == 0);
+    REQUIRE(spy.removes == 0);
+    REQUIRE(spy.changes == 1);
+    REQUIRE(countEmissions == 0);
+    // The joined value is visible on re-read (the ~1 Hz latency tick path).
+    REQUIRE(roleOf(model, 0, SlotListModel::SatLatencySamplesRole).toInt() == 64);
+}
+
+TEST_CASE("SlotListModel: setConnectionRows with no slots emits nothing", "[slotmodel][satjoin]") {
+    SlotListModel model;
+    RowSpy spy(&model);
+    model.setConnectionRows({connectedRow()});
+    REQUIRE(spy.changes == 0);
 }

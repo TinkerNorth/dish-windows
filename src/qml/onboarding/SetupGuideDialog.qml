@@ -24,6 +24,10 @@ Kit.ContentDialog {
 
     property int step: 0
     readonly property int stepCount: 3
+    // The step to land on when opened (0 unless the caller pre-seeds it — the
+    // shell's openSetupGuideAt sets 1 so "+ Add a controller" opens straight
+    // onto the Controller step). Consumed and reset by onOpened.
+    property int initialStep: 0
 
     // The host the user tapped Pair… on. Android's SetupConnectionViewModel
     // rule, ported: only the USER'S pairing advances the wizard — a background
@@ -45,11 +49,13 @@ Kit.ContentDialog {
     preferredWidth: 470
 
     onOpened: {
-        step = 0;
+        step = initialStep;
+        initialStep = 0;
         pendingHostId = "";
         // Scan immediately (android #125 parity): the wizard's first step IS
         // the picker — no extra tap to start looking. Guarded manager-side
-        // against double-trigger.
+        // against double-trigger. Still kicked when landing past step 0 so
+        // backing into Connect shows a fresh list.
         if (!App.scanning)
             App.startDiscovery();
     }

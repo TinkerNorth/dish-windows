@@ -59,23 +59,8 @@ Kit.Page {
     readonly property var shellStack: StackView.view
     readonly property var shellApi: shellStack ? shellStack.shellApi : null
 
-    // The slot whose bind chooser is open (+ its display name for the dialog
-    // heading). Captured on row click so the shared chooser dialog (declared
-    // once, not per-delegate) knows which slot to bind.
-    property string bindSlotId: ""
-    property string bindSlotName: ""
-    // The connectionId chosen in the bind chooser, captured in the delegate
-    // scope (where the row object is visible) so accept needn't reach into
-    // model internals.
-    property string bindConnectionId: ""
-    // The connections the open chooser offers — {connectionId,label,dotColor,
-    // glyph} objects pulled ONE-SHOT from App.availableConnectionsForSlot when
-    // the chooser opens (the invokable has no NOTIFY). NOT the unfiltered
-    // App.connectionModel: this is the same pick-list the Widgets SlotCard
-    // shows (connections free to bind + the slot's own held-over binding), so
-    // a connection already bound to another slot can't be chosen here.
-    property var bindCandidates: []
-    // The slot whose emulate picker is open, mirrored for the same reason.
+    // The slot whose emulate picker is open, captured on row click (the shared
+    // picker dialog is declared once, not per-delegate).
     property string emulateSlotId: ""
 
     // ---- Empty state --------------------------------------------------------
@@ -95,8 +80,9 @@ Kit.Page {
             body: qsTr("Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.")
             actionText: qsTr("Open Connections")
             showAction: true
-            // Destination 1 is the Connections rail entry (AppShell order).
-            onActionRequested: if (page.shellApi) page.shellApi.selectDestination(1)
+            // Destination 2 is the Connections rail entry (AppShell order —
+            // Home / Controllers / Connections).
+            onActionRequested: if (page.shellApi) page.shellApi.selectDestination(2)
         }
     }
 
@@ -450,117 +436,11 @@ Kit.Page {
         }
     }
 
-    // ---- Bind chooser (design FBindDlg; shared, retargeted per click) -------
-    // Lists the slot's filtered pick-list (page.bindCandidates, pulled from
-    // App.availableConnectionsForSlot on open) and binds the captured slot to
-    // the chosen one.
-    Kit.ContentDialog {
+    // ---- Bind chooser (design FBindDlg) -------------------------------------
+    // The shared chooser dialog (also instantiated by HomePage); openFor pulls
+    // the slot's filtered pick-list and accept applies the bind.
+    BindChooserDialog {
         id: bindDialog
-        eyebrow: qsTr("Bind")
-        heading: qsTr("Bind %1").arg(page.bindSlotName)
-        preferredWidth: 440
-        acceptText: qsTr("Bind")
-        // A selection is required before the bind can apply.
-        acceptEnabled: bindList.currentIndex >= 0
-
-        body: [
-            Label {
-                text: qsTr("Choose which satellite this controller drives.")
-                color: Theme.muted
-                font.pixelSize: Tokens.textSummary
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            },
-            ListView {
-                id: bindList
-                Layout.fillWidth: true
-                implicitHeight: Math.min(contentHeight, 240)
-                clip: true
-                spacing: Tokens.s1
-                currentIndex: -1
-                model: page.bindCandidates
-
-                delegate: ItemDelegate {
-                    id: connRow
-                    required property int index
-                    // A pick-list row object (contract §1,
-                    // availableConnectionsForSlot).
-                    required property var modelData
-
-                    width: ListView.view ? ListView.view.width : implicitWidth
-                    topPadding: Tokens.s4
-                    bottomPadding: Tokens.s4
-                    leftPadding: Tokens.s6
-                    rightPadding: Tokens.s6
-                    highlighted: ListView.isCurrentItem
-                    onClicked: {
-                        bindList.currentIndex = connRow.index;
-                        // Capture the id here, in delegate scope — the
-                        // dialog's accept handler reads it back.
-                        page.bindConnectionId = connRow.modelData.connectionId;
-                    }
-
-                    contentItem: RowLayout {
-                        spacing: Tokens.s5
-
-                        Kit.RadioMark {
-                            selected: connRow.highlighted
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Kit.BrandGlyph {
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 18
-                            glyph: glyphForToken(connRow.modelData.glyph)
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Kit.StatusDot {
-                            token: connRow.modelData.dotColor
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Label {
-                            text: connRow.modelData.label
-                            color: Theme.onSurface
-                            font.pixelSize: Tokens.textBase
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        // The design's trailing "Online" cue, derived from the
-                        // row's dot token (the pick-list payload carries no
-                        // chip text — see the contract-gap note in the page
-                        // header docs). Only the success state names itself.
-                        Label {
-                            visible: connRow.modelData.dotColor === "success"
-                            text: qsTr("Online")
-                            color: Theme.success
-                            font.pixelSize: Tokens.textMeta
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-
-                    background: Rectangle {
-                        radius: Tokens.radiusButton
-                        color: connRow.highlighted ? Theme.primaryFill
-                             : connRow.hovered
-                                   ? Qt.rgba(Theme.onSurface.r, Theme.onSurface.g,
-                                             Theme.onSurface.b, 0.06)
-                             : "transparent"
-                    }
-                }
-            },
-            Label {
-                text: qsTr("Satellites already driven by another slot are not offered.")
-                color: Theme.muted
-                font.pixelSize: Tokens.textMeta
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-        ]
-
-        onAccepted: {
-            if (bindList.currentIndex < 0) { return; }
-            App.bindSlot(page.bindSlotId, page.bindConnectionId);
-            close();
-        }
     }
 
     // ---- Emulate picker -----------------------------------------------------
@@ -592,15 +472,7 @@ Kit.Page {
     // ---- Helpers (presentation only; no business logic) ---------------------
 
     function openBind(slotId, slotName) {
-        page.bindSlotId = slotId;
-        page.bindSlotName = slotName;
-        page.bindConnectionId = "";
-        // Re-pull the slot's filtered pick-list each open (one-shot, like the
-        // emulate picker's load). App.availableConnectionsForSlot runs the
-        // same PickerVisibility reducer the Widgets SlotCard uses.
-        page.bindCandidates = App.availableConnectionsForSlot(slotId);
-        bindList.currentIndex = -1;
-        bindDialog.open();
+        bindDialog.openFor(slotId, slotName);
     }
 
     // Push the raw-joystick remap detail. shellApi.pushDetail(url, title)

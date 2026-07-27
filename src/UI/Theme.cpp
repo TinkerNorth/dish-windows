@@ -35,6 +35,8 @@ const ThemePalette& darkPalette() {
         /*success*/ 0xFF22C55E,
         /*error*/ 0xFFE74C3C,
         /*warning*/ 0xFFF59E0B,
+        // Donation accent — dish-android colorPulse, pulse pink on navy.
+        /*pulse*/ 0xFFFF6FB5,
     };
     return kDark;
 }
@@ -59,6 +61,7 @@ const ThemePalette& lightPalette() {
         /*success*/ 0xFF1B873F,     // status — success (darker green on light)
         /*error*/ 0xFFC0392B,       // status — error (darker red on light)
         /*warning*/ 0xFFB7791F,     // status — warning (amber that reads on white)
+        /*pulse*/ 0xFFC2417F,       // donation accent — pink, AA-darkened on white
     };
     return kLight;
 }
@@ -83,6 +86,7 @@ QRgb Theme::outline = darkPalette().outline;
 QRgb Theme::success = darkPalette().success;
 QRgb Theme::error = darkPalette().error;
 QRgb Theme::warning = darkPalette().warning;
+QRgb Theme::pulse = darkPalette().pulse;
 
 namespace {
 Appearance g_activeAppearance = Appearance::Dark;
@@ -101,6 +105,7 @@ void setActivePalette(const ThemePalette& palette) {
     Theme::success = palette.success;
     Theme::error = palette.error;
     Theme::warning = palette.warning;
+    Theme::pulse = palette.pulse;
 }
 
 Appearance activeAppearance() { return g_activeAppearance; }

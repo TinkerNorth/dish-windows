@@ -44,6 +44,12 @@ class ThemeBridge : public QObject {
     Q_PROPERTY(QColor primaryPress READ primaryPress NOTIFY paletteChanged)
     Q_PROPERTY(QColor primaryFill READ primaryFill NOTIFY paletteChanged)
     Q_PROPERTY(QColor warningFill READ warningFill NOTIFY paletteChanged)
+    // The donation accent (pulse pink) + its derived washes: the 12% fill and
+    // the 35% edge the Support Dish surface uses (design overlays PULSE_FILL /
+    // PULSE_EDGE). One hue beyond cyan, reserved for donations.
+    Q_PROPERTY(QColor pulse READ pulse NOTIFY paletteChanged)
+    Q_PROPERTY(QColor pulseFill READ pulseFill NOTIFY paletteChanged)
+    Q_PROPERTY(QColor pulseEdge READ pulseEdge NOTIFY paletteChanged)
 
   public:
     explicit ThemeBridge(QObject* parent = nullptr);
@@ -64,6 +70,9 @@ class ThemeBridge : public QObject {
     QColor primaryPress() const;
     QColor primaryFill() const;
     QColor warningFill() const;
+    QColor pulse() const;
+    QColor pulseFill() const;
+    QColor pulseEdge() const;
 
     // Re-read the active C++ Theme tokens (call after setActiveAppearance swapped
     // the palette). Every token property re-evaluates off the one paletteChanged.
