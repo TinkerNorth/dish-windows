@@ -24,6 +24,9 @@ Kit.Page {
     id: donatePage
     title: qsTr("Support Dish")
 
+    readonly property string headerTitle: qsTr("Support Dish")
+    readonly property string headerSub: qsTr("Dish is free and open source — donations keep it that way")
+
     // Brand donation URLs from the App surface (defaults mirror DonateView; the
     // C++ side carries the localizable overrides).
     readonly property string urlSponsors: App.donateSponsorsUrl

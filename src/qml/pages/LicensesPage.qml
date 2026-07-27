@@ -24,6 +24,9 @@ Kit.Page {
     id: licensesPage
     title: qsTr("Open source licenses")
 
+    readonly property string headerTitle: qsTr("Open source licenses")
+    readonly property string headerSub: qsTr("Acknowledgements for the libraries Dish is built on")
+
     // The bundled manifest, mapped to { name, version, license, url } rows. Read
     // once on load (the manifest is a static resource — it never moves at runtime).
     readonly property var entries: App.licenses()
