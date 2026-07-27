@@ -468,3 +468,83 @@ session-key vectors, plus the AEAD direction/counter/token-mismatch properties).
 compile-time-guarded and the touchpad payload is the protocol-1 16-byte layout. The
 only frozen-contract follow-up is the **uncalled public-IP guard** in
 `WifiConnectionManager` (item 6 above) — a wiring gap, routed to Wave 1.
+
+---
+
+## Release-redesign addendum (2026-07-27, branch `feat/release-parity-design`)
+
+A dated truth layer over the 2026-06-15 audit above; earlier rows are left
+verbatim as the historical record. Suite size at this addendum: **1302
+`TEST_CASE`s** (was 926 at the audit).
+
+**Structural: the Widgets UI is deleted.** The Qt Quick flows app (design
+project "Dish — Screens and Flows", synced 2026-07-26) is the ONLY UI; rows
+above that cite `src/UI/*.cpp` view files describe deleted code. The QML pages
+carry every audited behavior; `docs/QML_CONTRACT.md` (A2) is the surface.
+
+**Audit items since RESOLVED:**
+- Battery `isLow` divergence → `core/reducer/BatteryUi.h` is the canonical
+  home (android-inclusive `<= 15`, wired folded into charging per android's
+  `fromWire`); `test_main_ui_state.cpp` repointed at it; the QML card renders
+  its chip tokens. The duplicated inline rules died with the Widgets tree.
+- `SyntheticTwinDedup` → `core/reducer/UsbTwinDedup.h` (was already wired;
+  the row's "no symbol anywhere" note was stale at audit time).
+- `PathCardMapper` core fields → `core/reducer/SlotPathFields.h` (badge/risk/
+  `suggestDirectForTouch` fields intentionally absent — the touch nudge is
+  premise-invalid on Windows, where SDL forwards the touchpad on Standard).
+- `ConfigUiStateBlocker` → `core/reducer/ConfigBlocker.h` + all 13 android
+  cases in `test_config_blocker.cpp` (production consumer wiring pending).
+- **The D2 touchpad-mode cluster is LIVE**: `TouchpadModeRepository` /
+  `TouchpadModeStore` / `TouchpadModeResolve` (ds4 > mouse > off ladder with
+  the catalog ds4-mode gate) exist with contract + probe tests, and the
+  descriptor path DECLARES the resolved mode (SDL touch-source detection →
+  hub resolver → `attachSlot` → PUT; reconcile compares the applied mode).
+  `mouseControl` remains false in v1 by decision — no UI sets a "mouse" pick.
+- `isPrivateHostLiteral` guard → wired in `WifiConnectionManager::connectTo`.
+- `LinkState::Unstable` → entered at 2 consecutive missed acks; recovers on
+  the next ack. The "NOT YET ENTERED" notes above are historical.
+- Reverse pairing: a Path-B `none` AFTER `pending` is now a terminal decline
+  (satellite #68 removed the wire `denied`); early `none` tolerates the
+  POST→first-poll race.
+- Pairing TLS: `PairingClient` is TOFU-pinned via the shared pin store (the
+  "later wave" note above landed).
+- Catalog: legacy/absent-version bodies normalize via
+  `core/catalog/LegacyCatalogTranslator.h` at the repository fill boundary;
+  `catalogVersion`/`emulates`/per-feature `modes` parse; the emulate seed
+  honors `emulates` (`core/reducer/EmulateSeed.h`, delegated from
+  `seedControllerType`).
+- The dead satellite download URL → `dish.tinkernorth.com/downloads/satellite`.
+- SDL button labels → pinned positional (`SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS=0`)
+  so the SDL and USB-direct paths agree.
+
+**REMOVED features (deliberate, with the Widgets tree):** the dismissible
+DonatePill (+ its pure logic + `test_donate_pill.cpp`) — the flows design's
+Settings carries a "Support Dish" row instead; the informational
+SetupWizard/OnboardingNavBar screens — superseded by the live 3-step
+`SetupGuideDialog`.
+
+**Ports landed but NOT yet wired (headers + partial tests, integration
+pending):** `core/input/UsbHidLayout.h` (android HidLayout/decodeFromLayout —
+the HidP caps builder + gateway use are open), `core/reducer/CatalogFeatureGate.h`
+(descriptor caps ∩ catalog type features), `core/catalog/BundledCatalog.h`
+(offline capability sets), `composer/TouchpadModeComposer.h` (the store-fold —
+the hub resolver currently computes the ladder directly).
+
+**Still-open android deltas (tracked for post-release):** per-path rumble
+capability + the USB-direct OUTPUT write path (rumble/lightbar encoders +
+gateway write — today rumble is advertised on Direct with no actuator);
+`claim()` HID-collection re-check + ranking + the kKnown model-table port;
+the six-layer capability fold (`Capability.kt`) + `RumbleEnabledStore` + host
+feature/runtime stores; `GET /api/server/capabilities` consumption + the
+motion sink/backend feed (R10 wiring); guided-setup live-state depth
+(`SetupUsb` recovery flows); the departed-device binding sweep +
+`SlotTopologyComposer/Controller`; catalog prewarm-on-Live; stored-type
+clamp-to-catalog call site; QML translation fill (312 new source strings per
+locale ride the catalogs untranslated; English fallback ships).
+
+**Deliberate exclusions reaffirmed (not regressions):** the Diagnostics
+screen/inspector/probe/bench (the design's 16 frames exclude it; the latency
+MECHANISM ships on connection rows), catalog images, the X25519 pairing
+extension (contract-optional), the FakeSatellite integration layer (the
+no-real-sockets invariant stands), the touch-capable "Needs Direct" nudge
+(premise-invalid on Windows).
