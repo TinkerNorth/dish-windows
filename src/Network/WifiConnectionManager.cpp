@@ -317,6 +317,7 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     reverseServerName_ = server.name.isEmpty() ? server.ip : server.name;
     reverseElapsedMs_ = 0;
     reverseDeadlineMs_ = kReverseDeadlineMs;
+    reverseSawPending_ = false;
     setReversePhase(ReversePairingPhase::AwaitingApproval);
 
     const QString did = deviceId_;
@@ -403,7 +404,8 @@ void WifiConnectionManager::pollReverseStatus() {
         ar.bodyParsed = status.reachable;
         ar.statusStr = status.status.value_or(QString()).toStdString();
         ar.hasSharedKey = status.sharedKey.has_value() && !status.sharedKey->isEmpty();
-        const auto approval = reducer::classifyApproval(ar);
+        const auto approval = reducer::classifyApproval(ar, reverseSawPending_);
+        if (ar.statusStr == "pending") { reverseSawPending_ = true; }
         // The pure decision: the only place the poll loop's branching lives.
         switch (
             reducer::nextReversePairingAction(approval, reverseElapsedMs_, reverseDeadlineMs_)) {
