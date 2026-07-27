@@ -52,6 +52,19 @@
           "url": "https://www.boost.org/LICENSE_1_0.txt"
         }
       ]
+    },
+    {
+      "group": "com.rsms",
+      "artifact": "inter",
+      "version": "4.1",
+      "name": "Inter",
+      "url": "https://rsms.me/inter/",
+      "licenses": [
+        {
+          "name": "SIL Open Font License 1.1",
+          "url": "https://openfontlicense.org/open-font-license-official-text/"
+        }
+      ]
     }
   ]
 }

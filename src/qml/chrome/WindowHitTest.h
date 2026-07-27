@@ -54,28 +54,47 @@ enum class HitRegion {
 // resize frame in the same units. When `maximized` is true the window has no
 // resize frame (you can't resize a maximized window), so the border regions are
 // suppressed and only Caption/MaximizeButton/Client are reported.
+//
+// The three CLIENT CARVE-OUTS are interactive controls living INSIDE the
+// caption strip that must receive normal Qt mouse events: without them the
+// native resolver answered HTCAPTION for the whole strip, a press became a
+// system drag at the NATIVE level, and the QML hamburger / minimize / close
+// buttons never saw a click at all (maximize alone worked, via HTMAXBUTTON).
+// Empty rects (the default) carve nothing. Only the maximize button keeps its
+// native region — HTMINBUTTON/HTCLOSEBUTTON would hand the click to Windows
+// and bypass the QML buttons' own hover/press rendering.
 struct HitTestInput {
     Point cursor;
     Rect window;
     Rect caption;
     Rect maximizeButton;
+    Rect minimizeButton; // client carve-out
+    Rect closeButton;    // client carve-out
+    Rect leftClient;     // client carve-out (the rail hamburger cell)
     int resizeBorder;
     bool maximized;
 };
+
+// True iff the point is inside the half-open rect. An empty rect (right <=
+// left or bottom <= top) contains nothing, which is what lets an unset
+// carve-out default to "carve nothing".
+constexpr bool contains(const Rect& r, int x, int y) {
+    return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+}
 
 // Pure decision. Order matters and is deliberate:
 //   1) Resize corners/edges first (a 1px corner must beat the caption strip that
 //      overlaps it at the very top), UNLESS maximized.
 //   2) The maximize button (so Snap Layouts can trigger) before the caption.
-//   3) The caption strip (draggable).
-//   4) Client otherwise.
+//   3) The client carve-outs (hamburger / minimize / close) before the caption,
+//      so those controls get real Qt clicks instead of starting a system drag.
+//   4) The caption strip (draggable).
+//   5) Client otherwise.
 constexpr HitRegion hitTest(const HitTestInput& in) {
     const int x = in.cursor.x;
     const int y = in.cursor.y;
 
-    const bool inside =
-        x >= in.window.left && x < in.window.right && y >= in.window.top && y < in.window.bottom;
-    if (!inside) { return HitRegion::Client; }
+    if (!contains(in.window, x, y)) { return HitRegion::Client; }
 
     if (!in.maximized && in.resizeBorder > 0) {
         const bool nearLeft = x < in.window.left + in.resizeBorder;
@@ -93,13 +112,14 @@ constexpr HitRegion hitTest(const HitTestInput& in) {
         if (nearBottom) { return HitRegion::Bottom; }
     }
 
-    const bool inMaximize = x >= in.maximizeButton.left && x < in.maximizeButton.right &&
-                            y >= in.maximizeButton.top && y < in.maximizeButton.bottom;
-    if (inMaximize) { return HitRegion::MaximizeButton; }
+    if (contains(in.maximizeButton, x, y)) { return HitRegion::MaximizeButton; }
 
-    const bool inCaption = x >= in.caption.left && x < in.caption.right && y >= in.caption.top &&
-                           y < in.caption.bottom;
-    if (inCaption) { return HitRegion::Caption; }
+    if (contains(in.minimizeButton, x, y) || contains(in.closeButton, x, y) ||
+        contains(in.leftClient, x, y)) {
+        return HitRegion::Client;
+    }
+
+    if (contains(in.caption, x, y)) { return HitRegion::Caption; }
 
     return HitRegion::Client;
 }

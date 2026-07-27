@@ -6,6 +6,8 @@
 #include "UI/CrashHandler.h"
 #include "qml/QmlEntryPoint.h"
 
+#include <QFont>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLocale>
@@ -69,6 +71,20 @@ int main(int argc, char* argv[]) {
     // taskbar-while-running. dish.qrc ships the same multi-resolution .ico via
     // AUTORCC; QIcon picks the best size per DPI.
     app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
+
+    // The design system's UI face. Inter is bundled (SIL OFL; see
+    // packaging/fonts/) because Windows does not ship it — without the load
+    // every Text fell back to Segoe UI and the app visibly diverged from the
+    // design canvas. Registering the four statics gives the weight ladder the
+    // tokens use (400/500/600/700); the app default font then propagates to
+    // every Quick Text that doesn't set its own family.
+    for (const char* face : {":/fonts/Inter-Regular.ttf", ":/fonts/Inter-Medium.ttf",
+                             ":/fonts/Inter-SemiBold.ttf", ":/fonts/Inter-Bold.ttf"}) {
+        QFontDatabase::addApplicationFont(QLatin1String(face));
+    }
+    QFont uiFont(QStringLiteral("Inter"));
+    uiFont.setPixelSize(13); // the token base; pages override per role
+    app.setFont(uiFont);
 
     // The AppModel is exposed to QML as the `App` context property (an
     // AppViewModel adapter) inside runQmlApp, which owns the engine + chrome.

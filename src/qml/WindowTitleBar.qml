@@ -27,13 +27,23 @@ Item {
     // The window we control (set by Main.qml). Used for drag + min/max/close.
     required property var window
 
-    // Publish geometry to C++ whenever the bar or the maximize button moves or
-    // resizes. The rects are window-local logical px; C++ scales by DPR.
+    // Publish geometry to C++ whenever the bar or its buttons move or resize.
+    // The rects are window-local logical px; C++ scales by DPR. The hamburger
+    // + minimize + close rects are CLIENT CARVE-OUTS — without them the whole
+    // strip native-resolves to HTCAPTION and a press starts a system drag, so
+    // those buttons never receive a click (the launch-day symptom).
     function publishRects() {
         ChromeBridge.setCaptionRect(Qt.rect(bar.x, bar.y, bar.width, bar.height));
         var p = maximizeButton.mapToItem(null, 0, 0);
         ChromeBridge.setMaximizeButtonRect(
             Qt.rect(p.x, p.y, maximizeButton.width, maximizeButton.height));
+        var m = minimizeButton.mapToItem(null, 0, 0);
+        ChromeBridge.setMinimizeButtonRect(
+            Qt.rect(m.x, m.y, minimizeButton.width, minimizeButton.height));
+        var c = closeButton.mapToItem(null, 0, 0);
+        ChromeBridge.setCloseButtonRect(Qt.rect(c.x, c.y, closeButton.width, closeButton.height));
+        var g = hamburger.mapToItem(null, 0, 0);
+        ChromeBridge.setLeftClientRect(Qt.rect(g.x, g.y, hamburger.width, hamburger.height));
     }
 
     onWidthChanged: publishRects()
