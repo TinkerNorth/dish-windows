@@ -20,7 +20,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <QApplication>
 #include <QLocale>
 
 namespace dish {
@@ -54,7 +53,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
       inhibitor_(std::move(inhibitor)), wakeComposer_(streamingSlotCount_, shouldKeepScreenOn_),
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
-      themeController_(themeStore_.state(), qApp),
+      themeController_(themeStore_.state()),
       crashController_(crashStore_.state(), &crashBackend_),
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
       motionEnabledStore_(&motionPrefRepo_), joystickRemapStore_(&joystickRemapRepo_),
@@ -220,7 +219,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
 
     // Arm the theme controller: it subscribes the ThemePreferenceStore and
     // applies the persisted (or System-resolved) palette immediately, re-theming
-    // the live QApplication. start() applying the current value == android's
+    // the live palette. start() applying the current value == android's
     // applyPersistedMode(). The Source derives the mode; this Controller effects
     // the palette — they cannot drift (§4.3 rule 2).
     themeController_.start();

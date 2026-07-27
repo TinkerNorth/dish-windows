@@ -8,14 +8,14 @@
 // DERIVE (which mode is selected) lives in the Source; this class only actuates
 // — the §4.3 rule-2 split android folds into setMode()+AppCompatDelegate.
 //
-// Two seams keep it testable without touching the real registry or a live
-// QApplication:
+// Two seams keep it testable without touching the real registry:
 //   * `systemReader` resolves ThemeMode::System -> Appearance (default: the real
 //     ui::detectSystemAppearance). Tests inject a stub to drive 0->Dark / 1->Light.
 //   * `applySink` receives the resolved Appearance and performs the re-theme
-//     (default: ui::setActiveAppearance + applyDishTheme on the app). Tests
-//     inject a recording sink and assert the Appearance sequence (the house
-//     pattern, cf. FakeInhibitor in test_screen_wake_controller).
+//     (default: ui::setActiveAppearance — the QML ThemeBridge re-reads the
+//     swapped tokens on its refresh). Tests inject a recording sink and assert
+//     the Appearance sequence (the house pattern, cf. FakeInhibitor in
+//     test_screen_wake_controller).
 //
 // stop() uses the kernel default (cancel the subscription) — unlike the crash
 // controller, the theme controller does not need to survive teardown.
@@ -28,8 +28,6 @@
 
 #include <functional>
 
-class QApplication;
-
 namespace dish::composer {
 
 class ThemeController : public arch::Controller<source::ThemeMode> {
@@ -39,9 +37,9 @@ class ThemeController : public arch::Controller<source::ThemeMode> {
     // Applies a resolved Appearance (set the active palette + re-theme).
     using ApplySink = std::function<void(ui::Appearance)>;
 
-    // Production ctor: re-themes the given QApplication on each mode change.
-    // `app` is borrowed (owned by main); SYSTEM resolves via the real OS reader.
-    ThemeController(const arch::Observable<source::ThemeMode>& mode, QApplication* app);
+    // Production ctor: swaps the active palette on each mode change; SYSTEM
+    // resolves via the real OS reader.
+    explicit ThemeController(const arch::Observable<source::ThemeMode>& mode);
 
     // Test ctor: inject both seams. `systemReader` resolves SYSTEM; `applySink`
     // receives the resolved Appearance. Neither touches the OS / a QApplication.

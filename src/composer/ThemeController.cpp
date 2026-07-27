@@ -3,19 +3,14 @@
 
 #include "composer/ThemeController.h"
 
-#include <QApplication>
-
 #include <utility>
 
 namespace dish::composer {
 
-ThemeController::ThemeController(const arch::Observable<source::ThemeMode>& mode, QApplication* app)
+ThemeController::ThemeController(const arch::Observable<source::ThemeMode>& mode)
     : ThemeController(
           mode, [] { return ui::detectSystemAppearance(); },
-          [app](ui::Appearance appearance) {
-              ui::setActiveAppearance(appearance);
-              if (app != nullptr) { ui::applyDishTheme(*app); }
-          }) {}
+          [](ui::Appearance appearance) { ui::setActiveAppearance(appearance); }) {}
 
 ThemeController::ThemeController(const arch::Observable<source::ThemeMode>& mode,
                                  SystemReader systemReader, ApplySink applySink)

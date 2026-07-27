@@ -305,7 +305,7 @@ class AppModel : public QObject {
     // Declaration order matters: each controller captures its store's Observable,
     // so the stores must precede the controllers. The crash backend (a no-op
     // seam this wave, D4) precedes its controller. The theme controller re-themes
-    // the live QApplication off the theme store's ThemeMode Observable.
+    // the active palette off the theme store's ThemeMode Observable.
     source::OnboardingPreferenceStore onboardingStore_;
     source::ThemePreferenceStore themeStore_;
     source::CrashReportingStore crashStore_;

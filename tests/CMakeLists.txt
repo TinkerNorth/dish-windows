@@ -181,7 +181,6 @@ set(DISH_TEST_SOURCES
     # parse + mapping + forward-compat. Windows-authored (most surfaces had no
     # android @Test); they pin the android class RULES, asserted via probes/fakes.
     test_onboarding_store.cpp
-    test_donate_pill.cpp
     test_license_manifest.cpp
     test_theme_store.cpp
     test_crash_reporting.cpp
@@ -259,10 +258,9 @@ if(WIN32)
         DL_PATHS
             $<TARGET_FILE_DIR:Qt6::Core>
             $<TARGET_FILE_DIR:Qt6::Network>
-            # dish_core now links Qt6::Gui/Widgets (the theme layer moved in for
-            # Workstream 3d), so the test exe needs their DLLs on PATH too.
-            $<TARGET_FILE_DIR:Qt6::Gui>
-            $<TARGET_FILE_DIR:Qt6::Widgets>)
+            # dish_core links Qt6::Gui (theme palette + role models), so the
+            # test exe needs its DLL on PATH too.
+            $<TARGET_FILE_DIR:Qt6::Gui>)
 else()
     catch_discover_tests(DishTests)
 endif()

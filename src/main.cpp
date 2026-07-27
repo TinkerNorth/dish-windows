@@ -4,18 +4,9 @@
 #include "AppModel.h"
 #include "Network/WinsockInit.h"
 #include "UI/CrashHandler.h"
-#include "UI/Theme.h"
-
-#ifdef DISH_QML
-// The Qt Quick chrome path (built only when the DISH_QML option is ON). When
-// OFF, none of the Quick headers/libs are referenced and the build is the exact
-// Widgets app.
 #include "qml/QmlEntryPoint.h"
-#else
-#include "UI/MainWindow.h"
-#endif
 
-#include <QApplication>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QLocale>
 #include <QTranslator>
@@ -46,7 +37,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    QApplication app(argc, argv);
+    // QGuiApplication, not QApplication: the app is Qt Quick only — no QWidget
+    // is ever constructed, so the widgets module stays out of the process.
+    QGuiApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("TinkerNorth"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.dev"));
     QCoreApplication::setApplicationName(QStringLiteral("Dish"));
@@ -58,7 +51,7 @@ int main(int argc, char* argv[]) {
     // strings (e.g. "pt_BR" -> "pt"), so a host LANG of pt_BR.UTF-8 picks up
     // dish_pt_BR.qm and a host LANG of pt_PT falls back to dish_pt.qm if
     // present, or English when nothing matches. The translator stays alive
-    // for the lifetime of the QApplication via the `static` qualifier.
+    // for the lifetime of the application via the `static` qualifier.
     static QTranslator translator;
     const QString localeName = QLocale::system().name();
     if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n"))) {
@@ -72,30 +65,14 @@ int main(int argc, char* argv[]) {
 
     // dish.rc embeds the icon into the PE resource section (Explorer / Task
     // Manager / taskbar-from-pinned). That's invisible to Qt — without
-    // setWindowIcon every QWidget shows Qt's generic icon in the title
-    // bar, Alt-Tab, and taskbar-while-running. dish.qrc ships the same
-    // multi-resolution .ico via AUTORCC; QIcon picks the best size per DPI.
+    // setWindowIcon the window shows Qt's generic icon in Alt-Tab and the
+    // taskbar-while-running. dish.qrc ships the same multi-resolution .ico via
+    // AUTORCC; QIcon picks the best size per DPI.
     app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
 
-#ifndef DISH_QML
-    // applyDishTheme styles QWidgets (global QPalette + QSS) — meaningless and
-    // unused on the Quick path, where ThemeBridge feeds the same tokens to QML.
-    dish::ui::applyDishTheme(app);
-#endif
-
-    dish::AppModel model;
-
-#ifdef DISH_QML
     // The AppModel is exposed to QML as the `App` context property (an
-    // AppViewModel adapter) inside runQmlApp. Core init above is identical to the
-    // Widgets path and in the same order; only the window construction differs.
+    // AppViewModel adapter) inside runQmlApp, which owns the engine + chrome.
+    dish::AppModel model;
     model.start();
     return dish::qml::runQmlApp(model);
-#else
-    dish::ui::MainWindow window(&model);
-    window.show();
-    model.start();
-
-    return app.exec();
-#endif
 }

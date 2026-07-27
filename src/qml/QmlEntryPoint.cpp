@@ -123,13 +123,9 @@ int runQmlApp(dish::AppModel& model) {
         },
         Qt::DirectConnection);
 
-    // Route App.openExternalUrl through the shared ExternalLink helper so a
-    // failure raises the same warning the Widgets screens do. No NotificationQueue
-    // exists on the Quick path yet, so failures fall through to App.errorMessage
-    // (the QML toast channel) — pass nullptr and let openExternalUrl return false;
-    // the AppViewModel's own emit covers the toast.
-    appVm.setExternalOpenSink(
-        [](const QString& url) { return dish::ui::openExternalUrl(url, nullptr); });
+    // Route App.openExternalUrl through the shared ExternalLink helper; a false
+    // return falls through to App.errorMessage (the QML toast channel).
+    appVm.setExternalOpenSink([](const QString& url) { return dish::ui::openExternalUrl(url); });
 
     // After a theme change: re-read the C++ tokens into the QML Theme singleton
     // and flip the native chrome's immersive-dark attribute so the frame matches.
