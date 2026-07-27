@@ -4,215 +4,205 @@
 <context>
     <name>AppShell</name>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="39"/>
+        <location filename="../src/qml/AppShell.qml" line="43"/>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/AppShell.qml" line="44"/>
         <source>Controllers</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="40"/>
+        <location filename="../src/qml/AppShell.qml" line="45"/>
         <source>Connections</source>
         <translation type="unfinished">Veze</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="41"/>
+        <location filename="../src/qml/AppShell.qml" line="46"/>
+        <source>Support Dish</source>
+        <translation type="unfinished">Podrži Dish</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/AppShell.qml" line="47"/>
         <source>Settings</source>
         <translation type="unfinished">Podešavanja</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="189"/>
+        <location filename="../src/qml/AppShell.qml" line="241"/>
+        <source>Add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/AppShell.qml" line="255"/>
+        <source>Add a controller</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/AppShell.qml" line="272"/>
         <source>Dish %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BindChooserDialog</name>
+    <message>
+        <location filename="../src/qml/pages/BindChooserDialog.qml" line="34"/>
+        <location filename="../src/qml/pages/BindChooserDialog.qml" line="37"/>
+        <source>Bind</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/BindChooserDialog.qml" line="35"/>
+        <source>Bind %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/BindChooserDialog.qml" line="52"/>
+        <source>Choose which satellite this controller drives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/BindChooserDialog.qml" line="116"/>
+        <source>Online</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/BindChooserDialog.qml" line="134"/>
+        <source>Satellites already driven by another slot are not offered.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="26"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="31"/>
         <source>Connections</source>
         <translation type="unfinished">Veze</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="28"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="33"/>
         <source>%1 found · nothing remembered yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="29"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="34"/>
         <source>%1 streaming · %2 remembered</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="55"/>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="92"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="63"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="100"/>
         <source>Found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="56"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="64"/>
         <source>Needs pairing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="57"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="65"/>
         <source>Offline</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="58"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="66"/>
         <source>Ready</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="59"/>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="333"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="67"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="341"/>
         <source>Connecting…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="60"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="68"/>
         <source>Online</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="61"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="69"/>
         <source>Unstable</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="95"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="103"/>
         <source>Scanning…</source>
         <translation type="unfinished">Skeniranje…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="95"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="103"/>
         <source>Scan</source>
         <translation type="unfinished">Skeniraj</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="125"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="133"/>
         <source>Searching your LAN…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="126"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="134"/>
         <source>No satellites found yet — hit Scan to look again.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="185"/>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="328"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="193"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="336"/>
         <source>Pair…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="199"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="207"/>
         <source>Remembered</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="220"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="228"/>
         <source>No remembered satellites yet — pair one and it is saved here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="293"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="301"/>
         <source>%1 • UDP %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="301"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="309"/>
         <source>%1 · last %2 pings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="323"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="331"/>
         <source>Disconnect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="333"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="341"/>
         <source>Reconnect</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="339"/>
+        <location filename="../src/qml/pages/ConnectionsPage.qml" line="347"/>
         <source>Forget</source>
         <translation type="unfinished">Zaboravi</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="363"/>
-        <source>Pairing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="364"/>
-        <source>Pair from this PC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="365"/>
         <source>Pair with %1</source>
-        <translation type="unfinished">Upari sa %1</translation>
+        <translation type="obsolete">Upari sa %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="367"/>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation type="obsolete">Otkaži</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="369"/>
         <source>Pairing…</source>
-        <translation type="unfinished">Uparivanje…</translation>
+        <translation type="obsolete">Uparivanje…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="369"/>
         <source>Pair</source>
-        <translation type="unfinished">Upari</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="385"/>
-        <source>Enter the 6-digit PIN shown on the Satellite&apos;s screen.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="408"/>
-        <source>Show a PIN on this PC instead…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="427"/>
-        <source>Type this PIN on &lt;b&gt;%1&lt;/b&gt; to approve the pairing.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="476"/>
-        <source>Waiting for approval on the satellite…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="478"/>
-        <source>Approved — connecting…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="480"/>
-        <source>The operator declined the pairing.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="482"/>
-        <source>No approval — the code expired.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="492"/>
-        <source>New code</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="499"/>
-        <source>~2 min</source>
-        <translation type="unfinished"></translation>
+        <translation type="obsolete">Upari</translation>
     </message>
 </context>
 <context>
@@ -262,208 +252,182 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="94"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="79"/>
         <source>No controllers connected</source>
         <translation type="unfinished">Nema povezanih kontrolera</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="95"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="80"/>
         <source>Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="96"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="81"/>
         <source>Open Connections</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="187"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="173"/>
         <source>Registering controller…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="234"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="220"/>
         <source>Bound to %1</source>
         <translation type="unfinished">Povezano sa %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="236"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="222"/>
         <source> · as %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="237"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="223"/>
         <source>Unbound</source>
         <translation type="unfinished">Nije povezano</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="252"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="238"/>
         <source>Gyro</source>
         <translation type="unfinished">Žiro</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="252"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="238"/>
         <source>No gyro</source>
         <translation type="unfinished">Nema žira</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="258"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="244"/>
         <source>Lightbar</source>
         <translation type="unfinished">Svjetlosna traka</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="275"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="261"/>
         <source>%1 Hz</source>
         <translation type="unfinished">%1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="276"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="262"/>
         <source>~%1 Hz</source>
         <translation type="unfinished">~%1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="282"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="268"/>
         <source>Motion %1 Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="288"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="391"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="274"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="377"/>
         <source>Poll %1 Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="301"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="287"/>
         <source>Bind…</source>
         <translation type="unfinished">Poveži…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="316"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="302"/>
         <source>Emulate…</source>
         <translation type="unfinished">Emuliraj…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="321"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="307"/>
         <source>Unbind</source>
         <translation type="unfinished">Odveži</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="347"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="333"/>
         <source>USB PATH</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="360"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="361"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="346"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="347"/>
         <source>Standard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="360"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="361"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="365"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="346"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="347"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="351"/>
         <source>Direct</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="360"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="366"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="346"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="352"/>
         <source>Auto</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="380"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="366"/>
         <source>Claiming controller…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="416"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="402"/>
         <source>Controls…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="443"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="429"/>
         <source>events/s %1   sends/s %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="448"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="434"/>
         <source>total %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="459"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="462"/>
-        <source>Bind</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="460"/>
-        <source>Bind %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="468"/>
-        <source>Choose which satellite this controller drives.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="533"/>
-        <source>Online</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="551"/>
-        <source>Satellites already driven by another slot are not offered.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="634"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="506"/>
         <source>Battery wired</source>
         <translation type="unfinished">Baterija žičana</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="635"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="507"/>
         <source>Battery %1% ↑</source>
         <translation type="unfinished">Baterija %1 % ↑</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="636"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="508"/>
         <source>Battery full</source>
         <translation type="unfinished">Baterija puna</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="637"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="509"/>
         <source>Battery %1%</source>
         <translation type="unfinished">Baterija %1 %</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="651"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="523"/>
         <source>Unplug and replug the controller to finish switching.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="654"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="526"/>
         <source>Standard isn&apos;t responding — pick Direct, retry, or replug.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="657"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="529"/>
         <source>Direct access denied — another app owns this device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="660"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="532"/>
         <source>Direct claim is busy — another app or driver holds the device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="663"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="535"/>
         <source>Direct claim couldn&apos;t start the controller&apos;s report stream.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="666"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="538"/>
         <source>The device dropped during the claim — a replug is needed.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -771,140 +735,170 @@
 <context>
     <name>DonatePage</name>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="25"/>
-        <location filename="../src/qml/pages/DonatePage.qml" line="27"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="28"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="30"/>
         <source>Support Dish</source>
         <translation type="unfinished">Podrži Dish</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="28"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="31"/>
         <source>Dish is free and open source — donations keep it that way</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="60"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="73"/>
         <source>Support the project</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="65"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="80"/>
         <source>Dish runs on coffee and goodwill.</source>
         <translation type="unfinished">Dish radi na kavi i dobroj volji.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="75"/>
         <source>Dish, Satellite, and every Dish client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells. Donations are what keep them that way.</source>
-        <translation type="unfinished">Dish, Satellite i svaki Dish klijent su besplatni, otvorenog koda, bez oglasa i bez analitike. Bez plaćenih značajki, bez dodatne prodaje. Donacije ih takvima održavaju.</translation>
+        <translation type="obsolete">Dish, Satellite i svaki Dish klijent su besplatni, otvorenog koda, bez oglasa i bez analitike. Bez plaćenih značajki, bez dodatne prodaje. Donacije ih takvima održavaju.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="86"/>
         <source>Sponsor on GitHub Sponsors (recommended)</source>
-        <translation type="unfinished">Sponzoriraj na GitHub Sponsors (preporučeno)</translation>
+        <translation type="obsolete">Sponzoriraj na GitHub Sponsors (preporučeno)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="99"/>
         <source>Monthly sponsorship, processed by GitHub. Lowest fees, no platform cut — the most stable way to support Dish, and the one GitHub matches dollar-for-dollar where eligible.</source>
-        <translation type="unfinished">Mjesečno sponzorstvo, obrađuje ga GitHub. Najniže naknade, bez udjela platforme — najstabilniji način podrške Dishu i jedini koji GitHub udvostručuje dolar za dolar gdje je to moguće.</translation>
+        <translation type="obsolete">Mjesečno sponzorstvo, obrađuje ga GitHub. Najniže naknade, bez udjela platforme — najstabilniji način podrške Dishu i jedini koji GitHub udvostručuje dolar za dolar gdje je to moguće.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="102"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="166"/>
         <source>Recurring</source>
         <translation type="unfinished">Ponavljajuće</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="102"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="166"/>
         <source>Card, PayPal, GitHub credit</source>
         <translation type="unfinished">Kartica, PayPal, GitHub kredit</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="103"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="167"/>
         <source>Open GitHub Sponsors →</source>
         <translation type="unfinished">Otvori GitHub Sponsors →</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="105"/>
         <source>Tip jar. Buy us a coffee, no account required. Ko-fi takes no cut on one-time tips, so every dollar reaches the project.</source>
-        <translation type="unfinished">Kasica za napojnice. Počastite nas kavom, bez računa. Ko-fi ne uzima udio na jednokratne napojnice, pa svaki dolar stigne do projekta.</translation>
+        <translation type="obsolete">Kasica za napojnice. Počastite nas kavom, bez računa. Ko-fi ne uzima udio na jednokratne napojnice, pa svaki dolar stigne do projekta.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="107"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="171"/>
         <source>One-time</source>
         <translation type="unfinished">Jednokratno</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="107"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="172"/>
         <source>Card, Apple Pay, Google Pay, PayPal</source>
         <translation type="unfinished">Kartica, Apple Pay, Google Pay, PayPal</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="108"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="173"/>
         <source>Open Ko-fi →</source>
         <translation type="unfinished">Otvori Ko-fi →</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="110"/>
         <source>Quick one-time gift or a monthly membership. Card, Apple Pay, or Google Pay. Great if you don&apos;t have a GitHub account.</source>
-        <translation type="unfinished">Brzi jednokratni dar ili mjesečno članstvo. Kartica, Apple Pay ili Google Pay. Odlično ako nemate GitHub račun.</translation>
+        <translation type="obsolete">Brzi jednokratni dar ili mjesečno članstvo. Kartica, Apple Pay ili Google Pay. Odlično ako nemate GitHub račun.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="112"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="89"/>
+        <source>Dish, Satellite, and every client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells — donations are what keep them true.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="127"/>
+        <source>Sponsor on GitHub Sponsors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="138"/>
+        <source>Recommended — lowest fees, matched by GitHub where eligible.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="147"/>
+        <source>Thank you. Every dollar, every star, every shared link. — Emir</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="163"/>
+        <source>Monthly sponsorship, processed by GitHub. Lowest fees, no platform cut, and the most stable way to support Dish month after month.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="169"/>
+        <source>Tip jar. Buy us a coffee, no account required — Ko-fi takes no cut on one-time tips.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="175"/>
+        <source>Quick one-time gift or a monthly membership. Great if you don&apos;t have a GitHub account.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/DonatePage.qml" line="177"/>
         <source>Either</source>
         <translation type="unfinished">Bilo koje</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="112"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="177"/>
         <source>Card, Apple Pay, Google Pay</source>
         <translation type="unfinished">Kartica, Apple Pay, Google Pay</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="113"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="178"/>
         <source>Open Buy Me a Coffee →</source>
         <translation type="unfinished">Otvori Buy Me a Coffee →</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="143"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="212"/>
         <source>Recommended</source>
         <translation type="unfinished">Preporučeno</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="168"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="238"/>
         <source>Cadence</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="187"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="247"/>
         <source>Pays with</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="237"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="293"/>
         <source>What your donation pays for</source>
         <translation type="unfinished">Šta vaša donacija zapravo plaća</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="246"/>
+        <location filename="../src/qml/pages/DonatePage.qml" line="302"/>
+        <source>%1Hosting%2 — dish.tinkernorth.com and every signed-installer mirror. %1Code signing%2 — the EV certificate that keeps SmartScreen friendly, renewed yearly. %1Store fees%2 — listings and policy upkeep. %1Time%2 — honest answer: most of it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Hosting. dish.tinkernorth.com, tinkernorth.com, and every signed-installer mirror. AWS isn&apos;t free, even at our scale.</source>
-        <translation type="unfinished">Hosting. dish.tinkernorth.com, tinkernorth.com i svako zrcalo potpisanog instalatera. AWS nije besplatan, čak ni na našoj razini.</translation>
+        <translation type="obsolete">Hosting. dish.tinkernorth.com, tinkernorth.com i svako zrcalo potpisanog instalatera. AWS nije besplatan, čak ni na našoj razini.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="248"/>
         <source>Code-signing certificates. Windows SmartScreen only plays nice because we pay for an EV certificate every year.</source>
-        <translation type="unfinished">Certifikati za potpisivanje koda. Windows SmartScreen je suradljiv samo jer svake godine plaćamo EV certifikat.</translation>
+        <translation type="obsolete">Certifikati za potpisivanje koda. Windows SmartScreen je suradljiv samo jer svake godine plaćamo EV certifikat.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="250"/>
         <source>Store developer fees. The platform accounts and the time to keep each listing compliant with every new policy round.</source>
-        <translation type="unfinished">Naknade za programere u trgovinama. Računi platformi i vrijeme za održavanje svakog unosa usklađenim sa svakim novim krugom pravila.</translation>
+        <translation type="obsolete">Naknade za programere u trgovinama. Računi platformi i vrijeme za održavanje svakog unosa usklađenim sa svakim novim krugom pravila.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="252"/>
         <source>Time. Honest answer: most of it. Dish is a nights-and-weekends project. Donations let us say yes to working on it.</source>
-        <translation type="unfinished">Vrijeme. Iskren odgovor: većinu njega. Dish je projekt večeri i vikenda. Donacije nam omogućuju da kažemo da radu na njemu.</translation>
+        <translation type="obsolete">Vrijeme. Iskren odgovor: većinu njega. Dish je projekt večeri i vikenda. Donacije nam omogućuju da kažemo da radu na njemu.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="279"/>
         <source>Thank you. Every dollar, every star, every shared link. They all add up. Emir</source>
-        <translation type="unfinished">Hvala vam. Svaki dolar, svaka zvjezdica, svaki podijeljeni link. Sve to zbraja. Emir</translation>
+        <translation type="obsolete">Hvala vam. Svaki dolar, svaka zvjezdica, svaki podijeljeni link. Sve to zbraja. Emir</translation>
     </message>
 </context>
 <context>
@@ -1132,6 +1126,190 @@
     </message>
 </context>
 <context>
+    <name>HomePage</name>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="32"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="38"/>
+        <source>Home</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="41"/>
+        <source>Plug in a controller and pair a Satellite to get started</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="46"/>
+        <source> · nothing streaming</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="47"/>
+        <source>Nothing streaming</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="76"/>
+        <source>Pad</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="78"/>
+        <source>This PC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="80"/>
+        <source>Satellite</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="234"/>
+        <source>Bind…</source>
+        <translation type="unfinished">Poveži…</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="235"/>
+        <source>Choose a satellite for this pad</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="261"/>
+        <source>Add a controller</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="262"/>
+        <source>Wired, or Bluetooth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="303"/>
+        <source>Streaming — do not close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="358"/>
+        <source>1 controller streaming</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="359"/>
+        <source>%1 controllers streaming</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="362"/>
+        <source>1 satellite online</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="363"/>
+        <source>%1 satellites online</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="370"/>
+        <source>Registering controller…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="373"/>
+        <source>Unbound · wired</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="373"/>
+        <source>Unbound</source>
+        <translation type="unfinished">Nije povezano</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="377"/>
+        <source>as %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="380"/>
+        <source>Bound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="386"/>
+        <source>Battery wired</source>
+        <translation type="unfinished">Baterija žičana</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="387"/>
+        <source>Battery %1% ↑</source>
+        <translation type="unfinished">Baterija %1 % ↑</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="388"/>
+        <source>Battery full</source>
+        <translation type="unfinished">Baterija puna</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="389"/>
+        <source>Battery %1%</source>
+        <translation type="unfinished">Baterija %1 %</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="396"/>
+        <source>idle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="399"/>
+        <source>%1 Hz</source>
+        <translation type="unfinished">%1 Hz</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="400"/>
+        <source>~%1 Hz</source>
+        <translation type="unfinished">~%1 Hz</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="404"/>
+        <source>live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="411"/>
+        <source>Found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="412"/>
+        <source>Needs pairing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="413"/>
+        <source>Offline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="414"/>
+        <source>Ready</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="415"/>
+        <source>Connecting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="416"/>
+        <source>Online</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="417"/>
+        <source>Unstable</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>LicensesPage</name>
     <message>
         <location filename="../src/qml/pages/LicensesPage.qml" line="25"/>
@@ -1156,6 +1334,79 @@
     <message>
         <location filename="../src/qml/Main.qml" line="24"/>
         <source>Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PairingDialog</name>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="37"/>
+        <source>Pairing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="38"/>
+        <source>Pair with %1</source>
+        <translation type="unfinished">Upari sa %1</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="40"/>
+        <source>Cancel</source>
+        <translation type="unfinished">Otkaži</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="41"/>
+        <source>Pairing…</source>
+        <translation type="unfinished">Uparivanje…</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="41"/>
+        <source>Pair</source>
+        <translation type="unfinished">Upari</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="62"/>
+        <source>Enter the 6-digit PIN shown on the Satellite&apos;s screen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="92"/>
+        <source>or</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="103"/>
+        <source>Type this PIN on &lt;b&gt;%1&lt;/b&gt; to approve the pairing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="152"/>
+        <source>Waiting for approval on the satellite…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="154"/>
+        <source>Approved — connecting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="156"/>
+        <source>The operator declined the pairing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="158"/>
+        <source>No approval — the code expired.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="168"/>
+        <source>New code</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/PairingDialog.qml" line="175"/>
+        <source>~2 min</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1335,53 +1586,53 @@
 <context>
     <name>SetupGuideDialog</name>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="25"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="43"/>
         <source>Setup guide · step %1 of %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="26"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="44"/>
         <source>Find and pair your Satellite</source>
         <translation type="unfinished">Pronađite i uparite svoj Satellite</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="27"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="45"/>
         <source>Plug in a controller</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="28"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="46"/>
         <source>You&apos;re set</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="29"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="47"/>
         <source>Next</source>
         <translation type="unfinished">Dalje</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="29"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="47"/>
         <source>Finish</source>
         <translation type="unfinished">Završi</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="30"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="48"/>
         <source>Close</source>
         <translation type="unfinished">Zatvori</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="92"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="142"/>
         <source>Dish reaches a host PC over your local network. Both machines must be on the same Wi-Fi or LAN.</source>
         <translation type="unfinished">Dish doseže PC domaćina preko vaše lokalne mreže. Oba računala moraju biti na istom Wi-Fiju ili LAN-u.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="101"/>
-        <source>Find your PC on the network</source>
-        <translation type="unfinished">Pronađite svoj PC na mreži</translation>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="155"/>
+        <source>Scanning your network…</source>
+        <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="103"/>
-        <source>Open Connections and hit Scan. %n satellite(s) are already visible on your LAN.</source>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="157"/>
+        <source>%n satellite(s) found</source>
         <translation type="unfinished">
             <numerusform></numerusform>
             <numerusform></numerusform>
@@ -1389,27 +1640,79 @@
         </translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="104"/>
-        <source>Open Connections and hit Scan. Satellites running on your LAN appear automatically — no IP to type in.</source>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="158"/>
+        <source>No satellites found yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="107"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="166"/>
+        <source>Scanning…</source>
+        <translation type="unfinished">Skeniranje…</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="166"/>
+        <source>Rescan</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="248"/>
+        <source>Pair…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="266"/>
+        <source>Don&apos;t see your PC?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="267"/>
+        <source>Install the free Satellite app on the PC you want to play on — satellites on your LAN appear here automatically, no IP to type in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="271"/>
+        <source>Get Satellite for your PC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="279"/>
+        <source>Connected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="280"/>
+        <source>%1 is online. Next: a controller.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="303"/>
+        <source>They are listed below and on the Controllers page — bind one to a satellite and it starts streaming.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="304"/>
+        <source>Plug in an Xbox, PlayStation, or generic pad. It shows up here the moment Windows sees it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Find your PC on the network</source>
+        <translation type="obsolete">Pronađite svoj PC na mreži</translation>
+    </message>
+    <message>
         <source>Enter the operator PIN</source>
-        <translation type="unfinished">Unesite PIN operatera</translation>
+        <translation type="obsolete">Unesite PIN operatera</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="108"/>
         <source>Pick your Satellite and enter the 6-digit PIN it shows on the host screen. Once accepted, the pairing is remembered.</source>
-        <translation type="unfinished">Odaberite svoj Satellite i unesite 6-znamenkasti PIN koji prikazuje na zaslonu domaćina. Nakon prihvaćanja, uparivanje se pamti.</translation>
+        <translation type="obsolete">Odaberite svoj Satellite i unesite 6-znamenkasti PIN koji prikazuje na zaslonu domaćina. Nakon prihvaćanja, uparivanje se pamti.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="119"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="291"/>
         <source>Physical controllers only — Windows has no on-screen pad. Connect one over USB or Bluetooth and it appears as a slot automatically.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="128"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="300"/>
         <source>%n controller(s) detected</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -1418,32 +1721,22 @@
         </translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="129"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="301"/>
         <source>Waiting for a controller</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="131"/>
-        <source>They are listed on the Controllers page — bind one to a satellite and it starts streaming.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="132"/>
-        <source>Plug in an Xbox, PlayStation, or generic pad. It shows up on the Controllers page the moment Windows sees it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="135"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="337"/>
         <source>Pick what the host sees</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="136"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="338"/>
         <source>Per slot, Emulate chooses what the pad appears as on the host — from the satellite&apos;s own catalog.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="148"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="350"/>
         <source>%n satellite(s) online</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -1452,12 +1745,12 @@
         </translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="149"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="351"/>
         <source>No satellite online yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="152"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="354"/>
         <source>%n controller(s) ready</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -1466,12 +1759,12 @@
         </translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="153"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="355"/>
         <source>no controllers yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="161"/>
+        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="363"/>
         <source>Bind a controller to a satellite on the Controllers page and play. Re-run this guide any time from Settings, and see Help &amp; FAQ for concepts and troubleshooting.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1572,17 +1865,17 @@
 <context>
     <name>WindowTitleBar</name>
     <message>
-        <location filename="../src/qml/WindowTitleBar.qml" line="101"/>
+        <location filename="../src/qml/WindowTitleBar.qml" line="111"/>
         <source>Expand navigation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/WindowTitleBar.qml" line="101"/>
+        <location filename="../src/qml/WindowTitleBar.qml" line="111"/>
         <source>Collapse navigation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/WindowTitleBar.qml" line="117"/>
+        <location filename="../src/qml/WindowTitleBar.qml" line="127"/>
         <source>Dish</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1595,27 +1888,27 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="468"/>
+        <location filename="../src/AppModel.cpp" line="502"/>
         <source>Controller</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="472"/>
+        <location filename="../src/AppModel.cpp" line="506"/>
         <source>Couldn&apos;t switch %1 to Direct mode — keeping it on Standard.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="475"/>
+        <location filename="../src/AppModel.cpp" line="509"/>
         <source>%1 needs to be unplugged and reconnected.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="478"/>
+        <location filename="../src/AppModel.cpp" line="512"/>
         <source>%1 stayed on Direct mode.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="481"/>
+        <location filename="../src/AppModel.cpp" line="515"/>
         <source>Couldn&apos;t return %1 to Standard mode.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1629,65 +1922,73 @@
     </message>
 </context>
 <context>
+    <name>dish::net::WifiConnectionManager</name>
+    <message>
+        <location filename="../src/Network/WifiConnectionManager.cpp" line="225"/>
+        <source>Refusing to connect to a non-local address (%1).</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>dish::qml::AppViewModel</name>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="227"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="230"/>
         <source>No connections yet</source>
         <translation type="unfinished">Još nema veza</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="229"/>
-        <location filename="../src/qml/AppViewModel.cpp" line="239"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="232"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="242"/>
         <source>%1 remembered</source>
         <translation type="unfinished">%1 upareno</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="233"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="236"/>
         <source>%1 online</source>
         <translation type="unfinished">%1 na vezi</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="237"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="240"/>
         <source>Tap Manage to add one</source>
         <translation type="unfinished">Dodirnite Upravljanje da dodate vezu</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="241"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="244"/>
         <source>%1 of %2 online</source>
         <translation type="unfinished">%1 od %2 na vezi</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="403"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="438"/>
         <source>Couldn&apos;t reach the satellite to load controller types.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="405"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="440"/>
         <source>The satellite couldn&apos;t provide controller types right now.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="407"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="442"/>
         <source>The satellite sent an unreadable controller-type list.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="574"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="620"/>
         <source>https://github.com/sponsors/TinkerNorth</source>
         <translation type="unfinished">https://github.com/sponsors/TinkerNorth</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="576"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="622"/>
         <source>https://ko-fi.com/tinkernorth</source>
         <translation type="unfinished">https://ko-fi.com/tinkernorth</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="577"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="623"/>
         <source>https://buymeacoffee.com/tinkernorth</source>
         <translation type="unfinished">https://buymeacoffee.com/tinkernorth</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="725"/>
+        <location filename="../src/qml/AppViewModel.cpp" line="771"/>
         <source>Couldn&apos;t open browser</source>
         <translation type="unfinished">Nije moguće otvoriti preglednik</translation>
     </message>
