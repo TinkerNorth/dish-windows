@@ -531,8 +531,13 @@ void AppModel::pollUsbDirect() {
     // count lookup. The measured rate is currently informational (the live-stats
     // surface reads it on android); we drain it so the snapshot map stays bounded
     // and a re-attached id starts fresh.
+    // One snapshot for the whole pass. controllers() returns BY VALUE — calling
+    // it per lookup below would compare find()/end() iterators from two different
+    // temporaries (UB; the debug CRT asserts "map/set iterators incompatible" the
+    // moment a Direct pad exists).
+    const auto controllers = usbManager_->controllers();
     std::vector<int> present;
-    for (const auto& [key, c] : usbManager_->controllers()) {
+    for (const auto& [key, c] : controllers) {
         if (c.phase == reducer::UsbPhase::Direct && c.syntheticId.has_value()) {
             present.push_back(*c.syntheticId);
         }
@@ -555,7 +560,7 @@ void AppModel::pollUsbDirect() {
         QHash<int, int> bySyntheticId;
         for (const auto& u : updates) { bySyntheticId.insert(u.deviceId, u.rateHz); }
         bool changed = false;
-        for (const auto& [key, c] : usbManager_->controllers()) {
+        for (const auto& [key, c] : controllers) {
             if (c.phase != reducer::UsbPhase::Direct || !c.syntheticId.has_value()) { continue; }
             const auto it = bySyntheticId.constFind(*c.syntheticId);
             if (it == bySyntheticId.constEnd()) { continue; }
@@ -567,9 +572,9 @@ void AppModel::pollUsbDirect() {
         // Prune synthetics that are gone so a stale rate can't linger on a reused
         // key, then repaint if anything moved (the slot card reads it via state).
         for (auto it = usbPollRateHz_.begin(); it != usbPollRateHz_.end();) {
-            const auto cit = usbManager_->controllers().find(it.key());
-            const bool live = cit != usbManager_->controllers().end() &&
-                              cit->second.phase == reducer::UsbPhase::Direct;
+            const auto cit = controllers.find(it.key());
+            const bool live =
+                cit != controllers.end() && cit->second.phase == reducer::UsbPhase::Direct;
             if (live) {
                 ++it;
             } else {

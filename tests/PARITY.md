@@ -561,7 +561,15 @@ no-real-sockets invariant stands), the touch-capable "Needs Direct" nudge
   `syntheticRemoved`. Three new manager-level tests in
   `test_usb_gamepad_manager.cpp` (Direct erase+release, Routed forget,
   replug re-evaluates auto-Direct); the §2.6 "no unplug scenario" gap is
-  closed at the manager layer.
+  closed at the manager layer. Hardened same day: the sweep debounces to 2
+  consecutive missed scans (one flaky enumeration pass must read as a blip,
+  never a teardown of a live claim — same shape as the missed-ack Unstable
+  rule), with a blip test. Found while chasing a "Claiming controller…"
+  flap: `AppModel::pollUsbDirect()` compared `find()`/`end()` iterators from
+  two separate BY-VALUE `controllers()` temporaries — UB that only executes
+  once a Direct pad exists (debug CRT: "map/set iterators incompatible"
+  assert ~2 s after a fast-lane pad claims; release: freed-heap reads, the
+  0xc0000005 ntdll crash). Fixed with a single snapshot per pass.
 - **Pairing sheet — both paths at once (android `PairPinDialog` parity)**: the
   forward/reverse split dialog (a tap-gated `reverseMode` flip; the reverse
   POST fired only on the "Show a PIN on this PC instead…" link) is replaced by

@@ -17,8 +17,10 @@
 //   * a verified model with no recorded failure auto-claims Direct (claim runs).
 //
 // Plus the departed-device sweep (the Windows unplug signal is reconcile()'s
-// presence diff, android's detach broadcast folded into the rescan):
-//   * a Direct pad that stops enumerating is erased + its claim released.
+// presence diff, android's detach broadcast folded into the rescan; debounced
+// to 2 consecutive misses so a flaky single scan can't tear down a live claim):
+//   * a Direct pad missing 2 scans is erased + its claim released.
+//   * one missed scan is a blip: nothing is torn down, and a sighting resets it.
 //   * a Routed pad that stops enumerating is forgotten with no release.
 //   * a replug after the sweep re-tracks fresh and re-evaluates auto-Direct.
 
@@ -277,7 +279,7 @@ TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-mana
     // The stale-card regression: with no detach broadcast on Windows, a claimed
     // pad used to survive its own unplug forever (nothing ever emitted
     // UsbUnplugged). The reconcile sweep must erase it, release the claim, and
-    // notify so the slot list drops the card.
+    // notify so the slot list drops the card — after the 2-miss debounce.
     FakeGateway gw;
     gw.nextClaim = ClaimResult::success(-1000);
     UsbPathPreferenceRepository repo(makeSharedSettings());
@@ -291,11 +293,14 @@ TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-mana
         REQUIRE(c.has_value());
         REQUIRE(c->phase == UsbPhase::Direct);
     }
-    const int beforeSweep = obs.controllersChangedCount;
 
     gw.devices.clear(); // physical unplug: the pad stops enumerating.
-    m.reconcile();
+    m.reconcile();      // miss #1: debounced, nothing torn down yet.
+    REQUIRE(m.controllerFor(kVid, kPid).has_value());
+    CHECK(gw.released.empty());
+    const int beforeSweep = obs.controllersChangedCount;
 
+    m.reconcile(); // miss #2: swept.
     CHECK_FALSE(m.controllerFor(kVid, kPid).has_value());
     REQUIRE(gw.released.size() == 1);
     CHECK(gw.released.front() == -1000);
@@ -310,6 +315,36 @@ TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-mana
     CHECK(gw.released.size() == 1);
 }
 
+TEST_CASE("one missed scan is a blip, not an unplug", "[usb-manager]") {
+    // A live claim must survive a single flaky enumeration pass (Bluetooth link
+    // parking, a transient exclusive open elsewhere) — a false unplug here would
+    // release + re-claim a working pad in a visible loop. A sighting between
+    // misses resets the debounce counter entirely.
+    FakeGateway gw;
+    gw.nextClaim = ClaimResult::success(-1000);
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    RecordingObserver obs;
+    UsbGamepadManager m(&gw, nullptr, &prefs, &obs);
+
+    m.tryDirectMode(kVid, kPid);
+    REQUIRE(m.controllerFor(kVid, kPid).has_value());
+
+    const auto pad = padDevice();
+    gw.devices.clear();
+    m.reconcile(); // miss #1
+    gw.devices = {pad};
+    m.reconcile(); // seen again: counter resets.
+    gw.devices.clear();
+    m.reconcile(); // miss #1 again (NOT #2).
+
+    const auto c = m.controllerFor(kVid, kPid);
+    REQUIRE(c.has_value());
+    CHECK(c->phase == UsbPhase::Direct);
+    CHECK(gw.released.empty());
+    CHECK(obs.syntheticsRemoved.empty());
+}
+
 TEST_CASE("unplugging a Routed pad forgets it without a release", "[usb-manager]") {
     FakeGateway gw; // fastLane=false: reconcile tracks the pad Routed, no claim.
     UsbPathPreferenceRepository repo(makeSharedSettings());
@@ -322,7 +357,8 @@ TEST_CASE("unplugging a Routed pad forgets it without a release", "[usb-manager]
     REQUIRE(gw.claimCalls == 0);
 
     gw.devices.clear();
-    m.reconcile();
+    m.reconcile(); // miss #1: debounced.
+    m.reconcile(); // miss #2: swept.
 
     CHECK_FALSE(m.controllerFor(kVid, kPid).has_value());
     CHECK(gw.released.empty()); // no synthetic was ever held.
@@ -350,7 +386,8 @@ TEST_CASE("a replug after the sweep re-tracks fresh and re-evaluates auto-Direct
     CHECK(gw.claimCalls == 1);
 
     gw.devices.clear();
-    m.reconcile(); // unplug: swept, prior failure cleared with it.
+    m.reconcile(); // miss #1: debounced.
+    m.reconcile(); // miss #2: swept, prior failure cleared with it.
     REQUIRE_FALSE(m.controllerFor(kVid, kPid).has_value());
 
     gw.devices = {padDevice()};

@@ -23,6 +23,11 @@ namespace {
 // satellite/src/core/types.h and proto::kControllerTypeXbox.)
 constexpr int kControllerTypeXbox = 0;
 
+// Consecutive reconcile() scans a tracked pad must be missing before the sweep
+// declares it unplugged (~2 s at the 1 s poll). Same >=2-misses debounce shape
+// as LinkState::Unstable's missed-ack rule.
+constexpr int kDepartedScanThreshold = 2;
+
 } // namespace
 
 UsbGamepadManager::UsbGamepadManager(UsbDeviceGateway* gateway,
@@ -48,19 +53,21 @@ void UsbGamepadManager::reconcile() {
         presentKeys.insert(device.vpKey());
         ensureTracked(device);
     }
-    // Departed-device sweep: a tracked model that no longer enumerates has been
+    // Departed-device sweep: a tracked model that stops enumerating has been
     // physically unplugged. This presence diff IS the Windows unplug signal —
     // the raw-HID read loop just breaks silently when its handle dies and there
     // is no detach broadcast on this polled path (android gets
-    // ACTION_USB_DEVICE_DETACHED). Safe against false positives for live claims:
-    // enumerate() probes with a query-only open (desired access 0) while claim()
-    // holds the device with share-read/write, so a pad WE hold claimed still
-    // enumerates; only a genuine unplug drops out of the scan.
+    // ACTION_USB_DEVICE_DETACHED). Debounced to kDepartedScanThreshold
+    // consecutive misses so one flaky scan (a Bluetooth link parking itself, a
+    // transient exclusive open elsewhere) reads as a blip, not an unplug — a
+    // false positive here would tear down and re-claim a perfectly live pad.
     std::vector<std::pair<int, int>> departed;
     {
         std::lock_guard<std::mutex> lock(mtx_);
         for (const auto& [key, c] : controllers_) {
-            if (presentKeys.find(key) == presentKeys.end()) {
+            if (presentKeys.find(key) != presentKeys.end()) {
+                missedScans_.erase(key);
+            } else if (++missedScans_[key] >= kDepartedScanThreshold) {
                 departed.emplace_back(c.vendorId, c.productId);
             }
         }
@@ -144,6 +151,7 @@ void UsbGamepadManager::onUsbGone(int vendorId, int productId) {
     applyEvent(key, reducer::event::UsbUnplugged{});
     std::lock_guard<std::mutex> lock(mtx_);
     devices_.erase(key);
+    missedScans_.erase(key);
     // A fresh plug-in of this model should re-evaluate Direct rather than inherit
     // a stale failure (android clears the registry's directFailed here).
     priorFailures_.erase(key);
