@@ -757,6 +757,16 @@ void AppModel::rebuild() {
         if (!cid.isEmpty()) {
             s.boundConnectionId = cid;
             s.boundStatus = hub_->summary(cid);
+            // The resolved emulation type's short name for the card's
+            // "· as DualShock 4" suffix — server-localized catalog text when
+            // available; empty (suffix omitted) when no catalog row matches.
+            const int type = resolveControllerType(s.id);
+            for (const auto& t : pickableTypesFor(s.id)) {
+                if (t.type == type) {
+                    s.emulateName = t.shortName;
+                    break;
+                }
+            }
         }
         // Stamp the latest measured stream rates (gamepad/motion Hz + peaks) the
         // InputRateStore folded into liveRatesBySlot_, preserving them across this
