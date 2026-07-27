@@ -6,14 +6,18 @@
 #include "Models/Models.h"
 #include "core/reducer/RestOutcome.h"
 
+#include <QByteArray>
 #include <QString>
 
+#include <functional>
 #include <variant>
 
 namespace dish::net {
 
 // Blocking protocol-1 pairing over the satellite's HTTPS client server (:9443,
-// self-signed cert, verification not enforced). POST /api/pair has three modes
+// self-signed cert, TOFU-pinned via the verifier below — the pairing exchange
+// carries the sharedKey exactly once, so it gets the same pin gate as the
+// session REST path). POST /api/pair has three modes
 // (contract §Pairing): Path A (operator `pin`), Path B (client-shown
 // `clientPin` → pending, then poll GET /api/pair/status), and key rotation
 // (`hmacProof` of the current key → fresh key). DELETE /api/pair self-unpairs.
@@ -58,6 +62,18 @@ class PairingClient {
 
     // Path-B poll: GET /api/pair/status?deviceId=... → approved/pending/denied.
     static models::PairResponse pairStatus(const QString& ip, int port, const QString& deviceId);
+
+    // TOFU pin gate, keyed by host like the HTTPClient one (the pin store is
+    // shared). Called on the TLS `encrypted` edge with the peer cert DER; a
+    // false return aborts the exchange before any payload transits. Pairing is
+    // the natural pin-on-first-use moment: the first pair pins, later pairing /
+    // rotation must match. Unset (tests / early boot) = accept, preserving the
+    // pre-TOFU behavior only where no manager has wired the store yet.
+    using PinVerifier = std::function<bool(const QString& host, const QByteArray& certDer)>;
+    static void setPinVerifier(PinVerifier verifier);
+
+  private:
+    static PinVerifier& pinVerifier();
 };
 
 } // namespace dish::net

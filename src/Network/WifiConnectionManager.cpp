@@ -106,6 +106,12 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* pa
     http_->setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
         return http::verifyPeerCertificate(host, pins, certDer);
     });
+    // The pairing exchange carries the sharedKey exactly once — it gets the
+    // SAME pin gate over the same store, so the first pair pins and every
+    // later pairing / rotation must present the pinned cert.
+    PairingClient::setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
+        return http::verifyPeerCertificate(host, pins, certDer);
+    });
 }
 
 WifiConnectionManager::~WifiConnectionManager() {
