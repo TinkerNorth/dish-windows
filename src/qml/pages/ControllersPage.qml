@@ -1,16 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Controllers destination — the slot/controller dashboard. Reproduces the
-// Widgets SlotCard (name, status dot, bound state, the capability + live-stat
-// chips) for every row of App.slotModel, with per-row Bind/Unbind, an Emulate
-// picker for bound slots, and an empty-state when there are no slots. All data
-// and actions come solely from the frozen App contract (docs/QML_CONTRACT.md);
-// no business logic lives here.
+// The Controllers destination — the slot dashboard, restyled to the flows
+// redesign (design FControllersBody / FSlotCard / FPathSeg / FTelemetry /
+// FBindDlg). One Kit.Card per App.slotModel row: brand glyph + status dot +
+// name and bound sub-line, the capability pills and mono live-rate readouts,
+// the per-slot actions (Bind… / Emulate… / Unbind) and — under a hairline —
+// the USB-path segmented control with its claiming / note states plus the
+// "Controls…" remap entry. A registering slot renders the busy variant. The
+// page header (title · dot+sub · keep-awake pill) is DECLARED here and drawn
+// by the shell (AppShell per-page header contract) — the body renders no title
+// of its own. A mono telemetry strip pins to the page footer. All data and
+// actions come solely from the frozen App contract (docs/QML_CONTRACT.md,
+// §7 A2 addendum); no business logic lives here.
 
-// Bound so the inline Chip component and delegates may reference outer ids
-// (page) without qmllint flagging them; also makes delegate model bindings
-// resolvable via `required property`.
+// Bound so delegates and the dialog body reference outer ids (page, card,
+// bindList) statically and their model bindings resolve via `required
+// property`. `App` stays unqualified: it is a runtime context property the
+// linter cannot resolve (downgraded to info by the lint invocation), the same
+// accepted limitation ConnectionsPage notes.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -23,75 +31,107 @@ Kit.Page {
     id: page
     title: qsTr("Controllers")
 
-    // The slot whose bind chooser is open. Captured on row click so the shared
-    // chooser dialog (declared once, not per-delegate) knows which slot to bind.
+    // ---- Shell header contract (rendered by AppShell, not by this body).
+    // Sub-line composition per QML_CONTRACT §7.1: no connections → the
+    // getting-started nudge (muted); exactly one online with nothing bound →
+    // the named-satellite line (primary); else the online count, suffixed
+    // "· nothing bound" while no slot is bound (success).
+    readonly property string headerTitle: qsTr("Controllers")
+    readonly property string headerSub: {
+        if (App.connectionCount === 0)
+            return qsTr("No connections yet — pair a Satellite to get started");
+        if (App.onlineCount === 1 && App.boundSlotCount === 0)
+            return App.firstOnlineName + qsTr(" online · nothing bound");
+        return qsTr("%1 of %2 online").arg(App.onlineCount).arg(App.connectionCount)
+               + (App.boundSlotCount === 0 ? qsTr(" · nothing bound") : "");
+    }
+    readonly property string headerDot: App.connectionCount === 0 ? "muted"
+                                        : App.onlineCount === 1 && App.boundSlotCount === 0
+                                              ? "primary"
+                                              : "success"
+    readonly property string headerPill: App.keepAwakeActive
+                                         ? qsTr("STREAMING · DISPLAY KEPT AWAKE") : ""
+
+    // The enclosing shell StackView, type-erased through `var` so the shell's
+    // dynamic `shellApi` property (an instance property AppShell declares on
+    // its StackView — invisible to the linter's static type) resolves without
+    // a missing-property warning.
+    readonly property var shellStack: StackView.view
+    readonly property var shellApi: shellStack ? shellStack.shellApi : null
+
+    // The slot whose bind chooser is open (+ its display name for the dialog
+    // heading). Captured on row click so the shared chooser dialog (declared
+    // once, not per-delegate) knows which slot to bind.
     property string bindSlotId: ""
+    property string bindSlotName: ""
     // The connectionId chosen in the bind chooser, captured in the delegate
-    // scope (where the role is visible) so accept needn't reach into model.data.
+    // scope (where the row object is visible) so accept needn't reach into
+    // model internals.
     property string bindConnectionId: ""
-    // The connections the open chooser offers — {connectionId,label,dotColor,glyph}
-    // objects pulled one-shot from App.availableConnectionsForSlot(slotId) when the
-    // chooser opens. NOT the unfiltered App.connectionModel: this is the same
-    // pick-list the Widgets SlotCard shows (connections free to bind + the slot's
-    // own held-over binding), so a connection already bound to another slot can't
-    // be chosen here.
+    // The connections the open chooser offers — {connectionId,label,dotColor,
+    // glyph} objects pulled ONE-SHOT from App.availableConnectionsForSlot when
+    // the chooser opens (the invokable has no NOTIFY). NOT the unfiltered
+    // App.connectionModel: this is the same pick-list the Widgets SlotCard
+    // shows (connections free to bind + the slot's own held-over binding), so
+    // a connection already bound to another slot can't be chosen here.
     property var bindCandidates: []
     // The slot whose emulate picker is open, mirrored for the same reason.
     property string emulateSlotId: ""
 
-    Kit.SectionHeader { label: qsTr("Controllers") }
-
-    // Empty-state: shown only when the model is genuinely empty. A Card (not bare
-    // Mica) so the message reads against a surface like the rest of the page.
-    Kit.Card {
-        visible: App.slotModel.count === 0 // qmllint disable unqualified
+    // ---- Empty state --------------------------------------------------------
+    // Centered in the content viewport (the wrapper spans the ScrollView's
+    // height; with the list hidden it is the only laid-out child, so nothing
+    // scrolls and the state sits dead-center like the design's flexed column).
+    Item {
+        visible: App.slotCount === 0
         width: parent ? parent.width : implicitWidth
-        contentItem: ColumnLayout {
-            spacing: 4
-            Label {
-                text: qsTr("No controllers yet")
-                color: Theme.onSurface
-                font.pixelSize: 14
-                font.bold: true
-            }
-            Label {
-                text: qsTr("Plug in a controller or connect a satellite to add a slot.")
-                color: Theme.muted
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
+        height: page.contentItem.height
+
+        Kit.EmptyState {
+            anchors.centerIn: parent
+            width: parent.width
+            glyph: "dish-off"
+            title: qsTr("No controllers connected")
+            body: qsTr("Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.")
+            actionText: qsTr("Open Connections")
+            showAction: true
+            // Destination 1 is the Connections rail entry (AppShell order).
+            onActionRequested: if (page.shellApi) page.shellApi.selectDestination(1)
         }
     }
 
-    // The slot list. Each row is a Card reproducing the Widgets SlotCard. The
-    // ListView is sized to its contents (the page's Column lays children out
-    // vertically) so it grows with the model rather than scrolling internally.
+    // ---- Slot list ----------------------------------------------------------
+    // Sized to its contents (the page's Column lays children out vertically)
+    // so it grows with the model rather than scrolling internally; the page's
+    // single scroller owns all overflow.
     ListView {
         id: slotList
-        visible: App.slotModel.count > 0 // qmllint disable unqualified
+        visible: App.slotCount > 0
         width: parent ? parent.width : implicitWidth
         height: contentHeight
         interactive: false
-        spacing: 12
-        model: App.slotModel // qmllint disable unqualified
+        spacing: Tokens.s5
+        model: App.slotModel
 
         delegate: Kit.Card {
             id: card
             width: ListView.view ? ListView.view.width : implicitWidth
 
-            // Slot roles consumed by this delegate (contract §2). Declared
-            // required so they resolve qualified and the ListView injects them.
+            // Slot roles consumed by this delegate (contract §2 + §7.2).
+            // Declared required so they resolve qualified and the ListView
+            // injects them.
             required property string slotId
             required property string name
             required property bool bound
             required property string boundLabel
+            // "· as DualShock 4" suffix source; empty → suffix omitted (§7.2).
+            required property string emulateName
+            // Attach in flight → the busy variant replaces chips/actions (§7.2).
+            required property bool registering
             required property bool live
             required property string dotColor
-            required property bool usbDirect
-            // True for a raw-joystick slot whose DirectInput routing the
-            // "Configure controls" page may remap; gates that action's visibility
-            // (an SDL game controller / synthetic uses its own mapping).
+            // True for a raw-joystick pad whose DirectInput routing the
+            // "Controls…" page may remap; gates that action's visibility.
             required property bool remappable
             required property bool hasMotion
             required property bool hasLightbar
@@ -105,261 +145,330 @@ Kit.Page {
             required property bool motionHzShown
             required property int pollHz
             required property bool pollHzShown
-            // USB input-path roles (contract §2). The path control reflects
-            // these; toggling calls App.setSlotPath.
+            // USB input-path roles (contract §2). The segmented control
+            // reflects these; picking calls App.setSlotPath.
             required property string pathPhase
             required property string desiredPath
             required property bool pathSupported
             required property bool claimInProgress
             required property string directFailure
 
-            // Brand glyph variant follows the live state, like the Widgets card's
-            // leading satellite silhouette.
-            readonly property string glyphAsset: card.live ? "satellite-connected"
-                                                 : card.bound ? "satellite"
-                                                 : "satellite-off"
+            readonly property bool hasPathRow: !registering
+                                               && (pathSupported || remappable)
 
-            contentItem: RowLayout {
-                spacing: 12
+            contentItem: ColumnLayout {
+                spacing: 0
 
-                Kit.BrandGlyph {
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
-                    glyph: card.glyphAsset
-                    Layout.alignment: Qt.AlignVCenter
-                }
-
-                Kit.StatusDot {
-                    token: card.dotColor
-                    Layout.alignment: Qt.AlignVCenter
-                }
-
-                ColumnLayout {
+                // ── Busy variant: attach in flight (design registering card) ─
+                RowLayout {
+                    visible: card.registering
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: Tokens.s6
 
-                    Label {
-                        text: card.name
-                        color: Theme.onSurface
-                        font.pixelSize: 14
-                        font.bold: true
+                    Kit.BrandGlyph {
+                        glyph: "dish"
+                        Layout.preferredWidth: 28
+                        Layout.preferredHeight: 28
+                        Layout.alignment: Qt.AlignVCenter
                     }
-                    Label {
-                        text: card.bound ? qsTr("Bound to %1").arg(card.boundLabel)
-                                         : qsTr("Unbound")
-                        color: Theme.muted
-                        font.pixelSize: 11
-                    }
-
-                    // Capability + live-stat chip row. The capability pills sit at
-                    // the leading edge; the measured-Hz cluster right-aligns after
-                    // a stretch, mirroring the Widgets chipRow layout.
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 4
-                        spacing: 6
-
-                        // Motion capability: explicit Gyro / No-gyro so absence is
-                        // visible, not merely the lack of an indicator.
-                        Chip {
-                            text: card.hasMotion ? qsTr("Gyro") : qsTr("No gyro")
-                            tone: card.hasMotion ? "present" : "absent"
-                        }
-                        // Lightbar shown ONLY when the pad has an RGB LED.
-                        Chip {
-                            visible: card.hasLightbar
-                            text: qsTr("Lightbar")
-                            tone: "present"
-                        }
-                        // Battery chip only when a real reading has landed.
-                        Chip {
-                            visible: card.batteryKnown
-                            text: page.batteryLabel(card.batteryLevel, card.batteryStatus)
-                            tone: page.batteryLow(card.batteryLevel, card.batteryStatus)
-                                  ? "warning" : "present"
-                        }
-
-                        Item { Layout.fillWidth: true }
-
-                        // Measured-rate cluster. Each honors its *Shown role and
-                        // formats live vs ~peak from the *Live role.
-                        Chip {
-                            visible: card.gamepadHzShown
-                            text: card.gamepadHzLive ? qsTr("%1 Hz").arg(card.gamepadHz)
-                                                     : qsTr("~%1 Hz").arg(card.gamepadHz)
-                            tone: card.gamepadHzLive ? "live" : "muted"
-                        }
-                        Chip {
-                            visible: card.motionHzShown
-                            // USB-direct motion is a measured reading; routed is a peak.
-                            text: card.usbDirect ? qsTr("%1 Hz").arg(card.motionHz)
-                                                 : qsTr("~%1 Hz").arg(card.motionHz)
-                            tone: card.usbDirect ? "live" : "muted"
-                        }
-                        Chip {
-                            visible: card.pollHzShown
-                            text: qsTr("%1 Hz").arg(card.pollHz)
-                            tone: "live"
-                        }
-                    }
-
-                    // ── USB input path (Standard / Direct / Auto) ────────────
-                    // Shown ONLY for a raw-HID-claimable pad (pathSupported) —
-                    // an Xbox/XInput pad has no UsbController and hides this.
-                    // The segments reflect desiredPath; while a claim is in
-                    // flight they disable and a spinner shows. A note surfaces a
-                    // claim failure / needs-replug / restore-stuck state. All
-                    // reactive off the model roles; toggling calls setSlotPath.
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Layout.topMargin: 4
-                        visible: card.pathSupported
-                        spacing: 4
+                        spacing: Tokens.s1
 
-                        RowLayout {
-                            spacing: 6
+                        Label {
+                            text: card.name
+                            color: Theme.onSurface
+                            font.pixelSize: 14   // design slot-name size (no type-scale token)
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Label {
+                            text: qsTr("Registering controller…")
+                            color: Theme.muted
+                            font.pixelSize: Tokens.textMeta
+                        }
+                    }
+                }
+                Kit.DishProgressBar {
+                    visible: card.registering
+                    indeterminate: true
+                    Layout.fillWidth: true
+                    Layout.topMargin: Tokens.s5
+                }
 
-                            Label {
-                                text: qsTr("Input path")
-                                color: Theme.muted
-                                font.pixelSize: 11
-                                Layout.alignment: Qt.AlignVCenter
-                            }
+                // ── Normal variant: glyph · dot · name/sub/chips · actions ──
+                RowLayout {
+                    visible: !card.registering
+                    Layout.fillWidth: true
+                    spacing: Tokens.s6
 
-                            Repeater {
-                                model: [
-                                    { label: qsTr("Standard"), choice: "standard" },
-                                    { label: qsTr("Direct"), choice: "direct" },
-                                    { label: qsTr("Auto"), choice: "auto" }
-                                ]
-                                delegate: Button {
-                                    id: pathSeg
-                                    required property var modelData
-                                    // NOT checkable: a checkable Button sets its own
-                                    // `checked` imperatively on click, breaking the
-                                    // binding so segments stop being exclusive. Drive
-                                    // the visual purely off `selected` (a binding that
-                                    // a click can't break). "auto" never reads selected
-                                    // (the FSM resolves it to standard/direct) — it's
-                                    // the "clear" verb.
-                                    readonly property bool selected: card.desiredPath === modelData.choice
-                                    text: modelData.label
-                                    // Disabled for the whole switch (claimInProgress is
-                                    // the derived slotPathSwitching state) so a second
-                                    // pick can't race the in-flight transition.
-                                    enabled: !card.claimInProgress
-                                    font.pixelSize: 11
-                                    implicitHeight: 26
-                                    leftPadding: 12
-                                    rightPadding: 12
-                                    onClicked: App.setSlotPath(card.slotId, // qmllint disable unqualified
-                                                               pathSeg.modelData.choice)
+                    Kit.BrandGlyph {
+                        glyph: card.live ? "satellite-connected" : "satellite"
+                        Layout.preferredWidth: 28
+                        Layout.preferredHeight: 28
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Kit.StatusDot {
+                        token: card.dotColor
+                        Layout.alignment: Qt.AlignVCenter
+                    }
 
-                                    contentItem: Text {
-                                        text: pathSeg.text
-                                        font: pathSeg.font
-                                        color: pathSeg.selected ? Theme.background : Theme.onSurface
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    background: Rectangle {
-                                        radius: 7
-                                        color: pathSeg.selected ? Theme.primary
-                                             : pathSeg.hovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.10)
-                                             : "transparent"
-                                        border.width: 1
-                                        border.color: pathSeg.selected ? Theme.primary : Theme.outline
-                                    }
-                                }
-                            }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Tokens.s1
 
-                            // Spinner for the whole derived switching window — the
-                            // FSM transition AND the Direct telemetry-establishing
-                            // (synthetic up but poll rate not yet measured).
-                            BusyIndicator {
-                                visible: card.claimInProgress
-                                running: card.claimInProgress
-                                implicitWidth: 18
-                                implicitHeight: 18
-                                Layout.alignment: Qt.AlignVCenter
-                            }
+                        Label {
+                            text: card.name
+                            color: Theme.onSurface
+                            font.pixelSize: 14   // design slot-name size (no type-scale token)
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Label {
+                            // "Bound to Living-room Satellite · as DualShock 4"
+                            // — the emulate suffix only when the resolved short
+                            // name is known (§7.2: empty → omit).
+                            text: card.bound
+                                  ? qsTr("Bound to %1").arg(card.boundLabel)
+                                    + (card.emulateName.length > 0
+                                           ? qsTr(" · as %1").arg(card.emulateName) : "")
+                                  : qsTr("Unbound")
+                            color: Theme.muted
+                            font.pixelSize: Tokens.textMeta
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
                         }
 
-                        // Inline status note for the non-happy path states. A
-                        // claim failure, a needs-replug, or a restore-stuck each
-                        // reads as a short amber line under the toggle.
-                        Label {
-                            visible: text.length > 0
-                            text: page.pathNote(card.pathPhase, card.directFailure)
-                            color: Theme.warning
-                            font.pixelSize: 11
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
+                        // Capability pills + mono rate readouts, one leading
+                        // cluster (design chip row). The absent gyro pill IS
+                        // drawn — absence is visible, not merely missing.
+                        RowLayout {
+                            spacing: Tokens.s3
+                            Layout.topMargin: Tokens.s2
+
+                            Kit.CapabilityChip {
+                                text: card.hasMotion ? qsTr("Gyro") : qsTr("No gyro")
+                                present: card.hasMotion
+                            }
+                            // Lightbar shown ONLY when the pad has an RGB LED.
+                            Kit.CapabilityChip {
+                                visible: card.hasLightbar
+                                text: qsTr("Lightbar")
+                                present: true
+                            }
+                            // Battery only once a real reading landed (an
+                            // unknown level 255 hides the chip via batteryKnown).
+                            Kit.CapabilityChip {
+                                visible: card.batteryKnown
+                                text: page.batteryLabel(card.batteryLevel, card.batteryStatus)
+                                present: true
+                                low: page.batteryLow(card.batteryLevel, card.batteryStatus)
+                            }
+
+                            // Rate readouts: live measurements in the success
+                            // tone, estimates/IMU sample rates muted.
+                            Kit.LiveStat {
+                                visible: card.gamepadHzShown
+                                live: card.gamepadHzLive
+                                text: card.gamepadHzLive ? qsTr("%1 Hz").arg(card.gamepadHz)
+                                                         : qsTr("~%1 Hz").arg(card.gamepadHz)
+                                Layout.leftMargin: Tokens.s1
+                            }
+                            Kit.LiveStat {
+                                visible: card.motionHzShown
+                                live: false
+                                text: qsTr("Motion %1 Hz").arg(card.motionHz)
+                                Layout.leftMargin: Tokens.s1
+                            }
+                            Kit.LiveStat {
+                                visible: card.pollHzShown
+                                live: true
+                                text: qsTr("Poll %1 Hz").arg(card.pollHz)
+                                Layout.leftMargin: Tokens.s1
+                            }
+                        }
+                    }
+
+                    // Right-edge actions, vertically centered on the card.
+                    RowLayout {
+                        spacing: Tokens.s4
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Kit.KitButton {
+                            visible: !card.bound
+                            text: qsTr("Bind…")
+                            // Dimmed when the slot has nothing it may bind to
+                            // — gated on the SLOT's filtered pick-list
+                            // (contract §1), not the raw connection total. The
+                            // App.connectionCount read (NOTIFY stateChanged)
+                            // enlists this binding in the state graph so the
+                            // NOTIFY-less invokable re-evaluates on each move.
+                            enabled: App.connectionCount >= 0
+                                     && App.availableConnectionsForSlot(card.slotId).length > 0
+                            onClicked: page.openBind(card.slotId, card.name)
+                        }
+                        // Emulate is offered only on a bound slot (nothing to
+                        // emulate a pad on until it routes to a satellite).
+                        Kit.OutlineButton {
+                            visible: card.bound
+                            text: qsTr("Emulate…")
+                            onClicked: page.openEmulate(card.slotId)
+                        }
+                        Kit.OutlineButton {
+                            visible: card.bound
+                            text: qsTr("Unbind")
+                            onClicked: App.unbindSlot(card.slotId)
                         }
                     }
                 }
 
-                // "Configure controls" — the raw-joystick remap page. Shown ONLY
-                // for a remappable slot (a generic DirectInput pad); an SDL game
-                // controller / USB-direct synthetic uses its own mapping and
-                // hides this. A quiet outline action next to Emulate/Bind.
-                Kit.OutlineButton {
-                    visible: card.remappable
-                    text: qsTr("Configure controls…")
-                    Layout.alignment: Qt.AlignVCenter
-                    onClicked: page.openRemap(card.slotId, card.name)
+                // ── Path row: USB PATH segments + claim/note states, and the
+                // remap entry — below a hairline, per the design's FSlotCard
+                // footer. Shown for a raw-HID-claimable pad and/or a
+                // remappable one; an Xbox/XInput pad has neither and hides it.
+                Rectangle {
+                    visible: card.hasPathRow
+                    implicitHeight: 1
+                    color: Theme.outline
+                    Layout.fillWidth: true
+                    Layout.topMargin: Tokens.s5
                 }
+                RowLayout {
+                    visible: card.hasPathRow
+                    Layout.fillWidth: true
+                    Layout.topMargin: Tokens.s5
+                    spacing: Tokens.s5
 
-                // Emulate is offered only on a bound slot (nothing to emulate a
-                // pad on until it routes to a satellite).
-                Kit.OutlineButton {
-                    visible: card.bound
-                    text: qsTr("Emulate…")
-                    Layout.alignment: Qt.AlignVCenter
-                    onClicked: page.openEmulate(card.slotId)
-                }
+                    Kit.Eyebrow {
+                        visible: card.pathSupported
+                        mutedTone: true
+                        text: qsTr("USB PATH")
+                        Layout.alignment: Qt.AlignVCenter
+                    }
 
-                Kit.KitButton {
-                    text: card.bound ? qsTr("Unbind") : qsTr("Bind…")
-                    Layout.alignment: Qt.AlignVCenter
-                    // Disabled when unbound and there is nothing this slot may
-                    // bind to — the dimmed control reads as "nothing to do here".
-                    // Gated on the SLOT's pick-list (bound, or it has at least one
-                    // available connection), not the unfiltered total: a connection
-                    // already bound to another slot doesn't count here. The
-                    // connectionModel.count read keeps the binding reactive (it
-                    // moves whenever the pick-list could change). qmllint disable unqualified
-                    enabled: card.bound
-                             || (App.connectionModel.count >= 0
-                                 && App.availableConnectionsForSlot(card.slotId).length > 0)
-                    onClicked: {
-                        if (card.bound) {
-                            App.unbindSlot(card.slotId); // qmllint disable unqualified
-                        } else {
-                            page.openBind(card.slotId);
+                    // Reflects desiredPath ("auto" is an INPUT only — the
+                    // resolver collapses it to standard/direct, so it never
+                    // reads selected); picking forwards the wire token. Inert
+                    // while a Direct claim is in flight so a second pick can't
+                    // race the transition.
+                    Kit.SegmentedControl {
+                        visible: card.pathSupported
+                        small: true
+                        busy: card.claimInProgress
+                        options: [qsTr("Standard"), qsTr("Direct"), qsTr("Auto")]
+                        value: card.desiredPath === "direct" ? qsTr("Direct") : qsTr("Standard")
+                        Layout.alignment: Qt.AlignVCenter
+                        onPicked: function(option) {
+                            App.setSlotPath(card.slotId,
+                                            option === qsTr("Direct") ? "direct"
+                                            : option === qsTr("Auto") ? "auto"
+                                                                      : "standard");
                         }
+                    }
+
+                    // Claim-in-flight: the thin sweep + status line.
+                    Kit.DishProgressBar {
+                        visible: card.pathSupported && card.claimInProgress
+                        indeterminate: true
+                        Layout.preferredWidth: 70   // design's fixed inline sweep width
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Label {
+                        visible: card.pathSupported && card.claimInProgress
+                        text: qsTr("Claiming controller…")
+                        color: Theme.muted
+                        font.pixelSize: Tokens.textMeta
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    // Live Direct: the measured URB completion rate.
+                    Kit.LiveStat {
+                        visible: card.pathSupported && card.pathPhase === "direct"
+                                 && card.pollHzShown
+                        live: true
+                        text: qsTr("Poll %1 Hz").arg(card.pollHz)
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    // Inline note for the non-happy path states (needs-replug /
+                    // restore-stuck in the attention tone, a claim-failure
+                    // reason in the error tone). Fills the remaining width, so
+                    // it doubles as the row's flexible spacer that pushes
+                    // "Controls…" to the trailing edge when empty.
+                    Label {
+                        text: card.pathSupported
+                              ? page.pathNoteText(card.pathPhase, card.directFailure) : ""
+                        color: page.pathNoteIsError(card.pathPhase, card.directFailure)
+                               ? Theme.error : Theme.warning
+                        font.pixelSize: Tokens.textMeta
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    // The raw-joystick remap detail ("Configure controls").
+                    // Shown ONLY for a remappable slot — an SDL game controller
+                    // / USB-direct synthetic uses its own mapping and hides it.
+                    Kit.OutlineButton {
+                        visible: card.remappable
+                        text: qsTr("Controls…")
+                        Layout.alignment: Qt.AlignVCenter
+                        onClicked: page.openRemap(card.slotId, card.name)
                     }
                 }
             }
         }
     }
 
-    // ---- Bind chooser (shared; one per page, retargeted per click) ----------
+    // ---- Telemetry strip (design FTelemetry) --------------------------------
+    // Pinned to the page bottom via the Page footer slot — it holds while the
+    // slot list scrolls, exactly the design's out-of-flow footer row.
+    footer: Item {
+        implicitHeight: telemetryRow.implicitHeight + Tokens.s8
+
+        RowLayout {
+            id: telemetryRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: Tokens.pagePadding
+            anchors.rightMargin: Tokens.pagePadding
+            spacing: Tokens.s4
+
+            // LiveStat's non-live face IS the strip's spec (mono chip-size
+            // muted); telemetryChanged re-evaluates these ~1 Hz.
+            Kit.LiveStat {
+                text: qsTr("events/s %1   sends/s %2")
+                          .arg(App.eventsPerSec).arg(App.sendsPerSec)
+            }
+            Item { Layout.fillWidth: true }
+            Kit.LiveStat {
+                text: qsTr("total %1").arg(App.totalSent)
+            }
+        }
+    }
+
+    // ---- Bind chooser (design FBindDlg; shared, retargeted per click) -------
     // Lists the slot's filtered pick-list (page.bindCandidates, pulled from
-    // App.availableConnectionsForSlot on open) and binds the captured slot to the
-    // chosen one.
+    // App.availableConnectionsForSlot on open) and binds the captured slot to
+    // the chosen one.
     Kit.ContentDialog {
         id: bindDialog
-        heading: qsTr("Bind controller")
+        eyebrow: qsTr("Bind")
+        heading: qsTr("Bind %1").arg(page.bindSlotName)
+        preferredWidth: 440
         acceptText: qsTr("Bind")
         // A selection is required before the bind can apply.
         acceptEnabled: bindList.currentIndex >= 0
 
         body: [
             Label {
-                text: qsTr("Choose a connection to route this controller to.")
+                text: qsTr("Choose which satellite this controller drives.")
                 color: Theme.muted
-                font.pixelSize: 12
+                font.pixelSize: Tokens.textSummary
+                wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             },
             ListView {
@@ -367,31 +476,37 @@ Kit.Page {
                 Layout.fillWidth: true
                 implicitHeight: Math.min(contentHeight, 240)
                 clip: true
-                spacing: 4
+                spacing: Tokens.s1
                 currentIndex: -1
-                // The slot's filtered pick-list (page.bindCandidates), pulled
-                // one-shot from App.availableConnectionsForSlot when the chooser
-                // opens — NOT the unfiltered App.connectionModel. Each entry is a
-                // {connectionId,label,dotColor,glyph} object, read via modelData.
                 model: page.bindCandidates
 
                 delegate: ItemDelegate {
                     id: connRow
                     required property int index
-                    // The pick-list row object (contract §1, availableConnectionsForSlot).
+                    // A pick-list row object (contract §1,
+                    // availableConnectionsForSlot).
                     required property var modelData
 
                     width: ListView.view ? ListView.view.width : implicitWidth
+                    topPadding: Tokens.s4
+                    bottomPadding: Tokens.s4
+                    leftPadding: Tokens.s6
+                    rightPadding: Tokens.s6
                     highlighted: ListView.isCurrentItem
                     onClicked: {
                         bindList.currentIndex = connRow.index;
-                        // Capture the id here, in delegate scope — the dialog's
-                        // accept handler reads it back.
+                        // Capture the id here, in delegate scope — the
+                        // dialog's accept handler reads it back.
                         page.bindConnectionId = connRow.modelData.connectionId;
                     }
 
                     contentItem: RowLayout {
-                        spacing: 10
+                        spacing: Tokens.s5
+
+                        Kit.RadioMark {
+                            selected: connRow.highlighted
+                            Layout.alignment: Qt.AlignVCenter
+                        }
                         Kit.BrandGlyph {
                             Layout.preferredWidth: 18
                             Layout.preferredHeight: 18
@@ -402,56 +517,73 @@ Kit.Page {
                             token: connRow.modelData.dotColor
                             Layout.alignment: Qt.AlignVCenter
                         }
-                        ColumnLayout {
+                        Label {
+                            text: connRow.modelData.label
+                            color: Theme.onSurface
+                            font.pixelSize: Tokens.textBase
+                            elide: Text.ElideRight
                             Layout.fillWidth: true
-                            spacing: 0
-                            Label {
-                                text: connRow.modelData.label
-                                color: Theme.onSurface
-                                font.pixelSize: 13
-                            }
+                        }
+                        // The design's trailing "Online" cue, derived from the
+                        // row's dot token (the pick-list payload carries no
+                        // chip text — see the contract-gap note in the page
+                        // header docs). Only the success state names itself.
+                        Label {
+                            visible: connRow.modelData.dotColor === "success"
+                            text: qsTr("Online")
+                            color: Theme.success
+                            font.pixelSize: Tokens.textMeta
+                            Layout.alignment: Qt.AlignVCenter
                         }
                     }
 
                     background: Rectangle {
-                        radius: 8
-                        color: connRow.highlighted
-                                   ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.18)
+                        radius: Tokens.radiusButton
+                        color: connRow.highlighted ? Theme.primaryFill
                              : connRow.hovered
-                                   ? Qt.rgba(Theme.onSurface.r, Theme.onSurface.g, Theme.onSurface.b, 0.06)
+                                   ? Qt.rgba(Theme.onSurface.r, Theme.onSurface.g,
+                                             Theme.onSurface.b, 0.06)
                              : "transparent"
                     }
                 }
+            },
+            Label {
+                text: qsTr("Satellites already driven by another slot are not offered.")
+                color: Theme.muted
+                font.pixelSize: Tokens.textMeta
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
         ]
 
         onAccepted: {
             if (bindList.currentIndex < 0) { return; }
-            App.bindSlot(page.bindSlotId, page.bindConnectionId); // qmllint disable unqualified
+            App.bindSlot(page.bindSlotId, page.bindConnectionId);
             close();
         }
     }
 
-    // ---- Emulate picker ------------------------------------------------------
+    // ---- Emulate picker -----------------------------------------------------
     EmulatePicker {
         id: emulatePicker
         onChosen: function(type) {
-            App.setControllerType(page.emulateSlotId, type); // qmllint disable unqualified
+            App.setControllerType(page.emulateSlotId, type);
             emulatePicker.close();
         }
-        // Retry re-kicks the async catalog fetch for the open slot; the spinner/
-        // error/list then reflect the new AsyncState as it resolves.
-        onRetryRequested: App.refreshEmulate(page.emulateSlotId) // qmllint disable unqualified
+        // Retry re-kicks the async catalog fetch for the open slot; the
+        // spinner/error/list then reflect the new AsyncState as it resolves.
+        onRetryRequested: App.refreshEmulate(page.emulateSlotId)
     }
 
     // When the catalog fetch lands (Loading→Success/Error), re-pull the offer
-    // list into the open picker so a slow/late catalog populates the rows without
-    // the user reopening. Harmless when the picker is closed (next open reloads).
+    // list into the open picker so a slow/late catalog populates the rows
+    // without the user reopening. Harmless when the picker is closed (the next
+    // open reloads).
     Connections {
         target: App
         function onEmulateStateChanged() {
             if (page.emulateSlotId.length > 0) {
-                emulatePicker.load(App.emulateTypes(page.emulateSlotId), // qmllint disable unqualified
+                emulatePicker.load(App.emulateTypes(page.emulateSlotId),
                                    App.emulateCurrentType(page.emulateSlotId));
             }
         }
@@ -459,65 +591,70 @@ Kit.Page {
 
     // ---- Helpers (presentation only; no business logic) ---------------------
 
-    function openBind(slotId) {
+    function openBind(slotId, slotName) {
         page.bindSlotId = slotId;
+        page.bindSlotName = slotName;
         page.bindConnectionId = "";
         // Re-pull the slot's filtered pick-list each open (one-shot, like the
-        // emulate picker's load below). App.availableConnectionsForSlot runs the
+        // emulate picker's load). App.availableConnectionsForSlot runs the
         // same PickerVisibility reducer the Widgets SlotCard uses.
-        page.bindCandidates = App.availableConnectionsForSlot(slotId); // qmllint disable unqualified
+        page.bindCandidates = App.availableConnectionsForSlot(slotId);
         bindList.currentIndex = -1;
         bindDialog.open();
     }
 
-    // Push the raw-joystick remap sub-page onto the enclosing content StackView
-    // (the SettingsPage sub-page pattern, QML_UI_KIT.md §3), seeding the target
-    // slot's id + name as initial properties so the page reads its remap on load.
+    // Push the raw-joystick remap detail. shellApi.pushDetail(url, title)
+    // cannot seed initial properties and ControlsRemapPage needs slotId /
+    // slotName BEFORE load — so reproduce pushDetail here: push with the
+    // params on the shell stack, then hand the pushed page's own title to the
+    // shell breadcrumb (what pushDetail's `title` argument does).
     function openRemap(slotId, slotName) {
-        if (StackView.view) {
-            StackView.view.push(Qt.resolvedUrl("ControlsRemapPage.qml"),
-                                { slotId: slotId, slotName: slotName });
+        if (!page.shellStack) {
+            return;
+        }
+        var detail = page.shellStack.push(Qt.resolvedUrl("ControlsRemapPage.qml"),
+                                          { slotId: slotId, slotName: slotName });
+        if (detail && page.shellApi) {
+            page.shellApi.currentTitle = detail.title;
         }
     }
 
     function openEmulate(slotId) {
         page.emulateSlotId = slotId;
-        // Kick a best-effort catalog refresh before reading the offer list so a
-        // freshly-opened picker shows current types (contract requirement).
-        App.refreshEmulate(slotId); // qmllint disable unqualified
+        // Kick a best-effort catalog refresh before reading the offer list so
+        // a freshly-opened picker shows current types (contract requirement).
+        App.refreshEmulate(slotId);
         emulatePicker.load(App.emulateTypes(slotId), App.emulateCurrentType(slotId));
         emulatePicker.open();
     }
 
-    // Battery wire-status mapping — mirrors SlotCard.cpp's locals (2=charging,
-    // 3=full, 4=wired). batteryKnown already gates visibility, so 0xFF never
-    // reaches here.
+    // Battery wire-status mapping (contract §2: 2=charging, 3=full, 4=wired;
+    // batteryKnown already gates visibility, so 255 never reaches here).
     function batteryLabel(level, status) {
-        if (status === 2) { return qsTr("Battery %1% ↑").arg(level); }   // charging
         if (status === 4) { return qsTr("Battery wired"); }
+        if (status === 2) { return qsTr("Battery %1% ↑").arg(level); }
         if (status === 3) { return qsTr("Battery full"); }
         return qsTr("Battery %1%").arg(level);
     }
+    // Low = the pack is at/under the threshold and not charging (design rule).
     function batteryLow(level, status) {
-        // A wired/charging pad is never "low"; only an actually-draining pack
-        // trips the amber warning style (matches SlotCard's threshold).
-        return level < 15 && status !== 2 && status !== 4;
+        return level <= 15 && status !== 2;
     }
 
-    // The inline note under the path toggle for the non-happy FSM states. The
-    // phase drives the needs-replug / restore-stuck lines; a directFailure token
-    // (present when Direct couldn't claim) drives the failure-reason line. Empty
-    // for the steady routed/direct/claiming states (no note needed). Presentation
-    // only — the phase + failure tokens come straight from the model roles.
-    function pathNote(phase, failure) {
+    // The inline note beside the path segments for the non-happy FSM states.
+    // The phase drives the needs-replug / restore-stuck lines (attention); a
+    // directFailure token (present when Direct couldn't claim) drives the
+    // failure-reason line (error). Empty for the steady routed/direct/claiming
+    // states. Presentation only — the tokens come straight from the roles.
+    function pathNoteText(phase, failure) {
         if (phase === "needsReplug") {
-            return qsTr("Unplug and replug this controller to switch its input path.");
+            return qsTr("Unplug and replug the controller to finish switching.");
         }
         if (phase === "restoreStuck") {
             return qsTr("Standard isn't responding — pick Direct, retry, or replug.");
         }
         if (failure === "permissionDenied") {
-            return qsTr("Direct claim was refused — another app or driver may hold the device.");
+            return qsTr("Direct access denied — another app owns this device.");
         }
         if (failure === "busy") {
             return qsTr("Direct claim is busy — another app or driver holds the device.");
@@ -530,38 +667,10 @@ Kit.Page {
         }
         return "";
     }
-
-    // ---- Inline chip -------------------------------------------------------
-    // The small pill used for capability + live-stat readouts. Tones: "present"
-    // (filled primary), "absent" (dimmed outline), "warning" (amber), "live"
-    // (success — a continuous measurement), "muted" (estimate / ~peak).
-    component Chip: Rectangle {
-        id: chip
-        property string text: ""
-        property string tone: "muted"
-        visible: text.length > 0
-
-        readonly property color toneColor: tone === "present" ? Theme.primary
-                                          : tone === "warning" ? Theme.warning
-                                          : tone === "live" ? Theme.success
-                                          : Theme.muted
-        readonly property bool filled: tone === "present" || tone === "warning"
-                                        || tone === "live"
-
-        implicitWidth: chipText.implicitWidth + 16
-        implicitHeight: 20
-        radius: 10
-        color: filled ? Qt.rgba(toneColor.r, toneColor.g, toneColor.b, 0.16)
-                      : "transparent"
-        border.width: filled ? 0 : 1
-        border.color: Theme.outline
-
-        Text {
-            id: chipText
-            anchors.centerIn: parent
-            text: chip.text
-            color: chip.filled ? chip.toneColor : Theme.muted
-            font.pixelSize: 11
-        }
+    // The phase notes are attention-toned; only a claim-failure reason (with
+    // no phase note taking precedence) reads in the error tone.
+    function pathNoteIsError(phase, failure) {
+        return phase !== "needsReplug" && phase !== "restoreStuck"
+               && failure.length > 0;
     }
 }

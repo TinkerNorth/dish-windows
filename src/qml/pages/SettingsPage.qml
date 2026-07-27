@@ -1,252 +1,261 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Settings destination — a Win11-Settings-style sectioned page mirroring the
-// Widgets SettingsView. Each surface is a Kit.Card grouped under a SectionHeader:
-// Appearance (theme), Deadzones (entry → detail sub-page), Diagnostics (crash
-// reporting), About (version + Licenses entry), Support (Donate entry).
+// The Settings destination (design FSettingsBody, frame f-e1): a responsive
+// two-column grid of sections. LEFT: Setup & help (setup-guide dialog + Help &
+// FAQ detail), Appearance (theme segmented control), Forwarded features (light
+// bar combo + footnote). RIGHT: Controller tuning (deadzones detail entry),
+// Diagnostics (crash reporting), About (licenses / donate entries + the mono
+// version line). The page renders no local title — the shell header shows
+// `headerTitle`.
 //
-// Bound to the real `App` surface: App.themeMode / App.crashReportingEnabled /
-// App.appVersion (docs/QML_CONTRACT.md §1b). The stores behind them are the
-// already-tested ThemePreferenceStore / CrashReportingStore; App only re-projects.
+// Bound to the real `App` surface: App.themeMode / App.setThemeMode,
+// App.lightbarFollowGame / App.setLightbarFollowGame, App.crashReportingEnabled
+// / App.setCrashReportingEnabled, App.appVersion (docs/QML_CONTRACT.md §1b/§7).
 
-// Bind outer-component ids into nested Repeater delegates (qmllint-clean
-// qualified access to `settingsPage` from inside the theme-chip delegate).
+// Bind outer-component ids (settingsPage) into nested handlers/delegates.
 pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "../kit" as Kit
+import "../onboarding"
 import Dish.Chrome
 
 Kit.Page {
     id: settingsPage
     title: qsTr("Settings")
 
-    readonly property string appName: qsTr("Dish")
+    // Shell header contract (AppShell): title only, no sub line (frame f-e1).
+    readonly property string headerTitle: qsTr("Settings")
 
-    // ── Appearance ───────────────────────────────────────────────────────────
-    Kit.SectionHeader { label: qsTr("Appearance") }
+    // Chip order == App.themeMode values (0=Light 1=Dark 2=System, §1b).
+    readonly property var themeOptions: [qsTr("Light"), qsTr("Dark"), qsTr("System")]
+    // Light-bar combo options (§7.1: true = "Follow game", false = "Off").
+    readonly property string lightbarOn: qsTr("Follow game")
+    readonly property string lightbarOff: qsTr("Off")
 
-    Kit.Card {
-        width: parent ? parent.width : implicitWidth
-        contentItem: ColumnLayout {
-            spacing: 8
+    // The shell facade vended by the content StackView (AppShell `shellApi`).
+    // Held var-typed so the dynamic property resolves at runtime.
+    readonly property var shellView: StackView.view
 
-            Label {
-                text: qsTr("Theme")
-                color: Theme.onSurface
-                font.pixelSize: 13
-                font.bold: true
-            }
-            Label {
-                text: qsTr("Choose how Dish looks. System matches your Windows light or dark setting.")
-                color: Theme.muted
-                font.pixelSize: 11
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-
-            // Three-way segmented control (Light / Dark / System). Exclusive —
-            // exactly the QButtonGroup behaviour of the Widgets theme chips.
-            RowLayout {
-                spacing: 6
-                Repeater {
-                    model: [
-                        { label: qsTr("Light"), mode: 0 },
-                        { label: qsTr("Dark"), mode: 1 },
-                        { label: qsTr("System"), mode: 2 }
-                    ]
-                    delegate: Button {
-                        id: chip
-                        required property var modelData
-                        // NOT checkable: a checkable Button sets `checked`
-                        // imperatively on click, breaking the binding so the chips
-                        // stop being exclusive. Drive the visual off `selected`.
-                        readonly property bool selected: App.themeMode === modelData.mode
-                        text: modelData.label
-                        font.pixelSize: 12
-                        implicitHeight: 30
-                        leftPadding: 14
-                        rightPadding: 14
-                        // setThemeMode persists + republishes (ThemePreferenceStore)
-                        // and re-themes the live app + chrome (see App.setThemeMode).
-                        onClicked: App.setThemeMode(modelData.mode)
-
-                        contentItem: Text {
-                            text: chip.text
-                            font: chip.font
-                            color: chip.selected ? Theme.background : Theme.onSurface
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        background: Rectangle {
-                            radius: 8
-                            color: chip.selected ? Theme.primary
-                                 : chip.hovered ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.10)
-                                 : "transparent"
-                            border.width: 1
-                            border.color: chip.selected ? Theme.primary : Theme.outline
-                        }
-                    }
-                }
-                Item { Layout.fillWidth: true }
-            }
+    // Push a detail sub-page. The URL is resolved HERE (against this page's
+    // location) because the shell's own Qt.resolvedUrl resolves against
+    // AppShell.qml — which would miss ../onboarding/. shellApi.pushDetail also
+    // records the breadcrumb fallback title; a bare push is the fallback.
+    function pushDetail(file, title) {
+        if (!settingsPage.shellView) {
+            return;
+        }
+        if (settingsPage.shellView.shellApi) {
+            settingsPage.shellView.shellApi.pushDetail(Qt.resolvedUrl(file), title);
+        } else {
+            settingsPage.shellView.push(Qt.resolvedUrl(file));
         }
     }
 
-    // ── Controller tuning (Deadzones) ────────────────────────────────────────
-    Kit.SectionHeader { label: qsTr("Controller tuning") }
+    // The 3-step setup guide as an in-window dialog (design f-a2). A local
+    // instance; the Popup reparents to the shell overlay on open().
+    SetupGuideDialog { id: setupGuide }
 
-    Kit.Card {
+    GridLayout {
         width: parent ? parent.width : implicitWidth
-        contentItem: RowLayout {
-            spacing: 12
+        // The design's two-column settings grid collapses to one column when
+        // the content pane is narrow (rail expanded on a small window).
+        columns: settingsPage.width < 760 ? 1 : 2
+        columnSpacing: Tokens.pagePadding
+        rowSpacing: Tokens.pagePadding
 
+        // ── LEFT column ──────────────────────────────────────────────────────
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.preferredWidth: 1
+            Layout.alignment: Qt.AlignTop
+            spacing: Tokens.s8
+
+            // Setup & help
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
-                Label {
-                    text: qsTr("Dead zones & motion")
-                    color: Theme.onSurface
-                    font.pixelSize: 13
-                    font.bold: true
+                spacing: Tokens.s4
+
+                Kit.SectionHeader { label: qsTr("Setup & help") }
+
+                Kit.RowButton {
+                    Layout.fillWidth: true
+                    title: qsTr("Setup guide")
+                    subtitle: qsTr("Walk through connection and controller setup. Re-run any time.")
+                    onClicked: setupGuide.open()
                 }
+                Kit.RowButton {
+                    Layout.fillWidth: true
+                    title: qsTr("Help & FAQ")
+                    subtitle: qsTr("Concepts, performance tips, and troubleshooting.")
+                    onClicked: settingsPage.pushDetail("../onboarding/HelpScreen.qml",
+                                                       qsTr("Help & FAQ"))
+                }
+            }
+
+            // Appearance
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.s4
+
+                Kit.SectionHeader { label: qsTr("Appearance") }
+
+                Kit.Card {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: 0
+
+                        Label {
+                            text: qsTr("Theme")
+                            color: Theme.onSurface
+                            font.pixelSize: Tokens.textBase
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            text: qsTr("Choose how Dish looks. System matches your Windows light or dark setting.")
+                            color: Theme.muted
+                            font.pixelSize: Tokens.textMeta
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                            Layout.topMargin: Tokens.s1
+                        }
+                        Kit.SegmentedControl {
+                            Layout.topMargin: Tokens.s5
+                            options: settingsPage.themeOptions
+                            value: settingsPage.themeOptions[App.themeMode]
+                            // setThemeMode persists + republishes (ThemePreferenceStore)
+                            // and re-themes the live app + native chrome (§1b).
+                            onPicked: (option) => App.setThemeMode(settingsPage.themeOptions.indexOf(option))
+                        }
+                    }
+                }
+            }
+
+            // Forwarded features
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.s4
+
+                Kit.SectionHeader { label: qsTr("Forwarded features") }
+
+                Kit.Card {
+                    Layout.fillWidth: true
+                    contentItem: RowLayout {
+                        spacing: Tokens.s6
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Tokens.s1
+
+                            Label {
+                                text: qsTr("Light bar")
+                                color: Theme.onSurface
+                                font.pixelSize: Tokens.textBase
+                                font.weight: Font.DemiBold
+                            }
+                            Label {
+                                text: qsTr("Follow game: the controller LED matches the host game. Off: leave the LED untouched.")
+                                color: Theme.muted
+                                font.pixelSize: Tokens.textMeta
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        Kit.ComboButton {
+                            Layout.alignment: Qt.AlignVCenter
+                            options: [settingsPage.lightbarOn, settingsPage.lightbarOff]
+                            value: App.lightbarFollowGame ? settingsPage.lightbarOn
+                                                          : settingsPage.lightbarOff
+                            onPicked: (option) => App.setLightbarFollowGame(option === settingsPage.lightbarOn)
+                        }
+                    }
+                }
+
                 Label {
-                    text: qsTr("Tune per-device stick and trigger dead zones, and motion forwarding.")
+                    text: qsTr("Features only apply when your controller's hardware supports them — the controller list shows what was detected.")
                     color: Theme.muted
-                    font.pixelSize: 11
+                    font.pixelSize: Tokens.textMeta
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
             }
-
-            Kit.OutlineButton {
-                text: qsTr("Open")
-                // Push the deadzone detail onto the content StackView.
-                onClicked: settingsPage.openDetail("DeadzoneSettingsPage.qml")
-            }
         }
-    }
 
-    // ── Diagnostics ──────────────────────────────────────────────────────────
-    Kit.SectionHeader { label: qsTr("Diagnostics") }
+        // ── RIGHT column ─────────────────────────────────────────────────────
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.preferredWidth: 1
+            Layout.alignment: Qt.AlignTop
+            spacing: Tokens.s8
 
-    Kit.Card {
-        width: parent ? parent.width : implicitWidth
-        contentItem: Kit.LabeledSwitch {
-            width: parent ? parent.width : implicitWidth
-            label: qsTr("Share crash reports")
-            description: qsTr("On by default — turn off to opt out. Shares anonymized crash logs and "
-                            + "stack traces to help fix bugs; no gameplay or controller input is "
-                            + "included. (No crash backend is wired yet.)")
-            checked: App.crashReportingEnabled
-            // Forwards to CrashReportingStore::setEnabled (opt-out, default on).
-            onToggled: App.setCrashReportingEnabled(checked)
-        }
-    }
-
-    // ── About ────────────────────────────────────────────────────────────────
-    Kit.SectionHeader { label: qsTr("About") }
-
-    Kit.Card {
-        width: parent ? parent.width : implicitWidth
-        contentItem: ColumnLayout {
-            spacing: 10
-
-            RowLayout {
-                spacing: 12
-                Kit.BrandGlyph {
-                    glyph: "dish"
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 28
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Label {
-                        text: settingsPage.appName
-                        color: Theme.onSurface
-                        font.pixelSize: 14
-                        font.bold: true
-                    }
-                    Label {
-                        text: qsTr("Version %1").arg(App.appVersion)
-                        color: Theme.muted
-                        font.pixelSize: 11
-                        font.family: "Consolas"
-                    }
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.outline }
-
-            RowLayout {
-                spacing: 12
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Label {
-                        text: qsTr("Open source licenses")
-                        color: Theme.onSurface
-                        font.pixelSize: 13
-                        font.bold: true
-                    }
-                    Label {
-                        text: qsTr("Acknowledgements for the libraries Dish is built on.")
-                        color: Theme.muted
-                        font.pixelSize: 11
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                }
-                Kit.OutlineButton {
-                    text: qsTr("View")
-                    onClicked: settingsPage.openDetail("LicensesPage.qml")
-                }
-            }
-        }
-    }
-
-    // ── Support ──────────────────────────────────────────────────────────────
-    Kit.SectionHeader { label: qsTr("Support") }
-
-    Kit.Card {
-        width: parent ? parent.width : implicitWidth
-        contentItem: RowLayout {
-            spacing: 12
-
+            // Controller tuning
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
-                Label {
-                    text: qsTr("Support Dish")
-                    color: Theme.onSurface
-                    font.pixelSize: 13
-                    font.bold: true
-                }
-                Label {
-                    text: qsTr("Donate via GitHub Sponsors, Ko-fi, or Buy Me a Coffee.")
-                    color: Theme.muted
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-            }
-            Kit.KitButton {
-                text: qsTr("Donate")
-                onClicked: settingsPage.openDetail("DonatePage.qml")
-            }
-        }
-    }
+                spacing: Tokens.s4
 
-    // Push a detail sub-page onto the enclosing content StackView (the supported
-    // simple pattern, QML_UI_KIT.md §3). The shell shows a Back affordance once
-    // the stack has depth > 1; a bare push keeps the destination's rail label.
-    function openDetail(file) {
-        if (StackView.view) {
-            StackView.view.push(Qt.resolvedUrl(file));
+                Kit.SectionHeader { label: qsTr("Controller tuning") }
+
+                Kit.RowButton {
+                    Layout.fillWidth: true
+                    title: qsTr("Dead zones & motion…")
+                    subtitle: qsTr("Per-device stick / trigger flats and gyro forwarding.")
+                    onClicked: settingsPage.pushDetail("DeadzoneSettingsPage.qml",
+                                                       qsTr("Dead zones & motion"))
+                }
+            }
+
+            // Diagnostics
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.s4
+
+                Kit.SectionHeader { label: qsTr("Diagnostics") }
+
+                Kit.Card {
+                    Layout.fillWidth: true
+                    contentItem: Kit.LabeledSwitch {
+                        label: qsTr("Crash reporting")
+                        description: qsTr("Anonymous crash reports help fix bugs. Opt out any time.")
+                        checked: App.crashReportingEnabled
+                        // Forwards to CrashReportingStore::setEnabled (opt-out, default on).
+                        onToggled: (checked) => App.setCrashReportingEnabled(checked)
+                    }
+                }
+            }
+
+            // About
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.s4
+
+                Kit.SectionHeader { label: qsTr("About") }
+
+                Kit.RowButton {
+                    Layout.fillWidth: true
+                    title: qsTr("Open source licenses")
+                    subtitle: qsTr("Acknowledgements for the libraries Dish is built on.")
+                    onClicked: settingsPage.pushDetail("LicensesPage.qml",
+                                                       qsTr("Open source licenses"))
+                }
+                Kit.RowButton {
+                    Layout.fillWidth: true
+                    title: qsTr("Support Dish")
+                    subtitle: qsTr("Donate via GitHub Sponsors, Ko-fi, or Buy Me a Coffee.")
+                    onClicked: settingsPage.pushDetail("DonatePage.qml", qsTr("Support Dish"))
+                }
+
+                Label {
+                    text: qsTr("Dish %1 · TinkerNorth · LGPL-3.0").arg(App.appVersion)
+                    color: Theme.muted
+                    font.family: Tokens.monoFamily
+                    font.pixelSize: Tokens.textMeta
+                    Layout.topMargin: Tokens.s1
+                }
+            }
         }
     }
 }
