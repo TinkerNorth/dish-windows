@@ -27,8 +27,8 @@
 
 using dish::reducer::BlockerHostRow;
 using dish::reducer::ConfigBlocker;
-using dish::reducer::ConfigBlockerKind;
 using dish::reducer::configBlockerFor;
+using dish::reducer::ConfigBlockerKind;
 using dish::reducer::isLiveLink;
 using dish::reducer::UiLinkState;
 
@@ -125,8 +125,7 @@ TEST_CASE("ConfigBlocker: dismissed unsteady warning stays dismissed", "[config-
     CHECK(blockerOf(a) == ConfigBlocker{});
 }
 
-TEST_CASE("ConfigBlocker: dismissing unsteady does not suppress a real loss",
-          "[config-blocker]") {
+TEST_CASE("ConfigBlocker: dismissing unsteady does not suppress a real loss", "[config-blocker]") {
     Args a;
     a.connections = {summary("s:1", UiLinkState::Saved)}; // label defaults to the id
     a.dismissed = {"s:1"};
@@ -143,10 +142,9 @@ TEST_CASE("ConfigBlocker: unrelated dismissal does not hide the unsteady warning
 
 TEST_CASE("ConfigBlocker: every link state resolves to a deterministic blocker",
           "[config-blocker]") {
-    const UiLinkState all[] = {UiLinkState::Found,      UiLinkState::Stale,
-                               UiLinkState::Saved,      UiLinkState::Ready,
-                               UiLinkState::Connecting, UiLinkState::Connected,
-                               UiLinkState::Unstable};
+    const UiLinkState all[] = {
+        UiLinkState::Found,      UiLinkState::Stale,     UiLinkState::Saved,   UiLinkState::Ready,
+        UiLinkState::Connecting, UiLinkState::Connected, UiLinkState::Unstable};
     for (const auto link : all) {
         CAPTURE(static_cast<int>(link));
         Args a;
@@ -162,8 +160,7 @@ TEST_CASE("ConfigBlocker: every link state resolves to a deterministic blocker",
     }
 }
 
-TEST_CASE("ConfigBlocker: isLiveLink is true only for Connected and Unstable",
-          "[config-blocker]") {
+TEST_CASE("ConfigBlocker: isLiveLink is true only for Connected and Unstable", "[config-blocker]") {
     // android ControllerAdapter.isLiveLink (IsLiveLinkTest): the two states
     // that actually stream.
     CHECK(isLiveLink(UiLinkState::Connected));

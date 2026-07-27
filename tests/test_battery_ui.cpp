@@ -42,8 +42,7 @@ bool foldsToCharging(int status) {
 
 // ── fromWire: status x level matrix ──────────────────────────────────────────
 
-TEST_CASE("BatteryUi fromWire matrix: every status with a known level renders it",
-          "[battery-ui]") {
+TEST_CASE("BatteryUi fromWire matrix: every status with a known level renders it", "[battery-ui]") {
     for (const int status : kAllStatuses) {
         CAPTURE(status);
         const auto b = br::batteryUiFromWire(/*level=*/50, status);
@@ -90,8 +89,7 @@ TEST_CASE("BatteryUi isLow threshold is 15 and inclusive", "[battery-ui]") {
 
 // ── batteryChip: the render-token projection ─────────────────────────────────
 
-TEST_CASE("batteryChip hides the chip for an unknown level regardless of status",
-          "[battery-ui]") {
+TEST_CASE("batteryChip hides the chip for an unknown level regardless of status", "[battery-ui]") {
     for (const int status : kAllStatuses) {
         CAPTURE(status);
         const auto chip = br::batteryChip(0xFF, status);
@@ -100,8 +98,7 @@ TEST_CASE("batteryChip hides the chip for an unknown level regardless of status"
     }
 }
 
-TEST_CASE("batteryChip maps the wired status to the Wired kind and never low",
-          "[battery-ui]") {
+TEST_CASE("batteryChip maps the wired status to the Wired kind and never low", "[battery-ui]") {
     const auto chip = br::batteryChip(10, br::kBatteryStatusWired);
     CHECK(chip.kind == br::BatteryChipKind::Wired);
     // Even a sub-threshold level cannot read as low: wired folds to charging.
@@ -168,8 +165,8 @@ TEST_CASE("batteryChip full level-by-status matrix", "[battery-ui]") {
             // The wire level is carried verbatim; low fires only in the level
             // arm, inclusively at the threshold.
             CHECK(chip.level == level);
-            const bool levelArm = status == br::kBatteryStatusUnknown ||
-                                  status == br::kBatteryStatusDischarging;
+            const bool levelArm =
+                status == br::kBatteryStatusUnknown || status == br::kBatteryStatusDischarging;
             CHECK(chip.low == (levelArm && level <= br::kLowBatteryThreshold));
         }
     }

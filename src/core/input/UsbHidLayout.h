@@ -94,8 +94,8 @@ inline std::int16_t scaleAxis16(std::uint32_t raw, const HidAxis& a, bool invert
     const std::int32_t center = (a.logicalMin + a.logicalMax) / 2;
     const std::int32_t half = (a.logicalMax - a.logicalMin) / 2;
     if (half <= 0) { return 0; }
-    std::int32_t scaled = static_cast<std::int32_t>(static_cast<std::int64_t>(v - center) * 32767 /
-                                                    half);
+    std::int32_t scaled =
+        static_cast<std::int32_t>(static_cast<std::int64_t>(v - center) * 32767 / half);
     if (invert) { scaled = -scaled; }
     if (scaled > 32767) { scaled = 32767; }
     if (scaled < -32768) { scaled = -32768; }
@@ -383,8 +383,12 @@ inline bool decodeFromLayout(const std::uint8_t* buf, std::size_t len, StateT& s
     if (L.ry.present) {
         s.ry = scaleAxis16(extractBits(d, dlen, L.ry.bitOffset, L.ry.bitSize), L.ry, true);
     }
-    if (L.lt.present) { s.lt = scaleTrig8(extractBits(d, dlen, L.lt.bitOffset, L.lt.bitSize), L.lt); }
-    if (L.rt.present) { s.rt = scaleTrig8(extractBits(d, dlen, L.rt.bitOffset, L.rt.bitSize), L.rt); }
+    if (L.lt.present) {
+        s.lt = scaleTrig8(extractBits(d, dlen, L.lt.bitOffset, L.lt.bitSize), L.lt);
+    }
+    if (L.rt.present) {
+        s.rt = scaleTrig8(extractBits(d, dlen, L.rt.bitOffset, L.rt.bitSize), L.rt);
+    }
 
     std::uint16_t b = 0;
     if (L.hasHat) {
