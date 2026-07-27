@@ -62,6 +62,10 @@ class AppViewModel : public QObject {
     // pairing sheet opens on it and calls clearPairingTarget() before showing.
     Q_PROPERTY(bool pairingActive READ pairingActive NOTIFY stateChanged)
     Q_PROPERTY(QString pairingServerName READ pairingServerName NOTIFY stateChanged)
+    // The parked target's stable server id, so the sheet can drive BOTH pairing
+    // paths (forward submit + the auto-sent reverse PIN) for a satellite that
+    // demanded pairing mid-connect — not just the rows the user clicked.
+    Q_PROPERTY(QString pairingServerId READ pairingServerId NOTIFY stateChanged)
 
     // ── Collections the page agents iterate ──────────────────────────────────
     // The slot/controller model (a SlotCard per row) and the connection-row
@@ -159,6 +163,7 @@ class AppViewModel : public QObject {
 
     bool pairingActive() const { return pairingActive_; }
     QString pairingServerName() const { return pairingServerName_; }
+    QString pairingServerId() const { return pairingServerId_; }
 
     SlotListModel* slotModel() { return &slotModel_; }
     ConnectionListModel* connectionModel() { return &connectionModel_; }
@@ -413,6 +418,7 @@ class AppViewModel : public QObject {
 
     bool pairingActive_ = false;
     QString pairingServerName_;
+    QString pairingServerId_;
 
     // The slot currently running an input capture, or empty when none. Set by
     // startInputCapture, cleared by stopInputCapture; the rawJoystickInput relay

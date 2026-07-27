@@ -103,9 +103,12 @@ class UsbGamepadManager {
     UsbGamepadManager(UsbDeviceGateway* gateway, input::GamepadInputProcessor* processor,
                       UsbPathPreferenceStore* prefs, UsbDirectObserver* observer);
 
-    // Re-scan the USB bus and (idempotently) start tracking present pads, driving
-    // each toward its resolved path automatically (not user-initiated). Safe to
-    // call repeatedly (e.g. on app foreground). Mirrors android reconcileForeground.
+    // Re-scan the USB bus: (idempotently) start tracking present pads, driving
+    // each toward its resolved path automatically (not user-initiated), and
+    // forget tracked pads that no longer enumerate (the departed-device sweep —
+    // the polled unplug signal on Windows, where no detach broadcast exists).
+    // Safe to call repeatedly (the 1 s poll). Mirrors android reconcileForeground
+    // + its USB detach receiver folded into one pass.
     void reconcile();
 
     // The user explicitly picks Direct for a model (the Settings toggle / card

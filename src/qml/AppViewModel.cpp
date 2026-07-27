@@ -255,6 +255,7 @@ void AppViewModel::onStateChanged() {
 
     pairingActive_ = st.pairingTarget.has_value();
     pairingServerName_ = pairingActive_ ? st.pairingTarget->name : QString();
+    pairingServerId_ = pairingActive_ ? st.pairingTarget->id() : QString();
 
     slotModel_.setState(st.slotList);
 

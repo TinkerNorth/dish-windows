@@ -548,3 +548,36 @@ MECHANISM ships on connection rows), catalog images, the X25519 pairing
 extension (contract-optional), the FakeSatellite integration layer (the
 no-real-sockets invariant stands), the touch-capable "Needs Direct" nudge
 (premise-invalid on Windows).
+
+### Post-addendum fixes (2026-07-27, later the same day)
+
+- **USB-direct unplug (stale controller card)**: nothing ever emitted
+  `event::UsbUnplugged` — `onUsbGone` had zero callers, so a `Direct` pad
+  survived its own unplug forever (the reducer's erase at `applyEvent` was
+  unreachable; SDL-path pads were unaffected). `UsbGamepadManager::reconcile()`
+  now runs a departed-device presence sweep (the polled Windows analog of
+  android's `ACTION_USB_DEVICE_DETACHED`): tracked keys absent from
+  `enumerate()` route through `onUsbGone` → erase + `releaseClaim` +
+  `syntheticRemoved`. Three new manager-level tests in
+  `test_usb_gamepad_manager.cpp` (Direct erase+release, Routed forget,
+  replug re-evaluates auto-Direct); the §2.6 "no unplug scenario" gap is
+  closed at the manager layer.
+- **Pairing sheet — both paths at once (android `PairPinDialog` parity)**: the
+  forward/reverse split dialog (a tap-gated `reverseMode` flip; the reverse
+  POST fired only on the "Show a PIN on this PC instead…" link) is replaced by
+  the shared `src/qml/pages/PairingDialog.qml`: the 6-digit satellite-PIN
+  field stays typeable throughout, and the 4-digit `clientPin` is POSTed
+  automatically on open (android's "sent immediately so no extra tap"
+  rule). New `App.pairingServerId` lets the parked-target auto-open drive
+  both paths (it previously passed an empty id, killing Path B). Contract:
+  `docs/QML_CONTRACT.md` "The pairing sheet: both paths at once".
+- **Guided connect wizard (android `ui/setup` step-3 port)**: the wizard flow
+  android replaced its onboarding with (#129) never existed on Windows in
+  functional form — `SetupGuideDialog` was informational copy. Its Connect
+  step is now the LIVE flow: scan-on-open (#125), Rescan, discovered-host
+  rows opening the shared pairing sheet, the get-Satellite empty state, and
+  auto-advance gated on the wizard's own pending host (the
+  `SetupConnectionViewModel` "never advance on a background reconnect" rule,
+  ported). Step 2 lists `App.slotModel` live. The USB/BT input-picker steps
+  stay collapsed by design (pads auto-appear on Windows); `SetupUsb`-style
+  recovery depth remains in the still-open list above.

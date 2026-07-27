@@ -3,8 +3,10 @@
 //
 // The Connections destination (design flow 02): FOUND (scan + discovered rows)
 // and REMEMBERED (link-state rows with latency + per-state actions), plus the
-// pairing dialog — forward 6-digit PIN entry with a link that flips to the
-// reverse 4-digit view (the operator approves on the satellite). All behavior
+// pairing dialog — BOTH pairing paths live in one sheet (android PairPinDialog
+// parity): the forward 6-digit PIN field is always typeable, and our reverse
+// 4-digit clientPin is sent to the satellite automatically on open (no tap
+// gates either path; whichever completes first pairs the box). All behavior
 // forwards to App (QML_CONTRACT.md A2); this file holds zero business logic.
 //
 // The old pairTick polling hack is gone: submission progress is a dialog-local
@@ -41,9 +43,12 @@ Kit.Page {
         target: App
         function onStateChanged() {
             if (App.pairingActive && !pairDialog.visible) {
+                // Capture both BEFORE clearing — the clear resets the parked
+                // target and these properties with it.
                 const name = App.pairingServerName;
+                const id = App.pairingServerId;
                 App.clearPairingTarget();
-                pairDialog.openFor("", name);
+                pairDialog.openFor(id, name);
             }
         }
     }
@@ -347,191 +352,9 @@ Kit.Page {
 
     } // body ColumnLayout
 
-    // ── PAIRING dialog: forward PIN entry, flip-to-reverse ───────────────────
-    // Forward (design FPairDlg): type the satellite's 6-digit operator PIN.
-    // The link flips to the reverse view (design FReverseDlg): we POST a
-    // 4-digit clientPin, show it, and poll until the operator approves on the
-    // satellite (~2 min budget). Whichever path completes pairs the box.
-    Kit.ContentDialog {
-        id: pairDialog
-
-        property string serverId: ""
-        property string serverName: ""
-        property bool reverseMode: false
-        property bool submitting: false   // forward submit in flight
-
-        eyebrow: qsTr("Pairing")
-        heading: pairDialog.reverseMode ? qsTr("Pair from this PC")
-                                        : qsTr("Pair with %1").arg(pairDialog.serverName)
-        preferredWidth: 400
-        rejectText: qsTr("Cancel")
-        acceptText: pairDialog.reverseMode ? ""
-                   : pairDialog.submitting ? qsTr("Pairing…") : qsTr("Pair")
-        acceptEnabled: pinField.text.length === 6 && !pairDialog.submitting
-
-        function openFor(id, name) {
-            serverId = id;
-            serverName = name;
-            reverseMode = false;
-            submitting = false;
-            pinField.clear();
-            open();
-        }
-
-        body: [
-            // ── FORWARD ──
-            Label {
-                visible: !pairDialog.reverseMode
-                text: qsTr("Enter the 6-digit PIN shown on the Satellite's screen.")
-                color: Theme.muted
-                font.pixelSize: Tokens.textSummary
-                lineHeight: 1.5
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            },
-            Kit.KitTextField {
-                id: pinField
-                visible: !pairDialog.reverseMode
-                maximumLength: 6
-                inputMethodHints: Qt.ImhDigitsOnly
-                validator: IntValidator { bottom: 0 }
-                enabled: !pairDialog.submitting
-                font.family: Tokens.monoFamily
-                font.pixelSize: 20
-                font.letterSpacing: 10
-                horizontalAlignment: TextInput.AlignHCenter
-                implicitHeight: 44
-                Layout.fillWidth: true
-            },
-            Label {
-                visible: !pairDialog.reverseMode && pairDialog.serverId.length > 0
-                text: qsTr("Show a PIN on this PC instead…")
-                color: Theme.primary
-                font.pixelSize: Tokens.textSummary
-                font.underline: reverseLinkHover.hovered
-                Layout.fillWidth: true
-
-                HoverHandler { id: reverseLinkHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler {
-                    onTapped: {
-                        pairDialog.reverseMode = true;
-                        App.requestReversePairing(pairDialog.serverId);
-                    }
-                }
-            },
-
-            // ── REVERSE ──
-            Label {
-                visible: pairDialog.reverseMode
-                textFormat: Text.StyledText
-                text: qsTr("Type this PIN on <b>%1</b> to approve the pairing.")
-                          .arg(pairDialog.serverName)
-                color: Theme.muted
-                font.pixelSize: Tokens.textSummary
-                lineHeight: 1.5
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            },
-            RowLayout {
-                visible: pairDialog.reverseMode
-                spacing: Tokens.s4
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: Tokens.s3
-                Layout.bottomMargin: Tokens.s3
-
-                Repeater {
-                    model: 4
-                    delegate: Rectangle {
-                        required property int index
-                        implicitWidth: 44
-                        implicitHeight: 52
-                        radius: Tokens.radiusButton
-                        color: Theme.surfaceDim
-                        border.width: 1
-                        border.color: Theme.outline
-
-                        Label {
-                            anchors.centerIn: parent
-                            text: index < App.reversePairingPin.length
-                                  ? App.reversePairingPin.charAt(index) : ""
-                            color: Theme.primary
-                            font.family: Tokens.monoFamily
-                            font.pixelSize: 22
-                        }
-                    }
-                }
-            },
-            RowLayout {
-                visible: pairDialog.reverseMode
-                spacing: Tokens.s5
-                Layout.fillWidth: true
-
-                Kit.DishProgressBar {
-                    visible: App.reversePairingPhase === "awaiting"
-                    indeterminate: true
-                    Layout.preferredWidth: 60
-                }
-                Label {
-                    text: App.reversePairingPhase === "awaiting"
-                              ? qsTr("Waiting for approval on the satellite…")
-                          : App.reversePairingPhase === "approved"
-                              ? qsTr("Approved — connecting…")
-                          : App.reversePairingPhase === "declined"
-                              ? qsTr("The operator declined the pairing.")
-                          : App.reversePairingPhase === "timedout"
-                              ? qsTr("No approval — the code expired.")
-                          : ""
-                    color: App.reversePairingPhase === "declined" ? Theme.error
-                         : App.reversePairingPhase === "approved" ? Theme.success
-                         : Theme.muted
-                    font.pixelSize: Tokens.textSummary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-                Kit.OutlineButton {
-                    text: qsTr("New code")
-                    visible: App.reversePairingPhase === "declined"
-                             || App.reversePairingPhase === "timedout"
-                    onClicked: App.requestReversePairing(pairDialog.serverId)
-                }
-                Label {
-                    visible: App.reversePairingPhase === "awaiting"
-                    text: qsTr("~2 min")
-                    color: Theme.muted
-                    font.family: Tokens.monoFamily
-                    font.pixelSize: Tokens.textChip
-                }
-            }
-        ]
-
-        // Footer accept = the FORWARD submit (hidden in reverse mode). Errors
-        // keep the sheet open (the global toast carries the message); success
-        // closes below.
-        onAccepted: {
-            submitting = true;
-            App.pairByServerId(serverId, pinField.text);
-        }
-        onRejected: App.cancelReversePairing()
-
-        Connections {
-            target: App
-            enabled: pairDialog.visible
-
-            function onErrorMessage(message) { pairDialog.submitting = false; }
-            function onPairingSucceeded() { pairDialog.close(); }
-            function onReversePairingChanged() {
-                if (App.reversePairingPhase === "approved")
-                    pairDialog.close();
-            }
-        }
-
-        onClosed: {
-            // No orphan poll outlives the sheet.
-            if (App.reversePairingPhase !== "approved")
-                App.cancelReversePairing();
-            pinField.clear();
-            submitting = false;
-            reverseMode = false;
-        }
-    }
+    // ── PAIRING: the shared both-paths-at-once sheet (PairingDialog.qml) ─────
+    // Path A (type the satellite's 6-digit PIN) is always live; Path B (our
+    // 4-digit clientPin) is sent automatically by openFor(). Same-module bare
+    // type — also used by the setup-guide wizard.
+    PairingDialog { id: pairDialog }
 }

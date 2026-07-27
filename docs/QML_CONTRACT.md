@@ -46,6 +46,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `totalSent` | `qulonglong` | `telemetryChanged` | Cumulative reports sent since launch. |
 | `pairingActive` | `bool` | `stateChanged` | True when the model has parked a pairing target (open the pairing sheet on the rising edge; call `clearPairingTarget()` before showing it). |
 | `pairingServerName` | `string` | `stateChanged` | Display name of the pairing target (empty when `!pairingActive`). |
+| `pairingServerId` | `string` | `stateChanged` | Stable `id` of the pairing target (empty when `!pairingActive`). Pass it into the pairing sheet so BOTH paths work for a parked target: the forward submit resolves on it and the reverse PIN auto-send has a destination. Capture it (with the name) BEFORE `clearPairingTarget()`. |
 | `slotModel` | `SlotListModel*` | (CONSTANT) | The controllers/slots model — see §2. Bind into a `ListView.model`. |
 | `connectionModel` | `ConnectionListModel*` | (CONSTANT) | The connection-rows model — see §3. |
 | `themeMode` | `int` (read/write) | `themeModeChanged` | Appearance mode, `0=Light 1=Dark 2=System` (the SettingsPage chip order). Writing forwards to `ThemePreferenceStore::setMode`; the live app + native chrome re-theme. See §1b. |
@@ -138,6 +139,14 @@ re-projects/forwards (no new behaviour). The pages bind them directly:
 * **Main.qml first-run** — if `App.onboardingNeeded`, push
   `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
   `App.markOnboardingComplete()`.
+* **SetupGuideDialog (the setup wizard)** — step 1 IS the live connect flow
+  (the android guided-setup connection step, ported): `App.startDiscovery` on
+  open, `App.scanning` / `App.discoveredServers` / `App.foundCount` drive the
+  host list, each row opens the shared `PairingDialog`, and the step
+  auto-advances on `pairingSucceeded` gated by the wizard's own pending host
+  (android's "never advance on a background reconnect" rule). Step 2 lists
+  `App.slotModel` rows live; step 3 summarizes `App.onlineCount` /
+  `App.slotCount`.
 
 ### Configure-controls (raw-joystick remap) page
 
@@ -159,20 +168,28 @@ All four persist AND push into the live bridge, so the change takes effect on th
 next report with no re-attach. ALWAYS call `stopInputCapture()` when leaving the
 page so capture doesn't keep streaming.
 
-### Reverse (host-initiated) pairing sheet
+### The pairing sheet: both paths at once
 
 Forward pairing (`pairByServerId`) is the operator-reads-the-PIN-off-the-dish
 flow. The REVERSE flow is the inverse: the dish SHOWS a PIN and the operator
-approves on the satellite. Bind a sheet like:
+approves on the satellite. The sheet runs BOTH simultaneously (android
+`PairPinDialog` parity) — no tap gates either path:
 
-* On the user's "Pair this way" tap: `App.requestReversePairing(server.id)`,
-  then open the sheet.
+* On open: `App.cancelReversePairing()` (a stale phase from an earlier sheet
+  must not leak in), then `App.requestReversePairing(server.id)` immediately —
+  the operator is notified the moment the sheet opens. The 6-digit PIN field
+  stays typeable throughout as the live fallback; its submit is
+  `pairByServerId` as before.
+* Show the reverse block only while `App.reversePairingPhase !== "idle"` (an
+  unresolvable id leaves the phase idle, degrading to forward-only — e.g. a
+  parked target whose satellite has left the scan).
 * While `App.reversePairingPhase === "awaiting"`: show `App.reversePairingPin`
   (the 4 digits) and `App.reversePairingServerName`, with a spinner.
 * On `"approved"`: close the sheet (the session is opening — the connection row
   will go live). On `"declined"` / `"timedout"`: show the reason (also arrives on
-  `App.errorMessage`) and offer retry.
-* The sheet's Cancel calls `App.cancelReversePairing()`.
+  `App.errorMessage`) and offer a "New code" retry.
+* The sheet's Cancel calls `App.cancelReversePairing()`; whichever path
+  completes first pairs the box.
 
 The poll budget is ~2 minutes; a momentary network blip during the wait does NOT
 abort (it keeps polling until the deadline).

@@ -9,7 +9,9 @@
 
 #include "Input/GamepadInputProcessor.h"
 
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace dish::source::usb {
 
@@ -41,7 +43,29 @@ reducer::PathChoice UsbGamepadManager::resolvePath(int vendorId, int productId) 
 
 void UsbGamepadManager::reconcile() {
     if (gateway_ == nullptr) { return; }
-    for (const auto& device : gateway_->enumerate()) { ensureTracked(device); }
+    std::unordered_set<int> presentKeys;
+    for (const auto& device : gateway_->enumerate()) {
+        presentKeys.insert(device.vpKey());
+        ensureTracked(device);
+    }
+    // Departed-device sweep: a tracked model that no longer enumerates has been
+    // physically unplugged. This presence diff IS the Windows unplug signal —
+    // the raw-HID read loop just breaks silently when its handle dies and there
+    // is no detach broadcast on this polled path (android gets
+    // ACTION_USB_DEVICE_DETACHED). Safe against false positives for live claims:
+    // enumerate() probes with a query-only open (desired access 0) while claim()
+    // holds the device with share-read/write, so a pad WE hold claimed still
+    // enumerates; only a genuine unplug drops out of the scan.
+    std::vector<std::pair<int, int>> departed;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        for (const auto& [key, c] : controllers_) {
+            if (presentKeys.find(key) == presentKeys.end()) {
+                departed.emplace_back(c.vendorId, c.productId);
+            }
+        }
+    }
+    for (const auto& [vendorId, productId] : departed) { onUsbGone(vendorId, productId); }
 }
 
 void UsbGamepadManager::ensureTracked(const UsbDeviceInfo& device) {

@@ -507,6 +507,9 @@ qt_add_qml_module(Dish
         # EmulatePicker is referenced by bare type name from ControllersPage,
         # so it must register into the same Dish.Chrome module.
         src/qml/pages/EmulatePicker.qml
+        # The shared both-paths-at-once pairing sheet — bare type name from
+        # ConnectionsPage, "../pages" import from the setup-guide wizard.
+        src/qml/pages/PairingDialog.qml
         # First-run onboarding (pushed full-screen onto appRoot): the welcome
         # pager + the standalone Help screen (also pushed from Settings).
         src/qml/onboarding/OnboardingFlow.qml
