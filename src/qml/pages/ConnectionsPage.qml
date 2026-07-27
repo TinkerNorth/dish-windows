@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Connections destination (design flow 02): FOUND (scan + discovered rows)
-// and REMEMBERED (link-state rows with latency + per-state actions), plus the
+// The Connections destination (design flow 02): FOUND (scan + un-remembered
+// discovered rows — a box with a REMEMBERED row never duplicates here; the
+// C++ one-spot rule keeps the two lists disjoint and the remembered chip
+// carries its reachability) and REMEMBERED (link-state rows with latency +
+// per-state actions), plus the
 // pairing dialog — BOTH pairing paths live in one sheet (android PairPinDialog
 // parity): the forward 6-digit PIN field is always typeable, and our reverse
 // 4-digit clientPin is sent to the satellite automatically on open (no tap

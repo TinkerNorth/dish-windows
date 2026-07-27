@@ -25,6 +25,7 @@
 #include "source/store/UiPreferenceStore.h"
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -93,8 +94,10 @@ class AppViewModel : public QObject {
     // The FOUND list + scan flag, exposed REACTIVELY so QML bindings stream as a
     // scan lands (P2's plain invokables had no NOTIFY, so the FOUND list only
     // refreshed on page recreation). The properties read THROUGH the kept
-    // invokables; discoveredChanged folds the manager's discoveredChanged, and
-    // scanning folds its scanningChanged.
+    // invokables; discoveredChanged folds the manager's discoveredChanged PLUS
+    // the connection-row id set moving (the FOUND list excludes ids that already
+    // have a connections row — the one-spot rule), and scanning folds its
+    // scanningChanged.
     Q_PROPERTY(QVariantList discoveredServers READ discoveredServers NOTIFY discoveredChanged)
     Q_PROPERTY(bool scanning READ isScanning NOTIFY scanningChanged)
 
@@ -344,8 +347,10 @@ class AppViewModel : public QObject {
 
     // Discovery results moved (P2 had to re-pull discoveredServers() on the broad
     // stateChanged; this is the precise edge to re-pull on). Folds the
-    // WifiConnectionManager's discoveredChanged. NOTIFY for the discoveredServers
-    // property so QML bindings stream as a scan lands.
+    // WifiConnectionManager's discoveredChanged AND a connection-row id-set move
+    // (pair landed / forget dropped a row — the FOUND list excludes those ids, so
+    // it must re-read then too). NOTIFY for the discoveredServers property so QML
+    // bindings stream as a scan lands.
     void discoveredChanged();
 
     // The scan flag flipped (a scan started or finished). Folds the
@@ -428,6 +433,12 @@ class AppViewModel : public QObject {
     // Cached so onStateChanged can fire pairingSucceeded() on the rising edge of
     // the online count (a fresh connection reached Connected).
     int lastOnlineCount_ = 0;
+
+    // The connection-row id set as of the last onConnectionsChanged — the FOUND
+    // list excludes these ids (the one-spot rule), so a membership move re-emits
+    // discoveredChanged. An edge detector only: discoveredServers() re-reads the
+    // coordinator's authoritative rows on every call, never this cache.
+    QSet<QString> connectionRowIds_;
 
     // Cached onboarding gate so onStateChanged can fire onboardingNeededChanged
     // only on a real transition (markOnboardingComplete is the only mover today,

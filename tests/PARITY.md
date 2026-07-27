@@ -589,3 +589,19 @@ no-real-sockets invariant stands), the touch-capable "Needs Direct" nudge
   ported). Step 2 lists `App.slotModel` live. The USB/BT input-picker steps
   stay collapsed by design (pads auto-appear on Windows); `SetupUsb`-style
   recovery depth remains in the still-open list above.
+- **FOUND/REMEMBERED one-spot rule**: a remembered satellite that was also in
+  the current scan rendered TWICE on the Connections page — a FOUND row (raw
+  `discoveredServers`) and its REMEMBERED row (the composer already marks it
+  discovered via the `Ready` chip). The contract (§3 note) always said FOUND
+  is the *not-yet-remembered* rest; the filter just never existed. Now
+  `reducer::serversVisibleInFound` (`core/reducer/FoundVisibility.h`) drops
+  any discovered id that already has a connections row (remembered ∪ live —
+  the row-id universe, so a mid-pair live session collapses too, matching
+  android where the found list is keyed off the same summaries map).
+  `AppViewModel::discoveredServers()/foundCount` read through it, and
+  `discoveredChanged` also re-fires when the connection-row id SET moves
+  (pair lands / forget drops a row) — keyed on the id set so the 1 Hz latency
+  ticks never churn the FOUND repeater. Pinned in
+  `test_found_visibility.cpp` (7 cases: one-spot, scan order, DHCP-move fold
+  on `mid:`, legacy `wifi:ip:port` fold, mid-pair suppression,
+  forget-reappearance, input purity).

@@ -56,7 +56,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `donateSponsorsUrl` | `string` | (CONSTANT) | GitHub Sponsors URL (brand default; localizable in C++). |
 | `donateKofiUrl` | `string` | (CONSTANT) | Ko-fi URL. |
 | `donateBmacUrl` | `string` | (CONSTANT) | Buy Me a Coffee URL. |
-| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. Bind a `Repeater.model` to it and it re-evaluates as a scan lands — no manual re-pull. |
+| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. **One-spot rule**: excludes any server whose stable `id` already has a `connectionModel` row (remembered ∪ live) — that row is the box's one spot; FOUND is only the un-remembered rest. Bind a `Repeater.model` to it and it re-evaluates as a scan lands or a pair/forget moves a box between the lists — no manual re-pull. |
 | `scanning` | `bool` | `scanningChanged` | Whether a discovery scan is in flight (reactive). Flips true on `startDiscovery()` and false on completion; gate the Scan button / "Scanning…" label on it. |
 | `reversePairingPhase` | `string` | `reversePairingChanged` | The host-initiated (reverse) pairing phase: `"idle"` (none in flight) / `"awaiting"` (PIN shown, waiting for the operator to approve on the satellite) / `"approved"` (operator approved — the session is opening) / `"declined"` (operator denied) / `"timedout"` (no approval inside the ~2-min budget). The sheet switches on this. |
 | `reversePairingPin` | `string` | `reversePairingChanged` | The 4-digit PIN to display while `awaiting` (the operator types it on the satellite). Stays set on the terminal arms so the sheet can keep showing it; cleared on the next `requestReversePairing`/`cancelReversePairing`. |
@@ -72,7 +72,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `stateChanged` | — | Header / slot / pairing state moved (folds AppModel's `stateChanged`). |
 | `telemetryChanged` | — | Telemetry footer numbers moved (~1 Hz). |
 | `errorMessage` | `string message` | Transient one-shot error — surface it as a toast. |
-| `discoveredChanged` | — | The discovered-servers list moved (folds `WifiConnectionManager::discoveredChanged`). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
+| `discoveredChanged` | — | The FOUND list moved: the discovered scan changed (folds `WifiConnectionManager::discoveredChanged`) OR the connection-row id set changed (a pair landed / a forget dropped a row — those ids are excluded from FOUND, so it re-reads then too). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
 | `scanningChanged` | — | The `scanning` flag flipped (a scan started or finished; folds `WifiConnectionManager::scanningChanged`). NOTIFY for the `scanning` property. |
 | `reversePairingChanged` | — | A reverse-pairing transition (phase / PIN / server name moved; folds `WifiConnectionManager::reversePairingChanged`). NOTIFY for all three `reversePairing*` properties. |
 | `themeModeChanged` | — | `themeMode` moved (the store republished). |
@@ -96,7 +96,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `setControllerType(slotId, type)` | `string, int` | Apply the Emulate choice and re-attach the slot so the new descriptor is PUT. |
 | `startDiscovery()` | — | Begin a satellite discovery scan (Connections page "Scan"). |
 | `isScanning()` | → `bool` | Whether a scan is in flight. Prefer the reactive `scanning` property for bindings. |
-| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
+| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). One-spot rule: ids that already have a `connectionModel` row are excluded (see the property row in §1). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
 | `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. |
 | `reconnectConnection(connectionId)` | `string` | Reconnect a REMEMBERED satellite by id WITHOUT a rescan requirement and WITHOUT re-pairing (the key persists). If the id is in the current scan, connects the fresh endpoint; else kicks a discovery relearn AND attempts the last-known endpoint now. Gate the button on the row NOT being `liveLink`. |
 | `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered row + pairing key survive (contrast `forgetConnection`). Gate the button on the row's `liveLink` role. |
@@ -278,7 +278,10 @@ mirrors `ConnectionsDialog` rows). Same minimal-signal behavior as §2.
 
 > `connectionModel` carries the REMEMBERED/derived rows. The FOUND list of
 > not-yet-remembered discovered servers comes from the `App.discoveredServers`
-> property (reactive) / `App.discoveredServers()` invokable.
+> property (reactive) / `App.discoveredServers()` invokable. The two lists are
+> disjoint by construction (the one-spot rule): an id with a row here never
+> appears in `discoveredServers` — its reachability shows as this row's chip
+> (`ready`/`online`/…) instead of a duplicate FOUND row.
 
 ---
 
@@ -370,7 +373,7 @@ exactly like the A1 surface.
 | `slotCount` | `int` | `stateChanged` | Rows in `slotModel` (mirrored so bindings never poke the model for a count). |
 | `boundSlotCount` | `int` | `stateChanged` | Slots currently bound to a connection — drives the "· nothing bound" suffix. |
 | `firstOnlineName` | `string` | `stateChanged` | Label of the first `Connected` connection ("Living-room Satellite online · …"); empty when none. |
-| `foundCount` | `int` | `discoveredChanged` | Size of the FOUND list ("2 found · nothing remembered yet"). |
+| `foundCount` | `int` | `discoveredChanged` | Size of the FOUND list ("2 found · nothing remembered yet") — after the one-spot exclusion, so it counts only un-remembered boxes, matching the rows the FOUND card renders. |
 | `keepAwakeActive` | `bool` | `stateChanged` | True while the display-sleep inhibitor is held — render the header pill `STREAMING · DISPLAY KEPT AWAKE`. |
 | `railCollapsed` | `bool` (RW) | `railCollapsedChanged` | The nav rail's persisted collapse state (48px icons vs 236px labels). The title-bar hamburger calls `App.setRailCollapsed(!App.railCollapsed)`. |
 | `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding preference (design combo: true = "Follow game", false = "Off"). Settings page binds `App.setLightbarFollowGame(x)`. |

@@ -123,6 +123,8 @@ set(DISH_TEST_SOURCES
     test_late_slot_converge.cpp
     test_connections_composer.cpp
     test_connection_coordinator.cpp
+    # FOUND-list one-spot rule (a box never renders as both FOUND and REMEMBERED)
+    test_found_visibility.cpp
     test_session_lifecycle.cpp
     test_session_manager.cpp
     # Workstream 2c — catalog cache (ETag/304/stale), controller-type store,

@@ -13,6 +13,7 @@
 #include "composer/ConnectionCoordinator.h"
 #include "core/input/Deadzones.h"
 #include "core/reducer/ConnectionRows.h"
+#include "core/reducer/FoundVisibility.h"
 #include "core/reducer/PathChoice.h"
 #include "core/reducer/PickerVisibility.h"
 #include "core/reducer/SlotPathFields.h"
@@ -28,6 +29,7 @@
 
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QSet>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
@@ -273,7 +275,22 @@ void AppViewModel::onStateChanged() {
 }
 
 void AppViewModel::onConnectionsChanged() {
-    connectionModel_.setRows(model_->connections()->connections().value());
+    const auto rows = model_->connections()->connections().value();
+    connectionModel_.setRows(rows);
+
+    // The FOUND list is the discovered scan MINUS these row ids (the one-spot
+    // rule, reducer::serversVisibleInFound), so a membership move — a pair
+    // landing a new remembered row, a forget dropping one — must re-read the
+    // discoveredServers/foundCount bindings too. Keyed on the id SET, not the
+    // rows, so the per-second latency ticks (which also arrive here) never
+    // churn the FOUND Repeater.
+    QSet<QString> ids;
+    ids.reserve(static_cast<qsizetype>(rows.size()));
+    for (const auto& row : rows) { ids.insert(QString::fromStdString(row.id)); }
+    if (ids != connectionRowIds_) {
+        connectionRowIds_ = std::move(ids);
+        emit discoveredChanged();
+    }
 }
 
 void AppViewModel::onTelemetryTick() {
@@ -284,8 +301,8 @@ void AppViewModel::onTelemetryTick() {
     emit telemetryChanged();
 }
 
-// Derived from the live discovered list on read (UI cadence, list is tiny) so
-// no second cache can drift from discoveredServers().
+// Derived from the (one-spot filtered) FOUND list on read (UI cadence, list is
+// tiny) so no second cache can drift from discoveredServers().
 int AppViewModel::foundCount() const { return static_cast<int>(discoveredServers().size()); }
 
 bool AppViewModel::railCollapsed() const { return uiPrefs_.railCollapsed(); }
@@ -440,8 +457,19 @@ void AppViewModel::startDiscovery() { model_->wifi()->startDiscovery(); }
 bool AppViewModel::isScanning() const { return model_->wifi()->isScanning(); }
 
 QVariantList AppViewModel::discoveredServers() const {
+    // One-spot rule (reducer::serversVisibleInFound): a satellite whose id
+    // already has a row in the derived connections list (remembered ∪ live)
+    // renders THERE — FOUND offers only the un-remembered rest. Both sides key
+    // on the stable machineId-preferring id, so a remembered box at a fresh
+    // DHCP address still folds. onConnectionsChanged re-emits discoveredChanged
+    // when this id set moves, so the binding re-reads on pair/forget too.
+    QSet<QString> rowIds;
+    for (const auto& row : model_->connections()->connections().value()) {
+        rowIds.insert(QString::fromStdString(row.id));
+    }
     QVariantList out;
-    for (const auto& s : model_->wifi()->discoveredServers()) {
+    for (const auto& s :
+         reducer::serversVisibleInFound(model_->wifi()->discoveredServers(), rowIds)) {
         QVariantMap m;
         m[QStringLiteral("name")] = s.name;
         m[QStringLiteral("ip")] = s.ip;
