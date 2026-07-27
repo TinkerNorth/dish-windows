@@ -198,7 +198,7 @@ void WifiConnection::markStale() {
 }
 
 void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool hasLightbar,
-                                bool hasMotion) {
+                                bool hasMotion, std::uint8_t touchpadMode) {
     auto it = slots_.find(slotId);
     if (it == slots_.end()) {
         SlotBinding b;
@@ -206,18 +206,20 @@ void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool 
         b.controllerType = controllerType;
         b.hasLightbar = hasLightbar;
         b.hasMotion = hasMotion;
+        b.touchpadMode = touchpadMode;
         b.registered = false;
         slots_.emplace(slotId, b);
         boundSlotId_ = slotId;
         if (state_ == SessionState::Live) { emit slotChanged(slotId); }
     } else {
         // Re-declare: the WHOLE descriptor in one shot.
-        const bool changed = it->second.controllerType != controllerType ||
-                             it->second.hasLightbar != hasLightbar ||
-                             it->second.hasMotion != hasMotion;
+        const bool changed =
+            it->second.controllerType != controllerType || it->second.hasLightbar != hasLightbar ||
+            it->second.hasMotion != hasMotion || it->second.touchpadMode != touchpadMode;
         it->second.controllerType = controllerType;
         it->second.hasLightbar = hasLightbar;
         it->second.hasMotion = hasMotion;
+        it->second.touchpadMode = touchpadMode;
         if (changed && state_ == SessionState::Live) { emit slotChanged(slotId); }
     }
     emit changed();
@@ -306,12 +308,18 @@ bool WifiConnection::matchesAppliedView(const models::SessionViewDto& view) cons
     desired.reserve(slots_.size());
     for (const auto& [slotId, b] : slots_) {
         desired.push_back({static_cast<std::uint8_t>(b.controllerIndex),
-                           static_cast<std::uint8_t>(b.controllerType)});
+                           static_cast<std::uint8_t>(b.controllerType), b.touchpadMode});
     }
     std::vector<reducer::AppliedSlot> applied;
     for (const auto& c : view.controllers) {
-        applied.push_back({static_cast<std::uint8_t>(c.ctrlIdx),
-                           static_cast<std::uint8_t>(c.appliedType), c.active});
+        reducer::AppliedSlot a{static_cast<std::uint8_t>(c.ctrlIdx),
+                               static_cast<std::uint8_t>(c.appliedType), c.active, std::nullopt};
+        // An empty mode string means the server predates reporting it — the
+        // comparison then skips the mode arm rather than forcing a re-PUT.
+        if (!c.touchpadMode.isEmpty()) {
+            a.touchpadMode = proto::touchpadModeFromName(c.touchpadMode.toStdString());
+        }
+        applied.push_back(a);
     }
     // The host-feature grant is applied state too: a slot toggled to mouse
     // mid-session leaves wants≠granted (the grant is only computed at session

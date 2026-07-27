@@ -85,6 +85,10 @@ class SDLGamepadBridge : public QObject {
         // SDL's own mapping and ignores any remap. AppModel stamps it onto the
         // slot's `remappable` so the page entry shows for exactly these.
         bool isRawJoystick = false;
+        // True iff SDL reports a readable touchpad on the pad (DS4/DualSense).
+        // Gates the descriptor's touchpadMode resolution — a pad with no touch
+        // source always declares "off".
+        bool hasTouchpad = false;
     };
     QList<Device> devices() const;
 
@@ -218,6 +222,9 @@ class SDLGamepadBridge : public QObject {
     // hasLightbar so the UI can show a lightbar chip and WifiConnection can
     // advertise CAP_LIGHTBAR. Same lifecycle / locking as motionCapable_.
     std::unordered_set<int> lightbarCapable_;
+    // Instance ids whose pad exposes a readable touchpad (SDL
+    // GetNumTouchpads > 0). Same lifecycle / locking as motionCapable_.
+    std::unordered_set<int> touchpadCapable_;
 
     // Per-device USB identity (vid, pid) classified once at attach. Surfaced via
     // devices() for the twin-dedup pairing. Same lifecycle / locking as

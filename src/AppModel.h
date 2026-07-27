@@ -28,6 +28,7 @@
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/TouchpadModeStore.h"
 #include "source/store/ThemePreferenceStore.h"
 #include "source/store/UsbPathPreferenceStore.h"
 #include "source/usb/UsbGamepadManager.h"
@@ -329,6 +330,10 @@ class AppModel : public QObject {
     repository::DeadzoneRepository deadzoneRepo_;
     repository::MotionPreferenceRepository motionPrefRepo_;
     source::MotionEnabledStore motionEnabledStore_;
+    // Per-satellite touchpad-mode picks (absent = the ds4 pair-time default).
+    // Read by the hub's touchpad-mode resolver when a slot binds.
+    repository::TouchpadModeRepository touchpadModeRepo_;
+    source::TouchpadModeStore touchpadModeStore_{&touchpadModeRepo_};
 
     // ── Raw-joystick remap store (android parity) ────────────────────────────
     // Declaration order: the repo must precede the store that hydrates from it.

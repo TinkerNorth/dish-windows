@@ -9,6 +9,7 @@
 #include "core/reducer/PickerVisibility.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/SlotPathFields.h"
+#include "core/reducer/TouchpadModeResolve.h"
 #include "core/reducer/TouchpadRouting.h"
 #include "core/reducer/UsbTwinDedup.h"
 
@@ -184,6 +185,40 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     // the choice is threaded into the descriptor PUT.
     hub_->setControllerTypeFn(
         [this](const QString& slotId) { return resolveControllerType(slotId); });
+
+    // Touchpad mode: the descriptor declares ds4 pad-render when the pad HAS a
+    // touch source and the resolved type is DS4 (the one offered type whose
+    // catalog touchpad feature carries the "ds4" mode — legacy catalogs imply
+    // it, per contract). The per-satellite pick defaults to ds4 when never
+    // picked, so DS4 touch forwards out of the box; mouse stays unreachable in
+    // v1 (no UI sets the pick to "mouse", and hostMouseControl reads false).
+    // A hardwired "off" here previously made the satellite discard every
+    // MSG_TOUCHPAD the fully-built forward path sent.
+    hub_->setTouchpadModeFn([this](const QString& slotId) -> std::uint8_t {
+        bool hasTouchpad = false;
+        for (const auto& d : bridge_->devices()) {
+            if (d.id == slotId) {
+                hasTouchpad = d.hasTouchpad;
+                break;
+            }
+        }
+        if (!hasTouchpad) { return proto::kTouchpadModeOff; }
+        const auto connId = hub_->boundConnection(slotId);
+        const std::string pick =
+            connId.has_value()
+                ? touchpadModeStore_.modeFor(connId->id.toStdString())
+                      .value_or(std::string(proto::touchpadModeName(proto::kTouchpadModeDs4)))
+                : std::string(proto::touchpadModeName(proto::kTouchpadModeDs4));
+        // The ds4 wire type (kControllerTypePlayStation) is the one type whose
+        // catalog touchpad feature carries the "ds4" mode in every catalog the
+        // contract pins (legacy v1 implies it). When the live per-satellite
+        // catalog gate lands (CatalogFeatureGate), this shortcut widens to a
+        // real lookup.
+        const bool typeOffersDs4 =
+            resolveControllerType(slotId) == proto::kControllerTypePlayStation;
+        return reducer::resolveTouchpadMode(pick, hasTouchpad, typeOffersDs4,
+                                            /*hostMouseControl=*/false);
+    });
 
     // ── USB-direct (raw-HID) claim path ──────────────────────────────────────
     // Build the real Windows raw-HID gateway + the claim driver, feeding decoded

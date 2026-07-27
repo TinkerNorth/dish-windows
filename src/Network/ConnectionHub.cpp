@@ -187,8 +187,10 @@ void ConnectionHub::bind(const QString& slotId, const QString& connectionId) {
     const bool hasLightbar = lightbarCapabilityFn_ && lightbarCapabilityFn_(slotId);
     const bool hasMotion = motionCapabilityFn_ && motionCapabilityFn_(slotId);
     const int controllerType = controllerTypeFn_ ? controllerTypeFn_(slotId) : 0;
+    const std::uint8_t touchpadMode =
+        touchpadModeFn_ ? touchpadModeFn_(slotId) : proto::kTouchpadModeOff;
     if (auto* c = wifi_->get(connectionId)) {
-        c->attachSlot(slotId, controllerType, hasLightbar, hasMotion);
+        c->attachSlot(slotId, controllerType, hasLightbar, hasMotion, touchpadMode);
     }
 }
 
