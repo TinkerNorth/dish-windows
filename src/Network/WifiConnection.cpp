@@ -152,6 +152,17 @@ void WifiConnection::onAliveTick() {
         if (cb) { cb(); }
         return;
     }
+    // Alive but faltering: two consecutive missed acks is the contract's
+    // "not responding" display threshold — the chip reads "Unstable" for the
+    // ~6 s before the death threshold instead of a confident "Online", and
+    // recovers to Live the moment an ack lands. Only flips between the two
+    // steady states; Linking/Stale keep their own owners.
+    const bool faltering = c->missedAcks() >= SatelliteClient::kHeartbeatMissNotResponding;
+    const SessionState steady = faltering ? SessionState::Faltering : SessionState::Live;
+    if ((state_ == SessionState::Live || state_ == SessionState::Faltering) && state_ != steady) {
+        state_ = steady;
+        emit changed();
+    }
     // Alive: nudge the reconcile (the manager re-checks epoch/bitmap drift
     // against applied and only does the GET-then-rePUT when it actually
     // diverged).

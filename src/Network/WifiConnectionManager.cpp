@@ -4,6 +4,7 @@
 #include "WifiConnectionManager.h"
 
 #include "PairingClient.h"
+#include "core/net/IpLiterals.h"
 #include "source/connection/DiscoveryGateway.h"
 #include "source/connection/LANDiscovery.h"
 #include "source/connection/MdnsDiscovery.h"
@@ -209,6 +210,15 @@ WifiConnectionManager::credentialsFor(const QString& id) const {
 
 void WifiConnectionManager::connectTo(const models::DiscoveredServer& server,
                                       ConnectIntent intent) {
+    // Satellites live on the LAN by definition (mDNS/broadcast discovery); a
+    // public-address literal here means a spoofed/mis-parsed beacon or a
+    // poisoned remembered entry, and dialing it would leak the deviceId +
+    // hmacProof to an arbitrary internet host. Refuse before any socket work.
+    if (!isPrivateHostLiteral(server.ip.toStdString())) {
+        emit connectionEvent(
+            makeError(tr("Refusing to connect to a non-local address (%1).").arg(server.ip)));
+        return;
+    }
     auto* conn = ensureConnection(server);
     if (intent == ConnectIntent::UserInitiated) { retryAttempts_.remove(conn->id()); }
     if (conn->state() == SessionState::Live || conn->state() == SessionState::Linking) {

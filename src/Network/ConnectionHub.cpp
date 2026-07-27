@@ -75,11 +75,8 @@ void ConnectionHub::rebuild() {
                 live = models::LinkState::Connecting;
                 break;
             case SessionState::Faltering:
-                // TODO(LinkState::Unstable): native alive-poll currently only
-                // exposes a binary "is alive" and flips Live -> Idle directly
-                // when misses hit the death threshold, so this arm is defined
-                // but never taken. Once the miss count is exposed, the
-                // alive-poll should bump SessionState to Faltering instead.
+                // Entered by WifiConnection::onAliveTick at >=2 consecutive
+                // missed acks; recovers to Live on the next ack.
                 live = models::LinkState::Unstable;
                 break;
             case SessionState::Stale:

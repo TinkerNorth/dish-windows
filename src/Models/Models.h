@@ -354,8 +354,9 @@ QJsonArray controllersJson(const QList<ControllerDescriptor>& descriptors);
 // close-notify(unpaired) drops the key and parks the row here so the chip reads
 // "Needs pairing" and auto-retry stops.
 //
-// **Unstable** is NOT YET ENTERED: it requires the native layer to expose the
-// consecutive-missed-heartbeat count separately from the binary alive poll.
+// **Unstable** enters at two consecutive missed heartbeat acks (the contract's
+// "not responding" display threshold, read off SatelliteClient::missedAcks in
+// the alive tick) and recovers to Connected the moment an ack lands.
 enum class LinkState { Found, Stale, Saved, Ready, Connecting, Connected, Unstable };
 
 // What a physical controller's *hardware* exposes, detected once at attach by
