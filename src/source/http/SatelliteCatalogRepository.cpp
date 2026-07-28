@@ -3,6 +3,8 @@
 
 #include "source/http/SatelliteCatalogRepository.h"
 
+#include "core/catalog/LegacyCatalogTranslator.h"
+
 #include "Network/HTTPClient.h"
 
 #include <utility>
@@ -78,13 +80,18 @@ void SatelliteCatalogRepository::catalogFor(const models::DiscoveredServer& serv
                    cb(core::toError(prev, classifyCatalogError(reply)));
                    return;
                }
-               // A good 200: fill the cache (store the response ETag for the
-               // next revalidation) and serve the fresh catalog.
+               // A good 200: normalize a legacy/absent-version body into the
+               // client's canonical representation FIRST (contract: a client
+               // MAY substitute its own known shape for a recognized legacy
+               // version), so the cache and every caller see one schema and
+               // nothing downstream branches on catalogVersion. The SERVER's
+               // ETag still keys revalidation — normalization is client-local.
+               const models::CatalogDto normalized = catalog::normalizeCatalog(reply);
                {
                    std::lock_guard<std::mutex> lock(mutex_);
-                   cache_[satelliteId] = CacheEntry{reply.etag, reply};
+                   cache_[satelliteId] = CacheEntry{reply.etag, normalized};
                }
-               cb(core::toSuccess(prev, reply));
+               cb(core::toSuccess(prev, normalized));
            });
 }
 

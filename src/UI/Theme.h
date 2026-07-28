@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include <QApplication>
 #include <QColor>
 #include <QString>
 
@@ -40,6 +39,9 @@ struct ThemePalette {
     QRgb success;
     QRgb error;
     QRgb warning;
+    // The donation accent ("pulse" — dish-android colorPulse). The ONE hue Dish
+    // uses beyond cyan, reserved for the Support Dish surface + its rail entry.
+    QRgb pulse;
 };
 
 // Which appearance the app is rendering. SYSTEM is resolved to one of
@@ -63,12 +65,10 @@ struct Theme {
     // DESIGN.md for the token name <-> hex mapping and the cross-repo schema.
     //
     // These are NON-const statics that alias the *active* palette's fields, so
-    // existing call sites (`hex(Theme::primary)`, `dotQss(Theme::success)`, …)
-    // keep working verbatim while resolving to the currently-applied appearance.
-    // setActivePalette() rewrites them; applyDishTheme()/the QSS helpers read
-    // them, so re-applying re-themes the whole app. Initialised to the dark
-    // values so a build that never calls setActivePalette() looks exactly as it
-    // did before this workstream (no dark regression).
+    // call sites (the QML ThemeBridge accessors) resolve to the currently-
+    // applied appearance. setActivePalette() rewrites them. Initialised to the
+    // dark values so a build that never calls setActivePalette() renders the
+    // deep-space default.
     static QRgb background;
     static QRgb surface;
     static QRgb surfaceDim;
@@ -81,12 +81,12 @@ struct Theme {
     static QRgb success;
     static QRgb error;
     static QRgb warning;
+    static QRgb pulse;
 };
 
-// Swap the active palette (the Theme::* tokens above). Pure state mutation — it
-// does NOT touch any QApplication; call applyDishTheme(app) afterwards to push
-// the new tokens into the global palette + stylesheet. The live-re-apply
-// Controller (composer::ThemeController) calls both in order.
+// Swap the active palette (the Theme::* tokens above). Pure state mutation;
+// the QML ThemeBridge re-reads these on its refresh() and the native chrome
+// flips its immersive-dark attribute — there is no widget stylesheet anymore.
 void setActivePalette(const ThemePalette& palette);
 
 // The currently-active appearance (Dark unless setActiveAppearance set Light).
@@ -100,49 +100,7 @@ void setActiveAppearance(Appearance appearance);
 // tests so SYSTEM resolution can be driven without touching the real registry.
 Appearance detectSystemAppearance();
 
-// Apply the global Qt palette + a stylesheet matching dish-android's themes,
-// reading from the *active* palette (so a re-apply after setActivePalette
-// re-themes globally-styled widgets).
-void applyDishTheme(QApplication& app);
-
-// Format a QRgb as a `#RRGGBB` string for embedding in QSS.
+// Format a QRgb as a `#RRGGBB` string (diagnostics + any string-styled sink).
 QString hex(QRgb c);
-
-// Style helpers used by the dialogs / SlotCard.
-QString sectionHeaderQss();
-QString outlinedButtonQss();
-QString dotQss(QRgb color);
-
-// Apply the canonical Dish design-system "disabled" treatment to a widget:
-// when the widget is disabled, the entire control drops to 0.4 alpha (matches
-// `ds-components.jsx`'s Button rule `opacity: disabled ? 0.4 : 1`). Qt
-// stylesheets don't accept `opacity:` directly, so the helper installs a
-// `QGraphicsOpacityEffect` that toggles on `QEvent::EnabledChange` via a
-// child-object filter. Press / hover feedback is naturally suppressed
-// because the existing `:hover` / `:pressed` QSS selectors do not match a
-// disabled widget. Mirrors dish-mac's `DishOutlinedButtonStyle` opacity rule.
-//
-// Call this once, after the widget is fully constructed, on any control that
-// can transition between enabled / disabled in-flight (Scan, Pair, Connect).
-void applyDisabledOpacityEffect(QWidget* widget);
-
-// Small capability-chip pill used in SlotCard. `present` renders the active
-// (filled, primary-tinted) chip; otherwise a dimmed, outlined "not available"
-// chip. Mirrors dish-mac's CapabilityChip. Colours come from Theme tokens.
-QString capabilityChipQss(bool present);
-
-// Battery-chip pill used in SlotCard, sat next to the motion chip. Shares the
-// capability-chip pill geometry. `lowBattery` swaps the cyan/primary tint for
-// the amber `warning` token so a near-flat pad reads at a glance.
-QString batteryChipQss(bool lowBattery);
-
-// Small, unobtrusive live-stats text used in SlotCard for the measured-Hz
-// readouts (gamepad / motion / USB-direct poll rate). Deliberately quieter than
-// the filled capability pills — a borderless monospace number — so the live
-// numbers read as telemetry, not as another status chip. Mirrors android's
-// live-stats pills tone split: `measured` (a USB-direct pad's continuously-
-// measured rate) renders in the `success` token, an estimated/peak routed rate
-// in the muted token.
-QString liveStatChipQss(bool measured);
 
 } // namespace dish::ui

@@ -118,10 +118,12 @@ class WifiConnection : public QObject {
         bool registered = false;
     };
 
-    // Bind a slot with its FINAL descriptor (the type travels with the attach —
-    // no default-then-correct phase). While live, the manager converges it via a
-    // controller PUT (`onSlotChanged`); while idle it rides the next session PUT.
-    void attachSlot(const QString& slotId, int controllerType, bool hasLightbar, bool hasMotion);
+    // Bind a slot with its FINAL descriptor (the type + touchpad mode travel
+    // with the attach — no default-then-correct phase). While live, the manager
+    // converges it via a controller PUT (`onSlotChanged`); while idle it rides
+    // the next session PUT.
+    void attachSlot(const QString& slotId, int controllerType, bool hasLightbar, bool hasMotion,
+                    std::uint8_t touchpadMode = proto::kTouchpadModeOff);
     void detachSlot();
     // Detach by slotId (the hub may unbind a specific slot).
     void detachSlot(const QString& slotId);

@@ -468,3 +468,215 @@ session-key vectors, plus the AEAD direction/counter/token-mismatch properties).
 compile-time-guarded and the touchpad payload is the protocol-1 16-byte layout. The
 only frozen-contract follow-up is the **uncalled public-IP guard** in
 `WifiConnectionManager` (item 6 above) — a wiring gap, routed to Wave 1.
+
+---
+
+## Release-redesign addendum (2026-07-27, branch `feat/release-parity-design`)
+
+A dated truth layer over the 2026-06-15 audit above; earlier rows are left
+verbatim as the historical record. Suite size at this addendum: **1302
+`TEST_CASE`s** (was 926 at the audit).
+
+**Structural: the Widgets UI is deleted.** The Qt Quick flows app (design
+project "Dish — Screens and Flows", synced 2026-07-26) is the ONLY UI; rows
+above that cite `src/UI/*.cpp` view files describe deleted code. The QML pages
+carry every audited behavior; `docs/QML_CONTRACT.md` (A2) is the surface.
+
+**Audit items since RESOLVED:**
+- Battery `isLow` divergence → `core/reducer/BatteryUi.h` is the canonical
+  home (android-inclusive `<= 15`, wired folded into charging per android's
+  `fromWire`); `test_main_ui_state.cpp` repointed at it; the QML card renders
+  its chip tokens. The duplicated inline rules died with the Widgets tree.
+- `SyntheticTwinDedup` → `core/reducer/UsbTwinDedup.h` (was already wired;
+  the row's "no symbol anywhere" note was stale at audit time).
+- `PathCardMapper` core fields → `core/reducer/SlotPathFields.h` (badge/risk/
+  `suggestDirectForTouch` fields intentionally absent — the touch nudge is
+  premise-invalid on Windows, where SDL forwards the touchpad on Standard).
+- `ConfigUiStateBlocker` → `core/reducer/ConfigBlocker.h` + all 13 android
+  cases in `test_config_blocker.cpp` (production consumer wiring pending).
+- **The D2 touchpad-mode cluster is LIVE**: `TouchpadModeRepository` /
+  `TouchpadModeStore` / `TouchpadModeResolve` (ds4 > mouse > off ladder with
+  the catalog ds4-mode gate) exist with contract + probe tests, and the
+  descriptor path DECLARES the resolved mode (SDL touch-source detection →
+  hub resolver → `attachSlot` → PUT; reconcile compares the applied mode).
+  `mouseControl` remains false in v1 by decision — no UI sets a "mouse" pick.
+- `isPrivateHostLiteral` guard → wired in `WifiConnectionManager::connectTo`.
+- `LinkState::Unstable` → entered at 2 consecutive missed acks; recovers on
+  the next ack. The "NOT YET ENTERED" notes above are historical.
+- Reverse pairing: a Path-B `none` AFTER `pending` is now a terminal decline
+  (satellite #68 removed the wire `denied`); early `none` tolerates the
+  POST→first-poll race.
+- Pairing TLS: `PairingClient` is TOFU-pinned via the shared pin store (the
+  "later wave" note above landed).
+- Catalog: legacy/absent-version bodies normalize via
+  `core/catalog/LegacyCatalogTranslator.h` at the repository fill boundary;
+  `catalogVersion`/`emulates`/per-feature `modes` parse; the emulate seed
+  honors `emulates` (`core/reducer/EmulateSeed.h`, delegated from
+  `seedControllerType`).
+- The dead satellite download URL → `dish.tinkernorth.com/downloads/satellite`.
+- SDL button labels → pinned positional (`SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS=0`)
+  so the SDL and USB-direct paths agree.
+
+**REMOVED features (deliberate, with the Widgets tree):** the dismissible
+DonatePill (+ its pure logic + `test_donate_pill.cpp`) — the flows design's
+Settings carries a "Support Dish" row instead; the informational
+SetupWizard/OnboardingNavBar screens — superseded by the live 3-step
+`SetupGuideDialog`.
+
+**Ports landed but NOT yet wired (headers + partial tests, integration
+pending):** `core/input/UsbHidLayout.h` (android HidLayout/decodeFromLayout —
+the HidP caps builder + gateway use are open), `core/reducer/CatalogFeatureGate.h`
+(descriptor caps ∩ catalog type features — referenced only from the
+`AppModel::resolveTouchpadMode` comment, no call site),
+`core/catalog/BundledCatalog.h` (offline capability sets — reached only from
+`LegacyCatalogTranslator.h` / `CatalogFeatureGate.h`, themselves unwired).
+
+`composer/TouchpadModeComposer.h` was listed here in error: no such header was
+ever written. The store-fold is unbuilt, consistent with the D2 SKIP rows for
+`TouchpadModeComposerTest` (§2.8 and the D2 SKIP ledger); the hub resolver
+computes the ladder directly. What DID land is the trio
+`core/reducer/TouchpadModeResolve.h` + `repository/TouchpadModeRepository.h` +
+`source/store/TouchpadModeStore.h`.
+
+**Still-open android deltas (tracked for post-release).** Re-verified against
+the tree at `3b8c822` (symbol-presence + call-site audit); the list below is
+that audit, not the original 3ea439a snapshot.
+
+- **Per-path rumble capability + the USB-direct OUTPUT write path** (rumble /
+  lightbar encoders + gateway write). Today rumble is advertised on Direct
+  with no actuator: `WinHidGateway` only *detects* the endpoint
+  (`info.hasOutEndpoint = caps.OutputReportByteLength > 0`) and no
+  `HidD_SetOutputReport` / `WriteFile` call exists anywhere.
+- **`claim()` HID-collection re-check + ranking + the kKnown model-table
+  port.** No `kKnown` table and no ranking/re-check symbols in the tree.
+- **The six-layer capability fold (`Capability.kt`) + `RumbleEnabledStore` +
+  host feature/runtime stores.** No `RumbleEnabledStore` under
+  `src/source/store/`; rumble delivery at `AppModel`'s rumble handler is
+  ungated, unlike the adjacent lightbar path (which honours
+  `FeatureSettings::lightbarFollowGame`).
+- **`GET /api/server/capabilities` consumption + the motion sink/backend feed
+  (R10 wiring).** The client half EXISTS — `HTTPClient::getCapabilities` —
+  but has zero callers in `src/` or `tests/`. The gap is consumption only.
+- **Guided-setup live-state depth (`SetupUsb` recovery flows).** The wizard's
+  Connect step went live in `ee8cb9c`; the USB recovery depth did not. No
+  `SetupUsb` anything in the tree.
+- **`SlotTopologyComposer` / `SlotTopologyController`.** Absent. NB the
+  departed-device binding sweep this item used to be paired with LANDED in
+  `ee8cb9c` + `e110a23` (see the post-addendum note below) — the two were
+  split because only this half is still open.
+- **Catalog prewarm-on-Live.** No `prewarm` anywhere in `src/`.
+- **Stored-type clamp-to-catalog — the CLAMP ITSELF, not just its call
+  site.** Previously worded as a missing call site, which understated it:
+  `src/core/catalog/` holds only `BundledCatalog.h` +
+  `LegacyCatalogTranslator.h`, and every `clamp` in the tree belongs to
+  Backoff / BatteryRouting / LatencyWindow / Reconcile. Nothing to call yet.
+- **QML translation fill.** Exactly 312 `type="unfinished"` entries in each of
+  the five catalogs (`bs`, `de`, `es`, `fr`, `pt_BR`). English fallback ships.
+
+**Deliberate exclusions reaffirmed (not regressions):** the Diagnostics
+screen/inspector/probe/bench (the design's 16 frames exclude it; the latency
+MECHANISM ships on connection rows), catalog images, the X25519 pairing
+extension (contract-optional), the FakeSatellite integration layer (the
+no-real-sockets invariant stands), the touch-capable "Needs Direct" nudge
+(premise-invalid on Windows).
+
+### Post-addendum fixes (2026-07-27, later the same day)
+
+- **USB-direct unplug (stale controller card)**: nothing ever emitted
+  `event::UsbUnplugged` — `onUsbGone` had zero callers, so a `Direct` pad
+  survived its own unplug forever (the reducer's erase at `applyEvent` was
+  unreachable; SDL-path pads were unaffected). `UsbGamepadManager::reconcile()`
+  now runs a departed-device presence sweep (the polled Windows analog of
+  android's `ACTION_USB_DEVICE_DETACHED`): tracked keys absent from
+  `enumerate()` route through `onUsbGone` → erase + `releaseClaim` +
+  `syntheticRemoved`. Three new manager-level tests in
+  `test_usb_gamepad_manager.cpp` (Direct erase+release, Routed forget,
+  replug re-evaluates auto-Direct); the §2.6 "no unplug scenario" gap is
+  closed at the manager layer. Hardened same day: the sweep debounces to 2
+  consecutive missed scans (one flaky enumeration pass must read as a blip,
+  never a teardown of a live claim — same shape as the missed-ack Unstable
+  rule), with a blip test. Found while chasing a "Claiming controller…"
+  flap: `AppModel::pollUsbDirect()` compared `find()`/`end()` iterators from
+  two separate BY-VALUE `controllers()` temporaries — UB that only executes
+  once a Direct pad exists (debug CRT: "map/set iterators incompatible"
+  assert ~2 s after a fast-lane pad claims; release: freed-heap reads, the
+  0xc0000005 ntdll crash). Fixed with a single snapshot per pass.
+- **Pairing sheet — both paths at once (android `PairPinDialog` parity)**: the
+  forward/reverse split dialog (a tap-gated `reverseMode` flip; the reverse
+  POST fired only on the "Show a PIN on this PC instead…" link) is replaced by
+  the shared `src/qml/pages/PairingDialog.qml`: the 6-digit satellite-PIN
+  field stays typeable throughout, and the 4-digit `clientPin` is POSTed
+  automatically on open (android's "sent immediately so no extra tap"
+  rule). New `App.pairingServerId` lets the parked-target auto-open drive
+  both paths (it previously passed an empty id, killing Path B). Contract:
+  `docs/QML_CONTRACT.md` "The pairing sheet: both paths at once".
+- **Guided connect wizard (android `ui/setup` step-3 port)**: the wizard flow
+  android replaced its onboarding with (#129) never existed on Windows in
+  functional form — `SetupGuideDialog` was informational copy. Its Connect
+  step is now the LIVE flow: scan-on-open (#125), Rescan, discovered-host
+  rows opening the shared pairing sheet, the get-Satellite empty state, and
+  auto-advance gated on the wizard's own pending host (the
+  `SetupConnectionViewModel` "never advance on a background reconnect" rule,
+  ported). Step 2 lists `App.slotModel` live. The USB/BT input-picker steps
+  stay collapsed by design (pads auto-appear on Windows); `SetupUsb`-style
+  recovery depth remains in the still-open list above.
+- **FOUND/REMEMBERED one-spot rule**: a remembered satellite that was also in
+  the current scan rendered TWICE on the Connections page — a FOUND row (raw
+  `discoveredServers`) and its REMEMBERED row (the composer already marks it
+  discovered via the `Ready` chip). The contract (§3 note) always said FOUND
+  is the *not-yet-remembered* rest; the filter just never existed. Now
+  `reducer::serversVisibleInFound` (`core/reducer/FoundVisibility.h`) drops
+  any discovered id that already has a connections row (remembered ∪ live —
+  the row-id universe, so a mid-pair live session collapses too, matching
+  android where the found list is keyed off the same summaries map).
+  `AppViewModel::discoveredServers()/foundCount` read through it, and
+  `discoveredChanged` also re-fires when the connection-row id SET moves
+  (pair lands / forget drops a row) — keyed on the id set so the 1 Hz latency
+  ticks never churn the FOUND repeater. Pinned in
+  `test_found_visibility.cpp` (7 cases: one-spot, scan order, DHCP-move fold
+  on `mid:`, legacy `wifi:ip:port` fold, mid-pair suppression,
+  forget-reappearance, input purity).
+
+### The Home flow (design sync 2026-07-27 — frames 17/18 + the revised rail)
+
+The design project grew a "06 · HOME" section (Home — signal path; Action
+card — states) and revised the rail (Home on top, a pane "+ Add", Support
+Dish as a pulse-pink heart destination above a gear-glyphed Settings).
+Implemented end-to-end, screenshot-verified against the frames by driving the
+built app:
+
+- **Home destination** (`pages/HomePage.qml`, the new default): one wiring row
+  per pad — pad card → wire (measured rate `·` one-way latency over the dish
+  glyph; solid accent live, dashed outline dead/"idle") → satellite card (the
+  §3 row vocabulary) or the dashed "Bind…" ghost; the "+ Add a controller"
+  invitation row; the keep-awake floating pill ("Streaming — do not close").
+- **Data**: the slot model gained the bound-satellite JOIN roles (`satIp`,
+  `satLinkState`, `satChip`, `satDotColor`, `satGlyph`, `satLatencyText`,
+  `satLatencySamples`) — joined in C++ by `boundConnectionId` against the
+  coordinator's derived rows, same render-token vocabulary + latency
+  formatter/gate as `ConnectionListModel` (shared `qml/RenderTokens.h`, so the
+  three surfaces cannot drift). Pinned in `test_slot_list_model.cpp` (6 new
+  cases: join, unbound/vanished-row empties, samples gate, roles-scoped
+  `dataChanged`, no-slot no-op). `App.streamingSlotCount` re-projects the
+  EXISTING `composer::streamingSlotCount` (the wake rule) for the header.
+- **Action-card vocabulary** (`kit/ActionCard.qml`): rest `primaryFill`,
+  hover 18 %, pressed 24 %, keyboard focus solid-border + ring, disabled 0.4 —
+  the frame-18 ladder; pane density = the rail's "+ Add" (opens the setup
+  guide's Controller step via the new `openSetupGuideAt`; the wizard gained
+  `initialStep`).
+- **Bind chooser extracted** to the shared `pages/BindChooserDialog.qml`
+  (ControllersPage + HomePage; behavior unchanged, ControllersPage's inline
+  copy deleted). Hard-coded destination index updated (Connections → 2).
+- **Pulse tokens**: `ThemePalette.pulse` (android `colorPulse` #FF6FB5; light
+  AA-darkens to #C2417F per the palette's documented on-light shift) →
+  `Theme.pulse`/`pulseFill`/`pulseEdge` in the QML bridge; the palette
+  completeness test now covers it. DonatePage restyled to frame f-e3 (pulse
+  hero + CTA + rails + condensed pays-for card, 330px/flex two-column grid);
+  the rail heart is a ♥ text glyph in `Theme.pulse`. `gear.svg` added to the
+  brand set (qrc) for Settings.
+- **Fixes surfaced while driving the app**: fractional `font.pixelSize`
+  literals fail qmlcachegen-compiled component creation (int-typed) — the
+  restyled DonatePage silently refused to load until 10.5/11.5/12.5 became
+  tokens; `BrandGlyph` now maps an empty glyph to an empty source (was
+  warning `qrc:/brand/.svg` on every hidden-glyph create).
+- Contract: `docs/QML_CONTRACT.md` §8 "A3 addendum — the Home flow surface".

@@ -28,6 +28,7 @@
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/TouchpadModeStore.h"
 #include "source/store/ThemePreferenceStore.h"
 #include "source/store/UsbPathPreferenceStore.h"
 #include "source/usb/UsbGamepadManager.h"
@@ -88,6 +89,9 @@ class AppModel : public QObject {
     input::GamepadInputProcessor* processor() { return &processor_; }
     input::SDLGamepadBridge* bridge() { return bridge_; }
     composer::WakeStateController* wake() { return &wakeController_; }
+    // Observable count of streaming slots holding the display awake (>0 == the
+    // inhibitor is held). The QML header pill subscribes; read-only.
+    arch::Observable<int>& keepAwakeCount() { return shouldKeepScreenOn_; }
     // Feature-forwarding preferences (light bar on/off). Owned by the model;
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }
@@ -302,7 +306,7 @@ class AppModel : public QObject {
     // Declaration order matters: each controller captures its store's Observable,
     // so the stores must precede the controllers. The crash backend (a no-op
     // seam this wave, D4) precedes its controller. The theme controller re-themes
-    // the live QApplication off the theme store's ThemeMode Observable.
+    // the active palette off the theme store's ThemeMode Observable.
     source::OnboardingPreferenceStore onboardingStore_;
     source::ThemePreferenceStore themeStore_;
     source::CrashReportingStore crashStore_;
@@ -326,6 +330,10 @@ class AppModel : public QObject {
     repository::DeadzoneRepository deadzoneRepo_;
     repository::MotionPreferenceRepository motionPrefRepo_;
     source::MotionEnabledStore motionEnabledStore_;
+    // Per-satellite touchpad-mode picks (absent = the ds4 pair-time default).
+    // Read by the hub's touchpad-mode resolver when a slot binds.
+    repository::TouchpadModeRepository touchpadModeRepo_;
+    source::TouchpadModeStore touchpadModeStore_{&touchpadModeRepo_};
 
     // ── Raw-joystick remap store (android parity) ────────────────────────────
     // Declaration order: the repo must precede the store that hydrates from it.

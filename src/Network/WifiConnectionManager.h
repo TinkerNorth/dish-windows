@@ -192,6 +192,10 @@ class WifiConnectionManager : public QObject {
     QTimer* reverseTimer_ = nullptr;
     std::int64_t reverseElapsedMs_ = 0;
     std::int64_t reverseDeadlineMs_ = 0;
+    // Whether any poll in the CURRENT attempt saw "pending" — a later "none"
+    // then means the operator's deny erased the row (terminal), while a "none"
+    // before any pending tolerates the POST→first-poll race. Reset per attempt.
+    bool reverseSawPending_ = false;
     bool reversePollInFlight_ = false;
 };
 

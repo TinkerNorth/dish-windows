@@ -87,21 +87,30 @@ inline PairVerdict classifyPair(const PairReply& r) {
 
 // ── Path-B approval-status classification (GET /api/pair/status) ─────────────
 // {"ok":true,"status":"approved","sharedKey":...} exactly once, else
-// {"ok":false,"status":"pending"|"denied"|"none"}.
+// {"ok":false,"status":"pending"|"none"}. There is NO wire "denied" anymore:
+// an operator deny ERASES the pending row server-side, so the client polls
+// straight to "none" — which is terminal exactly when a "pending" was seen
+// first (before that, "none" tolerates the POST→first-poll race). The string
+// is still mapped defensively for any pre-change satellite.
 enum class ApprovalVerdict { Approved, Pending, Declined, Unreachable };
 
 struct ApprovalReply {
     int status = 0;
     bool bodyParsed = false;
-    std::string statusStr; // "approved"|"pending"|"denied"|"none"
+    std::string statusStr; // "approved"|"pending"|"none" ("denied" legacy)
     bool hasSharedKey = false;
 };
 
-inline ApprovalVerdict classifyApproval(const ApprovalReply& r) {
+// `sawPending`: has any poll in THIS attempt observed "pending"? The caller
+// tracks it (pure state travels in, the rule stays a function).
+inline ApprovalVerdict classifyApproval(const ApprovalReply& r, bool sawPending = false) {
     if (r.status == 0 || !r.bodyParsed) { return ApprovalVerdict::Unreachable; }
     if (r.statusStr == "approved" && r.hasSharedKey) { return ApprovalVerdict::Approved; }
     if (r.statusStr == "denied") { return ApprovalVerdict::Declined; }
-    // "pending" / "none" / anything transient → keep waiting.
+    // A "none" AFTER a pending means the operator's deny erased the row —
+    // terminal for this attempt; keep polling would burn the whole budget.
+    if (r.statusStr == "none" && sawPending) { return ApprovalVerdict::Declined; }
+    // "pending" / early "none" / anything transient → keep waiting.
     return ApprovalVerdict::Pending;
 }
 

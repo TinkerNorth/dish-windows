@@ -18,6 +18,8 @@
 #include <QTimer>
 #include <QUrl>
 
+#include <utility>
+
 namespace dish::net {
 
 namespace {
@@ -49,15 +51,18 @@ struct BlockingReply {
 };
 
 BlockingReply blockingRequest(const QString& url, const QByteArray& method, const QByteArray& body,
-                              const QString& deviceId, const QString& hmacProof) {
-    QNetworkRequest req((QUrl(url)));
+                              const QString& deviceId, const QString& hmacProof,
+                              const PairingClient::PinVerifier& pinVerify) {
+    const QUrl parsed(url);
+    QNetworkRequest req(parsed);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     if (!deviceId.isEmpty()) { req.setRawHeader("X-Device-Id", deviceId.toUtf8()); }
     if (!hmacProof.isEmpty()) { req.setRawHeader("X-Hmac-Proof", hmacProof.toUtf8()); }
 
-    // Self-signed cert accepted without verification (TOFU pinning is a later
-    // wave). The manager is stack-local so it (and the reply) belong to this
-    // worker thread; the nested event loop pumps its signals.
+    // Qt's own chain verification stays off (self-signed cert by design); the
+    // REAL gate is the TOFU pin check on the `encrypted` edge below, same as
+    // the HTTPClient path. The manager is stack-local so it (and the reply)
+    // belong to this worker thread; the nested event loop pumps its signals.
     QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
     tls.setPeerVerifyMode(QSslSocket::VerifyNone);
     req.setSslConfiguration(tls);
@@ -70,6 +75,15 @@ BlockingReply blockingRequest(const QString& url, const QByteArray& method, cons
                                           : nam.sendCustomRequest(req, method, body);
     QObject::connect(reply, &QNetworkReply::sslErrors, reply,
                      [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
+    // TOFU: inspect the peer cert the moment the handshake completes — before
+    // the request body (the PIN / the proof) transits. A pin mismatch aborts;
+    // the exchange then reads unreachable and pairing fails safe.
+    const QString host = parsed.host();
+    QObject::connect(reply, &QNetworkReply::encrypted, reply, [reply, host, &pinVerify] {
+        if (!pinVerify) { return; }
+        const QByteArray der = reply->sslConfiguration().peerCertificate().toDer();
+        if (!pinVerify(host, der)) { reply->abort(); }
+    });
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
 
     QTimer guard;
@@ -137,7 +151,7 @@ models::PairResponse PairingClient::pair(const QString& ip, int port, const QStr
         {"clientPin", clientPin},
     };
     const auto body = QJsonDocument(reqObj).toJson(QJsonDocument::Compact);
-    const auto reply = blockingRequest(url, "POST", body, {}, {});
+    const auto reply = blockingRequest(url, "POST", body, {}, {}, pinVerifier());
     if (!reply.reachable) { return makeError("connect failed"); }
     auto r = models::PairResponse::fromJson(parseObject(reply.body));
     r.httpStatus = reply.status;
@@ -154,7 +168,7 @@ models::PairResponse PairingClient::rotateKey(const QString& ip, int port, const
         {"hmacProof", hmacProof},
     };
     const auto body = QJsonDocument(reqObj).toJson(QJsonDocument::Compact);
-    const auto reply = blockingRequest(url, "POST", body, {}, {});
+    const auto reply = blockingRequest(url, "POST", body, {}, {}, pinVerifier());
     if (!reply.reachable) { return makeError("connect failed"); }
     auto r = models::PairResponse::fromJson(parseObject(reply.body));
     r.httpStatus = reply.status;
@@ -167,11 +181,20 @@ models::PairResponse PairingClient::pairStatus(const QString& ip, int port,
                             .arg(ip)
                             .arg(port)
                             .arg(QString::fromUtf8(QUrl::toPercentEncoding(deviceId)));
-    const auto reply = blockingRequest(url, "GET", {}, {}, {});
+    const auto reply = blockingRequest(url, "GET", {}, {}, {}, pinVerifier());
     if (!reply.reachable) { return makeError("connect failed"); }
     auto r = models::PairResponse::fromStatusJson(parseObject(reply.body));
     r.httpStatus = reply.status;
     return r;
 }
+
+PairingClient::PinVerifier& PairingClient::pinVerifier() {
+    // Function-local static: the manager sets it once at construction (worker
+    // threads only READ it afterwards), and tests can swap/clear it.
+    static PinVerifier verifier;
+    return verifier;
+}
+
+void PairingClient::setPinVerifier(PinVerifier verifier) { pinVerifier() = std::move(verifier); }
 
 } // namespace dish::net

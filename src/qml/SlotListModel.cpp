@@ -4,7 +4,9 @@
 #include "qml/SlotListModel.h"
 
 #include "UI/SlotLiveStats.h"
+#include "core/reducer/LatencyWindow.h"
 #include "core/reducer/SlotPathFields.h"
+#include "qml/RenderTokens.h"
 
 namespace dish::qml {
 
@@ -99,6 +101,10 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return s.usbDirect;
     case RemappableRole:
         return s.remappable;
+    case EmulateNameRole:
+        return s.emulateName;
+    case RegisteringRole:
+        return s.registering;
 
     case HasMotionRole:
         return s.capabilities.hasMotion;
@@ -144,6 +150,42 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return chip.kind != ui::RateChipKind::Hidden;
     }
 
+    // Bound-satellite join roles: read through the connection row matched by
+    // boundConnectionId. The unbound / vanished-row fallbacks are the inert
+    // empties (the Home page's ghost-card state).
+    case SatIpRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? QString::fromStdString(row->ip) : QString();
+    }
+    case SatLinkStateRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::linkStateToken(row->live) : QString();
+    }
+    case SatChipRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::chipToken(row->chip) : QString();
+    }
+    case SatDotColorRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::dotToken(row->dotColor) : QString();
+    }
+    case SatGlyphRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::glyphToken(row->glyph) : QString();
+    }
+    case SatLatencyTextRole: {
+        // Same formatter + same samples gate as ConnectionListModel, so the
+        // Home wire label and the Connections row can never disagree.
+        const auto* row = rowForSlot(s);
+        return row != nullptr && row->latencySamples > 0
+                   ? QString::fromStdString(reducer::formatLatencyMs(row->latencyOneWayMs))
+                   : QString();
+    }
+    case SatLatencySamplesRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? row->latencySamples : 0;
+    }
+
     case PathPhaseRole:
         return pathPhaseToken(s.pathPhase);
     case DesiredPathRole:
@@ -176,6 +218,8 @@ QHash<int, QByteArray> SlotListModel::roleNames() const {
         {DotColorRole, "dotColor"},
         {UsbDirectRole, "usbDirect"},
         {RemappableRole, "remappable"},
+        {EmulateNameRole, "emulateName"},
+        {RegisteringRole, "registering"},
         {HasMotionRole, "hasMotion"},
         {HasLightbarRole, "hasLightbar"},
         {BatteryLevelRole, "batteryLevel"},
@@ -193,6 +237,13 @@ QHash<int, QByteArray> SlotListModel::roleNames() const {
         {PathSupportedRole, "pathSupported"},
         {ClaimInProgressRole, "claimInProgress"},
         {DirectFailureRole, "directFailure"},
+        {SatIpRole, "satIp"},
+        {SatLinkStateRole, "satLinkState"},
+        {SatChipRole, "satChip"},
+        {SatDotColorRole, "satDotColor"},
+        {SatGlyphRole, "satGlyph"},
+        {SatLatencyTextRole, "satLatencyText"},
+        {SatLatencySamplesRole, "satLatencySamples"},
     };
 }
 
@@ -225,6 +276,27 @@ void SlotListModel::setState(const QList<models::ControllerSlot>& slotList) {
     if (common > 0) { emit dataChanged(index(0), index(common - 1)); }
 
     if (oldCount != newCount) { emit countChanged(); }
+}
+
+void SlotListModel::setConnectionRows(const std::vector<composer::ConnectionRow>& rows) {
+    connectionRows_ = rows;
+    // Only the join roles read through the rows; scoping the dataChanged to
+    // them keeps the ~1 Hz latency tick from re-evaluating every slot binding.
+    if (!slots_.isEmpty()) {
+        static const QList<int> kJoinRoles{
+            SatIpRole,    SatLinkStateRole,   SatChipRole,          SatDotColorRole,
+            SatGlyphRole, SatLatencyTextRole, SatLatencySamplesRole};
+        emit dataChanged(index(0), index(static_cast<int>(slots_.size()) - 1), kJoinRoles);
+    }
+}
+
+const composer::ConnectionRow* SlotListModel::rowForSlot(const models::ControllerSlot& slot) const {
+    if (!slot.boundConnectionId.has_value()) { return nullptr; }
+    const std::string id = slot.boundConnectionId->toStdString();
+    for (const auto& row : connectionRows_) {
+        if (row.id == id) { return &row; }
+    }
+    return nullptr;
 }
 
 } // namespace dish::qml

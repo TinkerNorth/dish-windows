@@ -4,14 +4,17 @@
 #include "qml/AppViewModel.h"
 
 #include "AppModel.h"
+#include "FeatureSettings.h"
 #include "Input/GamepadInputProcessor.h"
 #include "Input/JoystickMapping.h"
 #include "Input/SDLGamepadBridge.h"
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "composer/StreamingSlotCount.h"
 #include "core/input/Deadzones.h"
 #include "core/reducer/ConnectionRows.h"
+#include "core/reducer/FoundVisibility.h"
 #include "core/reducer/PathChoice.h"
 #include "core/reducer/PickerVisibility.h"
 #include "core/reducer/SlotPathFields.h"
@@ -27,6 +30,7 @@
 
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QSet>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
@@ -176,6 +180,24 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
         false);
     onboardingNeeded_ = !model_->onboardingStore()->welcomeCompleted();
 
+    // The keep-awake pill follows the wake composer's streaming count. Folded
+    // into stateChanged (a wake flip always rides a binding/liveness change,
+    // but the subscription is what actually catches it).
+    keepAwakeSub_ = model_->keepAwakeCount().subscribe(
+        [this](const int& count) {
+            const bool active = count > 0;
+            if (active != keepAwakeActive_) {
+                keepAwakeActive_ = active;
+                emit stateChanged();
+            }
+        },
+        true);
+
+    // An external light-bar mutation (nothing mutates it but us today, yet the
+    // store could grow callers) re-reads through the one NOTIFY.
+    QObject::connect(model_->featureSettings(), &FeatureSettings::changed, this,
+                     [this] { emit lightbarChanged(); });
+
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
     QObject::connect(telemetryTimer_, &QTimer::timeout, this, &AppViewModel::onTelemetryTick);
@@ -224,8 +246,32 @@ void AppViewModel::onStateChanged() {
 
     busy_ = st.busy;
 
+    // Shell-header primitives (contract A2): the pages assemble the design's
+    // sub-lines ("2 of 3 online · nothing bound") from these in QML.
+    slotCount_ = static_cast<int>(st.slotList.size());
+    int bound = 0;
+    for (const auto& s : st.slotList) {
+        if (s.boundConnectionId.has_value()) { ++bound; }
+    }
+    boundSlotCount_ = bound;
+    firstOnlineName_ = firstLabel;
+
+    // The Home header's "N controllers streaming" — the SAME pure
+    // composer::streamingSlotCount the wake controller keys the display on
+    // (bound AND Connected), fed from this state slice's bindings x links.
+    {
+        QHash<QString, QString> bindings;
+        for (const auto& s : st.slotList) {
+            if (s.boundConnectionId.has_value()) { bindings.insert(s.id, *s.boundConnectionId); }
+        }
+        QHash<QString, models::LinkState> links;
+        for (const auto& c : conns) { links.insert(c.id, c.live); }
+        streamingSlotCount_ = composer::streamingSlotCount(bindings, links);
+    }
+
     pairingActive_ = st.pairingTarget.has_value();
     pairingServerName_ = pairingActive_ ? st.pairingTarget->name : QString();
+    pairingServerId_ = pairingActive_ ? st.pairingTarget->id() : QString();
 
     slotModel_.setState(st.slotList);
 
@@ -243,7 +289,25 @@ void AppViewModel::onStateChanged() {
 }
 
 void AppViewModel::onConnectionsChanged() {
-    connectionModel_.setRows(model_->connections()->connections().value());
+    const auto rows = model_->connections()->connections().value();
+    connectionModel_.setRows(rows);
+    // The slot model's bound-satellite join (the Home signal-path right cell +
+    // wire latency) reads through the same derived rows.
+    slotModel_.setConnectionRows(rows);
+
+    // The FOUND list is the discovered scan MINUS these row ids (the one-spot
+    // rule, reducer::serversVisibleInFound), so a membership move — a pair
+    // landing a new remembered row, a forget dropping one — must re-read the
+    // discoveredServers/foundCount bindings too. Keyed on the id SET, not the
+    // rows, so the per-second latency ticks (which also arrive here) never
+    // churn the FOUND Repeater.
+    QSet<QString> ids;
+    ids.reserve(static_cast<qsizetype>(rows.size()));
+    for (const auto& row : rows) { ids.insert(QString::fromStdString(row.id)); }
+    if (ids != connectionRowIds_) {
+        connectionRowIds_ = std::move(ids);
+        emit discoveredChanged();
+    }
 }
 
 void AppViewModel::onTelemetryTick() {
@@ -252,6 +316,30 @@ void AppViewModel::onTelemetryTick() {
     sendsPerSec_ = snap.sends;
     totalSent_ = snap.totalSent;
     emit telemetryChanged();
+}
+
+// Derived from the (one-spot filtered) FOUND list on read (UI cadence, list is
+// tiny) so no second cache can drift from discoveredServers().
+int AppViewModel::foundCount() const { return static_cast<int>(discoveredServers().size()); }
+
+bool AppViewModel::railCollapsed() const { return uiPrefs_.railCollapsed(); }
+
+void AppViewModel::setRailCollapsed(bool collapsed) {
+    if (uiPrefs_.railCollapsed() == collapsed) { return; }
+    uiPrefs_.setRailCollapsed(collapsed);
+    emit railCollapsedChanged();
+}
+
+bool AppViewModel::lightbarFollowGame() const {
+    return model_->featureSettings()->lightbarMode() == LightbarMode::FollowGame;
+}
+
+void AppViewModel::setLightbarFollowGame(bool followGame) {
+    model_->featureSettings()->setLightbarMode(followGame ? LightbarMode::FollowGame
+                                                          : LightbarMode::Off);
+    // FeatureSettings::changed also fires; the extra emit keeps the property
+    // NOTIFY correct even if that connect is ever removed.
+    emit lightbarChanged();
 }
 
 void AppViewModel::bindSlot(const QString& slotId, const QString& connectionId) {
@@ -386,8 +474,19 @@ void AppViewModel::startDiscovery() { model_->wifi()->startDiscovery(); }
 bool AppViewModel::isScanning() const { return model_->wifi()->isScanning(); }
 
 QVariantList AppViewModel::discoveredServers() const {
+    // One-spot rule (reducer::serversVisibleInFound): a satellite whose id
+    // already has a row in the derived connections list (remembered ∪ live)
+    // renders THERE — FOUND offers only the un-remembered rest. Both sides key
+    // on the stable machineId-preferring id, so a remembered box at a fresh
+    // DHCP address still folds. onConnectionsChanged re-emits discoveredChanged
+    // when this id set moves, so the binding re-reads on pair/forget too.
+    QSet<QString> rowIds;
+    for (const auto& row : model_->connections()->connections().value()) {
+        rowIds.insert(QString::fromStdString(row.id));
+    }
     QVariantList out;
-    for (const auto& s : model_->wifi()->discoveredServers()) {
+    for (const auto& s :
+         reducer::serversVisibleInFound(model_->wifi()->discoveredServers(), rowIds)) {
         QVariantMap m;
         m[QStringLiteral("name")] = s.name;
         m[QStringLiteral("ip")] = s.ip;

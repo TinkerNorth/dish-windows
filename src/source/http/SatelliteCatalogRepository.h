@@ -18,6 +18,12 @@
 // source/http alongside the TLS verifier seam. The fetch is injected as a
 // `Fetch` callable so the cache/revalidate policy is unit-testable with a fake
 // transport (no real socket), exactly as android mocks its DiscoveryGateway.
+//
+// Catalog-version handling is the LegacyCatalogTranslator's, applied HERE at
+// the parse boundary (200 fill and stale-serve alike): a legacy/absent-version
+// body is substituted for the client's own known representation before it
+// reaches the cache or a callback, so every caller sees the normalized shape
+// and the rest of the app never branches on catalogVersion.
 
 #pragma once
 

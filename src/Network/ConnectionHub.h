@@ -80,6 +80,15 @@ class ConnectionHub : public QObject {
     using ControllerTypeFn = std::function<int(const QString& slotId)>;
     void setControllerTypeFn(ControllerTypeFn fn) { controllerTypeFn_ = std::move(fn); }
 
+    // Resolver answering "which touchpadMode does this slot's descriptor
+    // declare?" (a proto::kTouchpadMode* value). AppModel folds the full
+    // ladder (pad has a touch source × the selected type's catalog gate × the
+    // per-satellite pick) via reducer::resolveTouchpadMode; bind() threads the
+    // result into the descriptor so DS4 touch actually forwards (a hardwired
+    // "off" made the satellite discard every MSG_TOUCHPAD). Unset → off.
+    using TouchpadModeFn = std::function<std::uint8_t(const QString& slotId)>;
+    void setTouchpadModeFn(TouchpadModeFn fn) { touchpadModeFn_ = std::move(fn); }
+
     void bind(const QString& slotId, const QString& connectionId);
     void unbind(const QString& slotId);
     std::optional<models::ConnectionSummary> boundConnection(const QString& slotId) const;
@@ -98,6 +107,7 @@ class ConnectionHub : public QObject {
     LightbarCapabilityFn lightbarCapabilityFn_;
     MotionCapabilityFn motionCapabilityFn_;
     ControllerTypeFn controllerTypeFn_;
+    TouchpadModeFn touchpadModeFn_;
 };
 
 } // namespace dish::net

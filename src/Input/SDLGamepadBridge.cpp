@@ -134,12 +134,19 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
         // the only kind the JoystickRemap path applies to (a game controller in
         // openControllers_ uses SDL's own mapping). Drives the slot's remappable.
         dev.isRawJoystick = openJoysticks_.count(iid) != 0;
+        dev.hasTouchpad = touchpadCapable_.count(iid) != 0;
         out.append(dev);
     }
     return out;
 }
 
 void SDLGamepadBridge::runLoop() {
+    // Positional (Xbox-layout) button reporting, NOT label-based: the
+    // USB-direct decoders map by physical position (UsbReportParsers) and
+    // android's GamepadQuirks does the same positional swap on its framework
+    // path — without this hint a Switch Pro on the SDL path would disagree
+    // with the same pad on the Direct path.
+    SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) != 0) {
         running_.store(false);
         return;
@@ -189,6 +196,9 @@ void SDLGamepadBridge::runLoop() {
             // third-party pads); SDL_FALSE for Xbox / Switch Pro / generic
             // pads. Drives the per-controller CAP_LIGHTBAR advertisement.
             const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
+            // Readable touchpad probe (DS4 / DualSense report one; everything
+            // else zero). Gates the slot's descriptor touchpadMode resolution.
+            const bool hasTouchpad = SDL_GameControllerGetNumTouchpads(gc) > 0;
             // SDL's negotiated type — used only for the DEVCAPS diagnostic below.
             const auto type = SDL_GameControllerGetType(gc);
             // The pad's USB identity, classified once here for the twin-dedup
@@ -203,6 +213,7 @@ void SDLGamepadBridge::runLoop() {
                 deviceNames_[iid] = deviceName;
                 if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
                 if (hasLed) { lightbarCapable_.insert(iid); }
+                if (hasTouchpad) { touchpadCapable_.insert(iid); }
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
             }
@@ -245,6 +256,7 @@ void SDLGamepadBridge::runLoop() {
                 deviceNames_.erase(iid);
                 motionCapable_.erase(iid);
                 lightbarCapable_.erase(iid);
+                touchpadCapable_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
                 lastBattery_.erase(iid);

@@ -15,6 +15,7 @@
 
 #include "Models/Models.h"
 #include "core/model/Protocol.h"
+#include "core/reducer/EmulateSeed.h"
 
 #include <QList>
 #include <QString>
@@ -76,18 +77,35 @@ inline bool isTypeOfferable(const models::CatalogTypeDto& type) {
 }
 
 // The slot's seed/default controller type, as a pure ladder: the user's Emulate
-// override when set; else the first type the catalog OFFERS (isTypeOfferable — the
-// picker's first row, in the server's curated order); else Xbox when no catalog is
-// cached. Keeps the pre-selected default in lockstep with the picker's first row.
+// override when set; else the type whose `emulates` hint matches the detected
+// pad (EmulateSeed — the server's mapping policy, resolved against the OFFERED
+// rows only, since hints ride only offered types); else the first type the
+// catalog OFFERS (isTypeOfferable — the picker's first row, in the server's
+// curated order); else Xbox when no catalog is cached. An empty pad identity
+// (or a hint-less catalog) matches nothing, so the ladder degrades to exactly
+// the pre-emulates first-offered behavior.
 inline int seedControllerType(std::optional<int> userOverride,
-                              const std::optional<models::CatalogDto>& catalog) {
+                              const std::optional<models::CatalogDto>& catalog,
+                              const QString& sdlTypeSlug, const QString& vidPid) {
     if (userOverride) { return *userOverride; }
     if (catalog) {
+        QList<models::CatalogTypeDto> offered;
+        offered.reserve(catalog->controllerTypes.size());
         for (const auto& t : catalog->controllerTypes) {
-            if (isTypeOfferable(t)) { return t.id; }
+            if (isTypeOfferable(t)) { offered.push_back(t); }
         }
+        if (const auto match = seedFromEmulates(offered, sdlTypeSlug, vidPid)) { return *match; }
+        if (!offered.isEmpty()) { return offered.front().id; }
     }
     return proto::kControllerTypeXbox;
+}
+
+// Identity-less overload for callers with no detected pad in hand (and the
+// pre-emulates call sites): same ladder, hint matching short-circuits to
+// first-offered.
+inline int seedControllerType(std::optional<int> userOverride,
+                              const std::optional<models::CatalogDto>& catalog) {
+    return seedControllerType(userOverride, catalog, QString(), QString());
 }
 
 // A catalog FEATURE is offered only when the client recognises its slug AND the

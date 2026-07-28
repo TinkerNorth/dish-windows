@@ -21,5 +21,6 @@ Rectangle {
     color: token === "success" ? Theme.success
          : token === "warning" ? Theme.warning
          : token === "primary" ? Theme.primary
+         : token === "error" ? Theme.error
          : Theme.muted
 }

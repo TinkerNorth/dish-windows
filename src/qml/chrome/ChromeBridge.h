@@ -37,11 +37,19 @@ class ChromeBridge : public QObject {
     bool dark() const { return m_dark; }
     void setDark(bool dark);
 
-    // Wire to the native chrome filter. The bridge forwards rect updates to it.
-    void setChrome(FramelessWindowChrome* chrome) { m_chrome = chrome; }
+    // Wire to the native chrome filter. Rects published BEFORE this (the QML
+    // title bar completes before the native window exists) are cached and
+    // flushed here, so the first frames already hit-test correctly.
+    void setChrome(FramelessWindowChrome* chrome);
 
     Q_INVOKABLE void setCaptionRect(const QRect& rect);
     Q_INVOKABLE void setMaximizeButtonRect(const QRect& rect);
+    // Client carve-outs inside the caption strip (hamburger / minimize /
+    // close) so those QML buttons receive real clicks instead of the press
+    // starting a native caption drag.
+    Q_INVOKABLE void setMinimizeButtonRect(const QRect& rect);
+    Q_INVOKABLE void setCloseButtonRect(const QRect& rect);
+    Q_INVOKABLE void setLeftClientRect(const QRect& rect);
 
   signals:
     void micaActiveChanged();
@@ -51,6 +59,12 @@ class ChromeBridge : public QObject {
     FramelessWindowChrome* m_chrome = nullptr;
     bool m_micaActive = false;
     bool m_dark = true; // app defaults to the dark palette
+    // Last published rects, cached so a late-wired chrome starts correct.
+    QRect m_caption;
+    QRect m_maximize;
+    QRect m_minimize;
+    QRect m_close;
+    QRect m_leftClient;
 };
 
 } // namespace dish::chrome

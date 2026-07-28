@@ -13,19 +13,19 @@ import Dish.Chrome
 TextField {
     id: field
 
-    implicitHeight: 34
-    leftPadding: 12
-    rightPadding: 12
+    implicitHeight: 32
+    leftPadding: Tokens.s4
+    rightPadding: Tokens.s4
     color: Theme.onSurface
     placeholderTextColor: Theme.muted
     selectionColor: Theme.primary
-    selectedTextColor: Theme.background
-    font.pixelSize: 13
+    selectedTextColor: Theme.onPrimary
+    font.pixelSize: Tokens.textBase
 
     background: Rectangle {
-        radius: 8
-        color: Theme.surfaceDim
-        border.width: field.activeFocus ? 2 : 1
+        radius: Tokens.radiusButton
+        color: Theme.surface
+        border.width: 1
         border.color: field.activeFocus ? Theme.primary : Theme.outline
     }
 }

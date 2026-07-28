@@ -15,6 +15,14 @@
 //   * successful claim         -> Direct, a synthetic is registered.
 //   * a recorded failure suppresses auto-Direct on a verified model (no claim).
 //   * a verified model with no recorded failure auto-claims Direct (claim runs).
+//
+// Plus the departed-device sweep (the Windows unplug signal is reconcile()'s
+// presence diff, android's detach broadcast folded into the rescan; debounced
+// to 2 consecutive misses so a flaky single scan can't tear down a live claim):
+//   * a Direct pad missing 2 scans is erased + its claim released.
+//   * one missed scan is a blip: nothing is torn down, and a sighting resets it.
+//   * a Routed pad that stops enumerating is forgotten with no release.
+//   * a replug after the sweep re-tracks fresh and re-evaluates auto-Direct.
 
 #include "source/usb/UsbGamepadManager.h"
 
@@ -64,6 +72,7 @@ class FakeGateway : public UsbDeviceGateway {
     bool fastLane = false;
     int claimCalls = 0;
     int nextSyntheticId = -1000;
+    std::vector<int> released; // releaseClaim calls, in order.
 
     std::vector<UsbDeviceInfo> enumerate() override { return devices; }
     ClaimResult claim(const UsbDeviceInfo& /*d*/,
@@ -72,7 +81,7 @@ class FakeGateway : public UsbDeviceGateway {
         if (nextClaim.has_value()) { return *nextClaim; }
         return ClaimResult::fail(DirectClaimFailure::Busy, /*frameworkStolen=*/false);
     }
-    void releaseClaim(int /*syntheticId*/) override {}
+    void releaseClaim(int syntheticId) override { released.push_back(syntheticId); }
     bool isKnownFastLaneModel(int /*vendorId*/, int /*productId*/) const override {
         return fastLane;
     }
@@ -83,6 +92,7 @@ class FakeGateway : public UsbDeviceGateway {
 struct RecordingObserver : UsbDirectObserver {
     std::vector<DirectClaimFailure> failures;
     std::vector<int> syntheticsAdded;
+    std::vector<int> syntheticsRemoved;
     int controllersChangedCount = 0;
     void markFailure(int /*v*/, int /*p*/, DirectClaimFailure reason) override {
         failures.push_back(reason);
@@ -91,6 +101,7 @@ struct RecordingObserver : UsbDirectObserver {
                         int /*pollRateHz*/, int /*v*/, int /*p*/) override {
         syntheticsAdded.push_back(syntheticId);
     }
+    void syntheticRemoved(int syntheticId) override { syntheticsRemoved.push_back(syntheticId); }
     void controllersChanged() override { ++controllersChangedCount; }
 };
 
@@ -262,6 +273,132 @@ TEST_CASE("a verified model with no recorded failure auto-claims Direct", "[usb-
     // The auto path attempted the claim (the gateway's claim was reached) instead
     // of settling Standard without trying.
     CHECK(gw.claimCalls == 1);
+}
+
+TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-manager]") {
+    // The stale-card regression: with no detach broadcast on Windows, a claimed
+    // pad used to survive its own unplug forever (nothing ever emitted
+    // UsbUnplugged). The reconcile sweep must erase it, release the claim, and
+    // notify so the slot list drops the card — after the 2-miss debounce.
+    FakeGateway gw;
+    gw.nextClaim = ClaimResult::success(-1000);
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    RecordingObserver obs;
+    UsbGamepadManager m(&gw, nullptr, &prefs, &obs);
+
+    m.tryDirectMode(kVid, kPid);
+    {
+        const auto c = m.controllerFor(kVid, kPid);
+        REQUIRE(c.has_value());
+        REQUIRE(c->phase == UsbPhase::Direct);
+    }
+
+    gw.devices.clear(); // physical unplug: the pad stops enumerating.
+    m.reconcile();      // miss #1: debounced, nothing torn down yet.
+    REQUIRE(m.controllerFor(kVid, kPid).has_value());
+    CHECK(gw.released.empty());
+    const int beforeSweep = obs.controllersChangedCount;
+
+    m.reconcile(); // miss #2: swept.
+    CHECK_FALSE(m.controllerFor(kVid, kPid).has_value());
+    REQUIRE(gw.released.size() == 1);
+    CHECK(gw.released.front() == -1000);
+    REQUIRE(obs.syntheticsRemoved.size() == 1);
+    CHECK(obs.syntheticsRemoved.front() == -1000);
+    CHECK(obs.controllersChangedCount > beforeSweep);
+
+    // The sweep is edge-triggered by presence: an already-empty bus stays quiet.
+    const int afterSweep = obs.controllersChangedCount;
+    m.reconcile();
+    CHECK(obs.controllersChangedCount == afterSweep);
+    CHECK(gw.released.size() == 1);
+}
+
+TEST_CASE("one missed scan is a blip, not an unplug", "[usb-manager]") {
+    // A live claim must survive a single flaky enumeration pass (Bluetooth link
+    // parking, a transient exclusive open elsewhere) — a false unplug here would
+    // release + re-claim a working pad in a visible loop. A sighting between
+    // misses resets the debounce counter entirely.
+    FakeGateway gw;
+    gw.nextClaim = ClaimResult::success(-1000);
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    RecordingObserver obs;
+    UsbGamepadManager m(&gw, nullptr, &prefs, &obs);
+
+    m.tryDirectMode(kVid, kPid);
+    REQUIRE(m.controllerFor(kVid, kPid).has_value());
+
+    const auto pad = padDevice();
+    gw.devices.clear();
+    m.reconcile(); // miss #1
+    gw.devices = {pad};
+    m.reconcile(); // seen again: counter resets.
+    gw.devices.clear();
+    m.reconcile(); // miss #1 again (NOT #2).
+
+    const auto c = m.controllerFor(kVid, kPid);
+    REQUIRE(c.has_value());
+    CHECK(c->phase == UsbPhase::Direct);
+    CHECK(gw.released.empty());
+    CHECK(obs.syntheticsRemoved.empty());
+}
+
+TEST_CASE("unplugging a Routed pad forgets it without a release", "[usb-manager]") {
+    FakeGateway gw; // fastLane=false: reconcile tracks the pad Routed, no claim.
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    RecordingObserver obs;
+    UsbGamepadManager m(&gw, nullptr, &prefs, &obs);
+
+    m.reconcile();
+    REQUIRE(m.controllerFor(kVid, kPid).has_value());
+    REQUIRE(gw.claimCalls == 0);
+
+    gw.devices.clear();
+    m.reconcile(); // miss #1: debounced.
+    m.reconcile(); // miss #2: swept.
+
+    CHECK_FALSE(m.controllerFor(kVid, kPid).has_value());
+    CHECK(gw.released.empty()); // no synthetic was ever held.
+    CHECK(obs.syntheticsRemoved.empty());
+}
+
+TEST_CASE("a replug after the sweep re-tracks fresh and re-evaluates auto-Direct",
+          "[usb-manager]") {
+    // onUsbGone clears the recorded prior failure. With the model back on Auto
+    // (no stored pick — the failed claim itself rolled the stored pick to
+    // Standard via SetPref, so the user's clearChoice models returning it to
+    // Auto), a fresh plug-in of a verified model must try Direct again instead
+    // of inheriting the stale failure from before the unplug.
+    FakeGateway gw;
+    gw.fastLane = true;
+    gw.nextClaim = ClaimResult::fail(DirectClaimFailure::Busy, /*frameworkStolen=*/false);
+    UsbPathPreferenceRepository repo(makeSharedSettings());
+    UsbPathPreferenceStore prefs(&repo);
+    UsbGamepadManager m(&gw, nullptr, &prefs, nullptr);
+
+    m.reconcile(); // auto-Direct attempt fails -> failure recorded + Standard stored.
+    REQUIRE(gw.claimCalls == 1);
+
+    m.clearChoice(kVid, kPid); // back to Auto; the prior failure still gates Direct.
+    CHECK(gw.claimCalls == 1);
+
+    gw.devices.clear();
+    m.reconcile(); // miss #1: debounced.
+    m.reconcile(); // miss #2: swept, prior failure cleared with it.
+    REQUIRE_FALSE(m.controllerFor(kVid, kPid).has_value());
+
+    gw.devices = {padDevice()};
+    gw.nextClaim = ClaimResult::success(-1001);
+    m.reconcile(); // replug on Auto: auto-Direct runs again and now sticks.
+
+    CHECK(gw.claimCalls == 2);
+    const auto c = m.controllerFor(kVid, kPid);
+    REQUIRE(c.has_value());
+    CHECK(c->phase == UsbPhase::Direct);
+    CHECK(c->syntheticId == -1001);
 }
 
 namespace {

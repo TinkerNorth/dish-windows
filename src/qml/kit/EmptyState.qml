@@ -35,11 +35,22 @@ ColumnLayout {
     property string actionText: ""
     // Whether to show the call-to-action button.
     property bool showAction: false
+    // Optional brand asset name drawn 40px above the title (the design's
+    // dish-off glyph on the empty dashboard). Empty = text only.
+    property string glyph: ""
 
     // Emitted when the user taps the action — the page decides what it does.
     signal actionRequested()
 
-    spacing: 6
+    spacing: Tokens.s5
+
+    BrandGlyph {
+        glyph: empty.glyph
+        Layout.preferredWidth: 40
+        Layout.preferredHeight: 40
+        visible: empty.glyph.length > 0
+        Layout.alignment: Qt.AlignHCenter
+    }
 
     Label {
         text: empty.title
@@ -61,12 +72,15 @@ ColumnLayout {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
+        // The design caps empty-state copy at a readable measure.
+        Layout.maximumWidth: 400
         Layout.alignment: Qt.AlignHCenter
     }
 
-    // Primary call-to-action, centered under the copy. Emits the signal rather
-    // than acting, so the page owns the behavior.
-    KitButton {
+    // Outlined call-to-action, centered under the copy (the design's quiet
+    // "Open Connections"). Emits the signal rather than acting, so the page
+    // owns the behavior.
+    OutlineButton {
         text: empty.actionText
         visible: empty.showAction && empty.actionText.length > 0
         Layout.alignment: Qt.AlignHCenter

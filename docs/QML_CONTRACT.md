@@ -1,8 +1,16 @@
-# QML Contract (frozen — A1)
+# QML Contract (frozen — A2)
 
 This is the FROZEN exposure contract the Qt Quick UI binds against. Page agents
 code ONLY against this document. Do not re-read the C++; if something you need is
 missing, flag it rather than reaching past this surface.
+
+A2 (the flows redesign) extends A1 additively — every A1 binding keeps working.
+The additions are listed in **§7 A2 addendum** at the end: shell-header
+primitives (counts + keep-awake pill), the collapsible-rail preference, the
+light-bar setting, two new slot roles, and the `Tokens` metrics singleton
+beside `Theme`. The two index-based invokables A1 still listed as DEPRECATED
+(`connectByIndex`, index-based `pairWithPin`) were REMOVED from the C++ in R14
+and are gone from this doc.
 
 The whole surface is reached through one context property, **`App`** (an
 `AppViewModel`), registered by `QmlEntryPoint::runQmlApp` on the root context. It
@@ -38,6 +46,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `totalSent` | `qulonglong` | `telemetryChanged` | Cumulative reports sent since launch. |
 | `pairingActive` | `bool` | `stateChanged` | True when the model has parked a pairing target (open the pairing sheet on the rising edge; call `clearPairingTarget()` before showing it). |
 | `pairingServerName` | `string` | `stateChanged` | Display name of the pairing target (empty when `!pairingActive`). |
+| `pairingServerId` | `string` | `stateChanged` | Stable `id` of the pairing target (empty when `!pairingActive`). Pass it into the pairing sheet so BOTH paths work for a parked target: the forward submit resolves on it and the reverse PIN auto-send has a destination. Capture it (with the name) BEFORE `clearPairingTarget()`. |
 | `slotModel` | `SlotListModel*` | (CONSTANT) | The controllers/slots model — see §2. Bind into a `ListView.model`. |
 | `connectionModel` | `ConnectionListModel*` | (CONSTANT) | The connection-rows model — see §3. |
 | `themeMode` | `int` (read/write) | `themeModeChanged` | Appearance mode, `0=Light 1=Dark 2=System` (the SettingsPage chip order). Writing forwards to `ThemePreferenceStore::setMode`; the live app + native chrome re-theme. See §1b. |
@@ -47,7 +56,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `donateSponsorsUrl` | `string` | (CONSTANT) | GitHub Sponsors URL (brand default; localizable in C++). |
 | `donateKofiUrl` | `string` | (CONSTANT) | Ko-fi URL. |
 | `donateBmacUrl` | `string` | (CONSTANT) | Buy Me a Coffee URL. |
-| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. Bind a `Repeater.model` to it and it re-evaluates as a scan lands — no manual re-pull. |
+| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. **One-spot rule**: excludes any server whose stable `id` already has a `connectionModel` row (remembered ∪ live) — that row is the box's one spot; FOUND is only the un-remembered rest. Bind a `Repeater.model` to it and it re-evaluates as a scan lands or a pair/forget moves a box between the lists — no manual re-pull. |
 | `scanning` | `bool` | `scanningChanged` | Whether a discovery scan is in flight (reactive). Flips true on `startDiscovery()` and false on completion; gate the Scan button / "Scanning…" label on it. |
 | `reversePairingPhase` | `string` | `reversePairingChanged` | The host-initiated (reverse) pairing phase: `"idle"` (none in flight) / `"awaiting"` (PIN shown, waiting for the operator to approve on the satellite) / `"approved"` (operator approved — the session is opening) / `"declined"` (operator denied) / `"timedout"` (no approval inside the ~2-min budget). The sheet switches on this. |
 | `reversePairingPin` | `string` | `reversePairingChanged` | The 4-digit PIN to display while `awaiting` (the operator types it on the satellite). Stays set on the terminal arms so the sheet can keep showing it; cleared on the next `requestReversePairing`/`cancelReversePairing`. |
@@ -63,7 +72,7 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `stateChanged` | — | Header / slot / pairing state moved (folds AppModel's `stateChanged`). |
 | `telemetryChanged` | — | Telemetry footer numbers moved (~1 Hz). |
 | `errorMessage` | `string message` | Transient one-shot error — surface it as a toast. |
-| `discoveredChanged` | — | The discovered-servers list moved (folds `WifiConnectionManager::discoveredChanged`). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
+| `discoveredChanged` | — | The FOUND list moved: the discovered scan changed (folds `WifiConnectionManager::discoveredChanged`) OR the connection-row id set changed (a pair landed / a forget dropped a row — those ids are excluded from FOUND, so it re-reads then too). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
 | `scanningChanged` | — | The `scanning` flag flipped (a scan started or finished; folds `WifiConnectionManager::scanningChanged`). NOTIFY for the `scanning` property. |
 | `reversePairingChanged` | — | A reverse-pairing transition (phase / PIN / server name moved; folds `WifiConnectionManager::reversePairingChanged`). NOTIFY for all three `reversePairing*` properties. |
 | `themeModeChanged` | — | `themeMode` moved (the store republished). |
@@ -87,14 +96,12 @@ Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
 | `setControllerType(slotId, type)` | `string, int` | Apply the Emulate choice and re-attach the slot so the new descriptor is PUT. |
 | `startDiscovery()` | — | Begin a satellite discovery scan (Connections page "Scan"). |
 | `isScanning()` | → `bool` | Whether a scan is in flight. Prefer the reactive `scanning` property for bindings. |
-| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
-| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. **Prefer this over `connectByIndex`.** |
-| `connectByIndex(discoveredIndex)` | `int` | **DEPRECATED** (racy if the list reorders between read and call). Connect to the discovered server at that index (no-op if out of range). Use `connectByServerId`. |
+| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). One-spot rule: ids that already have a `connectionModel` row are excluded (see the property row in §1). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
+| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. |
 | `reconnectConnection(connectionId)` | `string` | Reconnect a REMEMBERED satellite by id WITHOUT a rescan requirement and WITHOUT re-pairing (the key persists). If the id is in the current scan, connects the fresh endpoint; else kicks a discovery relearn AND attempts the last-known endpoint now. Gate the button on the row NOT being `liveLink`. |
 | `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered row + pairing key survive (contrast `forgetConnection`). Gate the button on the row's `liveLink` role. |
 | `forgetConnection(connectionId)` | `string` | Forget a remembered connection (unbinds its slots, drops key/pin/row). |
-| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable `id` (de-raced; resolves out of the live list). **Prefer this over `pairWithPin`.** Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
-| `pairWithPin(discoveredIndex, pin)` | `int, string` | **DEPRECATED** (racy if the list reorders). Submit a 6-digit PIN for the discovered server at that index. Use `pairByServerId`. |
+| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable `id` (de-raced; resolves out of the live list). Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
 | `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers`). Drives the Pair button's spinner+disabled state. |
 | `clearPairingTarget()` | — | Drop the one-shot pairing trigger (call before opening the pairing sheet to avoid re-entry). |
 | `requestReversePairing(serverId)` | `string` | Start HOST-INITIATED (reverse) pairing for the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). The dish generates + shows a 4-digit PIN (`reversePairingPin`); the operator types it on the satellite. Watch `reversePairingPhase` for the outcome and `App.errorMessage` for the decline/timeout reason. A second call cancels the first. |
@@ -132,6 +139,14 @@ re-projects/forwards (no new behaviour). The pages bind them directly:
 * **Main.qml first-run** — if `App.onboardingNeeded`, push
   `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
   `App.markOnboardingComplete()`.
+* **SetupGuideDialog (the setup wizard)** — step 1 IS the live connect flow
+  (the android guided-setup connection step, ported): `App.startDiscovery` on
+  open, `App.scanning` / `App.discoveredServers` / `App.foundCount` drive the
+  host list, each row opens the shared `PairingDialog`, and the step
+  auto-advances on `pairingSucceeded` gated by the wizard's own pending host
+  (android's "never advance on a background reconnect" rule). Step 2 lists
+  `App.slotModel` rows live; step 3 summarizes `App.onlineCount` /
+  `App.slotCount`.
 
 ### Configure-controls (raw-joystick remap) page
 
@@ -153,20 +168,28 @@ All four persist AND push into the live bridge, so the change takes effect on th
 next report with no re-attach. ALWAYS call `stopInputCapture()` when leaving the
 page so capture doesn't keep streaming.
 
-### Reverse (host-initiated) pairing sheet
+### The pairing sheet: both paths at once
 
 Forward pairing (`pairByServerId`) is the operator-reads-the-PIN-off-the-dish
 flow. The REVERSE flow is the inverse: the dish SHOWS a PIN and the operator
-approves on the satellite. Bind a sheet like:
+approves on the satellite. The sheet runs BOTH simultaneously (android
+`PairPinDialog` parity) — no tap gates either path:
 
-* On the user's "Pair this way" tap: `App.requestReversePairing(server.id)`,
-  then open the sheet.
+* On open: `App.cancelReversePairing()` (a stale phase from an earlier sheet
+  must not leak in), then `App.requestReversePairing(server.id)` immediately —
+  the operator is notified the moment the sheet opens. The 6-digit PIN field
+  stays typeable throughout as the live fallback; its submit is
+  `pairByServerId` as before.
+* Show the reverse block only while `App.reversePairingPhase !== "idle"` (an
+  unresolvable id leaves the phase idle, degrading to forward-only — e.g. a
+  parked target whose satellite has left the scan).
 * While `App.reversePairingPhase === "awaiting"`: show `App.reversePairingPin`
   (the 4 digits) and `App.reversePairingServerName`, with a spinner.
 * On `"approved"`: close the sheet (the session is opening — the connection row
   will go live). On `"declined"` / `"timedout"`: show the reason (also arrives on
-  `App.errorMessage`) and offer retry.
-* The sheet's Cancel calls `App.cancelReversePairing()`.
+  `App.errorMessage`) and offer a "New code" retry.
+* The sheet's Cancel calls `App.cancelReversePairing()`; whichever path
+  completes first pairs the box.
 
 The poll budget is ~2 minutes; a momentary network blip during the wait does NOT
 abort (it keeps polling until the deadline).
@@ -255,7 +278,10 @@ mirrors `ConnectionsDialog` rows). Same minimal-signal behavior as §2.
 
 > `connectionModel` carries the REMEMBERED/derived rows. The FOUND list of
 > not-yet-remembered discovered servers comes from the `App.discoveredServers`
-> property (reactive) / `App.discoveredServers()` invokable.
+> property (reactive) / `App.discoveredServers()` invokable. The two lists are
+> disjoint by construction (the one-spot rule): an id with a row here never
+> appears in `discoveredServers` — its reachability shows as this row's chip
+> (`ready`/`online`/…) instead of a duplicate FOUND row.
 
 ---
 
@@ -315,7 +341,7 @@ TextField { id: pinField; maximumLength: 6 }
 Button {
     text: qsTr("Pair")
     enabled: !App.isPairingInFlight(App.discoveredServers()[0].id)
-    onClicked: App.pairWithPin(0, pinField.text)
+    onClicked: App.pairByServerId(App.discoveredServers()[0].id, pinField.text)
 }
 Connections {
     target: App
@@ -332,3 +358,150 @@ function openEmulate(slotId) {
     App.setControllerType(slotId, chosenType);
 }
 ```
+
+---
+
+## 7. A2 addendum — the flows redesign surface
+
+Additive over A1. Everything below exists and is wired; page agents bind these
+exactly like the A1 surface.
+
+### 7.1 New `App` properties
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `slotCount` | `int` | `stateChanged` | Rows in `slotModel` (mirrored so bindings never poke the model for a count). |
+| `boundSlotCount` | `int` | `stateChanged` | Slots currently bound to a connection — drives the "· nothing bound" suffix. |
+| `firstOnlineName` | `string` | `stateChanged` | Label of the first `Connected` connection ("Living-room Satellite online · …"); empty when none. |
+| `foundCount` | `int` | `discoveredChanged` | Size of the FOUND list ("2 found · nothing remembered yet") — after the one-spot exclusion, so it counts only un-remembered boxes, matching the rows the FOUND card renders. |
+| `keepAwakeActive` | `bool` | `stateChanged` | True while the display-sleep inhibitor is held — render the header pill `STREAMING · DISPLAY KEPT AWAKE`. |
+| `railCollapsed` | `bool` (RW) | `railCollapsedChanged` | The nav rail's persisted collapse state (48px icons vs 236px labels). The title-bar hamburger calls `App.setRailCollapsed(!App.railCollapsed)`. |
+| `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding preference (design combo: true = "Follow game", false = "Off"). Settings page binds `App.setLightbarFollowGame(x)`. |
+
+Header sub-lines are ASSEMBLED IN QML from these primitives (each page owns its
+wording via `qsTr`):
+- Controllers: no connections → "No connections yet — pair a Satellite to get
+  started" (dot muted); one online, nothing bound → `firstOnlineName` + " online
+  · nothing bound" (dot primary); else `onlineCount of connectionCount online`
+  (+ " · nothing bound" when `boundSlotCount === 0`; dot success).
+- Connections: nothing remembered → `foundCount` + " found · nothing remembered
+  yet" (dot muted); else `onlineCount` streaming · `connectionCount` remembered
+  (dot success when any online, warning when none).
+
+### 7.2 New `slotModel` roles
+
+| Role | Type | Meaning |
+|---|---|---|
+| `emulateName` | `string` | Resolved emulation type short name for the bound sub-line's "· as DualShock 4" suffix. Empty → omit the suffix. |
+| `registering` | `bool` | Attach in flight — render the busy card (glyph + "Registering controller…" + indeterminate bar) instead of chips/actions. |
+
+### 7.3 `Tokens` singleton (`import Dish.Chrome`)
+
+Non-color design tokens beside `Theme`: type scale (`textStatus 17, textTitle
+20, textHeading 16, textBase 13, textSummary 12, textMeta 11, textChip 10`),
+`sectionLetterSpacing 1.5`, `monoFamily` (platform monospace), spacing `s1..s9 =
+2,4,6,8,10,12,14,16,20` + `pagePadding 24`, radii (`radiusChip 5, radiusButton
+6, radiusCard 8, radiusBar 2`), shell metrics (`titleBarHeight 44,
+captionButtonWidth 46, railCompact 48, railExpanded 236, navItemHeight 40,
+hitRow 44, dotSize 8`), `disabledOpacity 0.4`. Never hard-code these numbers in
+pages.
+
+### 7.4 `Theme` singleton additions
+
+`primaryDark`, `onPrimary`, and the derived washes `primaryHover`,
+`primaryPress`, `primaryFill`, `warningFill` (all NOTIFY `paletteChanged`).
+Text on a filled accent control is ALWAYS `Theme.onPrimary` (not
+`Theme.background`).
+
+### 7.5 Kit inventory for the redesign
+
+New: `Eyebrow`, `SegmentedControl` (options/value/small/busy + picked),
+`ComboButton` (options/value + picked), `SliderRow` (label/value/maxValue +
+committed), `RadioMark` (selected), `RowButton` (title/subtitle + clicked),
+`CapabilityChip` (text/present/low), `LiveStat` (text/live),
+`DishProgressBar` (indeterminate/value).
+Restyled to the ds spec (API unchanged unless noted): `KitButton` (primary
+fill), `OutlineButton` (accent border), `Card` (radius 8, 12/14 inset),
+`SectionHeader` (now a Row with optional `glyph`; accent mono), `KitTextField`,
+`LabeledSwitch`, `EmptyState` (+ `glyph` property), `ContentDialog` (+ `eyebrow`,
+`preferredWidth`; empty `acceptText`/`rejectText` hides that button),
+`NotificationToastHost` (+ "warning" severity).
+
+---
+
+## 8. A3 addendum — the Home flow surface
+
+Additive over A2 (design frames 17 "Home — signal path" + 18 "Action card —
+states" + the revised rail, synced 2026-07-27).
+
+### 8.1 New `App` property
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `streamingSlotCount` | `int` | `stateChanged` | Slots actively streaming (bound AND the link `Connected`) — the Home header's "N controllers streaming" count. The same pure `composer::streamingSlotCount` rule the wake controller inhibits the display on, so the header and the keep-awake pill can never disagree. |
+
+### 8.2 New `slotModel` roles — the bound-satellite join
+
+The Home signal-path row's right cell + wire latency, joined per slot by
+`boundConnectionId` against the coordinator's derived connection rows. The
+tokens are the SAME vocabulary §3 exposes, so the satellite cell renders
+identically to a Connections-page row by construction. ALL empty / zero for an
+unbound slot or a binding whose row has vanished — render the ghost "Bind…"
+action card then. Refreshes ride the coordinator's `connectionsChanged` (the
+~1 Hz latency tick emits `dataChanged` scoped to these roles only).
+
+| Role | Type | Meaning |
+|---|---|---|
+| `satIp` | `string` | Bound satellite ip ("" when unbound / row vanished). |
+| `satLinkState` | `string` | Link-state token (`"connected"`/`"unstable"`/…, §3 vocabulary). |
+| `satChip` | `string` | Status-chip key (localize like the Connections rows). |
+| `satDotColor` | `string` | `"success"`/`"primary"`/`"warning"`/`"muted"`. |
+| `satGlyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"`. |
+| `satLatencyText` | `string` | Pre-formatted `"~3.4 ms"` — same formatter + samples gate as §3's `latencyText`. |
+| `satLatencySamples` | `int` | RTT samples in the window. Gate the wire's latency half on `satLatencySamples > 0 && (satLinkState === "connected" \|\| satChip === "unstable")`. |
+
+The satellite cell's display name is the existing `boundLabel` role.
+
+### 8.3 `Theme` singleton additions — the donation accent
+
+`pulse` (the pulse-pink donation hue — `#FF6FB5` dark, AA-darkened on light),
+`pulseFill` (12 % wash), `pulseEdge` (35 % outline); all NOTIFY
+`paletteChanged`. The ONE hue Dish uses beyond cyan, reserved for the Support
+Dish surface and its rail heart. Text on a filled pulse control is
+`Theme.onPrimary` (deep ink dark / white light), like any filled accent.
+
+### 8.4 Kit + shared-dialog additions
+
+* `ActionCard` (kit) — the dashed action card (frame 18): `title`, `subtitle`,
+  `showPlus`, `clicked()`. Rest = `Theme.primaryFill`, hover/press deepen to
+  the 18/24 % accent washes, keyboard focus = solid border + 2px ring,
+  disabled = 0.4 opacity. Used for Home's "+ Add a controller" and the unbound
+  pad's "Bind…" ghost.
+* `BindChooserDialog` (pages) — the shared bind chooser (FBindDlg), extracted
+  from ControllersPage and also driven by Home's ghost card:
+  `openFor(slotId, slotName)` pulls the filtered pick-list
+  (`availableConnectionsForSlot`) and accept applies `bindSlot`.
+
+### 8.5 Shell — destinations + the rail
+
+`AppShell.destinations` is now Home (`pages/HomePage.qml`, dish glyph, the
+DEFAULT destination) · Controllers · Connections up top, then Support Dish
+(`pages/DonatePage.qml`, the pulse heart — `heart: true` draws the ♥ text
+glyph in `Theme.pulse` instead of a brand SVG) and Settings (the new `gear`
+brand glyph) pinned to the footer. Between the top group and the footer sits
+the pane-density "+ Add" action (solid accent outline, collapses to the bare
++), wired — like Home's "+ Add a controller" card — to
+`shellApi.openSetupGuideAt(1)`: the setup guide's Controller step IS the
+add-a-controller explainer (pads auto-appear on Windows). `openSetupGuide()`
+still opens at step 0; `SetupGuideDialog.initialStep` carries the seed.
+
+Hard-coded destination indices shifted: Connections is `selectDestination(2)`.
+
+### 8.6 Home header assembly (wording owned by HomePage)
+
+Fresh install (no slots, no connections) → the getting-started nudge (muted);
+`streamingSlotCount > 0` → "N controllers streaming · M satellites online"
+(success); `onlineCount > 0` → "M satellites online · nothing streaming"
+(primary); else "Nothing streaming" (muted). The floating footer pill
+("STREAMING — DO NOT CLOSE") gates on `keepAwakeActive`, the same signal as
+the Controllers header pill.

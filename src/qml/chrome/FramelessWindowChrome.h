@@ -54,11 +54,20 @@ class FramelessWindowChrome : public QObject, public QAbstractNativeEventFilter 
     // The QML title bar publishes its geometry (logical px, window-local) here.
     void setCaptionRect(const QRect& rect);
     void setMaximizeButtonRect(const QRect& rect);
+    // Client carve-outs INSIDE the caption strip: without them the native
+    // resolver answers HTCAPTION over the hamburger / minimize / close and a
+    // press starts a system drag instead of reaching the QML buttons.
+    void setMinimizeButtonRect(const QRect& rect);
+    void setCloseButtonRect(const QRect& rect);
+    void setLeftClientRect(const QRect& rect);
 
   private:
     QWindow* m_window = nullptr;
     QRect m_captionRect;        // logical px
     QRect m_maximizeButtonRect; // logical px
+    QRect m_minimizeButtonRect; // logical px (client carve-out)
+    QRect m_closeButtonRect;    // logical px (client carve-out)
+    QRect m_leftClientRect;     // logical px (client carve-out — hamburger)
 };
 
 } // namespace dish::chrome

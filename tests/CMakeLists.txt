@@ -90,6 +90,18 @@ set(DISH_TEST_SOURCES
     # manager poll methods open real Winsock the test process would join, so the
     # branching is tested here, not by driving the manager.
     test_reverse_pairing.cpp
+    # Release-parity wave — tests for the five headers that landed without them:
+    # the canonical BatteryUi projection + chip tokens (android MainUiState arm),
+    # the binding-config blocker rule (all 13 android ConfigUiStateBlockerTest
+    # cases), the pure ds4>mouse>off touchpad-mode resolve (android
+    # TouchpadRouting.wireMode + the CapabilityResolver ds4-mode catalog gate),
+    # and the per-satellite touchpad-mode repository (RepositoryContract) +
+    # store (hydrate/persist/republish) pair.
+    test_battery_ui.cpp
+    test_config_blocker.cpp
+    test_touchpad_mode_resolve.cpp
+    test_touchpad_mode_repository.cpp
+    test_touchpad_mode_store.cpp
     # Forward (Path A, user-types-a-PIN) pairing lifecycle — the PURE total FSM
     # (reducePairing over every PairPhase x PairEvent) giving forward pairing the
     # same first-class, typed, retained lifecycle reverse pairing already has.
@@ -111,6 +123,8 @@ set(DISH_TEST_SOURCES
     test_late_slot_converge.cpp
     test_connections_composer.cpp
     test_connection_coordinator.cpp
+    # FOUND-list one-spot rule (a box never renders as both FOUND and REMEMBERED)
+    test_found_visibility.cpp
     test_session_lifecycle.cpp
     test_session_manager.cpp
     # Workstream 2c — catalog cache (ETag/304/stale), controller-type store,
@@ -181,7 +195,6 @@ set(DISH_TEST_SOURCES
     # parse + mapping + forward-compat. Windows-authored (most surfaces had no
     # android @Test); they pin the android class RULES, asserted via probes/fakes.
     test_onboarding_store.cpp
-    test_donate_pill.cpp
     test_license_manifest.cpp
     test_theme_store.cpp
     test_crash_reporting.cpp
@@ -259,10 +272,9 @@ if(WIN32)
         DL_PATHS
             $<TARGET_FILE_DIR:Qt6::Core>
             $<TARGET_FILE_DIR:Qt6::Network>
-            # dish_core now links Qt6::Gui/Widgets (the theme layer moved in for
-            # Workstream 3d), so the test exe needs their DLLs on PATH too.
-            $<TARGET_FILE_DIR:Qt6::Gui>
-            $<TARGET_FILE_DIR:Qt6::Widgets>)
+            # dish_core links Qt6::Gui (theme palette + role models), so the
+            # test exe needs its DLL on PATH too.
+            $<TARGET_FILE_DIR:Qt6::Gui>)
 else()
     catch_discover_tests(DishTests)
 endif()

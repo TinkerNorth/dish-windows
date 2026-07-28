@@ -15,12 +15,15 @@
 #pragma once
 
 #include "Models/Models.h"
+#include "composer/ConnectionsComposer.h"
 
 #include <QAbstractListModel>
 #include <QByteArray>
 #include <QHash>
 #include <QList>
 #include <QString>
+
+#include <vector>
 
 namespace dish::qml {
 
@@ -47,6 +50,8 @@ class SlotListModel : public QAbstractListModel {
         DotColorRole,          // QString: semantic token name ("success"/"warning"/"muted")
         UsbDirectRole,         // bool: synthetic USB-direct pad
         RemappableRole,        // bool: raw joystick whose routing is user-remappable
+        EmulateNameRole,       // QString: resolved type short name ("" hides the suffix)
+        RegisteringRole,       // bool: attach in flight — card renders the busy state
 
         HasMotionRole,     // bool: hardware has a gyro/accelerometer
         HasLightbarRole,   // bool: hardware has an addressable RGB LED
@@ -68,6 +73,21 @@ class SlotListModel : public QAbstractListModel {
         PathSupportedRole,   // bool: device is raw-HID-claimable (control shown)
         ClaimInProgressRole, // bool: phase == claiming (spinner, control disabled)
         DirectFailureRole,   // QString: last Direct-claim failure reason ("" if none)
+
+        // ── Bound-satellite join (the Home signal-path row's right cell) ─────
+        // The connection row this slot is bound to, joined by boundConnectionId
+        // against the coordinator's derived rows (setConnectionRows). All empty
+        // / zero for an unbound slot or a binding whose row has vanished — the
+        // Home page renders the ghost "Bind…" action card then. The tokens are
+        // the SAME vocabulary ConnectionListModel exposes, so the satellite
+        // cell renders identically to a Connections-page row by construction.
+        SatIpRole,             // QString: bound satellite ip ("" if unbound)
+        SatLinkStateRole,      // QString token: "connected"/"unstable"/...
+        SatChipRole,           // QString token: status-chip key
+        SatDotColorRole,       // QString token: "success"/"primary"/"warning"/"muted"
+        SatGlyphRole,          // QString token: "satelliteBase"/-Connected/-Off
+        SatLatencyTextRole,    // QString: pre-formatted "~3.4 ms" ("" until sampled)
+        SatLatencySamplesRole, // int: RTT samples in the window (gates the caption)
     };
     Q_ENUM(Roles)
 
@@ -87,11 +107,24 @@ class SlotListModel : public QAbstractListModel {
     // "connections not bound elsewhere" filter.
     void setState(const QList<models::ControllerSlot>& slotList);
 
+    // Replace the connection rows the Sat* join roles read through (pushed by
+    // the owner on the coordinator's connectionsChanged, the same edge that
+    // feeds ConnectionListModel). Emits dataChanged for the join roles only, so
+    // the ~1 Hz latency tick refreshes the Home wire labels without churning
+    // the slot-side bindings.
+    void setConnectionRows(const std::vector<composer::ConnectionRow>& rows);
+
   signals:
     void countChanged();
 
   private:
+    // The bound connection row for a slot, or nullptr when unbound / the id has
+    // no row (the Home ghost-card state). A plain linear scan — both lists are
+    // a handful of entries.
+    const composer::ConnectionRow* rowForSlot(const models::ControllerSlot& slot) const;
+
     QList<models::ControllerSlot> slots_;
+    std::vector<composer::ConnectionRow> connectionRows_;
 };
 
 } // namespace dish::qml

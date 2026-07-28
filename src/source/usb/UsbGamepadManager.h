@@ -103,9 +103,15 @@ class UsbGamepadManager {
     UsbGamepadManager(UsbDeviceGateway* gateway, input::GamepadInputProcessor* processor,
                       UsbPathPreferenceStore* prefs, UsbDirectObserver* observer);
 
-    // Re-scan the USB bus and (idempotently) start tracking present pads, driving
-    // each toward its resolved path automatically (not user-initiated). Safe to
-    // call repeatedly (e.g. on app foreground). Mirrors android reconcileForeground.
+    // Re-scan the USB bus: (idempotently) start tracking present pads, driving
+    // each toward its resolved path automatically (not user-initiated), and
+    // forget tracked pads that no longer enumerate (the departed-device sweep —
+    // the polled unplug signal on Windows, where no detach broadcast exists).
+    // The sweep is debounced: a pad must miss kDepartedScanThreshold consecutive
+    // scans before it reads as unplugged, so a single-pass enumeration hiccup
+    // (Bluetooth link parking, a momentary open elsewhere) can never tear down a
+    // live claim. Safe to call repeatedly (the 1 s poll). Mirrors android
+    // reconcileForeground + its USB detach receiver folded into one pass.
     void reconcile();
 
     // The user explicitly picks Direct for a model (the Settings toggle / card
@@ -174,6 +180,9 @@ class UsbGamepadManager {
     // In-memory prior-failure tracking (android keeps this on the registry; we
     // fold it in so the manager is self-contained). Cleared on a fresh plug-in.
     std::unordered_map<int, reducer::DirectClaimFailure> priorFailures_;
+    // Consecutive reconcile() scans a tracked model has been missing from
+    // enumerate(). Reset on sighting; the sweep fires at the threshold.
+    std::unordered_map<int, int> missedScans_;
 };
 
 } // namespace dish::source::usb
