@@ -149,3 +149,45 @@ TEST_CASE("the client-to-server send framing decrypts as the satellite expects",
     REQUIRE_FALSE(wire::decryptPacket(sessionKey.data(), wire::kDirServerToClient, 1, token, ct,
                                       static_cast<std::size_t>(ctLen), pt, &ptLen));
 }
+
+// ── Path-B "none" terminality (satellite #68: no wire "denied") ──────────────
+// An operator deny ERASES the pending row server-side; the client polls
+// straight to "none". Terminal exactly when a "pending" was observed first —
+// before that, "none" tolerates the POST→first-poll race.
+
+TEST_CASE("classifyApproval: none before any pending keeps waiting", "[rest][approval]") {
+    dish::reducer::ApprovalReply r;
+    r.status = 200;
+    r.bodyParsed = true;
+    r.statusStr = "none";
+    REQUIRE(dish::reducer::classifyApproval(r, /*sawPending=*/false) ==
+            dish::reducer::ApprovalVerdict::Pending);
+}
+
+TEST_CASE("classifyApproval: none AFTER a pending is a terminal decline", "[rest][approval]") {
+    dish::reducer::ApprovalReply r;
+    r.status = 200;
+    r.bodyParsed = true;
+    r.statusStr = "none";
+    REQUIRE(dish::reducer::classifyApproval(r, /*sawPending=*/true) ==
+            dish::reducer::ApprovalVerdict::Declined);
+}
+
+TEST_CASE("classifyApproval: legacy denied still declines regardless of pending",
+          "[rest][approval]") {
+    dish::reducer::ApprovalReply r;
+    r.status = 200;
+    r.bodyParsed = true;
+    r.statusStr = "denied";
+    REQUIRE(dish::reducer::classifyApproval(r, false) == dish::reducer::ApprovalVerdict::Declined);
+    REQUIRE(dish::reducer::classifyApproval(r, true) == dish::reducer::ApprovalVerdict::Declined);
+}
+
+TEST_CASE("classifyApproval: pending stays pending with the flag either way", "[rest][approval]") {
+    dish::reducer::ApprovalReply r;
+    r.status = 200;
+    r.bodyParsed = true;
+    r.statusStr = "pending";
+    REQUIRE(dish::reducer::classifyApproval(r, false) == dish::reducer::ApprovalVerdict::Pending);
+    REQUIRE(dish::reducer::classifyApproval(r, true) == dish::reducer::ApprovalVerdict::Pending);
+}

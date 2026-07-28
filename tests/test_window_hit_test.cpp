@@ -144,3 +144,50 @@ TEST_CASE("Win11 gate: Windows 10 builds are false", "[win11gate]") {
     CHECK_FALSE(isWin11OrLater(10240)); // Win10 1507
     CHECK_FALSE(isWin11OrLater(19045)); // Win10 22H2
 }
+
+// ── Client carve-outs inside the caption strip ───────────────────────────────
+// The hamburger + minimize + close are QML buttons; their regions must resolve
+// Client so a press reaches Qt instead of starting a native caption drag (the
+// launch-day bug: every strip click was HTCAPTION and the buttons were dead).
+
+namespace {
+HitTestInput makeWithCarves(int x, int y) {
+    HitTestInput in = make(x, y);
+    in.leftClient = Rect{0, 0, 48, 40};        // hamburger cell
+    in.minimizeButton = Rect{554, 0, 600, 40}; // left of maximize
+    in.closeButton = Rect{646, 0, 692, 40};    // right of maximize
+    return in;
+}
+} // namespace
+
+TEST_CASE("hamburger cell resolves Client, not Caption", "[hittest][carve]") {
+    CHECK(hitTest(makeWithCarves(24, 20)) == HitRegion::Client);
+}
+
+TEST_CASE("minimize and close resolve Client; maximize keeps its native region",
+          "[hittest][carve]") {
+    CHECK(hitTest(makeWithCarves(570, 20)) == HitRegion::Client);         // minimize
+    CHECK(hitTest(makeWithCarves(660, 20)) == HitRegion::Client);         // close
+    CHECK(hitTest(makeWithCarves(620, 20)) == HitRegion::MaximizeButton); // snap flyout intact
+}
+
+TEST_CASE("the strip between carves still drags", "[hittest][carve]") {
+    CHECK(hitTest(makeWithCarves(300, 20)) == HitRegion::Caption); // wordmark area
+    CHECK(hitTest(makeWithCarves(50, 20)) == HitRegion::Caption);  // just past the hamburger
+}
+
+TEST_CASE("carve edges are half-open like every other rect", "[hittest][carve]") {
+    CHECK(hitTest(makeWithCarves(47, 20)) == HitRegion::Client);  // last hamburger px
+    CHECK(hitTest(makeWithCarves(48, 20)) == HitRegion::Caption); // first px past it
+}
+
+TEST_CASE("resize corners still beat a carve that touches the top edge", "[hittest][carve]") {
+    // The 8px top band overlaps the carves' first rows; the frame must win so
+    // the window stays resizable from the very top.
+    CHECK(hitTest(makeWithCarves(24, 4)) == HitRegion::Top);
+}
+
+TEST_CASE("empty carves change nothing (defaults are inert)", "[hittest][carve]") {
+    CHECK(hitTest(make(24, 20)) == HitRegion::Caption);
+    CHECK(hitTest(make(570, 20)) == HitRegion::Caption);
+}

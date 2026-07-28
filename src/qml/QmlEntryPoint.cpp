@@ -10,6 +10,7 @@
 #include "qml/chrome/ChromeBridge.h"
 #include "qml/chrome/FramelessWindowChrome.h"
 #include "qml/chrome/ThemeBridge.h"
+#include "qml/chrome/TokensBridge.h"
 #include "UI/common/ExternalLink.h"
 
 #include "UI/Theme.h"
@@ -45,14 +46,22 @@ int runQmlApp(dish::AppModel& model) {
 
     dish::qml::AppViewModel appVm(&model);
 
-    // model.start() already ran the ThemeController, which resolved the persisted
-    // mode (System -> the OS appearance) and swapped the active palette. Re-resolve
-    // System here so the active palette provably matches the OS at the instant the
-    // QML Theme singleton is registered and first read — an explicit Light/Dark
-    // choice is already applied by the controller and left untouched. (A later
-    // setThemeMode re-themes live via the AppViewModel theme-applied sink below.)
-    if (model.themeStore()->mode() == dish::source::ThemeMode::System) {
-        dish::ui::setActiveAppearance(dish::ui::detectSystemAppearance());
+    // model.start() already ran the ThemeController, but the smoke checklist
+    // caught a System+dark cold start rendering the BODY light while the title
+    // bar sampled dark — an ordering interaction between the controller's apply
+    // and this entry point. Rather than depend on who ran last, resolve the
+    // persisted mode to a concrete appearance HERE, unconditionally, for all
+    // three modes (idempotent when the controller already applied the same
+    // thing): the active palette then provably matches the mode at the instant
+    // the QML Theme singleton is registered and first read. A later
+    // setThemeMode re-themes live via the AppViewModel theme-applied sink below.
+    {
+        const auto mode = model.themeStore()->mode();
+        const auto appearance = mode == dish::source::ThemeMode::Light ? dish::ui::Appearance::Light
+                                : mode == dish::source::ThemeMode::Dark
+                                    ? dish::ui::Appearance::Dark
+                                    : dish::ui::detectSystemAppearance();
+        dish::ui::setActiveAppearance(appearance);
     }
 
     // Own the two QML singletons explicitly and register them by instance, rather
@@ -67,10 +76,13 @@ int runQmlApp(dish::AppModel& model) {
     // them, so register with CppOwnership.
     auto* bridge = new dish::chrome::ChromeBridge(qApp);
     auto* themeBridge = new dish::chrome::ThemeBridge(qApp);
+    auto* tokensBridge = new dish::chrome::TokensBridge(qApp);
     QQmlEngine::setObjectOwnership(bridge, QQmlEngine::CppOwnership);
     QQmlEngine::setObjectOwnership(themeBridge, QQmlEngine::CppOwnership);
+    QQmlEngine::setObjectOwnership(tokensBridge, QQmlEngine::CppOwnership);
     qmlRegisterSingletonInstance("Dish.Chrome", 1, 0, "ChromeBridge", bridge);
     qmlRegisterSingletonInstance("Dish.Chrome", 1, 0, "Theme", themeBridge);
+    qmlRegisterSingletonInstance("Dish.Chrome", 1, 0, "Tokens", tokensBridge);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &appVm);
@@ -82,7 +94,7 @@ int runQmlApp(dish::AppModel& model) {
 
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated, qApp,
-        [bridge, chromeHolder](QObject* obj, const QUrl&) {
+        [bridge, themeBridge, chromeHolder](QObject* obj, const QUrl&) {
             auto* window = qobject_cast<QQuickWindow*>(obj);
             if (!window) { return; }
             // The chrome filter outlives the window (parented to the app). Mica
@@ -103,16 +115,16 @@ int runQmlApp(dish::AppModel& model) {
                 bridge->setMicaActive(mica);
                 bridge->setDark(startupDark);
             }
+            // Belt-and-braces for the System+dark cold-start body-vs-chrome
+            // split: any binding that evaluated before the palette settled
+            // re-reads now that the window exists.
+            if (themeBridge) { themeBridge->refresh(); }
         },
         Qt::DirectConnection);
 
-    // Route App.openExternalUrl through the shared ExternalLink helper so a
-    // failure raises the same warning the Widgets screens do. No NotificationQueue
-    // exists on the Quick path yet, so failures fall through to App.errorMessage
-    // (the QML toast channel) — pass nullptr and let openExternalUrl return false;
-    // the AppViewModel's own emit covers the toast.
-    appVm.setExternalOpenSink(
-        [](const QString& url) { return dish::ui::openExternalUrl(url, nullptr); });
+    // Route App.openExternalUrl through the shared ExternalLink helper; a false
+    // return falls through to App.errorMessage (the QML toast channel).
+    appVm.setExternalOpenSink([](const QString& url) { return dish::ui::openExternalUrl(url); });
 
     // After a theme change: re-read the C++ tokens into the QML Theme singleton
     // and flip the native chrome's immersive-dark attribute so the frame matches.

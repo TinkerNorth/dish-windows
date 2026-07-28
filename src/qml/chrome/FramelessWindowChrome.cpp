@@ -69,6 +69,14 @@ void FramelessWindowChrome::setMaximizeButtonRect(const QRect& rect) {
     m_maximizeButtonRect = rect;
 }
 
+void FramelessWindowChrome::setMinimizeButtonRect(const QRect& rect) {
+    m_minimizeButtonRect = rect;
+}
+
+void FramelessWindowChrome::setCloseButtonRect(const QRect& rect) { m_closeButtonRect = rect; }
+
+void FramelessWindowChrome::setLeftClientRect(const QRect& rect) { m_leftClientRect = rect; }
+
 bool FramelessWindowChrome::applyMicaBackdrop() {
     HWND hwnd = hwndOf(m_window);
     if (!hwnd) { return false; }
@@ -141,6 +149,9 @@ bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType, void*
         in.window = Rect{0, 0, rc.right - rc.left, rc.bottom - rc.top};
         in.caption = toPhysical(m_captionRect, dpr);
         in.maximizeButton = toPhysical(m_maximizeButtonRect, dpr);
+        in.minimizeButton = toPhysical(m_minimizeButtonRect, dpr);
+        in.closeButton = toPhysical(m_closeButtonRect, dpr);
+        in.leftClient = toPhysical(m_leftClientRect, dpr);
         // 8 logical px grab band, matching the Win11 default resize frame feel.
         in.resizeBorder = static_cast<int>(8 * dpr);
         in.maximized = maximized;

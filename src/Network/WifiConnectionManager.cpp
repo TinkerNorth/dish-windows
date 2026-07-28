@@ -4,6 +4,7 @@
 #include "WifiConnectionManager.h"
 
 #include "PairingClient.h"
+#include "core/net/IpLiterals.h"
 #include "source/connection/DiscoveryGateway.h"
 #include "source/connection/LANDiscovery.h"
 #include "source/connection/MdnsDiscovery.h"
@@ -103,6 +104,12 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* pa
     // core/net/Tofu via source/http/SatelliteTlsVerifier.
     auto& pins = store_->facade().pins();
     http_->setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
+        return http::verifyPeerCertificate(host, pins, certDer);
+    });
+    // The pairing exchange carries the sharedKey exactly once — it gets the
+    // SAME pin gate over the same store, so the first pair pins and every
+    // later pairing / rotation must present the pinned cert.
+    PairingClient::setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
         return http::verifyPeerCertificate(host, pins, certDer);
     });
 }
@@ -209,6 +216,15 @@ WifiConnectionManager::credentialsFor(const QString& id) const {
 
 void WifiConnectionManager::connectTo(const models::DiscoveredServer& server,
                                       ConnectIntent intent) {
+    // Satellites live on the LAN by definition (mDNS/broadcast discovery); a
+    // public-address literal here means a spoofed/mis-parsed beacon or a
+    // poisoned remembered entry, and dialing it would leak the deviceId +
+    // hmacProof to an arbitrary internet host. Refuse before any socket work.
+    if (!isPrivateHostLiteral(server.ip.toStdString())) {
+        emit connectionEvent(
+            makeError(tr("Refusing to connect to a non-local address (%1).").arg(server.ip)));
+        return;
+    }
     auto* conn = ensureConnection(server);
     if (intent == ConnectIntent::UserInitiated) { retryAttempts_.remove(conn->id()); }
     if (conn->state() == SessionState::Live || conn->state() == SessionState::Linking) {
@@ -301,6 +317,7 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     reverseServerName_ = server.name.isEmpty() ? server.ip : server.name;
     reverseElapsedMs_ = 0;
     reverseDeadlineMs_ = kReverseDeadlineMs;
+    reverseSawPending_ = false;
     setReversePhase(ReversePairingPhase::AwaitingApproval);
 
     const QString did = deviceId_;
@@ -387,7 +404,8 @@ void WifiConnectionManager::pollReverseStatus() {
         ar.bodyParsed = status.reachable;
         ar.statusStr = status.status.value_or(QString()).toStdString();
         ar.hasSharedKey = status.sharedKey.has_value() && !status.sharedKey->isEmpty();
-        const auto approval = reducer::classifyApproval(ar);
+        const auto approval = reducer::classifyApproval(ar, reverseSawPending_);
+        if (ar.statusStr == "pending") { reverseSawPending_ = true; }
         // The pure decision: the only place the poll loop's branching lives.
         switch (
             reducer::nextReversePairingAction(approval, reverseElapsedMs_, reverseDeadlineMs_)) {

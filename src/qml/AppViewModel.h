@@ -22,8 +22,10 @@
 #include "source/store/CrashReportingStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
+#include "source/store/UiPreferenceStore.h"
 
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -61,6 +63,10 @@ class AppViewModel : public QObject {
     // pairing sheet opens on it and calls clearPairingTarget() before showing.
     Q_PROPERTY(bool pairingActive READ pairingActive NOTIFY stateChanged)
     Q_PROPERTY(QString pairingServerName READ pairingServerName NOTIFY stateChanged)
+    // The parked target's stable server id, so the sheet can drive BOTH pairing
+    // paths (forward submit + the auto-sent reverse PIN) for a satellite that
+    // demanded pairing mid-connect — not just the rows the user clicked.
+    Q_PROPERTY(QString pairingServerId READ pairingServerId NOTIFY stateChanged)
 
     // ── Collections the page agents iterate ──────────────────────────────────
     // The slot/controller model (a SlotCard per row) and the connection-row
@@ -88,8 +94,10 @@ class AppViewModel : public QObject {
     // The FOUND list + scan flag, exposed REACTIVELY so QML bindings stream as a
     // scan lands (P2's plain invokables had no NOTIFY, so the FOUND list only
     // refreshed on page recreation). The properties read THROUGH the kept
-    // invokables; discoveredChanged folds the manager's discoveredChanged, and
-    // scanning folds its scanningChanged.
+    // invokables; discoveredChanged folds the manager's discoveredChanged PLUS
+    // the connection-row id set moving (the FOUND list excludes ids that already
+    // have a connections row — the one-spot rule), and scanning folds its
+    // scanningChanged.
     Q_PROPERTY(QVariantList discoveredServers READ discoveredServers NOTIFY discoveredChanged)
     Q_PROPERTY(bool scanning READ isScanning NOTIFY scanningChanged)
 
@@ -123,6 +131,30 @@ class AppViewModel : public QObject {
     Q_PROPERTY(QString donateKofiUrl READ donateKofiUrl CONSTANT)
     Q_PROPERTY(QString donateBmacUrl READ donateBmacUrl CONSTANT)
 
+    // ── Shell header + rail (contract A2) ────────────────────────────────────
+    // Primitive counts the pages compose their header sub-lines from (the
+    // design's "2 found · nothing remembered yet" / "2 of 3 online · nothing
+    // bound" strings are assembled in QML so the words stay in qsTr catalogs).
+    Q_PROPERTY(int slotCount READ slotCount NOTIFY stateChanged)
+    Q_PROPERTY(int boundSlotCount READ boundSlotCount NOTIFY stateChanged)
+    // Slots actively streaming (bound AND the link Connected) — the Home
+    // header's "N controllers streaming" count. Same composer::streamingSlotCount
+    // rule the wake controller inhibits the display on.
+    Q_PROPERTY(int streamingSlotCount READ streamingSlotCount NOTIFY stateChanged)
+    Q_PROPERTY(QString firstOnlineName READ firstOnlineName NOTIFY stateChanged)
+    Q_PROPERTY(int foundCount READ foundCount NOTIFY discoveredChanged)
+    // True while the display-sleep inhibitor is held (a slot is streaming) —
+    // drives the header's "STREAMING · DISPLAY KEPT AWAKE" pill.
+    Q_PROPERTY(bool keepAwakeActive READ keepAwakeActive NOTIFY stateChanged)
+    // The collapsible navigation rail's persisted state (48px icon rail vs
+    // 236px labeled pane). Written by the title-bar hamburger.
+    Q_PROPERTY(
+        bool railCollapsed READ railCollapsed WRITE setRailCollapsed NOTIFY railCollapsedChanged)
+    // The light-bar forwarding preference (Follow game / Off), surfaced so the
+    // QML Settings page carries the control the Widgets SettingsView had.
+    Q_PROPERTY(bool lightbarFollowGame READ lightbarFollowGame WRITE setLightbarFollowGame NOTIFY
+                   lightbarChanged)
+
   public:
     explicit AppViewModel(dish::AppModel* model, QObject* parent = nullptr);
 
@@ -138,6 +170,7 @@ class AppViewModel : public QObject {
 
     bool pairingActive() const { return pairingActive_; }
     QString pairingServerName() const { return pairingServerName_; }
+    QString pairingServerId() const { return pairingServerId_; }
 
     SlotListModel* slotModel() { return &slotModel_; }
     ConnectionListModel* connectionModel() { return &connectionModel_; }
@@ -157,6 +190,17 @@ class AppViewModel : public QObject {
     QString donateSponsorsUrl() const;
     QString donateKofiUrl() const;
     QString donateBmacUrl() const;
+
+    int slotCount() const { return slotCount_; }
+    int boundSlotCount() const { return boundSlotCount_; }
+    int streamingSlotCount() const { return streamingSlotCount_; }
+    QString firstOnlineName() const { return firstOnlineName_; }
+    int foundCount() const;
+    bool keepAwakeActive() const { return keepAwakeActive_; }
+    bool railCollapsed() const;
+    Q_INVOKABLE void setRailCollapsed(bool collapsed);
+    bool lightbarFollowGame() const;
+    Q_INVOKABLE void setLightbarFollowGame(bool followGame);
 
     // The external-open sink: the QmlEntryPoint injects the real ExternalLink
     // path (which routes a failure through the NotificationQueue toast, matching
@@ -308,8 +352,10 @@ class AppViewModel : public QObject {
 
     // Discovery results moved (P2 had to re-pull discoveredServers() on the broad
     // stateChanged; this is the precise edge to re-pull on). Folds the
-    // WifiConnectionManager's discoveredChanged. NOTIFY for the discoveredServers
-    // property so QML bindings stream as a scan lands.
+    // WifiConnectionManager's discoveredChanged AND a connection-row id-set move
+    // (pair landed / forget dropped a row — the FOUND list excludes those ids, so
+    // it must re-read then too). NOTIFY for the discoveredServers property so QML
+    // bindings stream as a scan lands.
     void discoveredChanged();
 
     // The scan flag flipped (a scan started or finished). Folds the
@@ -329,6 +375,13 @@ class AppViewModel : public QObject {
     // The deadzone device rows / their seeded values moved (a device attached or
     // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().
     void deadzonesChanged();
+
+    // The rail collapse preference flipped (persisted; NOTIFY for railCollapsed).
+    void railCollapsedChanged();
+
+    // The light-bar preference flipped (NOTIFY for lightbarFollowGame). Folds
+    // FeatureSettings::changed so an external mutation re-reads too.
+    void lightbarChanged();
 
     // A one-shot pairing-success edge (a session reached Connected after a pair).
     // Mirrors the rising edge of a connection going live; the QML pairing sheet
@@ -364,6 +417,11 @@ class AppViewModel : public QObject {
     int onlineCount_ = 0;
     int connectionCount_ = 0;
     bool busy_ = false;
+    int slotCount_ = 0;
+    int boundSlotCount_ = 0;
+    int streamingSlotCount_ = 0;
+    QString firstOnlineName_;
+    bool keepAwakeActive_ = false;
 
     int eventsPerSec_ = 0;
     int sendsPerSec_ = 0;
@@ -371,6 +429,7 @@ class AppViewModel : public QObject {
 
     bool pairingActive_ = false;
     QString pairingServerName_;
+    QString pairingServerId_;
 
     // The slot currently running an input capture, or empty when none. Set by
     // startInputCapture, cleared by stopInputCapture; the rawJoystickInput relay
@@ -380,6 +439,12 @@ class AppViewModel : public QObject {
     // Cached so onStateChanged can fire pairingSucceeded() on the rising edge of
     // the online count (a fresh connection reached Connected).
     int lastOnlineCount_ = 0;
+
+    // The connection-row id set as of the last onConnectionsChanged — the FOUND
+    // list excludes these ids (the one-spot rule), so a membership move re-emits
+    // discoveredChanged. An edge detector only: discoveredServers() re-reads the
+    // coordinator's authoritative rows on every call, never this cache.
+    QSet<QString> connectionRowIds_;
 
     // Cached onboarding gate so onStateChanged can fire onboardingNeededChanged
     // only on a real transition (markOnboardingComplete is the only mover today,
@@ -394,6 +459,11 @@ class AppViewModel : public QObject {
     arch::Observable<source::ThemeMode>::Subscription themeSub_;
     arch::Observable<bool>::Subscription crashSub_;
     arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
+    arch::Observable<int>::Subscription keepAwakeSub_;
+
+    // Rail-collapse persistence. UI-shell-only state, so the store lives here
+    // rather than on AppModel — the view model IS the shell's C++ edge.
+    source::UiPreferenceStore uiPrefs_;
 };
 
 } // namespace dish::qml

@@ -12,29 +12,31 @@ import Dish.Chrome
 Button {
     id: control
 
-    font.pixelSize: 13
-    font.bold: true
-    implicitHeight: 34
-    leftPadding: 16
-    rightPadding: 16
+    font.pixelSize: Tokens.textBase
+    font.weight: Font.Medium
+    implicitHeight: 30
+    leftPadding: Tokens.s6
+    rightPadding: Tokens.s6
 
     // The Dish design system drops the whole control to 0.4 alpha when disabled
     // (matches the Widgets `applyDisabledOpacityEffect` / ds-components rule).
-    opacity: control.enabled ? 1.0 : 0.4
+    opacity: control.enabled ? 1.0 : Tokens.disabledOpacity
 
     contentItem: Text {
         text: control.text
         font: control.font
-        color: Theme.background        // on-primary: dark text on the cyan fill
+        color: control.enabled ? Theme.onPrimary : Theme.muted
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
 
     background: Rectangle {
-        radius: 8
-        color: control.down ? Qt.darker(Theme.primary, 1.15)
-             : control.hovered ? Qt.lighter(Theme.primary, 1.08)
+        radius: Tokens.radiusButton
+        // Hover/press darken to the pressed accent (the ds Button spec); the
+        // disabled fill recedes so the muted text stays legible at 0.4.
+        color: !control.enabled ? Theme.surfaceDim
+             : control.down || control.hovered ? Theme.primaryDark
              : Theme.primary
     }
 }

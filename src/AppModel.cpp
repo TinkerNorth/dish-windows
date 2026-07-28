@@ -9,6 +9,7 @@
 #include "core/reducer/PickerVisibility.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/SlotPathFields.h"
+#include "core/reducer/TouchpadModeResolve.h"
 #include "core/reducer/TouchpadRouting.h"
 #include "core/reducer/UsbTwinDedup.h"
 
@@ -20,7 +21,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <QApplication>
 #include <QLocale>
 
 namespace dish {
@@ -54,8 +54,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       featureSettings_(new FeatureSettings(this)), autoReconnectTimer_(new QTimer(this)),
       inhibitor_(std::move(inhibitor)), wakeComposer_(streamingSlotCount_, shouldKeepScreenOn_),
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
-      themeController_(themeStore_.state(), qApp),
-      crashController_(crashStore_.state(), &crashBackend_),
+      themeController_(themeStore_.state()), crashController_(crashStore_.state(), &crashBackend_),
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
       motionEnabledStore_(&motionPrefRepo_), joystickRemapStore_(&joystickRemapRepo_),
       catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
@@ -187,6 +186,40 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     hub_->setControllerTypeFn(
         [this](const QString& slotId) { return resolveControllerType(slotId); });
 
+    // Touchpad mode: the descriptor declares ds4 pad-render when the pad HAS a
+    // touch source and the resolved type is DS4 (the one offered type whose
+    // catalog touchpad feature carries the "ds4" mode — legacy catalogs imply
+    // it, per contract). The per-satellite pick defaults to ds4 when never
+    // picked, so DS4 touch forwards out of the box; mouse stays unreachable in
+    // v1 (no UI sets the pick to "mouse", and hostMouseControl reads false).
+    // A hardwired "off" here previously made the satellite discard every
+    // MSG_TOUCHPAD the fully-built forward path sent.
+    hub_->setTouchpadModeFn([this](const QString& slotId) -> std::uint8_t {
+        bool hasTouchpad = false;
+        for (const auto& d : bridge_->devices()) {
+            if (d.id == slotId) {
+                hasTouchpad = d.hasTouchpad;
+                break;
+            }
+        }
+        if (!hasTouchpad) { return proto::kTouchpadModeOff; }
+        const auto connId = hub_->boundConnection(slotId);
+        const std::string pick =
+            connId.has_value()
+                ? touchpadModeStore_.modeFor(connId->id.toStdString())
+                      .value_or(std::string(proto::touchpadModeName(proto::kTouchpadModeDs4)))
+                : std::string(proto::touchpadModeName(proto::kTouchpadModeDs4));
+        // The ds4 wire type (kControllerTypePlayStation) is the one type whose
+        // catalog touchpad feature carries the "ds4" mode in every catalog the
+        // contract pins (legacy v1 implies it). When the live per-satellite
+        // catalog gate lands (CatalogFeatureGate), this shortcut widens to a
+        // real lookup.
+        const bool typeOffersDs4 =
+            resolveControllerType(slotId) == proto::kControllerTypePlayStation;
+        return reducer::resolveTouchpadMode(pick, hasTouchpad, typeOffersDs4,
+                                            /*hostMouseControl=*/false);
+    });
+
     // ── USB-direct (raw-HID) claim path ──────────────────────────────────────
     // Build the real Windows raw-HID gateway + the claim driver, feeding decoded
     // reports into the SAME processor_ as the SDL path. The driver is dormant
@@ -220,7 +253,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
 
     // Arm the theme controller: it subscribes the ThemePreferenceStore and
     // applies the persisted (or System-resolved) palette immediately, re-theming
-    // the live QApplication. start() applying the current value == android's
+    // the live palette. start() applying the current value == android's
     // applyPersistedMode(). The Source derives the mode; this Controller effects
     // the palette — they cannot drift (§4.3 rule 2).
     themeController_.start();
@@ -498,8 +531,13 @@ void AppModel::pollUsbDirect() {
     // count lookup. The measured rate is currently informational (the live-stats
     // surface reads it on android); we drain it so the snapshot map stays bounded
     // and a re-attached id starts fresh.
+    // One snapshot for the whole pass. controllers() returns BY VALUE — calling
+    // it per lookup below would compare find()/end() iterators from two different
+    // temporaries (UB; the debug CRT asserts "map/set iterators incompatible" the
+    // moment a Direct pad exists).
+    const auto controllers = usbManager_->controllers();
     std::vector<int> present;
-    for (const auto& [key, c] : usbManager_->controllers()) {
+    for (const auto& [key, c] : controllers) {
         if (c.phase == reducer::UsbPhase::Direct && c.syntheticId.has_value()) {
             present.push_back(*c.syntheticId);
         }
@@ -522,7 +560,7 @@ void AppModel::pollUsbDirect() {
         QHash<int, int> bySyntheticId;
         for (const auto& u : updates) { bySyntheticId.insert(u.deviceId, u.rateHz); }
         bool changed = false;
-        for (const auto& [key, c] : usbManager_->controllers()) {
+        for (const auto& [key, c] : controllers) {
             if (c.phase != reducer::UsbPhase::Direct || !c.syntheticId.has_value()) { continue; }
             const auto it = bySyntheticId.constFind(*c.syntheticId);
             if (it == bySyntheticId.constEnd()) { continue; }
@@ -534,9 +572,9 @@ void AppModel::pollUsbDirect() {
         // Prune synthetics that are gone so a stale rate can't linger on a reused
         // key, then repaint if anything moved (the slot card reads it via state).
         for (auto it = usbPollRateHz_.begin(); it != usbPollRateHz_.end();) {
-            const auto cit = usbManager_->controllers().find(it.key());
-            const bool live = cit != usbManager_->controllers().end() &&
-                              cit->second.phase == reducer::UsbPhase::Direct;
+            const auto cit = controllers.find(it.key());
+            const bool live =
+                cit != controllers.end() && cit->second.phase == reducer::UsbPhase::Direct;
             if (live) {
                 ++it;
             } else {
@@ -724,6 +762,16 @@ void AppModel::rebuild() {
         if (!cid.isEmpty()) {
             s.boundConnectionId = cid;
             s.boundStatus = hub_->summary(cid);
+            // The resolved emulation type's short name for the card's
+            // "· as DualShock 4" suffix — server-localized catalog text when
+            // available; empty (suffix omitted) when no catalog row matches.
+            const int type = resolveControllerType(s.id);
+            for (const auto& t : pickableTypesFor(s.id)) {
+                if (t.type == type) {
+                    s.emulateName = t.shortName;
+                    break;
+                }
+            }
         }
         // Stamp the latest measured stream rates (gamepad/motion Hz + peaks) the
         // InputRateStore folded into liveRatesBySlot_, preserving them across this

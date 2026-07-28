@@ -15,6 +15,16 @@
   <qresource prefix="/">
     <file>dish.ico</file>
   </qresource>
+  <qresource prefix="/fonts">
+    <!-- Inter (SIL OFL 1.1, packaging/fonts/Inter-LICENSE.txt): the design
+         system's UI face. Bundled so the app matches the design on machines
+         without Inter installed; loaded in main() via QFontDatabase. -->
+    <file alias="Inter-Regular.ttf">fonts/Inter-Regular.ttf</file>
+    <file alias="Inter-Medium.ttf">fonts/Inter-Medium.ttf</file>
+    <file alias="Inter-SemiBold.ttf">fonts/Inter-SemiBold.ttf</file>
+    <file alias="Inter-Bold.ttf">fonts/Inter-Bold.ttf</file>
+    <file alias="Inter-LICENSE.txt">fonts/Inter-LICENSE.txt</file>
+  </qresource>
   <qresource prefix="/licenses">
     <!-- Third-party attribution manifest (Workstream 3c). Hand-authored seed of
          the Windows deps (Qt6 LGPL-3.0, SDL2 Zlib, libsodium ISC, Catch2
@@ -38,6 +48,7 @@
     <file alias="dish-receiving.svg">brand/dish-receiving.svg</file>
     <file alias="dish-receiving-animated.svg">brand/dish-receiving-animated.svg</file>
     <file alias="dish-scanning-animated.svg">brand/dish-scanning-animated.svg</file>
+    <file alias="gear.svg">brand/gear.svg</file>
     <file alias="satellite.svg">brand/satellite.svg</file>
     <file alias="satellite-broadcasting.svg">brand/satellite-broadcasting.svg</file>
     <file alias="satellite-broadcasting-animated.svg">brand/satellite-broadcasting-animated.svg</file>

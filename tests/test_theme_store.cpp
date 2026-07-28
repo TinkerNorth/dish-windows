@@ -141,6 +141,12 @@ TEST_CASE("light palette defines every dark token role and differs from dark",
     // assert each opaque body/surface/text role is fully opaque (alpha 0xFF) in
     // both, which catches a forgotten/zeroed light token.
     const auto opaque = [](QRgb c) { return qAlpha(c) == 0xFF; };
+    // The donation accent (pulse) rides the same completeness bar: opaque in
+    // both palettes, and AA-darkened (not aliased) on light.
+    REQUIRE(opaque(dark.pulse));
+    REQUIRE(opaque(light.pulse));
+    REQUIRE(light.pulse != dark.pulse);
+    REQUIRE(qGray(light.pulse) < qGray(dark.pulse));
     for (QRgb c :
          {dark.background, dark.surface, dark.surfaceDim, dark.primary, dark.primaryDark,
           dark.onPrimary, dark.onSurface, dark.muted, dark.success, dark.error, dark.warning}) {

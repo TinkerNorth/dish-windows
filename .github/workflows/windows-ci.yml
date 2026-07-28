@@ -77,18 +77,14 @@ jobs:
           $files = git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp' 'tests/*.h'
           clang-format --dry-run --Werror $files
 
-      - name: Configure (Debug, tests + QML UI on)
+      - name: Configure (Debug, tests)
         shell: pwsh
         run: |
-          # DISH_QML=ON so the Qt Quick tree (the Dish.Chrome module, the chrome
-          # C++, the QmlEntryPoint) actually compiles in CI alongside the tests.
-          # The SHIPPED default stays the Widgets UI: the Release/artifact build
-          # below deliberately does not set DISH_QML — flipping the product
-          # default is the owner's call, not CI's.
+          # The Qt Quick chrome is THE app now (the Widgets UI is gone), so the
+          # default configure compiles the Dish.Chrome module + tests together.
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Debug `
             -DDISH_BUILD_TESTS=ON `
-            -DDISH_QML=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
@@ -122,15 +118,10 @@ jobs:
       - name: clang-tidy
         shell: pwsh
         run: |
-          # DISH_QML=ON so the src/qml TUs are in compile_commands.json with real
-          # Qt6::Qml include dirs. Without it they are absent and clang-tidy
-          # interpolates a sibling TU's command, reporting bogus missing-header
-          # errors (e.g. QQmlApplicationEngine) instead of analysing them.
           cmake -S . -B build-tidy -G Ninja `
             -DCMAKE_BUILD_TYPE=Debug `
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
             -DDISH_BUILD_TESTS=OFF `
-            -DDISH_QML=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           # Build first so generated mocs exist for clang-tidy.
           cmake --build build-tidy --parallel
@@ -168,10 +159,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item build-release/dish.exe artifact/
           # windeployqt copies every required Qt DLL + plugins next to the exe.
-          # jurplel/install-qt-action v4 sets QT_ROOT_DIR (the install root,
-          # e.g. ...\Qt\6.7.3\msvc2019_64) but not Qt6_DIR, so resolve
+          # --qmldir walks our QML sources so the Quick modules the app imports
+          # (QtQuick, Controls Basic, Layouts, Effects, Window) ship too — the
+          # frameless Quick chrome is the ONLY UI, so a QML-less artifact would
+          # open to a white window. jurplel/install-qt-action v4 sets
+          # QT_ROOT_DIR (the install root) but not Qt6_DIR, so resolve
           # windeployqt directly under QT_ROOT_DIR/bin.
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations artifact/dish.exe
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir src/qml artifact/dish.exe
 
       - name: Upload release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

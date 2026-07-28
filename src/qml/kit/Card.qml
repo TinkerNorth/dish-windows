@@ -14,10 +14,14 @@ import Dish.Chrome
 Control {
     id: card
 
-    padding: 16
+    // The ds card inset: 12 vertical / 14 horizontal (slot rows, list panels).
+    topPadding: Tokens.s6
+    bottomPadding: Tokens.s6
+    leftPadding: Tokens.s7
+    rightPadding: Tokens.s7
 
     background: Rectangle {
-        radius: 12
+        radius: Tokens.radiusCard
         color: Theme.surface
         border.width: 1
         border.color: Theme.outline

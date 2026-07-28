@@ -5,78 +5,17 @@
 
 #include "core/reducer/ConnectionRows.h"
 #include "core/reducer/LatencyWindow.h"
+#include "qml/RenderTokens.h"
 
 namespace dish::qml {
 
 namespace {
 
 namespace rd = dish::reducer;
-
-QString linkStateToken(rd::UiLinkState s) {
-    switch (s) {
-    case rd::UiLinkState::Found:
-        return QStringLiteral("found");
-    case rd::UiLinkState::Stale:
-        return QStringLiteral("stale");
-    case rd::UiLinkState::Saved:
-        return QStringLiteral("saved");
-    case rd::UiLinkState::Ready:
-        return QStringLiteral("ready");
-    case rd::UiLinkState::Connecting:
-        return QStringLiteral("connecting");
-    case rd::UiLinkState::Connected:
-        return QStringLiteral("connected");
-    case rd::UiLinkState::Unstable:
-        return QStringLiteral("unstable");
-    }
-    return {};
-}
-
-QString chipToken(rd::StatusChipKey c) {
-    switch (c) {
-    case rd::StatusChipKey::Found:
-        return QStringLiteral("found");
-    case rd::StatusChipKey::NeedsPairing:
-        return QStringLiteral("needsPairing");
-    case rd::StatusChipKey::Offline:
-        return QStringLiteral("offline");
-    case rd::StatusChipKey::Ready:
-        return QStringLiteral("ready");
-    case rd::StatusChipKey::Connecting:
-        return QStringLiteral("connecting");
-    case rd::StatusChipKey::Online:
-        return QStringLiteral("online");
-    case rd::StatusChipKey::Unstable:
-        return QStringLiteral("unstable");
-    }
-    return {};
-}
-
-QString dotToken(rd::DotColor d) {
-    switch (d) {
-    case rd::DotColor::Success:
-        return QStringLiteral("success");
-    case rd::DotColor::Primary:
-        return QStringLiteral("primary");
-    case rd::DotColor::Warning:
-        return QStringLiteral("warning");
-    case rd::DotColor::Muted:
-        return QStringLiteral("muted");
-    }
-    return {};
-}
-
-QString glyphToken(rd::ConnectionGlyph g) {
-    switch (g) {
-    case rd::ConnectionGlyph::SatelliteBase:
-        return QStringLiteral("satelliteBase");
-    case rd::ConnectionGlyph::SatelliteConnected:
-        return QStringLiteral("satelliteConnected");
-    case rd::ConnectionGlyph::SatelliteOff:
-        return QStringLiteral("satelliteOff");
-    }
-    return {};
-}
+using tokens::chipToken;
+using tokens::dotToken;
+using tokens::glyphToken;
+using tokens::linkStateToken;
 
 } // namespace
 

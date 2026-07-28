@@ -29,6 +29,26 @@ void setIfNonEmpty(std::optional<QString>& slot, const QJsonObject& obj, const c
     if (auto v = optString(obj, key); !v.isEmpty()) { slot = v; }
 }
 
+// Inverse of ControllerDescriptor::toJson's caps fold: the view's caps object
+// back into the proto::kCap* word. Unknown keys are ignored so a newer server
+// can add caps without breaking older clients.
+std::uint16_t capsWordFromJson(const QJsonObject& caps) {
+    std::uint16_t word = 0;
+    if (boolOr(caps, "rumble", false)) { word |= proto::kCapRumble; }
+    if (boolOr(caps, "motion", false)) { word |= proto::kCapMotion; }
+    if (boolOr(caps, "analogTriggers", false)) { word |= proto::kCapAnalogTriggers; }
+    if (boolOr(caps, "lightbar", false)) { word |= proto::kCapLightbar; }
+    return word;
+}
+
+HostCapabilityDto hostCapabilityFromJson(const QJsonObject& obj) {
+    HostCapabilityDto d;
+    d.supported = boolOr(obj, "supported", false);
+    const auto avail = obj.value(QLatin1String("available"));
+    if (avail.isBool()) { d.available = avail.toBool(); }
+    return d;
+}
+
 } // namespace
 
 QJsonObject DiscoveredServer::toJson() const {
@@ -131,6 +151,19 @@ SessionViewControllerDto SessionViewControllerDto::fromJson(const QJsonObject& o
     d.active = boolOr(obj, "active", false);
     d.appliedType = intOr(obj, "appliedType", proto::kControllerTypeXbox);
     d.touchpadMode = optString(obj, "touchpadMode");
+    const auto caps = obj.value(QLatin1String("caps"));
+    if (caps.isObject()) {
+        d.caps = capsWordFromJson(caps.toObject());
+        d.capsPresent = true;
+    }
+    const auto motion = obj.value(QLatin1String("motion"));
+    if (motion.isObject()) {
+        const auto mo = motion.toObject();
+        const auto sink = mo.value(QLatin1String("sinkSupportedForType"));
+        if (sink.isBool()) { d.motionSinkSupportedForType = sink.toBool(); }
+        const auto ok = mo.value(QLatin1String("backendOk"));
+        if (ok.isBool()) { d.motionBackendOk = ok.toBool(); }
+    }
     return d;
 }
 
@@ -138,6 +171,8 @@ SessionViewDto SessionViewDto::fromJson(const QJsonObject& obj) {
     SessionViewDto r;
     setIfNonEmpty(r.connectionId, obj, "connectionId");
     r.epoch = intOr(obj, "epoch", 0);
+    r.protocolVersion = intOr(obj, "protocolVersion", proto::kProtocolVersion);
+    r.maxControllers = intOr(obj, "maxControllers", 16);
     for (const auto& v : obj.value(QLatin1String("controllers")).toArray()) {
         if (v.isObject()) {
             r.controllers.append(SessionViewControllerDto::fromJson(v.toObject()));
@@ -163,6 +198,17 @@ CapabilitiesDto CapabilitiesDto::fromJson(const QJsonObject& obj) {
     if (auto ec = optString(backend, "errorCode"); !ec.isEmpty()) { c.backendErrorCode = ec; }
     const auto motion = obj.value(QLatin1String("motion")).toObject();
     c.motionAvailable = boolOr(motion, "available", false);
+    const auto host = obj.value(QLatin1String("host"));
+    if (host.isObject()) {
+        const auto ho = host.toObject();
+        c.hasHostBlock = true;
+        c.hostCatalog = hostCapabilityFromJson(ho.value(QLatin1String("catalog")).toObject());
+        c.hostMouseControl =
+            hostCapabilityFromJson(ho.value(QLatin1String("mouseControl")).toObject());
+        c.hostKeyboardControl =
+            hostCapabilityFromJson(ho.value(QLatin1String("keyboardControl")).toObject());
+        c.hostRumble = hostCapabilityFromJson(ho.value(QLatin1String("rumble")).toObject());
+    }
     c.reachable = true;
     return c;
 }
@@ -183,7 +229,20 @@ CatalogTypeDto CatalogTypeDto::fromJson(const QJsonObject& obj) {
         CatalogFeatureDto f;
         f.supported = boolOr(fo, "supported", false);
         if (auto req = optString(fo, "requires"); !req.isEmpty()) { f.requires_ = req; }
+        for (const auto& m : fo.value(QLatin1String("modes")).toArray()) {
+            if (m.isString()) { f.modes.append(m.toString()); }
+        }
         t.features.insert(it.key(), f);
+    }
+    const auto emulates = obj.value(QLatin1String("emulates"));
+    if (emulates.isObject()) {
+        const auto eo = emulates.toObject();
+        CatalogEmulatesDto e;
+        e.sdlType = optString(eo, "sdlType");
+        for (const auto& u : eo.value(QLatin1String("usb")).toArray()) {
+            if (u.isString()) { e.usb.append(u.toString().toLower()); }
+        }
+        t.emulates = e;
     }
     return t;
 }
@@ -192,6 +251,8 @@ CatalogDto CatalogDto::fromJson(const QJsonObject& obj) {
     CatalogDto c;
     c.locale = optString(obj, "locale");
     c.protocolVersion = intOr(obj, "protocolVersion", proto::kProtocolVersion);
+    // Absent = the legacy v1 catalog, per contract — never default to current.
+    c.catalogVersion = intOr(obj, "catalogVersion", 1);
     c.serverVersion = optString(obj, "serverVersion");
     for (const auto& v : obj.value(QLatin1String("controllerTypes")).toArray()) {
         if (v.isObject()) { c.controllerTypes.append(CatalogTypeDto::fromJson(v.toObject())); }

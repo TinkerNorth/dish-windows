@@ -303,21 +303,20 @@ device hotplug, capability, capture mode, path switching — **is** modelled sta
 
 ---
 
-## 9. <a name="legacy"></a>The two front-ends (Widgets vs QML)
+## 9. <a name="legacy"></a>One front-end: the Qt Quick flows app
 
-The app currently builds two UIs from one core, gated by the `DISH_QML` CMake
-option (default OFF today):
+The Qt Quick app (`src/qml/`, entry `runQmlApp`, `QGuiApplication`) is THE app.
+The parallel Widgets UI served as the migration's reference and fallback until
+the flows redesign reached feature+UX parity, then was deleted for the release
+(no `DISH_QML` option remains — Quick always builds, Widgets never links).
 
-- **OFF** → the **Widgets** app (`src/UI/`, entry `MainWindow`). The shipping UI.
-- **ON** → the **Qt Quick / Fluent** app (`src/qml/`, entry `runQmlApp`). The
-  in-progress migration this guide is written for.
-
-That two front-ends compile against the same `AppModel`/`AppViewModel` core *is the
-proof the prime directive holds.* Until the QML path reaches feature+UX parity (see
-the roadmap) the Widgets path stays as the reference and fallback; do not delete it.
-Shared infra that both use (`Theme`, `CrashHandler`, `SlotLiveStats`, `BrandIcon`,
-`ExternalLink`/`NotificationQueue`) lives outside the view code and must keep
-compiling for both.
+What survives under `src/UI/` is shared non-view infrastructure only: the
+`Theme` palettes (pure QColor data + the OS appearance reader — the widget
+QSS layer died with the Widgets tree), `CrashHandler`, the `SlotLiveStats`
+mapper, `common/ExternalLink` (now a bare QDesktopServices edge; toast routing
+happens in QML via `App.errorMessage`), and `licenses/LicenseManifest`. The
+prime directive's proof burden moved to the tests: the view model + role
+models live in `dish_core` and stay fully unit-testable without Quick.
 
 ---
 
