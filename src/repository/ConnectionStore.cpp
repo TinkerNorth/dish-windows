@@ -65,7 +65,9 @@ ConnectionStore::ConnectionStore(std::shared_ptr<QSettings> settings)
 }
 
 QString ConnectionStore::getOrCreateDeviceId() {
-    const auto existing = settings_->value(QLatin1String(keys::kDeviceIdKey)).toString();
+    // Non-const on purpose: const would block the implicit move on the return
+    // below and force a QString copy on the (overwhelmingly common) hit path.
+    auto existing = settings_->value(QLatin1String(keys::kDeviceIdKey)).toString();
     if (!existing.isEmpty()) { return existing; }
     const auto fresh =
         QUuid::createUuid().toString(QUuid::WithoutBraces).remove(QLatin1Char('-')).toLower();
