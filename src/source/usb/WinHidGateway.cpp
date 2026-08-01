@@ -3,6 +3,7 @@
 
 #include "source/usb/WinHidGateway.h"
 
+#include "core/input/HidTransport.h"
 #include "core/input/UsbReportParsers.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
@@ -96,6 +97,14 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
         }
         const std::string path = wideToUtf8(detail->DevicePath);
 
+        // A Bluetooth-connected pad is a HID device too (same VID:PID as its
+        // USB identity) but is NOT a USB-direct claim candidate: the raw-HID
+        // claim is a USB feature, the per-model decoders parse the USB report
+        // layout (the BT layout differs — a DS4 streams the short 0x01 report
+        // until a feature-report handshake), and tracking it would grow a bogus
+        // "USB PATH" control on a wireless pad. Skip it before probing.
+        if (input::isBluetoothHidDevicePath(path)) { continue; }
+
         // Open for query only (no read/write share so we don't disturb other
         // readers while probing). The actual claim re-opens with read access.
         HANDLE h = CreateFileW(detail->DevicePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
@@ -172,6 +181,10 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         if (!SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr)) {
             continue;
         }
+        // Same VID:PID can be present over BOTH transports at once (a pad
+        // charging over USB while still BT-paired); never claim the Bluetooth
+        // interface — enumerate() filtered it, so the claim must match.
+        if (input::isBluetoothHidDevicePath(wideToUtf8(detail->DevicePath))) { continue; }
         HANDLE h = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                FILE_FLAG_OVERLAPPED, nullptr);

@@ -190,6 +190,10 @@ set(DISH_TEST_SOURCES
     # USB-direct synthetic; claim->suppress, detach->restore).
     test_usb_report_parsers.cpp
     test_usb_twin_dedup.cpp
+    # USB-vs-Bluetooth transport classification of a Windows HID interface path
+    # (pure). Gates the raw-HID claim candidates (a BT pad never claims) and the
+    # slot card's Bluetooth presentation.
+    test_hid_transport.cpp
     # Workstream 3a/3b/3c/3d/3e — onboarding/theme/crash preference stores +
     # controllers, the donate-pill dismiss-window pure fn, and the license-manifest
     # parse + mapping + forward-compat. Windows-authored (most surfaces had no

@@ -229,6 +229,7 @@ never resets on a quiet telemetry tick.
 | `live` | `bool` | Bound session is `Connected` (green dot iff true). |
 | `dotColor` | `string` | Status-dot token: `"success"` / `"warning"` / `"muted"`. Resolve to a `Theme` color. |
 | `usbDirect` | `bool` | Slot is a USB-direct (raw-HID) synthetic. |
+| `bluetooth` | `bool` | Pad is connected over Bluetooth (classic or BLE), classified at attach from the device path. Swap the card's glyph FAMILY to the `bluetooth*` brand set (state suffix still follows liveness) and show the "Bluetooth" transport chip. Always `false` for a USB-direct synthetic, and a `bluetooth` slot is never `pathSupported` (no USB path to switch). |
 | `remappable` | `bool` | Slot is a RAW-joystick SDL pad whose DirectInput routing the "Configure controls" page may remap (the `mapJoystick` path). `false` for synthetics (USB-direct), the virtual slot, and SDL-recognised game controllers (they use SDL's own mapping and ignore a remap). Gate the "Configure controls" entry on this — and `slotRemap(slotId)` returns `{}` for a non-remappable slot. |
 | `hasMotion` | `bool` | Hardware has a gyro/accelerometer (drives the Gyro/No-gyro chip). |
 | `hasLightbar` | `bool` | Hardware has an RGB LED (show the Lightbar chip ONLY when true). |
@@ -244,7 +245,7 @@ never resets on a quiet telemetry tick.
 | `pollHzShown` | `bool` | Whether to show the poll-rate chip (USB-direct pads with a reading). |
 | `pathPhase` | `string` | USB-path FSM phase token: `"routed"` / `"claiming"` / `"direct"` / `"awaitingFramework"` / `"restoreStuck"` / `"needsReplug"`. |
 | `desiredPath` | `string` | Resolved desired path the toggle reads as selected: `"standard"` / `"direct"`. (`"auto"` is a `setSlotPath` INPUT only — it resolves to one of these, so it never appears here.) |
-| `pathSupported` | `bool` | The device is a raw-HID-claimable controller (a `UsbController` exists for it). Show the Standard/Direct/Auto control ONLY when true — an Xbox/XInput pad has none and hides it. |
+| `pathSupported` | `bool` | The device is a raw-HID-claimable controller (a `UsbController` exists for it). Show the Standard/Direct/Auto control ONLY when true — an Xbox/XInput pad has none and hides it, and a Bluetooth-connected pad is never path-supported (the raw-HID claim is USB-only). |
 | `claimInProgress` | `bool` | `pathPhase == "claiming"` — a Direct claim is in flight. Disable the toggle + show a spinner while true. |
 | `directFailure` | `string` | Last Direct-claim failure reason token (`"permissionDenied"` / `"busy"` / `"initFailed"` / `"dropped"`), or `""` when none. Drives the inline note (together with the `needsReplug` / `restoreStuck` phases). |
 

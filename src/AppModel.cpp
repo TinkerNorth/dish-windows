@@ -726,7 +726,13 @@ void AppModel::rebuild() {
         // remappable mapJoystick path; carry the flag so the page entry shows
         // for exactly those. Synthetics below stay false (default).
         s.remappable = d.isRawJoystick;
-        stampSlotPath(s, d.vendorId, d.productId, controllers);
+        // A Bluetooth-connected pad shows the Bluetooth presentation and never
+        // gets USB-path fields: the same model can be present over BOTH
+        // transports at once (charging over USB while BT-paired), and the
+        // controllers map is keyed by (vid, pid) — without this gate the BT
+        // twin would wear the USB twin's path control.
+        s.bluetooth = d.bluetooth;
+        if (!d.bluetooth) { stampSlotPath(s, d.vendorId, d.productId, controllers); }
         next.append(s);
     }
 
