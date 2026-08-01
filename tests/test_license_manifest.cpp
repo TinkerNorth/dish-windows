@@ -9,7 +9,7 @@
 // assets/licenses/licenses.json (handed in via DISH_LICENSES_JSON_PATH, since the
 // Qt resource lives only in the Dish exe, not in dish_core which the test links).
 
-#include "ui/licenses/LicenseManifest.h"
+#include "UI/licenses/LicenseManifest.h"
 
 #include <catch2/catch_test_macros.hpp>
 

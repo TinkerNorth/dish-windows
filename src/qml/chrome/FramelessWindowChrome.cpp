@@ -5,6 +5,8 @@
 
 #include <QWindow>
 
+#include <cstring>
+
 #include <windows.h>
 #include <dwmapi.h>
 #include <windowsx.h>
@@ -35,16 +37,26 @@ HWND hwndOf(QWindow* window) {
 // Win11 gate needs.
 unsigned long osBuildNumber() {
     using RtlGetVersionFn = LONG(WINAPI*)(PRTL_OSVERSIONINFOW);
-    if (HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll")) {
-        // Via void*: FARPROC has an unrelated signature, so a direct function-
-        // pointer cast trips -Wcast-function-type-mismatch.
-        if (auto fn = reinterpret_cast<RtlGetVersionFn>(
-                reinterpret_cast<void*>(::GetProcAddress(ntdll, "RtlGetVersion")))) {
-            RTL_OSVERSIONINFOW info{};
-            info.dwOSVersionInfoSize = sizeof(info);
-            if (fn(&info) == 0) { return info.dwBuildNumber; }
-        }
-    }
+    HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+    if (ntdll == nullptr) { return 0; }
+    FARPROC proc = ::GetProcAddress(ntdll, "RtlGetVersion");
+    if (proc == nullptr) { return 0; }
+    // Copy the bits rather than cast them. FARPROC's signature is unrelated to
+    // RtlGetVersion's, so a direct function-pointer cast trips
+    // -Wcast-function-type-mismatch while laundering it through void* trips
+    // bugprone-casting-through-void — with no cast between the two types, neither
+    // has anything to match. memcpy's operands are spelled as explicit void* /
+    // const void* so the call performs no implicit pointer conversion of its own
+    // (bugprone-bitwise-pointer-cast, -multi-level-implicit-pointer-conversion).
+    // Both are function pointers, so the widths agree on every Windows ABI; the
+    // static_assert makes a mismatch a compile error, not a half-copied pointer.
+    static_assert(sizeof(RtlGetVersionFn) == sizeof(FARPROC),
+                  "RtlGetVersion and FARPROC must be the same width to copy between them");
+    RtlGetVersionFn fn = nullptr;
+    std::memcpy(static_cast<void*>(&fn), static_cast<const void*>(&proc), sizeof(fn));
+    RTL_OSVERSIONINFOW info{};
+    info.dwOSVersionInfoSize = sizeof(info);
+    if (fn(&info) == 0) { return info.dwBuildNumber; }
     return 0;
 }
 
@@ -79,7 +91,7 @@ void FramelessWindowChrome::setLeftClientRect(const QRect& rect) { m_leftClientR
 
 bool FramelessWindowChrome::applyMicaBackdrop() {
     HWND hwnd = hwndOf(m_window);
-    if (!hwnd) { return false; }
+    if (hwnd == nullptr) { return false; }
     if (!isWin11OrLater(osBuildNumber())) {
         // Pre-Win11: the backdrop + dark-mode attributes are unsupported and the
         // immersive-dark attribute had a different (reserved) id on early builds.
@@ -107,7 +119,7 @@ bool FramelessWindowChrome::applyMicaBackdrop() {
 
 void FramelessWindowChrome::setImmersiveDarkMode(bool dark) {
     HWND hwnd = hwndOf(m_window);
-    if (!hwnd || !isWin11OrLater(osBuildNumber())) { return; }
+    if (hwnd == nullptr || !isWin11OrLater(osBuildNumber())) { return; }
     const BOOL value = dark ? TRUE : FALSE;
     ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 }
@@ -117,7 +129,7 @@ bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType, void*
     if (eventType != QByteArrayLiteral("windows_generic_MSG")) { return false; }
     auto* msg = static_cast<MSG*>(message);
     HWND target = hwndOf(m_window);
-    if (!target || msg->hwnd != target) { return false; }
+    if (target == nullptr || msg->hwnd != target) { return false; }
 
     switch (msg->message) {
     case WM_NCCALCSIZE: {
@@ -138,7 +150,7 @@ bool FramelessWindowChrome::nativeEventFilter(const QByteArray& eventType, void*
         const int gx = GET_X_LPARAM(msg->lParam);
         const int gy = GET_Y_LPARAM(msg->lParam);
 
-        const qreal dpr = m_window ? m_window->devicePixelRatio() : 1.0;
+        const qreal dpr = m_window != nullptr ? m_window->devicePixelRatio() : 1.0;
 
         WINDOWPLACEMENT wp{sizeof(wp), 0, 0, {}, {}, {}};
         ::GetWindowPlacement(target, &wp);

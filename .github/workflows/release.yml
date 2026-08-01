@@ -52,6 +52,7 @@ jobs:
     name: Build Windows release
     needs: [gates]
     runs-on: windows-2022
+    timeout-minutes: 60
 
     env:
       VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
@@ -93,15 +94,27 @@ jobs:
             -DDISH_BUILD_TESTS=OFF `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
+      # --parallel 4 matches the windows-2022 runner's 4 vCPUs; Ninja's
+      # cores+2 default only oversubscribes the box.
       - name: Build
-        run: cmake --build build --parallel --target Dish
+        run: cmake --build build --parallel 4 --target Dish
 
       - name: Bundle Qt runtime DLLs
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dish-windows | Out-Null
           Copy-Item build/dish.exe dish-windows/
-          & "$env:Qt6_DIR/../../../bin/windeployqt.exe" --release --no-translations dish-windows/dish.exe
+          # jurplel/install-qt-action v4 sets QT_ROOT_DIR (the install root) but
+          # NOT Qt6_DIR — the old "$env:Qt6_DIR/../../../bin" spelling resolved
+          # against an empty variable, so this step had never worked. It had
+          # never been caught because release.yml only fires on a v* tag and no
+          # tag has been pushed yet; windows-ci.yml already resolves the
+          # documented-correct way.
+          # --qmldir walks our QML sources so the Quick modules the app imports
+          # (QtQuick, Controls Basic, Layouts, Effects, Window) ship too. The
+          # frameless Quick chrome is the ONLY UI, so a QML-less bundle would
+          # open to a white window.
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir src/qml dish-windows/dish.exe
 
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0

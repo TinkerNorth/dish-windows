@@ -28,7 +28,6 @@
 #include "UI/Theme.h"
 #include "UI/licenses/LicenseManifest.h"
 
-#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QSet>
 #include <QTimer>
@@ -45,10 +44,6 @@
 namespace dish::qml {
 
 namespace {
-
-// "Bound to <ip> • UDP <port>" detail not needed here — the header strings
-// mirror MainWindow::rebuildHeader, which keys off ConnectionSummary only.
-QString tr(const char* s) { return QCoreApplication::translate("AppViewModel", s); }
 
 // models::LinkState and reducer::UiLinkState are the SAME 7-value enum in the
 // same order (the latter is the Qt-free mirror); the picker rows carry a
@@ -212,7 +207,9 @@ void AppViewModel::onStateChanged() {
     const auto& st = model_->state();
 
     // Header derivation — byte-for-byte mirror of MainWindow::rebuildHeader so
-    // the two UIs read identically. No new behavior, only a re-projection.
+    // the two UIs read identically. No new behavior, only a re-projection. The
+    // "Bound to <ip> • UDP <port>" detail is not needed: rebuildHeader keys off
+    // ConnectionSummary only.
     const auto& conns = st.connections;
     int live = 0;
     QString firstLabel;

@@ -99,6 +99,7 @@ Kit.Page {
             required property string boundLabel
             required property bool live
             required property bool registering
+            required property bool bluetooth
             required property string emulateName
             required property int batteryLevel
             required property int batteryStatus
@@ -364,18 +365,26 @@ Kit.Page {
     }
 
     // The pad card's sub-line: "as DualShock 4 · Battery 82%" bound,
-    // "Unbound · wired" loose, the busy line while attaching.
+    // "Unbound · wired" loose, the busy line while attaching. A Bluetooth pad
+    // names its transport instead of "wired" — and suppresses the status-4
+    // battery word, which is the HOST-battery substitute (a desktop reads
+    // 100%/WIRED when the pad's own charge is unknown) and would contradict
+    // the wireless link.
     function padSubText(row) {
         if (row.registering)
             return qsTr("Registering controller…");
         if (!row.bound) {
+            if (row.bluetooth)
+                return qsTr("Unbound · Bluetooth");
             return row.batteryKnown && row.batteryStatus === 4
                    ? qsTr("Unbound · wired") : qsTr("Unbound");
         }
         var parts = [];
         if (row.emulateName.length > 0)
             parts.push(qsTr("as %1").arg(row.emulateName));
-        if (row.batteryKnown)
+        if (row.bluetooth)
+            parts.push(qsTr("Bluetooth"));
+        if (row.batteryKnown && !(row.bluetooth && row.batteryStatus === 4))
             parts.push(page.batteryText(row.batteryLevel, row.batteryStatus));
         return parts.length > 0 ? parts.join(" · ") : qsTr("Bound");
     }

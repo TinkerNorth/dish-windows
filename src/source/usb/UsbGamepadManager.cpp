@@ -322,7 +322,13 @@ ClaimResult UsbGamepadManager::doClaim(const UsbDeviceInfo& device) {
     // DS4/DualSense TOUCHPAD through publishTouchpad().
     const std::string deviceTag = device.name;
     const int vp = device.vpKey();
-    const std::string slotId = std::to_string(vp);
+    // Not const on purpose: a by-copy capture carries the captured entity's
+    // cv-qualifiers into the closure, so a `const std::string` local becomes a
+    // const closure member — and a const member forces the closure's implicit
+    // MOVE constructor to fall back to std::string's copy ctor. That move is how
+    // the lambda gets into the gateway's std::function, so const here would buy a
+    // throwing move ctor plus a heap copy of the slot id on every claim.
+    std::string slotId = std::to_string(vp);
     input::GamepadInputProcessor* processor = processor_;
     const ClaimResult outcome = gateway_->claim(device, [processor, slotId](const UsbReport& r) {
         if (processor == nullptr) { return; }
