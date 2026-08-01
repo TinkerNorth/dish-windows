@@ -332,10 +332,10 @@ set(DISH_CORE_SOURCES
     # UI/SlotLiveStats — the shared live-Hz row mapper the QML SlotListModel
     # projects through.
     src/UI/SlotLiveStats.h
-    # ui/licenses — the license-manifest DTO + parse + pure mapping rules.
+    # UI/licenses — the license-manifest DTO + parse + pure mapping rules.
     # Pure (no QWidget), host-testable; the QML LicensesPage renders it.
-    src/ui/licenses/LicenseManifest.h
-    src/ui/licenses/LicenseManifest.cpp
+    src/UI/licenses/LicenseManifest.h
+    src/UI/licenses/LicenseManifest.cpp
     src/Input/GamepadInputProcessor.h
     src/Input/GamepadInputProcessor.cpp
     src/Input/SdlMotionConvert.h
@@ -407,8 +407,8 @@ set(DISH_UI_SOURCES
     src/UI/CrashHandler.h
     src/UI/CrashHandler.cpp
     # The shared external-link helper (QDesktopServices edge).
-    src/ui/common/ExternalLink.h
-    src/ui/common/ExternalLink.cpp
+    src/UI/common/ExternalLink.h
+    src/UI/common/ExternalLink.cpp
     src/main.cpp
     # Windows resource file embeds the application icon + version metadata
     # so the .exe shows a real Dish icon in Explorer / taskbar.

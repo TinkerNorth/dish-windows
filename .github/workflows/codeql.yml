@@ -4,7 +4,7 @@ name: CodeQL
 #
 # Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
 #   actions/checkout          @ v6.0.2  → de0fac2e4500dabe0009e67214ff5f5447ce83dd
-#   github/codeql-action/*    @ v4.35.5 → 9e0d7b8d25671d64c341c19c0152d693099fb5ba
+#   github/codeql-action/*    @ v4.37.1 → 7188fc363630916deb702c7fdcf4e481b751f97a
 #   ilammy/msvc-dev-cmd       @ v1.13.0 → 0b201ec74fa43914dc39ae48a89fd1d8cb592756
 #   jurplel/install-qt-action @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
 #   lukka/run-vcpkg           @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
@@ -68,8 +68,10 @@ jobs:
         with:
           vcpkgGitCommitId: ${{ env.VCPKG_COMMITID }}
 
+      # init and analyze are subdirectories of the SAME repo, so they must
+      # always be pinned to the SAME commit SHA — bump them together.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4.35.5
+        uses: github/codeql-action/init@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
@@ -81,7 +83,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DDISH_BUILD_TESTS=OFF `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          cmake --build build --parallel --target Dish
+          # --parallel 4 matches the windows-2022 runner's 4 vCPUs; Ninja's
+          # cores+2 default only oversubscribes the box.
+          cmake --build build --parallel 4 --target Dish
 
       - name: Perform CodeQL analysis
         # SARIF upload requires GitHub Advanced Security on private repos.
@@ -89,7 +93,7 @@ jobs:
         # findings in the logs while GHAS enablement is still pending —
         # see HANDOFF.md item 5.
         continue-on-error: true
-        uses: github/codeql-action/analyze@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4.35.5
+        uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
         with:
           category: "/language:${{ matrix.language }}"
           upload: failure-only

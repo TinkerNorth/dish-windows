@@ -18,7 +18,6 @@ namespace {
 
 using input::JoystickRemap;
 using input::kRemapButtonCount;
-using input::TriggerSource;
 using input::TriggerSourceKind;
 
 // Compact field names — one persisted blob can hold many pads, so keep keys

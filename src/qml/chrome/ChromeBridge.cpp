@@ -34,27 +34,27 @@ void ChromeBridge::setChrome(FramelessWindowChrome* chrome) {
 
 void ChromeBridge::setCaptionRect(const QRect& rect) {
     m_caption = rect;
-    if (m_chrome) { m_chrome->setCaptionRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setCaptionRect(rect); }
 }
 
 void ChromeBridge::setMaximizeButtonRect(const QRect& rect) {
     m_maximize = rect;
-    if (m_chrome) { m_chrome->setMaximizeButtonRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setMaximizeButtonRect(rect); }
 }
 
 void ChromeBridge::setMinimizeButtonRect(const QRect& rect) {
     m_minimize = rect;
-    if (m_chrome) { m_chrome->setMinimizeButtonRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setMinimizeButtonRect(rect); }
 }
 
 void ChromeBridge::setCloseButtonRect(const QRect& rect) {
     m_close = rect;
-    if (m_chrome) { m_chrome->setCloseButtonRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setCloseButtonRect(rect); }
 }
 
 void ChromeBridge::setLeftClientRect(const QRect& rect) {
     m_leftClient = rect;
-    if (m_chrome) { m_chrome->setLeftClientRect(rect); }
+    if (m_chrome != nullptr) { m_chrome->setLeftClientRect(rect); }
 }
 
 } // namespace dish::chrome

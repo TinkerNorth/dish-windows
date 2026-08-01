@@ -3,6 +3,7 @@
 
 #include "SDLGamepadBridge.h"
 
+#include "core/input/HidTransport.h"
 #include "JoystickMapping.h"
 #include "SdlMotionConvert.h"
 #include "Util/HostBattery.h"
@@ -135,6 +136,7 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
         // openControllers_ uses SDL's own mapping). Drives the slot's remappable.
         dev.isRawJoystick = openJoysticks_.count(iid) != 0;
         dev.hasTouchpad = touchpadCapable_.count(iid) != 0;
+        dev.bluetooth = bluetoothIids_.count(iid) != 0;
         out.append(dev);
     }
     return out;
@@ -206,6 +208,14 @@ void SDLGamepadBridge::runLoop() {
             // same model). SDL returns 0 when it can't read the descriptor.
             const int vendorId = SDL_GameControllerGetVendor(gc);
             const int productId = SDL_GameControllerGetProduct(gc);
+            // Transport, classified once at attach: SDL's device path is the
+            // Win32 HID interface path for HIDAPI/RawInput pads, so the pure
+            // marker check spots a Bluetooth link (classic or BLE). A null path
+            // (XInput fallback) reads as not-Bluetooth — fails safe to the
+            // wired presentation.
+            const char* devPath = SDL_GameControllerPath(gc);
+            const bool bluetooth =
+                devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
             {
                 std::lock_guard<std::mutex> lock(mtx_);
                 openControllers_[iid] = gc;
@@ -214,6 +224,7 @@ void SDLGamepadBridge::runLoop() {
                 if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
                 if (hasLed) { lightbarCapable_.insert(iid); }
                 if (hasTouchpad) { touchpadCapable_.insert(iid); }
+                if (bluetooth) { bluetoothIids_.insert(iid); }
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
             }
@@ -229,7 +240,8 @@ void SDLGamepadBridge::runLoop() {
                                 << "type=" << static_cast<int>(type)
                                 << "vid=" << QString::number(vendorId, 16)
                                 << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
-                                << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed;
+                                << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed
+                                << "bt=" << bluetooth;
             // Push the default deadzone profile so the processor filters
             // out controller noise from the first event. The default lives
             // inside the bridge (not the processor) because the bridge is
@@ -257,6 +269,7 @@ void SDLGamepadBridge::runLoop() {
                 motionCapable_.erase(iid);
                 lightbarCapable_.erase(iid);
                 touchpadCapable_.erase(iid);
+                bluetoothIids_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
                 lastBattery_.erase(iid);
@@ -292,11 +305,16 @@ void SDLGamepadBridge::runLoop() {
             // motion and no lightbar.
             const int vendorId = SDL_JoystickGetVendor(js);
             const int productId = SDL_JoystickGetProduct(js);
+            // Same at-attach transport classification as the controller path.
+            const char* devPath = SDL_JoystickPath(js);
+            const bool bluetooth =
+                devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
             {
                 std::lock_guard<std::mutex> lock(mtx_);
                 openJoysticks_[iid] = js;
                 deviceIds_[iid] = deviceId;
                 deviceNames_[iid] = deviceName;
+                if (bluetooth) { bluetoothIids_.insert(iid); }
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
             }
@@ -309,7 +327,8 @@ void SDLGamepadBridge::runLoop() {
                                 << "buttons=" << SDL_JoystickNumButtons(js)
                                 << "hats=" << SDL_JoystickNumHats(js)
                                 << "vid=" << QString::number(vendorId, 16)
-                                << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf;
+                                << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
+                                << "bt=" << bluetooth;
             processor_->setDeadzones(deviceId.toStdString(),
                                      {kDefaultStickFlat, kDefaultTriggerFlat});
             QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
@@ -332,6 +351,7 @@ void SDLGamepadBridge::runLoop() {
                     deviceIds_.erase(it);
                 }
                 deviceNames_.erase(iid);
+                bluetoothIids_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
                 lastBattery_.erase(iid);

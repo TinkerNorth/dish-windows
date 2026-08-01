@@ -3,6 +3,7 @@
 
 #include "source/usb/WinHidGateway.h"
 
+#include "core/input/HidTransport.h"
 #include "core/input/UsbReportParsers.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
@@ -48,7 +49,8 @@ std::string wideToUtf8(const wchar_t* w) {
 // Read a HID device's friendly product string, falling back to the path.
 std::string productName(HANDLE h, const std::string& fallbackPath) {
     std::array<wchar_t, 256> buf{};
-    if (HidD_GetProductString(h, buf.data(), static_cast<ULONG>(buf.size() * sizeof(wchar_t)))) {
+    if (HidD_GetProductString(h, buf.data(), static_cast<ULONG>(buf.size() * sizeof(wchar_t))) !=
+        0) {
         const std::string s = wideToUtf8(buf.data());
         if (!s.empty()) { return s; }
     }
@@ -61,12 +63,25 @@ WinHidGateway::WinHidGateway() = default;
 
 WinHidGateway::~WinHidGateway() {
     // Release every still-open claim (stops the read loops + closes handles).
-    std::vector<int> ids;
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        for (const auto& [id, c] : claimed_) { ids.push_back(id); }
+    //
+    // Drained in place instead of snapshotting the ids into a std::vector first:
+    // a destructor is implicitly noexcept, so that vector's growth was a live
+    // std::terminate path. Catching the bad_alloc would not have helped either —
+    // bailing out of the drain leaves joinable std::threads in claimed_, and
+    // ~thread on a joinable thread terminates just the same. map::empty/begin,
+    // the id copy, and releaseClaim's own find+erase allocate nothing, so this
+    // loop has no throwing step left. mtx_ is still dropped before each call:
+    // releaseClaim re-takes it, then joins the reader with the mutex free.
+    for (;;) {
+        int syntheticId = 0;
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            if (claimed_.empty()) { break; }
+            syntheticId = claimed_.begin()->first;
+        }
+        // Erases the entry it releases, so claimed_ strictly shrinks each pass.
+        releaseClaim(syntheticId);
     }
-    for (int id : ids) { releaseClaim(id); }
 }
 
 bool WinHidGateway::isKnownFastLaneModel(int vendorId, int /*productId*/) const {
@@ -84,17 +99,27 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
 
     SP_DEVICE_INTERFACE_DATA ifData{};
     ifData.cbSize = sizeof(ifData);
-    for (DWORD i = 0; SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData); ++i) {
+    for (DWORD i = 0; SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
+         ++i) {
         DWORD needed = 0;
         SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
         if (needed == 0) { continue; }
         std::vector<std::uint8_t> detailBuf(needed);
         auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
         detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-        if (!SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr)) {
+        if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) ==
+            0) {
             continue;
         }
         const std::string path = wideToUtf8(detail->DevicePath);
+
+        // A Bluetooth-connected pad is a HID device too (same VID:PID as its
+        // USB identity) but is NOT a USB-direct claim candidate: the raw-HID
+        // claim is a USB feature, the per-model decoders parse the USB report
+        // layout (the BT layout differs — a DS4 streams the short 0x01 report
+        // until a feature-report handshake), and tracking it would grow a bogus
+        // "USB PATH" control on a wireless pad. Skip it before probing.
+        if (input::isBluetoothHidDevicePath(path)) { continue; }
 
         // Open for query only (no read/write share so we don't disturb other
         // readers while probing). The actual claim re-opens with read access.
@@ -108,7 +133,7 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
         HIDP_CAPS caps{};
         bool gamepadShaped = false;
         UsbDeviceInfo info;
-        if (HidD_GetAttributes(h, &attrs) && HidD_GetPreparsedData(h, &preparsed)) {
+        if (HidD_GetAttributes(h, &attrs) != 0 && HidD_GetPreparsedData(h, &preparsed) != 0) {
             if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
                 gamepadShaped = caps.UsagePage == kUsagePageGenericDesktop &&
                                 (caps.Usage == kUsageGamepad || caps.Usage == kUsageJoystick);
@@ -161,7 +186,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     SP_DEVICE_INTERFACE_DATA ifData{};
     ifData.cbSize = sizeof(ifData);
     for (DWORD i = 0; opened == INVALID_HANDLE_VALUE &&
-                      SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData);
+                      SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
          ++i) {
         DWORD needed = 0;
         SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
@@ -169,16 +194,21 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         std::vector<std::uint8_t> detailBuf(needed);
         auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
         detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-        if (!SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr)) {
+        if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) ==
+            0) {
             continue;
         }
+        // Same VID:PID can be present over BOTH transports at once (a pad
+        // charging over USB while still BT-paired); never claim the Bluetooth
+        // interface — enumerate() filtered it, so the claim must match.
+        if (input::isBluetoothHidDevicePath(wideToUtf8(detail->DevicePath))) { continue; }
         HANDLE h = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                FILE_FLAG_OVERLAPPED, nullptr);
         if (h == INVALID_HANDLE_VALUE) { continue; }
         HIDD_ATTRIBUTES attrs{};
         attrs.Size = sizeof(attrs);
-        if (HidD_GetAttributes(h, &attrs) && attrs.VendorID == device.vendorId &&
+        if (HidD_GetAttributes(h, &attrs) != 0 && attrs.VendorID == device.vendorId &&
             attrs.ProductID == device.productId) {
             sawDevice = true;
             opened = h;
@@ -241,7 +271,7 @@ void WinHidGateway::readLoop(Claimed* c) {
     while (c->running.load()) {
         DWORD read = 0;
         ResetEvent(ov.hEvent);
-        if (!ReadFile(handle, buf.data(), static_cast<DWORD>(buf.size()), &read, &ov)) {
+        if (ReadFile(handle, buf.data(), static_cast<DWORD>(buf.size()), &read, &ov) == 0) {
             if (GetLastError() != ERROR_IO_PENDING) { break; }
             // Wait with a short timeout so running=false is observed promptly.
             const DWORD w = WaitForSingleObject(ov.hEvent, 100);
@@ -249,7 +279,7 @@ void WinHidGateway::readLoop(Claimed* c) {
                 CancelIo(handle);
                 continue;
             }
-            if (!GetOverlappedResult(handle, &ov, &read, FALSE)) { break; }
+            if (GetOverlappedResult(handle, &ov, &read, FALSE) == 0) { break; }
         }
         if (read == 0) { continue; }
         c->completions.fetch_add(1);

@@ -102,9 +102,10 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     const auto names = model.roleNames();
     // One entry per declared role (Id..SatLatencySamples). If a role is added
     // without a name, this count drifts and the test flags it.
-    REQUIRE(names.size() == 35);
+    REQUIRE(names.size() == 36);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
+    REQUIRE(names.value(SlotListModel::BluetoothRole) == QByteArray("bluetooth"));
     REQUIRE(names.value(SlotListModel::RemappableRole) == QByteArray("remappable"));
     REQUIRE(names.value(SlotListModel::EmulateNameRole) == QByteArray("emulateName"));
     REQUIRE(names.value(SlotListModel::RegisteringRole) == QByteArray("registering"));
@@ -202,6 +203,20 @@ TEST_CASE("SlotListModel: remappable defaults off and reflects the slot flag",
     s.remappable = true;
     model.setState({s});
     REQUIRE(roleOf(model, 0, SlotListModel::RemappableRole).toBool());
+}
+
+TEST_CASE("SlotListModel: bluetooth defaults off and reflects the slot flag", "[slotmodel][data]") {
+    // Only a pad the bridge classified as Bluetooth-attached reads true; the
+    // default (wired / synthetic / unknown-path) slot keeps the wired
+    // presentation — glyph family and transport chip stay satellite/USB.
+    SlotListModel model;
+    model.setState({plainSlot()});
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::BluetoothRole).toBool());
+
+    auto s = plainSlot();
+    s.bluetooth = true;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::BluetoothRole).toBool());
 }
 
 TEST_CASE("SlotListModel: a bound-but-not-connected slot shows the warning dot",

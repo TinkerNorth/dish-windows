@@ -216,7 +216,9 @@ std::optional<int> mdnsTxtInt(const QHash<QString, QByteArray>& txt, const QStri
 std::optional<QString> mdnsTxtString(const QHash<QString, QByteArray>& txt, const QString& key) {
     const auto it = txt.constFind(key);
     if (it == txt.constEnd() || it->isNull()) { return std::nullopt; }
-    const QString trimmed = QString::fromUtf8(*it).trimmed();
+    // Non-const on purpose: const would block the implicit move into the
+    // returned optional and force a QString copy on every hit.
+    QString trimmed = QString::fromUtf8(*it).trimmed();
     if (trimmed.isEmpty()) { return std::nullopt; }
     return trimmed;
 }

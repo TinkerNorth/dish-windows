@@ -30,12 +30,17 @@ int main(int argc, char* argv[]) {
     // POSIX siblings have no equivalent — sockets just work.
     dish::net::WinsockInit winsock;
     if (!winsock.ok()) {
-        std::fprintf(stderr, "dish: WSAStartup failed\n");
+        // The `(void)` is deliberate. fprintf's result is a byte count / negative
+        // error, and a failed write to stderr here is unactionable: this runs
+        // before any logger exists and there is no second channel to complain on.
+        // The non-zero exit code below is what actually reports the failure.
+        (void)std::fprintf(stderr, "dish: WSAStartup failed\n");
         return 1;
     }
 
     if (sodium_init() < 0) {
-        std::fprintf(stderr, "dish: libsodium initialisation failed\n");
+        // Discarded for the same reason as the WSAStartup message above.
+        (void)std::fprintf(stderr, "dish: libsodium initialisation failed\n");
         return 1;
     }
 
@@ -56,12 +61,14 @@ int main(int argc, char* argv[]) {
     // for the lifetime of the application via the `static` qualifier.
     static QTranslator translator;
     const QString localeName = QLocale::system().name();
-    if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n"))) {
-        QCoreApplication::installTranslator(&translator);
-    } else if (translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"),
-                               QStringLiteral("_"), QStringLiteral(".qm"))) {
-        // Two-step fallback so QLocale::system().name() values that are
-        // language-only (e.g. "de") still find dish_de.qm.
+    // Two-step fallback so QLocale::system().name() values that are
+    // language-only (e.g. "de") still find dish_de.qm. `||` short-circuits
+    // exactly as the if/else-if this replaces did — the second load() runs only
+    // when the first returned false — and either way the translator that gets
+    // installed is the one the winning load() populated.
+    if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n")) ||
+        translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"), QStringLiteral("_"),
+                        QStringLiteral(".qm"))) {
         QCoreApplication::installTranslator(&translator);
     }
 

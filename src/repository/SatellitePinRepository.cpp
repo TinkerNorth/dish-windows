@@ -15,7 +15,9 @@ SatellitePinRepository::SatellitePinRepository(std::shared_ptr<QSettings> settin
 
 std::optional<QString> SatellitePinRepository::get(const QString& id) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    const auto v = settings_->value(QLatin1String(keys::kCertPinPrefix) + id).toString();
+    // Non-const on purpose: const would block the implicit move into the
+    // returned optional and force a QString copy on every hit.
+    auto v = settings_->value(QLatin1String(keys::kCertPinPrefix) + id).toString();
     if (v.isEmpty()) { return std::nullopt; }
     return v;
 }

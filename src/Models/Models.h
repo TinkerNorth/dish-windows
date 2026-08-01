@@ -448,6 +448,13 @@ struct ControllerSlot {
     // streams continuously) vs. as a "~peak". Mirrors android's
     // currentMode == Direct check on the PathCard.
     bool usbDirect = false;
+    // True iff the pad is connected over Bluetooth (classic or BLE), classified
+    // once at attach by SDLGamepadBridge from the device path. Drives the slot
+    // card's Bluetooth presentation (glyph family + transport chip) and gates
+    // the USB-path stamp in AppModel::rebuild — a wireless pad has no USB path
+    // to switch, even when its (vid, pid) matches a tracked UsbController.
+    // Always false for a USB-direct synthetic (raw-HID claims are USB-only).
+    bool bluetooth = false;
     // True iff this slot is a RAW-joystick-backed SDL pad whose DirectInput
     // routing the "Configure controls" page may remap (the mapJoystick /
     // JoystickRemap path). False for synthetics (USB-direct), the virtual slot,

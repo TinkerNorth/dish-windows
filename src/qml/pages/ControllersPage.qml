@@ -119,6 +119,9 @@ Kit.Page {
             // True for a raw-joystick pad whose DirectInput routing the
             // "Controls…" page may remap; gates that action's visibility.
             required property bool remappable
+            // True for a pad connected over Bluetooth — swaps the card's glyph
+            // family to the bluetooth brand set and shows the transport chip.
+            required property bool bluetooth
             required property bool hasMotion
             required property bool hasLightbar
             required property int batteryLevel
@@ -190,7 +193,14 @@ Kit.Page {
                     spacing: Tokens.s6
 
                     Kit.BrandGlyph {
-                        glyph: card.live ? "satellite-connected" : "satellite"
+                        // Transport picks the glyph FAMILY, liveness the state
+                        // suffix (the design system's BrandGlyph kind + state
+                        // contract): a Bluetooth pad wears the bluetooth brand
+                        // set, everything else keeps the satellite set. Same
+                        // family/state split dish-android's glyphForConnection
+                        // applies to its Bluetooth rows.
+                        glyph: (card.bluetooth ? "bluetooth" : "satellite")
+                               + (card.live ? "-connected" : "")
                         Layout.preferredWidth: 28
                         Layout.preferredHeight: 28
                         Layout.alignment: Qt.AlignVCenter
@@ -234,6 +244,14 @@ Kit.Page {
                             spacing: Tokens.s3
                             Layout.topMargin: Tokens.s2
 
+                            // Transport chip — the dish-android binding-link
+                            // pill: a Bluetooth pad states its link; a wired
+                            // pad stays unmarked (USB is the default story).
+                            Kit.CapabilityChip {
+                                visible: card.bluetooth
+                                text: qsTr("Bluetooth")
+                                present: true
+                            }
                             Kit.CapabilityChip {
                                 text: card.hasMotion ? qsTr("Gyro") : qsTr("No gyro")
                                 present: card.hasMotion
@@ -246,8 +264,13 @@ Kit.Page {
                             }
                             // Battery only once a real reading landed (an
                             // unknown level 255 hides the chip via batteryKnown).
+                            // On a Bluetooth pad the status-4 reading is the
+                            // HOST-battery substitute (desktop = 100%/WIRED) —
+                            // "Battery wired" would contradict the wireless
+                            // link, so that one case hides instead.
                             Kit.CapabilityChip {
                                 visible: card.batteryKnown
+                                         && !(card.bluetooth && card.batteryStatus === 4)
                                 text: page.batteryLabel(card.batteryLevel, card.batteryStatus)
                                 present: true
                                 low: page.batteryLow(card.batteryLevel, card.batteryStatus)

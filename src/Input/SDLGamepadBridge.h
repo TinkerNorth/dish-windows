@@ -89,6 +89,14 @@ class SDLGamepadBridge : public QObject {
         // Gates the descriptor's touchpadMode resolution — a pad with no touch
         // source always declares "off".
         bool hasTouchpad = false;
+        // True iff the pad is connected over Bluetooth (classic or BLE),
+        // classified once at attach from SDL's device path via the pure
+        // input::isBluetoothHidDevicePath marker check. Drives the slot's
+        // Bluetooth presentation (glyph + chip) and gates the USB-path stamp in
+        // AppModel::rebuild — a wireless pad has no USB path to switch. False
+        // when SDL reports no path (XInput fallback): the pad then keeps the
+        // wired presentation, which fails safe.
+        bool bluetooth = false;
     };
     QList<Device> devices() const;
 
@@ -225,6 +233,10 @@ class SDLGamepadBridge : public QObject {
     // Instance ids whose pad exposes a readable touchpad (SDL
     // GetNumTouchpads > 0). Same lifecycle / locking as motionCapable_.
     std::unordered_set<int> touchpadCapable_;
+    // Instance ids attached over Bluetooth (classified once at attach from the
+    // SDL device path). Surfaced through devices() as Device::bluetooth. Same
+    // lifecycle / locking as motionCapable_.
+    std::unordered_set<int> bluetoothIids_;
 
     // Per-device USB identity (vid, pid) classified once at attach. Surfaced via
     // devices() for the twin-dedup pairing. Same lifecycle / locking as

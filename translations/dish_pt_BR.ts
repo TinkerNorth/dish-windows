@@ -267,167 +267,172 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="173"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="176"/>
         <source>Registering controller…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="220"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="230"/>
         <source>Bound to %1</source>
         <translation type="unfinished">Vinculado a %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="222"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="232"/>
         <source> · as %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="223"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="233"/>
         <source>Unbound</source>
         <translation type="unfinished">Não vinculado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="238"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="252"/>
+        <source>Bluetooth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="256"/>
         <source>Gyro</source>
         <translation type="unfinished">Giroscópio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="238"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="256"/>
         <source>No gyro</source>
         <translation type="unfinished">Sem giroscópio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="244"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="262"/>
         <source>Lightbar</source>
         <translation type="unfinished">Barra de luz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="261"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="284"/>
         <source>%1 Hz</source>
         <translation type="unfinished">%1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="262"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="285"/>
         <source>~%1 Hz</source>
         <translation type="unfinished">~%1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="268"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="291"/>
         <source>Motion %1 Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="274"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="377"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="297"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="400"/>
         <source>Poll %1 Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="287"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="310"/>
         <source>Bind…</source>
         <translation type="unfinished">Vincular…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="302"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="325"/>
         <source>Emulate…</source>
         <translation type="unfinished">Emular…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="307"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="330"/>
         <source>Unbind</source>
         <translation type="unfinished">Desvincular</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="333"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="356"/>
         <source>USB PATH</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="346"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="347"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="369"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="370"/>
         <source>Standard</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="346"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="347"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="351"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="369"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="370"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="374"/>
         <source>Direct</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="346"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="352"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="369"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="375"/>
         <source>Auto</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="366"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="389"/>
         <source>Claiming controller…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="402"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="425"/>
         <source>Controls…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="429"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="452"/>
         <source>events/s %1   sends/s %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="434"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="457"/>
         <source>total %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="506"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="529"/>
         <source>Battery wired</source>
         <translation type="unfinished">Bateria com fio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="507"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="530"/>
         <source>Battery %1% ↑</source>
         <translation type="unfinished">Bateria %1 % ↑</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="508"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="531"/>
         <source>Battery full</source>
         <translation type="unfinished">Bateria cheia</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="509"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="532"/>
         <source>Battery %1%</source>
         <translation type="unfinished">Bateria %1 %</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="523"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="546"/>
         <source>Unplug and replug the controller to finish switching.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="526"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="549"/>
         <source>Standard isn&apos;t responding — pick Direct, retry, or replug.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="529"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="552"/>
         <source>Direct access denied — another app owns this device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="532"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="555"/>
         <source>Direct claim is busy — another app or driver holds the device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="535"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="558"/>
         <source>Direct claim couldn&apos;t start the controller&apos;s report stream.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="538"/>
+        <location filename="../src/qml/pages/ControllersPage.qml" line="561"/>
         <source>The device dropped during the claim — a replug is needed.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -950,13 +955,11 @@
 <context>
     <name>FeatureSettings</name>
     <message>
-        <location filename="../tests/test_feature_settings.cpp" line="81"/>
         <location filename="../src/FeatureSettings.cpp" line="47"/>
         <source>Off</source>
         <translation>Desligado</translation>
     </message>
     <message>
-        <location filename="../tests/test_feature_settings.cpp" line="79"/>
         <location filename="../src/FeatureSettings.cpp" line="51"/>
         <source>Follow game</source>
         <translation>Seguir o jogo</translation>
@@ -1164,147 +1167,157 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="234"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="235"/>
         <source>Bind…</source>
         <translation type="unfinished">Vincular…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="235"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="236"/>
         <source>Choose a satellite for this pad</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="261"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="262"/>
         <source>Add a controller</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="262"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="263"/>
         <source>Wired, or Bluetooth</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="303"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="304"/>
         <source>Streaming — do not close</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="358"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="359"/>
         <source>1 controller streaming</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="359"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="360"/>
         <source>%1 controllers streaming</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="362"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="363"/>
         <source>1 satellite online</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="363"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="364"/>
         <source>%1 satellites online</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="370"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="375"/>
         <source>Registering controller…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="373"/>
-        <source>Unbound · wired</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="373"/>
-        <source>Unbound</source>
-        <translation type="unfinished">Não vinculado</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="377"/>
-        <source>as %1</source>
+        <location filename="../src/qml/pages/HomePage.qml" line="378"/>
+        <source>Unbound · Bluetooth</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/qml/pages/HomePage.qml" line="380"/>
-        <source>Bound</source>
+        <source>Unbound · wired</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="380"/>
+        <source>Unbound</source>
+        <translation type="unfinished">Não vinculado</translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="384"/>
+        <source>as %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../src/qml/pages/HomePage.qml" line="386"/>
+        <source>Bluetooth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="389"/>
+        <source>Bound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml/pages/HomePage.qml" line="395"/>
         <source>Battery wired</source>
         <translation type="unfinished">Bateria com fio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="387"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="396"/>
         <source>Battery %1% ↑</source>
         <translation type="unfinished">Bateria %1 % ↑</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="388"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="397"/>
         <source>Battery full</source>
         <translation type="unfinished">Bateria cheia</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="389"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="398"/>
         <source>Battery %1%</source>
         <translation type="unfinished">Bateria %1 %</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="396"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="405"/>
         <source>idle</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="399"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="408"/>
         <source>%1 Hz</source>
         <translation type="unfinished">%1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="400"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="409"/>
         <source>~%1 Hz</source>
         <translation type="unfinished">~%1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="404"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="413"/>
         <source>live</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="411"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="420"/>
         <source>Found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="412"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="421"/>
         <source>Needs pairing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="413"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="422"/>
         <source>Offline</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="414"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="423"/>
         <source>Ready</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="415"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="424"/>
         <source>Connecting…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="416"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="425"/>
         <source>Online</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="417"/>
+        <location filename="../src/qml/pages/HomePage.qml" line="426"/>
         <source>Unstable</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1906,14 +1919,6 @@
     <message>
         <location filename="../src/AppModel.cpp" line="515"/>
         <source>Couldn&apos;t return %1 to Standard mode.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>dish::net::PairingClient</name>
-    <message>
-        <location filename="../tests/test_pairing_client_classify.cpp" line="87"/>
-        <source>Server unreachable</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
