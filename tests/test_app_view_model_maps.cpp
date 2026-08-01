@@ -24,7 +24,7 @@
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
-#include "ui/licenses/LicenseManifest.h"
+#include "UI/licenses/LicenseManifest.h"
 
 #include "QSettingsFixture.h"
 
