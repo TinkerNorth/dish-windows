@@ -1600,10 +1600,6 @@
         <translation>Ništa se ne strima</translation>
     </message>
     <message>
-        <source>Pad</source>
-        <translation>Pad</translation>
-    </message>
-    <message>
         <source>This PC</source>
         <translation>Ovaj PC</translation>
     </message>
@@ -1894,6 +1890,11 @@
     <message>
         <source>Unsteady</source>
         <translation>Nestabilan</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
+        <translation>Kontroler</translation>
     </message>
 </context>
 <context>

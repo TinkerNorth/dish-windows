@@ -705,4 +705,17 @@ install(TARGETS Dish RUNTIME DESTINATION bin)
 if(DISH_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+
+    # test_translations.cpp asserts against the COMPILED .qm, so it has to be
+    # built after them or it silently checks whatever an earlier build left on
+    # disk — the exact staleness the test exists to catch.
+    #
+    # This cannot live in tests/CMakeLists.txt. qt_add_translations creates
+    # `release_translations` when this directory scope is FINALIZED, which is
+    # after add_subdirectory(tests) has already run, so an if(TARGET ...) guard
+    # over there is always false and the dependency is silently dropped.
+    # Deferring to the end of this scope is what makes the target visible.
+    if(Qt6LinguistTools_FOUND)
+        cmake_language(DEFER CALL add_dependencies DishTests release_translations)
+    endif()
 endif()

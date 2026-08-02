@@ -1590,10 +1590,6 @@
         <translation>Kein Stream aktiv</translation>
     </message>
     <message>
-        <source>Pad</source>
-        <translation>Pad</translation>
-    </message>
-    <message>
         <source>This PC</source>
         <translation>Dieser PC</translation>
     </message>
@@ -1882,6 +1878,11 @@
     <message>
         <source>Unsteady</source>
         <translation>Instabil</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
+        <translation>Controller</translation>
     </message>
 </context>
 <context>

@@ -292,9 +292,10 @@ target_compile_definitions(DishTests PRIVATE
 target_compile_definitions(DishTests PRIVATE
     DISH_QM_DIR="${CMAKE_BINARY_DIR}"
     DISH_TS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../translations")
-if(TARGET Dish_translations)
-    add_dependencies(DishTests Dish_translations)
-endif()
+# The dependency on the compiled catalogues (`release_translations`) is wired
+# from the TOP-LEVEL CMakeLists, not here: qt_add_translations does not create
+# that target until this directory scope is finalized, which happens after this
+# file has already been processed.
 
 # Tests don't need -Werror on the third-party header path; keep our own at -Werror.
 #

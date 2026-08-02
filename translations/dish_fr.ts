@@ -1590,10 +1590,6 @@
         <translation>Aucune diffusion</translation>
     </message>
     <message>
-        <source>Pad</source>
-        <translation>Pavé</translation>
-    </message>
-    <message>
         <source>This PC</source>
         <translation>Ce PC</translation>
     </message>
@@ -1882,6 +1878,11 @@
     <message>
         <source>Unsteady</source>
         <translation>Instable</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
+        <translation>Manette</translation>
     </message>
 </context>
 <context>

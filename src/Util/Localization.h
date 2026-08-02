@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (C) 2026 Dish contributors.
+
 #pragma once
 
 #include <QString>
@@ -10,15 +13,9 @@ namespace dish::i18n {
 
 // Where qt_add_translations() drops the compiled catalogues inside the binary.
 // The .qm family is `dish_<locale>.qm` — see the i18n block in CMakeLists.txt.
-inline QString catalogDirectory()
-{
-    return QStringLiteral(":/i18n");
-}
+inline QString catalogDirectory() { return QStringLiteral(":/i18n"); }
 
-inline QString catalogPrefix()
-{
-    return QStringLiteral("dish");
-}
+inline QString catalogPrefix() { return QStringLiteral("dish"); }
 
 // Loads the catalogue that best matches `locale` into `translator`, returning
 // false when the locale has no catalogue and the caller should stay on the
@@ -38,4 +35,4 @@ inline QString catalogPrefix()
 bool loadCatalog(QTranslator& translator, const QLocale& locale,
                  const QString& directory = catalogDirectory());
 
-}  // namespace dish::i18n
+} // namespace dish::i18n

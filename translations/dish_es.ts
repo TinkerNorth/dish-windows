@@ -1590,10 +1590,6 @@
         <translation>Sin transmisión</translation>
     </message>
     <message>
-        <source>Pad</source>
-        <translation>Pad</translation>
-    </message>
-    <message>
         <source>This PC</source>
         <translation>Este PC</translation>
     </message>
@@ -1882,6 +1878,11 @@
     <message>
         <source>Unsteady</source>
         <translation>Inestable</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
+        <translation>Mando</translation>
     </message>
 </context>
 <context>

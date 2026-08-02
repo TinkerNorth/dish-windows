@@ -1590,10 +1590,6 @@
         <translation>Nada transmitindo</translation>
     </message>
     <message>
-        <source>Pad</source>
-        <translation>Pad</translation>
-    </message>
-    <message>
         <source>This PC</source>
         <translation>Este PC</translation>
     </message>
@@ -1882,6 +1878,11 @@
     <message>
         <source>Unsteady</source>
         <translation>Instável</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
+        <translation>Controle</translation>
     </message>
 </context>
 <context>
@@ -2340,7 +2341,7 @@
     </message>
     <message>
         <source>Overlays</source>
-        <translation>Sobreposições</translation>
+        <translation>Overlays</translation>
     </message>
     <message>
         <source>ContentDialog</source>

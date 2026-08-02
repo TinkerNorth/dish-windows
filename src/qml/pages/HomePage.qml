@@ -112,7 +112,11 @@ Kit.Page {
 
             Kit.Eyebrow {
                 mutedTone: true
-                text: qsTr("Pad")
+                // Disambiguated: the bare string "Pad" is also the touchpad
+                // routing mode (Off · Pad · Mouse), and one message cannot
+                // carry both senses — French renders that one "Pavé", which is
+                // a touchpad, not a controller.
+                text: qsTr("Pad", "the controller column of the wire diagram")
                 Layout.preferredWidth: page.nodePreferredWidth
             }
             Kit.Eyebrow {

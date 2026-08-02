@@ -34,13 +34,9 @@
 
 namespace {
 
-QString qmDir()
-{
-    return QStringLiteral(DISH_QM_DIR);
-}
+QString qmDir() { return QStringLiteral(DISH_QM_DIR); }
 
-QString tsPath(const QString& locale)
-{
+QString tsPath(const QString& locale) {
     return QStringLiteral(DISH_TS_DIR "/dish_%1.ts").arg(locale);
 }
 
@@ -48,35 +44,28 @@ QString tsPath(const QString& locale)
 const QStringList kLocales{QStringLiteral("en"), QStringLiteral("bs"), QStringLiteral("de"),
                            QStringLiteral("es"), QStringLiteral("fr"), QStringLiteral("pt_BR")};
 
-bool catalogsBuilt()
-{
-    return QFile::exists(qmDir() + QStringLiteral("/dish_en.qm"));
-}
+bool catalogsBuilt() { return QFile::exists(qmDir() + QStringLiteral("/dish_en.qm")); }
 
 // %1..%9 and %n, which are the only placeholder forms Qt substitutes.
-QSet<QString> placeholders(const QString& text)
-{
+QSet<QString> placeholders(const QString& text) {
     static const QRegularExpression re(QStringLiteral("%([1-9]|n)"));
     QSet<QString> found;
     auto it = re.globalMatch(text);
-    while (it.hasNext()) {
-        found.insert(it.next().captured(1));
-    }
+    while (it.hasNext()) { found.insert(it.next().captured(1)); }
     return found;
 }
 
 struct Message {
     QString context;
     QString source;
-    QStringList translations;  // one entry, or one per numerusform
+    QStringList translations; // one entry, or one per numerusform
     bool numerus = false;
 };
 
 // Reads a .ts into the messages that actually carry a translation. Untranslated
 // entries are dropped: lrelease leaves them out of the .qm, so Qt falls back to
 // the source text and there is nothing to check.
-QList<Message> readCatalog(const QString& path)
-{
+QList<Message> readCatalog(const QString& path) {
     QFile file(path);
     REQUIRE(file.open(QIODevice::ReadOnly));
     QXmlStreamReader xml(&file);
@@ -96,8 +85,8 @@ QList<Message> readCatalog(const QString& path)
                 inMessage = true;
                 current = Message{};
                 current.context = context;
-                current.numerus = xml.attributes().value(QLatin1String("numerus"))
-                                  == QLatin1String("yes");
+                current.numerus =
+                    xml.attributes().value(QLatin1String("numerus")) == QLatin1String("yes");
             } else if (name == QLatin1String("source") && inMessage) {
                 current.source = xml.readElementText();
             } else if (name == QLatin1String("numerusform") && inMessage) {
@@ -107,12 +96,10 @@ QList<Message> readCatalog(const QString& path)
             }
         } else if (xml.isEndElement() && xml.name() == QLatin1String("message")) {
             inMessage = false;
-            const bool anyText = std::any_of(current.translations.cbegin(),
-                                             current.translations.cend(),
-                                             [](const QString& t) { return !t.trimmed().isEmpty(); });
-            if (anyText) {
-                messages << current;
-            }
+            const bool anyText =
+                std::any_of(current.translations.cbegin(), current.translations.cend(),
+                            [](const QString& t) { return !t.trimmed().isEmpty(); });
+            if (anyText) { messages << current; }
         }
     }
     REQUIRE_FALSE(xml.hasError());
@@ -121,22 +108,17 @@ QList<Message> readCatalog(const QString& path)
 
 // The context a given source string lives in, so the runtime lookups below do
 // not hard-code a QML file name that a refactor could move.
-QString contextFor(const QList<Message>& catalog, const QString& source)
-{
+QString contextFor(const QList<Message>& catalog, const QString& source) {
     for (const Message& m : catalog) {
-        if (m.source == source) {
-            return m.context;
-        }
+        if (m.source == source) { return m.context; }
     }
     return {};
 }
 
-}  // namespace
+} // namespace
 
 TEST_CASE("every shipped locale has a compiled catalogue", "[i18n]") {
-    if (!catalogsBuilt()) {
-        SKIP("built without Qt LinguistTools — no .qm to check");
-    }
+    if (!catalogsBuilt()) { SKIP("built without Qt LinguistTools — no .qm to check"); }
     for (const QString& locale : kLocales) {
         INFO("locale " << locale.toStdString());
         CHECK(QFile::exists(qmDir() + QStringLiteral("/dish_%1.qm").arg(locale)));
@@ -147,9 +129,7 @@ TEST_CASE("every shipped locale has a compiled catalogue", "[i18n]") {
 // matter: Windows reports de_DE, not de, and a catalogue named dish_de.qm has
 // to be reachable from it.
 TEST_CASE("system locales resolve to the right catalogue", "[i18n]") {
-    if (!catalogsBuilt()) {
-        SKIP("built without Qt LinguistTools — no .qm to check");
-    }
+    if (!catalogsBuilt()) { SKIP("built without Qt LinguistTools — no .qm to check"); }
     const QList<QPair<QString, QString>> cases{
         {QStringLiteral("en_US"), QStringLiteral("dish_en")},
         {QStringLiteral("en_GB"), QStringLiteral("dish_en")},
@@ -175,9 +155,7 @@ TEST_CASE("system locales resolve to the right catalogue", "[i18n]") {
 // A locale with no catalogue must fail cleanly so main.cpp leaves the source
 // strings alone instead of installing an empty translator.
 TEST_CASE("an unshipped locale loads nothing", "[i18n]") {
-    if (!catalogsBuilt()) {
-        SKIP("built without Qt LinguistTools — no .qm to check");
-    }
+    if (!catalogsBuilt()) { SKIP("built without Qt LinguistTools — no .qm to check"); }
     QTranslator translator;
     CHECK_FALSE(dish::i18n::loadCatalog(translator, QLocale(QStringLiteral("ja_JP")), qmDir()));
 }
@@ -185,9 +163,7 @@ TEST_CASE("an unshipped locale loads nothing", "[i18n]") {
 // The reason dish_en.ts exists at all. Without it the source string is the only
 // English Qt has, and a source can carry one form: "1 slots free".
 TEST_CASE("English plurals pick the singular at one", "[i18n]") {
-    if (!catalogsBuilt()) {
-        SKIP("built without Qt LinguistTools — no .qm to check");
-    }
+    if (!catalogsBuilt()) { SKIP("built without Qt LinguistTools — no .qm to check"); }
     const auto catalog = readCatalog(tsPath(QStringLiteral("en")));
     const QString source = QStringLiteral("%n slots free");
     const QString context = contextFor(catalog, source);
@@ -196,19 +172,17 @@ TEST_CASE("English plurals pick the singular at one", "[i18n]") {
     QTranslator translator;
     REQUIRE(dish::i18n::loadCatalog(translator, QLocale(QStringLiteral("en_US")), qmDir()));
 
-    CHECK(translator.translate(context.toUtf8(), source.toUtf8(), nullptr, 1)
-          == QStringLiteral("%n slot free"));
-    CHECK(translator.translate(context.toUtf8(), source.toUtf8(), nullptr, 2)
-          == QStringLiteral("%n slots free"));
+    CHECK(translator.translate(context.toUtf8(), source.toUtf8(), nullptr, 1) ==
+          QStringLiteral("%n slot free"));
+    CHECK(translator.translate(context.toUtf8(), source.toUtf8(), nullptr, 2) ==
+          QStringLiteral("%n slots free"));
 }
 
 // Bosnian is why %n replaced the old singular/plural pairs: two forms cannot
 // express one/few/other, and this pins the ORDER the seeding script writes into
 // the numerusform slots.
 TEST_CASE("Bosnian selects all three plural forms", "[i18n]") {
-    if (!catalogsBuilt()) {
-        SKIP("built without Qt LinguistTools — no .qm to check");
-    }
+    if (!catalogsBuilt()) { SKIP("built without Qt LinguistTools — no .qm to check"); }
     const auto catalog = readCatalog(tsPath(QStringLiteral("bs")));
     const QString source = QStringLiteral("%n paired");
     const QString context = contextFor(catalog, source);
@@ -246,7 +220,7 @@ TEST_CASE("translations keep their source's placeholders", "[i18n]") {
             const auto expected = placeholders(m.source);
             for (const QString& translation : m.translations) {
                 if (translation.trimmed().isEmpty()) {
-                    continue;  // a partly-filled plural is caught below, not here
+                    continue; // a partly-filled plural is caught below, not here
                 }
                 INFO("context " << m.context.toStdString() << " source " << m.source.toStdString()
                                 << " translation " << translation.toStdString());
@@ -264,13 +238,9 @@ TEST_CASE("plural entries are all-or-nothing", "[i18n]") {
         const auto catalog = readCatalog(tsPath(locale));
         INFO("locale " << locale.toStdString());
         for (const Message& m : catalog) {
-            if (!m.numerus) {
-                continue;
-            }
+            if (!m.numerus) { continue; }
             INFO("context " << m.context.toStdString() << " source " << m.source.toStdString());
-            for (const QString& form : m.translations) {
-                CHECK_FALSE(form.trimmed().isEmpty());
-            }
+            for (const QString& form : m.translations) { CHECK_FALSE(form.trimmed().isEmpty()); }
         }
     }
 }
@@ -290,23 +260,20 @@ TEST_CASE("every English plural form is written", "[i18n]") {
         xml.readNext();
         if (xml.isStartElement()) {
             if (xml.name() == QLatin1String("message")) {
-                inNumerusMessage = xml.attributes().value(QLatin1String("numerus"))
-                                   == QLatin1String("yes");
+                inNumerusMessage =
+                    xml.attributes().value(QLatin1String("numerus")) == QLatin1String("yes");
                 forms.clear();
-                if (inNumerusMessage) {
-                    ++numerus;
-                }
+                if (inNumerusMessage) { ++numerus; }
             } else if (xml.name() == QLatin1String("numerusform") && inNumerusMessage) {
                 forms << xml.readElementText();
             }
-        } else if (xml.isEndElement() && xml.name() == QLatin1String("message")
-                   && inNumerusMessage) {
-            const bool complete = !forms.isEmpty()
-                                  && std::all_of(forms.cbegin(), forms.cend(),
-                                                 [](const QString& f) { return !f.trimmed().isEmpty(); });
-            if (complete) {
-                ++filled;
-            }
+        } else if (xml.isEndElement() && xml.name() == QLatin1String("message") &&
+                   inNumerusMessage) {
+            const bool complete =
+                !forms.isEmpty() && std::all_of(forms.cbegin(), forms.cend(), [](const QString& f) {
+                    return !f.trimmed().isEmpty();
+                });
+            if (complete) { ++filled; }
             inNumerusMessage = false;
         }
     }

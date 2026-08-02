@@ -1590,10 +1590,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Pad</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>This PC</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1881,6 +1877,11 @@
     </message>
     <message>
         <source>Unsteady</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
         <translation type="unfinished"></translation>
     </message>
 </context>
