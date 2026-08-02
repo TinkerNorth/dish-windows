@@ -33,7 +33,28 @@ ApplicationWindow {
 
     // Frameless: we draw our own chrome. The C++ FramelessWindowChrome filter
     // restores the native snap/resize/shadow that this flag otherwise strips.
-    flags: Qt.Window | Qt.FramelessWindowHint
+    //
+    // The button HINTS are load-bearing, not decoration. Qt maps them straight
+    // onto Win32 style bits, and FramelessWindowHint on its own leaves the HWND
+    // a bare WS_POPUP (style 0x96000000) — no WS_MAXIMIZEBOX. Without that bit
+    // the window is not maximizable AT ALL as far as Windows is concerned: a
+    // double-click on the caption strip does nothing (DefWindowProc checks the
+    // style before turning HTCAPTION into SC_MAXIMIZE), the system menu offers
+    // no Maximize, and Snap Layouts will not open over the HTMAXBUTTON region
+    // the chrome filter publishes. With the hints the style is
+    // WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX (0x960B0000) and
+    // those paths work. They draw nothing: WM_NCCALCSIZE still zeroes the
+    // non-client area and the frame margins stay 0 (window rect == client rect
+    // with and without them), so the geometry is untouched.
+    //
+    // The style is necessary but NOT sufficient for the maximize BUTTON: that
+    // region is non-client, so neither Quick nor DefWindowProc will act on a
+    // press over it (DefWindowProc's caption-button tracking needs a caption,
+    // which a frameless window has none of). FramelessWindowChrome runs that
+    // press itself — see its WM_NCLBUTTONDOWN/UP arm.
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint
+           | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
+           | Qt.WindowCloseButtonHint
 
     // ALWAYS the themed solid: the flows design paints the deep-space body
     // (#060818 dark / off-white light) — a Mica-transparent window composed to

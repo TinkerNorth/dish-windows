@@ -150,6 +150,12 @@ set(DISH_CORE_SOURCES
     src/core/reducer/ConnectionRows.h
     src/core/reducer/LateSlotConverge.h
     src/core/reducer/ResendPacer.h
+    # core/reducer — the presence gate over the binding table: a binding declares
+    # a virtual pad on the satellite and every session PUT re-sends it, so a
+    # binding whose physical pad is gone must be dropped (and one whose pad only
+    # moved onto its USB-direct twin must follow it) or the app reports a
+    # controller that does not exist.
+    src/core/reducer/BindingPresence.h
     # core/reducer mapper — Workstream 2c (pure picker-visibility + catalog
     # forward-compat: which connections/types the Emulate picker offers).
     src/core/reducer/PickerVisibility.h

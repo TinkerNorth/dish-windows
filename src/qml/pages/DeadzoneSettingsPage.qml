@@ -159,13 +159,22 @@ Kit.Page {
                     }
 
                     GridLayout {
+                        id: tuningGrid
                         Layout.fillWidth: true
                         Layout.topMargin: Tokens.s3
                         columns: 2
                         columnSpacing: Tokens.s10
 
+                        // The design's `1fr 1fr`. Layouts split surplus from the
+                        // PREFERRED widths, so without an equal preference the
+                        // column boundary would follow the label lengths — and
+                        // then twitch as the live % readout changes width.
+                        readonly property int cellWidth:
+                            (deadzonePage.bodyWidth - 2 * Tokens.s7 - Tokens.s10) / 2
+
                         Kit.SliderRow {
                             Layout.fillWidth: true
+                            Layout.preferredWidth: tuningGrid.cellWidth
                             label: qsTr("Stick dead zone")
                             maxValue: deadzonePage.percentMax
                             value: deviceCard.stickPct
@@ -176,6 +185,7 @@ Kit.Page {
                         }
                         Kit.SliderRow {
                             Layout.fillWidth: true
+                            Layout.preferredWidth: tuningGrid.cellWidth
                             label: qsTr("Trigger dead zone")
                             maxValue: deadzonePage.percentMax
                             value: deviceCard.triggerPct

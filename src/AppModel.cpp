@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <QLocale>
+#include <QStringList>
 
 namespace dish {
 
@@ -673,6 +674,11 @@ void AppModel::syncFrameworkPresence() {
 
 void AppModel::rebuild() {
     QList<models::ControllerSlot> next;
+    // The presence oracle: every slot this pass SHOWS, with the USB identity of
+    // the pad behind it. Filled alongside `next` below and published before the
+    // binding cross-reference, because both the emulation-type seed and the
+    // binding presence gate ask it "which pad is actually behind this slot id?".
+    std::vector<reducer::PresentSlot> presentPads;
     // Windows is physical-controllers-only — no virtual touch overlay, so
     // we never seed a "Virtual Controller" slot. Matches dish-mac (PR #7);
     // dish-linux carries the slot as a placeholder for a future feature
@@ -745,6 +751,7 @@ void AppModel::rebuild() {
         // twin would wear the USB twin's path control.
         s.bluetooth = d.bluetooth;
         if (!d.bluetooth) { stampSlotPath(s, d.vendorId, d.productId, controllers); }
+        presentPads.push_back({d.id.toStdString(), d.vendorId, d.productId});
         next.append(s);
     }
 
@@ -777,8 +784,14 @@ void AppModel::rebuild() {
         // path-supported; the mapper reads the phase/desired/failure off its own
         // controller entry (keyed by vid/pid, which round-trips to this key).
         stampSlotPath(s, c.vendorId, c.productId, controllers);
+        presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
         next.append(s);
     }
+
+    // Publish the presence oracle BEFORE the cross-reference: resolveControllerType
+    // (called just below for the card's "· as <type>" suffix, and by the hub on
+    // every bind) reads it to seed the type off the pad's own USB identity.
+    presentPads_ = std::move(presentPads);
 
     // Cross-reference bindings from the hub.
     const auto bindings = hub_->bindings();
@@ -868,6 +881,83 @@ void AppModel::rebuild() {
     streamingSlotCount_.set(composer::streamingSlotCount(bindings, connectionStates));
 
     emit stateChanged();
+
+    // Last, because it can bind/unbind and therefore re-enter this function: a
+    // binding whose physical pad is gone must not keep declaring a virtual
+    // controller to the satellite.
+    applyBindingPresence();
+}
+
+std::optional<std::pair<int, int>> AppModel::boundPadIdentity(const QString& slotId) const {
+    const std::string id = slotId.toStdString();
+    // 1. A slot on screen answers for itself.
+    if (const auto shown = reducer::padIdentityFor(id, presentPads_)) { return shown; }
+    // 2. A framework twin hidden by an active USB-direct claim is absent from the
+    //    slot list but still enumerated by SDL — that is a pad that MOVED, not one
+    //    that left.
+    for (const auto& d : bridge_->devices()) {
+        if (d.id != slotId) { continue; }
+        const std::optional<std::pair<int, int>> identity = std::make_pair(d.vendorId, d.productId);
+        return reducer::isPadIdentity(identity) ? identity : std::nullopt;
+    }
+    // 3. A synthetic slot id packs its own (vid, pid), so a claim that has just
+    //    been released still names the pad it belonged to. Whether that pad is
+    //    still here is the gate's question, not this one's.
+    const std::optional<std::pair<int, int>> packed = reducer::parseSyntheticSlotId(id);
+    if (reducer::isPadIdentity(packed)) { return packed; }
+    return std::nullopt;
+}
+
+void AppModel::applyBindingPresence() {
+    if (bindingPresenceInFlight_) { return; }
+    const auto bindings = hub_->bindings();
+    std::vector<reducer::BoundSlot> rows;
+    rows.reserve(static_cast<std::size_t>(bindings.size()));
+    for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
+        reducer::BoundSlot row;
+        row.slotId = it.key().toStdString();
+        row.connId = it.value().toStdString();
+        row.identity = boundPadIdentity(it.key());
+        rows.push_back(std::move(row));
+    }
+    const auto actions = reducer::resolveBindingPresence(presentPads_, rows);
+    if (actions.empty()) { return; }
+
+    bindingPresenceInFlight_ = true;
+    // The notices this pass owes the user, composed BEFORE the detach: unbind()
+    // re-derives the hub's summaries, so the satellite's label has to be read
+    // while the binding still exists. A migration is silent on purpose — the pad
+    // never left, only its slot id changed, and announcing that would train the
+    // user to ignore the channel.
+    QStringList notices;
+    for (const auto& action : actions) {
+        if (action.kind == reducer::BindingPresenceKind::Unbind) {
+            const auto summary = hub_->summary(QString::fromStdString(action.connId));
+            notices.append(summary ? summary->label : QString());
+        }
+        // unbind() detaches the slot, which DELETEs the controller on a live
+        // session — the phantom leaves the satellite now rather than at the next
+        // reaper timeout.
+        hub_->unbind(QString::fromStdString(action.slotId));
+        if (action.kind == reducer::BindingPresenceKind::Migrate) {
+            hub_->bind(QString::fromStdString(action.toSlotId),
+                       QString::fromStdString(action.connId));
+        }
+    }
+    bindingPresenceInFlight_ = false;
+    // Each hub call emitted changed(), so a nested rebuild() has already
+    // published the settled shape; the gate is idempotent over it.
+
+    // Only now, with the guard clear and the state settled: a toast is UI, and
+    // whatever it reaches must be free to call back into this model. The gate is
+    // otherwise SILENT — the user would watch a binding they made disappear on
+    // its own, which reads as the app losing their work rather than as the app
+    // noticing their controller left.
+    for (const auto& label : notices) {
+        emit errorMessage(label.isEmpty()
+                              ? tr("Controller disconnected — its binding was removed.")
+                              : tr("Controller disconnected — unbound from %1.").arg(label));
+    }
 }
 
 void AppModel::syncInputRateDevices() {
@@ -945,7 +1035,17 @@ int AppModel::currentTypeForConnection(const QString& connId, const QString& slo
     const auto userOverride = typeStore_.typeFor(connId.toStdString(), slotId.toStdString());
     std::optional<models::CatalogDto> cached;
     if (auto* conn = wifi_->get(connId)) { cached = catalogRepo_.cached(conn->server().id()); }
-    return reducer::seedControllerType(userOverride, cached);
+    // Thread the PAD'S OWN USB identity into the seed. Without it the ladder
+    // skips the catalog's `emulates` hints entirely and every pad falls through
+    // to the catalog's first offered type — which is how a Switch Pro came to be
+    // declared to the satellite as a virtual DualShock 4. SDL exposes no type
+    // slug through the bridge, so only the usb half of the hint is matched; an
+    // unresolvable pad passes an empty key and degrades to first-offered exactly
+    // as before.
+    const auto identity = boundPadIdentity(slotId);
+    const QString vidPid =
+        identity ? reducer::vidPidKey(identity->first, identity->second) : QString();
+    return reducer::seedControllerType(userOverride, cached, /*sdlTypeSlug=*/QString(), vidPid);
 }
 
 QList<composer::PickableType> AppModel::pickableTypesFor(const QString& slotId) const {

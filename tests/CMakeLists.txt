@@ -121,6 +121,13 @@ set(DISH_TEST_SOURCES
     test_connection_rows.cpp
     test_resend_pacer.cpp
     test_late_slot_converge.cpp
+    # The presence gate over the binding table (a slot whose physical pad is
+    # absent must never stay advertised to the satellite; one whose pad moved
+    # onto its USB-direct twin migrates instead of being dropped) and the
+    # emulation-type seed resolved with the pad's REAL identity (a Switch Pro is
+    # not a DualShock 4 just because the catalog offers PlayStation first).
+    test_binding_presence.cpp
+    test_pad_identity_seed.cpp
     test_connections_composer.cpp
     test_connection_coordinator.cpp
     # FOUND-list one-spot rule (a box never renders as both FOUND and REMEMBERED)

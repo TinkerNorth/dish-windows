@@ -157,10 +157,14 @@ Item {
             width: Tokens.captionButtonWidth
             height: bar.height
             property color hoverColor: Theme.primaryHover
+            // Hover this button cannot feel for itself. Only the maximize button
+            // needs it (it is non-client — see below), but the fill has to be
+            // ONE expression or the three buttons would light differently.
+            property bool nativeHovered: false
             // The glyph tone; close swaps to the on-accent ink on its red hover.
             readonly property color glyphColor: Theme.onSurface
             background: Rectangle {
-                color: cb.hovered ? cb.hoverColor : "transparent"
+                color: (cb.hovered || cb.nativeHovered) ? cb.hoverColor : "transparent"
             }
         }
 
@@ -190,6 +194,21 @@ Item {
             id: maximizeButton
             onXChanged: bar.publishRects()
             onWidthChanged: bar.publishRects()
+
+            // This button is NON-CLIENT: the chrome filter answers HTMAXBUTTON
+            // over it so Win11 opens the Snap Layouts flyout, and Quick is never
+            // told about a non-client pointer. Its own `hovered` is therefore
+            // always false — the fill comes from the native tracker instead, or
+            // this would be the one caption button that never responds.
+            nativeHovered: ChromeBridge.maximizeHovered
+
+            // Maximise AND restore are the same button, so the glyph is the only
+            // signal that the click landed: one square windowed, the offset pair
+            // when zoomed (ds caption rule "minimise / maximise / restore /
+            // close"). Canvas doesn't rebind, so the flip requests a repaint.
+            readonly property bool zoomed: bar.window.visibility === Window.Maximized
+            onZoomedChanged: maximizeCanvas.requestPaint()
+
             contentItem: Canvas {
                 id: maximizeCanvas
                 onPaint: {
@@ -197,15 +216,30 @@ Item {
                     ctx.reset();
                     ctx.strokeStyle = String(maximizeButton.glyphColor);
                     ctx.lineWidth = 1;
-                    ctx.strokeRect(width / 2 - 5, height / 2 - 5, 10, 10);
+                    var cx = width / 2, cy = height / 2;
+                    if (maximizeButton.zoomed) {
+                        // Front pane, then the two exposed edges of the one behind.
+                        ctx.strokeRect(cx - 5, cy - 3, 8, 8);
+                        ctx.beginPath();
+                        ctx.moveTo(cx - 3, cy - 5);
+                        ctx.lineTo(cx + 5, cy - 5);
+                        ctx.lineTo(cx + 5, cy + 3);
+                        ctx.stroke();
+                    } else {
+                        ctx.strokeRect(cx - 5, cy - 5, 10, 10);
+                    }
                 }
                 Connections {
                     target: Theme
                     function onPaletteChanged() { maximizeCanvas.requestPaint(); }
                 }
             }
-            // Win11 sends a synthetic NCLBUTTONUP -> we still wire click as a
-            // fallback for when snap isn't involved.
+            // The real press is run in C++: FramelessWindowChrome takes the
+            // WM_NCLBUTTONDOWN/UP pair over HTMAXBUTTON and posts SC_MAXIMIZE /
+            // SC_RESTORE itself, because DefWindowProc only tracks caption
+            // buttons on a window that HAS a caption. Nothing reaches this
+            // handler today; it stays as the client-path fallback (and is what
+            // keyboard activation of the button would use).
             onClicked: bar.toggleMaximize()
         }
 
