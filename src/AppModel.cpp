@@ -80,6 +80,11 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
                          emit errorMessage(
                              tr("The satellite wouldn't accept that controller — binding undone."));
                      });
+    // A rejected forward PIN. The toast already fires from onWifiEvent; this is
+    // the TYPED edge the pairing sheet needs so it can stay open and mark the
+    // field inline instead of making the user re-derive the cause from a toast.
+    QObject::connect(wifi_, &net::WifiConnectionManager::pairingFailed, this,
+                     &AppModel::pairingFailed);
     // poolChanged fires every time a WifiConnection is created or transitions
     // state — perfect place to make sure new connections have a rumble
     // handler. Idempotent on already-wired connections.
@@ -713,6 +718,13 @@ void AppModel::rebuild() {
         // Likewise the addressable-LED capability — drives the lightbar chip
         // and tells the hub when to advertise CAP_LIGHTBAR on bind.
         s.capabilities.hasLightbar = d.hasLightbar;
+        // ...and the touch surface, which gates both the Touchpad and the Mouse
+        // rows of the capability solver (mouse is a routing of the touchpad).
+        s.capabilities.hasTouchpad = d.hasTouchpad;
+        // Whether the raw-HID fast lane KNOWS this model's report layout. Only
+        // meaningful on the Direct path, and a Bluetooth pad has none.
+        s.verifiedModel = !d.bluetooth && usbGateway_ != nullptr &&
+                          usbGateway_->isKnownFastLaneModel(d.vendorId, d.productId);
         // Carry the latest battery sample through so the slot card's battery
         // chip can show charge — controller's own for a wireless pad, the
         // host machine's for a wired/unknown one.
@@ -749,6 +761,13 @@ void AppModel::rebuild() {
         s.capabilities.hasMotion = input::usbparse::parserHasImu(
             input::usbparse::parserForDevice(c.vendorId, c.productId));
         s.capabilities.hasLightbar = false;
+        // The raw-HID decoder reads the DS4 / DualSense touch block directly, so
+        // a claimed pad of that family carries a touchpad the same as its SDL
+        // twin did.
+        s.capabilities.hasTouchpad = input::usbparse::parserHasTouchpad(
+            input::usbparse::parserForDevice(c.vendorId, c.productId));
+        s.verifiedModel =
+            usbGateway_ != nullptr && usbGateway_->isKnownFastLaneModel(c.vendorId, c.productId);
         // Mark it as a USB-direct synthetic so the slot card shows its gamepad Hz
         // as a live (continuously-streaming) measurement, and attach the latest
         // independently-measured poll rate (URB completion rate) for it.
@@ -914,6 +933,13 @@ void AppModel::onInputRatesChanged(const source::SlotInputRatesMap& rates) {
 int AppModel::resolveControllerType(const QString& slotId) const {
     const QString connId = hub_->bindings().value(slotId);
     if (connId.isEmpty()) { return proto::kControllerTypeXbox; }
+    return currentTypeForConnection(connId, slotId);
+}
+
+int AppModel::currentTypeFor(const QString& slotId) const { return resolveControllerType(slotId); }
+
+int AppModel::currentTypeForConnection(const QString& connId, const QString& slotId) const {
+    if (connId.isEmpty()) { return proto::kControllerTypeXbox; }
     // The user's Emulate override wins; absent that the default is the bound
     // satellite catalog's first offered type (the picker's first row), then Xbox.
     const auto userOverride = typeStore_.typeFor(connId.toStdString(), slotId.toStdString());
@@ -922,10 +948,11 @@ int AppModel::resolveControllerType(const QString& slotId) const {
     return reducer::seedControllerType(userOverride, cached);
 }
 
-int AppModel::currentTypeFor(const QString& slotId) const { return resolveControllerType(slotId); }
-
 QList<composer::PickableType> AppModel::pickableTypesFor(const QString& slotId) const {
-    const QString connId = hub_->bindings().value(slotId);
+    return pickableTypesForConnection(hub_->bindings().value(slotId));
+}
+
+QList<composer::PickableType> AppModel::pickableTypesForConnection(const QString& connId) const {
     if (connId.isEmpty()) { return {}; }
     if (auto* conn = wifi_->get(connId)) {
         if (auto cached = catalogRepo_.cached(conn->server().id())) {
@@ -947,8 +974,38 @@ void AppModel::setSlotControllerType(const QString& slotId, int type) {
     hub_->bind(slotId, connId);
 }
 
+// ── Catalog reads for the capability solver ─────────────────────────────────
+// The repository is already keyed on the stable satellite id, which IS the
+// connection id the binding surfaces carry, so these need no wifi_ lookup.
+
+bool AppModel::hasCatalogFor(const QString& hostId) const {
+    return hostId.isEmpty() ? false : catalogRepo_.cached(hostId).has_value();
+}
+
+std::optional<models::CatalogTypeDto> AppModel::catalogTypeFor(const QString& hostId,
+                                                               int type) const {
+    if (hostId.isEmpty()) { return std::nullopt; }
+    const auto cached = catalogRepo_.cached(hostId);
+    if (!cached.has_value()) { return std::nullopt; }
+    for (const auto& t : cached->controllerTypes) {
+        if (t.id == type) { return t; }
+    }
+    return std::nullopt;
+}
+
+QHash<QString, models::CatalogHostFeatureDto>
+AppModel::catalogHostFeatures(const QString& hostId) const {
+    if (hostId.isEmpty()) { return {}; }
+    const auto cached = catalogRepo_.cached(hostId);
+    if (!cached.has_value()) { return {}; }
+    return cached->hostFeatures;
+}
+
 void AppModel::refreshCatalogForSlot(const QString& slotId) {
-    const QString connId = hub_->bindings().value(slotId);
+    refreshCatalogForConnection(hub_->bindings().value(slotId));
+}
+
+void AppModel::refreshCatalogForConnection(const QString& connId) {
     if (connId.isEmpty()) { return; }
     auto* conn = wifi_->get(connId);
     if (conn == nullptr) { return; }

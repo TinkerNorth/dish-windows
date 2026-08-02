@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Settings destination (design FSettingsBody, frame f-e1): a responsive
-// two-column grid of sections. LEFT: Setup & help (setup-guide dialog + Help &
-// FAQ detail), Appearance (theme segmented control), Forwarded features (light
-// bar combo + footnote). RIGHT: Controller tuning (deadzones detail entry),
-// Diagnostics (crash reporting), About (licenses / donate entries + the mono
-// version line). The page renders no local title — the shell header shows
-// `headerTitle`.
+// The Settings destination (SCR §7.4). A single scrolling column that reflows to
+// two above Tokens.wideBreakpoint — never a hard grid with hidden overflow
+// (D46 / SCR §12.24e). LEFT: Setup & help (the wizard entry + Help & FAQ),
+// Appearance (theme segmented control), Forwarded features (light-bar combo +
+// footnote). RIGHT: Controller tuning (deadzones detail), Diagnostics (crash
+// reporting), About (licenses / donate entries + the mono version line). The
+// page renders no local title — the shell header shows `headerTitle`.
+//
+// "Setup & help" opens the v3 setup wizard (D36): the setup-guide dialog is
+// deleted, so there is no second explainer to keep in sync.
 //
 // Bound to the real `App` surface: App.themeMode / App.setThemeMode,
 // App.lightbarFollowGame / App.setLightbarFollowGame, App.crashReportingEnabled
@@ -20,14 +23,13 @@ import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import "../kit" as Kit
-import "../onboarding"
 import Dish.Chrome
 
 Kit.Page {
     id: settingsPage
     title: qsTr("Settings")
 
-    // Shell header contract (AppShell): title only, no sub line (frame f-e1).
+    // Shell header contract (AppShell): title only, no sub line (SCR §7.4).
     readonly property string headerTitle: qsTr("Settings")
 
     // Chip order == App.themeMode values (0=Light 1=Dark 2=System, §1b).
@@ -39,6 +41,7 @@ Kit.Page {
     // The shell facade vended by the content StackView (AppShell `shellApi`).
     // Held var-typed so the dynamic property resolves at runtime.
     readonly property var shellView: StackView.view
+    readonly property var shellApi: settingsPage.shellView ? settingsPage.shellView.shellApi : null
 
     // Push a detail sub-page. The URL is resolved HERE (against this page's
     // location) because the shell's own Qt.resolvedUrl resolves against
@@ -48,22 +51,18 @@ Kit.Page {
         if (!settingsPage.shellView) {
             return;
         }
-        if (settingsPage.shellView.shellApi) {
-            settingsPage.shellView.shellApi.pushDetail(Qt.resolvedUrl(file), title);
+        if (settingsPage.shellApi) {
+            settingsPage.shellApi.pushDetail(Qt.resolvedUrl(file), title);
         } else {
             settingsPage.shellView.push(Qt.resolvedUrl(file));
         }
     }
 
-    // The 3-step setup guide as an in-window dialog (design f-a2). A local
-    // instance; the Popup reparents to the shell overlay on open().
-    SetupGuideDialog { id: setupGuide }
-
     GridLayout {
         width: parent ? parent.width : implicitWidth
-        // The design's two-column settings grid collapses to one column when
-        // the content pane is narrow (rail expanded on a small window).
-        columns: settingsPage.width < 760 ? 1 : 2
+        // One column until the content pane is genuinely wide; the design's
+        // two-column board only reads above ~980 px (D46).
+        columns: settingsPage.width < Tokens.wideBreakpoint ? 1 : 2
         columnSpacing: Tokens.pagePadding
         rowSpacing: Tokens.pagePadding
 
@@ -83,9 +82,10 @@ Kit.Page {
 
                 Kit.RowButton {
                     Layout.fillWidth: true
-                    title: qsTr("Setup guide")
-                    subtitle: qsTr("Walk through connection and controller setup. Re-run any time.")
-                    onClicked: setupGuide.open()
+                    title: qsTr("Set up Dish")
+                    subtitle: qsTr("Walk through input, destination and binding. Re-run any time.")
+                    // Always lands on Home first, then pushes the wizard (D1).
+                    onClicked: if (settingsPage.shellApi) settingsPage.shellApi.openSetupWizard("")
                 }
                 Kit.RowButton {
                     Layout.fillWidth: true
@@ -106,7 +106,9 @@ Kit.Page {
                 Kit.Card {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
-                        spacing: 0
+                        // Flush: the rows below carry their own top margins, so
+                        // a layout gap would double-space the label stack.
+                        spacing: Tokens.s0
 
                         Label {
                             text: qsTr("Theme")
@@ -115,12 +117,12 @@ Kit.Page {
                             font.weight: Font.DemiBold
                         }
                         Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Tokens.s1
                             text: qsTr("Choose how Dish looks. System matches your Windows light or dark setting.")
                             color: Theme.muted
                             font.pixelSize: Tokens.textMeta
                             wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                            Layout.topMargin: Tokens.s1
                         }
                         Kit.SegmentedControl {
                             Layout.topMargin: Tokens.s5
@@ -157,11 +159,11 @@ Kit.Page {
                                 font.weight: Font.DemiBold
                             }
                             Label {
+                                Layout.fillWidth: true
                                 text: qsTr("Follow game: the controller LED matches the host game. Off: leave the LED untouched.")
                                 color: Theme.muted
                                 font.pixelSize: Tokens.textMeta
                                 wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
                             }
                         }
 
@@ -176,11 +178,11 @@ Kit.Page {
                 }
 
                 Label {
-                    text: qsTr("Features only apply when your controller's hardware supports them — the controller list shows what was detected.")
+                    Layout.fillWidth: true
+                    text: qsTr("Features only apply when your controller’s hardware supports them — the controller list shows what was detected.")
                     color: Theme.muted
                     font.pixelSize: Tokens.textMeta
                     wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
                 }
             }
         }
@@ -249,11 +251,11 @@ Kit.Page {
                 }
 
                 Label {
+                    Layout.topMargin: Tokens.s1
                     text: qsTr("Dish %1 · TinkerNorth · LGPL-3.0").arg(App.appVersion)
                     color: Theme.muted
                     font.family: Tokens.monoFamily
                     font.pixelSize: Tokens.textMeta
-                    Layout.topMargin: Tokens.s1
                 }
             }
         }

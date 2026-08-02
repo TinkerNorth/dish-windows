@@ -16,7 +16,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import Dish.Chrome
 import "kit" as Kit
 
@@ -82,8 +81,11 @@ Item {
             onClicked: App.setRailCollapsed(!App.railCollapsed)
 
             background: Rectangle {
-                color: hamburger.hovered ? Qt.rgba(230 / 255, 236 / 255, 1, 0.08) : "transparent"
+                color: hamburger.hovered ? Theme.primaryHover : "transparent"
             }
+            // Canvas 2D parses a stringified colour as #RRGGBBAA, so only an
+            // OPAQUE Theme role may be handed to it this way — every role used
+            // in this file (onSurface, onPrimary) is opaque by construction.
             contentItem: Canvas {
                 id: hamburgerCanvas
                 onPaint: {
@@ -106,9 +108,18 @@ Item {
                 }
             }
 
-            ToolTip.visible: hovered
-            ToolTip.delay: 800
-            ToolTip.text: App.railCollapsed ? qsTr("Expand navigation") : qsTr("Collapse navigation")
+            // Declared, not attached: the ATTACHED ToolTip resolves its delegate
+            // through QtQuick.Controls, which this file does not import, so it
+            // logs "Component is not ready" and never appears. Kit.DishToolTip
+            // is the themed one — a bare ToolTip paints Basic's system palette.
+            Kit.DishToolTip {
+                id: hamburgerTip
+                visible: hamburger.hovered
+                delay: 800
+                text: App.railCollapsed ? qsTr("Expand navigation")
+                                        : qsTr("Collapse navigation")
+                y: hamburger.height + Tokens.s2
+            }
         }
 
         Item { width: 0; height: 1 }
@@ -119,14 +130,14 @@ Item {
 
             Kit.BrandGlyph {
                 glyph: "dish"
-                width: 16
-                height: 16
+                width: Tokens.glyphSm
+                height: Tokens.glyphSm
                 anchors.verticalCenter: parent.verticalCenter
             }
             Label {
                 text: qsTr("Dish")
                 color: Theme.onSurface
-                font.pixelSize: 12
+                font.pixelSize: Tokens.textSummary
                 font.weight: Font.DemiBold
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -145,8 +156,8 @@ Item {
             id: cb
             width: Tokens.captionButtonWidth
             height: bar.height
-            property color hoverColor: Qt.rgba(230 / 255, 236 / 255, 1, 0.08)
-            // The glyph tone; close swaps to white on its red hover.
+            property color hoverColor: Theme.primaryHover
+            // The glyph tone; close swaps to the on-accent ink on its red hover.
             readonly property color glyphColor: Theme.onSurface
             background: Rectangle {
                 color: cb.hovered ? cb.hoverColor : "transparent"
@@ -206,9 +217,9 @@ Item {
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.reset();
-                    // White X on the red hover fill (the ds cap-close rule);
-                    // themed otherwise.
-                    ctx.strokeStyle = closeButton.hovered ? "#ffffff"
+                    // On-accent ink over the red hover fill (the ds cap-close
+                    // rule); themed otherwise.
+                    ctx.strokeStyle = closeButton.hovered ? String(Theme.onPrimary)
                                                           : String(closeButton.glyphColor);
                     ctx.lineWidth = 1;
                     ctx.beginPath();

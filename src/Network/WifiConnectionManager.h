@@ -112,6 +112,14 @@ class WifiConnectionManager : public QObject {
     // Forwarded from per-connection slot apply failures so the hub can roll a
     // binding back when the server rejects a controller descriptor.
     void slotRegistrationFailed(const QString& slotId);
+    // A FORWARD pair (the user typed the satellite's PIN) was rejected, with the
+    // machine-readable cause: "wrongPin" | "versionMismatch" | "unreachable" |
+    // "pending". Raised alongside the existing connectionEvent toast so the
+    // pairing sheet can stay open and mark the field inline — the toast is for
+    // transient failures, and a wrong PIN is a surface the user is still on.
+    // Deliberately NOT raised from pairAndConnect: a background reconnect must
+    // never pop an error into a sheet the user did not open.
+    void pairingFailed(const QString& connectionId, const QString& reasonToken);
 
   private:
     WifiConnection* ensureConnection(const models::DiscoveredServer& server);

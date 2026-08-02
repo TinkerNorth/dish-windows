@@ -3,15 +3,23 @@
 //
 // The transient toast / snackbar host — drop it ONCE at the app shell so a
 // one-shot App.errorMessage (and any other transient notice) has somewhere to
-// land. Mirrors the Widgets NotificationToastHost: a bottom-center stack of
-// rail-accented pills (Theme.surface fill, Theme.outline border, a
-// severity-coloured leading bar), each fading + sliding in, sitting for ~4 s,
-// then fading out. Safe to call show() repeatedly — each call pushes a new toast
-// onto the stack with its own auto-dismiss timer.
+// land. A bottom-center stack of rail-accented pills (Theme.surface fill,
+// Theme.outline border, a tone-coloured leading rule), each fading + sliding in,
+// sitting for Tokens.durToast, then fading out. Safe to call show() repeatedly —
+// each call pushes a new toast with its own auto-dismiss timer.
+//
+// TONES ARE error | warning | success. There is no `info` tone: persistent state
+// lives on the surface that owns it, so an informational toast is by
+// construction state that has escaped its surface. A stray "info" maps to
+// success and warns.
+//
+// This is the ONE elevated surface in the app — it is the only thing that floats
+// without a scrim, so the shadow is what separates it from the page. Dialogs
+// deliberately have none.
 //
 // API:
 //   show(message)                       // severity defaults to "error"
-//   show(message, severity)             // severity ∈ "error" | "info" | "success"
+//   show(message, severity)             // severity ∈ "error" | "warning" | "success"
 //
 // Wiring (in AppShell.qml / Main.qml — declare one and connect App.errorMessage):
 //   Kit.NotificationToastHost { id: toastHost }
@@ -41,7 +49,7 @@ Item {
     id: host
 
     // How long (ms) a toast stays before it auto-dismisses.
-    property int durationMs: 4000
+    property int durationMs: Tokens.durToast
     // Cap the visible stack so a flood of errors can't grow without bound; the
     // oldest is dropped when a new one would exceed this (DROP_OLDEST, matching
     // the source-layer channel policy).
@@ -60,15 +68,22 @@ Item {
     // declarative and each entry's lifetime is the model row's lifetime.
     ListModel { id: toastModel }
 
-    // Push a toast. `severity` is one of "error" | "info" | "success" and
+    // Push a toast. `severity` is one of "error" | "warning" | "success" and
     // defaults to "error" (the App.errorMessage channel). Safe to call any number
     // of times; each call appends a row with its own auto-dismiss timer (declared
     // on the delegate). An empty message is ignored.
     function show(message, severity) {
         if (!message || message.length === 0)
             return;
-        const sev = (severity === "info" || severity === "success" || severity === "warning")
-                  ? severity : "error";
+        let sev = severity;
+        if (sev === "info") {
+            console.warn("NotificationToastHost: the 'info' tone was removed — "
+                         + "persistent state belongs on its own surface. Mapped to "
+                         + "'success': " + message);
+            sev = "success";
+        }
+        if (sev !== "warning" && sev !== "success")
+            sev = "error";
         // DROP_OLDEST: trim from the front until there's room for the new one.
         while (toastModel.count >= host.maxVisible)
             toastModel.remove(0);
@@ -93,8 +108,8 @@ Item {
         id: stack
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottomMargin: 18
-        spacing: 8
+        anchors.bottomMargin: Tokens.s8
+        spacing: Tokens.s4
 
         Repeater {
             model: toastModel
@@ -112,12 +127,13 @@ Item {
                 width: implicitWidth
                 height: implicitHeight
 
-                // Severity → accent colour (the leading rail bar). The tone map
-                // mirrors the ds Toast: error / warning / success / info.
+                // Severity → the leading rule colour. Three tones, no info.
                 readonly property color accent: toast.severity === "success" ? Theme.success
-                                              : toast.severity === "info" ? Theme.primary
                                               : toast.severity === "warning" ? Theme.warning
                                               : Theme.error
+
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: toast.message
 
                 Rectangle {
                     id: pill
@@ -160,24 +176,54 @@ Item {
                             text: toast.message
                             color: Theme.onSurface
                             font.pixelSize: Tokens.textSummary
+                            lineHeight: 1.45
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                             Layout.maximumWidth: 320
                             Layout.alignment: Qt.AlignVCenter
                         }
 
-                        // Explicit dismiss affordance (the ds Toast ✕).
-                        Label {
-                            text: "✕"
-                            color: Theme.muted
-                            font.pixelSize: 14
+                        // Explicit dismiss affordance, drawn as a vector: the
+                        // design bans ✕ as text (no reliable Windows glyph).
+                        Canvas {
+                            id: dismissMark
+                            implicitWidth: Tokens.s5
+                            implicitHeight: Tokens.s5
                             Layout.alignment: Qt.AlignTop
+                            onPaint: {
+                                var ctx = getContext("2d");
+                                ctx.reset();
+                                // The whole pill is the dismiss target, so the
+                                // mark brightens with the pill, not on its own.
+                                var c = pillMouse.containsMouse ? Theme.onSurface : Theme.muted;
+                                ctx.strokeStyle = Qt.rgba(c.r, c.g, c.b, c.a);
+                                ctx.lineWidth = 1.4;
+                                ctx.beginPath();
+                                ctx.moveTo(1.5, 1.5);
+                                ctx.lineTo(width - 1.5, height - 1.5);
+                                ctx.moveTo(width - 1.5, 1.5);
+                                ctx.lineTo(1.5, height - 1.5);
+                                ctx.stroke();
+                            }
+                            Connections {
+                                target: Theme
+                                function onPaletteChanged() { dismissMark.requestPaint(); }
+                            }
+                            Connections {
+                                target: pillMouse
+                                function onContainsMouseChanged() { dismissMark.requestPaint(); }
+                            }
                         }
                     }
 
-                    // Tap anywhere on the toast to dismiss it early.
+                    // Tap anywhere on the toast to dismiss it early. A toast is
+                    // never in the tab order: it announces itself as an
+                    // AlertMessage and disappears on its own, so taking keyboard
+                    // focus would interrupt whatever the user is actually doing.
                     MouseArea {
+                        id: pillMouse
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: host._dismiss(toast.toastId)
                     }
@@ -187,8 +233,7 @@ Item {
                 // Fade + slide up on appear; the auto-dismiss is a one-shot Timer
                 // started on completion. (No exit slide: removing the model row
                 // destroys the delegate, so we keep the appear motion and let the
-                // ListModel removal carry the disappearance — matching the Widgets
-                // host, which leans on opacity for the whole transition.)
+                // ListModel removal carry the disappearance.)
                 opacity: 0
                 transform: Translate { id: slide; y: 12 }
 
@@ -198,7 +243,7 @@ Item {
                     property: "y"
                     from: 12
                     to: 0
-                    duration: 160
+                    duration: Tokens.reducedMotion ? 0 : Tokens.durFast
                     easing.type: Easing.OutCubic
                 }
                 NumberAnimation {
@@ -207,7 +252,7 @@ Item {
                     property: "opacity"
                     from: 0
                     to: 1
-                    duration: 160
+                    duration: Tokens.reducedMotion ? 0 : Tokens.durFast
                 }
 
                 Timer {

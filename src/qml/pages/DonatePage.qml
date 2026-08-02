@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Support / Donate page (design frame f-e3 "Support Dish") — reached from the
-// rail's pulse-pink heart item and the Settings About row. A two-column grid:
-// LEFT the hero (heart medallion, pulse eyebrow, headline, lead, the filled
-// GitHub Sponsors CTA, the thanks line pinned low); RIGHT the three donation
-// rails (GitHub Sponsors / Ko-fi / Buy Me a Coffee) and the "What your
-// donation pays for" card. Straight from the Android donate surface: pulse
-// pink (Theme.pulse, #FF6FB5 on navy, 12 % fills) is the ONE hue Dish uses
-// beyond cyan, reserved for donations.
+// Support Dish (SCR §7.5) — a rail destination, so no back chevron (D46 /
+// SCR §12.24b) and it scrolls through Kit.Page's single page-level scroller
+// rather than clipping to prove a mock fits (SCR §12.24d). LEFT: the hero
+// (heart medallion, pulse eyebrow, headline, lead, the filled GitHub Sponsors
+// CTA, the thanks line). RIGHT: the three donation rails as real Kit.RowButtons
+// — focusable, named, keyboard-activatable (D46 / SCR §12.24c) — each with its
+// cadence / pays-with meta beneath, then the "What your donation pays for" card.
+//
+// Pulse pink (Theme.pulse / pulseFill / pulseEdge) is the ONE hue Dish uses
+// beyond cyan and is scoped to THIS surface and the rail heart — nowhere else.
 //
 // Bound to the real `App` surface: App.donateSponsorsUrl / -KofiUrl / -BmacUrl
-// (the brand defaults, localizable in C++) and App.openExternalUrl (routes
-// through ExternalLink so a failure toasts). See docs/QML_CONTRACT.md §1b.
+// and App.openExternalUrl (routes through ExternalLink so a failure toasts).
+// See docs/QML_CONTRACT.md §1b.
 
 // Bind outer-component ids (donatePage) into the rail Repeater delegates.
 pragma ComponentBehavior: Bound
@@ -36,50 +38,91 @@ Kit.Page {
     readonly property string urlKofi: App.donateKofiUrl
     readonly property string urlBmac: App.donateBmacUrl
 
+    // The design's fixed hero column; the rails take the remaining measure.
+    readonly property int heroWidth: 330
+
+    readonly property var rails: [
+        {
+            name: qsTr("GitHub Sponsors"),
+            recommended: true,
+            blurb: qsTr("Monthly sponsorship, processed by GitHub. Lowest fees, no platform cut, "
+                      + "and the most stable way to support Dish month after month."),
+            cadence: qsTr("Recurring"),
+            currencies: qsTr("Card, PayPal, GitHub credit"),
+            url: donatePage.urlSponsors
+        },
+        {
+            name: qsTr("Ko-fi"),
+            recommended: false,
+            blurb: qsTr("Tip jar. Buy us a coffee, no account required — Ko-fi takes no cut on "
+                      + "one-time tips."),
+            cadence: qsTr("One-time"),
+            currencies: qsTr("Card, Apple Pay, Google Pay, PayPal"),
+            url: donatePage.urlKofi
+        },
+        {
+            name: qsTr("Buy Me a Coffee"),
+            recommended: false,
+            blurb: qsTr("Quick one-time gift or a monthly membership. Great if you don’t have a "
+                      + "GitHub account."),
+            cadence: qsTr("Either"),
+            currencies: qsTr("Card, Apple Pay, Google Pay"),
+            url: donatePage.urlBmac
+        }
+    ]
+
+    // Route through App.openExternalUrl so a failed open raises the same toast
+    // the Widgets DonateView did (via ExternalLink), not a silent
+    // Qt.openUrlExternally.
+    function openUrl(url) {
+        if (url && url.length > 0) {
+            App.openExternalUrl(url);
+        }
+    }
+
     GridLayout {
         width: parent ? parent.width : implicitWidth
-        // The design's 330px | flexible grid collapses to one column when the
-        // content pane is narrow. Lower threshold than the Settings grid: the
-        // hero column is FIXED at 330, so two columns fit once the flexible
-        // rail column keeps a readable measure (~300px) — the design frame
-        // renders two columns at the default window with the rail expanded.
-        columns: donatePage.width < 660 ? 1 : 2
-        columnSpacing: 26
-        rowSpacing: 26
+        // The 330px | flexible grid collapses to one column when the content
+        // pane is narrow: the hero column is FIXED, so two columns only fit
+        // once the rail column keeps a readable measure.
+        columns: donatePage.width < Tokens.stackBreakpoint ? 1 : 2
+        columnSpacing: Tokens.s10
+        rowSpacing: Tokens.s10
 
         // ── Hero (left column) ───────────────────────────────────────────────
         ColumnLayout {
-            Layout.preferredWidth: 330
-            Layout.fillWidth: donatePage.width < 760
+            Layout.preferredWidth: donatePage.heroWidth
+            Layout.fillWidth: donatePage.width < Tokens.stackBreakpoint
             Layout.alignment: Qt.AlignTop
             spacing: Tokens.s5
 
             Rectangle {
-                implicitWidth: 54
-                implicitHeight: 54
-                radius: 27
+                implicitWidth: Tokens.glyphXl + Tokens.s7
+                implicitHeight: Tokens.glyphXl + Tokens.s7
+                radius: width / 2
                 color: Theme.pulseFill
                 border.width: 1
                 border.color: Theme.pulseEdge
+
                 Label {
                     anchors.centerIn: parent
-                    text: "♥"   // ♥ — brand glyph, not localized
+                    text: "♥" // ♥ — brand glyph, not localized
                     color: Theme.pulse
-                    font.pixelSize: 24
+                    font.pixelSize: Tokens.glyphLg
                 }
             }
 
             Kit.Eyebrow {
+                Layout.topMargin: Tokens.s2
                 text: qsTr("Support the project")
                 color: Theme.pulse
-                Layout.topMargin: Tokens.s2
             }
 
             Label {
                 Layout.fillWidth: true
                 text: qsTr("Dish runs on coffee and goodwill.")
                 color: Theme.onSurface
-                font.pixelSize: 19
+                font.pixelSize: Tokens.textHero
                 font.bold: true
                 wrapMode: Text.WordWrap
             }
@@ -94,14 +137,20 @@ Kit.Page {
                 wrapMode: Text.WordWrap
             }
 
-            // The filled pulse CTA (the design's one solid-pink control).
+            // The one solid-pulse control in the app. Not a Kit.DishButton: the
+            // kit's variants are all accent-toned and pulse must not leak into
+            // them (SCR §7.5). It still carries the global focus treatment (D50).
             AbstractButton {
                 id: sponsorCta
+
                 Layout.topMargin: Tokens.s3
-                implicitHeight: 34
-                implicitWidth: ctaRow.implicitWidth + 32
+                implicitHeight: Tokens.glyphLg + Tokens.s3
+                implicitWidth: ctaRow.implicitWidth + Tokens.s11
                 hoverEnabled: true
+                focusPolicy: Qt.StrongFocus
                 opacity: enabled ? 1.0 : Tokens.disabledOpacity
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("Sponsor on GitHub Sponsors")
                 onClicked: donatePage.openUrl(donatePage.urlSponsors)
 
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -110,25 +159,36 @@ Kit.Page {
                     radius: Tokens.radiusButton
                     color: sponsorCta.down || sponsorCta.hovered
                            ? Qt.darker(Theme.pulse, 1.15) : Theme.pulse
+                    border.width: sponsorCta.visualFocus ? 1 : 0
+                    border.color: Theme.primary
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -Tokens.s1
+                        visible: sponsorCta.visualFocus
+                        radius: parent.radius + Tokens.s1
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Theme.focusRing
+                    }
                 }
-                contentItem: Row {
+
+                contentItem: RowLayout {
                     id: ctaRow
                     spacing: Tokens.s4
-                    leftPadding: Tokens.s8
-                    rightPadding: Tokens.s8
 
                     Label {
-                        text: "♥"   // ♥ — brand glyph, not localized
+                        Layout.leftMargin: Tokens.s8
+                        text: "♥" // ♥ — brand glyph, not localized
                         color: Theme.onPrimary
                         font.pixelSize: Tokens.textBase
-                        anchors.verticalCenter: parent.verticalCenter
                     }
                     Label {
+                        Layout.rightMargin: Tokens.s8
                         text: qsTr("Sponsor on GitHub Sponsors")
                         color: Theme.onPrimary
                         font.pixelSize: Tokens.textBase
                         font.weight: Font.DemiBold
-                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
             }
@@ -155,135 +215,68 @@ Kit.Page {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignTop
-            spacing: Tokens.s5
+            spacing: Tokens.s6
 
             Repeater {
-                model: [
-                    { name: "GitHub Sponsors", recommended: true,
-                      blurb: qsTr("Monthly sponsorship, processed by GitHub. Lowest fees, no "
-                                + "platform cut, and the most stable way to support Dish month "
-                                + "after month."),
-                      cadence: qsTr("Recurring"), currencies: qsTr("Card, PayPal, GitHub credit"),
-                      openLabel: qsTr("Open GitHub Sponsors →"), url: donatePage.urlSponsors },
-                    { name: "Ko-fi", recommended: false,
-                      blurb: qsTr("Tip jar. Buy us a coffee, no account required — Ko-fi takes no "
-                                + "cut on one-time tips."),
-                      cadence: qsTr("One-time"),
-                      currencies: qsTr("Card, Apple Pay, Google Pay, PayPal"),
-                      openLabel: qsTr("Open Ko-fi →"), url: donatePage.urlKofi },
-                    { name: "Buy Me a Coffee", recommended: false,
-                      blurb: qsTr("Quick one-time gift or a monthly membership. Great if you don't "
-                                + "have a GitHub account."),
-                      cadence: qsTr("Either"), currencies: qsTr("Card, Apple Pay, Google Pay"),
-                      openLabel: qsTr("Open Buy Me a Coffee →"), url: donatePage.urlBmac }
-                ]
-                delegate: Kit.Card {
-                    id: railCard
+                model: donatePage.rails
+
+                delegate: ColumnLayout {
+                    id: rail
                     required property var modelData
+
                     Layout.fillWidth: true
-                    topPadding: 10
-                    bottomPadding: 10
+                    spacing: Tokens.s3
 
-                    contentItem: ColumnLayout {
-                        spacing: Tokens.s2
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Tokens.s4
-
-                            Label {
-                                text: railCard.modelData.name
-                                color: Theme.pulse
-                                font.pixelSize: Tokens.textBase
-                                font.weight: Font.DemiBold
-                                Layout.fillWidth: true
-                                elide: Text.ElideRight
-                            }
-                            // Recommended badge — filled pulse, mono caps.
-                            Rectangle {
-                                visible: railCard.modelData.recommended === true
-                                radius: Tokens.radiusChip
-                                color: Theme.pulse
-                                implicitWidth: badgeText.implicitWidth + 14
-                                implicitHeight: badgeText.implicitHeight + 4
-                                Text {
-                                    id: badgeText
-                                    anchors.centerIn: parent
-                                    text: qsTr("Recommended")
-                                    color: Theme.onPrimary
-                                    font.family: Tokens.monoFamily
-                                    font.pixelSize: 9
-                                    font.letterSpacing: 1
-                                    font.capitalization: Font.AllUppercase
-                                }
-                            }
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: railCard.modelData.blurb
-                            color: Theme.muted
-                            font.pixelSize: Tokens.textMeta
-                            wrapMode: Text.WordWrap
-                        }
-
-                        // Cadence | Pays-with meta pair (muted mono micro-labels).
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.topMargin: Tokens.s3
-                            spacing: 28
-
-                            ColumnLayout {
-                                spacing: Tokens.s1
-                                Kit.Eyebrow { mutedTone: true; text: qsTr("Cadence") }
-                                Label {
-                                    text: railCard.modelData.cadence
-                                    color: Theme.onSurface
-                                    font.pixelSize: Tokens.textMeta
-                                }
-                            }
-                            ColumnLayout {
-                                spacing: Tokens.s1
-                                Kit.Eyebrow { mutedTone: true; text: qsTr("Pays with") }
-                                Label {
-                                    text: railCard.modelData.currencies
-                                    color: Theme.onSurface
-                                    font.pixelSize: Tokens.textMeta
-                                }
-                            }
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        // Visible visit link, keyboard/screen-reader reachable.
-                        Label {
-                            Layout.topMargin: Tokens.s3
-                            text: railCard.modelData.openLabel
-                            color: Theme.pulse
-                            font.pixelSize: Tokens.textSummary
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: donatePage.openUrl(railCard.modelData.url)
-                            }
-                        }
+                    Kit.RowButton {
+                        Layout.fillWidth: true
+                        title: rail.modelData.name
+                        subtitle: rail.modelData.blurb
+                        onClicked: donatePage.openUrl(rail.modelData.url)
                     }
 
-                    // Whole-card click opens the same URL.
-                    MouseArea {
-                        anchors.fill: parent
-                        z: -1
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: donatePage.openUrl(railCard.modelData.url)
+                    // Cadence | Pays-with meta, and the recommendation, under the
+                    // row rather than inside it: the row is the control, this is
+                    // the annotation (and it keeps pulse off a pill style, D58).
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Tokens.s6
+                        spacing: Tokens.s9
+
+                        Kit.Eyebrow {
+                            visible: rail.modelData.recommended === true
+                            text: qsTr("Recommended")
+                            color: Theme.pulse
+                        }
+                        ColumnLayout {
+                            spacing: Tokens.s1
+                            Kit.Eyebrow { mutedTone: true; text: qsTr("Cadence") }
+                            Label {
+                                text: rail.modelData.cadence
+                                color: Theme.onSurface
+                                font.pixelSize: Tokens.textMeta
+                            }
+                        }
+                        ColumnLayout {
+                            spacing: Tokens.s1
+                            Kit.Eyebrow { mutedTone: true; text: qsTr("Pays with") }
+                            Label {
+                                text: rail.modelData.currencies
+                                color: Theme.onSurface
+                                font.pixelSize: Tokens.textMeta
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
                     }
                 }
             }
 
-            // "What your donation pays for" — the design's condensed card with
-            // bold leads inline (StyledText; the leads read in onSurface).
+            // "What your donation pays for" — bold leads inline; the bold tag
+            // alone carries the emphasis, so no Theme colour is stringified into
+            // markup (D64's sibling hazard).
             Kit.Card {
                 Layout.fillWidth: true
-                topPadding: 10
-                bottomPadding: 10
+                Layout.topMargin: Tokens.s2
+                dense: true
 
                 contentItem: ColumnLayout {
                     spacing: Tokens.s3
@@ -299,13 +292,11 @@ Kit.Page {
                     Label {
                         Layout.fillWidth: true
                         textFormat: Text.StyledText
-                        text: qsTr("%1Hosting%2 — dish.tinkernorth.com and every signed-installer "
-                                 + "mirror. %1Code signing%2 — the EV certificate that keeps "
-                                 + "SmartScreen friendly, renewed yearly. %1Store fees%2 — "
-                                 + "listings and policy upkeep. %1Time%2 — honest answer: most "
+                        text: qsTr("<b>Hosting</b> — dish.tinkernorth.com and every signed-installer "
+                                 + "mirror. <b>Code signing</b> — the EV certificate that keeps "
+                                 + "SmartScreen friendly, renewed yearly. <b>Store fees</b> — "
+                                 + "listings and policy upkeep. <b>Time</b> — honest answer: most "
                                  + "of it.")
-                              .arg("<b><font color=\"" + Theme.onSurface + "\">")
-                              .arg("</font></b>")
                         color: Theme.muted
                         font.pixelSize: Tokens.textMeta
                         lineHeight: 1.4
@@ -313,15 +304,6 @@ Kit.Page {
                     }
                 }
             }
-        }
-    }
-
-    // Route through App.openExternalUrl so a failed open raises the same toast
-    // the Widgets DonateView did (via ExternalLink), not a silent
-    // Qt.openUrlExternally.
-    function openUrl(url) {
-        if (url && url.length > 0) {
-            App.openExternalUrl(url);
         }
     }
 }

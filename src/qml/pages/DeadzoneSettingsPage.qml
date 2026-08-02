@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Dead zones & motion detail (design frame 14): one card per device — name +
-// gyro chip, stick/trigger dead-zone sliders side by side, and the motion
-// toggle (or the no-gyro note) under a hairline — capped at a readable 640px
-// measure.
+// Dead zones & motion detail (SCR §7.2): one card per device — name + gyro chip
+// + a per-device Reset, stick/trigger dead-zone sliders side by side, and the
+// motion toggle (or the no-gyro line) under a hairline — capped at a readable
+// 640 px measure.
 //
-// The sliders PRESENT percentages of the full axis travel (the design's 0-30%
+// The sliders PRESENT percentages of the full axis travel (the design's 0-30 %
 // scale) while the persisted values stay in the raw units the input processor
 // consumes (stick flat 0..32767, trigger flat 0..255) — the mapping lives here
 // so neither the store schema nor the hot path changes.
+//
+// D38 / SCR §12.17 — a drag must not hammer the repository. `moved` keeps the
+// tuning live while the user drags, but rate-limited to one push per
+// Tokens.durNormal; `committed` (release) is the authoritative write. There is
+// exactly one seam, App.setDeadzones, and it persists AND pushes into the live
+// processor, which is why the footer note is literally true.
 
 pragma ComponentBehavior: Bound
 
@@ -30,6 +36,9 @@ Kit.Page {
     readonly property real triggerRange: 255
     readonly property int percentMax: 30
 
+    // The design's readable measure for the tuning cards (SCR §7.2).
+    readonly property int bodyWidth: 640
+
     function toPercent(raw, range) { return Math.round(raw / range * 100); }
     function fromPercent(pct, range) { return Math.round(pct / 100 * range); }
 
@@ -38,92 +47,142 @@ Kit.Page {
     // App.deadzonesChanged (a device attached/detached, or a set landed).
     property var deviceModel: App.deadzoneDevices()
 
+    // The gesture in flight. Only one slider can be dragged at a time, so a
+    // single pending triple is enough.
+    property string pendingDeviceId: ""
+    property int pendingStick: 0
+    property int pendingTrigger: 0
+
+    Timer {
+        id: livePush
+        interval: Tokens.durNormal
+        repeat: false
+        onTriggered: deadzonePage.flush()
+    }
+
+    // `moved`: keep the live processor tracking the drag, at most one write per
+    // interval (the seam persists too — see the header note).
+    function pushLive(deviceId, stickPct, triggerPct) {
+        deadzonePage.pendingDeviceId = deviceId;
+        deadzonePage.pendingStick = stickPct;
+        deadzonePage.pendingTrigger = triggerPct;
+        if (!livePush.running) {
+            livePush.start();
+        }
+    }
+
+    // `committed`: the authoritative write on release; supersedes any pending
+    // live push so the gesture ends on exactly one value.
+    function commit(deviceId, stickPct, triggerPct) {
+        livePush.stop();
+        deadzonePage.pendingDeviceId = deviceId;
+        deadzonePage.pendingStick = stickPct;
+        deadzonePage.pendingTrigger = triggerPct;
+        deadzonePage.flush();
+    }
+
+    function flush() {
+        if (deadzonePage.pendingDeviceId.length === 0) {
+            return;
+        }
+        App.setDeadzones(deadzonePage.pendingDeviceId,
+                         deadzonePage.fromPercent(deadzonePage.pendingStick,
+                                                  deadzonePage.stickRange),
+                         deadzonePage.fromPercent(deadzonePage.pendingTrigger,
+                                                  deadzonePage.triggerRange));
+    }
+
     Connections {
         target: App
         function onDeadzonesChanged() { deadzonePage.deviceModel = App.deadzoneDevices(); }
     }
 
     ColumnLayout {
-        width: Math.min(640, parent.width)
+        width: Math.min(deadzonePage.bodyWidth, parent ? parent.width : 0)
         spacing: Tokens.s6
 
-        Label {
+        Kit.EmptyState {
             visible: deadzonePage.deviceModel.length === 0
-            text: qsTr("Connect a controller to adjust its dead zones.")
-            color: Theme.muted
-            font.pixelSize: Tokens.textSummary
-            wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            glyph: "dish-off"
+            title: qsTr("No controllers connected")
+            body: qsTr("Connect a controller to adjust its dead zones.")
         }
 
         Repeater {
             model: deadzonePage.deviceModel
-            delegate: Rectangle {
+
+            delegate: Kit.Card {
                 id: deviceCard
                 required property var modelData
 
-                Layout.fillWidth: true
-                implicitHeight: cardBody.implicitHeight + 28
-                radius: Tokens.radiusCard
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.outline
+                readonly property string deviceId: deviceCard.modelData.id
+                readonly property bool hasGyro: deviceCard.modelData.hasGyro === true
+                readonly property int stickPct: deadzonePage.toPercent(
+                    deviceCard.modelData.stickFlat, deadzonePage.stickRange)
+                readonly property int triggerPct: deadzonePage.toPercent(
+                    deviceCard.modelData.triggerFlat, deadzonePage.triggerRange)
 
-                ColumnLayout {
-                    id: cardBody
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Tokens.s8
-                    anchors.rightMargin: Tokens.s8
+                Layout.fillWidth: true
+
+                contentItem: ColumnLayout {
                     spacing: Tokens.s3
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Tokens.s5
+
                         Label {
+                            Layout.fillWidth: true
                             text: deviceCard.modelData.name.length > 0
-                                  ? deviceCard.modelData.name : deviceCard.modelData.id
+                                  ? deviceCard.modelData.name : deviceCard.deviceId
                             color: Theme.onSurface
                             font.pixelSize: Tokens.textBase
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
-                            Layout.fillWidth: true
                         }
+                        // Absent capabilities are still drawn, negated (SYS §7.5).
                         Kit.CapabilityChip {
-                            present: deviceCard.modelData.hasGyro === true
-                            text: deviceCard.modelData.hasGyro === true ? qsTr("Gyro")
-                                                                        : qsTr("No gyro")
+                            tone: deviceCard.hasGyro ? Kit.CapabilityChip.Present
+                                                     : Kit.CapabilityChip.Absent
+                            text: deviceCard.hasGyro ? qsTr("Gyro") : qsTr("No gyro")
+                        }
+                        // Per-device escape hatch: the repository's own default
+                        // is a zero flat on both axes (SCR §12.17).
+                        Kit.DishButton {
+                            size: Kit.DishButton.Small
+                            text: qsTr("Reset")
+                            Accessible.name: qsTr("Reset dead zones for %1")
+                                             .arg(deviceCard.modelData.name)
+                            onClicked: deadzonePage.commit(deviceCard.deviceId, 0, 0)
                         }
                     }
 
                     GridLayout {
-                        columns: 2
-                        columnSpacing: Tokens.s9 + 4
                         Layout.fillWidth: true
                         Layout.topMargin: Tokens.s3
+                        columns: 2
+                        columnSpacing: Tokens.s10
 
                         Kit.SliderRow {
                             Layout.fillWidth: true
                             label: qsTr("Stick dead zone")
                             maxValue: deadzonePage.percentMax
-                            value: deadzonePage.toPercent(deviceCard.modelData.stickFlat,
-                                                          deadzonePage.stickRange)
-                            onCommitted: pct => App.setDeadzones(
-                                deviceCard.modelData.id,
-                                deadzonePage.fromPercent(pct, deadzonePage.stickRange),
-                                deviceCard.modelData.triggerFlat)
+                            value: deviceCard.stickPct
+                            onMoved: pct => deadzonePage.pushLive(deviceCard.deviceId, pct,
+                                                                  deviceCard.triggerPct)
+                            onCommitted: pct => deadzonePage.commit(deviceCard.deviceId, pct,
+                                                                    deviceCard.triggerPct)
                         }
                         Kit.SliderRow {
                             Layout.fillWidth: true
                             label: qsTr("Trigger dead zone")
                             maxValue: deadzonePage.percentMax
-                            value: deadzonePage.toPercent(deviceCard.modelData.triggerFlat,
-                                                          deadzonePage.triggerRange)
-                            onCommitted: pct => App.setDeadzones(
-                                deviceCard.modelData.id,
-                                deviceCard.modelData.stickFlat,
-                                deadzonePage.fromPercent(pct, deadzonePage.triggerRange))
+                            value: deviceCard.triggerPct
+                            onMoved: pct => deadzonePage.pushLive(deviceCard.deviceId,
+                                                                  deviceCard.stickPct, pct)
+                            onCommitted: pct => deadzonePage.commit(deviceCard.deviceId,
+                                                                    deviceCard.stickPct, pct)
                         }
                     }
 
@@ -136,32 +195,34 @@ Kit.Page {
 
                     Kit.LabeledSwitch {
                         Layout.fillWidth: true
-                        visible: deviceCard.modelData.hasGyro === true
+                        visible: deviceCard.hasGyro
                         label: qsTr("Forward motion (gyro)")
                         description: qsTr("Send gyroscope and accelerometer readings to the host.")
                         checked: deviceCard.modelData.forwardMotion === true
-                        onToggled: App.setMotionEnabled(deviceCard.modelData.id, checked)
+                        onToggled: checked => App.setMotionEnabled(deviceCard.deviceId, checked)
                     }
+                    // Unavailable INFORMATION renders at full opacity in
+                    // mutedStrong — never a dimmed control's colour (D49).
                     Label {
-                        visible: deviceCard.modelData.hasGyro !== true
-                        text: qsTr("Motion forwarding unavailable — this device has no gyroscope.")
-                        color: Theme.muted
-                        font.pixelSize: Tokens.textMeta
-                        topPadding: Tokens.s2
-                        bottomPadding: Tokens.s2
-                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                        Layout.topMargin: Tokens.s2
+                        Layout.bottomMargin: Tokens.s2
+                        visible: !deviceCard.hasGyro
+                        text: qsTr("Motion forwarding unavailable — this device has no gyroscope.")
+                        color: Theme.mutedStrong
+                        font.pixelSize: Tokens.textMeta
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
         }
 
         Label {
-            text: qsTr("Overrides are stored per device and pushed into the live input processor immediately.")
+            Layout.fillWidth: true
+            text: qsTr("Overrides are stored per device and take effect immediately.")
             color: Theme.muted
             font.pixelSize: Tokens.textMeta
             wrapMode: Text.WordWrap
-            Layout.fillWidth: true
         }
     }
 }

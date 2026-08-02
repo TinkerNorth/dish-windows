@@ -126,6 +126,15 @@ jobs:
             --unqualified info `
             $files
 
+      # qmllint checks that a QML file RESOLVES; this checks that it followed the
+      # design system. A page that writes `#4FE3FF` or `radius: 8` still renders,
+      # it just silently stops tracking the palette and the scale. src/qml/kit/**
+      # is exempt (it is the layer that turns tokens into pixels); the greenfield
+      # wizard/ and shared/ dirs are errors, everything else warns.
+      - name: QML literal scanner
+        shell: pwsh
+        run: ./scripts/qml-lint-literals.ps1 -Mode error
+
       # Lints against the SAME Debug tree the `Build` step already produced.
       # This used to configure + compile a second `build-tidy` Debug tree just
       # to obtain compile_commands.json and the generated mocs — ~5.9 min of a

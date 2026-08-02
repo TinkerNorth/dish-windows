@@ -244,7 +244,19 @@ set(DISH_TEST_SOURCES
     # the candidate filter (drop bound-elsewhere) + connectionsVisibleInPicker
     # holdover, asserting another slot's binding is excluded while an unbound-
     # available one and the slot's own offline holdover are included.
-    test_app_view_model_bind_availability.cpp)
+    test_app_view_model_bind_availability.cpp
+    # v3 UI/UX redesign — the pure cores behind the new binding surfaces: the
+    # four-layer capability solver (input x link x type x host -> verdict +
+    # first failing layer, Pending whenever the type or host is unresolved),
+    # the apply sequencer FSM (every phase x event, the skipped-connection
+    # path, the 20 s Direct fallback that is a WARNING not a failure, and
+    # cancel-only-during-connection), the font-stack probes behind
+    # Tokens.sansFamily/monoFamily (a Consolas-bearing list never yields
+    # Courier New), and the WCAG relative-luminance guard over BOTH palettes.
+    test_capability_solver.cpp
+    test_apply_binding_machine.cpp
+    test_font_stacks.cpp
+    test_theme_contrast.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests

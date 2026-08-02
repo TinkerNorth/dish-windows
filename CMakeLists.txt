@@ -169,6 +169,14 @@ set(DISH_CORE_SOURCES
     # sliding median/2 one-way estimate + ping-clock arming rule behind the
     # per-connection latency readout (android #138 parity).
     src/core/reducer/LatencyWindow.h
+    # core/reducer — v3 binding surfaces (pure, Qt-light): the four-layer
+    # capability solver (input x link x type x host -> Available/Unavailable/
+    # Pending/Off + the first failing layer) that BOTH the wizard's type table
+    # and Configure binding's matrix render from, and the apply sequencer FSM
+    # driving the apply overlay's two steps and its 20 s / 8 s budgets.
+    src/core/reducer/CapabilitySolver.h
+    src/core/reducer/CapabilitySolver.cpp
+    src/core/reducer/ApplyBindingMachine.h
     # core/input — pure, Qt-free XUSB/HID layout math + deadzone/scale + the
     # host-testable physical-motion convert/filter (Workstream 2d). Header-only.
     src/core/input/GamepadButtonLayouts.h
@@ -271,6 +279,12 @@ set(DISH_CORE_SOURCES
     src/source/inputrate/SlotInputRates.h
     src/source/inputrate/InputRateStore.h
     src/source/inputrate/InputRateStore.cpp
+    # source/system — the Win32 Bluetooth radio probe behind
+    # App.bluetoothPresent / App.bluetoothEnabled (SetupAPI device-class
+    # presence + BluetoothFindFirstRadio power state). Win32-only; returns
+    # {false,false} elsewhere, which renders the safe "no adapter" copy.
+    src/source/system/BluetoothRadioProbe.h
+    src/source/system/BluetoothRadioProbe.cpp
     # repository — trust+identity stores on the kernel Repository + the
     # ConnectionStore facade/Coordinator over them (Workstream 2a).
     src/repository/SettingsKeys.h
@@ -329,6 +343,11 @@ set(DISH_CORE_SOURCES
     # widget QSS layer died with the Widgets UI).
     src/UI/Theme.h
     src/UI/Theme.cpp
+    # UI/FontStacks — the pure family probes behind Tokens.sansFamily /
+    # Tokens.monoFamily. In dish_core because TokensBridge lives in the Dish
+    # exe target and the tests cannot link it.
+    src/UI/FontStacks.h
+    src/UI/FontStacks.cpp
     # UI/SlotLiveStats — the shared live-Hz row mapper the QML SlotListModel
     # projects through.
     src/UI/SlotLiveStats.h
@@ -393,6 +412,10 @@ target_link_libraries(dish_core
         # the HID class API (HidD_*/HidP_*). hid.lib pulls in hidsdi/hidpi.
         setupapi
         hid
+        # BluetoothRadioProbe: BluetoothFindFirstRadio/BluetoothFindRadioClose.
+        # The header also carries a #pragma comment(lib) under MSVC; naming it
+        # here keeps the build file the single owner of the link set.
+        bthprops
     PRIVATE
         dish_warnings
         dish_strict)
@@ -484,6 +507,15 @@ qt_add_qml_module(Dish
         src/qml/kit/CapabilityChip.qml
         src/qml/kit/LiveStat.qml
         src/qml/kit/DishProgressBar.qml
+        # Kit — buttons, callouts and selection primitives (v3). DishButton is
+        # the one button type; KitButton/OutlineButton are aliases over it.
+        src/qml/kit/DishButton.qml
+        # The one themed tooltip. A bare ToolTip resolves Basic's system-palette
+        # delegate, which reads as an unthemed white slab in both appearances.
+        src/qml/kit/DishToolTip.qml
+        src/qml/kit/Callout.qml
+        src/qml/kit/SelectRow.qml
+        src/qml/kit/OptionCard.qml
         # The dashed action card (design frame 18 "Action card — states") —
         # the Home "+ Add a controller" / "Bind…" invitation control.
         src/qml/kit/ActionCard.qml
@@ -495,6 +527,20 @@ qt_add_qml_module(Dish
         src/qml/kit/ErrorBanner.qml
         src/qml/kit/EmptyState.qml
         src/qml/kit/NotificationToastHost.qml
+        # Kit — v3 composites (promoted out of pages; two-plus callers each).
+        src/qml/kit/WireLine.qml
+        src/qml/kit/StepList.qml
+        src/qml/kit/BindingStrip.qml
+        src/qml/kit/CapabilityTable.qml
+        src/qml/kit/WizardBanner.qml
+        src/qml/kit/ConfirmDialog.qml
+        src/qml/kit/ApplyOverlay.qml
+        src/qml/kit/BlockerDialog.qml
+        # Kit — the states gallery. No runtime entry point: it is the
+        # visual-regression artifact, reached only by editing Main.qml.
+        src/qml/kit/KitGallery.qml
+        # Shared page-scoped model types (the one binding draft, two editors).
+        src/qml/shared/BindingDraft.qml
         # Nav destinations (placeholders; page agents replace bodies).
         src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml
@@ -509,23 +555,26 @@ qt_add_qml_module(Dish
         # Raw-joystick remap detail (pushed from ControllersPage's
         # "Configure controls" action on a remappable slot card).
         src/qml/pages/ControlsRemapPage.qml
-        # EmulatePicker is referenced by bare type name from ControllersPage,
-        # so it must register into the same Dish.Chrome module.
-        src/qml/pages/EmulatePicker.qml
-        # The shared bind chooser (design FBindDlg) — bare type name from
-        # ControllersPage and HomePage.
-        src/qml/pages/BindChooserDialog.qml
+        # The binding editor (Home ▸ Edit › · Controllers ▸ Bound · host ›),
+        # pushed with an initial slotId via shellApi.pushDetail.
+        src/qml/pages/ConfigureBindingPage.qml
         # The shared both-paths-at-once pairing sheet — bare type name from
-        # ConnectionsPage, "../pages" import from the setup-guide wizard.
+        # ConnectionsPage, "../pages" import from the wizard's Destination page.
         src/qml/pages/PairingDialog.qml
         # First-run onboarding (pushed full-screen onto appRoot): the welcome
         # pager + the standalone Help screen (also pushed from Settings).
         src/qml/onboarding/OnboardingFlow.qml
         src/qml/onboarding/WelcomeScreen.qml
         src/qml/onboarding/HelpScreen.qml
-        # The 3-step setup guide as an in-window dialog (design f-a2) —
-        # opened from Settings and from the welcome hand-off.
-        src/qml/onboarding/SetupGuideDialog.qml)
+        # The v3 setup wizard — a pushed page on Home's content stack (it
+        # replaces the old SetupGuideDialog): three named stages over five
+        # pages, opened by shellApi.openSetupWizard(slotId).
+        src/qml/wizard/SetupWizardPage.qml
+        src/qml/wizard/WizardInputPage.qml
+        src/qml/wizard/WizardDestinationPage.qml
+        src/qml/wizard/WizardTypePage.qml
+        src/qml/wizard/WizardFeelPage.qml
+        src/qml/wizard/WizardReviewPage.qml)
 
 # The qmltyperegistrar emits a registration .cpp that #includes the bridge
 # headers by BASENAME (ChromeBridge.h, ThemeBridge.h), so their directory

@@ -12,7 +12,10 @@
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
 #include "composer/StreamingSlotCount.h"
+#include "core/catalog/BundledCatalog.h"
 #include "core/input/Deadzones.h"
+#include "core/reducer/CapabilitySolver.h"
+#include "core/reducer/CatalogFeatureGate.h"
 #include "core/reducer/ConnectionRows.h"
 #include "core/reducer/FoundVisibility.h"
 #include "core/reducer/PathChoice.h"
@@ -24,18 +27,26 @@
 #include "source/store/CrashReportingStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/ControllerTypeStore.h"
 #include "source/store/ThemePreferenceStore.h"
+#include "source/store/TouchpadModeStore.h"
 #include "UI/Theme.h"
 #include "UI/licenses/LicenseManifest.h"
 
 #include <QDesktopServices>
+#include <QGuiApplication>
 #include <QSet>
+#include <QStyleHints>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
 
 #include <map>
 #include <optional>
+
+// Pulls windows.h (WIN32_LEAN_AND_MEAN + NOMINMAX) — keep it last so no Win32
+// macro reaches the Qt headers above.
+#include "source/system/BluetoothRadioProbe.h"
 
 #ifndef DISH_VERSION
 #define DISH_VERSION "0.0.0"
@@ -125,6 +136,102 @@ QVariantMap triggerSourceToMap(const input::TriggerSource& src) {
     return m;
 }
 
+// ── Capability vocabulary → QML tokens ───────────────────────────────────────
+// Lowercase tokens only; every user-facing word is composed in QML so the
+// strings stay in the qsTr catalogs. The order matches CapFeature's.
+
+QString capFeatureToken(reducer::CapFeature f) {
+    switch (f) {
+    case reducer::CapFeature::Gamepad:
+        return QStringLiteral("gamepad");
+    case reducer::CapFeature::Triggers:
+        return QStringLiteral("triggers");
+    case reducer::CapFeature::Motion:
+        return QStringLiteral("motion");
+    case reducer::CapFeature::Touchpad:
+        return QStringLiteral("touchpad");
+    case reducer::CapFeature::Mouse:
+        return QStringLiteral("mouse");
+    case reducer::CapFeature::Rumble:
+        return QStringLiteral("rumble");
+    case reducer::CapFeature::Lightbar:
+        return QStringLiteral("lightbar");
+    }
+    return {};
+}
+
+QString capVerdictToken(reducer::CapVerdict v) {
+    switch (v) {
+    case reducer::CapVerdict::Available:
+        return QStringLiteral("available");
+    case reducer::CapVerdict::Unavailable:
+        return QStringLiteral("unavailable");
+    case reducer::CapVerdict::Pending:
+        return QStringLiteral("pending");
+    case reducer::CapVerdict::Off:
+        return QStringLiteral("off");
+    }
+    return {};
+}
+
+QString capLayerToken(reducer::CapLayer l) {
+    switch (l) {
+    case reducer::CapLayer::Input:
+        return QStringLiteral("input");
+    case reducer::CapLayer::Link:
+        return QStringLiteral("link");
+    case reducer::CapLayer::Type:
+        return QStringLiteral("type");
+    case reducer::CapLayer::Host:
+        return QStringLiteral("host");
+    }
+    return {};
+}
+
+// The step-state tokens the apply overlay switches on.
+QString applyStepToken(reducer::ApplyStepState s) {
+    switch (s) {
+    case reducer::ApplyStepState::Pending:
+        return QStringLiteral("pending");
+    case reducer::ApplyStepState::Active:
+        return QStringLiteral("active");
+    case reducer::ApplyStepState::Done:
+        return QStringLiteral("done");
+    case reducer::ApplyStepState::Failed:
+        return QStringLiteral("failed");
+    case reducer::ApplyStepState::Skipped:
+        return QStringLiteral("skipped");
+    }
+    return {};
+}
+
+// applyFinished's reason vocabulary. PathClaimTimeout never reaches here: a
+// claim that times out is a FALLBACK (directFellBack), not a failure.
+QString applyFailureToken(reducer::ApplyFailure f) {
+    switch (f) {
+    case reducer::ApplyFailure::SlotGone:
+        return QStringLiteral("slotGone");
+    case reducer::ApplyFailure::HostUnreachable:
+    case reducer::ApplyFailure::PathClaimTimeout:
+        return QStringLiteral("hostUnreachable");
+    case reducer::ApplyFailure::BindRejected:
+        return QStringLiteral("bindRejected");
+    case reducer::ApplyFailure::Cancelled:
+        return QStringLiteral("cancelled");
+    }
+    return {};
+}
+
+// The satellite's controller board is four pads wide, so the pre-bind copy can
+// say "<n> slots free" without asserting WHICH slot the bind will land in.
+constexpr int kHostSlotCapacity = 4;
+// Budgets, android parity: a raw-HID claim can hold the device for 20 s while
+// Windows releases it; a REST round-trip that has not answered in 8 s is an
+// unreachable host.
+constexpr int kPathBudgetMs = 20'000;
+constexpr int kBindBudgetMs = 8'000;
+constexpr int kApplyTickMs = 250;
+
 } // namespace
 
 AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
@@ -175,14 +282,15 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
         false);
     onboardingNeeded_ = !model_->onboardingStore()->welcomeCompleted();
 
-    // The keep-awake pill follows the wake composer's streaming count. Folded
-    // into stateChanged (a wake flip always rides a binding/liveness change,
-    // but the subscription is what actually catches it).
-    keepAwakeSub_ = model_->keepAwakeCount().subscribe(
-        [this](const int& count) {
-            const bool active = count > 0;
-            if (active != keepAwakeActive_) {
-                keepAwakeActive_ = active;
+    // The keep-awake pill follows the wake composer's DERIVED intent, not
+    // keepAwakeCount(): that observable is the keep-screen-on override input,
+    // which nothing sets, so binding to it left the pill dark while a pad was
+    // streaming. Folded into stateChanged (a wake flip always rides a
+    // binding/liveness change, but the subscription is what actually catches it).
+    keepAwakeSub_ = model_->wakeState().subscribe(
+        [this](const composer::WakeState& wake) {
+            if (wake.shouldInhibit != keepAwakeActive_) {
+                keepAwakeActive_ = wake.shouldInhibit;
                 emit stateChanged();
             }
         },
@@ -192,6 +300,57 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     // store could grow callers) re-reads through the one NOTIFY.
     QObject::connect(model_->featureSettings(), &FeatureSettings::changed, this,
                      [this] { emit lightbarChanged(); });
+
+    // A rejected forward PIN, re-keyed onto the STABLE server id the sheet knows
+    // (WifiConnection::idFor(server) IS that id, so the forward is verbatim).
+    QObject::connect(model_, &dish::AppModel::pairingFailed, this,
+                     [this](const QString& connectionId, const QString& reason) {
+                         emit pairingFailed(connectionId, reason);
+                     });
+
+    // The satellite refusing a controller descriptor is the authoritative
+    // negative edge for the apply sequencer's Destination step.
+    QObject::connect(model_->wifi(), &net::WifiConnectionManager::slotRegistrationFailed, this,
+                     [this](const QString& slotId) {
+                         if (apply_.phase != reducer::ApplyPhase::Binding ||
+                             slotId != applySlotId_) {
+                             return;
+                         }
+                         dispatchApply(reducer::apply_event::BindRejected{/*unreachable=*/false});
+                     });
+
+    // Live System-theme follow: the startup resolve was already correct, but a
+    // mode change while the app runs never re-resolved. Only System listens —
+    // an explicit Light/Dark pick must ignore the OS.
+    if (auto* hints = QGuiApplication::styleHints()) {
+        QObject::connect(hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme) {
+            if (model_->themeStore()->mode() != source::ThemeMode::System) { return; }
+            ui::setActiveAppearance(ui::detectSystemAppearance());
+            if (themeAppliedSink_) {
+                themeAppliedSink_(ui::activeAppearance() == ui::Appearance::Dark);
+            }
+            emit themeModeChanged();
+        });
+    }
+
+    // ── Apply budgets ────────────────────────────────────────────────────────
+    applyPathTimer_ = new QTimer(this);
+    applyPathTimer_->setSingleShot(true);
+    applyPathTimer_->setInterval(kPathBudgetMs);
+    QObject::connect(applyPathTimer_, &QTimer::timeout, this,
+                     [this] { dispatchApply(reducer::apply_event::PathTimedOut{}); });
+    applyBindTimer_ = new QTimer(this);
+    applyBindTimer_->setSingleShot(true);
+    applyBindTimer_->setInterval(kBindBudgetMs);
+    QObject::connect(applyBindTimer_, &QTimer::timeout, this,
+                     [this] { dispatchApply(reducer::apply_event::BindTimedOut{}); });
+    applyTickTimer_ = new QTimer(this);
+    applyTickTimer_->setInterval(kApplyTickMs);
+    QObject::connect(applyTickTimer_, &QTimer::timeout, this, &AppViewModel::onApplyTick);
+
+    const auto radio = source::probeBluetoothRadio();
+    bluetoothPresent_ = radio.present;
+    bluetoothEnabled_ = radio.enabled;
 
     telemetryTimer_ = new QTimer(this);
     telemetryTimer_->setInterval(1'000);
@@ -443,9 +602,10 @@ QString AppViewModel::emulateError() const {
 
 bool AppViewModel::emulateStale() const { return model_->catalogState().stale; }
 
-QVariantList AppViewModel::emulateTypes(const QString& slotId) const {
+namespace {
+QVariantList typeRows(const QList<composer::PickableType>& types) {
     QVariantList out;
-    for (const auto& t : model_->pickableTypesFor(slotId)) {
+    for (const auto& t : types) {
         QVariantMap m;
         m[QStringLiteral("type")] = t.type;
         m[QStringLiteral("slug")] = t.slug;
@@ -457,9 +617,27 @@ QVariantList AppViewModel::emulateTypes(const QString& slotId) const {
     }
     return out;
 }
+} // namespace
+
+QVariantList AppViewModel::emulateTypes(const QString& slotId) const {
+    return typeRows(model_->pickableTypesFor(slotId));
+}
 
 int AppViewModel::emulateCurrentType(const QString& slotId) const {
     return model_->currentTypeFor(slotId);
+}
+
+void AppViewModel::refreshEmulateForHost(const QString& connectionId) {
+    model_->refreshCatalogForConnection(connectionId);
+}
+
+QVariantList AppViewModel::emulateTypesForHost(const QString& connectionId) const {
+    return typeRows(model_->pickableTypesForConnection(connectionId));
+}
+
+int AppViewModel::emulateCurrentTypeForHost(const QString& connectionId,
+                                            const QString& slotId) const {
+    return model_->currentTypeForConnection(connectionId, slotId);
 }
 
 void AppViewModel::setControllerType(const QString& slotId, int type) {
@@ -740,6 +918,387 @@ void AppViewModel::onRawJoystickInput(const QString& deviceId, int kind, int ind
     // against the capturing slot is sufficient.
     if (capturingSlotId_.isEmpty() || deviceId != capturingSlotId_) { return; }
     emit rawInputCaptured(capturingSlotId_, kind, index, value);
+}
+
+// ── Bluetooth radio ─────────────────────────────────────────────────────────
+
+void AppViewModel::refreshBluetoothState() {
+    const auto radio = source::probeBluetoothRadio();
+    if (radio.present == bluetoothPresent_ && radio.enabled == bluetoothEnabled_) { return; }
+    bluetoothPresent_ = radio.present;
+    bluetoothEnabled_ = radio.enabled;
+    emit bluetoothChanged();
+}
+
+void AppViewModel::openBluetoothSettings() {
+    // The Windows Settings deep link. Routed through the same sink as every
+    // other external open so a failure raises the standard toast.
+    openExternalUrl(QStringLiteral("ms-settings:bluetooth"));
+}
+
+// ── Capabilities ────────────────────────────────────────────────────────────
+
+const models::ControllerSlot* AppViewModel::slotById(const QString& slotId) const {
+    for (const auto& s : model_->state().slotList) {
+        if (s.id == slotId) { return &s; }
+    }
+    return nullptr;
+}
+
+bool AppViewModel::catalogResolvedFor(const QString& hostId) const {
+    return model_->hasCatalogFor(hostId);
+}
+
+QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int type,
+                                                  const QString& hostKind, const QString& hostId,
+                                                  const QString& desiredPath, bool motionOn,
+                                                  bool rumbleOn, int touchpadMode) const {
+    reducer::CapabilityInputs in;
+
+    // Input layer — what the pad itself reports. An unknown slot leaves the
+    // layer at its defaults rather than inventing capabilities.
+    if (const auto* slot = slotById(slotId)) {
+        in.padMotion = slot->capabilities.hasMotion;
+        in.padTouchpad = slot->capabilities.hasTouchpad;
+        in.padLightbar = slot->capabilities.hasLightbar;
+        // Link layer. A Bluetooth pad has no USB path to claim, so Direct is not
+        // merely unselected — it is unreachable.
+        in.linkUsb = !slot->bluetooth;
+        in.padClaimable = slot->pathSupported;
+        in.linkDirect = in.linkUsb && slot->pathSupported && desiredPath == QLatin1String("direct");
+    }
+
+    const bool hostIsBluetooth = hostKind == QLatin1String("bluetooth");
+    in.hostIsBluetooth = hostIsBluetooth;
+    // A Bluetooth destination is Windows' own gamepad layer: nothing to resolve,
+    // and no catalog to wait on. A satellite is resolved once its catalog lands.
+    in.hostResolved = hostIsBluetooth ? !hostId.isEmpty() : model_->hasCatalogFor(hostId);
+
+    if (!hostIsBluetooth && in.hostResolved) {
+        const auto hostFeatures = model_->catalogHostFeatures(hostId);
+        const auto mouse = hostFeatures.constFind(QStringLiteral("mouseControl"));
+        in.hostMouseControl = mouse != hostFeatures.constEnd() && mouse->supported;
+        const auto rumble = hostFeatures.constFind(catalog::kFeatureRumble);
+        // An older satellite that advertises no host block at all still returns
+        // rumble — the return path predates the block.
+        in.hostRumble = rumble == hostFeatures.constEnd() ? true : rumble->supported;
+    }
+
+    // Type layer — the catalog's own statement about what this virtual pad
+    // carries. Unresolved leaves typeResolved false, which refuses nothing.
+    if (const auto typeDto = model_->catalogTypeFor(hostId, type)) {
+        const auto known = catalog::knownFeatureSlugs();
+        in.typeResolved = true;
+        in.typeMotion = reducer::isFeatureOffered(*typeDto, catalog::kFeatureMotion, known);
+        in.typeTouchpad = reducer::typeOffersTouchpadDs4(*typeDto);
+        in.typeRumble = reducer::isFeatureOffered(*typeDto, catalog::kFeatureRumble, known);
+        in.typeLightbar = reducer::isFeatureOffered(*typeDto, catalog::kFeatureLightbar, known);
+    }
+
+    in.userMotionOn = motionOn;
+    in.userRumbleOn = rumbleOn;
+    in.userTouchpadMode = touchpadMode;
+
+    QVariantList out;
+    for (const auto& row : reducer::solveCapabilities(in)) {
+        QVariantMap m;
+        m[QStringLiteral("feature")] = capFeatureToken(row.feature);
+        m[QStringLiteral("inOk")] = row.inOk;
+        m[QStringLiteral("linkOk")] = row.linkOk;
+        m[QStringLiteral("typeOk")] = row.typeOk;
+        m[QStringLiteral("hostOk")] = row.hostOk;
+        m[QStringLiteral("verdict")] = capVerdictToken(row.verdict);
+        m[QStringLiteral("failingLayer")] = capLayerToken(row.failingLayer);
+        m[QStringLiteral("hasFailingLayer")] = row.hasFailingLayer;
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantList AppViewModel::typeFeatureSummary(const QString& hostId, int type) const {
+    const auto typeDto = model_->catalogTypeFor(hostId, type);
+    // No catalog, no pills: a guessed "supported" is worse than saying nothing.
+    if (!typeDto.has_value()) { return {}; }
+
+    const auto known = catalog::knownFeatureSlugs();
+    // The TYPE layer's own answer, in the solver's fixed render order so the
+    // preview pills and the full table cannot use two vocabularies.
+    const std::pair<const char*, bool> rows[] = {
+        {"gamepad", true},
+        {"triggers", true},
+        {"motion", reducer::isFeatureOffered(*typeDto, catalog::kFeatureMotion, known)},
+        {"touchpad", reducer::typeOffersTouchpadDs4(*typeDto)},
+        {"mouse", true},
+        {"rumble", reducer::isFeatureOffered(*typeDto, catalog::kFeatureRumble, known)},
+        {"lightbar", reducer::isFeatureOffered(*typeDto, catalog::kFeatureLightbar, known)},
+    };
+    QVariantList out;
+    for (const auto& [feature, supported] : rows) {
+        QVariantMap m;
+        m[QStringLiteral("feature")] = QString::fromLatin1(feature);
+        m[QStringLiteral("supported")] = supported;
+        out.append(m);
+    }
+    return out;
+}
+
+// ── Host slot accounting ────────────────────────────────────────────────────
+
+int AppViewModel::hostBoundSlotCount(const QString& connectionId) const {
+    if (connectionId.isEmpty()) { return 0; }
+    int count = 0;
+    for (const auto& s : model_->state().slotList) {
+        if (s.boundConnectionId.has_value() && *s.boundConnectionId == connectionId) { ++count; }
+    }
+    return count;
+}
+
+int AppViewModel::hostSlotCapacity() const { return kHostSlotCapacity; }
+
+QString AppViewModel::displacedSlotName(const QString& connectionId) const {
+    if (hostBoundSlotCount(connectionId) < kHostSlotCapacity) { return {}; }
+    // The board fills in slot-list order, so the first pad bound to this host is
+    // the one a fifth bind would push off it.
+    for (const auto& s : model_->state().slotList) {
+        if (s.boundConnectionId.has_value() && *s.boundConnectionId == connectionId) {
+            return s.name;
+        }
+    }
+    return {};
+}
+
+// ── Binding-draft helpers ───────────────────────────────────────────────────
+
+QString AppViewModel::resolveSlotIdForBind(const QString& slotId) const {
+    const auto& st = model_->state();
+    const auto vidPid = resolveSlotVidPid(model_, slotId);
+    if (!vidPid.has_value()) {
+        // No (vid, pid) identity to re-resolve through (an SDL pad SDL could not
+        // identify): the id is all we have, and it is valid exactly as long as
+        // the slot is still listed.
+        return slotById(slotId) != nullptr ? slotId : QString();
+    }
+    // A Direct claim retires the framework slot and publishes a synthetic twin
+    // under a different id, so prefer the synthetic when both are present.
+    QString framework;
+    for (const auto& s : st.slotList) {
+        const auto identity = resolveSlotVidPid(model_, s.id);
+        if (!identity.has_value() || *identity != *vidPid) { continue; }
+        if (s.usbDirect) { return s.id; }
+        if (framework.isEmpty()) { framework = s.id; }
+    }
+    return framework;
+}
+
+bool AppViewModel::isVerifiedModel(const QString& slotId) const {
+    const auto* slot = slotById(slotId);
+    return slot != nullptr && slot->verifiedModel;
+}
+
+QString AppViewModel::touchpadModeFor(const QString& connectionId) const {
+    const auto pick = model_->touchpadModeStore()->modeFor(connectionId.toStdString());
+    // No invented default here — an unpicked host reads "off" and the resolve
+    // ladder owns any richer behaviour on the wire.
+    return pick.has_value() ? QString::fromStdString(*pick) : QStringLiteral("off");
+}
+
+void AppViewModel::setTouchpadMode(const QString& connectionId, const QString& mode) {
+    if (connectionId.isEmpty()) { return; }
+    if (mode != QLatin1String("off") && mode != QLatin1String("pad") &&
+        mode != QLatin1String("mouse")) {
+        return; // unrecognised mode — forward-compat no-op
+    }
+    model_->touchpadModeStore()->setMode(connectionId.toStdString(), mode.toStdString());
+}
+
+bool AppViewModel::motionEnabledFor(const QString& slotId) const {
+    if (slotId.isEmpty()) { return source::MotionEnabledStore::kDefaultEnabled; }
+    return model_->motionEnabledStore()->isEnabled(slotId.toStdString());
+}
+
+bool AppViewModel::rumbleEnabledFor(const QString& /*slotId*/) const {
+    // TODO(v3): no per-binding rumble store exists; rumble rides the descriptor
+    // caps. Add a RumbleEnabledStore mirroring MotionEnabledStore.
+    return true;
+}
+
+void AppViewModel::setRumbleEnabled(const QString& /*slotId*/, bool /*on*/) {
+    // TODO(v3): no per-binding rumble store exists; rumble rides the descriptor
+    // caps. Add a RumbleEnabledStore mirroring MotionEnabledStore.
+}
+
+QString AppViewModel::discoverySourceFor(const QString& serverId) const {
+    for (const auto& s : model_->wifi()->discoveredServers()) {
+        if (s.id() == serverId) { return models::discoverySourceLabel(s.source); }
+    }
+    return {};
+}
+
+// ── Apply ───────────────────────────────────────────────────────────────────
+
+bool AppViewModel::applyInFlight() const { return reducer::applyInFlight(apply_); }
+bool AppViewModel::applyCancellable() const { return reducer::applyCancellable(apply_); }
+QString AppViewModel::applyConnectionState() const { return applyStepToken(apply_.connection); }
+QString AppViewModel::applyDestinationState() const { return applyStepToken(apply_.destination); }
+
+void AppViewModel::applyBinding(const QString& slotId, const QString& connectionId, int type,
+                                const QString& desiredPath, bool motionOn, bool rumbleOn,
+                                int touchpadMode) {
+    if (applyInFlight()) { return; } // one run at a time; the overlay is modal
+
+    // The slot-id trap: re-resolve by (vid, pid) BEFORE anything is written. A
+    // path switch earlier in the flow can have retired the id the page opened
+    // with, and binding a dead id silently does nothing.
+    const QString resolved = resolveSlotIdForBind(slotId);
+    if (resolved.isEmpty()) {
+        apply_ = reducer::ApplyState{};
+        emit applyChanged();
+        emit applyFinished(false, QStringLiteral("slotGone"), false);
+        return;
+    }
+
+    applySlotId_ = resolved;
+    applyConnectionId_ = connectionId;
+    applyType_ = type;
+    applyMotionOn_ = motionOn;
+    applyRumbleOn_ = rumbleOn;
+    applyTouchpadMode_ = touchpadMode;
+
+    // Does the path actually need switching? Only a claimable wired pad has a
+    // path at all, and only a genuine change is worth a 20 s budget.
+    const auto* slot = slotById(resolved);
+    const bool wantsDirect = desiredPath == QLatin1String("direct");
+    bool needsPathSwitch = false;
+    if (slot != nullptr && slot->pathSupported && !slot->bluetooth &&
+        (desiredPath == QLatin1String("direct") || desiredPath == QLatin1String("standard"))) {
+        const bool currentlyDirect = slot->desiredPath == reducer::PathChoice::Direct;
+        needsPathSwitch = currentlyDirect != wantsDirect;
+    }
+
+    dispatchApply(reducer::apply_event::Start{needsPathSwitch, wantsDirect});
+    applyTickTimer_->start();
+    if (needsPathSwitch) {
+        applyPathTimer_->start();
+        setSlotPath(resolved, desiredPath);
+        return; // the tick reads the FSM settling and hands off to the bind
+    }
+    beginApplyBind();
+}
+
+void AppViewModel::beginApplyBind() {
+    // Every setting is written BEFORE the binding, because ConnectionHub::bind
+    // resolves the type, the motion grant and the touchpad mode while it builds
+    // the descriptor. Writing them first means one PUT carries the whole draft;
+    // writing them after would re-attach the slot once per setting.
+    //
+    // The type goes straight into the store rather than through
+    // AppModel::setSlotControllerType, which requires an EXISTING binding (it is
+    // the Emulate-picker path) and would re-bind a second time.
+    if (applyType_ > 0) {
+        model_->typeStore()->setType(applyConnectionId_.toStdString(), applySlotId_.toStdString(),
+                                     applyType_);
+    }
+    setMotionEnabled(applySlotId_, applyMotionOn_);
+    setTouchpadMode(applyConnectionId_, applyTouchpadMode_ == 2   ? QStringLiteral("mouse")
+                                        : applyTouchpadMode_ == 1 ? QStringLiteral("pad")
+                                                                  : QStringLiteral("off"));
+    setRumbleEnabled(applySlotId_, applyRumbleOn_);
+    bindSlot(applySlotId_, applyConnectionId_);
+    applyBindTimer_->start();
+}
+
+void AppViewModel::cancelApply() { dispatchApply(reducer::apply_event::Cancel{}); }
+
+void AppViewModel::dispatchApply(const reducer::ApplyEvent& event) {
+    const reducer::ApplyState before = apply_;
+    apply_ = reducer::reduceApply(before, event);
+    if (apply_.phase == before.phase && apply_.connection == before.connection &&
+        apply_.destination == before.destination &&
+        apply_.elapsedMsOnStep == before.elapsedMsOnStep &&
+        apply_.directFellBack == before.directFellBack) {
+        return; // the machine refused the event (wrong phase) — nothing moved
+    }
+
+    // The Connection step just handed off: stop its budget and start the bind.
+    const bool enteredBinding = before.phase == reducer::ApplyPhase::SwitchingPath &&
+                                apply_.phase == reducer::ApplyPhase::Binding;
+    if (before.phase == reducer::ApplyPhase::SwitchingPath &&
+        apply_.phase != reducer::ApplyPhase::SwitchingPath) {
+        applyPathTimer_->stop();
+    }
+    if (!reducer::applyInFlight(apply_)) {
+        applyPathTimer_->stop();
+        applyBindTimer_->stop();
+        applyTickTimer_->stop();
+    }
+
+    emit applyChanged();
+    if (enteredBinding) { beginApplyBind(); }
+
+    switch (apply_.phase) {
+    case reducer::ApplyPhase::Succeeded:
+        emit applyFinished(true, QString(), apply_.directFellBack);
+        break;
+    case reducer::ApplyPhase::Failed:
+    case reducer::ApplyPhase::Cancelled:
+        emit applyFinished(false,
+                           apply_.failure.has_value() ? applyFailureToken(*apply_.failure)
+                                                      : QStringLiteral("bindRejected"),
+                           apply_.directFellBack);
+        break;
+    default:
+        break;
+    }
+}
+
+void AppViewModel::onApplyTick() {
+    dispatchApply(reducer::apply_event::Tick{kApplyTickMs});
+    if (!applyInFlight()) { return; }
+
+    // The pad going away mid-apply is terminal from either step (a claim can
+    // retire the id we resolved, and a physical unplug certainly does).
+    const auto* slot = slotById(applySlotId_);
+    if (slot == nullptr && resolveSlotIdForBind(applySlotId_).isEmpty()) {
+        dispatchApply(reducer::apply_event::SlotVanished{});
+        return;
+    }
+
+    if (apply_.phase == reducer::ApplyPhase::SwitchingPath) {
+        // The SAME derived "switching" predicate the slot card's spinner reads,
+        // so the overlay and the card can never disagree about when a claim has
+        // settled. A slot that vanished into its synthetic twin re-resolves.
+        const QString liveId = resolveSlotIdForBind(applySlotId_);
+        if (liveId != applySlotId_ && !liveId.isEmpty()) { applySlotId_ = liveId; }
+        const auto* live = slotById(applySlotId_);
+        if (live == nullptr) { return; }
+        const bool switching = reducer::slotPathSwitching(
+            live->pathPhase, live->desiredPath, live->usbDirect, live->liveRates.directPollHz,
+            live->directFailure.has_value());
+        if (!switching) {
+            dispatchApply(
+                reducer::apply_event::PathSettled{live->pathPhase == reducer::UsbPhase::Direct});
+        }
+        return;
+    }
+
+    // Binding: the hub applies the binding locally and the satellite answers
+    // asynchronously. A rollback (the row losing the binding) and the typed
+    // slotRegistrationFailed are the negative edges; a live session still
+    // carrying the binding is the positive one.
+    //
+    // Never read the outcome on the tick that ENTERED this step: the local bind
+    // is synchronous, so a same-tick read would report success before the
+    // satellite had a chance to refuse — and would flash the step past the user.
+    if (slot == nullptr || apply_.elapsedMsOnStep <= 0) { return; }
+    const bool stillBound =
+        slot->boundConnectionId.has_value() && *slot->boundConnectionId == applyConnectionId_;
+    if (!stillBound) {
+        dispatchApply(reducer::apply_event::BindRejected{/*unreachable=*/false});
+        return;
+    }
+    if (slot->boundStatus.has_value() && slot->boundStatus->live == models::LinkState::Connected) {
+        dispatchApply(reducer::apply_event::BindAccepted{});
+    }
 }
 
 // ── Licenses ────────────────────────────────────────────────────────────────
