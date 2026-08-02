@@ -263,7 +263,13 @@ set(DISH_TEST_SOURCES
     test_capability_solver.cpp
     test_apply_binding_machine.cpp
     test_font_stacks.cpp
-    test_theme_contrast.cpp)
+    test_theme_contrast.cpp
+    # i18n — the catalogue contract against the COMPILED .qm: locale fallback
+    # (de_DE must reach dish_de.qm), the numerusform ORDER Qt assigns per
+    # language (Bosnian one/few/other, which the Android seeding script writes
+    # into blind), English's singular at n=1, and a placeholder-integrity sweep
+    # over every catalogue. Skips itself when built without LinguistTools.
+    test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests
@@ -277,6 +283,18 @@ target_link_libraries(DishTests
 # file directly. Hand it the absolute path at compile time.
 target_compile_definitions(DishTests PRIVATE
     DISH_LICENSES_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../assets/licenses/licenses.json")
+
+# Same reason as the license manifest above: the .qm files are a Qt resource of
+# the Dish exe, not of dish_core, so the i18n test reads them off the build tree.
+# qt_add_translations writes them beside the top-level binary dir. Depending on
+# the generated Dish_translations target means `ctest` after a fresh configure
+# finds compiled catalogues rather than an empty directory.
+target_compile_definitions(DishTests PRIVATE
+    DISH_QM_DIR="${CMAKE_BINARY_DIR}"
+    DISH_TS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../translations")
+if(TARGET Dish_translations)
+    add_dependencies(DishTests Dish_translations)
+endif()
 
 # Tests don't need -Werror on the third-party header path; keep our own at -Werror.
 #

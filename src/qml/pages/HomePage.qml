@@ -627,7 +627,7 @@ Kit.Page {
     function rowMenuItems(bound, remappable) {
         var items = [];
         if (bound) {
-            items.push({ key: "edit", text: qsTr("Edit binding") });
+            items.push({ key: "edit", text: qsTr("Configure binding…") });
             items.push({ key: "unbind", text: qsTr("Unbind") });
         } else {
             items.push({ key: "bind", text: qsTr("Bind…") });
@@ -663,16 +663,16 @@ Kit.Page {
 
     // ---- Helpers (presentation only; wording owned by this page) ------------
 
-    // "2 controllers streaming" / "1 controller streaming". Explicit singular /
-    // plural pairs (no %n): the app ships with English fallback catalogs, and
-    // untranslated %n would render its "(s)" literally.
+    // "2 controllers streaming" / "1 controller streaming". %n carries the count
+    // so each language picks its own plural form — Bosnian needs three, and an
+    // explicit singular/plural pair can only ever express two. English is a
+    // catalogue like any other (translations/dish_en.ts) rather than the
+    // untranslated fallback, which is what used to force the "(s)" workaround.
     function controllersStreamingText(n) {
-        return n === 1 ? qsTr("1 controller streaming")
-                       : qsTr("%1 controllers streaming").arg(n);
+        return qsTr("%n controllers streaming", "", n);
     }
     function satellitesOnlineText(n) {
-        return n === 1 ? qsTr("1 satellite online")
-                       : qsTr("%1 satellites online").arg(n);
+        return qsTr("%n satellites online", "", n);
     }
 
     // The pad card's sub-line. The emulated type is NOT here — it belongs to the
@@ -848,7 +848,7 @@ Kit.Page {
         case "ready":        return qsTr("Ready");
         case "connecting":   return qsTr("Connecting…");
         case "online":       return qsTr("Online");
-        case "unstable":     return qsTr("Unstable");
+        case "unstable":     return qsTr("Unsteady");
         default:             return token;
         }
     }

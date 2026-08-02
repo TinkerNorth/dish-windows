@@ -92,7 +92,7 @@ ColumnLayout {
         case "online":
             return qsTr("Online");
         case "unstable":
-            return qsTr("Unstable");
+            return qsTr("Unsteady");
         }
         return "";
     }
@@ -108,17 +108,14 @@ ColumnLayout {
     }
 
     // Never assert a slot NUMBER before bindSlot allocates one — and when the
-    // host is full, say what picking it costs.
-    // Explicit singular / plural pairs (no %n): the app ships English fallback
-    // catalogs and an untranslated %n renders its "(s)" literally.
+    // host is full, say what picking it costs. The zero case is its own message
+    // because it states a consequence rather than counting anything.
     function slotsFreeText(connectionId) {
         const free = page.accounting >= 0
                    ? App.hostSlotCapacity() - App.hostBoundSlotCount(connectionId) : 0;
         if (free <= 0)
             return qsTr("0 slots free — one pad will be unbound");
-        if (free === 1)
-            return qsTr("1 slot free");
-        return qsTr("%1 slots free").arg(free);
+        return qsTr("%n slots free", "", free);
     }
 
     function rowSubText(ip, source, connectionId) {
@@ -196,8 +193,7 @@ ColumnLayout {
         // what the banner's own "<n> found" says — App.foundCount is the
         // un-remembered subset and would read 0 beside a listed host.
         Label {
-            text: page.hostCount === 1 ? qsTr("1 found")
-                                       : qsTr("%1 found").arg(page.hostCount)
+            text: qsTr("%n found", "", page.hostCount)
             color: Theme.mutedStrong
             font.family: Tokens.monoFamily
             font.pixelSize: Tokens.textChip

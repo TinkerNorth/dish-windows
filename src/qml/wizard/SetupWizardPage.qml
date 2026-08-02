@@ -174,17 +174,13 @@ Kit.Page {
     }
 
     // Never a slot NUMBER before bindSlot allocates one. `accounting` is read
-    // so the caller's binding re-runs when a slot is bound elsewhere. Explicit
-    // singular / plural pairs (no %n): the app ships English fallback catalogs
-    // and an untranslated %n renders its "(s)" literally.
+    // so the caller's binding re-runs when a slot is bound elsewhere.
     function hostSubText() {
         const free = wizard.accounting >= 0
                    ? App.hostSlotCapacity() - App.hostBoundSlotCount(wizard.draft.hostId) : 0;
         if (free <= 0)
             return qsTr("satellite · 0 slots free");
-        if (free === 1)
-            return qsTr("satellite · 1 slot free");
-        return qsTr("satellite · %1 slots free").arg(free);
+        return qsTr("satellite · %n slots free", "", free);
     }
 
     readonly property var padSlot: !wizard.draft.hasInput
@@ -203,10 +199,9 @@ Kit.Page {
                "empty": true, "hot": false, "tone": "accent" })
           : destinationPage.hostCount > 0
             // Seeking is not a problem: amber is reserved for "wrong".
-            ? ({ "title": destinationPage.hostCount === 1 ? qsTr("1 found")
-                          : qsTr("%1 found").arg(destinationPage.hostCount),
+            ? ({ "title": qsTr("%n found", "", destinationPage.hostCount),
                  "sub": qsTr("pick one"), "empty": true, "hot": true, "tone": "accent" })
-            : ({ "title": qsTr("Searching…"), "sub": qsTr("0 found"),
+            : ({ "title": qsTr("Searching…"), "sub": qsTr("%n found", "", 0),
                  "empty": true, "hot": true, "tone": "accent" })
 
     readonly property string wireLabel: {
@@ -305,7 +300,7 @@ Kit.Page {
             wizard.notify(qsTr("Direct wasn’t available — %1 is bound over Standard.")
                             .arg(wizard.draft.padName), "warning");
         }
-        wizard.notify(qsTr("Controller bound · %1 is ready on %2.")
+        wizard.notify(qsTr("Controller bound — %1 is live on %2.")
                         .arg(wizard.draft.padName).arg(wizard.draft.hostName), "success");
         wizard.leaveNow();
     }

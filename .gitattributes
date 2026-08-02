@@ -1,0 +1,11 @@
+# Qt Linguist catalogues are rewritten wholesale by lupdate, which emits native
+# line endings — CRLF on Windows. Marking them `text` normalises them to LF in
+# the repository and back to native on checkout, whatever the clone's
+# core.autocrlf happens to be.
+#
+# This is what keeps scripts/check-translations.ps1 honest. That gate re-runs
+# lupdate and fails on any diff, so on a clone with core.autocrlf=false the
+# checkout would hold LF, lupdate would write CRLF, and every line of every
+# catalogue would read as changed the first time anyone ran it. A gate that
+# fires on line endings is a gate people learn to skip.
+translations/*.ts text

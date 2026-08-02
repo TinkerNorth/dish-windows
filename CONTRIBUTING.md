@@ -74,6 +74,52 @@ Security gates (also blocking):
 
 Reproduce build steps locally with `scripts\build.ps1 debug test`.
 
+## Translations
+
+Dish Windows ships six catalogues under `translations/`: English plus
+Bosnian, German, Spanish, French and Brazilian Portuguese, the same set
+dish-android ships.
+
+**If you add, change or delete a user-facing string, refresh the catalogues in
+the same commit.** CI fails otherwise — `check-translations.ps1` re-runs
+`lupdate` and rejects a PR whose catalogues no longer describe the code:
+
+```powershell
+cmake --build build --target update_translations
+git add translations/
+```
+
+You are not expected to translate what you extracted. An untranslated entry
+falls back to English, which is what would have happened anyway; the gate only
+exists so the entry is *visible* instead of missing.
+
+Three rules the tests enforce, so knowing them saves a round trip:
+
+- **Counts use `%n`, never a hand-written singular/plural pair.**
+  `qsTr("%n slots free", "", count)` in QML, `tr("%n slots free", "", count)`
+  in C++. A pair can only express two forms and Bosnian needs three (1 / 2-4 /
+  5+). Where two counts share one line, give each its own `%n` message and join
+  them — Qt substitutes one count per message.
+- **English is a catalogue, not the fallback.** A new `%n` string needs its
+  singular and plural written into `translations/dish_en.ts`, because the source
+  text can only carry one of them and the other one is what ships at `n == 1`.
+- **Placeholders are load-bearing.** A translation must contain exactly the
+  `%1`/`%2`/`%n` markers its source does. `test_translations.cpp` checks every
+  message in every catalogue.
+
+Vocabulary follows dish-android, which has the older and more reviewed
+catalogues. When a string already exists there, take its wording rather than
+inventing a second one for the same idea — a user with both apps should see one
+product. `scripts/seed-from-android.py` copies across every string the two apps
+share verbatim; run it after Android ships new translations:
+
+```powershell
+python scripts/seed-from-android.py --android ../dish-android   # --dry-run first
+```
+
+Platform idiom is the documented exception: Android says "Tap", Windows says
+"Click", and neither should be copied blindly into the other.
+
 ## Security
 
 ### Adding a vulnerability allowlist entry

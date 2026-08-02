@@ -155,7 +155,7 @@ Item {
                 size: DishButton.Small
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                Accessible.name: qsTr("Edit binding")
+                Accessible.name: qsTr("Configure binding")
                 onClicked: strip.editRequested()
             }
         }
@@ -209,7 +209,7 @@ Item {
             implicitHeight: overflowLabel.implicitHeight + Tokens.s2
 
             Accessible.role: Accessible.Button
-            Accessible.name: qsTr("Show %1 more binding settings").arg(strip.hiddenCount)
+            Accessible.name: qsTr("Show %n more binding settings", "", strip.hiddenCount)
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 

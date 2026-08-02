@@ -24,6 +24,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(DISH_BUILD_TESTS     "Build the Dish test suite"          ON)
 option(DISH_ENABLE_WARNINGS "Treat compiler warnings as errors"  ON)
 option(DISH_ENABLE_LTO      "Enable LTO/IPO for Release builds"  ON)
+# OFF by default so a contributor without qttools still gets a working build.
+# CI and the release workflow turn it ON: shipping a binary whose only signal
+# that every translation is missing was a STATUS line is not a tradeoff worth
+# having.
+option(DISH_REQUIRE_TRANSLATIONS
+       "Fail configuration if the Qt Linguist tools are missing"  OFF)
 
 if(DISH_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
     include(CheckIPOSupported)
@@ -201,6 +207,11 @@ set(DISH_CORE_SOURCES
     src/Util/HostBattery.cpp
     src/Util/DisplaySleepInhibitor.h
     src/Util/DisplaySleepInhibitor.cpp
+    # The catalogue loader main.cpp calls at startup. In dish_core so
+    # test_translations can exercise the real locale-fallback path instead of a
+    # copy of it.
+    src/Util/Localization.h
+    src/Util/Localization.cpp
     src/Models/Models.h
     src/Models/Models.cpp
     src/Network/WinsockInit.h
@@ -611,17 +622,43 @@ target_link_libraries(Dish PRIVATE
 # ${CMAKE_CURRENT_BINARY_DIR}/.qm. The RESOURCE_PREFIX puts them at
 # `:/i18n/dish_<locale>.qm` inside the binary.
 # --------------------------------------------------------------------------
+# English is a catalogue like any other rather than the untranslated fallback.
+# A %n message carries one source string but needs one form per plural category,
+# so English plurals have to come from a .qm the same way German's do; without
+# dish_en.qm the source text is all Qt has and "1 slots free" ships. Every
+# non-plural English message is left untranslated on purpose — lrelease drops
+# those, so dish_en.qm holds only the forms the source string cannot express.
 if(Qt6LinguistTools_FOUND)
     qt_add_translations(Dish
         TS_FILES
+            translations/dish_en.ts
             translations/dish_bs.ts
             translations/dish_de.ts
             translations/dish_es.ts
             translations/dish_fr.ts
             translations/dish_pt_BR.ts
-        RESOURCE_PREFIX "/i18n")
+        RESOURCE_PREFIX "/i18n"
+        # -locations none: the catalogues are VCS-tracked and CI fails a PR whose
+        # catalogues are stale, so the file must change only when a STRING
+        # changes. With line numbers in it, inserting a blank line at the top of
+        # a page rewrites hundreds of <location> tags and the gate cries wolf.
+        # Linguist still shows the context name, which is the QML file.
+        # -no-obsolete: drops messages whose source string is gone rather than
+        # letting dead widget-era entries accumulate.
+        LUPDATE_OPTIONS -locations none -no-obsolete)
 else()
-    message(STATUS "Qt6LinguistTools not found — building without translation catalogues.")
+    # Not fatal: a contributor without qttools still gets a working English
+    # build. It IS fatal in CI, where DISH_REQUIRE_TRANSLATIONS is set, because
+    # a release binary that silently shipped no catalogues is a broken release.
+    if(DISH_REQUIRE_TRANSLATIONS)
+        message(FATAL_ERROR
+            "Qt6LinguistTools not found and DISH_REQUIRE_TRANSLATIONS is ON. "
+            "Install the Qt Linguist tools (qttools) — a build without them "
+            "ships English-only with no other signal that anything is missing.")
+    endif()
+    message(WARNING "Qt6LinguistTools not found — building WITHOUT translation "
+                    "catalogues. The app will be English-only, and %n plural "
+                    "forms will fall back to their source spelling.")
 endif()
 
 # WIN32 above creates a windowed (non-console) subsystem binary. Qt provides

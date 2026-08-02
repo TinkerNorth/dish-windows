@@ -391,7 +391,7 @@ Kit.Page {
         case "online":
             return qsTr("Online");
         case "unstable":
-            return qsTr("Unstable");
+            return qsTr("Unsteady");
         default:
             return token;
         }
@@ -419,7 +419,7 @@ Kit.Page {
     function hostSubtitle(connectionId, boundCount) {
         const free = App.hostSlotCapacity() - App.hostBoundSlotCount(connectionId);
         if (free > 0) {
-            return qsTr("%1 slots free").arg(free);
+            return qsTr("%n slots free", "", free);
         }
         const displaced = App.displacedSlotName(connectionId);
         return displaced.length > 0
@@ -538,7 +538,7 @@ Kit.Page {
             page.notify(qsTr("Direct wasn’t available — bound on Standard instead."), "warning");
         }
         if (ok) {
-            page.notify(qsTr("Controller bound — %1 is ready on %2.")
+            page.notify(qsTr("Controller bound — %1 is live on %2.")
                           .arg(page.padName).arg(draft.hostName), "success");
             page.snapshot();
             page.popSelf();
@@ -858,7 +858,7 @@ Kit.Page {
                     visible: draft.hostIsBluetooth
                     Layout.fillWidth: true
                     tone: Kit.Callout.Info
-                    text: qsTr("The PC pairs with this box as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
+                    text: qsTr("This PC pairs as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
                 }
 
                 // Gets / Sends back — the same vocabulary as the matrix, read

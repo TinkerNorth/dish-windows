@@ -35,8 +35,9 @@ Kit.Page {
     // Counts come from the one shared surface so two headers can never
     // disagree; this page owns only the wording.
     readonly property string headerTitle: qsTr("Controllers")
-    readonly property string headerSub: qsTr("%1 connected · %2 bound")
-                                            .arg(App.slotCount).arg(App.boundSlotCount)
+    // Two counts, so each half is its own %n message joined by the shared "·".
+    readonly property string headerSub: qsTr("%n connected", "", App.slotCount)
+                                        + " · " + qsTr("%n bound", "", App.boundSlotCount)
     readonly property string headerDot: App.slotCount > 0 ? "success" : "muted"
 
     // The enclosing shell StackView, type-erased through `var` so the shell's
@@ -87,7 +88,7 @@ Kit.Page {
 
             Kit.SectionHeader { label: qsTr("Connected") }
             Item { Layout.fillWidth: true }
-            Kit.LiveStat { text: qsTr("%1 connected").arg(App.slotCount) }
+            Kit.LiveStat { text: qsTr("%n connected", "", App.slotCount) }
         }
 
         // One card per attached pad. The list is content-sized and inert: the
@@ -388,8 +389,8 @@ Kit.Page {
             spacing: Tokens.s9
 
             Kit.LiveStat {
-                text: qsTr("%1 connected · %2 bound")
-                          .arg(App.slotCount).arg(App.boundSlotCount)
+                text: qsTr("%n connected", "", App.slotCount)
+                      + " · " + qsTr("%n bound", "", App.boundSlotCount)
             }
             Kit.LiveStat {
                 text: qsTr("events/s %1   sends/s %2")
@@ -465,7 +466,7 @@ Kit.Page {
             return qsTr("Unplug and replug the controller to finish switching.");
         }
         if (phase === "restoreStuck") {
-            return qsTr("Standard isn’t responding — pick Direct, retry, or replug.");
+            return qsTr("Standard mode isn’t responding — switch to Direct, retry, or replug.");
         }
         if (failure === "permissionDenied") {
             return qsTr("Direct access denied — another app owns this device.");

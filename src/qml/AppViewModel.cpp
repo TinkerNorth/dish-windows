@@ -385,19 +385,21 @@ void AppViewModel::onStateChanged() {
     if (live == 0 && total == 0) {
         statusText_ = tr("No connections yet");
     } else if (live == 0) {
-        statusText_ = tr("%1 remembered").arg(total);
+        statusText_ = tr("%n paired", "", total);
     } else if (live == 1) {
         statusText_ = firstLabel;
     } else {
-        statusText_ = tr("%1 online").arg(live);
+        statusText_ = tr("%n online", "", live);
     }
 
     if (live == 0 && total == 0) {
-        summaryText_ = tr("Tap Manage to add one");
+        summaryText_ = tr("Open Connections to add one");
     } else if (live == 0) {
-        summaryText_ = tr("%1 remembered").arg(total);
+        summaryText_ = tr("%n paired", "", total);
     } else {
-        summaryText_ = tr("%1 of %2 online").arg(live).arg(total);
+        // Quantity rides the TOTAL, matching Android's status_connected_of:
+        // "1 of 1 online" reads singular, "2 of 5 online" plural.
+        summaryText_ = tr("%1 of %n online", "", total).arg(live);
     }
 
     busy_ = st.busy;
@@ -591,9 +593,9 @@ QString AppViewModel::emulateError() const {
     if (!s.isError() || !s.error.has_value()) { return {}; }
     switch (*s.error) {
     case source::CatalogError::Unreachable:
-        return tr("Couldn't reach the satellite to load controller types.");
+        return tr("Couldn’t reach the satellite to load controller types.");
     case source::CatalogError::ServerError:
-        return tr("The satellite couldn't provide controller types right now.");
+        return tr("The satellite couldn’t provide controller types right now.");
     case source::CatalogError::Malformed:
         return tr("The satellite sent an unreadable controller-type list.");
     }
@@ -1324,7 +1326,7 @@ void AppViewModel::openExternalUrl(const QString& url) {
     // open directly and report the same way.
     const bool ok =
         externalOpenSink_ ? externalOpenSink_(url) : QDesktopServices::openUrl(QUrl(url));
-    if (!ok) { emit errorMessage(tr("Couldn't open browser")); }
+    if (!ok) { emit errorMessage(tr("Couldn’t open browser")); }
 }
 
 } // namespace dish::qml

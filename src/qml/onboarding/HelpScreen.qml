@@ -68,8 +68,8 @@ Kit.Page {
         ListElement { kind: "section"; heading: QT_TR_NOOP("TROUBLESHOOTING") }
         ListElement {
             kind: "faq"
-            heading: QT_TR_NOOP("Dish can’t find any Satellites. What now?")
-            answer: QT_TR_NOOP("Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Tap Scan in Connections to retry.")
+            heading: QT_TR_NOOP("Dish can’t find any satellites. What now?")
+            answer: QT_TR_NOOP("Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Click Scan in Connections to retry.")
         }
         ListElement {
             kind: "faq"

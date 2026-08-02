@@ -491,7 +491,7 @@ Item {
                         label: qsTr("Connected")
                         glyph: "dish-connected"
                     }
-                    SectionHeader { label: qsTr("Remembered") }
+                    SectionHeader { label: qsTr("Paired") }
                     Eyebrow { text: qsTr("Binding") }
                     Eyebrow {
                         text: qsTr("Binding")

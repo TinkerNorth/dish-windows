@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
 // The Settings destination (SCR §7.4). A single scrolling column that reflows to
@@ -220,7 +220,7 @@ Kit.Page {
                 Kit.Card {
                     Layout.fillWidth: true
                     contentItem: Kit.LabeledSwitch {
-                        label: qsTr("Crash reporting")
+                        label: qsTr("Share crash reports")
                         description: qsTr("Anonymous crash reports help fix bugs. Opt out any time.")
                         checked: App.crashReportingEnabled
                         // Forwards to CrashReportingStore::setEnabled (opt-out, default on).

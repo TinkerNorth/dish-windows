@@ -92,6 +92,7 @@ jobs:
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DDISH_BUILD_TESTS=OFF `
+            -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       # --parallel 4 matches the windows-2022 runner's 4 vCPUs; Ninja's

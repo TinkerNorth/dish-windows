@@ -90,6 +90,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug `
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
             -DDISH_BUILD_TESTS=ON `
+            -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       # `--parallel 4` matches the windows-2022 runner's 4 vCPUs. Ninja's
@@ -135,6 +136,15 @@ jobs:
         shell: pwsh
         run: ./scripts/qml-lint-literals.ps1 -Mode error
 
+      # A stale .ts is not a compile error, which is how 618 strings reached
+      # main without a catalogue entry. Re-runs lupdate and fails if the tracked
+      # catalogues move — the diff it prints IS the refresh the PR is missing.
+      # Cheap and source-only, so it sits with the other scanners rather than
+      # after the build.
+      - name: Translation catalogues in sync
+        shell: pwsh
+        run: ./scripts/check-translations.ps1
+
       # Lints against the SAME Debug tree the `Build` step already produced.
       # This used to configure + compile a second `build-tidy` Debug tree just
       # to obtain compile_commands.json and the generated mocs — ~5.9 min of a
@@ -176,6 +186,7 @@ jobs:
           cmake -S . -B build-release -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DDISH_BUILD_TESTS=OFF `
+            -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build release binary

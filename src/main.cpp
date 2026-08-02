@@ -4,6 +4,7 @@
 #include "AppModel.h"
 #include "Network/WinsockInit.h"
 #include "UI/CrashHandler.h"
+#include "Util/Localization.h"
 #include "qml/QmlEntryPoint.h"
 
 #include <QFont>
@@ -52,23 +53,16 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setApplicationName(QStringLiteral("Dish"));
     // No setDesktopFileName on Windows — that's an XDG/Linux concept.
 
-    // i18n: load the .qm matching the system locale out of the QRC-embedded
-    // `:/i18n/dish_<locale>.qm` family. QTranslator::load("dish", ":/i18n",
-    // "_") tries name = "dish_<locale>" with progressively shorter locale
-    // strings (e.g. "pt_BR" -> "pt"), so a host LANG of pt_BR.UTF-8 picks up
-    // dish_pt_BR.qm and a host LANG of pt_PT falls back to dish_pt.qm if
-    // present, or English when nothing matches. The translator stays alive
-    // for the lifetime of the application via the `static` qualifier.
+    // i18n: load the .qm matching the user's language out of the QRC-embedded
+    // `:/i18n/dish_<locale>.qm` family. dish::i18n::loadCatalog walks
+    // QLocale::uiLanguages() so Windows' *preferred UI language* wins over the
+    // regional format setting, which are two different settings that routinely
+    // disagree. English is a catalogue like any other (dish_en.qm) rather than
+    // the untranslated fallback, because %n plural forms have to come from
+    // somewhere and the source string can only carry one of them. The
+    // translator stays alive for the lifetime of the app via `static`.
     static QTranslator translator;
-    const QString localeName = QLocale::system().name();
-    // Two-step fallback so QLocale::system().name() values that are
-    // language-only (e.g. "de") still find dish_de.qm. `||` short-circuits
-    // exactly as the if/else-if this replaces did — the second load() runs only
-    // when the first returned false — and either way the translator that gets
-    // installed is the one the winning load() populated.
-    if (translator.load(QStringLiteral("dish_%1").arg(localeName), QStringLiteral(":/i18n")) ||
-        translator.load(QStringLiteral("dish"), QStringLiteral(":/i18n"), QStringLiteral("_"),
-                        QStringLiteral(".qm"))) {
+    if (dish::i18n::loadCatalog(translator, QLocale::system())) {
         QCoreApplication::installTranslator(&translator);
     }
 

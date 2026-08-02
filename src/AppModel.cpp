@@ -79,7 +79,7 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     QObject::connect(wifi_, &net::WifiConnectionManager::slotRegistrationFailed, this,
                      [this](const QString&) {
                          emit errorMessage(
-                             tr("The satellite wouldn't accept that controller — binding undone."));
+                             tr("The satellite wouldn’t accept that controller — binding undone."));
                      });
     // A rejected forward PIN. The toast already fires from onWifiEvent; this is
     // the TYPED edge the pairing sheet needs so it can stay open and mark the
@@ -509,7 +509,7 @@ void AppModel::onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice n
     QString msg;
     switch (notice) {
     case reducer::UsbNotice::SwitchToDirectFailed:
-        msg = tr("Couldn't switch %1 to Direct mode — keeping it on Standard.").arg(name);
+        msg = tr("Couldn’t switch %1 to Direct mode — keeping it on Standard.").arg(name);
         break;
     case reducer::UsbNotice::NeedsReplug:
         msg = tr("%1 needs to be unplugged and reconnected.").arg(name);
@@ -518,7 +518,7 @@ void AppModel::onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice n
         msg = tr("%1 stayed on Direct mode.").arg(name);
         break;
     case reducer::UsbNotice::RestoreFailed:
-        msg = tr("Couldn't return %1 to Standard mode.").arg(name);
+        msg = tr("Couldn’t return %1 to Standard mode.").arg(name);
         break;
     }
     if (!msg.isEmpty()) { emit errorMessage(msg); }
