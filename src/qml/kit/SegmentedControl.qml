@@ -3,18 +3,34 @@
 //
 // Segmented single-choice control (design FSeg / the slot card's FPathSeg):
 // options in a recessed pill, the selected one filled with the accent. `small`
-// is the dense slot-card variant. Emits picked(option) — the caller applies
-// the change and the selected state streams back through `value`, so the
-// control never holds its own truth.
+// is the dense slot-card variant. Emits picked(option) — the caller applies the
+// change and the selected state streams back through `value`, so the control
+// never holds its own truth.
+//
+// Keyboard: the frame takes focus and ←/→ MOVE THE SELECTION (they do not merely
+// move focus — a segmented control has one value, so focus and selection are the
+// same thing). The frame carries the focus ring.
+//
+// The thumb radius is DERIVED (radiusButton - framePad), not the hand-drawn 3/4
+// the mocks used.
+//
+// DISABLED: the whole control fades to `disabledOpacity`, so the thumb must not
+// stay the ACCENT — `onPrimary` was picked to read on a saturated cyan fill at
+// full strength, and at 0.55 over the page it is neither. A dead control still
+// has to report which segment is selected (the Feel page's Touchpad row is
+// "Off, and here is why"), so the thumb becomes a neutral raised surface with a
+// hairline and the label takes `disabledFg` — the same treatment every other
+// dead control in the kit uses, legible in both appearances.
 
 // Bound: the Repeater delegate references the outer `control` id alongside its
 // `required` model props — static resolution needs bound component behavior.
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Basic
 import Dish.Chrome
 
-Rectangle {
+Control {
     id: control
 
     property var options: []
@@ -26,46 +42,102 @@ Rectangle {
     signal picked(string option)
 
     // The recessed frame insets its segments by 2px (dense) / 3px.
-    readonly property int framePad: small ? 2 : 3
+    readonly property int framePad: control.small ? 2 : 3
+    readonly property bool interactive: control.enabled && !control.busy
 
-    implicitWidth: row.implicitWidth + 2 * framePad
-    implicitHeight: row.implicitHeight + 2 * framePad
-    radius: small ? Tokens.radiusButton : Tokens.radiusCard
-    color: Theme.surfaceDim
-    border.width: 1
-    border.color: Theme.outline
-    opacity: busy ? 0.45 : 1.0
+    focusPolicy: Qt.StrongFocus
+    padding: control.framePad
+    opacity: control.interactive ? 1.0 : Tokens.disabledOpacity
 
-    Row {
-        id: row
-        anchors.centerIn: parent
+    Accessible.role: Accessible.Grouping
+    Accessible.name: control.value
+
+    Keys.onLeftPressed: control.stepSelection(-1)
+    Keys.onRightPressed: control.stepSelection(1)
+
+    // Move the selection one segment; clamped, never wrapping (a wrap would let
+    // a held arrow key cycle a destructive path choice).
+    function stepSelection(delta) {
+        if (!control.interactive)
+            return;
+        const i = control.options.indexOf(control.value);
+        if (i < 0)
+            return;
+        const next = i + delta;
+        if (next >= 0 && next < control.options.length)
+            control.picked(control.options[next]);
+    }
+
+    background: Item {
+        Rectangle {
+            anchors.fill: parent
+            radius: control.small ? Tokens.radiusButton : Tokens.radiusCard
+            color: Theme.surfaceDim
+            border.width: 1
+            border.color: control.enabled ? Theme.outline : Theme.disabledFg
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: (control.small ? Tokens.radiusButton : Tokens.radiusCard) + 2
+            visible: control.visualFocus
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.focusRing
+        }
+    }
+
+    contentItem: Row {
         spacing: control.small ? 3 : 4
 
         Repeater {
             model: control.options
             delegate: Rectangle {
+                id: segment
                 required property string modelData
-                readonly property bool selected: modelData === control.value
+                readonly property bool selected: segment.modelData === control.value
 
                 width: label.implicitWidth + (control.small ? 18 : 32)
                 height: label.implicitHeight + (control.small ? 5 : 10)
-                radius: control.small ? 4 : 5
-                color: selected ? Theme.primary : "transparent"
+                // Derived, not drawn: the thumb sits inside the frame's inset.
+                radius: Tokens.radiusButton - control.framePad
+                color: !segment.selected ? "transparent"
+                     : control.enabled ? Theme.primary
+                     : Theme.surface
+                border.width: segment.selected && !control.enabled ? 1 : 0
+                border.color: Theme.outline
+
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: segment.modelData
+                Accessible.checked: segment.selected
+
+                Behavior on color {
+                    enabled: !Tokens.reducedMotion
+                    ColorAnimation { duration: Tokens.durFast }
+                }
 
                 Text {
                     id: label
                     anchors.centerIn: parent
-                    text: modelData
-                    font.pixelSize: control.small ? 10.5 : Tokens.textBase
-                    font.weight: parent.selected ? Font.DemiBold : Font.Normal
-                    color: parent.selected ? Theme.onPrimary : Theme.muted
+                    text: segment.modelData
+                    font.pixelSize: control.small ? Tokens.textChip : Tokens.textBase
+                    font.weight: segment.selected ? Font.DemiBold : Font.Normal
+                    color: !control.enabled ? Theme.disabledFg
+                         : segment.selected ? Theme.onPrimary
+                         : hover.hovered ? Theme.onSurface
+                         : Theme.muted
+                }
+
+                HoverHandler {
+                    id: hover
+                    enabled: control.interactive
+                    cursorShape: Qt.PointingHandCursor
                 }
 
                 MouseArea {
                     anchors.fill: parent
-                    enabled: !control.busy
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: control.picked(parent.modelData)
+                    enabled: control.interactive
+                    onClicked: control.picked(segment.modelData)
                 }
             }
         }

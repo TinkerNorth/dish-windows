@@ -24,6 +24,14 @@ void ChromeBridge::setDark(bool dark) {
 void ChromeBridge::setChrome(FramelessWindowChrome* chrome) {
     m_chrome = chrome;
     if (m_chrome == nullptr) { return; }
+    // The filter owns the native hover of the maximize button (it is the only
+    // party that sees WM_NCMOUSEMOVE); this just republishes it to QML.
+    QObject::connect(m_chrome, &FramelessWindowChrome::maximizeButtonHoveredChanged, this,
+                     [this](bool hovered) {
+                         if (m_maximizeHovered == hovered) { return; }
+                         m_maximizeHovered = hovered;
+                         emit maximizeHoveredChanged();
+                     });
     // Flush what QML published before the native window existed.
     m_chrome->setCaptionRect(m_caption);
     m_chrome->setMaximizeButtonRect(m_maximize);

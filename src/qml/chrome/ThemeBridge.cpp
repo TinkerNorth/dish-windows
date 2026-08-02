@@ -36,6 +36,9 @@ QColor ThemeBridge::outline() const { return QColor::fromRgba(dish::ui::Theme::o
 QColor ThemeBridge::success() const { return QColor::fromRgba(dish::ui::Theme::success); }
 QColor ThemeBridge::error() const { return QColor::fromRgba(dish::ui::Theme::error); }
 QColor ThemeBridge::warning() const { return QColor::fromRgba(dish::ui::Theme::warning); }
+QColor ThemeBridge::glyph() const { return QColor::fromRgba(dish::ui::Theme::glyph); }
+QColor ThemeBridge::disabledFg() const { return QColor::fromRgba(dish::ui::Theme::disabledFg); }
+QColor ThemeBridge::mutedStrong() const { return QColor::fromRgba(dish::ui::Theme::mutedStrong); }
 
 // tokens/colors.css: dark hover/press/fill = 12/18/14 %, light = 10/16/12 %;
 // warning fill is 16 % in both.
@@ -50,6 +53,25 @@ QColor ThemeBridge::primaryFill() const {
 }
 QColor ThemeBridge::warningFill() const { return withAlpha(dish::ui::Theme::warning, 41); }
 
+// The 24 % accent wash — the third step above primaryHover (12 %) and
+// primaryPress (18 %). Those two keep their names; no aliases are introduced.
+QColor ThemeBridge::accentWash24() const {
+    return withAlpha(dish::ui::Theme::primary, lightActive() ? 56 : 61);
+}
+QColor ThemeBridge::successFill() const {
+    return withAlpha(dish::ui::Theme::success, lightActive() ? 31 : 36);
+}
+QColor ThemeBridge::errorFill() const { return withAlpha(dish::ui::Theme::error, 41); }
+
+// Dialog scrim: the body colour at 60 %, so it darkens on dark and lightens on
+// light instead of the fixed near-black each dialog used to hard-code.
+QColor ThemeBridge::scrim() const { return withAlpha(dish::ui::Theme::background, 153); }
+// Focus ring: accent @ 30 %, drawn outside the 1 px accent border.
+QColor ThemeBridge::focusRing() const { return withAlpha(dish::ui::Theme::primary, 77); }
+// A quieter hairline than `outline` (which is accent @ 18 %) for dividers
+// inside a card, where the full outline reads as a second card edge.
+QColor ThemeBridge::outlineSubtle() const { return withAlpha(dish::ui::Theme::primary, 23); }
+
 // Donation accent (design overlays: PULSE #FF6FB5, PULSE_FILL 12 %, PULSE_EDGE
 // 35 % — the alphas are appearance-invariant; the base hue AA-darkens on light).
 QColor ThemeBridge::pulse() const { return QColor::fromRgba(dish::ui::Theme::pulse); }
@@ -57,5 +79,11 @@ QColor ThemeBridge::pulseFill() const { return withAlpha(dish::ui::Theme::pulse,
 QColor ThemeBridge::pulseEdge() const { return withAlpha(dish::ui::Theme::pulse, 89); }
 
 void ThemeBridge::refresh() { emit paletteChanged(); }
+
+QColor ThemeBridge::alpha(const QColor& c, qreal a) const {
+    QColor out = c;
+    out.setAlphaF(static_cast<float>(qBound(0.0, a, 1.0)));
+    return out;
+}
 
 } // namespace dish::chrome

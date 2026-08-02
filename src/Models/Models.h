@@ -375,6 +375,13 @@ struct ControllerCapabilities {
     // card's lightbar chip and the CAP_LIGHTBAR advertisement.
     bool hasLightbar = false;
 
+    // True iff the pad exposes a readable touch surface (DualSense /
+    // DualShock 4) — SDL_GameControllerGetNumTouchpads on the SDL path, the
+    // decoded report layout on the USB-direct path. Gates the Touchpad and
+    // Mouse rows of the capability solver's Input layer (mouse is a routing of
+    // the touchpad, so a pad without one can never drive it).
+    bool hasTouchpad = false;
+
     // Most recent battery sample for the pad — the same (level, status) pair
     // forwarded on MSG_BATTERY. For a wireless pad this is the controller's
     // own charge; for a wired/unknown pad it is the host machine's battery
@@ -481,6 +488,13 @@ struct ControllerSlot {
     reducer::PathChoice desiredPath = reducer::PathChoice::Standard;
     bool pathSupported = false;
     std::optional<reducer::DirectClaimFailure> directFailure;
+
+    // True iff this model is one the raw-HID fast lane knows the report layout
+    // of (UsbDeviceGateway::isKnownFastLaneModel). Drives the "Layout guessed"
+    // warn chip on the DIRECT option card — the risk exists only on that path,
+    // so the badge belongs there and not on the pad row. Always false for a
+    // Bluetooth pad: raw-HID claims are USB-only, so the question never arises.
+    bool verifiedModel = false;
 };
 
 struct RememberedWifi {

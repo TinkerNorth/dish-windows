@@ -272,21 +272,25 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
                     } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
                         conn->markDisconnected();
                         emit connectionEvent(makeError(versionMsg()));
+                        emit pairingFailed(conn->id(), QStringLiteral("versionMismatch"));
                     } else if constexpr (std::is_same_v<T, PairingClient::AuthRequired>) {
                         // Reachable + parsed, but no key granted: the PIN was wrong
                         // or expired — the most common, most actionable failure.
                         // Typed now (was collapsed into a generic "Pairing failed").
                         conn->markDisconnected();
                         emit connectionEvent(makeError(wrongPinMsg()));
+                        emit pairingFailed(conn->id(), QStringLiteral("wrongPin"));
                     } else if constexpr (std::is_same_v<T, PairingClient::Unreachable>) {
                         // Transport failure — distinct from a wrong PIN.
                         conn->markDisconnected();
                         emit connectionEvent(makeError(unreachableMsg()));
+                        emit pairingFailed(conn->id(), QStringLiteral("unreachable"));
                     } else {
                         // Pending: the satellite staged the request but hasn't
                         // granted yet (rare on a direct PIN submit).
                         conn->markDisconnected();
                         emit connectionEvent(makeError(pairPendingMsg()));
+                        emit pairingFailed(conn->id(), QStringLiteral("pending"));
                     }
                 },
                 outcome);

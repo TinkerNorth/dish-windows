@@ -42,6 +42,18 @@ struct ThemePalette {
     // The donation accent ("pulse" — dish-android colorPulse). The ONE hue Dish
     // uses beyond cyan, reserved for the Support Dish surface + its rail entry.
     QRgb pulse;
+    // Brand-glyph tint. The shipped SVGs bake a fixed light-cyan that computes
+    // to 1.7:1 on a white card, so BrandGlyph re-tints by PALETTE (never by
+    // state — the dot still carries state colour).
+    QRgb glyph;
+    // Disabled-control foreground. >= 3:1 on `surface` in both palettes, so a
+    // disabled primary action stays readable; never multiplied by an opacity on
+    // top of an already-muted colour.
+    QRgb disabledFg;
+    // Drawn-but-unavailable INFORMATION (a capability a layer refuses, and the
+    // reason for it). Full opacity, >= 4.5:1 — distinct from `disabledFg`,
+    // which is for controls.
+    QRgb mutedStrong;
 };
 
 // Which appearance the app is rendering. SYSTEM is resolved to one of
@@ -82,6 +94,9 @@ struct Theme {
     static QRgb error;
     static QRgb warning;
     static QRgb pulse;
+    static QRgb glyph;
+    static QRgb disabledFg;
+    static QRgb mutedStrong;
 };
 
 // Swap the active palette (the Theme::* tokens above). Pure state mutation;

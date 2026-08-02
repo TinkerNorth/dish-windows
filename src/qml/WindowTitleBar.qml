@@ -16,7 +16,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import Dish.Chrome
 import "kit" as Kit
 
@@ -82,8 +81,11 @@ Item {
             onClicked: App.setRailCollapsed(!App.railCollapsed)
 
             background: Rectangle {
-                color: hamburger.hovered ? Qt.rgba(230 / 255, 236 / 255, 1, 0.08) : "transparent"
+                color: hamburger.hovered ? Theme.primaryHover : "transparent"
             }
+            // Canvas 2D parses a stringified colour as #RRGGBBAA, so only an
+            // OPAQUE Theme role may be handed to it this way — every role used
+            // in this file (onSurface, onPrimary) is opaque by construction.
             contentItem: Canvas {
                 id: hamburgerCanvas
                 onPaint: {
@@ -106,9 +108,18 @@ Item {
                 }
             }
 
-            ToolTip.visible: hovered
-            ToolTip.delay: 800
-            ToolTip.text: App.railCollapsed ? qsTr("Expand navigation") : qsTr("Collapse navigation")
+            // Declared, not attached: the ATTACHED ToolTip resolves its delegate
+            // through QtQuick.Controls, which this file does not import, so it
+            // logs "Component is not ready" and never appears. Kit.DishToolTip
+            // is the themed one — a bare ToolTip paints Basic's system palette.
+            Kit.DishToolTip {
+                id: hamburgerTip
+                visible: hamburger.hovered
+                delay: 800
+                text: App.railCollapsed ? qsTr("Expand navigation")
+                                        : qsTr("Collapse navigation")
+                y: hamburger.height + Tokens.s2
+            }
         }
 
         Item { width: 0; height: 1 }
@@ -119,14 +130,14 @@ Item {
 
             Kit.BrandGlyph {
                 glyph: "dish"
-                width: 16
-                height: 16
+                width: Tokens.glyphSm
+                height: Tokens.glyphSm
                 anchors.verticalCenter: parent.verticalCenter
             }
             Label {
                 text: qsTr("Dish")
                 color: Theme.onSurface
-                font.pixelSize: 12
+                font.pixelSize: Tokens.textSummary
                 font.weight: Font.DemiBold
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -145,11 +156,15 @@ Item {
             id: cb
             width: Tokens.captionButtonWidth
             height: bar.height
-            property color hoverColor: Qt.rgba(230 / 255, 236 / 255, 1, 0.08)
-            // The glyph tone; close swaps to white on its red hover.
+            property color hoverColor: Theme.primaryHover
+            // Hover this button cannot feel for itself. Only the maximize button
+            // needs it (it is non-client — see below), but the fill has to be
+            // ONE expression or the three buttons would light differently.
+            property bool nativeHovered: false
+            // The glyph tone; close swaps to the on-accent ink on its red hover.
             readonly property color glyphColor: Theme.onSurface
             background: Rectangle {
-                color: cb.hovered ? cb.hoverColor : "transparent"
+                color: (cb.hovered || cb.nativeHovered) ? cb.hoverColor : "transparent"
             }
         }
 
@@ -179,6 +194,21 @@ Item {
             id: maximizeButton
             onXChanged: bar.publishRects()
             onWidthChanged: bar.publishRects()
+
+            // This button is NON-CLIENT: the chrome filter answers HTMAXBUTTON
+            // over it so Win11 opens the Snap Layouts flyout, and Quick is never
+            // told about a non-client pointer. Its own `hovered` is therefore
+            // always false — the fill comes from the native tracker instead, or
+            // this would be the one caption button that never responds.
+            nativeHovered: ChromeBridge.maximizeHovered
+
+            // Maximise AND restore are the same button, so the glyph is the only
+            // signal that the click landed: one square windowed, the offset pair
+            // when zoomed (ds caption rule "minimise / maximise / restore /
+            // close"). Canvas doesn't rebind, so the flip requests a repaint.
+            readonly property bool zoomed: bar.window.visibility === Window.Maximized
+            onZoomedChanged: maximizeCanvas.requestPaint()
+
             contentItem: Canvas {
                 id: maximizeCanvas
                 onPaint: {
@@ -186,15 +216,30 @@ Item {
                     ctx.reset();
                     ctx.strokeStyle = String(maximizeButton.glyphColor);
                     ctx.lineWidth = 1;
-                    ctx.strokeRect(width / 2 - 5, height / 2 - 5, 10, 10);
+                    var cx = width / 2, cy = height / 2;
+                    if (maximizeButton.zoomed) {
+                        // Front pane, then the two exposed edges of the one behind.
+                        ctx.strokeRect(cx - 5, cy - 3, 8, 8);
+                        ctx.beginPath();
+                        ctx.moveTo(cx - 3, cy - 5);
+                        ctx.lineTo(cx + 5, cy - 5);
+                        ctx.lineTo(cx + 5, cy + 3);
+                        ctx.stroke();
+                    } else {
+                        ctx.strokeRect(cx - 5, cy - 5, 10, 10);
+                    }
                 }
                 Connections {
                     target: Theme
                     function onPaletteChanged() { maximizeCanvas.requestPaint(); }
                 }
             }
-            // Win11 sends a synthetic NCLBUTTONUP -> we still wire click as a
-            // fallback for when snap isn't involved.
+            // The real press is run in C++: FramelessWindowChrome takes the
+            // WM_NCLBUTTONDOWN/UP pair over HTMAXBUTTON and posts SC_MAXIMIZE /
+            // SC_RESTORE itself, because DefWindowProc only tracks caption
+            // buttons on a window that HAS a caption. Nothing reaches this
+            // handler today; it stays as the client-path fallback (and is what
+            // keyboard activation of the button would use).
             onClicked: bar.toggleMaximize()
         }
 
@@ -206,9 +251,9 @@ Item {
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.reset();
-                    // White X on the red hover fill (the ds cap-close rule);
-                    // themed otherwise.
-                    ctx.strokeStyle = closeButton.hovered ? "#ffffff"
+                    // On-accent ink over the red hover fill (the ds cap-close
+                    // rule); themed otherwise.
+                    ctx.strokeStyle = closeButton.hovered ? String(Theme.onPrimary)
                                                           : String(closeButton.glyphColor);
                     ctx.lineWidth = 1;
                     ctx.beginPath();

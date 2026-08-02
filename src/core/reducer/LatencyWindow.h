@@ -47,8 +47,18 @@ inline bool shouldArmPing(std::int64_t outstandingUs, std::int64_t nowUs) {
 // from zero via std::lround, never banker's) and clamped at 0. Built digit-wise
 // so the decimal separator is '.' regardless of the process locale; the UI
 // layer appends its own localized sample-count suffix.
+//
+// Under a millisecond it reads "<1 ms" instead of "~0.4 ms". Callers only reach
+// here with samples in the window, so the figure is real — but a sub-millisecond
+// one-way estimate off a 2 s heartbeat is below the measurement's own resolution,
+// and "~0.0 ms" (a wired loopback rounds straight to it) claims a latency of
+// zero, which is the one number a network link can never have. "<1 ms" is the
+// honest reading of the same sample: too small for this instrument to divide.
+// This is the ONE formatting site — Home, Connections and Configure binding all
+// render the string these two models build from it. (Plan D47.)
 inline std::string formatLatencyMs(double oneWayMs) {
     const long tenths = oneWayMs <= 0.0 ? 0 : std::lround(oneWayMs * 10.0);
+    if (tenths < 10) { return "<1 ms"; }
     std::string out = "~";
     out += std::to_string(tenths / 10);
     out += '.';

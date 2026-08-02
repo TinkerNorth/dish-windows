@@ -79,7 +79,7 @@ instances of every layer together.
 | `src/repository/` | Durable keyed storage (QSettings), dumb + synchronous | `core/` | yes (QSettings) |
 | `src/composer/` | `Composer`s (pure derive), `Controller`s (side effects), Coordinators (command services) | `core/`, `source/`, `repository/` | yes (QObject) |
 | `src/qml/` | QML bridge: `AppViewModel` facade + role models + chrome | everything | yes (Quick) |
-| `src/UI/` | **Legacy** Widgets path (see [§9](#legacy)) | everything | yes (Widgets) |
+| `src/UI/` | The design-token palette (`Theme`) + the font-family probes (`FontStacks`) + crash handling. No widgets remain (see [§9](#legacy)) | `core/` | yes (Gui) |
 | `src/Input/`, `src/Network/` | Older capitalized homes for the SDL bridge / socket layer (IO; being folded into the layer model over time) | `core/` | yes |
 
 When you add code, the folder is the contract: *if it has no Qt and makes a
@@ -360,6 +360,19 @@ land on the hardened shape rather than re-litigating it.
 | R12 | **Extract from `AppModel`** | Move the USB framework-presence driving → `UsbDirectCoordinator`; catalog/Emulate → `EmulateCoordinator`; remap/deadzone/rumble push → `Controller`s. Leaves `AppModel` a pure composition root + hot-path seam. | Planned |
 | R13 | **Capture mode as state** | Pure `CaptureMode` reducer (Idle/Capturing(slot,target)) — single-owner of the "press to assign" lifecycle, reusing the bridge's capture-threshold predicates; replaces the split bridge-bool + `QString capturingSlotId_`. | **Done (core FSM + tests); live wiring into AppViewModel/bridge is the follow-up** |
 | R14 | **Drop racy invokables** | Removed the `connectByIndex`/`pairWithPin(int)` index-based commands (QML is fully on the de-raced `*ByServerId` variants). | **Done** |
+| R15 | **Capability vocabulary as a reducer** | Pure `CapabilitySolver` (`core/reducer/`) owns `available = controller ∩ transport ∩ type ∩ host`, the four verdicts (`Available`/`Unavailable`/`Off`/`Pending`) and the first-failing-layer rule. The wizard's type table and Configure binding's matrix both render its output, so they cannot drift. | **Done (pure + tested); QML renders it via `App.capabilityForCandidate`)** |
+| R16 | **Apply as a sequencer** | Pure `ApplyBindingMachine` (`core/reducer/`) drives the two-step apply overlay and the 20 s / 8 s budgets. Encodes the two rules the UI kept getting wrong: a timed-out Direct claim is a **fallback**, not a failure, and Cancel is accepted **only** during the claim. `AppViewModel` owns the timers and projects the phase as strings. | **Done (pure + tested); wired in `AppViewModel::applyBinding`)** |
+| R17 | **A binding is a declaration, not a preference** | **It must not outlive its physical pad.** `ConnectionHub::bind` installs a desired descriptor and *every* session PUT re-sends the whole desired set, so a binding left behind by an unplugged controller made the satellite plug a virtual pad for hardware that does not exist. Pure `BindingPresence` (`core/reducer/`) gates the table against the slots the app currently shows: pad present → keep, pad moved to its twin id (USB-direct claim/release) → **migrate** so a path switch never tears down a live stream, pad gone → **unbind**, which DELETEs the controller on the live session now instead of at the reaper timeout. `AppModel::applyBindingPresence` applies it at the end of `rebuild()` behind a re-entrancy guard and raises the one-shot "Controller disconnected — unbound from …" toast, because a binding that vanishes unexplained reads as lost work. | **Done (pure + tested); wired in `AppModel::rebuild`)** |
+
+### Recorded follow-ups (deliberate v3 deferrals)
+
+| # | Concern | Why deferred | What it needs |
+|---|---|---|---|
+| F1 | **Windows High Contrast** | It needs a **third palette** plus a system-colour bridge (`SPI_GETHIGHCONTRAST` + the `SysColor` set), and it is not a v3 screen. Shipping a half-HC pass — some surfaces honouring system colours, some not — is worse than none, because a HC user cannot tell which surfaces to trust. | A `ThemePalette` sourced from `GetSysColor`, an `Appearance::HighContrast` arm, and a pass over every place the kit derives a wash from the accent (HC forbids alpha washes entirely). |
+| F2 | **Toast `Undo`** | `NotificationToastHost` is a **queue with no per-toast action channel**. Adding one is a shared-surface change with exactly one caller (Unbind), so the cost lands on every toast in the app to serve one. Unbind ships confirm-free with a `Binding removed` success toast instead. | An action slot on `models::DishNotification` + the queue, and a callback lifetime story for a toast that outlives the page that raised it. |
+| F3 | **Per-binding rumble** | No `RumbleEnabledStore` exists; rumble rides the descriptor caps. `App.rumbleEnabledFor` / `setRumbleEnabled` are honest stubs (`true` / no-op) and the Feel row still renders — the capability verdict for it is real, so hiding the row would hide true information. | A store mirroring `MotionEnabledStore`, keyed per binding, read by the descriptor assembly in `ConnectionHub::bind`. |
+| F4 | **A positive bind-accepted edge** | `ConnectionHub::bind` applies the binding locally and the satellite answers asynchronously; only the FAILURE is typed (`slotRegistrationFailed`). The apply sequencer therefore reads success as "the binding held and the session is live" on a 250 ms tick, inside an 8 s budget. A slow satellite can still reject after the overlay closed — the existing rollback toast covers it. | A per-controller applied/accepted signal out of `WifiConnectionManager`'s controller PUT, fed to `ApplyBindingMachine` as `BindAccepted`. |
+| F5 | **The SDL half of the emulation-type ladder** | `reducer::seedControllerType` matches a catalog `emulates` hint on **either** the pad's USB `vid:pid` **or** an SDL type slug (`ps4`/`ps5`/`switchpro`/`xbox360`…). `AppModel::currentTypeForConnection` can now answer the USB half (R17's presence oracle resolves the pad behind a slot), but `SDLGamepadBridge::Device` carries no type slug at all, so the slug half is always empty. A pad whose `vid:pid` is absent from the catalog's hint list still degrades to the catalog's **first offered type** — correct-by-fallback, not correct-by-identity. | `SDL_GameControllerGetType` → slug on the bridge's `Device`, threaded through `currentTypeForConnection` as the second key. Nothing else changes: the reducer already takes both. |
 
 **What's a pure spec vs. a live rewrite.** R1–R6, R8, R13(core), R14 are landed and
 unit-tested. The four state machines — `AsyncState`, `PairingMachine`,
@@ -382,8 +395,16 @@ the R12 extractions last. **Keep the `routingMtx_` hot-path tables intact throug
 - **Pure core is the contract.** Every reducer/mapper/`AsyncState` transition has a
   Catch2 test that pins the *full* decision space with no mocks
   (`test_async_state`, `test_usb_path_machine`, `test_pairing_machine`,
-  `test_catalog_repository`, …). If logic isn't testable without standing up a live
-  `QObject`/socket/SDL, it is in the wrong layer — move the decision into `core/`.
+  `test_catalog_repository`, `test_capability_solver`, `test_apply_binding_machine`,
+  …). If logic isn't testable without standing up a live `QObject`/socket/SDL, it
+  is in the wrong layer — move the decision into `core/`.
+- **The design system is tested too.** `test_theme_store` pins palette
+  completeness (every dark role has a light value, and they differ);
+  `test_theme_contrast` computes WCAG 2.1 ratios over the real palette values in
+  **both** palettes, so a token that reads on dark and vanishes on light fails the
+  build rather than a screenshot; `test_font_stacks` pins the family probe that
+  keeps mono off Courier New. `scripts/qml-lint-literals.ps1` keeps the pixel
+  values inside `src/qml/kit/**`.
 - **Probes for the kernel.** `StateSourceProbe`/`ComposerProbe`/`ControllerProbe`
   capture *emission sequences* (not just final values); `RepositoryContract` runs
   the 8 property tests every repository must pass.

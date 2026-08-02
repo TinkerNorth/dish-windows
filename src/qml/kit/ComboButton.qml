@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Compact dropdown chooser (design FCombo): the current value + a ▾ caret in a
-// recessed pill; clicking opens an in-scene menu of options. Emits
-// picked(option) — the selected value streams back through `value`.
+// Compact dropdown chooser (design FCombo): the current value + a caret in a
+// recessed pill; activating it opens an in-scene menu of options. Emits
+// picked(option) — the selected value streams back through `value`, so the
+// control never holds its own truth.
+//
+// It is a real AbstractButton, not a Rectangle with a MouseArea: a keyboard
+// user must be able to reach it, see that they have (the focus ring), open it
+// with Space/Enter, and have Narrator call it a combo box.
 
 // Bound: the Repeater delegate references the outer `control` id alongside its
 // `required` model props — static resolution needs bound component behavior.
@@ -13,7 +18,7 @@ import QtQuick
 import QtQuick.Controls.Basic
 import Dish.Chrome
 
-Rectangle {
+AbstractButton {
     id: control
 
     property var options: []
@@ -21,41 +26,80 @@ Rectangle {
 
     signal picked(string option)
 
-    implicitWidth: content.implicitWidth + 24
-    implicitHeight: content.implicitHeight + 12
-    radius: Tokens.radiusButton
-    color: Theme.surfaceDim
-    border.width: 1
-    border.color: Theme.outline
+    focusPolicy: Qt.StrongFocus
+    hoverEnabled: true
 
-    Row {
-        id: content
-        anchors.centerIn: parent
+    topPadding: Tokens.s3
+    bottomPadding: Tokens.s3
+    leftPadding: Tokens.s6
+    rightPadding: Tokens.s6
+
+    implicitHeight: Math.max(Tokens.minTouch,
+                             control.implicitContentHeight
+                             + control.topPadding + control.bottomPadding)
+
+    opacity: control.enabled ? 1.0 : Tokens.disabledOpacity
+
+    Accessible.role: Accessible.ComboBox
+    Accessible.name: control.value
+
+    onClicked: menu.open()
+    Keys.onDownPressed: menu.open()
+
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
+
+    background: Item {
+        Rectangle {
+            anchors.fill: parent
+            radius: Tokens.radiusButton
+            // The pill is a filled recess, so the interaction wash is tinted
+            // into it rather than laid over a transparent ground.
+            color: control.down ? Qt.tint(Theme.surfaceDim, Theme.primaryPress)
+                 : control.hovered ? Qt.tint(Theme.surfaceDim, Theme.primaryHover)
+                 : Theme.surfaceDim
+            border.width: 1
+            border.color: control.enabled ? Theme.outline : Theme.disabledFg
+
+            Behavior on color {
+                enabled: !Tokens.reducedMotion
+                ColorAnimation { duration: Tokens.durFast }
+            }
+        }
+
+        // The global focus ring: 2px outside the border, on visualFocus only.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: Tokens.radiusButton + 2
+            visible: control.visualFocus
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.focusRing
+        }
+    }
+
+    contentItem: Row {
         spacing: Tokens.s5
 
         Text {
             text: control.value
             font.pixelSize: Tokens.textSummary
-            color: Theme.onSurface
+            color: control.enabled ? Theme.onSurface : Theme.disabledFg
+            anchors.verticalCenter: parent.verticalCenter
         }
         Text {
             text: "▾"
             font.family: Tokens.monoFamily
-            font.pixelSize: 9
-            color: Theme.muted
+            // Nothing in the app renders below the 10px floor, caret included.
+            font.pixelSize: Tokens.textChip
+            color: control.enabled ? Theme.muted : Theme.disabledFg
             anchors.verticalCenter: parent.verticalCenter
         }
     }
 
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onClicked: menu.open()
-    }
-
     Menu {
         id: menu
-        y: control.height + 2
+        y: control.height + Tokens.s1
 
         background: Rectangle {
             implicitWidth: Math.max(control.width, 140)
@@ -70,7 +114,10 @@ Rectangle {
             delegate: MenuItem {
                 id: item
                 required property string modelData
-                text: modelData
+                text: item.modelData
+
+                Accessible.role: Accessible.MenuItem
+                Accessible.name: item.modelData
 
                 contentItem: Text {
                     text: item.modelData
@@ -80,7 +127,7 @@ Rectangle {
                 }
                 background: Rectangle {
                     color: item.highlighted ? Theme.primaryHover : "transparent"
-                    radius: 4
+                    radius: Tokens.radiusChip
                 }
                 onTriggered: control.picked(item.modelData)
             }
