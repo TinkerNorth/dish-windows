@@ -3,9 +3,12 @@
 //
 // The 4-page first-run welcome pager (design flow 01): a centered hero (brand
 // mark on page one, eyebrow, title, body), step dots pinned near the bottom,
-// and a Skip / Back / Next bar in the bottom-right — over the bare window
-// surface with no rail (the shell appears when onboarding pops). The final
-// page's primary action hands off to the setup guide.
+// and a Back / Skip / Next bar in the bottom-right — over the bare window
+// surface with no rail (the shell appears when onboarding pops).
+//
+// Both exits are completions. Skip and Finish each emit finished(); only the
+// hand-off differs — Finish opens the setup wizard, Skip lands on Home. (A Skip
+// that did not persist the flag re-showed the whole welcome on every launch.)
 
 pragma ComponentBehavior: Bound
 
@@ -18,8 +21,9 @@ import Dish.Chrome
 Item {
     id: screen
 
-    // Leave onboarding. runSetup=true also opens the setup guide over the shell
-    // (the final page's primary action); Skip leaves without it.
+    // Leave onboarding. runSetup=true also opens the setup wizard over the
+    // shell (the final page's primary action); Skip leaves without it. Either
+    // way the host marks onboarding complete.
     signal finished(bool runSetup)
 
     // Satellite download URL. Kept as a property so a localized override can
@@ -39,7 +43,7 @@ Item {
         ListElement {
             eyebrow: QT_TR_NOOP("How it works")
             title: QT_TR_NOOP("A short hop over Wi-Fi")
-            body: QT_TR_NOOP("Your controller's button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.")
+            body: QT_TR_NOOP("Your controller’s button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.")
             ctaLabel: ""
             showMark: false
         }
@@ -51,9 +55,9 @@ Item {
             showMark: false
         }
         ListElement {
-            eyebrow: QT_TR_NOOP("You're set")
+            eyebrow: QT_TR_NOOP("You’re set")
             title: QT_TR_NOOP("Ready when you are")
-            body: QT_TR_NOOP("Open the setup guide for a walkthrough, or jump straight in and pair with a Satellite on your network.")
+            body: QT_TR_NOOP("Finish walks you through input, destination and binding — about a minute. You can also skip and do it later from Set up in the rail.")
             ctaLabel: ""
             showMark: false
         }
@@ -64,17 +68,29 @@ Item {
     readonly property bool onFinalPage: currentIndex === pageCount - 1
     readonly property var currentPage: pages.get(currentIndex)
 
+    // Esc leaves the same way Skip does — the flow is never a trap, and the
+    // exit is still a completion.
+    focus: true
+    Keys.onEscapePressed: function (event) {
+        screen.finished(false);
+        event.accepted = true;
+    }
+
+    // The primary is the first thing a new user ever sees; give it the keyboard
+    // and a real focus ring rather than an invisible default.
+    Component.onCompleted: primaryButton.forceActiveFocus(Qt.TabFocusReason)
+
     // ── Hero: centered column, pulled slightly above optical center. ─────────
     ColumnLayout {
         anchors.centerIn: parent
-        anchors.verticalCenterOffset: -20
+        anchors.verticalCenterOffset: -Tokens.s9
         width: Math.min(460, parent.width - 80)
         spacing: Tokens.s6
 
         Kit.BrandGlyph {
             glyph: "dish-master"
-            Layout.preferredWidth: 76
-            Layout.preferredHeight: 76
+            Layout.preferredWidth: Tokens.glyphHero
+            Layout.preferredHeight: Tokens.glyphHero
             Layout.alignment: Qt.AlignHCenter
             visible: screen.currentPage.showMark
         }
@@ -85,7 +101,7 @@ Item {
         Label {
             text: qsTr(screen.currentPage.title)
             color: Theme.onSurface
-            font.pixelSize: 21
+            font.pixelSize: Tokens.textHero
             font.bold: true
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
@@ -100,8 +116,9 @@ Item {
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
         }
-        Kit.OutlineButton {
-            text: qsTr(screen.currentPage.ctaLabel)
+        Kit.DishButton {
+            text: screen.currentPage.ctaLabel.length > 0
+                  ? qsTr(screen.currentPage.ctaLabel) : ""
             visible: screen.currentPage.ctaLabel.length > 0
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: Tokens.s2
@@ -113,16 +130,16 @@ Item {
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 64
-        spacing: 7
+        anchors.bottomMargin: Tokens.s11 * 2
+        spacing: Tokens.s4
 
         Repeater {
             model: screen.pageCount
             delegate: Rectangle {
                 required property int index
-                width: 8
-                height: 8
-                radius: 4
+                width: Tokens.dotSize
+                height: Tokens.dotSize
+                radius: Tokens.dotSize / 2
                 color: index === screen.currentIndex ? Theme.primary : Theme.surfaceDim
                 border.width: index === screen.currentIndex ? 0 : 1
                 border.color: Theme.outline
@@ -130,7 +147,7 @@ Item {
         }
     }
 
-    // ── Bottom bar: Back (past page one) · spacer · Skip · Next/primary. ─────
+    // ── Bottom bar: Back (past page one) · spacer · Skip · Next/Finish. ──────
     RowLayout {
         anchors.left: parent.left
         anchors.right: parent.right
@@ -140,24 +157,20 @@ Item {
         anchors.bottomMargin: Tokens.s8
         spacing: Tokens.s4
 
-        Kit.OutlineButton {
+        Kit.DishButton {
             text: qsTr("Back")
             visible: screen.currentIndex > 0
             onClicked: screen.currentIndex -= 1
         }
         Item { Layout.fillWidth: true }
-        Kit.OutlineButton {
+        Kit.DishButton {
             text: qsTr("Skip")
-            visible: !screen.onFinalPage
             onClicked: screen.finished(false)
         }
-        Kit.OutlineButton {
-            text: qsTr("Not now")
-            visible: screen.onFinalPage
-            onClicked: screen.finished(false)
-        }
-        Kit.KitButton {
-            text: screen.onFinalPage ? qsTr("Open setup guide") : qsTr("Next")
+        Kit.DishButton {
+            id: primaryButton
+            variant: Kit.DishButton.Primary
+            text: screen.onFinalPage ? qsTr("Finish") : qsTr("Next")
             onClicked: {
                 if (screen.onFinalPage)
                     screen.finished(true);

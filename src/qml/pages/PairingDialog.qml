@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The shared pairing sheet (design FPairDlg + FReverseDlg fused; android
-// PairPinDialog parity): BOTH pairing paths run in one dialog and no tap gates
-// either. Path A — the forward 6-digit satellite-PIN field — is always
-// typeable; Path B — our reverse 4-digit clientPin — is POSTed automatically
-// by openFor() (the operator is notified the moment the sheet opens), shown
-// under an "or" divider, and polled (~2 min budget) until the operator
-// approves on the satellite. Whichever path completes first pairs the box;
-// the sheet closes itself on success (pairingSucceeded / phase "approved").
+// The shared pairing sheet — ONE sheet, two callers (the wizard's Destination
+// step and Connections' found rows). BOTH pairing paths run in it at once and
+// no tap gates either. Path A — the forward 6-digit satellite PIN — is always
+// typeable; Path B — our reverse 4-digit clientPin — is POSTed automatically by
+// openFor() (the operator is notified the moment the sheet opens), shown under
+// an "or" divider, and polled (~2 min budget) until the operator approves on
+// the satellite. Whichever path completes first pairs the box; the sheet closes
+// itself on success (pairingSucceeded / phase "approved").
 //
-// Used by ConnectionsPage (the Pair… rows + the parked-target auto-open) and
-// the setup-guide wizard's host rows. All behavior forwards to App
-// (QML_CONTRACT.md "The pairing sheet: both paths at once").
+// The PIN is SIX DISCRETE CELLS over one hidden capture field, not a
+// letter-spaced text box: Qt does not composite trailing letter-spacing the way
+// CSS does, and a letter-spaced run of digits is announced badly by a screen
+// reader. The field is numeric-only and paste-tolerant (spaces and dashes are
+// stripped), and Pair stays disabled until all six digits are in.
+//
+// A REJECTION KEEPS THE SHEET OPEN and marks the field inline. It does not go
+// to the toast: the toast is for transient failures the user cannot act on, and
+// this one has the user's own next action attached to it.
 
 pragma ComponentBehavior: Bound
 
@@ -34,18 +40,56 @@ Kit.ContentDialog {
     readonly property bool reverseLive:
         serverId.length > 0 && App.reversePairingPhase !== "idle"
 
+    // ── Forward-PIN rejection (inline, never a toast) ───────────────────────
+    property bool pinRejected: false
+    property string pinReason: ""
+    // The third rejection earns the extra line: by then the likeliest cause is
+    // that the satellite re-drew its screen and minted a new code.
+    property int rejections: 0
+
+    readonly property int pinLength: 6
+
+    readonly property string pinErrorText: {
+        if (!pairDialog.pinRejected)
+            return "";
+        let message;
+        if (pairDialog.pinReason === "versionMismatch") {
+            message = qsTr("%1 is running a different Satellite version. Update both, then pair again.")
+                        .arg(pairDialog.serverName);
+        } else if (pairDialog.pinReason === "unreachable") {
+            message = qsTr("Couldn’t reach %1. Make sure it’s on and on your network.")
+                        .arg(pairDialog.serverName);
+        } else if (pairDialog.pinReason === "pending") {
+            message = qsTr("%1 hasn’t approved the pairing yet.").arg(pairDialog.serverName);
+        } else {
+            message = qsTr("That PIN wasn’t accepted. Check the code on %1 and try again.")
+                        .arg(pairDialog.serverName);
+        }
+        if (pairDialog.rejections >= 3) {
+            message += " " + qsTr("The code changes if the Satellite screen was refreshed.");
+        }
+        return message;
+    }
+
     eyebrow: qsTr("Pairing")
     heading: qsTr("Pair with %1").arg(pairDialog.serverName)
-    preferredWidth: 400
+    preferredWidth: 430
     rejectText: qsTr("Cancel")
     acceptText: pairDialog.submitting ? qsTr("Pairing…") : qsTr("Pair")
-    acceptEnabled: pinField.text.length === 6 && !pairDialog.submitting
+    acceptEnabled: pinInput.text.length === pairDialog.pinLength && !pairDialog.submitting
+
+    // The sheet owns the keyboard while it is up, and Popup hands focus back to
+    // the row that opened it on close.
+    focus: true
 
     function openFor(id, name) {
         serverId = id;
         serverName = name;
         submitting = false;
-        pinField.clear();
+        pinRejected = false;
+        pinReason = "";
+        rejections = 0;
+        pinInput.clear();
         // Send our PIN to the satellite immediately — the operator sees the
         // request the moment the sheet opens, while the PIN field stays a
         // live fallback. Cancel first so a stale phase from an earlier
@@ -56,28 +100,109 @@ Kit.ContentDialog {
         open();
     }
 
+    onOpened: pinInput.forceActiveFocus()
+
     body: [
         // ── Path A: type the satellite's PIN ──
         Label {
-            text: qsTr("Enter the 6-digit PIN shown on the Satellite's screen.")
+            text: qsTr("Enter the 6-digit PIN shown on the Satellite’s screen.")
             color: Theme.muted
             font.pixelSize: Tokens.textSummary
             lineHeight: 1.5
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
         },
-        Kit.KitTextField {
-            id: pinField
-            maximumLength: 6
-            inputMethodHints: Qt.ImhDigitsOnly
-            validator: IntValidator { bottom: 0 }
-            enabled: !pairDialog.submitting
-            font.family: Tokens.monoFamily
-            font.pixelSize: 20
-            font.letterSpacing: 10
-            horizontalAlignment: TextInput.AlignHCenter
-            implicitHeight: 44
+
+        // Six cells drawn over one hidden capture field: the field owns paste,
+        // the input hints and the caret position; the cells only render it.
+        Item {
+            id: pinBlock
+            implicitHeight: cellRow.implicitHeight
             Layout.fillWidth: true
+
+            Row {
+                id: cellRow
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Tokens.s4
+
+                Repeater {
+                    model: pairDialog.pinLength
+
+                    delegate: Rectangle {
+                        id: cell
+                        required property int index
+
+                        // The cell the next digit lands in carries the caret.
+                        readonly property bool armed: pinInput.activeFocus
+                                                      && cell.index === Math.min(
+                                                          pinInput.text.length,
+                                                          pairDialog.pinLength - 1)
+
+                        implicitWidth: 40
+                        implicitHeight: 48
+                        radius: Tokens.radiusButton
+                        color: Theme.surfaceDim
+                        border.width: 1
+                        border.color: pairDialog.pinRejected ? Theme.error
+                                    : cell.armed ? Theme.primary
+                                    : Theme.outline
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: cell.index < pinInput.text.length
+                                  ? pinInput.text.charAt(cell.index) : ""
+                            color: Theme.onSurface
+                            font.family: Tokens.monoFamily
+                            font.pixelSize: Tokens.textHero
+                        }
+                    }
+                }
+            }
+
+            // Invisible, but live: it takes the clicks, the focus, the paste
+            // and the input-method hints for the whole block.
+            TextInput {
+                id: pinInput
+                anchors.fill: cellRow
+                opacity: 0
+                enabled: !pairDialog.submitting
+                inputMethodHints: Qt.ImhDigitsOnly
+                // Deliberately longer than the PIN: maximumLength truncates a
+                // pasted "408 192" BEFORE the separators are stripped.
+                maximumLength: 24
+                activeFocusOnTab: true
+
+                Accessible.role: Accessible.EditableText
+                Accessible.name: qsTr("Pairing PIN, 6 digits")
+                Accessible.description: pairDialog.pinErrorText
+
+                onTextChanged: {
+                    const cleaned = pinInput.text.replace(/[^0-9]/g, "")
+                                                 .substring(0, pairDialog.pinLength);
+                    if (cleaned !== pinInput.text)
+                        pinInput.text = cleaned;
+                    // Typing is the user answering the error; clear it.
+                    if (pairDialog.pinRejected)
+                        pairDialog.pinRejected = false;
+                }
+
+                onAccepted: {
+                    if (pairDialog.acceptEnabled)
+                        pairDialog.accepted();
+                }
+            }
+        },
+
+        Label {
+            visible: pairDialog.pinErrorText.length > 0
+            text: pairDialog.pinErrorText
+            color: Theme.error
+            font.pixelSize: Tokens.textMeta
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: text
         },
 
         // ── divider ──
@@ -118,9 +243,11 @@ Kit.ContentDialog {
             Repeater {
                 model: 4
                 delegate: Rectangle {
+                    id: reverseCell
                     required property int index
-                    implicitWidth: 44
-                    implicitHeight: 52
+
+                    implicitWidth: 40
+                    implicitHeight: 48
                     radius: Tokens.radiusButton
                     color: Theme.surfaceDim
                     border.width: 1
@@ -128,11 +255,11 @@ Kit.ContentDialog {
 
                     Label {
                         anchors.centerIn: parent
-                        text: index < App.reversePairingPin.length
-                              ? App.reversePairingPin.charAt(index) : ""
+                        text: reverseCell.index < App.reversePairingPin.length
+                              ? App.reversePairingPin.charAt(reverseCell.index) : ""
                         color: Theme.primary
                         font.family: Tokens.monoFamily
-                        font.pixelSize: 22
+                        font.pixelSize: Tokens.textHero
                     }
                 }
             }
@@ -164,8 +291,10 @@ Kit.ContentDialog {
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
-            Kit.OutlineButton {
+            Kit.DishButton {
                 text: qsTr("New code")
+                variant: Kit.DishButton.Outline
+                size: Kit.DishButton.Small
                 visible: App.reversePairingPhase === "declined"
                          || App.reversePairingPhase === "timedout"
                 onClicked: App.requestReversePairing(pairDialog.serverId)
@@ -181,11 +310,12 @@ Kit.ContentDialog {
     ]
 
     // Footer accept = the Path-A submit (typeable throughout Path B's
-    // wait). Errors keep the sheet open (the global toast carries the
-    // message); success closes below.
+    // wait). Errors keep the sheet open (the inline message carries the
+    // reason); success closes below.
     onAccepted: {
         submitting = true;
-        App.pairByServerId(serverId, pinField.text);
+        pinRejected = false;
+        App.pairByServerId(serverId, pinInput.text);
     }
     onRejected: App.cancelReversePairing()
 
@@ -199,13 +329,27 @@ Kit.ContentDialog {
             if (App.reversePairingPhase === "approved")
                 pairDialog.close();
         }
+        // Keyed by the STABLE server id: a rejection for some other box must
+        // never mark this sheet's field.
+        function onPairingFailed(failedServerId, reasonToken) {
+            if (failedServerId !== pairDialog.serverId)
+                return;
+            pairDialog.submitting = false;
+            pairDialog.rejections += 1;
+            pairDialog.pinReason = reasonToken;
+            pairDialog.pinRejected = true;
+            pinInput.forceActiveFocus();
+            pinInput.selectAll();
+        }
     }
 
     onClosed: {
         // No orphan poll outlives the sheet.
         if (App.reversePairingPhase !== "approved")
             App.cancelReversePairing();
-        pinField.clear();
+        pinInput.clear();
         submitting = false;
+        pinRejected = false;
+        rejections = 0;
     }
 }

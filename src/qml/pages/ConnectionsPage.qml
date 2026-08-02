@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Connections destination (design flow 02): FOUND (scan + un-remembered
-// discovered rows — a box with a REMEMBERED row never duplicates here; the
-// C++ one-spot rule keeps the two lists disjoint and the remembered chip
-// carries its reachability) and REMEMBERED (link-state rows with latency +
-// per-state actions), plus the
-// pairing dialog — BOTH pairing paths live in one sheet (android PairPinDialog
-// parity): the forward 6-digit PIN field is always typeable, and our reverse
-// 4-digit clientPin is sent to the satellite automatically on open (no tap
-// gates either path; whichever completes first pairs the box). All behavior
-// forwards to App (QML_CONTRACT.md A2); this file holds zero business logic.
+// The Connections destination — the inventory of HOSTS (design v3 "S10 ·
+// Connections"): manage the link, report the bindings riding on it. FOUND above
+// REMEMBERED, mirroring Controllers row for row. There is no path into a
+// binding editor from here: a host carries up to four slots, so no row maps to
+// one binding and the CARRYING manifest is read-only — never a link.
 //
-// The old pairTick polling hack is gone: submission progress is a dialog-local
-// flag resolved by pairingSucceeded / errorMessage, and everything else binds
-// reactive properties (scanning, discoveredServers, reversePairing*).
+// Two v3 rules shape the content. The dot never travels alone: every dot is
+// paired with its localized chip and both read the model's tokens, never a
+// literal. And forgetting a host drops every binding on it, so the confirm NAMES
+// the pads it will drop — a confirm that says "some bindings will be lost" is
+// not a confirm.
+//
+// All behavior forwards to App (QML_CONTRACT.md A2); this file holds zero
+// business logic.
 
+// Bound so delegates reference the outer `page` id and their `required` model
+// props statically. `App` stays unqualified: a runtime context property the
+// linter cannot resolve (the accepted limitation every page notes).
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -26,18 +29,28 @@ import Dish.Chrome
 
 Kit.Page {
     id: page
+    title: qsTr("Connections")
 
-    // ── Shell header (rendered by AppShell, not here) ────────────────────────
+    // ---- Shell header contract (rendered by AppShell, not by this body).
     readonly property string headerTitle: qsTr("Connections")
     readonly property string headerSub: App.connectionCount === 0
         ? qsTr("%1 found · nothing remembered yet").arg(App.foundCount)
-        : qsTr("%1 streaming · %2 remembered").arg(App.onlineCount).arg(App.connectionCount)
+        : qsTr("%1 online · %2 remembered").arg(App.onlineCount).arg(App.connectionCount)
     readonly property string headerDot: App.connectionCount === 0 ? "muted"
                                         : App.onlineCount > 0 ? "success" : "warning"
 
-    // Scan on open (android #125 parity): entering the destination surfaces
-    // reachable satellites without an extra Scan tap; startDiscovery() is
-    // guarded manager-side so an in-flight scan is never double-triggered.
+    // Where the free Satellite host app comes from (the same link the wizard's
+    // destination step offers).
+    readonly property string satelliteUrl: "https://dish.tinkernorth.com/downloads/satellite"
+
+    // The host whose overflow menu is open, mirrored as plain values so nothing
+    // reads a property off a delegate that may already be recycled.
+    property string currentConnectionId: ""
+    property string currentLabel: ""
+
+    // Scan on open: entering the destination surfaces reachable satellites
+    // without an extra tap; startDiscovery() is guarded manager-side so an
+    // in-flight sweep is never double-triggered.
     Component.onCompleted: if (!App.scanning) App.startDiscovery()
 
     // A satellite can park a pairing request C++-side (a stale-key box we tried
@@ -56,8 +69,501 @@ Kit.Page {
         }
     }
 
-    // Localized chip text for a ConnectionListModel `chip` token. Pure
-    // presentation — the C++ vends the token, not the copy.
+    ColumnLayout {
+        id: bodyColumn
+        width: parent.width
+        spacing: Tokens.s5
+
+        // ---- FOUND ----------------------------------------------------------
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Tokens.s4
+
+            Kit.SectionHeader { glyph: "satellite"; label: qsTr("Found") }
+            Item { Layout.fillWidth: true }
+            Kit.LiveStat {
+                live: App.scanning
+                text: App.scanning ? qsTr("scanning…")
+                                   : qsTr("%1 found").arg(App.foundCount)
+            }
+            // ONE control. Discovery here is a bounded ~4 s sweep with no
+            // cancel seam, so there is no scan to stop — the verb reports the
+            // sweep and the bar below is the busy cue.
+            Kit.DishButton {
+                text: App.scanning ? qsTr("Scanning…") : qsTr("Scan")
+                variant: Kit.DishButton.Outline
+                enabled: !App.scanning
+                onClicked: App.startDiscovery()
+            }
+        }
+
+        Kit.DishProgressBar {
+            visible: App.scanning
+            indeterminate: true
+            Layout.fillWidth: true
+        }
+
+        // Empty FOUND is a real state in BOTH cases — the copy never claims to
+        // be searching after the sweep has finished.
+        Kit.EmptyState {
+            visible: App.foundCount === 0 && App.scanning
+            glyph: "satellite-broadcasting"
+            title: qsTr("Looking for Satellites")
+            body: qsTr("Scanning your network over mDNS and UDP broadcast. Hosts appear here as they answer.")
+            showAction: false
+            Layout.fillWidth: true
+            Layout.topMargin: Tokens.s5
+            Layout.bottomMargin: Tokens.s5
+        }
+
+        Kit.EmptyState {
+            visible: App.foundCount === 0 && !App.scanning
+            glyph: "satellite-off"
+            title: qsTr("No Satellites found")
+            body: qsTr("A PC shows up here once the free Satellite app is running on it and both machines are on the same network.")
+            showAction: false
+            Layout.fillWidth: true
+            Layout.topMargin: Tokens.s5
+            Layout.bottomMargin: Tokens.s5
+
+            // Two next steps, so the state is a way forward rather than a
+            // dead end. EmptyState offers one action slot; the pair rides its
+            // column as a row.
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: Tokens.s3
+                spacing: Tokens.s4
+
+                Kit.DishButton {
+                    text: qsTr("Get Satellite ↗")
+                    variant: Kit.DishButton.Outline
+                    onClicked: App.openExternalUrl(page.satelliteUrl)
+                }
+                Kit.DishButton {
+                    text: qsTr("Scan again")
+                    variant: Kit.DishButton.Outline
+                    enabled: !App.scanning
+                    onClicked: App.startDiscovery()
+                }
+            }
+        }
+
+        // Found rows: seen in the sweep, not remembered. The one-spot rule keeps
+        // an id that already has a REMEMBERED row out of this list entirely.
+        Repeater {
+            model: App.discoveredServers
+
+            delegate: Kit.Card {
+                id: foundRow
+                required property var modelData
+                readonly property string displayName:
+                    modelData.name.length > 0 ? modelData.name : modelData.ip
+
+                filled: false
+                dense: true
+                Layout.fillWidth: true
+
+                Accessible.role: Accessible.ListItem
+                Accessible.name: qsTr("%1, found, %2")
+                                     .arg(foundRow.displayName).arg(foundRow.modelData.ip)
+
+                contentItem: RowLayout {
+                    spacing: Tokens.s4
+
+                    Kit.BrandGlyph {
+                        glyph: "satellite"
+                        Layout.preferredWidth: Tokens.glyphSm
+                        Layout.preferredHeight: Tokens.glyphSm
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    // Dot and chip always travel together: hue alone is not a
+                    // status.
+                    Kit.StatusDot {
+                        token: "muted"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Label {
+                        text: foundRow.displayName
+                        color: Theme.onSurface
+                        font.pixelSize: Tokens.textBase
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Kit.LiveStat {
+                        text: foundRow.modelData.ip + " · " + foundRow.modelData.source
+                        elide: Text.ElideRight
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Kit.CapabilityChip {
+                        text: qsTr("Found")
+                        tone: Kit.CapabilityChip.Neutral
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Kit.DishButton {
+                        text: qsTr("Pair…")
+                        variant: Kit.DishButton.Primary
+                        Layout.alignment: Qt.AlignVCenter
+                        onClicked: pairDialog.openFor(foundRow.modelData.id,
+                                                      foundRow.displayName)
+                    }
+                }
+            }
+        }
+
+        // ---- REMEMBERED -----------------------------------------------------
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: Tokens.s5
+            spacing: Tokens.s4
+
+            Kit.SectionHeader { glyph: "satellite"; label: qsTr("Remembered") }
+            Item { Layout.fillWidth: true }
+            Kit.LiveStat { text: qsTr("%1 remembered").arg(App.connectionCount) }
+        }
+
+        Kit.EmptyState {
+            visible: App.connectionCount === 0
+            glyph: "satellite-off"
+            title: qsTr("Nothing remembered yet")
+            body: qsTr("No remembered satellites yet — pair one and it is saved here.")
+            showAction: false
+            Layout.fillWidth: true
+            Layout.topMargin: Tokens.s5
+        }
+
+        // One card per remembered host. Content-sized and inert: the page's
+        // single scroller owns all overflow, and the model's scoped dataChanged
+        // keeps a ~1 Hz latency tick from resetting the view.
+        ListView {
+            id: hostList
+            visible: App.connectionCount > 0
+            Layout.fillWidth: true
+            Layout.preferredHeight: contentHeight
+            interactive: false
+            spacing: Tokens.s5
+            model: App.connectionModel
+
+            delegate: Kit.Card {
+                id: host
+                width: ListView.view ? ListView.view.width : implicitWidth
+
+                // ConnectionListModel roles (QML_CONTRACT.md §3).
+                required property string connectionId
+                required property string label
+                required property string ip
+                required property int udpPort
+                required property string linkState
+                required property string chip
+                required property string dotColor
+                required property string glyph
+                required property bool liveLink
+                required property string latencyText
+                required property int latencySamples
+
+                readonly property bool needsPairing: chip === "needsPairing"
+                readonly property bool connecting: linkState === "connecting"
+                // Latency renders only while the link is genuinely live and has
+                // samples — never "~0 ms".
+                readonly property bool showLatency:
+                    latencySamples > 0 && (linkState === "connected" || chip === "unstable")
+                readonly property var carrying:
+                    page.carryingLines(connectionId, App.boundSlotCount)
+
+                Accessible.role: Accessible.ListItem
+                Accessible.name: qsTr("%1, %2").arg(host.label).arg(page.chipText(host.chip))
+                                 + (host.showLatency ? " · " + host.latencyText : "")
+
+                contentItem: ColumnLayout {
+                    spacing: Tokens.s5
+
+                    // ── Header row: glyph · dot · name · address · chip ──────
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Tokens.s4
+
+                        Kit.BrandGlyph {
+                            id: hostGlyph
+                            glyph: hostGlyph.glyphForToken(host.glyph)
+                            Layout.preferredWidth: Tokens.glyphSm
+                            Layout.preferredHeight: Tokens.glyphSm
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Kit.StatusDot {
+                            token: host.dotColor
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Label {
+                            text: host.label
+                            color: Theme.onSurface
+                            font.pixelSize: Tokens.textBase
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        // The ONE "•" in the app: the contract-defined detail
+                        // composition. Everything else separates with "·".
+                        Kit.LiveStat {
+                            text: qsTr("%1 • UDP %2").arg(host.ip).arg(host.udpPort)
+                            elide: Text.ElideRight
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Kit.LiveStat {
+                            visible: host.showLatency
+                            live: true
+                            text: qsTr("%1 · last %2 pings")
+                                      .arg(host.latencyText).arg(host.latencySamples)
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Kit.CapabilityChip {
+                            text: page.chipText(host.chip)
+                            tone: page.chipTone(host.chip)
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+
+                    // ── CARRYING: the read-only manifest, never a link ───────
+                    Kit.Card {
+                        filled: false
+                        dense: true
+                        Layout.fillWidth: true
+
+                        // Announced as one block: a screen reader should hear
+                        // what the host carries, not walk six unlabelled lines.
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: qsTr("Carrying") + ": "
+                                         + (host.carrying.length > 0
+                                            ? host.carrying.join(", ")
+                                            : qsTr("Nothing bound yet"))
+
+                        contentItem: ColumnLayout {
+                            spacing: Tokens.s2
+
+                            Kit.Eyebrow {
+                                mutedTone: true
+                                text: qsTr("Carrying")
+                            }
+                            Label {
+                                visible: host.carrying.length === 0
+                                text: qsTr("Nothing bound yet")
+                                color: Theme.mutedStrong
+                                font.pixelSize: Tokens.textMeta
+                            }
+                            Repeater {
+                                model: host.carrying
+                                delegate: Label {
+                                    id: manifestLine
+                                    required property int index
+                                    required property string modelData
+                                    text: manifestLine.modelData
+                                    color: manifestLine.index === 0 ? Theme.onSurface
+                                                                    : Theme.mutedStrong
+                                    font.pixelSize: Tokens.textMeta
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Action row: one primary inline, Forget behind ⋯ ──────
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Tokens.s4
+
+                        Item { Layout.fillWidth: true }
+
+                        Kit.DishButton {
+                            visible: host.liveLink
+                            text: qsTr("Disconnect")
+                            variant: Kit.DishButton.Outline
+                            onClicked: App.disconnectConnection(host.connectionId)
+                        }
+                        // Terminal until re-paired: the key was rejected, so
+                        // Reconnect would only fail again.
+                        Kit.DishButton {
+                            visible: !host.liveLink && host.needsPairing
+                            text: qsTr("Pair…")
+                            variant: Kit.DishButton.Primary
+                            onClicked: pairDialog.openFor(host.connectionId, host.label)
+                        }
+                        Kit.DishButton {
+                            visible: !host.liveLink && !host.needsPairing
+                            text: host.connecting ? qsTr("Connecting…") : qsTr("Reconnect")
+                            variant: Kit.DishButton.Outline
+                            enabled: !host.connecting
+                            onClicked: App.reconnectConnection(host.connectionId)
+                        }
+                        // The destructive action sits behind the overflow so it
+                        // is never the mis-click next to Disconnect.
+                        Kit.DishButton {
+                            text: "⋯"
+                            variant: Kit.DishButton.Outline
+                            Accessible.name: qsTr("More actions for %1").arg(host.label)
+                            onClicked: {
+                                page.currentConnectionId = host.connectionId;
+                                page.currentLabel = host.label;
+                                hostMenu.popup();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Non-visual join ------------------------------------------------
+        // The manifest needs the pads riding each host, which no connection role
+        // carries. This mirrors the slot model the Home page already renders
+        // rather than adding an App member.
+        Item {
+            visible: false
+
+            Repeater {
+                id: slotJoin
+                model: App.slotModel
+                delegate: Item {
+                    required property string name
+                    required property string boundConnectionId
+                    required property string emulateName
+                }
+            }
+        }
+    }
+
+    // ---- Host overflow menu -------------------------------------------------
+    Menu {
+        id: hostMenu
+
+        background: Rectangle {
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.outline
+            radius: Tokens.radiusButton
+        }
+
+        MenuItem {
+            id: forgetItem
+            text: qsTr("Forget")
+
+            contentItem: Text {
+                text: forgetItem.text
+                font.pixelSize: Tokens.textSummary
+                color: Theme.error
+                verticalAlignment: Text.AlignVCenter
+            }
+            background: Rectangle {
+                color: forgetItem.highlighted ? Theme.primaryHover : "transparent"
+                radius: Tokens.radiusChip
+            }
+            onTriggered: page.confirmForget()
+        }
+    }
+
+    // ---- Forget confirm -----------------------------------------------------
+    // It names every pad it will drop; the pairing key goes with it.
+    Kit.ConfirmDialog {
+        id: forgetConfirm
+
+        property var pads: []
+
+        eyebrow: qsTr("Forget")
+        heading: qsTr("Forget %1?").arg(page.currentLabel)
+        bodyText: qsTr("Its pairing key is deleted — you’ll need the PIN again.")
+                  + (forgetConfirm.pads.length > 0
+                     ? "\n" + page.bindingsDroppedText(forgetConfirm.pads.length) : "")
+        bulletLines: forgetConfirm.pads
+        acceptText: qsTr("Forget")
+        rejectText: qsTr("Cancel")
+        destructiveAccept: true
+
+        onAccepted: {
+            App.forgetConnection(page.currentConnectionId);
+            forgetConfirm.close();
+        }
+    }
+
+    // ---- Telemetry footer ---------------------------------------------------
+    footer: Item {
+        implicitHeight: telemetryRow.implicitHeight + Tokens.s8
+
+        RowLayout {
+            id: telemetryRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: Tokens.pagePadding
+            anchors.rightMargin: Tokens.pagePadding
+            spacing: Tokens.s9
+
+            Kit.LiveStat {
+                text: qsTr("%1 online · %2 bindings")
+                          .arg(App.onlineCount).arg(App.boundSlotCount)
+            }
+            Item { Layout.fillWidth: true }
+            Kit.LiveStat {
+                text: qsTr("%1 remembered").arg(App.connectionCount)
+            }
+        }
+    }
+
+    // ---- PAIRING: the shared both-paths-at-once sheet ------------------------
+    // Path A (type the satellite's 6-digit PIN) is always live; Path B (our
+    // 4-digit clientPin) is sent automatically by openFor(). Same-module bare
+    // type — the wizard's destination step opens the same sheet.
+    PairingDialog { id: pairDialog }
+
+    // ---- Helpers (presentation only; wording owned by this page) ------------
+
+    function confirmForget() {
+        if (page.currentConnectionId.length === 0)
+            return;
+        forgetConfirm.pads = page.carryingPads(page.currentConnectionId);
+        forgetConfirm.open();
+    }
+
+    // "2 bindings ride on it and will be dropped:" — explicit singular/plural
+    // pairs (no %n): the app ships English fallback catalogs and an
+    // untranslated %n would render its "(s)" literally.
+    function bindingsDroppedText(n) {
+        return n === 1 ? qsTr("1 binding rides on it and will be dropped:")
+                       : qsTr("%1 bindings ride on it and will be dropped:").arg(n);
+    }
+
+    // The pads riding `connectionId`, by name — what a Forget will drop.
+    function carryingPads(connectionId) {
+        var out = [];
+        if (connectionId.length === 0)
+            return out;
+        for (var i = 0; i < slotJoin.count; ++i) {
+            var entry = slotJoin.itemAt(i);
+            if (entry && entry.boundConnectionId === connectionId)
+                out.push(entry.name);
+        }
+        return out;
+    }
+
+    // The manifest lines: "<pad> — as <type>". The type is a property of the
+    // binding, so it prints here and never on the pad. `epoch` is read by the
+    // caller's binding so the join re-runs when the slot list moves (the mirror
+    // carries no NOTIFY of its own).
+    function carryingLines(connectionId, epoch) {
+        var out = [];
+        if (connectionId.length === 0)
+            return out;
+        for (var i = 0; i < slotJoin.count; ++i) {
+            var entry = slotJoin.itemAt(i);
+            if (!entry || entry.boundConnectionId !== connectionId)
+                continue;
+            out.push(entry.emulateName.length > 0
+                     ? qsTr("%1 — as %2").arg(entry.name).arg(entry.emulateName)
+                     : entry.name);
+        }
+        return out;
+    }
+
+    // Localized chip text/tone for a link-state token — the same ladders Home
+    // renders from the identical tokens. The C++ vends the token, not the copy.
     function chipText(token) {
         switch (token) {
         case "found":        return qsTr("Found");
@@ -70,294 +576,14 @@ Kit.Page {
         default:             return token;
         }
     }
-
-    // Chip tone (design chipToneColor): online green, transient amber, ready
-    // accent, the rest muted.
-    function chipColor(token) {
+    function chipTone(token) {
         switch (token) {
-        case "online":       return Theme.success;
-        case "connecting":   return Theme.warning;
-        case "unstable":     return Theme.warning;
-        case "needsPairing": return Theme.warning;
-        case "ready":        return Theme.primary;
-        default:             return Theme.muted;
+        case "online":       return Kit.CapabilityChip.Ok;
+        case "connecting":   return Kit.CapabilityChip.Warn;
+        case "unstable":     return Kit.CapabilityChip.Warn;
+        case "needsPairing": return Kit.CapabilityChip.Warn;
+        case "ready":        return Kit.CapabilityChip.Present;
+        default:             return Kit.CapabilityChip.Neutral;
         }
     }
-
-    // Kit.Page's default slot is a plain Column (Layout.* attached props are
-    // inert there), so the whole body rides ONE ColumnLayout pinned to the
-    // page width — everything inside uses Layout.* normally.
-    ColumnLayout {
-        width: parent.width
-        spacing: Tokens.s5
-
-    // ── FOUND ────────────────────────────────────────────────────────────────
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Tokens.s4
-
-        Kit.SectionHeader { glyph: "satellite"; label: qsTr("Found") }
-        Item { Layout.fillWidth: true }
-        Kit.OutlineButton {
-            text: App.scanning ? qsTr("Scanning…") : qsTr("Scan")
-            enabled: !App.scanning
-            onClicked: App.startDiscovery()
-        }
-    }
-
-    Kit.DishProgressBar {
-        Layout.fillWidth: true
-        visible: App.scanning
-        indeterminate: true
-    }
-
-    // The FOUND list panel: one surface card, hairline-divided rows.
-    Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: foundColumn.implicitHeight
-        radius: Tokens.radiusCard
-        color: Theme.surface
-        border.width: 1
-        border.color: Theme.outline
-        clip: true
-
-        ColumnLayout {
-            id: foundColumn
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: 0
-
-            Label {
-                visible: App.discoveredServers.length === 0
-                text: App.scanning ? qsTr("Searching your LAN…")
-                                   : qsTr("No satellites found yet — hit Scan to look again.")
-                color: Theme.muted
-                font.pixelSize: Tokens.textSummary
-                Layout.fillWidth: true
-                Layout.margins: Tokens.s7
-            }
-
-            Repeater {
-                model: App.discoveredServers
-                delegate: ColumnLayout {
-                    id: foundRow
-                    required property int index
-                    required property var modelData
-                    readonly property string displayName:
-                        modelData.name.length > 0 ? modelData.name : modelData.ip
-
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    Rectangle {
-                        visible: foundRow.index > 0
-                        Layout.fillWidth: true
-                        implicitHeight: 1
-                        color: Theme.outline
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Tokens.s5
-                        Layout.bottomMargin: Tokens.s5
-                        Layout.leftMargin: Tokens.s7
-                        Layout.rightMargin: Tokens.s7
-                        spacing: Tokens.s5
-
-                        Kit.BrandGlyph {
-                            glyph: "satellite"
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 18
-                        }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Label {
-                                text: foundRow.displayName
-                                color: Theme.onSurface
-                                font.pixelSize: Tokens.textBase
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                            Label {
-                                text: foundRow.modelData.ip + " · " + foundRow.modelData.source
-                                color: Theme.muted
-                                font.family: Tokens.monoFamily
-                                font.pixelSize: Tokens.textMeta
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
-                        Kit.KitButton {
-                            text: qsTr("Pair…")
-                            onClicked: pairDialog.openFor(foundRow.modelData.id,
-                                                          foundRow.displayName)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── REMEMBERED ───────────────────────────────────────────────────────────
-
-    Kit.SectionHeader {
-        glyph: "satellite"
-        label: qsTr("Remembered")
-        Layout.topMargin: Tokens.s2
-    }
-
-    Rectangle {
-        Layout.fillWidth: true
-        implicitHeight: rememberedColumn.implicitHeight
-        radius: Tokens.radiusCard
-        color: Theme.surface
-        border.width: 1
-        border.color: Theme.outline
-        clip: true
-
-        ColumnLayout {
-            id: rememberedColumn
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: 0
-
-            Label {
-                visible: rememberedRepeater.count === 0
-                text: qsTr("No remembered satellites yet — pair one and it is saved here.")
-                color: Theme.muted
-                font.pixelSize: Tokens.textSummary
-                Layout.fillWidth: true
-                Layout.margins: Tokens.s7
-            }
-
-            Repeater {
-                id: rememberedRepeater
-                model: App.connectionModel
-                delegate: ColumnLayout {
-                    id: row
-
-                    // ConnectionListModel roles (QML_CONTRACT.md §3).
-                    required property int index
-                    required property string connectionId
-                    required property string label
-                    required property string ip
-                    required property int udpPort
-                    required property string linkState
-                    required property string chip
-                    required property string dotColor
-                    required property string glyph
-                    required property bool liveLink
-                    required property string latencyText
-                    required property int latencySamples
-
-                    readonly property bool needsPairing: chip === "needsPairing"
-                    readonly property bool connecting: linkState === "connecting"
-                    readonly property bool showLatency:
-                        latencySamples > 0 && (linkState === "connected"
-                                               || chip === "unstable")
-
-                    Layout.fillWidth: true
-                    spacing: 0
-
-                    Rectangle {
-                        visible: row.index > 0
-                        Layout.fillWidth: true
-                        implicitHeight: 1
-                        color: Theme.outline
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 9
-                        Layout.bottomMargin: 9
-                        Layout.leftMargin: Tokens.s7
-                        Layout.rightMargin: Tokens.s7
-                        spacing: Tokens.s5
-
-                        Kit.BrandGlyph {
-                            id: rowGlyph
-                            glyph: rowGlyph.glyphForToken(row.glyph)
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 18
-                        }
-                        Kit.StatusDot { token: row.dotColor }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Label {
-                                text: row.label
-                                color: Theme.onSurface
-                                font.pixelSize: Tokens.textBase
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                            RowLayout {
-                                spacing: Tokens.s3
-                                Layout.fillWidth: true
-                                Label {
-                                    text: qsTr("%1 • UDP %2").arg(row.ip).arg(row.udpPort)
-                                    color: Theme.muted
-                                    font.family: Tokens.monoFamily
-                                    font.pixelSize: Tokens.textMeta
-                                    elide: Text.ElideRight
-                                }
-                                Label {
-                                    visible: row.showLatency
-                                    text: qsTr("%1 · last %2 pings")
-                                              .arg(row.latencyText).arg(row.latencySamples)
-                                    color: Theme.success
-                                    font.family: Tokens.monoFamily
-                                    font.pixelSize: Tokens.textMeta
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                Item { visible: !row.showLatency; Layout.fillWidth: true }
-                            }
-                        }
-
-                        Label {
-                            text: page.chipText(row.chip)
-                            color: page.chipColor(row.chip)
-                            font.pixelSize: Tokens.textMeta
-                            rightPadding: Tokens.s2
-                        }
-
-                        // Per-state action (design): live → Disconnect; needs
-                        // pairing → Pair…; else Reconnect (disabled mid-connect).
-                        Kit.OutlineButton {
-                            text: qsTr("Disconnect")
-                            visible: row.liveLink
-                            onClicked: App.disconnectConnection(row.connectionId)
-                        }
-                        Kit.KitButton {
-                            text: qsTr("Pair…")
-                            visible: !row.liveLink && row.needsPairing
-                            onClicked: pairDialog.openFor(row.connectionId, row.label)
-                        }
-                        Kit.OutlineButton {
-                            text: row.connecting ? qsTr("Connecting…") : qsTr("Reconnect")
-                            visible: !row.liveLink && !row.needsPairing
-                            enabled: !row.connecting
-                            onClicked: App.reconnectConnection(row.connectionId)
-                        }
-                        Kit.OutlineButton {
-                            text: qsTr("Forget")
-                            onClicked: App.forgetConnection(row.connectionId)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    } // body ColumnLayout
-
-    // ── PAIRING: the shared both-paths-at-once sheet (PairingDialog.qml) ─────
-    // Path A (type the satellite's 6-digit PIN) is always live; Path B (our
-    // 4-digit clientPin) is sent automatically by openFor(). Same-module bare
-    // type — also used by the setup-guide wizard.
-    PairingDialog { id: pairDialog }
 }

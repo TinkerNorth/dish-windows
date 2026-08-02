@@ -1,20 +1,32 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The "Configure controls" sub-page (design frame 13) — per-(vid,pid)
-// raw-joystick remap for one slot. A capture banner sits on top while
-// listening; below it a two-column grid: Buttons & D-pad on the left, Sticks &
-// Triggers plus the invert toggles on the right. Each assign row is itself the
-// capture affordance — click it, then physically press the input to bind it.
+// Configure controls (SCR §7.1) — the per-(vid,pid) raw-joystick remap for one
+// slot, reachable from the Controllers card and nowhere else. A capture card on
+// top, then two columns: Buttons & D-pad on the left, Sticks & triggers plus the
+// invert toggles on the right. Each assign row is the capture affordance: click
+// it, then physically press the input.
 //
-// It targets a slot set BEFORE push (slotId/slotName). All data + actions come
-// solely from the frozen App contract (slotRemap / assignSlotInput /
-// setSlotInvert / resetSlotRemap / startInputCapture / stopInputCapture /
-// rawInputCaptured): no business logic lives here. slotRemap is a one-shot
-// read, so it is re-pulled after every mutation.
+// Capture is an ARMED MODE, and an armed mode needs escapes (D39 / SCR §12.18):
+//   * Esc cancels it.
+//   * It auto-expires after kCaptureTimeoutMs with an inline note, so a user who
+//     armed the wrong row is never stuck waiting on an input they cannot give.
+//   * Every row carries a real Clear control — the contract defines -1 as
+//     "unassigned" and nothing in the UI produced it before.
+//   * stopInputCapture() is bound to THREE exits — destruction, stack
+//     deactivation and the window going inactive — because a forgotten arm
+//     leaves the bridge streaming raw reports forever.
+//
+// The 2px accent border on the capture card is the one 2px border in the app: it
+// is an ARMED state, not a selection, and selection is 1px everywhere else.
+//
+// All data and actions come from the frozen App contract (slotRemap /
+// assignSlotInput / setSlotInvert / resetSlotRemap / startInputCapture /
+// stopInputCapture / rawInputCaptured). slotRemap is a one-shot read, so it is
+// re-pulled after every mutation.
 
-// Bound so the inline AssignRow component may reference the page id without an
-// unqualified-access warning, and so its required model bindings resolve.
+// Bound so the shared assign-row delegate resolves the page id statically and
+// its required model bindings resolve.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -35,298 +47,455 @@ Kit.Page {
         ? qsTr("%1 · raw DirectInput remap").arg(page.slotName)
         : qsTr("Raw DirectInput remap")
 
-    // The effective remap map last read from App.slotRemap(slotId). Re-pulled on
-    // load and after every assign/invert/reset (slotRemap is one-shot). Empty
-    // object until the first read; an empty/no-identity slot stays {} (the
-    // not-remappable note shows).
+    // The design's readable measure for the two-column remap board (SCR §7.1).
+    readonly property int bodyWidth: 760
+
+    // How long an armed row waits for a deliberate input before giving up. Long
+    // enough to reach across a desk, short enough that a mis-click self-heals.
+    readonly property int captureTimeoutMs: 10000
+
+    // The capture kinds the contract defines for assignSlotInput.
+    readonly property int kindAxis: 0
+    readonly property int kindButton: 1
+    readonly property int kindHat: 2
+
+    // The effective remap last read from App.slotRemap(slotId). Re-pulled on load
+    // and after every assign/invert/reset (slotRemap is one-shot). An empty
+    // object means the slot resolved to no (vid,pid) — the not-remappable note.
     property var remap: ({})
 
     // The logical output currently capturing ("" = none) and its display label
-    // for the banner. Only one row captures at a time.
+    // for the capture card. Only one row captures at a time.
     property string capturingTarget: ""
     property string capturingLabel: ""
 
-    // True once a real remap has been read (the slot resolved to a (vid,pid)).
-    readonly property bool hasRemap: remap && remap.a !== undefined
+    // Raised when a capture timed out, cleared the moment anything is armed
+    // again — the note explains the row that just reverted, not a live state.
+    property bool captureExpired: false
+
+    readonly property bool capturing: page.capturingTarget.length > 0
+    readonly property bool hasRemap: page.remap && page.remap.a !== undefined
+
+    // The window losing focus is a leave: an Alt-Tab away from an armed row is
+    // indistinguishable from abandoning it, and the bridge must not keep
+    // streaming behind another app.
+    readonly property bool windowActive: page.Window.active
 
     Component.onCompleted: page.refresh()
 
-    // Leaving the page MUST stop capture so the bridge doesn't keep streaming
-    // raw inputs (contract requirement). Covers both Back and a rail switch.
-    Component.onDestruction: App.stopInputCapture() // qmllint disable unqualified
+    // Three exits, not one. Component.onDestruction covers Back and a rail
+    // switch that replaces the stack; onDeactivating covers a push on top of
+    // this page; windowActive covers Alt-Tab and a minimise.
+    Component.onDestruction: App.stopInputCapture()
+    StackView.onDeactivating: page.cancelCapture()
+    onWindowActiveChanged: if (!page.windowActive) page.cancelCapture()
 
-    function refresh() {
-        page.remap = App.slotRemap(page.slotId); // qmllint disable unqualified
+    // Esc is the universal "get me out of this mode" on Windows; without it the
+    // Stop capture button is the only exit and it is 400px from the pointer.
+    Shortcut {
+        sequence: "Esc"
+        enabled: page.capturing
+        onActivated: page.cancelCapture()
     }
 
-    // Begin capturing for one logical output: arm the bridge and remember which
-    // output the next raw input binds to. Re-pointing from another row first
-    // stops the prior arm implicitly (startInputCapture re-points the filter).
+    Timer {
+        id: captureTimeout
+        interval: page.captureTimeoutMs
+        repeat: false
+        onTriggered: {
+            page.cancelCapture();
+            page.captureExpired = true;
+        }
+    }
+
+    function refresh() {
+        page.remap = App.slotRemap(page.slotId);
+    }
+
+    // Arm one logical output: point the bridge's filter at this slot and
+    // remember which output the next raw input binds to. Re-pointing from
+    // another row restarts the budget with it.
     function beginCapture(target, label) {
+        page.captureExpired = false;
         page.capturingTarget = target;
         page.capturingLabel = label;
-        App.startInputCapture(page.slotId); // qmllint disable unqualified
+        App.startInputCapture(page.slotId);
+        captureTimeout.restart();
     }
 
     function cancelCapture() {
+        captureTimeout.stop();
+        if (page.capturingTarget.length === 0) {
+            return;
+        }
         page.capturingTarget = "";
         page.capturingLabel = "";
-        App.stopInputCapture(); // qmllint disable unqualified
+        App.stopInputCapture();
+    }
+
+    // The contract's "unassigned" write. Clearing is not rebinding: it is the
+    // only way back to an unbound output.
+    function clearAssignment(target, kind) {
+        page.cancelCapture();
+        App.assignSlotInput(page.slotId, target, kind, -1);
+        page.refresh();
+    }
+
+    // ---- Readouts -----------------------------------------------------------
+
+    function isAssigned(value) {
+        return value !== undefined && value !== null && value >= 0;
     }
 
     // Render the current source of a plain button/stick/hat output: the int
     // index roles read -1 when unassigned. `kind` labels the readout.
-    function indexLabel(value, kind) {
-        if (value === undefined || value === null || value < 0) {
+    function indexLabel(value, kindWord) {
+        if (!page.isAssigned(value)) {
             return qsTr("Unassigned");
         }
-        return qsTr("%1 %2").arg(kind).arg(value);
+        return qsTr("%1 %2").arg(kindWord).arg(value);
     }
 
     // Render a trigger source: {kind:"axis"|"button", index:int}.
     function triggerLabel(obj) {
-        if (!obj || obj.index === undefined || obj.index < 0) {
+        if (!obj || !page.isAssigned(obj.index)) {
             return qsTr("Unassigned");
         }
         return obj.kind === "button" ? qsTr("Button %1 · digital").arg(obj.index)
                                      : qsTr("Axis %1 · analog").arg(obj.index);
     }
 
-    // The d-pad current readout: a per-direction button index wins; else the
-    // shared hat (when one is mapped); else unassigned.
+    // The d-pad readout: a per-direction button override wins; else the shared
+    // hat; else unassigned.
     function dpadLabel(dirValue) {
-        if (dirValue !== undefined && dirValue !== null && dirValue >= 0) {
+        if (page.isAssigned(dirValue)) {
             return qsTr("Button %1").arg(dirValue);
         }
-        if (page.remap.hatIndex !== undefined && page.remap.hatIndex >= 0) {
+        if (page.isAssigned(page.remap.hatIndex)) {
             return qsTr("Hat %1").arg(page.remap.hatIndex);
         }
         return qsTr("Unassigned");
     }
 
+    // ---- Row descriptors ----------------------------------------------------
+    // { label, target, kind, value, assigned } — `kind` is what a Clear writes
+    // alongside index -1, and withAssignment routes on it.
+
+    function buttonRow(label, target, value) {
+        return {
+            "label": label,
+            "target": target,
+            "kind": page.kindButton,
+            "value": page.indexLabel(value, qsTr("Button")),
+            "assigned": page.isAssigned(value)
+        };
+    }
+
+    // A direction with its own button clears as a Button; a direction reading
+    // the shared hat clears as a Hat — which drops the hat for EVERY direction,
+    // because one hat is one source.
+    function dpadRow(label, target, value) {
+        return {
+            "label": label,
+            "target": target,
+            "kind": page.isAssigned(value) ? page.kindButton : page.kindHat,
+            "value": page.dpadLabel(value),
+            "assigned": page.isAssigned(value) || page.isAssigned(page.remap.hatIndex)
+        };
+    }
+
+    function axisRow(label, target, value) {
+        return {
+            "label": label,
+            "target": target,
+            "kind": page.kindAxis,
+            "value": page.indexLabel(value, qsTr("Axis")),
+            "assigned": page.isAssigned(value)
+        };
+    }
+
+    function triggerRow(label, target, obj) {
+        return {
+            "label": label,
+            "target": target,
+            "kind": obj && obj.kind === "button" ? page.kindButton : page.kindAxis,
+            "value": page.triggerLabel(obj),
+            "assigned": obj !== undefined && obj !== null && page.isAssigned(obj.index)
+        };
+    }
+
+    readonly property var buttonRows: [
+        page.buttonRow(qsTr("A (bottom)"), "a", page.remap.a),
+        page.buttonRow(qsTr("B (right)"), "b", page.remap.b),
+        page.buttonRow(qsTr("X (left)"), "x", page.remap.x),
+        page.buttonRow(qsTr("Y (top)"), "y", page.remap.y),
+        page.buttonRow(qsTr("Left shoulder"), "leftShoulder", page.remap.leftShoulder),
+        page.buttonRow(qsTr("Right shoulder"), "rightShoulder", page.remap.rightShoulder),
+        page.buttonRow(qsTr("Back"), "back", page.remap.back),
+        page.buttonRow(qsTr("Start"), "start", page.remap.start),
+        page.buttonRow(qsTr("Left thumb"), "leftThumb", page.remap.leftThumb),
+        page.buttonRow(qsTr("Right thumb"), "rightThumb", page.remap.rightThumb),
+        page.dpadRow(qsTr("D-pad up"), "dpadUp", page.remap.dpadUp),
+        page.dpadRow(qsTr("D-pad down"), "dpadDown", page.remap.dpadDown),
+        page.dpadRow(qsTr("D-pad left"), "dpadLeft", page.remap.dpadLeft),
+        page.dpadRow(qsTr("D-pad right"), "dpadRight", page.remap.dpadRight)
+    ]
+
+    readonly property var stickRows: [
+        page.axisRow(qsTr("Left stick X"), "leftStickX", page.remap.leftStickX),
+        page.axisRow(qsTr("Left stick Y"), "leftStickY", page.remap.leftStickY),
+        page.axisRow(qsTr("Right stick X"), "rightStickX", page.remap.rightStickX),
+        page.axisRow(qsTr("Right stick Y"), "rightStickY", page.remap.rightStickY),
+        page.triggerRow(qsTr("Left trigger"), "leftTrigger", page.remap.leftTrigger),
+        page.triggerRow(qsTr("Right trigger"), "rightTrigger", page.remap.rightTrigger)
+    ]
+
     // ---- Raw-input capture sink --------------------------------------------
-    // While a row is capturing, the FIRST deliberate raw input for THIS slot is
-    // routed to the output being edited, then capture stops and the displayed
-    // assignments refresh. The bridge already filters to the capturing slot and
-    // rejects idle jitter, so a resting pad never self-assigns.
+    // The FIRST deliberate raw input for THIS slot lands on the armed output,
+    // then capture stops and the readouts refresh. The bridge filters to the
+    // capturing slot and rejects idle jitter, so a resting pad never
+    // self-assigns.
     Connections {
-        target: App // qmllint disable unqualified
+        target: App
 
         function onRawInputCaptured(sid, kind, index, value) {
-            if (sid !== page.slotId || page.capturingTarget.length === 0) { return; }
-            App.assignSlotInput(page.slotId, page.capturingTarget, kind, index); // qmllint disable unqualified
+            if (sid !== page.slotId || page.capturingTarget.length === 0) {
+                return;
+            }
+            App.assignSlotInput(page.slotId, page.capturingTarget, kind, index);
             page.cancelCapture();
             page.refresh();
         }
     }
 
-    // ---- Inline assign row -------------------------------------------------
-    // One output's row (design AssignRow): label left, mono value chip right;
-    // the WHOLE row is the capture affordance. While this row captures, both
-    // ends light accent; another row capturing re-points on click.
-    component AssignRow: Item {
-        id: assignRow
-        property string rowLabel: ""
-        property string target: ""
-        property string current: ""
+    // ---- The assign row -----------------------------------------------------
+    // One Component, two Repeaters: the row is drawn once, not twice, and it is
+    // not an inline `component` type (a page declares no types).
+    //
+    // Two real controls side by side rather than one region with a hover-only
+    // affordance stacked on it: arming and clearing are both reachable by
+    // keyboard, and neither can swallow the other's click.
+    Component {
+        id: assignRowDelegate
 
-        readonly property bool capturing: page.capturingTarget === assignRow.target
+        RowLayout {
+            id: assignRow
 
-        Layout.fillWidth: true
-        implicitHeight: Math.max(labelText.implicitHeight, chip.implicitHeight) + 8
+            required property var modelData
 
-        Label {
-            id: labelText
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: assignRow.rowLabel
-            color: assignRow.capturing ? Theme.primary : Theme.onSurface
-            font.pixelSize: Tokens.textSummary
-            font.weight: assignRow.capturing ? Font.DemiBold : Font.Normal
-        }
+            readonly property bool armed: page.capturingTarget === assignRow.modelData.target
 
-        Rectangle {
-            id: chip
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            implicitWidth: chipText.implicitWidth + 16
-            implicitHeight: chipText.implicitHeight + 6
-            radius: Tokens.radiusChip
-            color: Theme.surfaceDim
-            border.width: 1
-            border.color: assignRow.capturing ? Theme.primary : Theme.outline
+            Layout.fillWidth: true
+            spacing: Tokens.s4
 
-            Label {
-                id: chipText
-                anchors.centerIn: parent
-                text: assignRow.capturing ? qsTr("waiting for input…") : assignRow.current
-                color: assignRow.capturing ? Theme.primary : Theme.muted
-                font.family: Tokens.monoFamily
-                font.pixelSize: Tokens.textChip
+            AbstractButton {
+                id: armButton
+
+                Layout.fillWidth: true
+                implicitHeight: Tokens.minTouch
+                focusPolicy: Qt.StrongFocus
+                hoverEnabled: true
+
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("%1 — %2").arg(assignRow.modelData.label)
+                                                .arg(assignRow.modelData.value)
+                Accessible.description: qsTr("Activate, then press the input to assign it.")
+
+                onClicked: assignRow.armed
+                           ? page.cancelCapture()
+                           : page.beginCapture(assignRow.modelData.target,
+                                               assignRow.modelData.label)
+
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+
+                background: Item {
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Tokens.radiusChip
+                        color: armButton.hovered ? Theme.primaryHover : "transparent"
+                    }
+                    // The global ring: 2px focusRing outside the bounds, on
+                    // visualFocus only, so a mouse press never rings.
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: armButton.visualFocus
+                        radius: Tokens.radiusChip
+                        color: "transparent"
+                        border.width: 2
+                        border.color: Theme.focusRing
+                    }
+                }
+
+                contentItem: Item {
+                    implicitHeight: Math.max(rowLabel.implicitHeight, valuePill.implicitHeight)
+
+                    Label {
+                        id: rowLabel
+                        anchors.left: parent.left
+                        anchors.right: valuePill.left
+                        anchors.rightMargin: Tokens.s4
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: assignRow.modelData.label
+                        color: assignRow.armed ? Theme.primary : Theme.onSurface
+                        font.pixelSize: Tokens.textSummary
+                        font.weight: assignRow.armed ? Font.DemiBold : Font.Normal
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        id: valuePill
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        implicitWidth: pillText.implicitWidth + Tokens.s8
+                        implicitHeight: pillText.implicitHeight + Tokens.s3
+                        width: implicitWidth
+                        height: implicitHeight
+                        radius: Tokens.radiusChip
+                        color: Theme.surfaceDim
+                        border.width: 1
+                        border.color: assignRow.armed ? Theme.primary : Theme.outline
+
+                        Label {
+                            id: pillText
+                            anchors.centerIn: parent
+                            text: assignRow.armed ? qsTr("waiting for input…")
+                                                  : assignRow.modelData.value
+                            color: assignRow.armed ? Theme.primary : Theme.muted
+                            font.family: Tokens.monoFamily
+                            font.pixelSize: Tokens.textChip
+                        }
+                    }
+                }
             }
-        }
 
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: assignRow.capturing
-                       ? page.cancelCapture()
-                       : page.beginCapture(assignRow.target, assignRow.rowLabel)
+            // Disabled rather than hidden when there is nothing to clear: a
+            // control that appears on hover is a control a keyboard never finds.
+            Kit.DishButton {
+                size: Kit.DishButton.Small
+                text: qsTr("Clear")
+                enabled: assignRow.modelData.assigned === true
+                Accessible.name: qsTr("Clear %1").arg(assignRow.modelData.label)
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: page.clearAssignment(assignRow.modelData.target,
+                                                assignRow.modelData.kind)
+            }
         }
     }
 
     // ---- Body ---------------------------------------------------------------
     ColumnLayout {
-        width: Math.min(760, parent.width)
+        width: Math.min(page.bodyWidth, parent ? parent.width : 0)
         spacing: Tokens.s5
 
-        // Not-remappable note: defensive fallback — the ControllersPage entry
-        // already gates on the `remappable` role, but a slot can lose its
-        // identity while the page is open.
-        Rectangle {
+        // Not remappable: the ControllersPage entry gates on the `remappable`
+        // role, but a slot can lose its identity while this page is open.
+        Kit.EmptyState {
             visible: !page.hasRemap
             Layout.fillWidth: true
-            implicitHeight: notRemapCol.implicitHeight + 24
-            radius: Tokens.radiusCard
-            color: Theme.surface
-            border.width: 1
-            border.color: Theme.outline
-
-            ColumnLayout {
-                id: notRemapCol
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: Tokens.s7
-                anchors.rightMargin: Tokens.s7
-                spacing: Tokens.s2
-                Label {
-                    text: qsTr("Not remappable")
-                    color: Theme.onSurface
-                    font.pixelSize: 14
-                    font.bold: true
-                }
-                Label {
-                    text: qsTr("This controller uses its built-in mapping and can't be remapped here.")
-                    color: Theme.muted
-                    font.pixelSize: Tokens.textSummary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-            }
+            glyph: "dish-off"
+            title: qsTr("Not remappable")
+            body: qsTr("This controller uses its built-in mapping and can’t be remapped here.")
         }
 
-        // Capture banner (design): accent-bordered card with the busy sweep and
-        // the output being bound; Stop capture on the right. Idle: a quiet hint.
+        // The capture card. 2px accent while armed — the one 2px border in the
+        // app, and it marks an ARMED state, not a selection.
         Rectangle {
             visible: page.hasRemap
             Layout.fillWidth: true
-            implicitHeight: bannerRow.implicitHeight + 24
+            implicitHeight: captureColumn.implicitHeight + 2 * Tokens.s6
             radius: Tokens.radiusCard
             color: Theme.surface
-            border.width: page.capturingTarget.length > 0 ? 2 : 1
-            border.color: page.capturingTarget.length > 0 ? Theme.primary : Theme.outline
+            border.width: page.capturing ? 2 : 1
+            border.color: page.capturing ? Theme.primary : Theme.outline
 
-            RowLayout {
-                id: bannerRow
+            ColumnLayout {
+                id: captureColumn
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.leftMargin: Tokens.s7
                 anchors.rightMargin: Tokens.s7
-                spacing: Tokens.s7
+                spacing: Tokens.s3
 
-                Kit.DishProgressBar {
-                    visible: page.capturingTarget.length > 0
-                    indeterminate: true
-                    Layout.preferredWidth: 80
-                }
-                ColumnLayout {
+                RowLayout {
                     Layout.fillWidth: true
-                    spacing: 2
-                    Label {
-                        text: page.capturingTarget.length > 0 ? qsTr("Listening for input")
-                                                              : qsTr("Click a control to rebind it")
-                        color: Theme.onSurface
-                        font.pixelSize: Tokens.textBase
-                        font.weight: Font.DemiBold
+                    spacing: Tokens.s7
+
+                    Kit.DishProgressBar {
+                        visible: page.capturing
+                        indeterminate: true
+                        Layout.preferredWidth: 80
+                        Layout.alignment: Qt.AlignVCenter
                     }
-                    Label {
-                        textFormat: Text.StyledText
-                        text: page.capturingTarget.length > 0
-                              ? qsTr("Press the input on your controller to assign <b>%1</b>. Idle jitter is ignored — a resting pad never self-assigns.").arg(page.capturingLabel)
-                              : qsTr("Then physically press or move the input on your controller to bind it.")
-                        color: Theme.muted
-                        font.pixelSize: Tokens.textMeta
-                        wrapMode: Text.WordWrap
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: Tokens.s1
+
+                        Label {
+                            text: page.capturing ? qsTr("Listening for input")
+                                                 : qsTr("Click a control to rebind it")
+                            color: Theme.onSurface
+                            font.pixelSize: Tokens.textBase
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            textFormat: Text.StyledText
+                            text: page.capturing
+                                  ? qsTr("Press the input on your controller to assign <b>%1</b>. Idle jitter is ignored — a resting pad never self-assigns.").arg(page.capturingLabel)
+                                  : qsTr("Then physically press or move the input on your controller to bind it. Esc cancels.")
+                            color: Theme.muted
+                            font.pixelSize: Tokens.textMeta
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                    Kit.DishButton {
+                        visible: page.capturing
+                        variant: Kit.DishButton.Outline
+                        text: qsTr("Stop capture")
+                        Layout.alignment: Qt.AlignVCenter
+                        onClicked: page.cancelCapture()
                     }
                 }
-                Kit.OutlineButton {
-                    visible: page.capturingTarget.length > 0
-                    text: qsTr("Stop capture")
-                    onClicked: page.cancelCapture()
+
+                // The expiry note. Information the user must read, so a colour
+                // rather than an opacity.
+                Label {
+                    visible: page.captureExpired && !page.capturing
+                    Layout.fillWidth: true
+                    text: qsTr("No input seen — click the row to try again.")
+                    color: Theme.mutedStrong
+                    font.pixelSize: Tokens.textMeta
+                    wrapMode: Text.WordWrap
                 }
             }
         }
 
-        // Two-column grid: Buttons & D-pad left; Sticks & Triggers + inverts right.
+        // Two columns: Buttons & D-pad left; Sticks & triggers + inverts right.
         GridLayout {
             visible: page.hasRemap
-            columns: page.width < 700 ? 1 : 2
+            Layout.fillWidth: true
+            columns: page.availableWidth < Tokens.stackBreakpoint ? 1 : 2
             columnSpacing: Tokens.s6
             rowSpacing: Tokens.s6
-            Layout.fillWidth: true
 
-            Rectangle {
+            Kit.Card {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
-                implicitHeight: buttonsCol.implicitHeight + 24
-                radius: Tokens.radiusCard
-                color: Theme.surface
-                border.width: 1
-                border.color: Theme.outline
 
-                ColumnLayout {
-                    id: buttonsCol
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Tokens.s7
-                    anchors.rightMargin: Tokens.s7
-                    spacing: 2
+                contentItem: ColumnLayout {
+                    spacing: Tokens.s1
 
-                    Kit.Eyebrow { text: qsTr("Buttons & D-pad"); mutedTone: true
-                                  Layout.bottomMargin: Tokens.s3 }
+                    Kit.Eyebrow {
+                        mutedTone: true
+                        text: qsTr("Buttons & D-pad")
+                        Layout.bottomMargin: Tokens.s3
+                    }
 
-                    AssignRow { rowLabel: qsTr("A (bottom)"); target: "a"
-                                current: page.indexLabel(page.remap.a, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("B (right)"); target: "b"
-                                current: page.indexLabel(page.remap.b, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("X (left)"); target: "x"
-                                current: page.indexLabel(page.remap.x, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Y (top)"); target: "y"
-                                current: page.indexLabel(page.remap.y, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Left shoulder"); target: "leftShoulder"
-                                current: page.indexLabel(page.remap.leftShoulder, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Right shoulder"); target: "rightShoulder"
-                                current: page.indexLabel(page.remap.rightShoulder, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Back"); target: "back"
-                                current: page.indexLabel(page.remap.back, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Start"); target: "start"
-                                current: page.indexLabel(page.remap.start, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Left thumb"); target: "leftThumb"
-                                current: page.indexLabel(page.remap.leftThumb, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("Right thumb"); target: "rightThumb"
-                                current: page.indexLabel(page.remap.rightThumb, qsTr("Button")) }
-                    AssignRow { rowLabel: qsTr("D-pad up"); target: "dpadUp"
-                                current: page.dpadLabel(page.remap.dpadUp) }
-                    AssignRow { rowLabel: qsTr("D-pad down"); target: "dpadDown"
-                                current: page.dpadLabel(page.remap.dpadDown) }
-                    AssignRow { rowLabel: qsTr("D-pad left"); target: "dpadLeft"
-                                current: page.dpadLabel(page.remap.dpadLeft) }
-                    AssignRow { rowLabel: qsTr("D-pad right"); target: "dpadRight"
-                                current: page.dpadLabel(page.remap.dpadRight) }
+                    Repeater {
+                        model: page.buttonRows
+                        delegate: assignRowDelegate
+                    }
                 }
             }
 
@@ -335,64 +504,38 @@ Kit.Page {
                 Layout.alignment: Qt.AlignTop
                 spacing: Tokens.s6
 
-                Rectangle {
+                Kit.Card {
                     Layout.fillWidth: true
-                    implicitHeight: sticksCol.implicitHeight + 24
-                    radius: Tokens.radiusCard
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.outline
 
-                    ColumnLayout {
-                        id: sticksCol
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: Tokens.s7
-                        anchors.rightMargin: Tokens.s7
-                        spacing: 2
+                    contentItem: ColumnLayout {
+                        spacing: Tokens.s1
 
-                        Kit.Eyebrow { text: qsTr("Sticks & triggers"); mutedTone: true
-                                      Layout.bottomMargin: Tokens.s3 }
+                        Kit.Eyebrow {
+                            mutedTone: true
+                            text: qsTr("Sticks & triggers")
+                            Layout.bottomMargin: Tokens.s3
+                        }
 
-                        AssignRow { rowLabel: qsTr("Left stick X"); target: "leftStickX"
-                                    current: page.indexLabel(page.remap.leftStickX, qsTr("Axis")) }
-                        AssignRow { rowLabel: qsTr("Left stick Y"); target: "leftStickY"
-                                    current: page.indexLabel(page.remap.leftStickY, qsTr("Axis")) }
-                        AssignRow { rowLabel: qsTr("Right stick X"); target: "rightStickX"
-                                    current: page.indexLabel(page.remap.rightStickX, qsTr("Axis")) }
-                        AssignRow { rowLabel: qsTr("Right stick Y"); target: "rightStickY"
-                                    current: page.indexLabel(page.remap.rightStickY, qsTr("Axis")) }
-                        AssignRow { rowLabel: qsTr("Left trigger"); target: "leftTrigger"
-                                    current: page.triggerLabel(page.remap.leftTrigger) }
-                        AssignRow { rowLabel: qsTr("Right trigger"); target: "rightTrigger"
-                                    current: page.triggerLabel(page.remap.rightTrigger) }
+                        Repeater {
+                            model: page.stickRows
+                            delegate: assignRowDelegate
+                        }
                     }
                 }
 
-                Rectangle {
+                Kit.Card {
                     Layout.fillWidth: true
-                    implicitHeight: invertCol.implicitHeight + 16
-                    radius: Tokens.radiusCard
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.outline
+                    dense: true
 
-                    ColumnLayout {
-                        id: invertCol
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: Tokens.s7
-                        anchors.rightMargin: Tokens.s7
-                        spacing: 0
+                    contentItem: ColumnLayout {
+                        spacing: Tokens.s3
 
                         Kit.LabeledSwitch {
                             Layout.fillWidth: true
                             label: qsTr("Invert left stick Y")
                             checked: page.remap.invertLeftY === true
-                            onToggled: {
-                                App.setSlotInvert(page.slotId, "leftY", checked); // qmllint disable unqualified
+                            onToggled: checked => {
+                                App.setSlotInvert(page.slotId, "leftY", checked);
                                 page.refresh();
                             }
                         }
@@ -405,8 +548,8 @@ Kit.Page {
                             Layout.fillWidth: true
                             label: qsTr("Invert right stick Y")
                             checked: page.remap.invertRightY === true
-                            onToggled: {
-                                App.setSlotInvert(page.slotId, "rightY", checked); // qmllint disable unqualified
+                            onToggled: checked => {
+                                App.setSlotInvert(page.slotId, "rightY", checked);
                                 page.refresh();
                             }
                         }
@@ -418,17 +561,18 @@ Kit.Page {
                     spacing: Tokens.s5
 
                     Label {
+                        Layout.fillWidth: true
                         text: qsTr("Stored for this controller model — applies on the next report, no re-attach.")
                         color: Theme.muted
                         font.pixelSize: Tokens.textMeta
                         wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
                     }
-                    Kit.OutlineButton {
+                    Kit.DishButton {
+                        variant: Kit.DishButton.Outline
                         text: qsTr("Reset to defaults")
                         onClicked: {
                             page.cancelCapture();
-                            App.resetSlotRemap(page.slotId); // qmllint disable unqualified
+                            App.resetSlotRemap(page.slotId);
                             page.refresh();
                         }
                     }

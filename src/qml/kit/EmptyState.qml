@@ -3,10 +3,13 @@
 //
 // A centered empty placeholder for the "no items yet" state — the shared
 // replacement for the hand-rolled empty Cards in ControllersPage /
-// ConnectionsPage / LicensesPage. A bold `title` in Theme.onSurface over a muted
-// `body` line, with an optional call-to-action button (shown when `showAction`)
-// that emits `actionRequested()`. Muted styling throughout; drop it inside a
+// ConnectionsPage / LicensesPage. A bold `title` in Theme.onSurface over a
+// `body` line in Theme.mutedStrong, with an optional call-to-action button
+// (shown when `showAction`) that emits `actionRequested()`. Drop it inside a
 // Kit.Card (so it reads against a surface, not bare Mica) or a Kit.Page.
+//
+// EVERY list has one of these. A bare empty ListView is never shipped, and the
+// body always names a next step — never a bare spinner, never a bare "none".
 //
 // Usage:
 //   Kit.Card {
@@ -29,14 +32,14 @@ ColumnLayout {
 
     // The headline ("No controllers yet").
     property string title: ""
-    // The muted sub-text under the title.
+    // The explanatory sub-text under the title.
     property string body: ""
     // The optional call-to-action button label.
     property string actionText: ""
     // Whether to show the call-to-action button.
     property bool showAction: false
-    // Optional brand asset name drawn 40px above the title (the design's
-    // dish-off glyph on the empty dashboard). Empty = text only.
+    // Optional brand asset name drawn above the title (the design's dish-off
+    // glyph on the empty dashboard). Empty = text only.
     property string glyph: ""
 
     // Emitted when the user taps the action — the page decides what it does.
@@ -46,8 +49,8 @@ ColumnLayout {
 
     BrandGlyph {
         glyph: empty.glyph
-        Layout.preferredWidth: 40
-        Layout.preferredHeight: 40
+        Layout.preferredWidth: Tokens.glyphXl
+        Layout.preferredHeight: Tokens.glyphXl
         visible: empty.glyph.length > 0
         Layout.alignment: Qt.AlignHCenter
     }
@@ -56,7 +59,7 @@ ColumnLayout {
         text: empty.title
         visible: empty.title.length > 0
         color: Theme.onSurface
-        font.pixelSize: 14
+        font.pixelSize: Tokens.textBase
         font.bold: true
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
@@ -67,8 +70,9 @@ ColumnLayout {
     Label {
         text: empty.body
         visible: empty.body.length > 0
-        color: Theme.muted
-        font.pixelSize: 12
+        // Information the user must read: a colour, never an opacity.
+        color: Theme.mutedStrong
+        font.pixelSize: Tokens.textSummary
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
@@ -77,14 +81,14 @@ ColumnLayout {
         Layout.alignment: Qt.AlignHCenter
     }
 
-    // Outlined call-to-action, centered under the copy (the design's quiet
-    // "Open Connections"). Emits the signal rather than acting, so the page
-    // owns the behavior.
-    OutlineButton {
+    // Outlined call-to-action, centered under the copy. Emits the signal rather
+    // than acting, so the page owns the behavior.
+    DishButton {
         text: empty.actionText
         visible: empty.showAction && empty.actionText.length > 0
+        variant: DishButton.Outline
         Layout.alignment: Qt.AlignHCenter
-        Layout.topMargin: 6
+        Layout.topMargin: Tokens.s3
         onClicked: empty.actionRequested()
     }
 }

@@ -87,8 +87,12 @@ class SlotListModel : public QAbstractListModel {
         SatChipRole,           // QString token: status-chip key
         SatDotColorRole,       // QString token: "success"/"primary"/"warning"/"muted"
         SatGlyphRole,          // QString token: "satelliteBase"/-Connected/-Off
-        SatLatencyTextRole,    // QString: pre-formatted "~3.4 ms" ("" until sampled)
+        SatLatencyTextRole,    // QString: "~3.4 ms" / "<1 ms" ("" until sampled)
         SatLatencySamplesRole, // int: RTT samples in the window (gates the caption)
+
+        // ── Capability inputs the binding surfaces read ──────────────────────
+        HasTouchpadRole,   // bool: pad reports a touchpad (gates Touchpad + Mouse)
+        VerifiedModelRole, // bool: raw-HID layout is known, not guessed
     };
     Q_ENUM(Roles)
 

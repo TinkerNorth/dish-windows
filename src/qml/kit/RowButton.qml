@@ -2,68 +2,105 @@
 // Copyright (C) 2026 Dish contributors.
 //
 // Navigation row card (design FRowBtn): title + sub-line + trailing chevron on
-// a surface card. The Settings page's "Setup guide" / "Licenses" / "Support
-// Dish" rows. Whole row is the click target.
+// a surface card. The Settings rows, the Support Dish donation rails and the
+// licence list. The whole row is the click target.
+//
+// It is a real AbstractButton, not a Rectangle with a MouseArea: the design's
+// mocks drew these as cursor-pointer divs, which a keyboard user cannot reach
+// and Narrator does not announce. Rows are Tokens.hitRow tall, because a row
+// that is itself clickable is the one place the 44px token has a job.
 
 import QtQuick
+import QtQuick.Controls.Basic
+import QtQuick.Layouts
 import Dish.Chrome
 
-Rectangle {
+AbstractButton {
     id: control
 
     property string title: ""
     property string subtitle: ""
 
-    signal clicked()
+    focusPolicy: Qt.StrongFocus
+    hoverEnabled: true
 
-    implicitHeight: column.implicitHeight + 20
-    radius: Tokens.radiusCard
-    color: mouse.containsMouse ? Qt.tint(Theme.surface, Theme.primaryHover) : Theme.surface
-    border.width: 1
-    border.color: Theme.outline
+    topPadding: Tokens.s5
+    bottomPadding: Tokens.s5
+    leftPadding: Tokens.s6
+    rightPadding: Tokens.s6
 
-    Column {
-        id: column
-        anchors.left: parent.left
-        anchors.right: chevron.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: Tokens.s6
-        anchors.rightMargin: Tokens.s5
-        spacing: 2
+    implicitHeight: Math.max(Tokens.hitRow,
+                             control.implicitContentHeight
+                             + control.topPadding + control.bottomPadding)
 
-        Text {
-            width: parent.width
-            text: control.title
-            font.pixelSize: Tokens.textBase
-            font.weight: Font.DemiBold
-            color: Theme.onSurface
-            elide: Text.ElideRight
+    opacity: control.enabled ? 1.0 : Tokens.disabledOpacity
+
+    Accessible.role: Accessible.Button
+    Accessible.name: control.title
+    Accessible.description: control.subtitle
+
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
+
+    background: Item {
+        Rectangle {
+            anchors.fill: parent
+            radius: Tokens.radiusCard
+            // A filled surface takes its wash as a tint, not an overlay.
+            color: control.down ? Qt.tint(Theme.surface, Theme.primaryPress)
+                 : control.hovered ? Qt.tint(Theme.surface, Theme.primaryHover)
+                 : Theme.surface
+            border.width: 1
+            border.color: control.enabled ? Theme.outline : Theme.disabledFg
+
+            Behavior on color {
+                enabled: !Tokens.reducedMotion
+                ColorAnimation { duration: Tokens.durFast }
+            }
         }
-        Text {
-            width: parent.width
-            text: control.subtitle
-            font.pixelSize: Tokens.textMeta
-            color: Theme.muted
-            wrapMode: Text.WordWrap
-            visible: text.length > 0
+
+        // The global focus ring: 2px outside the border, on visualFocus only.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: Tokens.radiusCard + 2
+            visible: control.visualFocus
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.focusRing
         }
     }
 
-    Text {
-        id: chevron
-        anchors.right: parent.right
-        anchors.rightMargin: Tokens.s6
-        anchors.verticalCenter: parent.verticalCenter
-        text: "›"
-        font.pixelSize: 15
-        color: Theme.muted
-    }
+    contentItem: RowLayout {
+        spacing: Tokens.s5
 
-    MouseArea {
-        id: mouse
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: control.clicked()
+        ColumnLayout {
+            spacing: Tokens.s1
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+
+            Text {
+                text: control.title
+                font.pixelSize: Tokens.textBase
+                font.weight: Font.DemiBold
+                color: control.enabled ? Theme.onSurface : Theme.disabledFg
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+            Text {
+                text: control.subtitle
+                visible: control.subtitle.length > 0
+                font.pixelSize: Tokens.textMeta
+                color: Theme.muted
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        }
+
+        Text {
+            text: "›"
+            font.pixelSize: Tokens.textHeading
+            color: control.enabled ? Theme.muted : Theme.disabledFg
+            Layout.alignment: Qt.AlignVCenter
+        }
     }
 }

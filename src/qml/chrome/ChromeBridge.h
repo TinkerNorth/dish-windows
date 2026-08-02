@@ -28,6 +28,13 @@ class ChromeBridge : public QObject {
     // otherwise keep a dark backdrop while the cards/text go light. In light mode
     // we paint the solid light Theme.background instead.
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
+    // Is the pointer over the maximize button? It has to come the long way
+    // round: that button answers HTMAXBUTTON (the Snap Layouts contract), which
+    // makes it NON-CLIENT, and Quick never receives non-client mouse events —
+    // so the QML item's own `hovered` is permanently false and the button would
+    // be the one caption control that never lights up. The native filter tracks
+    // it and reports it here.
+    Q_PROPERTY(bool maximizeHovered READ maximizeHovered NOTIFY maximizeHoveredChanged)
 
   public:
     explicit ChromeBridge(QObject* parent = nullptr);
@@ -36,6 +43,7 @@ class ChromeBridge : public QObject {
     void setMicaActive(bool active);
     bool dark() const { return m_dark; }
     void setDark(bool dark);
+    bool maximizeHovered() const { return m_maximizeHovered; }
 
     // Wire to the native chrome filter. Rects published BEFORE this (the QML
     // title bar completes before the native window exists) are cached and
@@ -54,11 +62,13 @@ class ChromeBridge : public QObject {
   signals:
     void micaActiveChanged();
     void darkChanged();
+    void maximizeHoveredChanged();
 
   private:
     FramelessWindowChrome* m_chrome = nullptr;
     bool m_micaActive = false;
     bool m_dark = true; // app defaults to the dark palette
+    bool m_maximizeHovered = false;
     // Last published rects, cached so a late-wired chrome starts correct.
     QRect m_caption;
     QRect m_maximize;

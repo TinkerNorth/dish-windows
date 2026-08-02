@@ -17,6 +17,8 @@
 
 #include "Models/Models.h"
 #include "architecture/Observable.h"
+#include "composer/WakeStateComposer.h"
+#include "core/reducer/ApplyBindingMachine.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
 #include "source/store/CrashReportingStore.h"
@@ -155,6 +157,28 @@ class AppViewModel : public QObject {
     Q_PROPERTY(bool lightbarFollowGame READ lightbarFollowGame WRITE setLightbarFollowGame NOTIFY
                    lightbarChanged)
 
+    // ── Bluetooth radio (the wizard's waiting step) ──────────────────────────
+    // Two facts, not one: an absent adapter and a switched-off radio need
+    // different copy (and only the second has an action). Sampled in the ctor
+    // and on refreshBluetoothState(); never blocks Continue — USB still works.
+    Q_PROPERTY(bool bluetoothPresent READ bluetoothPresent NOTIFY bluetoothChanged)
+    Q_PROPERTY(bool bluetoothEnabled READ bluetoothEnabled NOTIFY bluetoothChanged)
+
+    // ── Apply sequencer (the wizard's Review page + Configure binding) ───────
+    // One step per real async action. The Connection step can sit for 20 s while
+    // Windows hands the device over, which is exactly why it is a step with an
+    // elapsed clock and an escape rather than a spinner.
+    Q_PROPERTY(bool applyInFlight READ applyInFlight NOTIFY applyChanged)
+    // "pending" | "active" | "done" | "failed" | "skipped".
+    Q_PROPERTY(QString applyConnectionState READ applyConnectionState NOTIFY applyChanged)
+    Q_PROPERTY(QString applyDestinationState READ applyDestinationState NOTIFY applyChanged)
+    // Milliseconds on the CURRENT step — drives the 4 s "Windows can take up to
+    // 20 seconds…" hint.
+    Q_PROPERTY(int applyElapsedMs READ applyElapsedMs NOTIFY applyChanged)
+    // True only while the Connection step is active: a claim aborts to Standard,
+    // which is a warning. The REST round-trip is never cancellable.
+    Q_PROPERTY(bool applyCancellable READ applyCancellable NOTIFY applyChanged)
+
   public:
     explicit AppViewModel(dish::AppModel* model, QObject* parent = nullptr);
 
@@ -201,6 +225,14 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void setRailCollapsed(bool collapsed);
     bool lightbarFollowGame() const;
     Q_INVOKABLE void setLightbarFollowGame(bool followGame);
+
+    bool bluetoothPresent() const { return bluetoothPresent_; }
+    bool bluetoothEnabled() const { return bluetoothEnabled_; }
+    bool applyInFlight() const;
+    QString applyConnectionState() const;
+    QString applyDestinationState() const;
+    int applyElapsedMs() const { return apply_.elapsedMsOnStep; }
+    bool applyCancellable() const;
 
     // The external-open sink: the QmlEntryPoint injects the real ExternalLink
     // path (which routes a failure through the NotificationQueue toast, matching
@@ -250,6 +282,14 @@ class AppViewModel : public QObject {
     Q_INVOKABLE QVariantList emulateTypes(const QString& slotId) const;
     Q_INVOKABLE int emulateCurrentType(const QString& slotId) const;
     Q_INVOKABLE void setControllerType(const QString& slotId, int type);
+
+    // The same three, keyed on the DESTINATION rather than an existing binding.
+    // The wizard and the bind-mode editor choose a type for a pad that is not
+    // bound yet, so the slot-keyed reads above vend nothing for them.
+    Q_INVOKABLE void refreshEmulateForHost(const QString& connectionId);
+    Q_INVOKABLE QVariantList emulateTypesForHost(const QString& connectionId) const;
+    Q_INVOKABLE int emulateCurrentTypeForHost(const QString& connectionId,
+                                              const QString& slotId) const;
     // Catalog-fetch lifecycle projection (see the Q_PROPERTYs above).
     bool emulateLoading() const;
     QString emulateError() const;
@@ -323,6 +363,74 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void startInputCapture(const QString& slotId);
     Q_INVOKABLE void stopInputCapture();
 
+    // ── Bluetooth radio ──────────────────────────────────────────────────────
+    // Re-probe (cheap: a SetupAPI enumeration + a radio-find). Emits only on a
+    // real change. openBluetoothSettings deep-links the Windows Settings page.
+    Q_INVOKABLE void refreshBluetoothState();
+    Q_INVOKABLE void openBluetoothSettings();
+
+    // ── The capability surface (wizard type table + Configure binding matrix) ─
+    // One row per feature, in the fixed render order, each
+    // { feature, inOk, linkOk, typeOk, hostOk, verdict, failingLayer,
+    //   hasFailingLayer }. feature / verdict / failingLayer are lowercase tokens
+    // ("motion", "unavailable", "link") — the C++ never vends a sentence, QML
+    // localizes. `hostKind` is "satellite" or "bluetooth"; `hostId` is the
+    // stable satellite id ("" = no destination chosen yet, which reads Pending).
+    // `desiredPath` is "standard" or "direct"; `touchpadMode` 0=off 1=pad 2=mouse.
+    Q_INVOKABLE QVariantList capabilityForCandidate(const QString& slotId, int type,
+                                                    const QString& hostKind, const QString& hostId,
+                                                    const QString& desiredPath, bool motionOn,
+                                                    bool rumbleOn, int touchpadMode) const;
+
+    // What ONE catalog type carries, as { feature, supported } rows for the type
+    // picker's preview pills. Empty while the catalog is unresolved — a guessed
+    // pill is worse than none.
+    Q_INVOKABLE QVariantList typeFeatureSummary(const QString& hostId, int type) const;
+
+    // False ⇒ every capability row renders Pending (never a cross).
+    Q_INVOKABLE bool catalogResolvedFor(const QString& hostId) const;
+
+    // ── Host slot accounting (the Destination sub-line, "<n> slots free") ────
+    // Never assert a slot NUMBER before bindSlot allocates one; these are the
+    // counts the pre-bind copy is composed from.
+    Q_INVOKABLE int hostBoundSlotCount(const QString& connectionId) const;
+    Q_INVOKABLE int hostSlotCapacity() const;
+    // The pad that would be unbound if this host is already full; "" when none.
+    Q_INVOKABLE QString displacedSlotName(const QString& connectionId) const;
+
+    // ── Binding-draft helpers ───────────────────────────────────────────────
+    // Re-resolve a slot id by (vid, pid) immediately before binding: a Direct
+    // claim RETIRES the framework slot id and replaces it with a synthetic twin,
+    // so an id the wizard opened with can be stale by the time Bind is pressed.
+    // Returns "" when the pad is genuinely gone.
+    Q_INVOKABLE QString resolveSlotIdForBind(const QString& slotId) const;
+    // True iff the raw-HID fast lane knows this model's report layout. Drives
+    // the Direct card's "Layout guessed" chip; always false over Bluetooth.
+    Q_INVOKABLE bool isVerifiedModel(const QString& slotId) const;
+    // The per-satellite touchpad pick: "off" | "pad" | "mouse" ("off" when the
+    // user never picked one — the resolve ladder owns any richer default).
+    Q_INVOKABLE QString touchpadModeFor(const QString& connectionId) const;
+    Q_INVOKABLE void setTouchpadMode(const QString& connectionId, const QString& mode);
+    // The read seam for motion forwarding, keyed exactly as setMotionEnabled
+    // writes. Without it a draft would seed from the default (on) and applying
+    // could silently re-enable gyro a user turned off on the Dead zones page.
+    Q_INVOKABLE bool motionEnabledFor(const QString& slotId) const;
+    Q_INVOKABLE bool rumbleEnabledFor(const QString& slotId) const;
+    Q_INVOKABLE void setRumbleEnabled(const QString& slotId, bool on);
+
+    // ── Apply ────────────────────────────────────────────────────────────────
+    // The ONE write the binding surfaces make. Drives the two-step overlay and
+    // terminates in exactly one applyFinished. Ignored while a run is in flight.
+    Q_INVOKABLE void applyBinding(const QString& slotId, const QString& connectionId, int type,
+                                  const QString& desiredPath, bool motionOn, bool rumbleOn,
+                                  int touchpadMode);
+    // Accepted only while the Connection step is active.
+    Q_INVOKABLE void cancelApply();
+
+    // The discovery-source label ("mDNS + broadcast") for a discovered server —
+    // the same string discoveredServers() already vends, addressable by id.
+    Q_INVOKABLE QString discoverySourceFor(const QString& serverId) const;
+
     // ── Licenses page ────────────────────────────────────────────────────────
     // The bundled third-party manifest as {name,version,license,url} rows.
     Q_INVOKABLE QVariantList licenses() const;
@@ -395,6 +503,24 @@ class AppViewModel : public QObject {
     // rawJoystickInput ONLY when the source deviceId maps to the capturing slot.
     void rawInputCaptured(const QString& slotId, int kind, int index, int value);
 
+    // The Bluetooth radio's presence/enabled pair moved.
+    void bluetoothChanged();
+
+    // Any field of the apply sequencer moved (phase, step states, elapsed).
+    void applyChanged();
+
+    // Terminal apply result, fired exactly once per run. `reasonToken` is "" on
+    // success, else "slotGone" | "hostUnreachable" | "bindRejected" |
+    // "cancelled". `directFellBack` means the Direct claim did not land and the
+    // pad streams over Standard — a WARNING, never an error.
+    void applyFinished(bool ok, const QString& reasonToken, bool directFellBack);
+
+    // A forward-PIN submit was rejected, keyed by the STABLE discovered-server
+    // id the sheet opened for. `reasonToken` is "wrongPin" | "versionMismatch" |
+    // "unreachable" | "pending". The sheet stays open and marks the field
+    // inline; the existing toast still fires and that duplication is fine.
+    void pairingFailed(const QString& serverId, const QString& reasonToken);
+
   private:
     // Recompute the cached header/pairing fields + repush the slot model from
     // the AppModel's current state slice, then emit stateChanged().
@@ -406,6 +532,18 @@ class AppViewModel : public QObject {
     // Relay AppModel's rawJoystickInput: map the deviceId → slotId and re-emit
     // rawInputCaptured only when it matches the currently-capturing slot.
     void onRawJoystickInput(const QString& deviceId, int kind, int index, int value);
+
+    // ── Apply sequencer internals ────────────────────────────────────────────
+    // Feed the pure machine, stop the budgets it has outgrown, re-publish the
+    // properties, and fire applyFinished once when it reaches a terminal phase.
+    void dispatchApply(const reducer::ApplyEvent& event);
+    // Write the four settings + the binding and arm the 8 s budget.
+    void beginApplyBind();
+    // The 250 ms tick: advance the elapsed clock and read the outcome of the
+    // step currently in flight off the state slice.
+    void onApplyTick();
+    // The slot row with that id in the current state slice, or nullptr.
+    const models::ControllerSlot* slotById(const QString& slotId) const;
 
     dish::AppModel* model_;
     SlotListModel slotModel_;
@@ -451,6 +589,26 @@ class AppViewModel : public QObject {
     // but the store could change out from under us).
     bool onboardingNeeded_ = false;
 
+    // Cached Bluetooth radio state (the probe enumerates SetupAPI, so it is
+    // sampled on demand rather than per binding read).
+    bool bluetoothPresent_ = false;
+    bool bluetoothEnabled_ = false;
+
+    // ── Apply sequencer state ────────────────────────────────────────────────
+    // The pure machine plus the run's parameters, so the Connection step can
+    // hand off to the Destination step without the caller re-supplying them.
+    reducer::ApplyState apply_;
+    QString applySlotId_;
+    QString applyConnectionId_;
+    int applyType_ = 0;
+    bool applyMotionOn_ = true;
+    bool applyRumbleOn_ = true;
+    int applyTouchpadMode_ = 0;
+    // The 20 s path budget, the 8 s bind budget, and the 250 ms elapsed tick.
+    QTimer* applyPathTimer_ = nullptr;
+    QTimer* applyBindTimer_ = nullptr;
+    QTimer* applyTickTimer_ = nullptr;
+
     ExternalOpenSink externalOpenSink_;
     ThemeAppliedSink themeAppliedSink_;
 
@@ -459,7 +617,7 @@ class AppViewModel : public QObject {
     arch::Observable<source::ThemeMode>::Subscription themeSub_;
     arch::Observable<bool>::Subscription crashSub_;
     arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
-    arch::Observable<int>::Subscription keepAwakeSub_;
+    arch::Observable<composer::WakeState>::Subscription keepAwakeSub_;
 
     // Rail-collapse persistence. UI-shell-only state, so the store lives here
     // rather than on AppModel — the view model IS the shell's C++ edge.

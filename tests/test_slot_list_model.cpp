@@ -100,9 +100,9 @@ QVariant roleOf(const SlotListModel& model, int row, int role) {
 TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel][roles]") {
     SlotListModel model;
     const auto names = model.roleNames();
-    // One entry per declared role (Id..SatLatencySamples). If a role is added
+    // One entry per declared role (Id..VerifiedModel). If a role is added
     // without a name, this count drifts and the test flags it.
-    REQUIRE(names.size() == 36);
+    REQUIRE(names.size() == 38);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
     REQUIRE(names.value(SlotListModel::BluetoothRole) == QByteArray("bluetooth"));
@@ -123,6 +123,8 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     REQUIRE(names.value(SlotListModel::SatGlyphRole) == QByteArray("satGlyph"));
     REQUIRE(names.value(SlotListModel::SatLatencyTextRole) == QByteArray("satLatencyText"));
     REQUIRE(names.value(SlotListModel::SatLatencySamplesRole) == QByteArray("satLatencySamples"));
+    REQUIRE(names.value(SlotListModel::HasTouchpadRole) == QByteArray("hasTouchpad"));
+    REQUIRE(names.value(SlotListModel::VerifiedModelRole) == QByteArray("verifiedModel"));
     // No duplicate role names (each maps a distinct delegate property).
     QSet<QByteArray> unique;
     for (const auto& n : names) { unique.insert(n); }
@@ -189,6 +191,33 @@ TEST_CASE("SlotListModel: data maps an unbound plain pad's off-state roles", "[s
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::GamepadHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::MotionHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::PollHzShownRole).toBool());
+}
+
+TEST_CASE("SlotListModel: hasTouchpad reflects the pad's touch surface", "[slotmodel][data]") {
+    // The Input layer of the capability solver gates BOTH the Touchpad row and
+    // the Mouse row on this, so a pad without a touch surface can never be
+    // offered mouse routing.
+    SlotListModel model;
+    model.setState({plainSlot()});
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::HasTouchpadRole).toBool());
+
+    auto s = richSlot();
+    s.capabilities.hasTouchpad = true;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::HasTouchpadRole).toBool());
+}
+
+TEST_CASE("SlotListModel: verifiedModel reflects the known-layout flag", "[slotmodel][data]") {
+    // Drives the Direct option card's "Layout guessed" chip: false means the
+    // raw-HID fast lane would be guessing this model's report layout.
+    SlotListModel model;
+    model.setState({plainSlot()});
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::VerifiedModelRole).toBool());
+
+    auto s = richSlot();
+    s.verifiedModel = true;
+    model.setState({s});
+    REQUIRE(roleOf(model, 0, SlotListModel::VerifiedModelRole).toBool());
 }
 
 TEST_CASE("SlotListModel: remappable defaults off and reflects the slot flag",

@@ -37,6 +37,11 @@ const ThemePalette& darkPalette() {
         /*warning*/ 0xFFF59E0B,
         // Donation accent — dish-android colorPulse, pulse pink on navy.
         /*pulse*/ 0xFFFF6FB5,
+        // Brand-glyph tint — the light-cyan the SVGs bake, now a token so the
+        // light palette can darken it (11.0:1 here, 1.7:1 on white).
+        /*glyph*/ 0xFF8FCFE3,
+        /*disabledFg*/ 0xFF6C7799,  // 4.2:1 on surface
+        /*mutedStrong*/ 0xFF7E8CB4, // 5.6:1 on surface
     };
     return kDark;
 }
@@ -62,6 +67,11 @@ const ThemePalette& lightPalette() {
         /*error*/ 0xFFC0392B,       // status — error (darker red on light)
         /*warning*/ 0xFFB7791F,     // status — warning (amber that reads on white)
         /*pulse*/ 0xFFC2417F,       // donation accent — pink, AA-darkened on white
+        /*glyph*/ 0xFF2F7E96,       // brand glyph — darkened cyan (4.6:1 on white)
+        // NOTE: disabledFg is deliberately LIGHTER than its dark counterpart —
+        // "disabled" reads as receding, which on a white card means paler.
+        /*disabledFg*/ 0xFF8A93A6,  // 3.1:1 on surface
+        /*mutedStrong*/ 0xFF4B566E, // 7.4:1 on surface
     };
     return kLight;
 }
@@ -87,6 +97,9 @@ QRgb Theme::success = darkPalette().success;
 QRgb Theme::error = darkPalette().error;
 QRgb Theme::warning = darkPalette().warning;
 QRgb Theme::pulse = darkPalette().pulse;
+QRgb Theme::glyph = darkPalette().glyph;
+QRgb Theme::disabledFg = darkPalette().disabledFg;
+QRgb Theme::mutedStrong = darkPalette().mutedStrong;
 
 namespace {
 Appearance g_activeAppearance = Appearance::Dark;
@@ -106,6 +119,9 @@ void setActivePalette(const ThemePalette& palette) {
     Theme::error = palette.error;
     Theme::warning = palette.warning;
     Theme::pulse = palette.pulse;
+    Theme::glyph = palette.glyph;
+    Theme::disabledFg = palette.disabledFg;
+    Theme::mutedStrong = palette.mutedStrong;
 }
 
 Appearance activeAppearance() { return g_activeAppearance; }

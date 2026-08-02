@@ -15,14 +15,25 @@
 //       // ... body ...
 //   }
 
+// Dish.Chrome is imported UNDER A NAMESPACE on purpose: the module exports its
+// own `Page` (this file), so an unqualified import would make the root `Page`
+// resolve to this component and qmllint would report an inheritance cycle. This
+// is the one kit file with that collision.
 import QtQuick
 import QtQuick.Controls.Basic
+import Dish.Chrome as Chrome
 
 Page {
     id: page
 
     // The default content lands in a padded column; pages just declare children.
     default property alias content: body.data
+
+    // false -> the page owns its own layout and pins its own regions (the
+    // wizard: banner and footer outside a scrolling body). The content column
+    // is then exactly the viewport, so a single child sized to `parent` fills
+    // it and nothing scrolls at this level.
+    property bool scrollable: true
 
     // Read by the shell for the breadcrumb / header. `title` is the Controls
     // Page property; we keep using it.
@@ -31,7 +42,7 @@ Page {
     // opaque surface — only their Cards are surfaces.
     background: null
 
-    padding: 24
+    padding: Chrome.Tokens.pagePadding
 
     // The content pane scrolls vertically when it outgrows the viewport — the
     // Windows-Settings pattern: the nav rail + breadcrumb (in the shell) stay
@@ -43,11 +54,16 @@ Page {
         id: scroller
         contentWidth: availableWidth
         clip: true
+        ScrollBar.vertical.policy: page.scrollable ? ScrollBar.AsNeeded
+                                                   : ScrollBar.AlwaysOff
 
         Column {
             id: body
             width: scroller.availableWidth
-            spacing: 16
+            // Pinned to the viewport in non-scrolling mode so a child can bind
+            // its own height to `parent.height` and own the whole page.
+            height: page.scrollable ? implicitHeight : scroller.availableHeight
+            spacing: page.scrollable ? Chrome.Tokens.s8 : 0
         }
     }
 }

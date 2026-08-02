@@ -113,10 +113,19 @@ TEST_CASE("formatLatencyMs: one decimal, half away from zero", "[latency]") {
     REQUIRE(formatLatencyMs(3.44) == "~3.4 ms");
     REQUIRE(formatLatencyMs(12.06) == "~12.1 ms");
     REQUIRE(formatLatencyMs(5.0) == "~5.0 ms");
-    REQUIRE(formatLatencyMs(0.24) == "~0.2 ms");
+}
+
+// Under a millisecond the instrument has nothing left to divide, and "~0.0 ms"
+// would claim a latency a network link cannot have (plan D47).
+TEST_CASE("formatLatencyMs: sub-millisecond reads as a bound, not a zero", "[latency]") {
+    REQUIRE(formatLatencyMs(0.24) == "<1 ms");
+    REQUIRE(formatLatencyMs(0.94) == "<1 ms");
+    // The boundary rounds UP into the figure: 0.95 -> 1.0.
+    REQUIRE(formatLatencyMs(0.95) == "~1.0 ms");
+    REQUIRE(formatLatencyMs(1.0) == "~1.0 ms");
 }
 
 TEST_CASE("formatLatencyMs: never negative", "[latency]") {
-    REQUIRE(formatLatencyMs(0.0) == "~0.0 ms");
-    REQUIRE(formatLatencyMs(-3.0) == "~0.0 ms");
+    REQUIRE(formatLatencyMs(0.0) == "<1 ms");
+    REQUIRE(formatLatencyMs(-3.0) == "<1 ms");
 }

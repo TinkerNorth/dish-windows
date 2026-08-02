@@ -20,6 +20,7 @@
 #include "composer/WakeStateController.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
+#include "core/reducer/BindingPresence.h"
 #include "core/reducer/PollRateSampler.h"
 #include "source/inputrate/InputRateStore.h"
 #include "source/http/SatelliteCatalogRepository.h"
@@ -43,6 +44,9 @@
 
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <utility>
+#include <vector>
 
 namespace dish {
 
@@ -89,9 +93,12 @@ class AppModel : public QObject {
     input::GamepadInputProcessor* processor() { return &processor_; }
     input::SDLGamepadBridge* bridge() { return bridge_; }
     composer::WakeStateController* wake() { return &wakeController_; }
-    // Observable count of streaming slots holding the display awake (>0 == the
-    // inhibitor is held). The QML header pill subscribes; read-only.
+    // The keep-screen-on OVERRIDE counter — an INPUT to the wake composer, not
+    // its result. Nothing sets it today, so never bind UI to it.
     arch::Observable<int>& keepAwakeCount() { return shouldKeepScreenOn_; }
+    // The derived wake intent (`shouldInhibit` == the inhibitor is held). This is
+    // what the header's STREAMING pill subscribes to; read-only.
+    const arch::Observable<composer::WakeState>& wakeState() const { return wakeComposer_.state(); }
     // Feature-forwarding preferences (light bar on/off). Owned by the model;
     // the settings UI binds to it and the lightbar handlers gate on it.
     FeatureSettings* featureSettings() { return featureSettings_; }
@@ -119,6 +126,10 @@ class AppModel : public QObject {
     // The per-slot motion-enable store (default on). The settings toggle writes
     // it; the CAP_MOTION negotiation + the motion routing read it.
     source::MotionEnabledStore* motionEnabledStore() { return &motionEnabledStore_; }
+
+    // The per-satellite touchpad-mode pick ("off"/"pad"/"mouse"). The binding
+    // surfaces read and write it; the hub's resolver already reads it on bind.
+    source::TouchpadModeStore* touchpadModeStore() { return &touchpadModeStore_; }
 
     // ── Raw-joystick remap ("Configure controls" page, android parity) ───────
     // The per-(vid,pid) remap store the page writes; AppModel pushes every saved
@@ -160,9 +171,18 @@ class AppModel : public QObject {
     // with this list. Mirrors android's per-slot picker derivation.
     QList<composer::PickableType> pickableTypesFor(const QString& slotId) const;
 
+    // The same list keyed on the CONNECTION instead of an existing binding: the
+    // setup wizard and the bind-mode editor pick a type for a pad that is not
+    // bound yet, so `hub_->bindings()` is empty for it and the slot-keyed read
+    // above would always vend nothing.
+    QList<composer::PickableType> pickableTypesForConnection(const QString& connId) const;
+
     // The slot's current emulated type id (the user override if set, else the
     // bound satellite catalog's first offered type, else Xbox). Pre-selects the picker.
     int currentTypeFor(const QString& slotId) const;
+
+    // The type a slot WOULD start on against a connection it is not bound to.
+    int currentTypeForConnection(const QString& connId, const QString& slotId) const;
 
     // Apply the user's Emulate choice: write the override into the type store
     // and re-attach the slot so the new descriptor is PUT to the satellite.
@@ -175,6 +195,29 @@ class AppModel : public QObject {
     // Drives catalogState() through Loading → Success/Error and emits
     // catalogStateChanged() at each transition.
     void refreshCatalogForSlot(const QString& slotId);
+
+    // The same fetch keyed on the connection, for the create flows where the pad
+    // has no binding yet.
+    void refreshCatalogForConnection(const QString& connId);
+
+    // ── Catalog reads for the capability solver ──────────────────────────────
+    // `hostId` is the STABLE satellite id (models::DiscoveredServer::id(), which
+    // is also the connection id and the catalog cache key — one identity, three
+    // callers). All three are synchronous peeks that never trigger a fetch.
+
+    // True iff a catalog has ever landed for that host. False makes every
+    // capability row read `Pending`: an unread layer must never draw a cross.
+    bool hasCatalogFor(const QString& hostId) const;
+
+    // The catalog entry for one controller type, or nullopt when the catalog is
+    // unresolved or offers no such type. Returned BY VALUE: the repository hands
+    // out a copy of its cache under its own lock, so a pointer into it would
+    // dangle the moment a refresh landed.
+    std::optional<models::CatalogTypeDto> catalogTypeFor(const QString& hostId, int type) const;
+
+    // The host's own feature inventory (mouseControl / rumble / ...), empty when
+    // unresolved.
+    QHash<QString, models::CatalogHostFeatureDto> catalogHostFeatures(const QString& hostId) const;
 
     // The catalog fetch lifecycle for the most-recently-refreshed slot's
     // satellite: Idle / Loading / Success(possibly stale) / Error(reason). The
@@ -217,6 +260,12 @@ class AppModel : public QObject {
     // capturing slot. `kind` 0=axis/1=button/2=hat; `index` the raw source;
     // `value` the axis int16 / 1 for a button / SDL_HAT_* bitmask for a hat.
     void rawJoystickInput(const QString& deviceId, int kind, int index, int value);
+
+    // A forward-PIN submit was rejected. `reasonToken` is one of "wrongPin" /
+    // "versionMismatch" / "unreachable" / "pending"; `connectionId` is the
+    // stable satellite id the sheet opened for. Forwarded verbatim from the
+    // WifiConnectionManager so the sheet can match on its own target.
+    void pairingFailed(const QString& connectionId, const QString& reasonToken);
 
   private:
     void rebuild();
@@ -268,11 +317,34 @@ class AppModel : public QObject {
     void onInputRatesChanged(const source::SlotInputRatesMap& rates);
 
     // Resolve the controller type to advertise for a slot: the user's Emulate
-    // override (ControllerTypeStore) wins; absent that, the bound satellite
-    // catalog's first offered type; absent that, Xbox. This is what bind()/
-    // attachSlot threads into the descriptor PUT, so an Emulate choice reaches
-    // the satellite.
+    // override (ControllerTypeStore) wins; absent that, the type whose catalog
+    // `emulates` hint matches the PAD'S OWN USB identity; absent that, the bound
+    // satellite catalog's first offered type; absent that, Xbox. This is what
+    // bind()/attachSlot threads into the descriptor PUT, so an Emulate choice
+    // reaches the satellite.
     int resolveControllerType(const QString& slotId) const;
+
+    // The USB identity of the pad behind a slot id, for BOTH the type seed and
+    // the presence gate. Looks in the shown slots first, then the SDL device
+    // list (a framework twin hidden by an active claim is still enumerated),
+    // then the synthetic slot id itself (which packs its own vid/pid). nullopt
+    // means nothing on this machine can account for the slot — the pad is gone.
+    std::optional<std::pair<int, int>> boundPadIdentity(const QString& slotId) const;
+
+    // Reconcile the hub's binding table with what is actually plugged in
+    // (reducer::resolveBindingPresence): drop a binding whose physical pad
+    // vanished — otherwise its descriptor rides every session PUT and the
+    // satellite keeps re-plugging a virtual controller that does not exist —
+    // and migrate one whose pad merely moved between its framework and
+    // USB-direct twin ids. Called at the END of rebuild(); the hub's own
+    // changed() re-enters rebuild, which the in-flight guard makes a no-op.
+    //
+    // A DROP is announced on the one-shot errorMessage toast channel, naming the
+    // satellite it was serving; a migration is silent (the pad never left). The
+    // gate acts on the user's behalf, so it owes them the reason — otherwise a
+    // binding they made disappears on its own and the app looks like it lost
+    // their work.
+    void applyBindingPresence();
 
     std::unique_ptr<net::ConnectionStore> store_;
     net::WifiConnectionManager* wifi_;
@@ -405,6 +477,16 @@ class AppModel : public QObject {
     // The VID:PIDs of SDL devices seen on the last syncFrameworkPresence pass, so
     // the next pass can emit FrameworkUp/Down deltas to the FSM. Main-thread-only.
     QSet<int> lastFrameworkVpKeys_;
+
+    // The slots rebuild() last SHOWED, each with the USB identity of the pad
+    // behind it — the presence oracle both the binding presence gate and the
+    // emulation-type seed read. Refilled at the top of every rebuild(), so it is
+    // never staler than state_.slotList. Main-thread-only.
+    std::vector<reducer::PresentSlot> presentPads_;
+    // Re-entrancy guard for applyBindingPresence: hub_->bind/unbind emit
+    // changed(), which lands back in rebuild(). The nested pass rebuilds state
+    // normally but skips the gate, so the actions are applied exactly once.
+    bool bindingPresenceInFlight_ = false;
 
     // ── Live input-rate measurement (android parity) ─────────────────────────
     // The per-slot live-rate StateSource: it samples the hot-path event counters

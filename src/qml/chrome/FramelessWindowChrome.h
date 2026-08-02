@@ -16,6 +16,7 @@
 
 #include <QAbstractNativeEventFilter>
 #include <QObject>
+#include <QPointer>
 #include <QRect>
 
 #include <QtGlobal>
@@ -50,6 +51,16 @@ class FramelessWindowChrome : public QObject, public QAbstractNativeEventFilter 
 
     bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) override;
 
+  signals:
+    // The maximize button is the ONE caption button that must stay NON-CLIENT:
+    // Snap Layouts opens only over a region that answers HTMAXBUTTON. The price
+    // is that Qt delivers neither hover nor click to the QML item under it (a
+    // non-client mouse event reaches a Quick window only through frame-strut
+    // events, which Quick never enables), so the button reads as dead. The
+    // filter reconstructs the hover from the native messages and hands it back
+    // here; WindowTitleBar paints the fill off it.
+    void maximizeButtonHoveredChanged(bool hovered);
+
   public slots:
     // The QML title bar publishes its geometry (logical px, window-local) here.
     void setCaptionRect(const QRect& rect);
@@ -62,12 +73,27 @@ class FramelessWindowChrome : public QObject, public QAbstractNativeEventFilter 
     void setLeftClientRect(const QRect& rect);
 
   private:
-    QWindow* m_window = nullptr;
+    // Distinct-until-changed, so a stream of WM_NCMOUSEMOVE over the button
+    // emits once.
+    void setMaximizeButtonHovered(bool hovered);
+
+    // OWNED BY THE ENGINE, AND IT DIES FIRST. This filter is parented to the app
+    // precisely so it can outlive the window (see QmlEntryPoint), and it is an
+    // APPLICATION-wide native event filter — it is handed every message the
+    // process receives, including the ones that still pump while the QML engine
+    // is tearing the window down. A raw pointer is dangling for all of those.
+    // QPointer nulls itself the moment the window is destroyed, which turns
+    // every arm below into an early `return false`.
+    QPointer<QWindow> m_window;
     QRect m_captionRect;        // logical px
     QRect m_maximizeButtonRect; // logical px
     QRect m_minimizeButtonRect; // logical px (client carve-out)
     QRect m_closeButtonRect;    // logical px (client carve-out)
     QRect m_leftClientRect;     // logical px (client carve-out — hamburger)
+    // Native hover/press state for the maximize button — see the signal above
+    // for why it cannot come from Quick.
+    bool m_maximizeButtonHovered = false;
+    bool m_maximizeButtonPressed = false;
 };
 
 } // namespace dish::chrome

@@ -147,14 +147,14 @@ TEST_CASE("light palette defines every dark token role and differs from dark",
     REQUIRE(opaque(light.pulse));
     REQUIRE(light.pulse != dark.pulse);
     REQUIRE(qGray(light.pulse) < qGray(dark.pulse));
-    for (QRgb c :
-         {dark.background, dark.surface, dark.surfaceDim, dark.primary, dark.primaryDark,
-          dark.onPrimary, dark.onSurface, dark.muted, dark.success, dark.error, dark.warning}) {
+    for (QRgb c : {dark.background, dark.surface, dark.surfaceDim, dark.primary, dark.primaryDark,
+                   dark.onPrimary, dark.onSurface, dark.muted, dark.success, dark.error,
+                   dark.warning, dark.glyph, dark.disabledFg, dark.mutedStrong}) {
         REQUIRE(opaque(c));
     }
     for (QRgb c : {light.background, light.surface, light.surfaceDim, light.primary,
                    light.primaryDark, light.onPrimary, light.onSurface, light.muted, light.success,
-                   light.error, light.warning}) {
+                   light.error, light.warning, light.glyph, light.disabledFg, light.mutedStrong}) {
         REQUIRE(opaque(c));
     }
 
@@ -166,12 +166,22 @@ TEST_CASE("light palette defines every dark token role and differs from dark",
     REQUIRE(light.onSurface != dark.onSurface);
     REQUIRE(light.primary != dark.primary);
     REQUIRE(light.muted != dark.muted);
+    REQUIRE(light.glyph != dark.glyph);
+    REQUIRE(light.disabledFg != dark.disabledFg);
+    REQUIRE(light.mutedStrong != dark.mutedStrong);
 
     // Light surfaces are lighter than dark surfaces (sanity: the appearance flips).
     REQUIRE(qGray(light.background) > qGray(dark.background));
     REQUIRE(qGray(light.surface) > qGray(dark.surface));
     // ...and light body text is darker than dark body text.
     REQUIRE(qGray(light.onSurface) < qGray(dark.onSurface));
+    // The brand glyph darkens on light so it survives a white card (the shipped
+    // SVG hex computes to 1.7:1 there).
+    REQUIRE(qGray(light.glyph) < qGray(dark.glyph));
+    // NOTE: disabledFg is deliberately NOT in the "light is darker" set. A dead
+    // control recedes, which on a white card means PALER — light #8A93A6 is
+    // lighter than dark #6C7799 on purpose, and both clear 3:1 on their own
+    // surface (asserted in test_theme_contrast.cpp).
 }
 
 TEST_CASE("paletteFor maps the appearance to its palette", "[settings][theme]") {

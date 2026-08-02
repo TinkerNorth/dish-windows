@@ -43,7 +43,7 @@ class ConnectionListModel : public QAbstractListModel {
                             //               "satelliteOff"
         BoundSlotIdRole,    // QString: bound slot id ("" if unbound)
         LiveLinkRole,       // bool: link is actively streaming (Connected/Unstable)
-        LatencyTextRole,    // QString: pre-formatted one-way latency "~3.4 ms"
+        LatencyTextRole,    // QString: pre-formatted one-way latency "~3.4 ms" / "<1 ms"
                             //          (median heartbeat-RTT/2); "" until a live
                             //          session has RTT samples
         LatencySamplesRole, // int: RTT samples in the window (gates the caption)

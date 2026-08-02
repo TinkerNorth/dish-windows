@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// A centered busy indicator with an optional caption — the shared "loading"
-// state so pages stop hand-rolling a bare BusyIndicator + Label. Drop it inside
-// a Kit.Card or a Kit.Page: it sizes to its content and centers, with the
-// spinner themed to `Theme.primary`. Set `text` for a caption under the spinner;
-// bind `running` to gate it (defaults true).
+// A centered busy indicator with a caption — the shared "loading" state so pages
+// stop hand-rolling a bare BusyIndicator + Label. Drop it inside a Kit.Card or a
+// Kit.Page: it sizes to its content and centers, with the spinner themed to
+// Theme.primary. Set `text` for a caption under the spinner; bind `running` to
+// gate it (defaults true).
+//
+// Two documented callers: the type-catalog loader in the wizard's type step (a
+// guessed default is worse than a wait) and the apply overlay's step spinner.
+// It is NEVER shipped bare — the caption names what is being waited on, because
+// "never a bare spinner" is a rule, not a preference.
+//
+// Under Tokens.reducedMotion the ring stops and simply renders — a static ring
+// still says "busy" beside its caption.
 //
 // Usage:
 //   Kit.LoadingSpinner { running: App.busy; text: qsTr("Connecting…") }
@@ -23,26 +31,26 @@ import Dish.Chrome
 ColumnLayout {
     id: spinner
 
-    // The optional caption shown under the spinner (hidden when empty).
+    // The caption shown under the spinner (hidden when empty).
     property string text: ""
     // Whether the indicator animates. Bind to a busy flag; defaults on.
     property bool running: true
 
-    spacing: 12
+    spacing: Tokens.s6
 
     BusyIndicator {
         running: spinner.running
         // Hide entirely when not running so the column collapses (no stray gap).
         visible: spinner.running
-        implicitWidth: 32
-        implicitHeight: 32
+        implicitWidth: Tokens.s11
+        implicitHeight: Tokens.s11
         Layout.alignment: Qt.AlignHCenter
 
         // Theme the Basic-style indicator to the brand primary — the default
         // contentItem paints fixed greys that clash with the Mica surface.
         contentItem: Item {
-            implicitWidth: 32
-            implicitHeight: 32
+            implicitWidth: Tokens.s11
+            implicitHeight: Tokens.s11
 
             Repeater {
                 model: 8
@@ -52,7 +60,7 @@ ColumnLayout {
                     readonly property real angle: dot.index / 8 * 2 * Math.PI
                     width: 4
                     height: 4
-                    radius: 2
+                    radius: width / 2
                     color: Theme.primary
                     // Trailing fade around the ring so the spin reads directional.
                     opacity: (dot.index + 1) / 8
@@ -61,12 +69,13 @@ ColumnLayout {
                 }
             }
 
-            // One continuous rotation while running; stops cleanly when hidden.
+            // One continuous rotation while running; stops cleanly when hidden
+            // or when the OS asks for reduced motion.
             RotationAnimation on rotation {
-                running: spinner.running
+                running: spinner.running && !Tokens.reducedMotion
                 from: 0
                 to: 360
-                duration: 900
+                duration: Tokens.durBusy
                 loops: Animation.Infinite
             }
         }
@@ -75,8 +84,8 @@ ColumnLayout {
     Label {
         text: spinner.text
         visible: spinner.text.length > 0
-        color: Theme.muted
-        font.pixelSize: 12
+        color: Theme.mutedStrong
+        font.pixelSize: Tokens.textSummary
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         Layout.alignment: Qt.AlignHCenter

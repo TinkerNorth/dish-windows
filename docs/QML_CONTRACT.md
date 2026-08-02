@@ -139,14 +139,13 @@ re-projects/forwards (no new behaviour). The pages bind them directly:
 * **Main.qml first-run** — if `App.onboardingNeeded`, push
   `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
   `App.markOnboardingComplete()`.
-* **SetupGuideDialog (the setup wizard)** — step 1 IS the live connect flow
-  (the android guided-setup connection step, ported): `App.startDiscovery` on
-  open, `App.scanning` / `App.discoveredServers` / `App.foundCount` drive the
-  host list, each row opens the shared `PairingDialog`, and the step
-  auto-advances on `pairingSucceeded` gated by the wizard's own pending host
-  (android's "never advance on a background reconnect" rule). Step 2 lists
-  `App.slotModel` rows live; step 3 summarizes `App.onlineCount` /
-  `App.slotCount`.
+* **The setup wizard** (`src/qml/wizard/**` — replaces the retired
+  `SetupGuideDialog`, see §9) — a pushed page, never a dialog. Its Destination
+  step is the live connect flow: `App.startDiscovery` on open, `App.scanning` /
+  `App.discoveredServers` / `App.foundCount` drive the host list, each row opens
+  the shared `PairingDialog`, and it auto-advances on `pairingSucceeded` **gated
+  by its own pending host** — `pairingSucceeded` is global, so a background
+  reconnect must never advance the flow.
 
 ### Configure-controls (raw-joystick remap) page
 
@@ -274,7 +273,7 @@ mirrors `ConnectionsDialog` rows). Same minimal-signal behavior as §2.
 | `glyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"` — pick the brand glyph variant. |
 | `boundSlotId` | `string` | Slot id bound to this connection ("" when unbound). |
 | `liveLink` | `bool` | Link is actively streaming (`Connected` or `Unstable`). **Gates the per-row Disconnect/Reconnect buttons**: enable `disconnectConnection(connectionId)` only when `liveLink`; enable `reconnectConnection(connectionId)` only when NOT `liveLink`. |
-| `latencyText` | `string` | Pre-formatted one-way latency, e.g. `"~3.4 ms"` (median heartbeat-RTT/2 over a sliding 64-ping window, ~1 Hz refresh). `""` until a live session has RTT samples. |
+| `latencyText` | `string` | Pre-formatted one-way latency, e.g. `"~3.4 ms"` (median heartbeat-RTT/2 over a sliding 64-ping window, ~1 Hz refresh). `""` until a live session has RTT samples, and `"<1 ms"` below the millisecond — never `"~0.0 ms"` (D47). |
 | `latencySamples` | `int` | RTT samples currently in the window (0–64). Gate the latency caption on `linkState === "connected" && latencySamples > 0` and show the count beside the figure (`"~3.4 ms · last 64 pings"`). |
 
 > `connectionModel` carries the REMEMBERED/derived rows. The FOUND list of
@@ -458,7 +457,7 @@ action card then. Refreshes ride the coordinator's `connectionsChanged` (the
 | `satChip` | `string` | Status-chip key (localize like the Connections rows). |
 | `satDotColor` | `string` | `"success"`/`"primary"`/`"warning"`/`"muted"`. |
 | `satGlyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"`. |
-| `satLatencyText` | `string` | Pre-formatted `"~3.4 ms"` — same formatter + samples gate as §3's `latencyText`. |
+| `satLatencyText` | `string` | Pre-formatted `"~3.4 ms"` / `"<1 ms"` — same formatter + samples gate as §3's `latencyText`. |
 | `satLatencySamples` | `int` | RTT samples in the window. Gate the wire's latency half on `satLatencySamples > 0 && (satLinkState === "connected" \|\| satChip === "unstable")`. |
 
 The satellite cell's display name is the existing `boundLabel` role.
@@ -476,33 +475,209 @@ Dish surface and its rail heart. Text on a filled pulse control is
 * `ActionCard` (kit) — the dashed action card (frame 18): `title`, `subtitle`,
   `showPlus`, `clicked()`. Rest = `Theme.primaryFill`, hover/press deepen to
   the 18/24 % accent washes, keyboard focus = solid border + 2px ring,
-  disabled = 0.4 opacity. Used for Home's "+ Add a controller" and the unbound
-  pad's "Bind…" ghost.
-* `BindChooserDialog` (pages) — the shared bind chooser (FBindDlg), extracted
-  from ControllersPage and also driven by Home's ghost card:
-  `openFor(slotId, slotName)` pulls the filtered pick-list
-  (`availableConnectionsForSlot`) and accept applies `bindSlot`.
+  disabled = `Tokens.disabledOpacity`. Used for Home's "+ Add" row and the
+  unbound pad's "Bind…" ghost.
+* ~~`BindChooserDialog` (pages)~~ — **superseded in v3 (§9).** The bind chooser
+  is gone: a dangling pad's `Bind…` opens the setup wizard, and an existing
+  binding is edited on `ConfigureBindingPage`. Both write through
+  `App.applyBinding`, so there is exactly one write path.
 
 ### 8.5 Shell — destinations + the rail
 
-`AppShell.destinations` is now Home (`pages/HomePage.qml`, dish glyph, the
-DEFAULT destination) · Controllers · Connections up top, then Support Dish
-(`pages/DonatePage.qml`, the pulse heart — `heart: true` draws the ♥ text
-glyph in `Theme.pulse` instead of a brand SVG) and Settings (the new `gear`
-brand glyph) pinned to the footer. Between the top group and the footer sits
-the pane-density "+ Add" action (solid accent outline, collapses to the bare
-+), wired — like Home's "+ Add a controller" card — to
-`shellApi.openSetupGuideAt(1)`: the setup guide's Controller step IS the
-add-a-controller explainer (pads auto-appear on Windows). `openSetupGuide()`
-still opens at step 0; `SetupGuideDialog.initialStep` carries the seed.
+`AppShell.destinations` is Home (`pages/HomePage.qml`, the DEFAULT destination)
+· Controllers · Connections up top, then Support Dish (`pages/DonatePage.qml`,
+the pulse heart — `heart: true` draws the ♥ text glyph in `Theme.pulse` instead
+of a brand SVG) and Settings pinned to the footer. Between the top group and the
+footer sits the pane-density action (solid accent outline, collapses to a bare
+`+`).
 
-Hard-coded destination indices shifted: Connections is `selectDestination(2)`.
+Hard-coded destination indices: Connections is `selectDestination(2)`.
+
+**v3 changes (§9.6):** the action is relabelled `Set up` and opens the wizard;
+`openSetupGuide()` / `openSetupGuideAt(step)` are **deleted** with no
+forwarders; every rail entry carries a distinct glyph family.
 
 ### 8.6 Home header assembly (wording owned by HomePage)
 
 Fresh install (no slots, no connections) → the getting-started nudge (muted);
 `streamingSlotCount > 0` → "N controllers streaming · M satellites online"
 (success); `onlineCount > 0` → "M satellites online · nothing streaming"
-(primary); else "Nothing streaming" (muted). The floating footer pill
-("STREAMING — DO NOT CLOSE") gates on `keepAwakeActive`, the same signal as
-the Controllers header pill.
+(primary); else "Nothing streaming" (muted). The keep-awake pill gates on
+`keepAwakeActive`.
+
+**v3 change (§9):** there is ONE streaming pill and it is the header pill,
+present on every page. Home's floating "STREAMING — DO NOT CLOSE" is gone —
+it instructed the user to compensate for behaviour the app did not have. The
+close intent is handled instead: while `keepAwakeActive`, `Main.qml`'s
+`onClosing` confirms.
+
+---
+
+## 9. v3 addendum — the binding surface
+
+Additive over §8. This is the contract the **setup wizard**
+(`src/qml/wizard/**`) and **`ConfigureBindingPage`** are written against. Both
+edit the same page-scoped `BindingDraft` (`src/qml/shared/BindingDraft.qml`) and
+commit through the same single write, `App.applyBinding`.
+
+### 9.1 New `App` properties
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `bluetoothPresent` | `bool` | `bluetoothChanged` | A Bluetooth-class device exists — **true even when the radio is switched off**. |
+| `bluetoothEnabled` | `bool` | `bluetoothChanged` | A radio handle opened. |
+| `applyInFlight` | `bool` | `applyChanged` | A binding apply is running. |
+| `applyConnectionState` | `string` | `applyChanged` | `"pending"`/`"active"`/`"done"`/`"failed"`/`"skipped"` for the USB-path step. |
+| `applyDestinationState` | `string` | `applyChanged` | Same vocabulary, for the REST round-trip. |
+| `applyElapsedMs` | `int` | `applyChanged` | Milliseconds on the CURRENT step — show the slow hint past 4000. |
+| `applyCancellable` | `bool` | `applyChanged` | True only while the Connection step is active. |
+
+`bluetoothPresent && !bluetoothEnabled` is "Bluetooth is off" (offer
+`openBluetoothSettings()`); `!bluetoothPresent` is "no adapter" (no button).
+Neither ever blocks the wizard: USB still works.
+
+### 9.2 New `App` signals
+
+| Signal | Meaning |
+|---|---|
+| `bluetoothChanged()` | The radio pair moved. |
+| `applyChanged()` | Any apply field moved. |
+| `applyFinished(bool ok, string reasonToken, bool directFellBack)` | Terminal, fired exactly once per run. `reasonToken` is `""` on success, else `"slotGone"` / `"hostUnreachable"` / `"bindRejected"` / `"cancelled"`. `directFellBack` means the Direct claim did not land and the pad streams over Standard — raise a **warning** toast, never an error. |
+| `pairingFailed(string serverId, string reasonToken)` | A forward PIN was rejected. `reasonToken` is `"wrongPin"` / `"versionMismatch"` / `"unreachable"` / `"pending"`. `serverId` is the stable discovered-server id — **match it against the sheet's own target** before showing an error. The sheet stays open and marks the field inline; the existing toast still fires and that duplication is intended. |
+
+### 9.3 The capability surface
+
+```qml
+App.capabilityForCandidate(slotId, type, hostKind, hostId,
+                           desiredPath, motionOn, rumbleOn, touchpadMode)
+```
+
+returns seven rows, in the fixed render order
+`gamepad · triggers · motion · touchpad · mouse · rumble · lightbar`, each:
+
+```js
+{ feature, inOk, linkOk, typeOk, hostOk, verdict, failingLayer, hasFailingLayer }
+```
+
+`feature`, `verdict` and `failingLayer` are **lowercase tokens** — the C++ never
+vends a sentence. `hostKind` is `"satellite"` or `"bluetooth"`; `hostId` is the
+stable satellite id (`""` = no destination chosen); `desiredPath` is
+`"standard"` or `"direct"`; `touchpadMode` is `0` off / `1` pad / `2` mouse.
+
+The four verdicts are not interchangeable:
+
+| `verdict` | Meaning | Render |
+|---|---|---|
+| `available` | every layer carries it and the user has it on | `✓`, `Theme.success` |
+| `unavailable` | a layer refuses it; `failingLayer` names the FIRST (`input`/`link`/`type`/`host`) | `✕`, and the reason line for that layer |
+| `off` | every layer carries it and the **user** switched it off | `Off`, and point at the switch |
+| `pending` | the host or its catalog is unresolved | `—`. **Never a `✕`** — a guessed "unsupported" is worse than no table |
+
+Supporting reads:
+
+| Method | Returns |
+|---|---|
+| `App.typeFeatureSummary(hostId, type)` | `[{feature, supported}]` for the type preview pills. **Empty while the catalog is unresolved.** |
+| `App.catalogResolvedFor(hostId)` | `false` ⇒ every row reads `pending`. |
+
+### 9.4 Host accounting, and the slot-id trap
+
+| Method | Returns |
+|---|---|
+| `App.hostBoundSlotCount(connectionId)` | Pads already bound to that host. |
+| `App.hostSlotCapacity()` | `4`. Compose `<n> slots free` in QML — **never assert a slot NUMBER before `applyBinding` allocates one.** |
+| `App.displacedSlotName(connectionId)` | The pad a bind would push off a full host; `""` when there is room. |
+| `App.resolveSlotIdForBind(slotId)` | The slot id re-resolved by `(vid, pid)`; `""` when the pad is gone. A Direct claim **retires** the framework slot id and publishes a synthetic twin, so an id the page opened with can be stale. |
+| `App.isVerifiedModel(slotId)` | The raw-HID layout is known, not guessed. Drives the Direct card's `Layout guessed` chip; always `false` over Bluetooth. |
+| `App.discoverySourceFor(serverId)` | The `"mDNS + broadcast"` label, addressable by id. |
+
+### 9.5 Draft settings
+
+| Method | Wiring |
+|---|---|
+| `App.touchpadModeFor(connectionId)` → `"off"`/`"pad"`/`"mouse"` | real (per-satellite store; `"off"` when never picked) |
+| `App.setTouchpadMode(connectionId, mode)` | real |
+| `App.rumbleEnabledFor(slotId)` | **stub — always `true`** |
+| `App.setRumbleEnabled(slotId, on)` | **stub — no-op** |
+
+The rumble pair is honest about being a stub: no per-binding rumble store exists
+yet (rumble rides the descriptor caps). **Still render the Rumble row and its
+switch** — the capability verdict for it is real, so hiding the row would hide
+true information; the switch simply has no durable effect yet.
+
+### 9.6 Apply
+
+```qml
+App.applyBinding(slotId, connectionId, type, desiredPath,
+                 motionOn, rumbleOn, touchpadMode)
+App.cancelApply()
+```
+
+`applyBinding` is the ONLY write either binding surface makes — pages 1-4 of the
+wizard call no setter at all. It:
+
+1. re-resolves the slot id, and fails immediately with `"slotGone"` if the pad
+   went away;
+2. switches the USB path only if it actually differs, budgeting **20 s**. A
+   claim that times out is a **fallback to Standard**, not a failure: the run
+   continues and `directFellBack` comes back true;
+3. writes the type, motion, touchpad mode, then binds, budgeting **8 s**;
+4. emits `applyChanged()` on every move and `applyFinished(...)` exactly once.
+
+`cancelApply()` is accepted **only** while `applyCancellable` — aborting a claim
+drops back to Standard, which is safe; the REST round-trip cannot be
+half-applied and offers no escape.
+
+On success: pop to Home and toast. On failure: **stay**, draft intact, reason in
+a toast, primary live again. The wire is `transmitting`, never `live`, until
+success — showing a connection that never existed is worse than showing none.
+
+### 9.7 New `slotModel` roles
+
+| Role | Type | Meaning |
+|---|---|---|
+| `hasTouchpad` | `bool` | The pad reports a touch surface. Gates BOTH the touchpad and the mouse capability rows — mouse is a routing of the touchpad. |
+| `verifiedModel` | `bool` | The raw-HID fast lane knows this model's report layout. Always `false` over Bluetooth. |
+
+### 9.8 New `Tokens`
+
+Type `textDisplay` 26 · `textHero` 21 · families `sansFamily` / `monoFamily`
+(probed explicitly — the platform generic can resolve to Courier New).
+Spacing `s10` 24 · `s11` 32. Radius `radiusDialog` 10. Glyphs `glyphSm` 16 ·
+`glyphMd` 20 · `glyphLg` 28 · `glyphXl` 40 · `glyphHero` 76. Durations
+`durFast` 120 · `durNormal` 200 · `durBusy` 1100 · `durToast` 4000. Metrics
+`minTouch` 32 · `minWindowWidth` 900 · `minWindowHeight` 620 ·
+`narrowBreakpoint` 860 · `stackBreakpoint` 760 · `wideBreakpoint` 980.
+
+**`disabledOpacity` is now `0.55`** (was 0.4) and is legal **only** on an
+`AbstractButton`. An unavailable *capability* gets **no opacity at all** —
+full-opacity `Theme.mutedStrong` plus the outlined absent chip.
+
+`reducedMotion` (`bool`, NOTIFY `reducedMotionChanged`) mirrors the OS
+"animate controls inside windows" setting, inverted. When true: indeterminate
+bars become a static filled track, glyph animations stop, `Behavior` durations
+go to 0. `refreshMotionPreference()` re-samples.
+
+### 9.9 New `Theme` roles
+
+`glyph` (brand-glyph tint, re-tinted by **palette**, never by state) ·
+`disabledFg` (inactive-control foreground) · `mutedStrong` (drawn-but-
+unavailable INFORMATION, always full opacity) · `scrim` · `focusRing` ·
+`accentWash24` · `successFill` · `errorFill` · `outlineSubtle`, plus
+`Theme.alpha(color, 0..1)`. All NOTIFY `paletteChanged`. See `DESIGN.md` for the
+values and the four-roles-easy-to-confuse table.
+
+### 9.10 Navigation
+
+```qml
+shellApi.openSetupWizard(slotId)        // slotId optional; "" = none
+shellApi.pushDetail(url, title, props)  // props optional
+shellApi.requestNavigation(action)      // routed through the leave guard
+```
+
+`openSetupWizard` **always selects Home first, then pushes**, so popping (on
+success or cancel) always lands on Home. `openSetupGuide()` /
+`openSetupGuideAt(step)` are deleted with no forwarders.
+
+A pushed page may declare `suppressBack` (hides the header chevron) and
+`blocksLeave` + `requestLeave(proceed)` (asks before the stack is replaced).
