@@ -61,7 +61,7 @@ jobs:
 
       # init and analyze come from the same repo — bump both SHAs together.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
+        uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
