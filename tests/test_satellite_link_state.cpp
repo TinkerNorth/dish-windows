@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Locks the satellite session-presence -> UI LinkState mapping so the dashboard
-// and the connections screen can never drift on how a Live/Linking/Faltering/
-// Idle/Stale satellite is shown. Pure mapper, no Qt. Replicates dish-android
-// composer/SatelliteLinkStateTest (9 cases).
 
 #include "core/reducer/SatelliteLinkState.h"
 
@@ -41,8 +36,7 @@ TEST_CASE("satelliteLinkState: idle remembered-only is saved", "[linkstate]") {
 }
 
 TEST_CASE("satelliteLinkState: stale presence is always needs pairing", "[linkstate]") {
-    // A Stale presence dropped the key; the chip reads "Needs pairing" regardless
-    // of the discovery flag.
+    // A Stale presence dropped the key, so being discovered cannot rescue it.
     REQUIRE(satelliteLinkState(SessionPresence::Stale, false, false) == UiLinkState::Stale);
     REQUIRE(satelliteLinkState(SessionPresence::Stale, false, true) == UiLinkState::Stale);
 }

@@ -1,23 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Binding presence gate — the rule that stops the app reporting a controller
-// that does not exist. A slot->connection binding declares a virtual pad on the
-// satellite (ConnectionHub::bind -> WifiConnection::attachSlot), and EVERY
-// session PUT re-sends the whole desired-descriptor set. Nothing pruned that set
-// when the physical pad went away, so a reconnect re-plugged a virtual pad with
-// no hardware behind it — the phantom.
-//
-// The gate is a pure decision over (the slots the app currently shows) x (the
-// bindings the hub holds): keep a binding whose pad is present, MIGRATE one
-// whose pad merely moved to its twin id (the USB-direct claim retires the
-// framework id and publishes a synthetic in its place — the pad is still
-// there), and UNBIND one whose pad is genuinely gone. Pure, Qt-free,
-// socket-free.
-//
-// Local variables here are never named `slots`: Qt's moc keyword macro claims
-// that identifier, and these tests share a translation-unit vocabulary with the
-// Qt-including seed test next door.
+// Never name a local `slots` here: Qt's moc keyword macro claims that identifier
+// and these tests share a vocabulary with the Qt-including seed test next door.
 
 #include "core/reducer/BindingPresence.h"
 
@@ -34,7 +19,6 @@ using reducer::resolveBindingPresence;
 
 namespace {
 
-// A slot the app currently shows, with the pad identity behind it.
 PresentSlot present(const std::string& id, int vid, int pid) {
     PresentSlot s;
     s.id = id;
@@ -43,8 +27,7 @@ PresentSlot present(const std::string& id, int vid, int pid) {
     return s;
 }
 
-// A binding the hub holds. vid/pid < 0 means the app can no longer resolve the
-// pad behind it at all (the device is not enumerated anywhere).
+// vid/pid < 0 means the pad behind the binding no longer resolves anywhere.
 BoundSlot bound(const std::string& slotId, const std::string& connId, int vid = -1, int pid = -1) {
     BoundSlot b;
     b.slotId = slotId;
@@ -53,8 +36,6 @@ BoundSlot bound(const std::string& slotId, const std::string& connId, int vid = 
     return b;
 }
 
-// The Nintendo Switch Pro Controller (057e:2009) — the pad on the reporting
-// machine, and the vpKey its USB-direct synthetic slot id is built from.
 constexpr int kSwitchProVid = 0x057e;
 constexpr int kSwitchProPid = 0x2009;
 const std::string kSwitchProSynthetic = "92151817"; // (0x057e << 16) | 0x2009
@@ -69,9 +50,8 @@ TEST_CASE("resolveBindingPresence: a binding whose pad is present is left alone"
 }
 
 TEST_CASE("resolveBindingPresence: a binding whose pad is gone is unbound", "[bindingpresence]") {
-    // THE PHANTOM. The pad was unplugged, so it is in no slot list any more and
-    // its identity no longer resolves — but the binding (and therefore the
-    // descriptor every session PUT re-sends) survived.
+    // A surviving binding is re-sent as a desired descriptor on every session
+    // PUT, so the satellite re-plugs a virtual pad with no hardware behind it.
     const std::vector<BoundSlot> bindings = {bound("sdl:0", "sat-1")};
     const auto actions = resolveBindingPresence(/*present=*/{}, bindings);
     REQUIRE(actions.size() == 1);
@@ -81,23 +61,18 @@ TEST_CASE("resolveBindingPresence: a binding whose pad is gone is unbound", "[bi
 
 TEST_CASE("resolveBindingPresence: an unbind names the connection it dropped",
           "[bindingpresence]") {
-    // The notice channel: AppModel turns an Unbind into a one-shot toast that
-    // names the satellite the binding was serving, so the user sees a REASON for
-    // the slot card going quiet instead of a binding that silently disappears.
-    // The connection therefore rides every action, not just a Migrate.
+    // AppModel turns an Unbind into a toast naming the satellite, so the
+    // connection has to ride every action, not just a Migrate.
     const std::vector<BoundSlot> bindings = {bound("sdl:0", "sat-living-room")};
     const auto actions = resolveBindingPresence(/*present=*/{}, bindings);
     REQUIRE(actions.size() == 1);
     REQUIRE(actions[0].kind == BindingPresenceKind::Unbind);
     REQUIRE(actions[0].connId == "sat-living-room");
-    // Nothing to migrate onto — the target stays empty so a caller cannot
-    // mistake it for a live slot id.
     REQUIRE(actions[0].toSlotId.empty());
 }
 
 TEST_CASE("resolveBindingPresence: a pad gone while others remain is still unbound",
           "[bindingpresence]") {
-    // A second pad being present must not vouch for the departed one.
     const std::vector<PresentSlot> shown = {present("sdl:1", 0x20d6, 0xa713)};
     const std::vector<BoundSlot> bindings = {bound("sdl:0", "sat-1", kSwitchProVid, kSwitchProPid),
                                              bound("sdl:1", "sat-2", 0x20d6, 0xa713)};
@@ -109,9 +84,9 @@ TEST_CASE("resolveBindingPresence: a pad gone while others remain is still unbou
 
 TEST_CASE("resolveBindingPresence: a pad that moved onto its USB-direct synthetic migrates",
           "[bindingpresence]") {
-    // The claim hides the framework twin and publishes a synthetic in its place.
-    // The pad IS still there, so the binding follows it instead of being dropped
-    // (dropping it would tear down a working stream on every path switch).
+    // The USB-direct claim hides the framework twin and publishes a synthetic in
+    // its place. The pad is still there, so dropping the binding would tear down
+    // a working stream on every path switch.
     const std::vector<PresentSlot> shown = {
         present(kSwitchProSynthetic, kSwitchProVid, kSwitchProPid)};
     const std::vector<BoundSlot> bindings = {bound("sdl:0", "sat-1", kSwitchProVid, kSwitchProPid)};
@@ -136,9 +111,8 @@ TEST_CASE("resolveBindingPresence: a synthetic released back to the framework tw
 
 TEST_CASE("resolveBindingPresence: an identity-less binding never migrates onto a stranger",
           "[bindingpresence]") {
-    // vid/pid 0:0 is identity-LESS (SDL could not read the descriptor), not a
-    // key — it must not match a present pad that also reads 0:0. Mirrors the
-    // EmulateSeed vidPidKey rule.
+    // 0:0 means SDL could not read the descriptor, so it is not a key: it must
+    // not match another pad that also reads 0:0.
     const std::vector<PresentSlot> shown = {present("sdl:9", 0, 0)};
     const std::vector<BoundSlot> bindings = {bound("sdl:0", "sat-1", 0, 0)};
     const auto actions = resolveBindingPresence(shown, bindings);
@@ -148,8 +122,8 @@ TEST_CASE("resolveBindingPresence: an identity-less binding never migrates onto 
 
 TEST_CASE("resolveBindingPresence: a migration target that is already bound is not clobbered",
           "[bindingpresence]") {
-    // Same model plugged twice: the departed slot must not steal the surviving
-    // twin's binding. Drop the stale one instead.
+    // Same model plugged twice: the departed slot must not steal the survivor's
+    // binding.
     const std::vector<PresentSlot> shown = {
         present(kSwitchProSynthetic, kSwitchProVid, kSwitchProPid)};
     const std::vector<BoundSlot> bindings = {
@@ -177,9 +151,8 @@ TEST_CASE("resolveBindingPresence: actions are ordered by the departing slot id"
 }
 
 TEST_CASE("resolveBindingPresence: the gate is idempotent once applied", "[bindingpresence]") {
-    // Re-running over the settled shape yields nothing — the AppModel rebuild
-    // re-enters after applying the actions, and a second round of unbinds would
-    // loop forever.
+    // The AppModel rebuild re-enters after applying the actions, so a second
+    // round of unbinds would loop forever.
     const std::vector<PresentSlot> shown = {
         present(kSwitchProSynthetic, kSwitchProVid, kSwitchProPid)};
     const std::vector<BoundSlot> settled = {

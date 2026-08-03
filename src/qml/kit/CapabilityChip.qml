@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// THE pill. Six tones, zero hand-rolls: the accent capability pill, the
-// outlined "not available" pill, the amber low-battery pill, the green trust
-// badge ("Verified", "Best fit"), the amber warning badge ("Layout guessed")
-// and the neutral identity pill ("as DualSense") are all this component. Adding
-// a second pill style is a review-blocking change.
-//
-// It ALWAYS renders. An absent capability draws the outlined pill with the
-// negated label ("No gyro") at FULL opacity — status is always drawn, never
-// merely absent, and the outline is the visual cue, not a fade.
+// The one pill. An absent capability draws the outlined tone with the negated
+// label at FULL opacity — the outline is the cue, not a fade.
 
 import QtQuick
 import Dish.Chrome

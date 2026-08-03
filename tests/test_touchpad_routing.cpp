@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Coverage for the pure touchpad routing reducer in
-// core/reducer/TouchpadRouting.h: assembleTouchpadForward (threads eventTimeMs
-// end-to-end — the 2e routing fix) and the kTouchpadMouseControlV1 constant
-// (D2: mouse mode off for v1). The on-screen TouchpadPadCoordinator /
-// TouchpadState surface tests are phone-only SKIP; dish-windows forwards a real
-// controller's touchpad, so this pins the physical-pad forward routing. The
-// wire byte layout (16 bytes, eventTimeMs at bytes 12..15) is pinned separately
-// by test_satellite_client_touchpad against the Wave 1 encoder.
+// The forward routing for a physical controller's touchpad. The full wire byte
+// layout is pinned by test_satellite_client_touchpad; here only the eventTimeMs
+// seam at bytes 12..15 is re-checked end to end.
 
 #include "Network/SatelliteClient.h"
 #include "core/reducer/TouchpadRouting.h"
@@ -53,8 +48,8 @@ TEST_CASE("assembleTouchpadForward preserves every finger/button field", "[touch
 
 TEST_CASE("assembleTouchpadForward does not zero an inactive finger's coords",
           "[touchpad][routing]") {
-    // The active flags are the sole source of truth (matching the encoder's pure
-    // layout contract) — an inactive finger's id/coords pass through verbatim.
+    // The active flags are the sole source of truth, matching the encoder's
+    // layout contract, so an inactive finger's id/coords pass through verbatim.
     const auto f = assembleTouchpadForward(false, 0x11, 0x2222, 0x3333, false, 0x44, 0x5555, 0x6666,
                                            false, 0x77777777U);
     REQUIRE_FALSE(f.finger0Active);
@@ -68,9 +63,8 @@ TEST_CASE("assembleTouchpadForward does not zero an inactive finger's coords",
 
 TEST_CASE("assembled forward feeds the wire encoder with eventTimeMs intact",
           "[touchpad][routing]") {
-    // End-to-end seam check: the routing's eventTimeMs reaches the encoder's
-    // trailing u32 (bytes 12..15). A regression that dropped eventTimeMs would
-    // re-introduce the server-side drop of a sub-16-byte payload.
+    // eventTimeMs must reach the encoder's trailing u32 (bytes 12..15): dropping
+    // it yields a sub-16-byte payload the server discards.
     const auto f = assembleTouchpadForward(true, 2, 5, 6, false, 0, 0, 0, true, 0xCAFEBABEU);
     const auto wire = dish::net::SatelliteClient::encodeTouchpadPayload(
         /*ctrlIdx=*/0, f.finger0Active, f.finger0Id, f.finger0X, f.finger0Y, f.finger1Active,
@@ -80,7 +74,7 @@ TEST_CASE("assembled forward feeds the wire encoder with eventTimeMs intact",
 }
 
 TEST_CASE("touchpad ships v1 with mouse control disabled (D2)", "[touchpad][routing]") {
-    // No mouse mode in v1; the descriptor (sent by 2b) carries this value.
+    // No mouse mode in v1; the capability descriptor carries this value.
     REQUIRE(kTouchpadMouseControlV1 == false);
 }
 

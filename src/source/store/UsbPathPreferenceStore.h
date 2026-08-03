@@ -1,31 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbPathPreferenceStore — the per-VID:PID USB input-path preference. Port of
-// dish-android source/store/UsbPathPreferenceStore.kt.
+// The per-VID:PID USB input-path preference, as a durable Repository wrapped in
+// a reactive Source.
 //
-// Two layers, matching the kernel SoC split the migration plan mandates (a
-// durable Repository wrapped in a reactive Source):
+// A corrupt blob falls back to empty and an unrecognised stored value (one a
+// newer build wrote) is dropped on read, so a downgrade never crashes and never
+// guesses.
 //
-//   * UsbPathPreferenceRepository — the dumb, synchronous, thread-safe storage
-//     (one std::mutex; no Observables). A Repository<QString, UsbPathEntry>
-//     keyed by the "%04x:%04x" vid:pid string, persisted as ONE JSON object
-//     under the "usb_path_choices" key (android keeps the same shape in its
-//     user_preferences SharedPreferences). It instantiates Wave 0's
-//     RepositoryContract. A corrupt blob falls back to empty; an unknown stored
-//     value (a PathChoice constant a newer build wrote) is dropped on read for
-//     forward-compat — never crash, never guess.
-//
-//   * UsbPathPreferenceStore — the StateSource<map<vid:pid, PathChoice>> over
-//     that repo. Hydrates from repo.all() on construction; setChoice/clear
-//     persist through AND republish; an unchanged setChoice short-circuits (no
-//     re-emit), matching android's `if (state.value[key] == choice) return`.
-//     choiceFor(vid, pid) reads the live map.
-//
-// On android the path pref is cloud-backed user preferences; on Windows it is
-// QSettings (HKCU\Software\Dish\Dish). The vid:pid key namespace is disjoint
-// from the trust/deadzone/motion namespaces (its own dedicated "usb_path_*"
-// key), so clear() touches only this store's data.
+// The vid:pid key namespace is disjoint from the trust, deadzone and motion
+// namespaces, which is what keeps clear() from touching another store's data.
 
 #pragma once
 

@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The QML-facing singleton that bridges the QML title bar to the C++ chrome
-// filter: QML publishes the caption + maximize-button rects here and reads
-// micaActive (so it can pick a transparent vs solid background). main.cpp wires
-// this to the FramelessWindowChrome instance after the window has a handle.
-//
-// QML/Quick-only; DISH_QML build exclusively.
+// The QML title bar's seam onto the native chrome filter: QML publishes its
+// rects here and reads back what only Win32 knows. QmlEntryPoint wires the
+// filter in once the window has a handle.
 
 #pragma once
 
@@ -23,17 +20,14 @@ class ChromeBridge : public QObject {
     QML_ELEMENT
     QML_SINGLETON
     Q_PROPERTY(bool micaActive READ micaActive NOTIFY micaActiveChanged)
-    // The resolved app appearance. The body is transparent (Mica shows) only when
-    // dark — Mica's tint follows the OS, so a light app over a dark desktop would
-    // otherwise keep a dark backdrop while the cards/text go light. In light mode
-    // we paint the solid light Theme.background instead.
+    // Gates a transparent (Mica) vs solid body. Mica's tint follows the OS, so a
+    // light app over a dark desktop would otherwise keep a dark backdrop while
+    // the cards and text go light.
     Q_PROPERTY(bool dark READ dark NOTIFY darkChanged)
-    // Is the pointer over the maximize button? It has to come the long way
-    // round: that button answers HTMAXBUTTON (the Snap Layouts contract), which
-    // makes it NON-CLIENT, and Quick never receives non-client mouse events —
-    // so the QML item's own `hovered` is permanently false and the button would
-    // be the one caption control that never lights up. The native filter tracks
-    // it and reports it here.
+    // The maximize button answers HTMAXBUTTON (the Snap Layouts contract), which
+    // makes it NON-CLIENT, and Quick never receives non-client mouse events — so
+    // the QML item's own `hovered` is permanently false. The filter reconstructs
+    // hover from the native messages and reports it here.
     Q_PROPERTY(bool maximizeHovered READ maximizeHovered NOTIFY maximizeHoveredChanged)
 
   public:
@@ -45,16 +39,15 @@ class ChromeBridge : public QObject {
     void setDark(bool dark);
     bool maximizeHovered() const { return m_maximizeHovered; }
 
-    // Wire to the native chrome filter. Rects published BEFORE this (the QML
-    // title bar completes before the native window exists) are cached and
-    // flushed here, so the first frames already hit-test correctly.
+    // The QML title bar completes before the native window exists, so rects
+    // published earlier are cached and flushed here — the first frames already
+    // hit-test correctly.
     void setChrome(FramelessWindowChrome* chrome);
 
     Q_INVOKABLE void setCaptionRect(const QRect& rect);
     Q_INVOKABLE void setMaximizeButtonRect(const QRect& rect);
-    // Client carve-outs inside the caption strip (hamburger / minimize /
-    // close) so those QML buttons receive real clicks instead of the press
-    // starting a native caption drag.
+    // Client carve-outs inside the caption strip, so these QML buttons receive
+    // real clicks instead of the press starting a native caption drag.
     Q_INVOKABLE void setMinimizeButtonRect(const QRect& rect);
     Q_INVOKABLE void setCloseButtonRect(const QRect& rect);
     Q_INVOKABLE void setLeftClientRect(const QRect& rect);
@@ -69,7 +62,7 @@ class ChromeBridge : public QObject {
     bool m_micaActive = false;
     bool m_dark = true; // app defaults to the dark palette
     bool m_maximizeHovered = false;
-    // Last published rects, cached so a late-wired chrome starts correct.
+    // Cached so a late-wired chrome starts correct.
     QRect m_caption;
     QRect m_maximize;
     QRect m_minimize;

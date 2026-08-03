@@ -1,31 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The wizard's progress affordance: not a numbered breadcrumb but the thing
-// being built — pad → wire → host, in Home's own geometry, filling in as the
-// answers land, with the three stage markers on a rule beneath. Composed of
-// Card (outline, dense) + WireLine + BrandGlyph; only the markers are novel.
-//
-// Three corrections to the frames are baked in:
-//  * A hot-but-empty slot is ACCENT, never amber. Nothing is wrong while the
-//    app is looking for a pad — amber is the problem colour everywhere else
-//    (stale, Needs pairing, Connecting…, unverified, claim failures), and
-//    spending it on "working" is how it stops meaning anything.
-//  * Stage 3 owns three of the five pages, so the markers alone stall for 60%
-//    of the flow. A three-dot sub-step row rides the right end of the marker
-//    rule while stage 3 is active.
-//  * A completed marker is clickable. Back is non-destructive, so jumping to an
-//    answered stage costs nothing.
-//
-// The banner costs ~95px of every step, which is why the type table is three
-// rows and not seven. `compact` drops the slot sub-lines and the marker labels
-// for ~60px on a short window; below Tokens.narrowBreakpoint the wire label
-// folds into the host slot's sub-line rather than squeezing the wire.
-//
-// The slots are PLACEHOLDERS: no hover, no press, no focus ring. They are
-// drawn state, not controls. (The dashed edge is drawn here rather than through
-// ActionCard.placeholder because a hot slot needs an accent dash and an accent
-// wash, which the placeholder mode deliberately does not carry.)
+// The wizard's progress affordance: the thing being built (pad → wire → host)
+// rather than a numbered breadcrumb. The slots are drawn state, not controls —
+// no hover, no press, no focus ring. Their dashed edge is drawn here rather
+// than through ActionCard.placeholder, which carries neither the accent dash
+// nor the accent wash a hot slot needs.
 
 // Bound: the marker and pip delegates read the outer `banner` id alongside
 // their required index.
@@ -42,7 +22,6 @@ Item {
     // { title: string, sub: string, empty: bool, hot: bool, tone: "accent"|"warn" }
     property var padSlot: ({})
     property var hostSlot: ({})
-    // Mono caption over the wire ("as —", "as Xbox 360 · rumble", "binding…").
     property string wireLabel: ""
     // A working link. NEVER true while an apply is in flight — see WireLine.
     property bool live: false
@@ -78,8 +57,8 @@ Item {
     readonly property string hostTone: (banner.hostSlot && banner.hostSlot.tone !== undefined)
                                        ? banner.hostSlot.tone : "accent"
 
-    // Below the narrow breakpoint the wire keeps its width and gives up its
-    // caption; the caption is a fact, so it moves rather than disappearing.
+    // Below the breakpoint the wire keeps its width and gives up its caption to
+    // the host slot; the caption is a fact, so it moves rather than vanishing.
     readonly property bool narrow: banner.width > 0 && banner.width < Tokens.narrowBreakpoint
     readonly property bool foldLabel: banner.narrow && banner.wireLabel.length > 0
     readonly property string hostSubText: !banner.foldLabel ? banner.hostSub
@@ -105,10 +84,8 @@ Item {
         return qsTr("not started");
     }
 
-    // ── The slot ─────────────────────────────────────────────────────────────
-    // One shape, two instances, one file: a slot with a variant would be a kit
-    // component of its own, but it has exactly one drawing site and lives
-    // inside the only component that composes it.
+    // Inline rather than promoted: one shape, two instances, and its only
+    // drawing site is the component it already lives in.
     component BannerSlot: Item {
         id: slot
 
@@ -137,23 +114,19 @@ Item {
                          ? qsTr("%1 — %2").arg(slot.title).arg(slot.sub)
                          : slot.title
 
-        // Ground: the surface of a filled slot, the accent wash of a hot empty
-        // one, nothing at all when the slot is cold and empty.
         Rectangle {
             anchors.fill: parent
             radius: Tokens.radiusCard
             color: !slot.empty ? Theme.surface
                  : slot.hot ? Theme.primaryFill
                  : "transparent"
-            // An empty slot's edge is the dashed canvas below; a filled slot
-            // draws its own hairline.
+            // An empty slot's edge is the dashed canvas below.
             border.width: slot.empty ? 0 : 1
             border.color: slot.edge
         }
 
-        // The dashed edge of an unanswered slot. Canvas because Qt 6.7 has no
-        // rounded dashed-rect primitive, and Qt.rgba() because a QColor
-        // stringifies to #AARRGGBB, which Canvas 2D reads as #RRGGBBAA.
+        // Canvas because Qt 6.7 has no rounded dashed-rect primitive (Qt.rgba
+        // per kit rule C5).
         Canvas {
             id: edgeCanvas
             anchors.fill: parent
@@ -212,7 +185,6 @@ Item {
         }
     }
 
-    // ── The banner ───────────────────────────────────────────────────────────
     Card {
         id: frame
         anchors.fill: parent
@@ -242,7 +214,6 @@ Item {
                 WireLine {
                     live: banner.live
                     transmitting: banner.transmitting
-                    // Folded into the host slot's sub-line on a narrow window.
                     label: banner.foldLabel ? "" : banner.wireLabel
                     Layout.fillWidth: true
                     Layout.minimumWidth: 60
@@ -292,9 +263,9 @@ Item {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
 
-                        // Only an answered stage is reachable. A not-yet stage is
-                        // information, so it keeps full opacity and says its
-                        // state in colour — the 0.55 rule is for dead controls.
+                        // Only an answered stage is reachable, and jumping to
+                        // one is free because Back is non-destructive. A not-yet
+                        // stage is information: full opacity, state in colour.
                         enabled: marker.completed
                         opacity: 1.0
                         focusPolicy: marker.completed ? Qt.StrongFocus : Qt.NoFocus
@@ -312,8 +283,6 @@ Item {
 
                         onClicked: banner.stageClicked(marker.stageNumber)
 
-                        // The one global focus treatment, outside the bounds and
-                        // on visualFocus only so a mouse press never rings.
                         background: Item {
                             Rectangle {
                                 anchors.fill: parent

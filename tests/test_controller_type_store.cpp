@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Locks the per-slot controller-type override StateSource: the (conn,slot)->type
-// map, setTypeIfAbsent semantics, selective vs bulk clear, and per-connection
-// isolation. Replicates dish-android source/store/ControllerTypeStoreTest (10
-// cases), plus a StateSourceProbe assertion that a no-op setTypeIfAbsent/clear
-// emits nothing (distinct-until-changed on the Observable).
 
 #include "StateSourceProbe.h"
 #include "source/store/ControllerTypeStore.h"
@@ -85,7 +79,6 @@ TEST_CASE("ControllerTypeStore: clear removes only the exact connection-slot ent
     store.clear("conn-1", "slot-A");
 
     REQUIRE_FALSE(store.typeFor("conn-1", "slot-A").has_value());
-    // clear is per-slot: slot-B survives. clearConnection drops a whole conn.
     REQUIRE(store.typeFor("conn-1", "slot-B") == kPlayStation);
 }
 
@@ -110,8 +103,6 @@ TEST_CASE("ControllerTypeStore: clear of an unset connection-slot is a no-op", "
     REQUIRE(store.state().value().size() == 1U);
 }
 
-// ── Windows-specific: the StateSource Observable is distinct-until-changed ────
-
 TEST_CASE("ControllerTypeStore: a no-op setTypeIfAbsent/clear emits nothing", "[typestore]") {
     ControllerTypeStore store;
     store.setType("conn-1", "slot-A", kXbox);
@@ -119,12 +110,11 @@ TEST_CASE("ControllerTypeStore: a no-op setTypeIfAbsent/clear emits nothing", "[
     dish::test::StateSourceProbe<ControllerTypeMap> probe(store.state());
     REQUIRE(probe.count() == 1U); // eager initial only
 
-    // Both are no-ops (key present / key absent), so neither emits.
+    // Key present / key absent: neither mutates the map.
     store.setTypeIfAbsent("conn-1", "slot-A", kPlayStation);
     store.clear("conn-1", "slot-missing");
     REQUIRE(probe.count() == 1U);
 
-    // A real change emits once.
     store.setType("conn-1", "slot-B", kPlayStation);
     REQUIRE(probe.count() == 2U);
 }

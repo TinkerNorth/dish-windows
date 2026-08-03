@@ -1,20 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// PURE, side-effect-free frameless-window hit-test math, factored out of the
-// native event filter so it is unit-testable without an HWND. The native
-// WM_NCHITTEST handler converts the cursor to client coordinates, fills in the
-// geometry below, calls hitTest(), and maps the returned region to a Win32 HT*
-// constant. No Qt, no Win32 types here — plain ints — so the tests link nothing.
+// Pure frameless-window hit-test math, factored out of the native event filter
+// so it is unit-testable without an HWND. No Qt and no Win32 types — plain ints
+// — so the tests link nothing.
 
 #pragma once
 
 namespace dish::chrome {
 
-// A point/rectangle in the same coordinate space (window-local, top-left
-// origin, x to the right, y down). Rect is half-open on the high edges:
-// [left, right) x [top, bottom), so a point at x == right is OUTSIDE — this is
-// what makes the off-by-one at a button's right/bottom edge well-defined.
+// Window-local, top-left origin. Rect is half-open on the high edges —
+// [left, right) x [top, bottom) — which is what makes the off-by-one at a
+// button's right/bottom edge well-defined.
 struct Point {
     int x;
     int y;

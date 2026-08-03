@@ -1,611 +1,355 @@
-# QML Contract (frozen — A2)
+# QML contract
 
-This is the FROZEN exposure contract the Qt Quick UI binds against. Page agents
-code ONLY against this document. Do not re-read the C++; if something you need is
-missing, flag it rather than reaching past this surface.
+The exposure surface between the C++ core and the Qt Quick UI. Everything the
+QML tree may read or call is listed here; anything not listed is private to
+C++ and the UI must not reach for it.
 
-A2 (the flows redesign) extends A1 additively — every A1 binding keeps working.
-The additions are listed in **§7 A2 addendum** at the end: shell-header
-primitives (counts + keep-awake pill), the collapsible-rail preference, the
-light-bar setting, two new slot roles, and the `Tokens` metrics singleton
-beside `Theme`. The two index-based invokables A1 still listed as DEPRECATED
-(`connectByIndex`, index-based `pairWithPin`) were REMOVED from the C++ in R14
-and are gone from this doc.
+The companion documents are [`QML_UI_KIT.md`](QML_UI_KIT.md) for the component
+kit and the design tokens, and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
+layering the surface sits on top of.
 
-The whole surface is reached through one context property, **`App`** (an
-`AppViewModel`), registered by `QmlEntryPoint::runQmlApp` on the root context. It
-wraps the existing `dish::AppModel` and its stores/composers; it adds NO new
-behavior — every property is a re-projection and every method forwards verbatim.
+## How the surface is reached
 
-Two `QML_IMPORT`-free list models are vended through `App`; their concrete types
-are also registered uncreatable under `import Dish.Chrome 1.0` as
-`SlotListModel` / `ConnectionListModel` (you generally never name them — you bind
-`App.slotModel` / `App.connectionModel` directly into a `ListView.model`).
+Three names are in scope for QML:
 
-The theme palette is the separate `Theme` singleton from A0 (`import Dish.Chrome`)
-— unchanged; use it for colors. This doc does not re-list it.
+| Name | What it is | Import |
+|---|---|---|
+| `App` | [`AppViewModel`](../src/qml/AppViewModel.h), the one model surface | none, it is a context property |
+| `Theme` | the colour palette | `import Dish.Chrome` |
+| `Tokens` | the non-colour design tokens | `import Dish.Chrome` |
 
----
+`App` is registered on the root context by
+[`QmlEntryPoint::runQmlApp`](../src/qml/QmlEntryPoint.cpp), so it is visible in
+every QML scope with no import. `Theme` and `Tokens` are registered by instance
+into the `Dish.Chrome` module, alongside `ChromeBridge` (the frameless-window
+bridge, used only by `Main.qml` and `WindowTitleBar.qml`).
 
-## 1. `App` — top-level singleton (context property)
+`SlotListModel` and `ConnectionListModel` are also registered uncreatable under
+`Dish.Chrome`, so a delegate can name the type. You rarely need to: bind
+`App.slotModel` or `App.connectionModel` straight into a `ListView.model`.
 
-Access: `App` (already in every QML scope; no import needed).
-Type: `dish::qml::AppViewModel` (a `QObject`, context property, app-lifetime).
+### The one accepted lint gap
 
-### Properties
+`App` is a runtime context property. Static analysis cannot see it, so every
+`App.foo` reference is an unqualified lookup as far as `qmllint` is concerned.
+CI therefore runs `qmllint` with `--unqualified info` and gates every other
+category at error, including `missing-property`, `unused-imports` and
+`unresolved-type`. This is the only downgrade, and this document is the
+compensating control: a reference to `App` is checked against the table below
+rather than by the linter.
+
+The gap closes when `AppViewModel` becomes a compiled QML singleton instead of
+a context property. Until then, do not add a second context property; anything
+new goes on `App`.
+
+## `App` properties
+
+`AppViewModel` is a thin adapter. Every property is a re-projection of state
+already derived in a C++ store or composer, and every method forwards verbatim.
+It adds no behaviour of its own.
+
+### Header and counts
 
 | Property | Type | NOTIFY | Meaning |
 |---|---|---|---|
-| `statusText` | `string` | `stateChanged` | Dashboard headline ("No connections yet" / "<n> remembered" / the single live server label / "<n> online"). Mirrors the Widgets header verbatim. |
-| `summaryText` | `string` | `stateChanged` | Header sub-line ("Tap Manage to add one" / "<n> remembered" / "<n> of <m> online"). |
-| `onlineCount` | `int` | `stateChanged` | Number of connections whose link is `Connected`. |
-| `connectionCount` | `int` | `stateChanged` | Total remembered+live connections (dashboard `ConnectionSummary` count). |
-| `busy` | `bool` | `stateChanged` | True while a controller is registering — drives the indeterminate dashboard spinner. |
-| `eventsPerSec` | `int` | `telemetryChanged` | Input events/s sampled ~1 Hz from the processor. |
-| `sendsPerSec` | `int` | `telemetryChanged` | Wire sends/s, same ~1 Hz sample. |
+| `statusText` | `string` | `stateChanged` | Dashboard headline: "No connections yet", "\<n\> remembered", the single live server label, or "\<n\> online". |
+| `summaryText` | `string` | `stateChanged` | Header sub-line: "Tap Manage to add one", "\<n\> remembered", "\<n\> of \<m\> online". |
+| `onlineCount` | `int` | `stateChanged` | Connections whose link is `Connected`. |
+| `connectionCount` | `int` | `stateChanged` | Total remembered plus live connections. |
+| `slotCount` | `int` | `stateChanged` | Rows in `slotModel`, mirrored so a binding never pokes the model for a count. |
+| `boundSlotCount` | `int` | `stateChanged` | Slots currently bound to a connection. |
+| `streamingSlotCount` | `int` | `stateChanged` | Slots bound **and** whose link is `Connected`. The same pure `composer::streamingSlotCount` rule the wake controller inhibits the display on, so the header and the keep-awake pill cannot disagree. |
+| `firstOnlineName` | `string` | `stateChanged` | Label of the first `Connected` connection; empty when none. |
+| `foundCount` | `int` | `discoveredChanged` | Size of the FOUND list, after the one-spot exclusion below. |
+| `keepAwakeActive` | `bool` | `stateChanged` | The display-sleep inhibitor is held. Drives the shell's streaming pill and the quit confirm. |
+| `busy` | `bool` | `stateChanged` | A controller is registering. |
+
+Header sub-lines are assembled in QML from these primitives, so the wording
+stays in the `qsTr` catalogues. Pages own their own copy; see the per-page
+`headerSub` bindings.
+
+### Telemetry
+
+Sampled about once a second off the input processor.
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `eventsPerSec` | `int` | `telemetryChanged` | Input events per second. |
+| `sendsPerSec` | `int` | `telemetryChanged` | Wire sends per second. |
 | `totalSent` | `qulonglong` | `telemetryChanged` | Cumulative reports sent since launch. |
-| `pairingActive` | `bool` | `stateChanged` | True when the model has parked a pairing target (open the pairing sheet on the rising edge; call `clearPairingTarget()` before showing it). |
-| `pairingServerName` | `string` | `stateChanged` | Display name of the pairing target (empty when `!pairingActive`). |
-| `pairingServerId` | `string` | `stateChanged` | Stable `id` of the pairing target (empty when `!pairingActive`). Pass it into the pairing sheet so BOTH paths work for a parked target: the forward submit resolves on it and the reverse PIN auto-send has a destination. Capture it (with the name) BEFORE `clearPairingTarget()`. |
-| `slotModel` | `SlotListModel*` | (CONSTANT) | The controllers/slots model — see §2. Bind into a `ListView.model`. |
-| `connectionModel` | `ConnectionListModel*` | (CONSTANT) | The connection-rows model — see §3. |
-| `themeMode` | `int` (read/write) | `themeModeChanged` | Appearance mode, `0=Light 1=Dark 2=System` (the SettingsPage chip order). Writing forwards to `ThemePreferenceStore::setMode`; the live app + native chrome re-theme. See §1b. |
-| `crashReportingEnabled` | `bool` (read/write) | `crashReportingChanged` | Crash-reporting opt-out flag (default ON). Writing forwards to `CrashReportingStore::setEnabled`. |
-| `appVersion` | `string` | (CONSTANT) | The build version (the CMake project `VERSION`). |
-| `onboardingNeeded` | `bool` | `onboardingNeededChanged` | `!OnboardingPreferenceStore::welcomeCompleted()`. Main.qml pushes the onboarding flow on it; flips false after `markOnboardingComplete()`. |
-| `donateSponsorsUrl` | `string` | (CONSTANT) | GitHub Sponsors URL (brand default; localizable in C++). |
-| `donateKofiUrl` | `string` | (CONSTANT) | Ko-fi URL. |
-| `donateBmacUrl` | `string` | (CONSTANT) | Buy Me a Coffee URL. |
-| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list (reactive). Same JS objects the `discoveredServers()` invokable returns: `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. **One-spot rule**: excludes any server whose stable `id` already has a `connectionModel` row (remembered ∪ live) — that row is the box's one spot; FOUND is only the un-remembered rest. Bind a `Repeater.model` to it and it re-evaluates as a scan lands or a pair/forget moves a box between the lists — no manual re-pull. |
-| `scanning` | `bool` | `scanningChanged` | Whether a discovery scan is in flight (reactive). Flips true on `startDiscovery()` and false on completion; gate the Scan button / "Scanning…" label on it. |
-| `reversePairingPhase` | `string` | `reversePairingChanged` | The host-initiated (reverse) pairing phase: `"idle"` (none in flight) / `"awaiting"` (PIN shown, waiting for the operator to approve on the satellite) / `"approved"` (operator approved — the session is opening) / `"declined"` (operator denied) / `"timedout"` (no approval inside the ~2-min budget). The sheet switches on this. |
-| `reversePairingPin` | `string` | `reversePairingChanged` | The 4-digit PIN to display while `awaiting` (the operator types it on the satellite). Stays set on the terminal arms so the sheet can keep showing it; cleared on the next `requestReversePairing`/`cancelReversePairing`. |
-| `reversePairingServerName` | `string` | `reversePairingChanged` | Display name of the server being reverse-paired (its `name`, or `ip` when unnamed). Empty when `idle`. |
 
-> Note: the property is `slotModel`, NOT `slots` — `slots` is the reserved
-> `Q_SLOTS` token and moc strips it.
+### Collections
 
-### Signals
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `slotModel` | `SlotListModel*` | CONSTANT | One row per controller slot. See below. |
+| `connectionModel` | `ConnectionListModel*` | CONSTANT | One row per derived connection. See below. |
+
+The property is `slotModel`, not `slots`: `slots` is the `Q_SLOTS` keyword and
+moc strips it.
+
+### Discovery and pairing
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `discoveredServers` | `list` | `discoveredChanged` | The FOUND list, as JS objects `{ name, ip, udpPort, pairPort, httpPort, machineId, source, id }`. `source` is the discovery-source label ("UDP broadcast", "mDNS", "mDNS + broadcast"). |
+| `scanning` | `bool` | `scanningChanged` | A discovery scan is in flight. Gate the Scan button on it. |
+| `pairingActive` | `bool` | `stateChanged` | The model parked a pairing target. Open the pairing sheet on the rising edge, and call `clearPairingTarget()` before showing it. |
+| `pairingServerName` | `string` | `stateChanged` | Display name of the parked target; empty when `!pairingActive`. |
+| `pairingServerId` | `string` | `stateChanged` | Stable id of the parked target. Capture it, with the name, **before** `clearPairingTarget()`; the sheet needs it for both pairing paths. |
+| `reversePairingPhase` | `string` | `reversePairingChanged` | `"idle"` / `"awaiting"` / `"approved"` / `"declined"` / `"timedout"`. |
+| `reversePairingPin` | `string` | `reversePairingChanged` | The 4-digit PIN to show while `awaiting`. Stays set on the terminal phases so the sheet can keep showing it; cleared on the next `requestReversePairing` or `cancelReversePairing`. |
+| `reversePairingServerName` | `string` | `reversePairingChanged` | Name, or ip when unnamed, of the server being reverse-paired. Empty when `idle`. |
+
+**The one-spot rule.** `discoveredServers` excludes any server whose stable `id`
+already has a `connectionModel` row. A box gets exactly one row in the UI: once
+it is remembered, its reachability shows as that row's chip, not as a duplicate
+FOUND entry. The two lists are disjoint by construction.
+
+### Emulate catalog lifecycle
+
+The catalog fetch is an `AsyncState<CatalogDto, CatalogError>`. These three
+project it so the type picker can tell loading from empty from failed.
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `emulateLoading` | `bool` | `emulateStateChanged` | A catalog GET is in flight with nothing cached. |
+| `emulateError` | `string` | `emulateStateChanged` | Localizable failure text; empty when there is no error. |
+| `emulateStale` | `bool` | `emulateStateChanged` | The types on screen come from a prior success. |
+
+### Settings
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `themeMode` | `int` (RW) | `themeModeChanged` | `0` Light, `1` Dark, `2` System. |
+| `crashReportingEnabled` | `bool` (RW) | `crashReportingChanged` | Crash-reporting opt-out. Default on. |
+| `railCollapsed` | `bool` (RW) | `railCollapsedChanged` | The nav rail's persisted collapse state. The title-bar hamburger writes it. |
+| `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding: true is "Follow game", false is "Off". |
+| `onboardingNeeded` | `bool` | `onboardingNeededChanged` | The first-run welcome has not completed. Flips false after `markOnboardingComplete()`. |
+| `appVersion` | `string` | CONSTANT | The CMake project version. |
+| `donateSponsorsUrl` | `string` | CONSTANT | GitHub Sponsors URL. |
+| `donateKofiUrl` | `string` | CONSTANT | Ko-fi URL. |
+| `donateBmacUrl` | `string` | CONSTANT | Buy Me a Coffee URL. |
+
+### Bluetooth radio
+
+Two facts, not one, because an absent adapter and a switched-off radio need
+different copy and only the second has an action.
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `bluetoothPresent` | `bool` | `bluetoothChanged` | A Bluetooth-class device exists. True even when the radio is switched off. |
+| `bluetoothEnabled` | `bool` | `bluetoothChanged` | A radio handle opened. |
+
+`bluetoothPresent && !bluetoothEnabled` reads "Bluetooth is off" and offers
+`openBluetoothSettings()`. `!bluetoothPresent` reads "no adapter" and offers no
+button. Neither ever blocks the setup wizard, because USB still works.
+
+### Apply sequencer
+
+One step per real asynchronous action, so the UI can show which one is running
+and how long it has been running.
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `applyInFlight` | `bool` | `applyChanged` | A binding apply is running. |
+| `applyConnectionState` | `string` | `applyChanged` | `"pending"` / `"active"` / `"done"` / `"failed"` / `"skipped"`, for the USB-path step. |
+| `applyDestinationState` | `string` | `applyChanged` | Same vocabulary, for the REST round trip. |
+| `applyElapsedMs` | `int` | `applyChanged` | Milliseconds on the **current** step. Show the slow hint past 4000. |
+| `applyCancellable` | `bool` | `applyChanged` | True only while the Connection step is active. |
+
+## `App` signals
 
 | Signal | Args | Meaning |
 |---|---|---|
-| `stateChanged` | — | Header / slot / pairing state moved (folds AppModel's `stateChanged`). |
-| `telemetryChanged` | — | Telemetry footer numbers moved (~1 Hz). |
-| `errorMessage` | `string message` | Transient one-shot error — surface it as a toast. |
-| `discoveredChanged` | — | The FOUND list moved: the discovered scan changed (folds `WifiConnectionManager::discoveredChanged`) OR the connection-row id set changed (a pair landed / a forget dropped a row — those ids are excluded from FOUND, so it re-reads then too). NOTIFY for the `discoveredServers` property — bind to that property and it re-evaluates here automatically (the legacy `discoveredServers()` invokable still works, re-pulled on this edge). |
-| `scanningChanged` | — | The `scanning` flag flipped (a scan started or finished; folds `WifiConnectionManager::scanningChanged`). NOTIFY for the `scanning` property. |
-| `reversePairingChanged` | — | A reverse-pairing transition (phase / PIN / server name moved; folds `WifiConnectionManager::reversePairingChanged`). NOTIFY for all three `reversePairing*` properties. |
-| `themeModeChanged` | — | `themeMode` moved (the store republished). |
-| `crashReportingChanged` | — | `crashReportingEnabled` moved. |
-| `onboardingNeededChanged` | — | `onboardingNeeded` flipped. |
-| `deadzonesChanged` | — | The deadzone device rows / their seeded values moved (a device attach/detach, or a `setDeadzones`/`setMotionEnabled` landed). Re-pull `deadzoneDevices()`. |
-| `pairingSucceeded` | — | One-shot: a connection reached `Connected` after a pair (the online-count rising edge). The pairing sheet may close on it. Best-effort. |
-| `rawInputCaptured` | `string slotId, int kind, int index, int value` | A raw joystick input was observed for the slot currently capturing (after `startInputCapture`). `kind` `0=axis 1=button 2=hat`; `index` the raw source index; `value` the axis int16 / `1` for a button / the `SDL_HAT_*` bitmask for a hat. Pass `slotId`/`kind`/`index` straight into `assignSlotInput` to bind the output the page is editing. Fires ONLY for the capturing slot — other devices' inputs are filtered out. |
+| `stateChanged` | | Header, slot, connection or pairing state moved. |
+| `telemetryChanged` | | Telemetry numbers moved (about 1 Hz). |
+| `errorMessage` | `string message` | Transient one-shot failure. The shell's toast host listens; pages do not need to. |
+| `discoveredChanged` | | The FOUND list moved: a scan landed, or the connection-row id set changed so the one-spot exclusion has to be re-read. |
+| `scanningChanged` | | The `scanning` flag flipped. |
+| `reversePairingChanged` | | A reverse-pairing transition. NOTIFY for all three `reversePairing*` properties. |
+| `emulateStateChanged` | | The catalog fetch moved. |
+| `themeModeChanged` | | `themeMode` moved. |
+| `crashReportingChanged` | | `crashReportingEnabled` moved. |
+| `onboardingNeededChanged` | | `onboardingNeeded` flipped. |
+| `railCollapsedChanged` | | `railCollapsed` flipped. |
+| `lightbarChanged` | | `lightbarFollowGame` flipped. |
+| `deadzonesChanged` | | Deadzone device rows or their values moved. Re-pull `deadzoneDevices()`. |
+| `bluetoothChanged` | | The radio presence/enabled pair moved. |
+| `pairingSucceeded` | | One-shot: a connection reached `Connected` after a pair. The pairing sheet may close on it. Best effort. |
+| `pairingFailed` | `string serverId, string reasonToken` | A forward PIN was rejected. `reasonToken` is `"wrongPin"` / `"versionMismatch"` / `"unreachable"` / `"pending"`. Match `serverId` against the sheet's own target before showing anything; the sheet stays open and marks the field inline. `errorMessage` also fires, and that duplication is intended. |
+| `applyChanged` | | Any apply field moved. |
+| `applyFinished` | `bool ok, string reasonToken, bool directFellBack` | Terminal, fired exactly once per run. `reasonToken` is `""` on success, else `"slotGone"` / `"hostUnreachable"` / `"bindRejected"` / `"cancelled"`. `directFellBack` means the Direct claim did not land and the pad streams over Standard: raise a **warning**, never an error. |
+| `rawInputCaptured` | `string slotId, int kind, int index, int value` | A raw joystick input was observed for the slot currently capturing. `kind` is `0` axis, `1` button, `2` hat; `index` is the raw source index; `value` is the axis int16, `1` for a button, or the `SDL_HAT_*` bitmask for a hat. Fires only for the capturing slot. |
 
-### Invokable methods
+## `App` methods
+
+### Slots and bindings
 
 | Method | Args | Effect |
 |---|---|---|
-| `bindSlot(slotId, connectionId)` | `string, string` | Bind a slot to a connection (the SlotCard bind menu). |
+| `bindSlot(slotId, connectionId)` | `string, string` | Bind a slot to a connection. |
 | `unbindSlot(slotId)` | `string` | Unbind the slot. |
-| `setSlotPath(slotId, choice)` | `string, string` | Force the slot's USB input path: `"standard"` (SDL/XInput owns the pad), `"direct"` (raw-HID claim), or `"auto"` (clear the override; the resolution policy decides). Resolves `slotId` → `(vid, pid)` (a synthetic slot's id IS the packed vpKey string; an SDL slot's identity comes from the bridge device list) and forwards to `UsbGamepadManager::setPathChoice` / `clearChoice`. No-op when the slot has no resolvable identity or no USB manager is wired. The slot roles (`pathPhase`/`desiredPath`/…) refresh on the next `stateChanged` — no new NOTIFY. Gate the control on the `pathSupported` role. |
-| `availableConnectionsForSlot(slotId)` | `string` → `list` | The connections this slot may bind to, for the bind chooser, as JS objects `{ connectionId:string, label:string, dotColor:string, glyph:string }` (`dotColor`/`glyph` are the same tokens §3 exposes). Computed via the SAME pure `reducer::connectionsVisibleInPicker` the Widgets SlotCard uses: connections bound to ANOTHER slot are EXCLUDED, live-available unbound ones are offered, and the slot's OWN current binding is held over even when offline. Read it **one-shot when the chooser opens** (like `emulateTypes`) — no NOTIFY. Do NOT bind the chooser to the unfiltered `connectionModel`, and gate the Bind button on this list being non-empty (or the slot being bound), not the total `connectionModel.count`. |
-| `refreshEmulate(slotId)` | `string` | Kick a best-effort catalog refresh for the slot's bound satellite. Call before reading `emulateTypes` so a later open shows fresh types. |
-| `emulateTypes(slotId)` | `string` → `list` | Offerable controller types as JS objects: `{ type:int, slug:string, name:string, shortName:string, description:string, known:bool }`. Empty if the slot is unbound or no catalog cached yet. |
-| `emulateCurrentType(slotId)` | `string` → `int` | The wire type id to pre-select in the picker (user override → hardware class → Xbox). |
-| `setControllerType(slotId, type)` | `string, int` | Apply the Emulate choice and re-attach the slot so the new descriptor is PUT. |
-| `startDiscovery()` | — | Begin a satellite discovery scan (Connections page "Scan"). |
-| `isScanning()` | → `bool` | Whether a scan is in flight. Prefer the reactive `scanning` property for bindings. |
-| `discoveredServers()` | → `list` | The FOUND list as JS objects: `{ name:string, ip:string, udpPort:int, pairPort:int, httpPort:int, machineId:string, source:string, id:string }`. `source` is the discovery-source label ("UDP broadcast" / "mDNS" / "mDNS + broadcast"). One-spot rule: ids that already have a `connectionModel` row are excluded (see the property row in §1). Prefer the reactive `discoveredServers` PROPERTY for bindings; this invokable is kept for explicit re-pulls. |
-| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). Pass the `id` field from `discoveredServers`. |
-| `reconnectConnection(connectionId)` | `string` | Reconnect a REMEMBERED satellite by id WITHOUT a rescan requirement and WITHOUT re-pairing (the key persists). If the id is in the current scan, connects the fresh endpoint; else kicks a discovery relearn AND attempts the last-known endpoint now. Gate the button on the row NOT being `liveLink`. |
-| `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered row + pairing key survive (contrast `forgetConnection`). Gate the button on the row's `liveLink` role. |
-| `forgetConnection(connectionId)` | `string` | Forget a remembered connection (unbinds its slots, drops key/pin/row). |
-| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable `id` (de-raced; resolves out of the live list). Watch `App.errorMessage` for failure and `isPairingInFlight` for the spinner. |
-| `isPairingInFlight(serverId)` | `string` → `bool` | Whether a `POST /api/pair` is in flight for that server id (use the `id` field from `discoveredServers`). Drives the Pair button's spinner+disabled state. |
-| `clearPairingTarget()` | — | Drop the one-shot pairing trigger (call before opening the pairing sheet to avoid re-entry). |
-| `requestReversePairing(serverId)` | `string` | Start HOST-INITIATED (reverse) pairing for the discovered server with that stable `id` (de-raced; resolves out of the live list — no-op if not found). The dish generates + shows a 4-digit PIN (`reversePairingPin`); the operator types it on the satellite. Watch `reversePairingPhase` for the outcome and `App.errorMessage` for the decline/timeout reason. A second call cancels the first. |
-| `cancelReversePairing()` | — | Abort an in-flight reverse pair (stops the poll, returns `reversePairingPhase` to `"idle"` and clears the PIN/server name). Safe to call when idle. |
-| `setThemeMode(mode)` | `int` | Apply an appearance mode (`0=Light 1=Dark 2=System`). Forwards to `ThemePreferenceStore`; re-themes the live QML palette + the native chrome immersive-dark attribute. |
-| `setCrashReportingEnabled(on)` | `bool` | Forward to `CrashReportingStore::setEnabled`. |
-| `deadzoneDevices()` | → `list` | Per-device deadzone rows as JS objects: `{ id:string, name:string, hasGyro:bool, stickFlat:int, triggerFlat:int, forwardMotion:bool }`. Re-pull on `deadzonesChanged`. |
-| `setDeadzones(deviceId, stickFlat, triggerFlat)` | `string, int, int` | Persist the per-device override (`DeadzoneRepository`) AND push it into the live processor (`AppModel::applyDeadzones`) — the exact pair the Widgets view does. |
-| `setMotionEnabled(deviceId, on)` | `string, bool` | Forward to `MotionEnabledStore::setEnabled`, keyed by the device id. |
-| `slotRemap(slotId)` | `string` → `map` | The slot's EFFECTIVE raw-joystick remap as a JS object (stored override → else the default layout). Resolves `slotId` → `(vid,pid)` (same resolver `setSlotPath` uses); returns `{}` for a slot with no resolvable identity (e.g. an SDL-recognised game controller or USB-direct synthetic — those don't take a raw-joystick remap). Shape: `{ a, b, x, y, dpadUp, dpadDown, dpadLeft, dpadRight, leftShoulder, rightShoulder, back, start, leftThumb, rightThumb : int (raw source-button index, -1 = unassigned), leftStickX, leftStickY, rightStickX, rightStickY, hatIndex : int (raw source/hat index, -1 = none), leftTrigger, rightTrigger : { kind:"axis"\|"button", index:int }, invertLeftY, invertRightY : bool }`. Re-pull after an `assignSlotInput`/`setSlotInvert`/`resetSlotRemap`. |
-| `assignSlotInput(slotId, target, kind, index)` | `string, string, int, int` | Apply a CAPTURE result to the slot's remap via the pure `withAssignment` helper and persist it (the store pushes into the live bridge, so it takes effect on the next report — no re-attach). `target` is the logical output being assigned, one of: `"a"`/`"b"`/`"x"`/`"y"`/`"dpadUp"`/`"dpadDown"`/`"dpadLeft"`/`"dpadRight"`/`"leftShoulder"`/`"rightShoulder"`/`"back"`/`"start"`/`"leftThumb"`/`"rightThumb"`/`"leftStickX"`/`"leftStickY"`/`"rightStickX"`/`"rightStickY"`/`"leftTrigger"`/`"rightTrigger"`. `kind` is the captured input kind `0=axis 1=button 2=hat` and `index` the raw source index — pass through the `kind`/`index` from `rawInputCaptured` verbatim. A trigger target tags its source kind from `kind` (axis-capture → analogue axis, button-capture → digital full-scale-on-press). A `hat`-kind capture to a dpad target routes the dpad to that hat; a `button`-kind capture routes that direction to the button. No-op for an unknown `target` (forward-compat) or a slot with no resolvable identity. |
-| `setSlotInvert(slotId, which, on)` | `string, string, bool` | Flip a stick Y-invert flag and persist (→ live). `which` is `"leftY"` or `"rightY"`. No-op for an unknown flag or an unresolvable slot. |
-| `resetSlotRemap(slotId)` | `string` | Drop the slot's stored remap override (revert to the default DirectInput layout) and clear it in the live bridge. No-op for an unresolvable slot. |
-| `startInputCapture(slotId)` | `string` | Arm the bridge's input-capture mode and remember `slotId` as the capturing slot. While active, raw inputs from THAT slot's device arrive on `rawInputCaptured`; assign one with `assignSlotInput`. Calling it again for another slot re-points the filter. An axis only fires on a deliberate move (idle jitter is rejected); buttons on press; hats on a non-centered direction — so a resting pad never self-assigns. |
-| `stopInputCapture()` | — | Disarm capture and clear the capturing slot. Call when the user finishes assigning (or leaves the page). Safe to call when idle. |
-| `licenses()` | → `list` | The bundled third-party manifest as JS objects: `{ name:string, version:string, license:string, url:string }` (unnamed entries dropped). |
-| `markOnboardingComplete()` | — | Persist the welcome-completed flag (`OnboardingPreferenceStore::markWelcomeCompleted`). `onboardingNeeded` then flips false. |
-| `openExternalUrl(url)` | `string` | Open a URL via the shared `ExternalLink` path; a failure raises `errorMessage` (the QML toast channel), matching the Widgets warning. NOT a raw `Qt.openUrlExternally`. |
+| `setSlotPath(slotId, choice)` | `string, string` | Force the slot's USB input path: `"standard"` (SDL or XInput owns the pad), `"direct"` (raw-HID claim), `"auto"` (clear the override and let the resolution policy decide). No-op when the slot has no resolvable `(vid, pid)`. The slot roles refresh on the next `stateChanged`. Gate the control on the `pathSupported` role. |
+| `availableConnectionsForSlot(slotId)` | `string` → `list` | Connections this slot may bind to, as `{ connectionId, label, dotColor, glyph }`. Computed by the pure `reducer::connectionsVisibleInPicker`: connections bound to another slot are excluded, live unbound ones are offered, and the slot's own current binding is held over even when offline. Read it once when a chooser opens; there is no NOTIFY. Gate a Bind button on this list being non-empty, not on `connectionModel.count`. |
 
----
+### Emulation types
 
-## 1b. Settings / About / Onboarding surfaces (A-ext)
+Two families: keyed on an existing binding, and keyed on a destination for a pad
+that is not bound yet. The setup wizard and the binding editor need the second,
+because the slot-keyed reads vend nothing before a binding exists.
 
-These extend §1 over the EXISTING, already-tested stores — `AppViewModel` only
-re-projects/forwards (no new behaviour). The pages bind them directly:
-
-* **SettingsPage** — `App.themeMode` / `App.setThemeMode` (Appearance chips),
-  `App.crashReportingEnabled` / `App.setCrashReportingEnabled` (Diagnostics),
-  `App.appVersion` (About).
-* **DeadzoneSettingsPage** — `App.deadzoneDevices()` rows (re-pulled on
-  `deadzonesChanged`), `App.setDeadzones`, `App.setMotionEnabled`.
-* **LicensesPage** — `App.licenses()` rows, `App.openExternalUrl`.
-* **DonatePage** — `App.donateSponsorsUrl` / `-KofiUrl` / `-BmacUrl`,
-  `App.openExternalUrl`.
-* **Main.qml first-run** — if `App.onboardingNeeded`, push
-  `onboarding/OnboardingFlow.qml`; on its `completed()`, pop and call
-  `App.markOnboardingComplete()`.
-* **The setup wizard** (`src/qml/wizard/**` — replaces the retired
-  `SetupGuideDialog`, see §9) — a pushed page, never a dialog. Its Destination
-  step is the live connect flow: `App.startDiscovery` on open, `App.scanning` /
-  `App.discoveredServers` / `App.foundCount` drive the host list, each row opens
-  the shared `PairingDialog`, and it auto-advances on `pairingSucceeded` **gated
-  by its own pending host** — `pairingSucceeded` is global, so a background
-  reconnect must never advance the flow.
-
-### Configure-controls (raw-joystick remap) page
-
-For a generic pad whose DirectInput button order is scrambled, the page corrects
-the routing per `(vid,pid)`. Bind it like:
-
-* On open: `let r = App.slotRemap(slotId)` to render the current routing (which
-  raw source each output reads + the invert toggles). If `r` is `{}` the slot
-  has no raw-joystick remap (an SDL game controller / USB-direct synthetic) —
-  hide the page or show a "not remappable" note.
-* To (re)assign an output: call `App.startInputCapture(slotId)`, prompt the user
-  to press the input, and on `rawInputCaptured(slotId, kind, index, value)` call
-  `App.assignSlotInput(slotId, target, kind, index)` for the output being edited.
-  Then `App.stopInputCapture()` and re-pull `App.slotRemap(slotId)`.
-* Invert toggles: `App.setSlotInvert(slotId, "leftY"|"rightY", on)`.
-* "Reset to defaults": `App.resetSlotRemap(slotId)`.
-
-All four persist AND push into the live bridge, so the change takes effect on the
-next report with no re-attach. ALWAYS call `stopInputCapture()` when leaving the
-page so capture doesn't keep streaming.
-
-### The pairing sheet: both paths at once
-
-Forward pairing (`pairByServerId`) is the operator-reads-the-PIN-off-the-dish
-flow. The REVERSE flow is the inverse: the dish SHOWS a PIN and the operator
-approves on the satellite. The sheet runs BOTH simultaneously (android
-`PairPinDialog` parity) — no tap gates either path:
-
-* On open: `App.cancelReversePairing()` (a stale phase from an earlier sheet
-  must not leak in), then `App.requestReversePairing(server.id)` immediately —
-  the operator is notified the moment the sheet opens. The 6-digit PIN field
-  stays typeable throughout as the live fallback; its submit is
-  `pairByServerId` as before.
-* Show the reverse block only while `App.reversePairingPhase !== "idle"` (an
-  unresolvable id leaves the phase idle, degrading to forward-only — e.g. a
-  parked target whose satellite has left the scan).
-* While `App.reversePairingPhase === "awaiting"`: show `App.reversePairingPin`
-  (the 4 digits) and `App.reversePairingServerName`, with a spinner.
-* On `"approved"`: close the sheet (the session is opening — the connection row
-  will go live). On `"declined"` / `"timedout"`: show the reason (also arrives on
-  `App.errorMessage`) and offer a "New code" retry.
-* The sheet's Cancel calls `App.cancelReversePairing()`; whichever path
-  completes first pairs the box.
-
-The poll budget is ~2 minutes; a momentary network blip during the wait does NOT
-abort (it keeps polling until the deadline).
-
-### Dark-mode / Mica wiring
-
-The app DEFAULTS to its deep-space DARK palette: `QmlEntryPoint` pins
-`Appearance::Dark` when the theme store sits at its System default (so a fresh
-launch is dark rather than following the OS to light), and the native chrome
-applies immersive-dark by default. `setThemeMode` forwards to the store (the
-`ThemeController` swaps the active `dish::ui::Theme` palette + re-applies the
-global QSS off its Observable), then pushes the resolved appearance to the QML
-side: the `Theme` singleton (`ThemeBridge`) is `refresh()`-ed — its tokens are
-now `NOTIFY paletteChanged` (was `CONSTANT`) so bindings re-read live — and the
-chrome's `DWMWA_USE_IMMERSIVE_DARK_MODE` is flipped to match, so the frame never
-drifts light while the body re-darks.
-
----
-
-## 2. `SlotListModel` — `App.slotModel`
-
-A `QAbstractListModel`, one row per controller slot. A delegate reproduces the
-Widgets `SlotCard`. The model is a thin mapping over `AppModel`'s slot list; it
-emits minimal `rowsInserted`/`rowsRemoved` on a count change and `dataChanged`
-for surviving rows on an in-place update (e.g. a 1 Hz Hz nudge), so a `ListView`
-never resets on a quiet telemetry tick.
-
-### Roles
-
-| Role name | Type | Meaning |
+| Method | Args | Effect |
 |---|---|---|
-| `slotId` | `string` | Stable slot id (pass to `bindSlot`/`unbindSlot`/`refreshEmulate`/`setControllerType`). |
-| `name` | `string` | Display name ("DualSense", "Xbox Pad"). |
-| `bound` | `bool` | Slot is bound to a connection. |
-| `boundConnectionId` | `string` | The bound connection id ("" when unbound). |
-| `boundLabel` | `string` | Bound server label for "Bound to <x>" ("" when unbound). |
-| `live` | `bool` | Bound session is `Connected` (green dot iff true). |
-| `dotColor` | `string` | Status-dot token: `"success"` / `"warning"` / `"muted"`. Resolve to a `Theme` color. |
-| `usbDirect` | `bool` | Slot is a USB-direct (raw-HID) synthetic. |
-| `bluetooth` | `bool` | Pad is connected over Bluetooth (classic or BLE), classified at attach from the device path. Swap the card's glyph FAMILY to the `bluetooth*` brand set (state suffix still follows liveness) and show the "Bluetooth" transport chip. Always `false` for a USB-direct synthetic, and a `bluetooth` slot is never `pathSupported` (no USB path to switch). |
-| `remappable` | `bool` | Slot is a RAW-joystick SDL pad whose DirectInput routing the "Configure controls" page may remap (the `mapJoystick` path). `false` for synthetics (USB-direct), the virtual slot, and SDL-recognised game controllers (they use SDL's own mapping and ignore a remap). Gate the "Configure controls" entry on this — and `slotRemap(slotId)` returns `{}` for a non-remappable slot. |
-| `hasMotion` | `bool` | Hardware has a gyro/accelerometer (drives the Gyro/No-gyro chip). |
-| `hasLightbar` | `bool` | Hardware has an RGB LED (show the Lightbar chip ONLY when true). |
-| `batteryLevel` | `int` | 0..100 percent, or `255` (0xFF) = unknown. |
-| `batteryStatus` | `int` | Wire status: 2=charging, 3=full, 4=wired (others=discharging/unknown). |
-| `batteryKnown` | `bool` | `batteryLevel != 255` — show the battery chip only when true. |
-| `gamepadHz` | `int` | Report-rate value for the gamepad chip. |
-| `gamepadHzLive` | `bool` | The gamepad Hz is a live measurement (USB-direct) vs. a "~peak" estimate. |
-| `gamepadHzShown` | `bool` | Whether to show the gamepad-rate chip at all. |
-| `motionHz` | `int` | IMU sample-rate value. |
-| `motionHzShown` | `bool` | Whether to show the motion-rate chip (only for motion-capable pads with a reading). |
-| `pollHz` | `int` | Measured USB-direct poll rate (URB completion rate). |
-| `pollHzShown` | `bool` | Whether to show the poll-rate chip (USB-direct pads with a reading). |
-| `pathPhase` | `string` | USB-path FSM phase token: `"routed"` / `"claiming"` / `"direct"` / `"awaitingFramework"` / `"restoreStuck"` / `"needsReplug"`. |
-| `desiredPath` | `string` | Resolved desired path the toggle reads as selected: `"standard"` / `"direct"`. (`"auto"` is a `setSlotPath` INPUT only — it resolves to one of these, so it never appears here.) |
-| `pathSupported` | `bool` | The device is a raw-HID-claimable controller (a `UsbController` exists for it). Show the Standard/Direct/Auto control ONLY when true — an Xbox/XInput pad has none and hides it, and a Bluetooth-connected pad is never path-supported (the raw-HID claim is USB-only). |
-| `claimInProgress` | `bool` | `pathPhase == "claiming"` — a Direct claim is in flight. Disable the toggle + show a spinner while true. |
-| `directFailure` | `string` | Last Direct-claim failure reason token (`"permissionDenied"` / `"busy"` / `"initFailed"` / `"dropped"`), or `""` when none. Drives the inline note (together with the `needsReplug` / `restoreStuck` phases). |
+| `refreshEmulate(slotId)` | `string` | Kick a best-effort catalog refresh for the slot's bound satellite. |
+| `emulateTypes(slotId)` | `string` → `list` | Offerable types as `{ type:int, slug, name, shortName, description, known:bool }`. Empty when the slot is unbound or no catalog is cached. |
+| `emulateCurrentType(slotId)` | `string` → `int` | The wire type id to pre-select: user override, else hardware class, else Xbox. |
+| `refreshEmulateForHost(connectionId)` | `string` | The destination-keyed refresh. |
+| `emulateTypesForHost(connectionId)` | `string` → `list` | The destination-keyed type list, same shape. |
+| `emulateCurrentTypeForHost(connectionId, slotId)` | `string, string` → `int` | The destination-keyed pre-selection. |
+| `setControllerType(slotId, type)` | `string, int` | Apply the choice and re-attach the slot so the new descriptor is sent. |
 
-> The `*Shown` / `*Live` booleans come from the SAME pure `SlotLiveStats` mapper
-> the Widgets card uses, so the two UIs never disagree about which chip renders.
-> Format Hz strings yourself: `gamepadHzLive ? "<n> Hz" : "~<n> Hz"`.
+### Discovery, connect, pair
 
----
-
-## 3. `ConnectionListModel` — `App.connectionModel`
-
-A `QAbstractListModel`, one row per derived connection (the Connections page;
-mirrors `ConnectionsDialog` rows). Same minimal-signal behavior as §2.
-
-### Roles
-
-| Role name | Type | Meaning |
+| Method | Args | Effect |
 |---|---|---|
-| `connectionId` | `string` | Stable connection id (pass to `forgetConnection`). |
-| `label` | `string` | Server name (or ip when the name is empty). |
-| `ip` | `string` | IPv4 address. |
-| `udpPort` | `int` | UDP stream port (compose detail "<ip> • UDP <port>"). |
-| `linkState` | `string` | One of `"found"`/`"stale"`/`"saved"`/`"ready"`/`"connecting"`/`"connected"`/`"unstable"`. |
-| `chip` | `string` | Status-chip key: `"found"`/`"needsPairing"`/`"offline"`/`"ready"`/`"connecting"`/`"online"`/`"unstable"`. Localize the chip text yourself. |
-| `dotColor` | `string` | `"success"`/`"primary"`/`"warning"`/`"muted"` — resolve to a `Theme` color. |
-| `glyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"` — pick the brand glyph variant. |
-| `boundSlotId` | `string` | Slot id bound to this connection ("" when unbound). |
-| `liveLink` | `bool` | Link is actively streaming (`Connected` or `Unstable`). **Gates the per-row Disconnect/Reconnect buttons**: enable `disconnectConnection(connectionId)` only when `liveLink`; enable `reconnectConnection(connectionId)` only when NOT `liveLink`. |
-| `latencyText` | `string` | Pre-formatted one-way latency, e.g. `"~3.4 ms"` (median heartbeat-RTT/2 over a sliding 64-ping window, ~1 Hz refresh). `""` until a live session has RTT samples, and `"<1 ms"` below the millisecond — never `"~0.0 ms"` (D47). |
-| `latencySamples` | `int` | RTT samples currently in the window (0–64). Gate the latency caption on `linkState === "connected" && latencySamples > 0` and show the count beside the figure (`"~3.4 ms · last 64 pings"`). |
+| `startDiscovery()` | | Begin a satellite discovery scan. |
+| `isScanning()` | → `bool` | Point-in-time scan flag. Prefer the reactive `scanning` property for bindings. |
+| `discoveredServers()` | → `list` | The FOUND list as an explicit re-pull. Prefer the reactive property. |
+| `discoverySourceFor(serverId)` | `string` → `string` | The discovery-source label, addressable by id. |
+| `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable id. Resolved out of the live list, so it cannot act on a stale index; a no-op when not found. |
+| `reconnectConnection(connectionId)` | `string` | Reconnect a **remembered** satellite without a rescan and without re-pairing; the key persists. If the id is in the current scan it connects the fresh endpoint, otherwise it kicks a discovery relearn and tries the last-known endpoint now. Gate on the row **not** being `liveLink`. |
+| `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a live session **without** forgetting: the row and the pairing key survive. Gate on the row's `liveLink`. |
+| `forgetConnection(connectionId)` | `string` | Forget a remembered connection: unbinds its slots and drops the key, the PIN and the row. |
+| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable id. Watch `pairingFailed` and `errorMessage` for failure, `isPairingInFlight` for the spinner. |
+| `isPairingInFlight(serverId)` | `string` → `bool` | A pair request is in flight for that server id. |
+| `clearPairingTarget()` | | Drop the one-shot pairing trigger. Call before opening the pairing sheet to avoid re-entry. |
+| `requestReversePairing(serverId)` | `string` | Start host-initiated pairing: the dish shows a 4-digit PIN and the operator approves on the satellite. A second call cancels the first. |
+| `cancelReversePairing()` | | Abort an in-flight reverse pair. Safe when idle. |
 
-> `connectionModel` carries the REMEMBERED/derived rows. The FOUND list of
-> not-yet-remembered discovered servers comes from the `App.discoveredServers`
-> property (reactive) / `App.discoveredServers()` invokable. The two lists are
-> disjoint by construction (the one-spot rule): an id with a row here never
-> appears in `discoveredServers` — its reachability shows as this row's chip
-> (`ready`/`online`/…) instead of a duplicate FOUND row.
+**Both pairing paths run at once.** Forward pairing is the operator reading a
+PIN off the dish and typing it here. Reverse pairing is the inverse: the dish
+shows a PIN and the operator approves on the satellite. The sheet runs both
+simultaneously, and no tap gates either one.
 
----
+On open it calls `cancelReversePairing()` (a stale phase from an earlier sheet
+must not leak in) and then `requestReversePairing(server.id)` immediately, so
+the operator is notified the moment the sheet opens. The 6-digit field stays
+typeable throughout as the live fallback, submitting through `pairByServerId`.
+Show the reverse block only while `reversePairingPhase !== "idle"`: an
+unresolvable id leaves the phase idle and the sheet degrades to forward-only,
+which is what a parked target whose satellite has left the scan looks like. On
+`"approved"`, close. On `"declined"` or `"timedout"`, show the reason and offer
+a new code. The poll budget is about two minutes, and a momentary network blip
+during the wait does not abort it.
 
-## 4. Binding examples
+### Input tuning
 
-### Read a streaming telemetry value
-```qml
-Label {
-    text: qsTr("events/s %1   sends/s %2").arg(App.eventsPerSec).arg(App.sendsPerSec)
-    color: Theme.muted
-}
-// `telemetryChanged` fires ~1 Hz; the binding above re-evaluates automatically.
-```
+| Method | Args | Effect |
+|---|---|---|
+| `deadzoneDevices()` | → `list` | Per-device rows `{ id, name, hasGyro, stickFlat, triggerFlat, forwardMotion }`. Re-pull on `deadzonesChanged`. |
+| `setDeadzones(deviceId, stickFlat, triggerFlat)` | `string, int, int` | Persist the per-device override and push it into the live processor. |
+| `setMotionEnabled(deviceId, on)` | `string, bool` | Persist motion forwarding, keyed by device id. |
+| `motionEnabledFor(slotId)` | `string` → `bool` | The read seam for the same flag. A binding draft seeds from this rather than from the default, so applying cannot silently re-enable gyro the user turned off. |
+| `slotRemap(slotId)` | `string` → `map` | The slot's effective raw-joystick remap: the stored override, else the default layout. Returns `{}` for a slot with no resolvable identity, which includes SDL-recognised game controllers and USB-direct synthetics. See the shape below. |
+| `assignSlotInput(slotId, target, kind, index)` | `string, string, int, int` | Apply a capture result through the pure `withAssignment` helper and persist it. The store pushes into the live bridge, so it takes effect on the next report with no re-attach. |
+| `setSlotInvert(slotId, which, on)` | `string, string, bool` | Flip a stick Y-invert flag. `which` is `"leftY"` or `"rightY"`. |
+| `resetSlotRemap(slotId)` | `string` | Drop the stored override and clear it in the live bridge. |
+| `startInputCapture(slotId)` | `string` | Arm capture and point the filter at that slot. Calling it for another slot re-points the filter. An axis fires only on a deliberate move, buttons on press, hats on a non-centred direction, so a resting pad never self-assigns. |
+| `stopInputCapture()` | | Disarm capture. Call it when the user leaves the page. Safe when idle. |
 
-### Iterate the controllers model in a ListView
-```qml
-ListView {
-    anchors.fill: parent
-    model: App.slotModel
-    spacing: 8
-    delegate: ItemDelegate {
-        width: ListView.view.width
-        contentItem: RowLayout {
-            Rectangle {                       // status dot
-                width: 8; height: 8; radius: 4
-                color: dotColor === "success" ? Theme.success
-                     : dotColor === "warning" ? Theme.warning : Theme.muted
-            }
-            ColumnLayout {
-                Label { text: name; color: Theme.onSurface }
-                Label {
-                    text: bound ? qsTr("Bound to %1").arg(boundLabel) : qsTr("Unbound")
-                    color: Theme.muted
-                }
-                RowLayout {
-                    visible: gamepadHzShown
-                    Label {
-                        text: gamepadHzLive ? qsTr("%1 Hz").arg(gamepadHz)
-                                            : qsTr("~%1 Hz").arg(gamepadHz)
-                    }
-                }
-            }
-            Button {
-                text: bound ? qsTr("Unbind") : qsTr("Bind…")
-                onClicked: bound ? App.unbindSlot(slotId)
-                                 : App.bindSlot(slotId, /* chosen connectionId */ "")
-            }
-        }
-    }
+`slotRemap` returns, with every index a raw source index and `-1` meaning
+unassigned:
+
+```js
+{
+  a, b, x, y,
+  dpadUp, dpadDown, dpadLeft, dpadRight,
+  leftShoulder, rightShoulder, back, start, leftThumb, rightThumb,   // int
+  leftStickX, leftStickY, rightStickX, rightStickY, hatIndex,        // int
+  leftTrigger, rightTrigger,        // { kind: "axis"|"button", index: int }
+  invertLeftY, invertRightY         // bool
 }
 ```
 
-### Trigger a pairing / emulate action
-```qml
-// Pairing: submit a PIN for the first discovered server.
-TextField { id: pinField; maximumLength: 6 }
-Button {
-    text: qsTr("Pair")
-    enabled: !App.isPairingInFlight(App.discoveredServers()[0].id)
-    onClicked: App.pairByServerId(App.discoveredServers()[0].id, pinField.text)
-}
-Connections {
-    target: App
-    function onErrorMessage(message) { /* show a toast; keep the sheet open */ }
-}
+`assignSlotInput`'s `target` is one of `a`, `b`, `x`, `y`, `dpadUp`,
+`dpadDown`, `dpadLeft`, `dpadRight`, `leftShoulder`, `rightShoulder`, `back`,
+`start`, `leftThumb`, `rightThumb`, `leftStickX`, `leftStickY`, `rightStickX`,
+`rightStickY`, `leftTrigger`, `rightTrigger`. Pass `kind` and `index` through
+from `rawInputCaptured` verbatim. A trigger target tags its source from `kind`:
+an axis capture becomes an analogue axis, a button capture becomes digital
+full-scale-on-press. A hat capture on a dpad target routes the dpad to that hat;
+a button capture routes that direction to the button. An unknown `target` is a
+no-op, for forward compatibility.
 
-// Emulate: open a type picker for a bound slot.
-function openEmulate(slotId) {
-    App.refreshEmulate(slotId);
-    let types = App.emulateTypes(slotId);     // [{type,slug,name,shortName,description,known}, ...]
-    let current = App.emulateCurrentType(slotId);
-    // ... build a picker from `types`, pre-select `current` ...
-    // on accept:
-    App.setControllerType(slotId, chosenType);
-}
-```
+The Configure-controls page drives that set in one shape. On open, read
+`slotRemap(slotId)` and render which raw source each output reads plus the
+invert toggles; `{}` means this slot takes no raw-joystick remap, so show the
+not-remappable note instead. To reassign an output, call
+`startInputCapture(slotId)`, prompt for the input, and on
+`rawInputCaptured(slotId, kind, index, value)` call
+`assignSlotInput(slotId, target, kind, index)` for the output being edited, then
+`stopInputCapture()` and re-pull `slotRemap`. Always call `stopInputCapture()`
+when leaving the page, or capture keeps streaming.
 
----
-
-## 7. A2 addendum — the flows redesign surface
-
-Additive over A1. Everything below exists and is wired; page agents bind these
-exactly like the A1 surface.
-
-### 7.1 New `App` properties
-
-| Property | Type | NOTIFY | Meaning |
-|---|---|---|---|
-| `slotCount` | `int` | `stateChanged` | Rows in `slotModel` (mirrored so bindings never poke the model for a count). |
-| `boundSlotCount` | `int` | `stateChanged` | Slots currently bound to a connection — drives the "· nothing bound" suffix. |
-| `firstOnlineName` | `string` | `stateChanged` | Label of the first `Connected` connection ("Living-room Satellite online · …"); empty when none. |
-| `foundCount` | `int` | `discoveredChanged` | Size of the FOUND list ("2 found · nothing remembered yet") — after the one-spot exclusion, so it counts only un-remembered boxes, matching the rows the FOUND card renders. |
-| `keepAwakeActive` | `bool` | `stateChanged` | True while the display-sleep inhibitor is held — render the header pill `STREAMING · DISPLAY KEPT AWAKE`. |
-| `railCollapsed` | `bool` (RW) | `railCollapsedChanged` | The nav rail's persisted collapse state (48px icons vs 236px labels). The title-bar hamburger calls `App.setRailCollapsed(!App.railCollapsed)`. |
-| `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding preference (design combo: true = "Follow game", false = "Off"). Settings page binds `App.setLightbarFollowGame(x)`. |
-
-Header sub-lines are ASSEMBLED IN QML from these primitives (each page owns its
-wording via `qsTr`):
-- Controllers: no connections → "No connections yet — pair a Satellite to get
-  started" (dot muted); one online, nothing bound → `firstOnlineName` + " online
-  · nothing bound" (dot primary); else `onlineCount of connectionCount online`
-  (+ " · nothing bound" when `boundSlotCount === 0`; dot success).
-- Connections: nothing remembered → `foundCount` + " found · nothing remembered
-  yet" (dot muted); else `onlineCount` streaming · `connectionCount` remembered
-  (dot success when any online, warning when none).
-
-### 7.2 New `slotModel` roles
-
-| Role | Type | Meaning |
-|---|---|---|
-| `emulateName` | `string` | Resolved emulation type short name for the bound sub-line's "· as DualShock 4" suffix. Empty → omit the suffix. |
-| `registering` | `bool` | Attach in flight — render the busy card (glyph + "Registering controller…" + indeterminate bar) instead of chips/actions. |
-
-### 7.3 `Tokens` singleton (`import Dish.Chrome`)
-
-Non-color design tokens beside `Theme`: type scale (`textStatus 17, textTitle
-20, textHeading 16, textBase 13, textSummary 12, textMeta 11, textChip 10`),
-`sectionLetterSpacing 1.5`, `monoFamily` (platform monospace), spacing `s1..s9 =
-2,4,6,8,10,12,14,16,20` + `pagePadding 24`, radii (`radiusChip 5, radiusButton
-6, radiusCard 8, radiusBar 2`), shell metrics (`titleBarHeight 44,
-captionButtonWidth 46, railCompact 48, railExpanded 236, navItemHeight 40,
-hitRow 44, dotSize 8`), `disabledOpacity 0.4`. Never hard-code these numbers in
-pages.
-
-### 7.4 `Theme` singleton additions
-
-`primaryDark`, `onPrimary`, and the derived washes `primaryHover`,
-`primaryPress`, `primaryFill`, `warningFill` (all NOTIFY `paletteChanged`).
-Text on a filled accent control is ALWAYS `Theme.onPrimary` (not
-`Theme.background`).
-
-### 7.5 Kit inventory for the redesign
-
-New: `Eyebrow`, `SegmentedControl` (options/value/small/busy + picked),
-`ComboButton` (options/value + picked), `SliderRow` (label/value/maxValue +
-committed), `RadioMark` (selected), `RowButton` (title/subtitle + clicked),
-`CapabilityChip` (text/present/low), `LiveStat` (text/live),
-`DishProgressBar` (indeterminate/value).
-Restyled to the ds spec (API unchanged unless noted): `KitButton` (primary
-fill), `OutlineButton` (accent border), `Card` (radius 8, 12/14 inset),
-`SectionHeader` (now a Row with optional `glyph`; accent mono), `KitTextField`,
-`LabeledSwitch`, `EmptyState` (+ `glyph` property), `ContentDialog` (+ `eyebrow`,
-`preferredWidth`; empty `acceptText`/`rejectText` hides that button),
-`NotificationToastHost` (+ "warning" severity).
-
----
-
-## 8. A3 addendum — the Home flow surface
-
-Additive over A2 (design frames 17 "Home — signal path" + 18 "Action card —
-states" + the revised rail, synced 2026-07-27).
-
-### 8.1 New `App` property
-
-| Property | Type | NOTIFY | Meaning |
-|---|---|---|---|
-| `streamingSlotCount` | `int` | `stateChanged` | Slots actively streaming (bound AND the link `Connected`) — the Home header's "N controllers streaming" count. The same pure `composer::streamingSlotCount` rule the wake controller inhibits the display on, so the header and the keep-awake pill can never disagree. |
-
-### 8.2 New `slotModel` roles — the bound-satellite join
-
-The Home signal-path row's right cell + wire latency, joined per slot by
-`boundConnectionId` against the coordinator's derived connection rows. The
-tokens are the SAME vocabulary §3 exposes, so the satellite cell renders
-identically to a Connections-page row by construction. ALL empty / zero for an
-unbound slot or a binding whose row has vanished — render the ghost "Bind…"
-action card then. Refreshes ride the coordinator's `connectionsChanged` (the
-~1 Hz latency tick emits `dataChanged` scoped to these roles only).
-
-| Role | Type | Meaning |
-|---|---|---|
-| `satIp` | `string` | Bound satellite ip ("" when unbound / row vanished). |
-| `satLinkState` | `string` | Link-state token (`"connected"`/`"unstable"`/…, §3 vocabulary). |
-| `satChip` | `string` | Status-chip key (localize like the Connections rows). |
-| `satDotColor` | `string` | `"success"`/`"primary"`/`"warning"`/`"muted"`. |
-| `satGlyph` | `string` | `"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"`. |
-| `satLatencyText` | `string` | Pre-formatted `"~3.4 ms"` / `"<1 ms"` — same formatter + samples gate as §3's `latencyText`. |
-| `satLatencySamples` | `int` | RTT samples in the window. Gate the wire's latency half on `satLatencySamples > 0 && (satLinkState === "connected" \|\| satChip === "unstable")`. |
-
-The satellite cell's display name is the existing `boundLabel` role.
-
-### 8.3 `Theme` singleton additions — the donation accent
-
-`pulse` (the pulse-pink donation hue — `#FF6FB5` dark, AA-darkened on light),
-`pulseFill` (12 % wash), `pulseEdge` (35 % outline); all NOTIFY
-`paletteChanged`. The ONE hue Dish uses beyond cyan, reserved for the Support
-Dish surface and its rail heart. Text on a filled pulse control is
-`Theme.onPrimary` (deep ink dark / white light), like any filled accent.
-
-### 8.4 Kit + shared-dialog additions
-
-* `ActionCard` (kit) — the dashed action card (frame 18): `title`, `subtitle`,
-  `showPlus`, `clicked()`. Rest = `Theme.primaryFill`, hover/press deepen to
-  the 18/24 % accent washes, keyboard focus = solid border + 2px ring,
-  disabled = `Tokens.disabledOpacity`. Used for Home's "+ Add" row and the
-  unbound pad's "Bind…" ghost.
-* ~~`BindChooserDialog` (pages)~~ — **superseded in v3 (§9).** The bind chooser
-  is gone: a dangling pad's `Bind…` opens the setup wizard, and an existing
-  binding is edited on `ConfigureBindingPage`. Both write through
-  `App.applyBinding`, so there is exactly one write path.
-
-### 8.5 Shell — destinations + the rail
-
-`AppShell.destinations` is Home (`pages/HomePage.qml`, the DEFAULT destination)
-· Controllers · Connections up top, then Support Dish (`pages/DonatePage.qml`,
-the pulse heart — `heart: true` draws the ♥ text glyph in `Theme.pulse` instead
-of a brand SVG) and Settings pinned to the footer. Between the top group and the
-footer sits the pane-density action (solid accent outline, collapses to a bare
-`+`).
-
-Hard-coded destination indices: Connections is `selectDestination(2)`.
-
-**v3 changes (§9.6):** the action is relabelled `Set up` and opens the wizard;
-`openSetupGuide()` / `openSetupGuideAt(step)` are **deleted** with no
-forwarders; every rail entry carries a distinct glyph family.
-
-### 8.6 Home header assembly (wording owned by HomePage)
-
-Fresh install (no slots, no connections) → the getting-started nudge (muted);
-`streamingSlotCount > 0` → "N controllers streaming · M satellites online"
-(success); `onlineCount > 0` → "M satellites online · nothing streaming"
-(primary); else "Nothing streaming" (muted). The keep-awake pill gates on
-`keepAwakeActive`.
-
-**v3 change (§9):** there is ONE streaming pill and it is the header pill,
-present on every page. Home's floating "STREAMING — DO NOT CLOSE" is gone —
-it instructed the user to compensate for behaviour the app did not have. The
-close intent is handled instead: while `keepAwakeActive`, `Main.qml`'s
-`onClosing` confirms.
-
----
-
-## 9. v3 addendum — the binding surface
-
-Additive over §8. This is the contract the **setup wizard**
-(`src/qml/wizard/**`) and **`ConfigureBindingPage`** are written against. Both
-edit the same page-scoped `BindingDraft` (`src/qml/shared/BindingDraft.qml`) and
-commit through the same single write, `App.applyBinding`.
-
-### 9.1 New `App` properties
-
-| Property | Type | NOTIFY | Meaning |
-|---|---|---|---|
-| `bluetoothPresent` | `bool` | `bluetoothChanged` | A Bluetooth-class device exists — **true even when the radio is switched off**. |
-| `bluetoothEnabled` | `bool` | `bluetoothChanged` | A radio handle opened. |
-| `applyInFlight` | `bool` | `applyChanged` | A binding apply is running. |
-| `applyConnectionState` | `string` | `applyChanged` | `"pending"`/`"active"`/`"done"`/`"failed"`/`"skipped"` for the USB-path step. |
-| `applyDestinationState` | `string` | `applyChanged` | Same vocabulary, for the REST round-trip. |
-| `applyElapsedMs` | `int` | `applyChanged` | Milliseconds on the CURRENT step — show the slow hint past 4000. |
-| `applyCancellable` | `bool` | `applyChanged` | True only while the Connection step is active. |
-
-`bluetoothPresent && !bluetoothEnabled` is "Bluetooth is off" (offer
-`openBluetoothSettings()`); `!bluetoothPresent` is "no adapter" (no button).
-Neither ever blocks the wizard: USB still works.
-
-### 9.2 New `App` signals
-
-| Signal | Meaning |
-|---|---|
-| `bluetoothChanged()` | The radio pair moved. |
-| `applyChanged()` | Any apply field moved. |
-| `applyFinished(bool ok, string reasonToken, bool directFellBack)` | Terminal, fired exactly once per run. `reasonToken` is `""` on success, else `"slotGone"` / `"hostUnreachable"` / `"bindRejected"` / `"cancelled"`. `directFellBack` means the Direct claim did not land and the pad streams over Standard — raise a **warning** toast, never an error. |
-| `pairingFailed(string serverId, string reasonToken)` | A forward PIN was rejected. `reasonToken` is `"wrongPin"` / `"versionMismatch"` / `"unreachable"` / `"pending"`. `serverId` is the stable discovered-server id — **match it against the sheet's own target** before showing an error. The sheet stays open and marks the field inline; the existing toast still fires and that duplication is intended. |
-
-### 9.3 The capability surface
+### Capability
 
 ```qml
 App.capabilityForCandidate(slotId, type, hostKind, hostId,
                            desiredPath, motionOn, rumbleOn, touchpadMode)
 ```
 
-returns seven rows, in the fixed render order
+`hostKind` is `"satellite"` or `"bluetooth"`. `hostId` is the stable satellite
+id, and `""` means no destination chosen. `desiredPath` is `"standard"` or
+`"direct"`. `touchpadMode` is `0` off, `1` pad, `2` mouse.
+
+It returns seven rows in the fixed render order
 `gamepad · triggers · motion · touchpad · mouse · rumble · lightbar`, each:
 
 ```js
 { feature, inOk, linkOk, typeOk, hostOk, verdict, failingLayer, hasFailingLayer }
 ```
 
-`feature`, `verdict` and `failingLayer` are **lowercase tokens** — the C++ never
-vends a sentence. `hostKind` is `"satellite"` or `"bluetooth"`; `hostId` is the
-stable satellite id (`""` = no destination chosen); `desiredPath` is
-`"standard"` or `"direct"`; `touchpadMode` is `0` off / `1` pad / `2` mouse.
-
-The four verdicts are not interchangeable:
+`feature`, `verdict` and `failingLayer` are lowercase tokens. The C++ never
+vends a sentence; QML localizes.
 
 | `verdict` | Meaning | Render |
 |---|---|---|
-| `available` | every layer carries it and the user has it on | `✓`, `Theme.success` |
-| `unavailable` | a layer refuses it; `failingLayer` names the FIRST (`input`/`link`/`type`/`host`) | `✕`, and the reason line for that layer |
-| `off` | every layer carries it and the **user** switched it off | `Off`, and point at the switch |
-| `pending` | the host or its catalog is unresolved | `—`. **Never a `✕`** — a guessed "unsupported" is worse than no table |
-
-Supporting reads:
+| `available` | Every layer carries it and the user has it on. | check, `Theme.success` |
+| `unavailable` | A layer refuses it. `failingLayer` names the **first**: `input`, `link`, `type` or `host`. | cross, plus the reason line for that layer |
+| `off` | Every layer carries it and the **user** switched it off. | "Off", plus a pointer at the switch |
+| `pending` | The host or its catalog is unresolved. | em dash. **Never a cross**: a guessed "unsupported" is worse than no table. |
 
 | Method | Returns |
 |---|---|
-| `App.typeFeatureSummary(hostId, type)` | `[{feature, supported}]` for the type preview pills. **Empty while the catalog is unresolved.** |
-| `App.catalogResolvedFor(hostId)` | `false` ⇒ every row reads `pending`. |
+| `typeFeatureSummary(hostId, type)` | `[{ feature, supported }]` for the type-preview pills. Empty while the catalog is unresolved. |
+| `catalogResolvedFor(hostId)` | `false` means every capability row reads `pending`. |
 
-### 9.4 Host accounting, and the slot-id trap
+### Host accounting, and the stale-slot-id trap
 
 | Method | Returns |
 |---|---|
-| `App.hostBoundSlotCount(connectionId)` | Pads already bound to that host. |
-| `App.hostSlotCapacity()` | `4`. Compose `<n> slots free` in QML — **never assert a slot NUMBER before `applyBinding` allocates one.** |
-| `App.displacedSlotName(connectionId)` | The pad a bind would push off a full host; `""` when there is room. |
-| `App.resolveSlotIdForBind(slotId)` | The slot id re-resolved by `(vid, pid)`; `""` when the pad is gone. A Direct claim **retires** the framework slot id and publishes a synthetic twin, so an id the page opened with can be stale. |
-| `App.isVerifiedModel(slotId)` | The raw-HID layout is known, not guessed. Drives the Direct card's `Layout guessed` chip; always `false` over Bluetooth. |
-| `App.discoverySourceFor(serverId)` | The `"mDNS + broadcast"` label, addressable by id. |
+| `hostBoundSlotCount(connectionId)` | Pads already bound to that host. |
+| `hostSlotCapacity()` | `4`. Compose "\<n\> slots free" in QML, and **never assert a slot number before `applyBinding` allocates one**. |
+| `displacedSlotName(connectionId)` | The pad a bind would push off a full host; `""` when there is room. |
+| `resolveSlotIdForBind(slotId)` | The slot id re-resolved by `(vid, pid)`; `""` when the pad is gone. A Direct claim **retires** the framework slot id and publishes a synthetic twin, so an id a page opened with can be stale by the time the user presses Bind. |
+| `isVerifiedModel(slotId)` | The raw-HID report layout for this model is known rather than guessed. Drives the Direct card's "Layout guessed" chip. Always `false` over Bluetooth. |
 
-### 9.5 Draft settings
+### Draft settings
 
-| Method | Wiring |
+| Method | State |
 |---|---|
-| `App.touchpadModeFor(connectionId)` → `"off"`/`"pad"`/`"mouse"` | real (per-satellite store; `"off"` when never picked) |
-| `App.setTouchpadMode(connectionId, mode)` | real |
-| `App.rumbleEnabledFor(slotId)` | **stub — always `true`** |
-| `App.setRumbleEnabled(slotId, on)` | **stub — no-op** |
+| `touchpadModeFor(connectionId)` → `"off"` / `"pad"` / `"mouse"` | Real. Per-satellite store; `"off"` when never picked. |
+| `setTouchpadMode(connectionId, mode)` | Real. |
+| `rumbleEnabledFor(slotId)` | **Stub: always `true`.** |
+| `setRumbleEnabled(slotId, on)` | **Stub: no-op.** |
 
-The rumble pair is honest about being a stub: no per-binding rumble store exists
-yet (rumble rides the descriptor caps). **Still render the Rumble row and its
-switch** — the capability verdict for it is real, so hiding the row would hide
-true information; the switch simply has no durable effect yet.
+The rumble pair is honest about being a stub. No per-binding rumble store
+exists; rumble rides the descriptor capabilities. Still render the Rumble row
+and its switch: the capability verdict for it is real, so hiding the row would
+hide true information. The switch simply has no durable effect yet.
 
-### 9.6 Apply
+### Apply
 
 ```qml
 App.applyBinding(slotId, connectionId, type, desiredPath,
@@ -613,71 +357,307 @@ App.applyBinding(slotId, connectionId, type, desiredPath,
 App.cancelApply()
 ```
 
-`applyBinding` is the ONLY write either binding surface makes — pages 1-4 of the
-wizard call no setter at all. It:
+`applyBinding` is the only write either binding surface makes. The setup
+wizard's first four pages call no setter at all; every answer lands in the
+draft and travels with this one call. It:
 
 1. re-resolves the slot id, and fails immediately with `"slotGone"` if the pad
    went away;
 2. switches the USB path only if it actually differs, budgeting **20 s**. A
-   claim that times out is a **fallback to Standard**, not a failure: the run
+   claim that times out is a fallback to Standard, not a failure: the run
    continues and `directFellBack` comes back true;
-3. writes the type, motion, touchpad mode, then binds, budgeting **8 s**;
+3. writes the type, motion and touchpad mode, then binds, budgeting **8 s**;
 4. emits `applyChanged()` on every move and `applyFinished(...)` exactly once.
 
-`cancelApply()` is accepted **only** while `applyCancellable` — aborting a claim
-drops back to Standard, which is safe; the REST round-trip cannot be
+`cancelApply()` is accepted only while `applyCancellable`. Aborting a claim
+drops back to Standard, which is safe. The REST round trip cannot be
 half-applied and offers no escape.
 
-On success: pop to Home and toast. On failure: **stay**, draft intact, reason in
-a toast, primary live again. The wire is `transmitting`, never `live`, until
-success — showing a connection that never existed is worse than showing none.
+On success, pop to Home and toast. On failure, **stay**: the draft is intact,
+the reason goes in a toast, and the primary action is live again. The wire
+renders as `transmitting`, never `live`, until success, because showing a
+connection that never existed is worse than showing none.
 
-### 9.7 New `slotModel` roles
+### Bluetooth, licenses, onboarding, links
+
+| Method | Effect |
+|---|---|
+| `refreshBluetoothState()` | Re-probe the radio. Cheap, and emits only on a real change. |
+| `openBluetoothSettings()` | Deep-link the Windows Bluetooth settings page. |
+| `licenses()` | The bundled third-party manifest as `{ name, version, license, url }`. Unnamed entries are dropped. |
+| `markOnboardingComplete()` | Persist the welcome-completed flag. `onboardingNeeded` then flips false. |
+| `openExternalUrl(url)` | Open a URL through the shared `ExternalLink` path; a failure raises `errorMessage`. Not a raw `Qt.openUrlExternally`. |
+| `setThemeMode(mode)` | Apply an appearance mode. Also available as the `themeMode` property write. |
+| `setCrashReportingEnabled(on)` | Also available as the property write. |
+| `setRailCollapsed(collapsed)` | Also available as the property write. |
+| `setLightbarFollowGame(on)` | Also available as the property write. |
+
+The setter invokables exist alongside the property writes because QML can only
+assign a `WRITE` accessor, and the pages call these as functions.
+
+## `SlotListModel`, bound as `App.slotModel`
+
+A `QAbstractListModel`, one row per controller slot. It emits minimal
+`rowsInserted` and `rowsRemoved` on a count change, and `dataChanged` scoped to
+the moved roles on an in-place update, so a `ListView` never resets on a quiet
+telemetry tick.
+
+### Identity and binding
 
 | Role | Type | Meaning |
 |---|---|---|
-| `hasTouchpad` | `bool` | The pad reports a touch surface. Gates BOTH the touchpad and the mouse capability rows — mouse is a routing of the touchpad. |
+| `slotId` | `string` | Stable slot id. |
+| `name` | `string` | Display name, for example "DualSense". |
+| `bound` | `bool` | The slot is bound to a connection. |
+| `boundConnectionId` | `string` | The bound connection id; `""` when unbound. |
+| `boundLabel` | `string` | Bound server label; `""` when unbound. |
+| `emulateName` | `string` | Resolved emulation-type short name for the "as DualShock 4" suffix. Empty means omit the suffix. |
+| `live` | `bool` | The bound session is `Connected`. |
+| `dotColor` | `string` | `"success"` / `"warning"` / `"muted"`. |
+| `registering` | `bool` | An attach is in flight. Render the busy card instead of chips and actions. |
+
+### Hardware
+
+| Role | Type | Meaning |
+|---|---|---|
+| `usbDirect` | `bool` | The slot is a USB-direct raw-HID synthetic. |
+| `bluetooth` | `bool` | The pad is connected over Bluetooth, classic or BLE, classified at attach from the device path. Swap the card's glyph family to the `bluetooth*` set and show the Bluetooth transport chip. Always `false` for a USB-direct synthetic, and a Bluetooth slot is never `pathSupported`. |
+| `remappable` | `bool` | A raw-joystick SDL pad whose DirectInput routing may be remapped. `false` for synthetics, the virtual slot, and SDL-recognised game controllers, which use SDL's own mapping. Gate the Configure-controls entry on this. |
+| `hasMotion` | `bool` | The hardware has a gyro or accelerometer. |
+| `hasLightbar` | `bool` | The hardware has an RGB LED. Show the Lightbar chip only when true. |
+| `hasTouchpad` | `bool` | The pad reports a touch surface. Gates **both** the touchpad and the mouse capability rows, because mouse is a routing of the touchpad. |
 | `verifiedModel` | `bool` | The raw-HID fast lane knows this model's report layout. Always `false` over Bluetooth. |
+| `batteryLevel` | `int` | 0 to 100 percent, or `255` for unknown. |
+| `batteryStatus` | `int` | Wire status: `2` charging, `3` full, `4` wired; anything else is discharging or unknown. |
+| `batteryKnown` | `bool` | `batteryLevel != 255`. Show the battery chip only when true. |
 
-### 9.8 New `Tokens`
+### Rates
 
-Type `textDisplay` 26 · `textHero` 21 · families `sansFamily` / `monoFamily`
-(probed explicitly — the platform generic can resolve to Courier New).
-Spacing `s10` 24 · `s11` 32. Radius `radiusDialog` 10. Glyphs `glyphSm` 16 ·
-`glyphMd` 20 · `glyphLg` 28 · `glyphXl` 40 · `glyphHero` 76. Durations
-`durFast` 120 · `durNormal` 200 · `durBusy` 1100 · `durToast` 4000. Metrics
-`minTouch` 32 · `minWindowWidth` 900 · `minWindowHeight` 620 ·
-`narrowBreakpoint` 860 · `stackBreakpoint` 760 · `wideBreakpoint` 980.
+| Role | Type | Meaning |
+|---|---|---|
+| `gamepadHz` | `int` | Report-rate value. |
+| `gamepadHzLive` | `bool` | The rate is a live measurement (USB-direct) rather than a peak estimate. |
+| `gamepadHzShown` | `bool` | Whether to show the gamepad-rate chip. |
+| `motionHz` | `int` | IMU sample rate. |
+| `motionHzShown` | `bool` | Whether to show the motion-rate chip. |
+| `pollHz` | `int` | Measured USB-direct poll rate (URB completion rate). |
+| `pollHzShown` | `bool` | Whether to show the poll-rate chip. |
 
-**`disabledOpacity` is now `0.55`** (was 0.4) and is legal **only** on an
-`AbstractButton`. An unavailable *capability* gets **no opacity at all** —
-full-opacity `Theme.mutedStrong` plus the outlined absent chip.
+The `*Shown` and `*Live` booleans come from the pure `SlotLiveStats` mapper.
+Do not format the numbers yourself; `Kit.LiveStat` owns rate and latency
+formatting for the whole app.
 
-`reducedMotion` (`bool`, NOTIFY `reducedMotionChanged`) mirrors the OS
-"animate controls inside windows" setting, inverted. When true: indeterminate
-bars become a static filled track, glyph animations stop, `Behavior` durations
-go to 0. `refreshMotionPreference()` re-samples.
+### USB path
 
-### 9.9 New `Theme` roles
+| Role | Type | Meaning |
+|---|---|---|
+| `pathPhase` | `string` | FSM phase token: `"routed"` / `"claiming"` / `"direct"` / `"awaitingFramework"` / `"restoreStuck"` / `"needsReplug"`. |
+| `desiredPath` | `string` | The path the toggle reads as selected: `"standard"` or `"direct"`. `"auto"` is a `setSlotPath` input only; it resolves to one of these and never appears here. |
+| `pathSupported` | `bool` | The device is raw-HID claimable. Show the path control only when true. An XInput pad has no such path, and a Bluetooth-connected pad never does, because the claim is USB-only. |
+| `claimInProgress` | `bool` | `pathPhase === "claiming"`. Disable the toggle and show a spinner. |
+| `directFailure` | `string` | Last Direct-claim failure token: `"permissionDenied"` / `"busy"` / `"initFailed"` / `"dropped"`, or `""`. Drives the inline note together with the `needsReplug` and `restoreStuck` phases. |
 
-`glyph` (brand-glyph tint, re-tinted by **palette**, never by state) ·
-`disabledFg` (inactive-control foreground) · `mutedStrong` (drawn-but-
-unavailable INFORMATION, always full opacity) · `scrim` · `focusRing` ·
-`accentWash24` · `successFill` · `errorFill` · `outlineSubtle`, plus
-`Theme.alpha(color, 0..1)`. All NOTIFY `paletteChanged`. See `DESIGN.md` for the
-values and the four-roles-easy-to-confuse table.
+### The bound-satellite join
 
-### 9.10 Navigation
+The Home signal-path row's right cell and its wire latency, joined per slot by
+`boundConnectionId` against the derived connection rows. Same token vocabulary
+as `ConnectionListModel`, so the satellite cell renders identically to a
+Connections row by construction. All empty or zero for an unbound slot, or for
+a binding whose row has vanished; render the ghost Bind action card then.
+
+| Role | Type | Meaning |
+|---|---|---|
+| `satIp` | `string` | Bound satellite ip. |
+| `satLinkState` | `string` | Link-state token. |
+| `satChip` | `string` | Status-chip key. |
+| `satDotColor` | `string` | `"success"` / `"primary"` / `"warning"` / `"muted"`. |
+| `satGlyph` | `string` | `"satelliteBase"` / `"satelliteConnected"` / `"satelliteOff"`. |
+| `satLatencyText` | `string` | Pre-formatted latency. |
+| `satLatencySamples` | `int` | RTT samples in the window. Gate the wire's latency half on `satLatencySamples > 0 && (satLinkState === "connected" \|\| satChip === "unstable")`. |
+
+The satellite cell's display name is the existing `boundLabel` role.
+
+## `ConnectionListModel`, bound as `App.connectionModel`
+
+One row per derived connection: the remembered set joined with live link state.
+Same minimal-signal behaviour as the slot model.
+
+| Role | Type | Meaning |
+|---|---|---|
+| `connectionId` | `string` | Stable connection id. |
+| `label` | `string` | Server name, or the ip when the name is empty. |
+| `ip` | `string` | IPv4 address. |
+| `udpPort` | `int` | UDP stream port. |
+| `linkState` | `string` | `"found"` / `"stale"` / `"saved"` / `"ready"` / `"connecting"` / `"connected"` / `"unstable"`. |
+| `chip` | `string` | Status-chip key: `"found"` / `"needsPairing"` / `"offline"` / `"ready"` / `"connecting"` / `"online"` / `"unstable"`. Localize the chip text yourself. |
+| `dotColor` | `string` | `"success"` / `"primary"` / `"warning"` / `"muted"`. |
+| `glyph` | `string` | `"satelliteBase"` / `"satelliteConnected"` / `"satelliteOff"`. |
+| `boundSlotId` | `string` | Slot bound to this connection; `""` when unbound. |
+| `liveLink` | `bool` | The link is actively streaming (`Connected` or `Unstable`). **Gates the per-row buttons**: enable `disconnectConnection` only when `liveLink`, and `reconnectConnection` only when not. |
+| `latencyText` | `string` | Pre-formatted one-way latency, for example `"~3.4 ms"`. Median heartbeat RTT halved, over a sliding 64-ping window, refreshed about 1 Hz. `""` until a live session has samples, and `"<1 ms"` below the millisecond, never `"~0.0 ms"`. |
+| `latencySamples` | `int` | RTT samples in the window, 0 to 64. Gate the latency caption on `linkState === "connected" && latencySamples > 0`. |
+
+The token vocabularies above are produced by
+[`RenderTokens.h`](../src/qml/RenderTokens.h), one switch per enum, shared by
+every surface that vends them. QML colours and localizes **from** the tokens and
+never re-derives them.
+
+## The shell
+
+[`AppShell.qml`](../src/qml/AppShell.qml) owns navigation. Pages reach it
+through `StackView.view.shellApi`, which is the shell itself:
 
 ```qml
-shellApi.openSetupWizard(slotId)        // slotId optional; "" = none
-shellApi.pushDetail(url, title, props)  // props optional
-shellApi.requestNavigation(action)      // routed through the leave guard
+readonly property var shellApi: StackView.view ? StackView.view.shellApi : null
 ```
 
-`openSetupWizard` **always selects Home first, then pushes**, so popping (on
-success or cancel) always lands on Home. `openSetupGuide()` /
-`openSetupGuideAt(step)` are deleted with no forwarders.
+Declare it `var`, not a typed item: `shellApi` is a dynamic property and a typed
+read makes `qmllint`'s `missing-property` gate fire.
 
-A pushed page may declare `suppressBack` (hides the header chevron) and
-`blocksLeave` + `requestLeave(proceed)` (asks before the stack is replaced).
+| Call | Effect |
+|---|---|
+| `selectDestination(index)` | Switch the rail destination. This **replaces** the content stack, clearing any pushed detail pages. |
+| `pushDetail(url, title, props)` | Push a detail page with an explicit breadcrumb title. `props` is optional and is the initial-property map, for a page that needs its id before the component loads. |
+| `openSetupWizard(slotId)` | Open the setup wizard. `slotId` is optional; `""` starts at the beginning. |
+| `requestNavigation(action)` | Run `action` through the leave guard. |
+| `toast(message, severity)` | Raise a transient notice on the shell's one toast host. `severity` is `"error"`, `"warning"` or `"success"`. |
+| `currentTitle` | The breadcrumb title, read-mostly. |
+
+`openSetupWizard` always selects Home first and then pushes, so popping on
+success or cancel always lands on Home. The wizard's result is a Home row, so it
+must never strand the user in Settings.
+
+The five destinations, in rail order, are Home, Controllers and Connections at
+the top, then Support Dish and Settings pinned to the footer. Between the two
+groups sits the Set up action, which is an action and not a destination.
+`selectDestination(2)` is Connections.
+
+### Per-page header
+
+The shell draws the header. A page, including a pushed detail, may declare any
+of:
+
+```qml
+readonly property string headerTitle   // falls back to the rail label
+readonly property string headerSub     // falls back to empty
+readonly property string headerDot     // a StatusDot token; empty draws no dot
+```
+
+The streaming pill is the shell's own and is present on every page whenever
+`App.keepAwakeActive`. Do not add a second one.
+
+### Leave guard
+
+A pushed page may declare:
+
+```qml
+readonly property bool suppressBack           // hide the header back chevron
+readonly property bool blocksLeave            // ask before the stack is replaced
+function requestLeave(proceed) { ... }        // call proceed() to allow it
+```
+
+Anything that would replace or unwind the content stack from outside the current
+page runs through `requestNavigation()`, so the page gets first refusal. The
+window's close handler goes through the same guard before the keep-awake quit
+confirm.
+
+`Alt+Left` is bound to the same action as the header chevron and is enabled
+exactly when the chevron is visible, because two enabled `Shortcut`s on one
+sequence is an ambiguous activation. `F6` cycles the rail and the content pane;
+`Ctrl+,` opens Settings.
+
+## Onboarding
+
+`Main.qml` hosts a top-level `StackView` (`appRoot`) below the title bar whose
+`initialItem` is the `AppShell`. A first-run flow is shown full-screen **over**
+the shell rather than inside it:
+
+```qml
+if (App.onboardingNeeded) {
+    const flow = appRoot.push(Qt.resolvedUrl("onboarding/OnboardingFlow.qml"));
+    flow.completed.connect(function (runSetup) {
+        appRoot.pop();
+        App.markOnboardingComplete();
+        if (runSetup)
+            shell.openSetupWizard("");
+    });
+}
+```
+
+`completed(bool runSetup)` fires once. Skip is a completion too, or the welcome
+loops forever.
+
+## Appearance
+
+`setThemeMode` forwards to `ThemePreferenceStore`. `ThemeController` resolves
+the mode to a concrete appearance, System included, and swaps the active
+`dish::ui::Theme` palette off its Observable. The entry point then refreshes the
+QML `Theme` singleton, whose tokens are `NOTIFY paletteChanged` so every binding
+re-reads, and flips the native chrome's `DWMWA_USE_IMMERSIVE_DARK_MODE` to match,
+so the frame never drifts light while the body re-darks.
+
+System mode reads the OS preference at startup and follows it live: the view
+model connects `QStyleHints::colorSchemeChanged` and re-resolves the appearance
+whenever the OS flips, but only while the stored mode is `System`. An explicit
+Light or Dark pick ignores the OS.
+
+The window body is always the themed solid `Theme.background`. The Mica backdrop
+is not composited through the body; the chrome filter still extends the frame for
+the native shadow and snap behaviour.
+
+## Examples
+
+Stream a telemetry value:
+
+```qml
+Label {
+    text: qsTr("events/s %1   sends/s %2").arg(App.eventsPerSec).arg(App.sendsPerSec)
+    color: Theme.muted
+}
+```
+
+Iterate the slot model:
+
+```qml
+ListView {
+    anchors.fill: parent
+    model: App.slotModel
+    spacing: Tokens.s4
+    delegate: ItemDelegate {
+        required property string slotId
+        required property string name
+        required property bool bound
+        required property string boundLabel
+        required property string dotColor
+        width: ListView.view.width
+        contentItem: RowLayout {
+            Kit.StatusDot { token: dotColor }
+            ColumnLayout {
+                Label { text: name; color: Theme.onSurface }
+                Label {
+                    text: bound ? qsTr("Bound to %1").arg(boundLabel) : qsTr("Unbound")
+                    color: Theme.muted
+                }
+            }
+        }
+    }
+}
+```
+
+Submit a pairing PIN:
+
+```qml
+Kit.KitTextField { id: pinField; maximumLength: 6 }
+Kit.KitButton {
+    text: qsTr("Pair")
+    enabled: pinField.text.length === 6 && !App.isPairingInFlight(server.id)
+    onClicked: App.pairByServerId(server.id, pinField.text)
+}
+Connections {
+    target: App
+    function onPairingFailed(serverId, reasonToken) {
+        if (serverId === server.id)
+            pinField.hasError = true;   // the sheet stays open
+    }
+}
+```

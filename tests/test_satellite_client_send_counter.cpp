@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The send-counter never-wrap invariant (contract §Crypto): counters are
-// monotonic per direction, never repeat a value under one session key, and a
-// session that exhausts the 2^32 space goes SILENT instead of wrapping into
-// ChaCha20-Poly1305 nonce reuse. Exercised over a real loopback UDP socket so
-// the assertion is on the wire bytes, not on internal state alone.
+// Counters are monotonic per direction and never repeat under one session key:
+// a session that exhausts the 2^32 space goes silent rather than wrap into
+// ChaCha20-Poly1305 nonce reuse. Asserted on the wire bytes over loopback UDP.
 
 #include "Network/SatelliteClient.h"
 #include "Network/WinsockInit.h"
@@ -29,8 +27,6 @@ using dish::net::SatelliteClientTestAccess;
 
 namespace {
 
-// Bind an ephemeral loopback UDP socket the client under test sends into.
-// Returns the socket (or INVALID_SOCKET) and fills `port`.
 SOCKET bindLoopback(std::uint16_t& port) {
     const SOCKET fd = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == INVALID_SOCKET) { return INVALID_SOCKET; }
@@ -126,8 +122,8 @@ TEST_CASE("send path goes silent at counter exhaustion instead of wrapping into 
     lb.sendOne();
     CHECK_FALSE(recvDatagram(lb.fd).has_value()); // silent: no wrapped-counter packets
 
-    // The exhausted counter must keep reading re-PUT needed, never wrap back
-    // under the threshold — the alive tick's guard depends on it.
+    // The alive tick's guard depends on the exhausted counter still reading
+    // re-PUT needed rather than wrapping back under the threshold.
     CHECK(lb.client.sendCounter() == 0xFFFFFFFFu);
     CHECK(dish::reducer::counterNeedsRepush(lb.client.sendCounter()));
 }
@@ -143,14 +139,13 @@ TEST_CASE("a session never repeats a counter value under one key; re-key restart
     std::uint32_t prev = 0;
     while (const auto pkt = recvDatagram(lb.fd)) {
         const std::uint32_t ctr = counterOf(*pkt);
-        CHECK(ctr > prev); // strictly monotonic on the wire
+        CHECK(ctr > prev);
         prev = ctr;
-        CHECK(seen.insert(ctr).second); // no value ever repeats
+        CHECK(seen.insert(ctr).second);
     }
     CHECK(seen.size() == 3);
 
-    // Re-key (fresh token + key, as the proactive re-PUT installs): counters
-    // restart at 1 in a fresh nonce space and traffic flows again.
+    // A re-key installs a fresh nonce space, so counters restart at 1.
     lb.client.setConnectionParams({0x55, 0x66, 0x77, 0x88}, LoopbackClient::key(0x3C));
     CHECK(lb.client.sendCounter() == 1);
     lb.sendOne();
@@ -160,13 +155,11 @@ TEST_CASE("a session never repeats a counter value under one key; re-key restart
 }
 
 TEST_CASE("a live re-key never tears the (key, token, counter) draw", "[send_counter]") {
-    // Hammer the send path from two threads while the owner thread re-keys
-    // through many generations. Every packet on the wire must decrypt under
-    // the key its token selects, and no (token, counter) pair may repeat —
-    // torn material (old key + fresh counter, or half-swapped token/key)
-    // fails one of the two.
+    // Two sender threads against an owner thread re-keying. Torn material (old
+    // key with a fresh counter, or a half-swapped token/key) fails either the
+    // decrypt under the token-selected key or the (token, counter) uniqueness.
     LoopbackClient lb;
-    const int rcvbuf = 1 << 20; // best effort — drops are fine, mixups are not
+    const int rcvbuf = 1 << 20; // best effort: drops are fine, mixups are not
     ::setsockopt(lb.fd, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&rcvbuf),
                  sizeof(rcvbuf));
 

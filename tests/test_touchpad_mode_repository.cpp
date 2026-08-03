@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// TouchpadModeRepository — the per-satellite touchpad-mode pick's durable
-// storage: the Wave 0 RepositoryContract (8 CRUD properties), durability
-// across a fresh repo on the same backing store, nullopt-on-unwritten (the
-// resolve ladder owns the default, never this layer), corrupt-payload
-// fallback, and remove isolation. Mirrors the android
-// TouchpadModeRepositoryTest shape via the shared house harness.
+// The resolve ladder owns the touchpad-mode default, so this layer reads back
+// nullopt for an unwritten satellite rather than "off".
 
 #include "repository/TouchpadModeRepository.h"
 
@@ -39,8 +35,7 @@ TEST_CASE("touchpad-mode picks round-trip with durability", "[touchpad-mode-repo
         repo.put(TouchpadModePreference{"sat-a", "ds4"});
         repo.put(TouchpadModePreference{"sat-b", "off"});
     }
-    // A fresh repo on the same backing store proves the pick survives a
-    // relaunch (no in-memory cache masking a broken persist).
+    // A fresh repo over the same store: no in-memory cache masks a broken persist.
     TouchpadModeRepository repo2(store);
     REQUIRE(repo2.get("sat-a").has_value());
     CHECK(repo2.get("sat-a")->mode == "ds4");

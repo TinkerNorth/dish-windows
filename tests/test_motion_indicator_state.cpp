@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Locks the motion-indicator precedence ladder so the per-slot gyro chip can
-// never drift on which single reason it shows. Pure mapper, no Qt. Replicates
-// dish-android ui/main/MotionIndicatorStateTest (41 cases) — the precedence
-// UNAVAILABLE > USER_DISABLED > NOT_FORWARDED > NO_HOST_SINK > BACKEND_BROKEN >
-// STALLED > STREAMING/PAUSED — plus MotionRateUserFacingOnTest (6) and
-// ScreenRateUserFacingOnTest (4, virtual arm dropped).
+// The gyro chip shows exactly one reason, picked by this precedence:
+// Unavailable > UserDisabled > NotForwarded > NoHostSink > BackendBroken >
+// Stalled > Streaming/Paused.
 
 #include "core/reducer/MotionIndicatorState.h"
 
@@ -20,8 +17,7 @@ using dish::reducer::screenRateUserFacingOn;
 
 namespace {
 
-// A "fully healthy + streaming" baseline; individual cases knock one fact out to
-// drive a specific ladder rung.
+// Healthy and streaming; each case knocks out one fact to drive one rung.
 MotionIndicatorInputs streamingBaseline() {
     MotionIndicatorInputs in;
     in.hasGyro = true;
@@ -36,8 +32,6 @@ MotionIndicatorInputs streamingBaseline() {
 
 } // namespace
 
-// ── UNAVAILABLE: no gyro, highest precedence (overrides everything) ───────────
-
 TEST_CASE("motionIndicator: no gyro is unavailable", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
     in.hasGyro = false;
@@ -45,8 +39,6 @@ TEST_CASE("motionIndicator: no gyro is unavailable", "[motionind]") {
 }
 
 TEST_CASE("motionIndicator: no gyro wins over every other blocking condition", "[motionind]") {
-    // Even with user disabled, not forwarded, no sink, backend broken, stalled —
-    // a pad without a gyro is simply Unavailable.
     MotionIndicatorInputs in;
     in.hasGyro = false;
     in.userEnabled = false;
@@ -69,8 +61,6 @@ TEST_CASE("motionIndicator: no gyro unavailable regardless of streaming/paused",
     b.hasGyro = false;
     REQUIRE(motionIndicatorFor(b) == MotionIndicatorState::Unavailable);
 }
-
-// ── USER_DISABLED: has gyro, user off (overrides forwarding/sink/backend) ─────
 
 TEST_CASE("motionIndicator: gyro present but user disabled", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
@@ -106,8 +96,6 @@ TEST_CASE("motionIndicator: user disabled regardless of stall/stream", "[motioni
     REQUIRE(motionIndicatorFor(b) == MotionIndicatorState::UserDisabled);
 }
 
-// ── NOT_FORWARDED: enabled gyro, not on a live carrying link ──────────────────
-
 TEST_CASE("motionIndicator: enabled but not forwarded", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
     in.carriesOnConnection = false;
@@ -140,8 +128,6 @@ TEST_CASE("motionIndicator: not-forwarded regardless of stream/stall", "[motioni
     REQUIRE(motionIndicatorFor(b) == MotionIndicatorState::NotForwarded);
 }
 
-// ── NO_HOST_SINK: forwarded, but host has no sink for this controller type ─────
-
 TEST_CASE("motionIndicator: forwarded but no host sink for type", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
     in.hostHasSinkForType = false;
@@ -167,8 +153,6 @@ TEST_CASE("motionIndicator: no-host-sink regardless of stream/stall", "[motionin
     b.isPaused = true;
     REQUIRE(motionIndicatorFor(b) == MotionIndicatorState::NoHostSink);
 }
-
-// ── BACKEND_BROKEN: sink present but satellite motion backend unhealthy ────────
 
 TEST_CASE("motionIndicator: host sink present but backend broken", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
@@ -196,22 +180,16 @@ TEST_CASE("motionIndicator: backend broken with paused still broken", "[motionin
     REQUIRE(motionIndicatorFor(in) == MotionIndicatorState::BackendBroken);
 }
 
-// ── STREAMING: everything wired + healthy + samples arriving ──────────────────
-
 TEST_CASE("motionIndicator: fully healthy and streaming", "[motionind]") {
     REQUIRE(motionIndicatorFor(streamingBaseline()) == MotionIndicatorState::Streaming);
 }
 
 TEST_CASE("motionIndicator: streaming wins over a stale paused flag", "[motionind]") {
-    // isStreaming takes precedence over isPaused: if samples are arriving it is
-    // Streaming even if a paused flag is also set.
     MotionIndicatorInputs in = streamingBaseline();
     in.isStreaming = true;
     in.isPaused = true;
     REQUIRE(motionIndicatorFor(in) == MotionIndicatorState::Streaming);
 }
-
-// ── PAUSED: wired + healthy, not streaming, explicitly paused ─────────────────
 
 TEST_CASE("motionIndicator: healthy not-streaming but paused is paused", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
@@ -219,8 +197,6 @@ TEST_CASE("motionIndicator: healthy not-streaming but paused is paused", "[motio
     in.isPaused = true;
     REQUIRE(motionIndicatorFor(in) == MotionIndicatorState::Paused);
 }
-
-// ── STALLED: wired + healthy, no samples, not paused ──────────────────────────
 
 TEST_CASE("motionIndicator: healthy but no samples and not paused is stalled", "[motionind]") {
     MotionIndicatorInputs in = streamingBaseline();
@@ -230,8 +206,6 @@ TEST_CASE("motionIndicator: healthy but no samples and not paused is stalled", "
 }
 
 TEST_CASE("motionIndicator: stalled requires all upstream conditions healthy", "[motionind]") {
-    // The only difference from Streaming is the absence of samples; flipping any
-    // upstream fact moves it up the ladder, never to Stalled.
     MotionIndicatorInputs base = streamingBaseline();
     base.isStreaming = false;
     REQUIRE(motionIndicatorFor(base) == MotionIndicatorState::Stalled);
@@ -241,17 +215,14 @@ TEST_CASE("motionIndicator: stalled requires all upstream conditions healthy", "
     REQUIRE(motionIndicatorFor(noSink) == MotionIndicatorState::NoHostSink);
 }
 
-// ── Exhaustive precedence sweep: each rung beats every lower rung ─────────────
-
 TEST_CASE("motionIndicator: full precedence sweep across rungs", "[motionind]") {
-    // Build inputs that satisfy the trigger for one rung and ALSO every lower
-    // trigger, then assert the higher rung wins. This pins the strict ordering.
+    // Each case satisfies one rung's trigger AND every lower trigger, so the
+    // higher rung winning is what pins the strict ordering.
     struct Case {
         MotionIndicatorInputs in;
         MotionIndicatorState expect;
     };
 
-    // All-bad: everything that can be wrong is wrong, gyro present.
     MotionIndicatorInputs allBad;
     allBad.hasGyro = true;
     allBad.userEnabled = false;
@@ -262,38 +233,30 @@ TEST_CASE("motionIndicator: full precedence sweep across rungs", "[motionind]") 
     allBad.isPaused = false;
     REQUIRE(motionIndicatorFor(allBad) == MotionIndicatorState::UserDisabled);
 
-    // Re-enable user → next rung surfaces.
     MotionIndicatorInputs c2 = allBad;
     c2.userEnabled = true;
     REQUIRE(motionIndicatorFor(c2) == MotionIndicatorState::NotForwarded);
 
-    // ... forward it → no-host-sink surfaces.
     MotionIndicatorInputs c3 = c2;
     c3.carriesOnConnection = true;
     REQUIRE(motionIndicatorFor(c3) == MotionIndicatorState::NoHostSink);
 
-    // ... give it a sink → backend-broken surfaces.
     MotionIndicatorInputs c4 = c3;
     c4.hostHasSinkForType = true;
     REQUIRE(motionIndicatorFor(c4) == MotionIndicatorState::BackendBroken);
 
-    // ... fix the backend → stalled (still no samples) surfaces.
     MotionIndicatorInputs c5 = c4;
     c5.backendOk = true;
     REQUIRE(motionIndicatorFor(c5) == MotionIndicatorState::Stalled);
 
-    // ... flag paused → paused surfaces.
     MotionIndicatorInputs c6 = c5;
     c6.isPaused = true;
     REQUIRE(motionIndicatorFor(c6) == MotionIndicatorState::Paused);
 
-    // ... samples arrive → streaming, the bottom rung.
     MotionIndicatorInputs c7 = c6;
     c7.isStreaming = true;
     REQUIRE(motionIndicatorFor(c7) == MotionIndicatorState::Streaming);
 }
-
-// ── motionRateUserFacingOn: meter visibility conjunction ──────────────────────
 
 TEST_CASE("motionRateUserFacingOn: hidden without a motion capability", "[motionind]") {
     REQUIRE_FALSE(motionRateUserFacingOn(false, MotionIndicatorState::Streaming));
@@ -320,8 +283,6 @@ TEST_CASE("motionRateUserFacingOn: shown when capable across other states", "[mo
     REQUIRE(motionRateUserFacingOn(true, MotionIndicatorState::Stalled));
     REQUIRE(motionRateUserFacingOn(true, MotionIndicatorState::Paused));
 }
-
-// ── screenRateUserFacingOn: physical touchpad rate visibility ──────────────────
 
 TEST_CASE("screenRateUserFacingOn: hidden when not connected", "[motionind]") {
     REQUIRE_FALSE(screenRateUserFacingOn(false, true));

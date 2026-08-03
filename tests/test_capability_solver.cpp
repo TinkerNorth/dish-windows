@@ -1,21 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// CapabilitySolver — the four-layer capability model shared by the wizard's type
-// table and Configure binding's WHAT CARRIES matrix. These pin the RULES the two
-// surfaces are forbidden to re-derive:
-//
-//   * available = controller n transport n type n host,
-//   * the FIRST failing layer is the one named (Input -> Link -> Type -> Host),
-//     because it is the one whose fix is actionable,
-//   * an unresolved host or catalog reads Pending and assigns NO blame — a
-//     guessed "unsupported" is worse than no table,
-//   * Off means the USER switched it off, and is reachable only when all four
-//     layers carry it,
-//   * mouse is a ROUTING of the touchpad, so it needs one at the pad, and
-//     needs the host to advertise mouse control.
-//
-// Pure: no catalog fetch, no satellite, no QML engine.
+// available = controller n transport n type n host, and the FIRST failing layer
+// (Input -> Link -> Type -> Host) is the one named, because it is the one whose
+// fix is actionable.
 
 #include "core/reducer/CapabilitySolver.h"
 
@@ -32,10 +20,7 @@ using dish::reducer::solveCapabilities;
 
 namespace {
 
-// A pad and a destination where EVERY layer carries everything: a DualSense on
-// the Direct path, a catalog type offering all four gated features, and a modern
-// satellite advertising mouse control and rumble return. Each test then breaks
-// exactly one thing.
+// Every layer carries everything; each test then breaks exactly one thing.
 CapabilityInputs everythingCarries() {
     CapabilityInputs in;
     in.padMotion = true;
@@ -106,8 +91,8 @@ TEST_CASE("capability solver: a pad with no gyro fails Motion on the Input layer
     REQUIRE(motion.hasFailingLayer);
     REQUIRE(motion.failingLayer == CapLayer::Input);
     REQUIRE_FALSE(motion.inOk);
-    // The later layers still report their OWN truth — every chip is real, and
-    // only the SENTENCE names the first failure.
+    // Later layers still report their own truth; only the verdict names the
+    // first failure.
     REQUIRE(motion.linkOk);
     REQUIRE(motion.typeOk);
     REQUIRE(motion.hostOk);
@@ -159,8 +144,8 @@ TEST_CASE("capability solver: no destination at all reads Pending", "[capability
 
 TEST_CASE("capability solver: a type that drops a feature fails it on the Type layer",
           "[capability][solver]") {
-    // The satellite delta: a type can advertise a feature as unsupported even
-    // when the pad and the transport both carry it (switchpro / analogTriggers).
+    // A type can advertise a feature as unsupported even when the pad and the
+    // transport both carry it (switchpro / analogTriggers).
     auto in = everythingCarries();
     in.typeMotion = false;
     const auto motion = rowFor(solveCapabilities(in), CapFeature::Motion);
@@ -175,8 +160,8 @@ TEST_CASE("capability solver: a Bluetooth host fails motion, touchpad and mouse 
           "[capability][solver]") {
     auto in = everythingCarries();
     in.hostIsBluetooth = true;
-    // A Bluetooth destination has no catalog to resolve — it is Windows' own
-    // gamepad layer — so it must NOT sit at Pending forever.
+    // A Bluetooth destination is Windows' own gamepad layer: no catalog to
+    // resolve, so it must not sit at Pending forever.
     in.typeResolved = false;
     in.userTouchpadMode = 2; // ask for mouse routing so it is not merely Off
     const auto rows = solveCapabilities(in);
@@ -224,7 +209,6 @@ TEST_CASE("capability solver: Mouse needs a touchpad at the pad", "[capability][
     REQUIRE(mouse.verdict == CapVerdict::Unavailable);
     REQUIRE(mouse.failingLayer == CapLayer::Input);
     REQUIRE_FALSE(mouse.inOk);
-    // ...and so does the touchpad row itself.
     REQUIRE(rowFor(rows, CapFeature::Touchpad).failingLayer == CapLayer::Input);
 }
 
@@ -238,7 +222,7 @@ TEST_CASE("capability solver: a user switch off reads Off, never Unavailable",
     const auto motion = rowFor(rows, CapFeature::Motion);
     REQUIRE(motion.verdict == CapVerdict::Off);
     REQUIRE_FALSE(motion.hasFailingLayer);
-    // Off is a statement about a WORKING feature: all four layers still carry it.
+    // Off is a statement about a working feature: all four layers still carry it.
     REQUIRE(motion.inOk);
     REQUIRE(motion.linkOk);
     REQUIRE(motion.typeOk);
@@ -268,9 +252,8 @@ TEST_CASE("capability solver: the touchpad mode picks which of touchpad and mous
 
 TEST_CASE("capability solver: a user switch off never masks a layer refusal",
           "[capability][solver]") {
-    // The trap this guards: a pad with no gyro whose motion switch is also off
-    // must read Unavailable (the hardware), not Off (the switch) — otherwise the
-    // user goes looking for a control that would not help.
+    // No gyro AND the switch off must read Unavailable, not Off, or the user
+    // goes looking for a control that would not help.
     auto in = everythingCarries();
     in.padMotion = false;
     in.userMotionOn = false;
@@ -281,8 +264,6 @@ TEST_CASE("capability solver: a user switch off never masks a layer refusal",
 
 TEST_CASE("capability solver: gamepad and triggers always carry on a resolved candidate",
           "[capability][solver]") {
-    // Whatever else fails, the buttons and sticks arrive: the review card must
-    // never tell a user their pad might not send button presses.
     CapabilityInputs in;
     in.padMotion = false;
     in.padTouchpad = false;
@@ -294,7 +275,6 @@ TEST_CASE("capability solver: gamepad and triggers always carry on a resolved ca
     const auto rows = solveCapabilities(in);
     REQUIRE(rowFor(rows, CapFeature::Gamepad).verdict == CapVerdict::Available);
     REQUIRE(rowFor(rows, CapFeature::Triggers).verdict == CapVerdict::Available);
-    // ...and a pad with no motors fails rumble at the Input layer, not the link.
     const auto rumble = rowFor(rows, CapFeature::Rumble);
     REQUIRE(rumble.verdict == CapVerdict::Unavailable);
     REQUIRE(rumble.failingLayer == CapLayer::Input);

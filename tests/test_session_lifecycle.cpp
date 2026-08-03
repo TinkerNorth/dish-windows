@@ -1,21 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Per-session FSM behaviors (ADAPT of dish-android source/connection/
-// SatelliteConnectionTest, 45). Windows' WifiConnection is the per-session
-// declarative class Wave 1 built; this slice (2b) CONSUMES it and pins the
-// behaviors the android test documents against its public surface: the slot
-// declarative model (attach/detach/index-reuse, desiredDescriptors, caps
-// folding), applyResults registration + stream-gating, matchesAppliedView,
-// registeredBitmap, wantsMouseControl, and the IDLE/LINKING/LIVE/STALE
-// transition guards. No real server is contacted; the few cases that need a
-// live client open a loopback UDP socket and tear it down immediately.
-//
-// Heartbeat cadence note: Windows uses the satellite-confirmed 2000 ms / 5-miss
-// window (SatelliteClient::kHeartbeatIntervalMs / kHeartbeatMissMax), where
-// android pins 1100 ms — the period is a per-platform constant, not a behavior
-// divergence; the death/reconcile RULES (reducer/Reconcile) are identical and
-// pinned in test_session_reconcile.
 
 #include "Network/SatelliteClient.h"
 #include "Network/WifiConnection.h"
@@ -70,9 +54,7 @@ SessionViewControllerDto view(int idx, int appliedType, bool active = true) {
     return c;
 }
 
-// A tiny signal counter (QtTest's QSignalSpy needs Qt6::Test, which the test
-// target doesn't link). Counts emissions of a no-arg-relevant signal until it
-// drops.
+// QSignalSpy needs Qt6::Test, which this target does not link.
 struct SignalCounter {
     int count = 0;
     template <class Sender, class Signal> SignalCounter(Sender* s, Signal sig) {
@@ -81,8 +63,6 @@ struct SignalCounter {
 };
 
 } // namespace
-
-// ── Initial state ────────────────────────────────────────────────────────────
 
 TEST_CASE("session: initial state is Idle with no connectionId or slots", "[session]") {
     auto conn = makeConn();
@@ -96,8 +76,6 @@ TEST_CASE("session: idFor derives the stable id from the machineId", "[session]"
     REQUIRE(WifiConnection::idFor(server()) == QStringLiteral("mid:m1"));
 }
 
-// ── Declarative slots: attach / descriptor / caps ────────────────────────────
-
 TEST_CASE("session: attachSlot records the full descriptor with no default-type phase",
           "[session]") {
     auto conn = makeConn();
@@ -110,8 +88,7 @@ TEST_CASE("session: attachSlot records the full descriptor with no default-type 
 
 TEST_CASE("session: desiredDescriptors folds caps from the slot's hardware flags", "[session]") {
     auto conn = makeConn();
-    // Motion + lightbar pad -> CAP_MOTION | CAP_LIGHTBAR on top of the rumble +
-    // analog-trigger base.
+    // Motion + lightbar fold on top of the always-on rumble + analog-trigger base.
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypePlayStation, /*lightbar=*/true,
                     /*motion=*/true);
     const auto ds = conn.desiredDescriptors();
@@ -170,26 +147,19 @@ TEST_CASE("session: slotIdForIndex maps an index back to its slot", "[session]")
     REQUIRE(conn.slotIdForIndex(9).isEmpty());
 }
 
-// ── wantsMouseControl (drives the session-level hostFeatures) ────────────────
-
 TEST_CASE("session: wantsMouseControl is true iff a slot requests mouse touchpad mode",
           "[session]") {
     auto conn = makeConn();
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypeXbox, false, false);
     REQUIRE_FALSE(conn.wantsMouseControl());
-    // The descriptor's touchpadMode defaults to off; there is no public mouse
-    // toggle on WifiConnection yet (the descriptor carries it), so the default
-    // path is what's asserted here: no slot wants mouse -> false.
 }
-
-// ── applyResults: registration + stream gating ───────────────────────────────
 
 TEST_CASE("session: applyResults flips the registered flag for an ok slot", "[session]") {
     auto conn = makeConn();
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypeXbox, false, false);
-    REQUIRE(conn.registeredBitmap() == 0); // unregistered until applied
+    REQUIRE(conn.registeredBitmap() == 0);
     conn.applyResults({apply(0, proto::kApplyOk)});
-    REQUIRE(conn.registeredBitmap() == 0x0001); // index 0 now registered
+    REQUIRE(conn.registeredBitmap() == 0x0001);
 }
 
 TEST_CASE("session: a failed apply keeps the slot unregistered and surfaces the failure",
@@ -198,17 +168,16 @@ TEST_CASE("session: a failed apply keeps the slot unregistered and surfaces the 
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypeXbox, false, false);
     SignalCounter errSpy(&conn, &WifiConnection::errorOccurred);
     conn.applyResults({apply(0, proto::kApplyPluginFailed)});
-    REQUIRE(conn.registeredBitmap() == 0); // not registered
-    REQUIRE(errSpy.count == 1);            // failure surfaced
+    REQUIRE(conn.registeredBitmap() == 0);
+    REQUIRE(errSpy.count == 1);
 }
 
 TEST_CASE("session: replugFailed keeps the slot live (the previous pad keeps streaming)",
           "[session]") {
     auto conn = makeConn();
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypeXbox, false, false);
-    // A replug-failed result leaves the previous pad in force -> the slot is
-    // still "live" (registered) so streams keep flowing, but it surfaces a
-    // failure too.
+    // The previous pad stays in force, so the slot stays registered and its
+    // streams keep flowing even though the failure is surfaced.
     SignalCounter errSpy(&conn, &WifiConnection::errorOccurred);
     conn.applyResults({apply(0, proto::kApplyReplugFailed)});
     REQUIRE(conn.registeredBitmap() == 0x0001);
@@ -222,8 +191,6 @@ TEST_CASE("session: registeredBitmap sets one bit per registered controller inde
     conn.applyResults({apply(0, proto::kApplyOk), apply(1, proto::kApplyOk)});
     REQUIRE(conn.registeredBitmap() == 0x0003);
 }
-
-// ── matchesAppliedView (the reconcile converge decision) ─────────────────────
 
 TEST_CASE("session: matchesAppliedView is true when the applied set equals desired", "[session]") {
     auto conn = makeConn();
@@ -260,8 +227,6 @@ TEST_CASE("session: matchesAppliedView ignores an inactive applied slot", "[sess
     REQUIRE_FALSE(conn.matchesAppliedView(v));
 }
 
-// ── State transition guards (no socket needed) ───────────────────────────────
-
 TEST_CASE("session: markConnecting moves Idle -> Linking", "[session]") {
     auto conn = makeConn();
     conn.markConnecting();
@@ -270,8 +235,7 @@ TEST_CASE("session: markConnecting moves Idle -> Linking", "[session]") {
 
 TEST_CASE("session: markConnected from Idle is rejected and leaves state Idle", "[session]") {
     auto conn = makeConn();
-    // markConnected only takes effect from Linking; from Idle it is a no-op and
-    // must not promote to Live (mirrors android's IDLE-rejection guard).
+    // markConnected only takes effect from Linking; from Idle it must not promote.
     auto client = std::make_shared<SatelliteClient>();
     conn.markConnected(
         client, QStringLiteral("cid"), 1, false, [] {}, [](std::uint8_t) {}, [] {}, [] {});
@@ -304,26 +268,21 @@ TEST_CASE("session: adoptEpoch updates the reconcile reference", "[session]") {
     REQUIRE(conn.lastAppliedEpoch() == 7);
 }
 
-// ── slotChanged / slotRemoved signals while live vs idle ─────────────────────
-
 TEST_CASE("session: re-declaring a slot's type while idle emits no slotChanged", "[session]") {
     auto conn = makeConn();
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypeXbox, false, false);
     SignalCounter changedSpy(&conn, &WifiConnection::slotChanged);
-    // Idle: re-declaring (whole descriptor) updates local desired state only; the
-    // next session PUT carries it. No per-controller sync is requested.
+    // While idle a re-declare only updates desired state; the next session PUT
+    // carries it, so no per-controller sync is requested.
     conn.attachSlot(QStringLiteral("slot-A"), proto::kControllerTypePlayStation, false, false);
     REQUIRE(changedSpy.count == 0);
     REQUIRE(conn.descriptorFor(QStringLiteral("slot-A"))->type ==
             proto::kControllerTypePlayStation);
 }
 
-// ── Heartbeat cadence constants (Windows = satellite-confirmed 2000 ms) ──────
-
 TEST_CASE("session: heartbeat cadence is the satellite-confirmed 2000 ms / 5-miss window",
           "[session][heartbeat]") {
-    // Windows uses the satellite's HEARTBEAT_INTERVAL_SEC=2 / HEARTBEAT_MISS_MAX=5,
-    // where android pins 1100 ms — a per-platform constant, not a rule change.
+    // Mirrors the satellite's HEARTBEAT_INTERVAL_SEC=2 / HEARTBEAT_MISS_MAX=5.
     REQUIRE(SatelliteClient::kHeartbeatIntervalMs == 2000);
     REQUIRE(SatelliteClient::kHeartbeatMissMax == 5);
     REQUIRE(SatelliteClient::kHeartbeatMissNotResponding == 2);

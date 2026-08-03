@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pins the DishNotifications source: monotonic id assignment, severity->duration
-// defaults, custom-duration override, the post/dismiss event channels with
-// DROP_OLDEST overflow + backlog drain on subscribe, and the Qt signal mirror.
-// Replicates dish-android source/notification/DishNotificationsApiTest (the
-// id/severity/duration model) + the DROP_OLDEST arm of the channel semantics
-// (the same-kind dedup itself lives in the READS-ONLY renderer).
+// The same-kind dedup is not here: it lives in the read-only renderer.
 
 #include "source/notification/DishNotifications.h"
 #include "source/notification/EventChannel.h"
@@ -37,8 +32,6 @@ DishNotification make(DishNotification::Severity sev, const QString& kind,
 
 } // namespace
 
-// ── Monotonic ids ─────────────────────────────────────────────────────────────
-
 TEST_CASE("DishNotifications: post assigns monotonically increasing ids", "[notify]") {
     DishNotifications dn;
     const int a = dn.post(make(DishNotification::Severity::Info, "a"));
@@ -54,10 +47,8 @@ TEST_CASE("DishNotifications: ids are never reused after a dismiss", "[notify]")
     const int a = dn.post(make(DishNotification::Severity::Info, "a"));
     dn.dismiss(a);
     const int b = dn.post(make(DishNotification::Severity::Info, "a")); // same kind
-    REQUIRE(b == a + 1); // a fresh id, not a recycled one
+    REQUIRE(b == a + 1);
 }
-
-// ── Severity -> duration defaults ─────────────────────────────────────────────
 
 TEST_CASE("DishNotifications: severity maps to the default duration", "[notify]") {
     REQUIRE(DishNotifications::defaultDurationForSeverity(DishNotification::Severity::Info) ==
@@ -102,8 +93,6 @@ TEST_CASE("DishNotifications: a persistent (0) duration is preserved", "[notify]
     REQUIRE(seen[0].durationMs == DishNotification::kDurationPersistent);
 }
 
-// ── post carries the id-stamped struct ────────────────────────────────────────
-
 TEST_CASE("DishNotifications: the posted struct carries its assigned id", "[notify]") {
     DishNotifications dn;
     std::vector<DishNotification> seen;
@@ -113,8 +102,6 @@ TEST_CASE("DishNotifications: the posted struct carries its assigned id", "[noti
     REQUIRE(seen[0].id == id);
     REQUIRE(seen[0].kind == QStringLiteral("i"));
 }
-
-// ── postError convenience ─────────────────────────────────────────────────────
 
 TEST_CASE("DishNotifications: postError emits an Error with the long duration", "[notify]") {
     DishNotifications dn;
@@ -126,8 +113,6 @@ TEST_CASE("DishNotifications: postError emits an Error with the long duration", 
     REQUIRE(seen[0].message == QStringLiteral("boom"));
     REQUIRE(seen[0].durationMs == DishNotification::kDurationLongMs);
 }
-
-// ── dismiss flow ──────────────────────────────────────────────────────────────
 
 TEST_CASE("DishNotifications: dismiss emits the id on the dismissal channel", "[notify]") {
     DishNotifications dn;
@@ -144,12 +129,10 @@ TEST_CASE("DishNotifications: dismissing an unknown id still forwards (renderer 
     DishNotifications dn;
     std::vector<int> dismissed;
     dn.dismissals().subscribe([&](const int& id) { dismissed.push_back(id); });
-    dn.dismiss(999); // never posted; the source forwards, the renderer ignores
+    dn.dismiss(999);
     REQUIRE(dismissed.size() == 1);
     REQUIRE(dismissed[0] == 999);
 }
-
-// ── Qt signal mirror (what the renderer binds to) ─────────────────────────────
 
 TEST_CASE("DishNotifications: emits Qt signals mirroring the channels", "[notify]") {
     DishNotifications dn;
@@ -168,8 +151,6 @@ TEST_CASE("DishNotifications: emits Qt signals mirroring the channels", "[notify
     REQUIRE(dismissedCount == 1);
     REQUIRE(dismissedId == id);
 }
-
-// ── Event channel: DROP_OLDEST + backlog drain ────────────────────────────────
 
 TEST_CASE("EventChannel: delivers live when a listener is attached", "[notify]") {
     EventChannel<int> ch(4);
@@ -203,12 +184,11 @@ TEST_CASE("EventChannel: DROP_OLDEST discards the oldest past capacity", "[notif
     REQUIRE(ch.buffered() == 3);
     std::vector<int> seen;
     ch.subscribe([&](const int& v) { seen.push_back(v); });
-    REQUIRE(seen == std::vector<int>{3, 4, 5}); // oldest two dropped
+    REQUIRE(seen == std::vector<int>{3, 4, 5});
 }
 
 TEST_CASE("DishNotifications: posts buffered before a renderer attaches drain to it", "[notify]") {
     DishNotifications dn;
-    // Post three before anyone subscribes (e.g. errors during startup).
     dn.post(make(DishNotification::Severity::Error, "e1"));
     dn.post(make(DishNotification::Severity::Error, "e2"));
     dn.post(make(DishNotification::Severity::Error, "e3"));
@@ -221,7 +201,6 @@ TEST_CASE("DishNotifications: posts buffered before a renderer attaches drain to
 
 TEST_CASE("DishNotifications: the post channel honours DROP_OLDEST capacity", "[notify]") {
     DishNotifications dn;
-    // Capacity is kChannelCapacity; overflow it by two.
     const int over = DishNotifications::kChannelCapacity + 2;
     for (int i = 0; i < over; ++i) {
         dn.post(make(DishNotification::Severity::Info, QStringLiteral("k")));
@@ -230,7 +209,7 @@ TEST_CASE("DishNotifications: the post channel honours DROP_OLDEST capacity", "[
 
     std::vector<int> ids;
     dn.posts().subscribe([&](const DishNotification& n) { ids.push_back(n.id); });
-    // The two oldest (ids 1,2) were dropped; the backlog starts at id 3.
+    // Ids 1 and 2 were dropped, so the backlog starts at 3.
     REQUIRE(static_cast<int>(ids.size()) == DishNotifications::kChannelCapacity);
     REQUIRE(ids.front() == 3);
     REQUIRE(ids.back() == over);

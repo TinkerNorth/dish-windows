@@ -15,17 +15,9 @@
 
 namespace dish::net {
 
-// Thin compatibility adapter over the repository-layer ConnectionStore facade
-// (dish::repository::ConnectionStore). Wave 2a carved the monolithic store into
-// three repositories + a Coordinator; this adapter keeps the pre-2a call surface
-// (remember / forget / sharedKey / setSharedKey / forgetKey / remembered /
-// getOrCreateDeviceId) so the existing consumers — WifiConnectionManager,
-// ConnectionHub, AppModel — compile unchanged while transparently gaining the
-// machineId-consolidation, legacy-upgrade, and pin/key-migration behaviour.
-//
-// The facade is the source of truth; new code should depend on it directly and
-// reach the cert-pin store through facade().pins(). This adapter exists only to
-// avoid a wide mechanical refactor of the Wave-1 session layer in this slice.
+// Compatibility adapter over repository::ConnectionStore, which is the source of
+// truth. It only spares the session layer a mechanical rename; new code should
+// depend on the facade directly and reach the cert-pin store via facade().pins().
 class ConnectionStore {
   public:
     explicit ConnectionStore(std::unique_ptr<QSettings> settings = nullptr);
@@ -34,12 +26,9 @@ class ConnectionStore {
 
     QList<models::RememberedWifi> remembered() const { return facade_->remembered(); }
     void remember(const models::DiscoveredServer& server) { facade_->rememberSatellite(server); }
-    // Re-point ONLY already-remembered rows from a fresh scan (durable). The
-    // session manager calls this on every discovery completion so a satellite
-    // that moved to a new DHCP lease has its persisted IP relearned WITHOUT a
-    // successful session — closing the "must rescan to reconnect" gap. Never
-    // adds an un-remembered satellite. Mirrors dish-android's
-    // store.refreshFromDiscovery in SatelliteConnectionManager.startDiscovery.
+    // Re-points already-remembered rows only, never adds one. Called on every
+    // discovery completion so a satellite that moved to a new DHCP lease relearns
+    // its persisted IP without needing a successful session first.
     void refreshFromDiscovery(const QList<models::DiscoveredServer>& discovered) {
         facade_->refreshFromDiscovery(discovered);
     }
@@ -53,8 +42,6 @@ class ConnectionStore {
     }
     void forgetKey(const QString& id) { facade_->forgetSatelliteSharedKey(id); }
 
-    // The underlying facade — new code wires the TLS pin store + identity
-    // consolidation through here.
     repository::ConnectionStore& facade() { return *facade_; }
 
   private:

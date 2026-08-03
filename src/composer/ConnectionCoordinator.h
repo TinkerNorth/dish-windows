@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ConnectionCoordinator — the imperative Coordinator over the connection
-// subsystem. It owns the upstream Observables and the ConnectionsComposer,
-// feeds those Observables from the Qt signal world (WifiConnectionManager pool +
-// discovery, ConnectionHub bindings), exposes the user commands
-// (bind/unbind/setControllerType/forget/autoReconnectAll), and — the canonical
-// "never mirror state another class owns" rule — RE-EXPOSES composer.state() BY
-// REFERENCE as connections(). It holds no summary list of its own.
-//
-// The binding table + hot-path sender factory + per-device capability lookups
-// stay on ConnectionHub (the input thread reads them); this Coordinator wraps it
-// and the manager. Mirrors dish-android composer/ConnectionCoordinator
-// (val connections = composer.state; bind/unbind/forget/setType/autoReconnectAll).
+// The imperative command surface over the connection subsystem: it feeds the
+// ConnectionsComposer's upstream Observables from the Qt signal world and
+// exposes the user commands. The binding table and hot-path sender factory stay
+// on ConnectionHub, because the input thread reads them.
 
 #pragma once
 
@@ -37,62 +29,40 @@ class ConnectionCoordinator : public QObject {
                           QObject* parent = nullptr);
     ~ConnectionCoordinator() override;
 
-    // RE-EXPOSED, never mirrored: the derived connections list lives on the
-    // composer; this is a const reference to its Observable. Subscribers get the
-    // eager initial + every distinct recompute. (android: val connections =
-    // composer.state.)
+    // Re-exposed by reference, never mirrored — the list is owned by the
+    // composer, and a second copy here would be a two-writer race.
     const arch::Observable<std::vector<ConnectionRow>>& connections() const {
         return composer_->state();
     }
 
-    // The current row for an id, or nullopt — a convenience over connections().
     std::optional<ConnectionRow> summary(const std::string& id) const;
 
-    // ── Commands (sequence the binding store + type hint + session) ──────────
-
-    // Bind a slot to a connection with its FINAL controller type. Delegates to
-    // ConnectionHub (binding table + attachSlot with the descriptor). Returns
-    // the bound connection id by way of the hub's own side effects; the
-    // composer re-derives the row on the resulting bindingsChanged.
     void bind(const QString& slotId, const QString& connectionId);
     void unbind(const QString& slotId);
 
-    // Forget a remembered connection and its local state: unbind its slots,
-    // then forget the host (drops the row + key + pin). Mirrors android
-    // forgetConnection.
+    // Unbinds this connection's slots first, then drops the row + key + pin.
     void forgetConnection(const QString& connectionId);
 
-    // Connect every remembered satellite that is not already live, with the
-    // AutoReconnect intent (silent failures — the row chip is the cue). Moved
-    // off AppModel's 15 s timer / WifiConnectionManager::autoReconnectAll into
-    // the Coordinator, mirroring android ConnectionCoordinator.autoReconnectAll.
+    // Connect every remembered satellite that is not already live. Failures are
+    // silent: the row's own chip is the cue.
     void autoReconnectAll();
 
-    // Reconnect a REMEMBERED satellite by id WITHOUT requiring the user to
-    // rescan first and WITHOUT re-pairing (the key persists). Mirrors Widgets
-    // ConnectionsDialog::onReconnectClicked: prefer the freshest discovered
-    // endpoint if this id is in the current scan (its IP is guaranteed current);
-    // else kick a discovery pass to relearn a moved box AND attempt the
-    // last-known persisted endpoint right now. No-op if the id is neither
-    // discovered nor remembered.
+    // Reconnect a remembered satellite without a rescan and without re-pairing
+    // (the key persists). Prefers a currently-discovered endpoint, whose IP is
+    // guaranteed current; otherwise kicks a discovery pass to relearn a moved
+    // box AND tries the last-known address right now.
     void reconnectConnection(const QString& connectionId);
 
-    // Graceful disconnect of a LIVE session WITHOUT forgetting — the remembered
-    // row + pairing key survive (contrast forgetConnection, which drops them).
-    // Delegates to WifiConnectionManager::disconnect (authed server-side close).
+    // Graceful teardown that KEEPS the remembered row and pairing key — contrast
+    // forgetConnection, which drops them.
     void disconnectConnection(const QString& connectionId);
 
   signals:
-    // Fired whenever the derived connections list may have changed (a thin Qt
-    // bridge so existing QObject consumers — ConnectionsDialog, AppModel — can
-    // connect without holding an Observable subscription). The authoritative
-    // value is always connections().value().
+    // A Qt bridge for consumers that can't hold an Observable subscription. The
+    // authoritative value is always connections().value().
     void connectionsChanged();
 
   private:
-    // Recompute the upstream Observables from the live manager/hub state and
-    // push them in (the composer reacts; connectionsChanged is emitted off the
-    // composer's own change subscription).
     void refreshSessions();
     void refreshRemembered();
     void refreshDiscovered();
@@ -101,7 +71,7 @@ class ConnectionCoordinator : public QObject {
     net::WifiConnectionManager* wifi_;
     net::ConnectionHub* hub_;
 
-    // The five upstream Observables (owned here; the composer reads them).
+    // Owned here; the composer only reads them.
     arch::Observable<std::vector<SessionSnapshot>> sessions_;
     arch::Observable<std::vector<RememberedSnapshot>> remembered_;
     arch::Observable<std::vector<std::string>> discoveredIds_;

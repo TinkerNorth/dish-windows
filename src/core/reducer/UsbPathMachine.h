@@ -1,33 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbPathMachine — the explicit per-controller USB input-path lifecycle FSM.
-// Pure, Qt-free, exhaustively-tested port of dish-android
-// source/usb/UsbPathMachine.kt 1:1.
+// The per-controller USB input-path lifecycle FSM. Every (phase x event) pair is
+// total and never throws, so an odd transition cannot silently drop a slot the
+// way scattered imperative logic could. Effects come back as data; `reduce` does
+// no IO. The coordinator (source/usb/UsbGamepadManager) turns world changes into
+// events, runs `reduce`, and executes the effects against the real subsystems.
 //
-// Every (phase x event) pair is TOTAL here: defined for all combinations,
-// never throws, so a failed/odd transition can never silently drop a slot the
-// way scattered imperative logic could. Effects are returned AS DATA (a vector
-// of UsbEffect) — `reduce` performs no IO. The coordinator (the Windows
-// UsbGamepadManager in source/usb/) turns world changes into events, runs
-// `reduce`, and executes the returned effects against the real subsystems
-// (the raw-HID claim driver, the registry, the connection layer).
-//
-// Kotlin -> C++ shape:
-//   * `sealed interface UsbEvent`  -> std::variant<...> (the events below).
-//   * `sealed interface UsbEffect` -> std::variant<...> (the effects below).
-//   * `data class Reduction`       -> Reduction { std::optional<UsbController>
-//                                      next; std::vector<UsbEffect> effects; }.
-//     A nullopt `next` means "remove this controller from tracking" (Kotlin's
-//     `next == null`).
-//   * `when (phase)` / `when (event)` -> std::visit / switch.
-//
-// This is platform-independent: the DECISION space is identical on android and
-// Windows; only the effector (UsbGamepadManager) differs (WinUSB/raw-HID vs the
-// android UsbManager). On Windows the "framework" path the FSM returns control
-// to is SDL/XInput; the "Direct" path is the raw-HID claim. XInput hides
-// Xbox-class pads from raw HID, so Direct mainly serves DualSense/DS4/8BitDo;
-// see source/usb/UsbGamepadManager.h for the fallback discussion.
+// "Framework" here is SDL/XInput and "Direct" is the raw-HID claim. XInput hides
+// Xbox-class pads from raw HID, so Direct mainly serves DualSense/DS4/8BitDo.
 
 #pragma once
 
@@ -43,18 +24,16 @@
 namespace dish::reducer {
 
 enum class UsbPhase {
-    Routed,            // Standard: a framework (SDL/XInput) device is present.
-    Claiming,          // a direct-mode claim is in flight (loader, toggle disabled).
-    Direct,            // claimed and streaming.
-    AwaitingFramework, // released or claim-failed; waiting for the framework device to
-                       // re-enumerate.
-    RestoreStuck, // a return-to-Standard never re-enumerated; user picks Direct, retry, or replug.
-    NeedsReplug,  // present but the OS never gave the device back; needs a manual replug.
+    Routed,            // Standard: a framework device is present
+    Claiming,          // a direct-mode claim is in flight
+    Direct,            // claimed and streaming
+    AwaitingFramework, // released or claim-failed; waiting on re-enumeration
+    RestoreStuck,      // a return to Standard never re-enumerated; the user picks
+                       // Direct, retry, or replug
+    NeedsReplug,       // present, but the OS never gave the device back
 };
 
-// One USB controller's path state. Keyed by vpKey (vendorId<<16 | productId)
-// in the coordinator. Mirrors the android UsbController data class field-for-
-// field (defaults match).
+// Keyed by vpKey (vendorId<<16 | productId) in the coordinator.
 struct UsbController {
     int vendorId = 0;
     int productId = 0;
@@ -65,13 +44,12 @@ struct UsbController {
     std::optional<int> syntheticId;
     bool hasPermission = false;
     PathChoice desired = PathChoice::Standard;
-    // Whether the in-flight switch was an explicit user action (gates user notices).
-    bool userInitiated = false;
-    // Bound connection, carried with the controller across path switches.
+    bool userInitiated = false; // gates user notices
+    // Carried with the controller across path switches.
     std::optional<std::string> connId;
     std::optional<int> type;
-    // Why the last Direct claim failed; remembered between the failure and the
-    // Standard re-settle so the re-enumerated framework card can show the cause.
+    // Remembered between the failure and the Standard re-settle, so the
+    // re-enumerated framework card can still show the cause.
     std::optional<DirectClaimFailure> failure;
 
     bool operator==(const UsbController& o) const {
@@ -115,10 +93,9 @@ struct ClaimSucceeded {
     int syntheticId = 0;
     bool operator==(const ClaimSucceeded& o) const { return syntheticId == o.syntheticId; }
 };
-// frameworkStolen: the interface was claimed (kernel HID driver detached) before
-// the failure, so the framework device must re-enumerate before we can settle on
-// Standard. When false the framework was never touched, so the slot is already
-// usable on Standard.
+// `frameworkStolen` means the kernel HID driver was already detached when the
+// claim failed, so the framework device must re-enumerate before Standard can
+// settle. When false the framework was never touched and the slot is usable now.
 struct ClaimFailed {
     DirectClaimFailure reason = DirectClaimFailure::Busy;
     bool frameworkStolen = false;
@@ -136,7 +113,7 @@ using UsbEvent = std::variant<event::FrameworkUp, event::FrameworkDown, event::U
                               event::PermissionGranted, event::PermissionDenied, event::Choose,
                               event::ClaimSucceeded, event::ClaimFailed, event::Timeout>;
 
-// User-facing banner reasons; the coordinator maps these to localized strings.
+// The coordinator maps these to localized strings.
 enum class UsbNotice {
     SwitchToDirectFailed,
     NeedsReplug,
@@ -148,26 +125,24 @@ enum class UsbNotice {
 
 namespace effect {
 
-// Coarse: open + claim interface + read-loop attach + register synthetic +
+// Open, claim the interface, attach the read loop, register the synthetic and
 // bind. The coordinator feeds the outcome back as ClaimSucceeded/ClaimFailed.
 struct Claim {
     bool operator==(const Claim&) const { return true; }
 };
-// Coarse rollback: re-claim Direct (known-good), dropping the synthetic
-// placeholder. Feeds ClaimSucceeded/ClaimFailed back. Only emitted when the
-// user picks Direct out of RestoreStuck.
+// Rollback to a known-good Direct claim, dropping the synthetic placeholder.
+// Only emitted when the user picks Direct out of RestoreStuck.
 struct Reclaim {
     bool operator==(const Reclaim&) const { return true; }
 };
-// Detach the read loop + release interface + keep the synthetic entry as a held
-// loader placeholder.
+// Detach the read loop and release the interface, keeping the synthetic entry as
+// a held placeholder.
 struct Release {
     bool operator==(const Release&) const { return true; }
 };
 struct RequestPermission {
     bool operator==(const RequestPermission&) const { return true; }
 };
-// Bind the carried connection to a device id (framework or synthetic).
 struct BindFramework {
     int frameworkId = 0;
     bool operator==(const BindFramework& o) const { return frameworkId == o.frameworkId; }
@@ -176,21 +151,20 @@ struct RemoveSynthetic {
     int syntheticId = 0;
     bool operator==(const RemoveSynthetic& o) const { return syntheticId == o.syntheticId; }
 };
-// Registry transition hold for the framework device (suppress the grace reaper).
+// Hold the framework device through the transition, suppressing the grace reaper.
 struct BeginHold {
     bool operator==(const BeginHold&) const { return true; }
 };
 struct EndHold {
     bool operator==(const EndHold&) const { return true; }
 };
-// Flip the held framework placeholder to a visible "needs replug" card (the OS
-// dropped the device and never gave it back), instead of removing it.
+// Show the held framework placeholder as a "needs replug" card rather than
+// removing it, so the device does not vanish without explanation.
 struct MarkNeedsReplug {
     bool operator==(const MarkNeedsReplug&) const { return true; }
 };
-// Flip the held synthetic placeholder to a visible "Standard isn't responding"
-// card whose toggle stays live, so the user picks Direct / retry / replug
-// instead of the app silently reverting.
+// Show the held synthetic placeholder as a card whose toggle stays live, so the
+// user picks Direct, retry or replug instead of the app silently reverting.
 struct MarkRestoreStuck {
     bool operator==(const MarkRestoreStuck&) const { return true; }
 };
@@ -208,8 +182,8 @@ struct SetPref {
     PathChoice choice = PathChoice::Standard;
     bool operator==(const SetPref& o) const { return choice == o.choice; }
 };
-// Surface why Direct failed on the visible card (and suppress auto-retry for the
-// model); cleared whenever a fresh attempt starts or Direct succeeds.
+// Surfaces why Direct failed and suppresses auto-retry for the model. Cleared
+// whenever a fresh attempt starts or Direct succeeds.
 struct MarkFailure {
     DirectClaimFailure reason = DirectClaimFailure::Busy;
     bool operator==(const MarkFailure& o) const { return reason == o.reason; }
@@ -233,35 +207,25 @@ struct Reduction {
     std::vector<UsbEffect> effects;
 };
 
-// The total reducer: (controller, event) -> next state + effects.
 Reduction reduce(const UsbController& c, const UsbEvent& event);
 
 // Whether the coordinator should synthesize a FrameworkUp to settle a controller
-// that is parked in AwaitingFramework. Pulled out as a pure predicate so the
-// Windows-specific settle rule is checkable without driving the live manager.
+// parked in AwaitingFramework.
 //
-// Why this exists at all: on Windows the SDL/XInput "framework" twin is NOT
-// removed when a pad is claimed for Direct (it is only twin-dedup-suppressed,
-// still in the bridge's device list), so its vpKey is *continuously* present.
-// The coordinator's presence diff therefore never sees a fresh appearance edge
-// after a Direct->Standard Release parks the controller in AwaitingFramework, and
-// the FSM would wait forever for a FrameworkUp that never comes. (Android differs:
-// claiming detaches the device, so a real appearance edge re-fires on release.)
-// The fix is level-triggered, not edge-triggered: if the framework device is
-// present *right now* and we are still awaiting it, settle. `present` MUST be read
-// from the real current device set so a device that is genuinely gone returns
-// false here and the Timeout -> RestoreStuck/NeedsReplug failure path stays
-// reachable. Settling is idempotent: AwaitingFramework --FrameworkUp--> Routed,
-// and Routed is not AwaitingFramework, so a re-check does not re-fire.
+// A claim does not remove the SDL/XInput twin on Windows, only twin-dedup
+// suppresses it, so its vpKey stays continuously present and the coordinator's
+// presence diff never sees a fresh appearance edge after a Direct-to-Standard
+// Release. Waiting on that edge would wait forever. The rule is therefore
+// level-triggered: settle if the framework device is present right now.
+// `frameworkPresent` MUST be read from the real current device set, so a device
+// that is genuinely gone keeps the Timeout path to RestoreStuck/NeedsReplug
+// reachable. Settling is idempotent, since Routed is not AwaitingFramework.
 inline bool shouldSettleAwaitingFramework(UsbPhase phase, bool frameworkPresent) {
     return phase == UsbPhase::AwaitingFramework && frameworkPresent;
 }
 
-// The path-resolution policy, lifted out of the coordinator so each branch is
-// checkable directly (UsbPathResolutionTest). An explicit stored pick always
-// wins; absent one (stored == nullopt = Auto), auto-Direct ONLY a verified
-// fast-lane model that has not just failed to claim. Mirrors android
-// resolvePathChoice.
+// An explicit stored pick always wins. Under Auto, only a verified fast-lane
+// model that has not just failed to claim goes Direct.
 inline PathChoice resolvePathChoice(std::optional<PathChoice> stored, bool isFastLaneModel,
                                     std::optional<DirectClaimFailure> priorFailure) {
     if (stored.has_value()) { return *stored; }

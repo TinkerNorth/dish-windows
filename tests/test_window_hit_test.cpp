@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Exhaustive tests for the PURE frameless-window hit-test (src/qml/chrome/
-// WindowHitTest.h): caption vs maximize-button vs client vs all 8 resize
-// regions, the off-by-one at button/rect edges (half-open high edges), the
-// maximized suppression of resize borders, and the Win11 build-number gate.
-// No Qt, no window — the math is plain ints.
+// Every rect is half-open on its high edges, which is where the off-by-one cases
+// below come from.
 
 #include "qml/chrome/WindowHitTest.h"
 
@@ -104,12 +101,10 @@ TEST_CASE("cursor outside the window is client (defensive)", "[hittest]") {
 }
 
 TEST_CASE("maximized window suppresses all resize regions", "[hittest]") {
-    // Corners/edges that would resize a normal window must NOT when maximized.
     CHECK(hitTest(make(0, 0, /*maximized=*/true)) == HitRegion::Caption);
     CHECK(hitTest(make(799, 0, true)) == HitRegion::Caption);
     CHECK(hitTest(make(0, 300, true)) == HitRegion::Client);
     CHECK(hitTest(make(799, 599, true)) == HitRegion::Client);
-    // Caption + maximize button still resolve when maximized.
     CHECK(hitTest(make(200, 20, true)) == HitRegion::Caption);
     CHECK(hitTest(make(620, 20, true)) == HitRegion::MaximizeButton);
 }
@@ -122,15 +117,12 @@ TEST_CASE("zero resize border behaves like no resize frame", "[hittest]") {
 }
 
 TEST_CASE("maximize-button rect outside the caption still wins over client", "[hittest]") {
-    // Defensive: a button placed below the caption strip should still be a
-    // maximize hit (the button check is independent of the caption check).
+    // The button check is independent of the caption check.
     HitTestInput in = make(620, 100);
     in.maximizeButton = Rect{600, 80, 646, 120};
     in.caption = Rect{0, 0, 800, 40};
     CHECK(hitTest(in) == HitRegion::MaximizeButton);
 }
-
-// ── Win11 version gate ──────────────────────────────────────────────────────
 
 TEST_CASE("Win11 gate: 22000 boundary", "[win11gate]") {
     CHECK_FALSE(isWin11OrLater(21999)); // last Windows 10 insider build
@@ -145,10 +137,9 @@ TEST_CASE("Win11 gate: Windows 10 builds are false", "[win11gate]") {
     CHECK_FALSE(isWin11OrLater(19045)); // Win10 22H2
 }
 
-// ── Client carve-outs inside the caption strip ───────────────────────────────
-// The hamburger + minimize + close are QML buttons; their regions must resolve
-// Client so a press reaches Qt instead of starting a native caption drag (the
-// launch-day bug: every strip click was HTCAPTION and the buttons were dead).
+// The hamburger, minimize and close are QML buttons, so their regions must
+// resolve Client: HTCAPTION there starts a native drag and the press never
+// reaches Qt.
 
 namespace {
 HitTestInput makeWithCarves(int x, int y) {
@@ -182,7 +173,7 @@ TEST_CASE("carve edges are half-open like every other rect", "[hittest][carve]")
 }
 
 TEST_CASE("resize corners still beat a carve that touches the top edge", "[hittest][carve]") {
-    // The 8px top band overlaps the carves' first rows; the frame must win so
+    // The 8px top band overlaps the carves' first rows, and the frame must win so
     // the window stays resizable from the very top.
     CHECK(hitTest(makeWithCarves(24, 4)) == HitRegion::Top);
 }

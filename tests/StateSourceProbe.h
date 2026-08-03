@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Test probe for StateSource/Observable: captures the FULL emission sequence
-// (not just the latest value), mirroring dish-android's StateSourceProbe. The
-// subscription is torn down before the captured vector, so callbacks never
-// fire into freed storage.
+// Member order matters: the subscription is declared last so it tears down
+// before the captured vector, and callbacks never fire into freed storage.
 
 #pragma once
 

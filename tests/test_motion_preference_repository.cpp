@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// MotionPreferenceRepositoryTest (ADAPT, 6) + the Wave 0 RepositoryContract.
-// Port of dish-android repository/MotionPreferenceRepositoryTest: enabled
-// true/false round-trip with durability across a fresh repo, get-on-unwritten
-// returns nullopt (NOT a default boolean — the store layer owns the default),
-// corrupt JSON falls back to empty (no crash), remove of one slot leaves the
-// others, and put on the same slot replaces in place (the list never grows).
+// get() on an unwritten slot answers nullopt rather than a default boolean: the
+// store layer above owns the default.
 
 #include "repository/MotionPreferenceRepository.h"
 
@@ -35,7 +31,7 @@ TEST_CASE("enabled true and false round-trip with durability", "[motion-pref]") 
         repo.put(MotionPreference{"virtual", true});
         repo.put(MotionPreference{"9", false});
     }
-    // Fresh repo on the same backing store proves durability (no in-memory cache).
+    // A fresh repo over the same store rules out an in-memory cache.
     MotionPreferenceRepository repo2(store);
     REQUIRE(repo2.get("virtual").has_value());
     CHECK(repo2.get("virtual")->enabled == true);

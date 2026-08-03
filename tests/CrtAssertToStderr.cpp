@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Route MSVC debug-CRT assertion / error reports to stderr and abort, instead
-// of the default MODAL "Debug Assertion Failed!" dialog. Under ctest / CI /
-// headless runs nobody can dismiss that dialog, so the test process hangs
-// forever (e.g. dereferencing an empty std::optional trips _STL_VERIFY, which
-// pops it). With this installed, a failed assertion prints to stderr and aborts
-// with a non-zero exit, surfacing as a FAILED test rather than a hung run.
-// Installed before main() via a global constructor; a no-op outside Windows debug.
+// The MSVC debug CRT's default assertion report is a modal dialog; under ctest
+// nobody can dismiss it and the test process hangs forever. Route reports to
+// stderr and abort instead, so an assertion surfaces as a FAILED test.
 
 #if defined(_WIN32) && defined(_DEBUG)
 

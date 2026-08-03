@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Exercises the architecture kernel (Observable / Combiner / Composer /
-// StateSource / Controller / Repository) and its test probes. Pure C++17 +
-// Catch2 — no Qt. These tests document the kernel contract the feature waves
-// build on.
 
 #include "architecture/Combiner.h"
 #include "architecture/Composer.h"
@@ -35,7 +30,7 @@ TEST_CASE("Observable replays the latest and emits only on change", "[kernel][ob
     Observable<int> o{1};
     std::vector<int> seen;
     auto sub = o.subscribe([&](const int& v) { seen.push_back(v); }, true);
-    REQUIRE(seen == std::vector<int>{1}); // emitCurrent replays the latest
+    REQUIRE(seen == std::vector<int>{1}); // the trailing true is emitCurrent
 
     o.set(1); // distinct-until-changed: no emit
     REQUIRE(seen.size() == 1);
@@ -115,9 +110,9 @@ TEST_CASE("Controller applies current on start, is idempotent, and stops cleanly
     ControllerProbe<RecordingController> probe(ctrl);
 
     probe.start();
-    REQUIRE(ctrl.applied == std::vector<int>{7}); // applies the current value on start
+    REQUIRE(ctrl.applied == std::vector<int>{7});
 
-    probe.start(); // idempotent: no extra apply, no second subscription
+    probe.start();
     up.set(8);
     REQUIRE(ctrl.applied == std::vector<int>{7, 8});
 

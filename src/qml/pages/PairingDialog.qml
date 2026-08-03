@@ -2,23 +2,18 @@
 // Copyright (C) 2026 Dish contributors.
 //
 // The shared pairing sheet — ONE sheet, two callers (the wizard's Destination
-// step and Connections' found rows). BOTH pairing paths run in it at once and
-// no tap gates either. Path A — the forward 6-digit satellite PIN — is always
-// typeable; Path B — our reverse 4-digit clientPin — is POSTed automatically by
-// openFor() (the operator is notified the moment the sheet opens), shown under
-// an "or" divider, and polled (~2 min budget) until the operator approves on
-// the satellite. Whichever path completes first pairs the box; the sheet closes
-// itself on success (pairingSucceeded / phase "approved").
+// step and Connections' found rows). Both pairing paths run at once and no tap
+// gates either: the forward 6-digit satellite PIN stays typeable while our
+// reverse 4-digit PIN is POSTed on open and polled. Whichever completes first
+// pairs the box.
 //
 // The PIN is SIX DISCRETE CELLS over one hidden capture field, not a
 // letter-spaced text box: Qt does not composite trailing letter-spacing the way
 // CSS does, and a letter-spaced run of digits is announced badly by a screen
-// reader. The field is numeric-only and paste-tolerant (spaces and dashes are
-// stripped), and Pair stays disabled until all six digits are in.
+// reader.
 //
-// A REJECTION KEEPS THE SHEET OPEN and marks the field inline. It does not go
-// to the toast: the toast is for transient failures the user cannot act on, and
-// this one has the user's own next action attached to it.
+// A rejection KEEPS THE SHEET OPEN and marks the field inline — unlike a toast,
+// this failure has the user's own next action attached to it.
 
 pragma ComponentBehavior: Bound
 
@@ -35,15 +30,13 @@ Kit.ContentDialog {
     property string serverName: ""
     property bool submitting: false   // forward submit in flight
 
-    // Path B is on screen: we actually kicked a reverse request for this
-    // sheet (openFor cancels any stale one first, so idle == not ours).
+    // openFor cancels any stale reverse request first, so idle == not ours.
     readonly property bool reverseLive:
         serverId.length > 0 && App.reversePairingPhase !== "idle"
 
-    // ── Forward-PIN rejection (inline, never a toast) ───────────────────────
     property bool pinRejected: false
     property string pinReason: ""
-    // The third rejection earns the extra line: by then the likeliest cause is
+    // The third rejection earns an extra line: by then the likeliest cause is
     // that the satellite re-drew its screen and minted a new code.
     property int rejections: 0
 
@@ -78,8 +71,7 @@ Kit.ContentDialog {
     acceptText: pairDialog.submitting ? qsTr("Pairing…") : qsTr("Pair")
     acceptEnabled: pinInput.text.length === pairDialog.pinLength && !pairDialog.submitting
 
-    // The sheet owns the keyboard while it is up, and Popup hands focus back to
-    // the row that opened it on close.
+    // The sheet owns the keyboard while it is up; Popup hands focus back on close.
     focus: true
 
     function openFor(id, name) {
@@ -90,10 +82,8 @@ Kit.ContentDialog {
         pinReason = "";
         rejections = 0;
         pinInput.clear();
-        // Send our PIN to the satellite immediately — the operator sees the
-        // request the moment the sheet opens, while the PIN field stays a
-        // live fallback. Cancel first so a stale phase from an earlier
-        // sheet can never leak in when this id doesn't resolve.
+        // Cancel first: a stale phase from an earlier sheet must not leak in
+        // when this id doesn't resolve.
         App.cancelReversePairing();
         if (id.length > 0)
             App.requestReversePairing(id);
@@ -103,7 +93,6 @@ Kit.ContentDialog {
     onOpened: pinInput.forceActiveFocus()
 
     body: [
-        // ── Path A: type the satellite's PIN ──
         Label {
             text: qsTr("Enter the 6-digit PIN shown on the Satellite’s screen.")
             color: Theme.muted
@@ -113,8 +102,6 @@ Kit.ContentDialog {
             Layout.fillWidth: true
         },
 
-        // Six cells drawn over one hidden capture field: the field owns paste,
-        // the input hints and the caret position; the cells only render it.
         Item {
             id: pinBlock
             implicitHeight: cellRow.implicitHeight
@@ -159,8 +146,8 @@ Kit.ContentDialog {
                 }
             }
 
-            // Invisible, but live: it takes the clicks, the focus, the paste
-            // and the input-method hints for the whole block.
+            // Invisible, but live: it owns the clicks, focus, paste and input
+            // hints for the whole block; the cells only render its text.
             TextInput {
                 id: pinInput
                 anchors.fill: cellRow
@@ -205,7 +192,6 @@ Kit.ContentDialog {
             Accessible.name: text
         },
 
-        // ── divider ──
         RowLayout {
             visible: pairDialog.reverseLive
             spacing: Tokens.s4
@@ -221,7 +207,6 @@ Kit.ContentDialog {
             Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.outline }
         },
 
-        // ── Path B: approve on the satellite (sent automatically on open) ──
         Label {
             visible: pairDialog.reverseLive
             textFormat: Text.StyledText
@@ -309,9 +294,6 @@ Kit.ContentDialog {
         }
     ]
 
-    // Footer accept = the Path-A submit (typeable throughout Path B's
-    // wait). Errors keep the sheet open (the inline message carries the
-    // reason); success closes below.
     onAccepted: {
         submitting = true;
         pinRejected = false;

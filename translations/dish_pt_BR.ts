@@ -4,216 +4,882 @@
 <context>
     <name>AppShell</name>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="43"/>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Início</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="44"/>
         <source>Controllers</source>
-        <translation type="unfinished"></translation>
+        <translation>Controles</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="45"/>
         <source>Connections</source>
         <translation type="unfinished">Conexões</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="46"/>
         <source>Support Dish</source>
         <translation type="unfinished">Apoiar o Dish</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="47"/>
         <source>Settings</source>
         <translation type="unfinished">Configurações</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppShell.qml" line="241"/>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppShell.qml" line="255"/>
-        <source>Add a controller</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppShell.qml" line="272"/>
         <source>Dish %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Dish %1</translation>
+    </message>
+    <message>
+        <source>Set up Dish</source>
+        <translation>Configurar o Dish</translation>
+    </message>
+    <message>
+        <source>Streaming · display kept awake</source>
+        <translation>Transmitindo · tela mantida ativa</translation>
+    </message>
+    <message>
+        <source>Set up</source>
+        <translation>Configurar</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">Voltar</translation>
     </message>
 </context>
 <context>
-    <name>BindChooserDialog</name>
+    <name>ApplyOverlay</name>
     <message>
-        <location filename="../src/qml/pages/BindChooserDialog.qml" line="34"/>
-        <location filename="../src/qml/pages/BindChooserDialog.qml" line="37"/>
-        <source>Bind</source>
-        <translation type="unfinished"></translation>
+        <source>Applying</source>
+        <translation>Aplicando</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/BindChooserDialog.qml" line="35"/>
-        <source>Bind %1</source>
-        <translation type="unfinished"></translation>
+        <source>Applying binding…</source>
+        <translation>Aplicando o vínculo…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/BindChooserDialog.qml" line="52"/>
-        <source>Choose which satellite this controller drives.</source>
-        <translation type="unfinished"></translation>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/BindChooserDialog.qml" line="116"/>
+        <source>Sending each setting to the host.</source>
+        <translation>Enviando cada configuração ao host.</translation>
+    </message>
+</context>
+<context>
+    <name>BindingDraft</name>
+    <message>
+        <source>Buttons &amp; sticks</source>
+        <translation>Botões e analógicos</translation>
+    </message>
+    <message>
+        <source>Analog triggers</source>
+        <translation>Gatilhos analógicos</translation>
+    </message>
+    <message>
+        <source>Gyro</source>
+        <translation type="unfinished">Giroscópio</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>Mouse</source>
+        <translation>Mouse</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>Lightbar</source>
+        <translation type="unfinished">Barra de luz</translation>
+    </message>
+    <message>
+        <source>buttons or sticks</source>
+        <translation>botões ou analógicos</translation>
+    </message>
+    <message>
+        <source>analog triggers</source>
+        <translation>gatilhos analógicos</translation>
+    </message>
+    <message>
+        <source>gyro</source>
+        <translation>giroscópio</translation>
+    </message>
+    <message>
+        <source>touchpad</source>
+        <translation>touchpad</translation>
+    </message>
+    <message>
+        <source>mouse control</source>
+        <translation>controle de mouse</translation>
+    </message>
+    <message>
+        <source>rumble motors</source>
+        <translation>motores de vibração</translation>
+    </message>
+    <message>
+        <source>lightbar</source>
+        <translation>barra de luz</translation>
+    </message>
+    <message>
+        <source>Waiting on a destination.</source>
+        <translation>Aguardando um destino.</translation>
+    </message>
+    <message>
+        <source>Couldn’t read the catalog from %1 — retry to resolve it.</source>
+        <translation>Não foi possível ler o catálogo de %1 — tente novamente para resolvê-lo.</translation>
+    </message>
+    <message>
+        <source>Resolving from %1’s catalog…</source>
+        <translation>Resolvendo pelo catálogo de %1…</translation>
+    </message>
+    <message>
+        <source>Routed to mouse instead.</source>
+        <translation>Roteado para o mouse.</translation>
+    </message>
+    <message>
+        <source>Turned off for this binding.</source>
+        <translation>Desativado para este vínculo.</translation>
+    </message>
+    <message>
+        <source>No touchpad on this controller to drive a mouse.</source>
+        <translation>Este controle não tem touchpad para controlar o mouse.</translation>
+    </message>
+    <message>
+        <source>%1 has no %2.</source>
+        <translation>%1 não tem %2.</translation>
+    </message>
+    <message>
+        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
+        <translation>O Modo padrão não consegue transmitir isso — mude a conexão para Direto.</translation>
+    </message>
+    <message>
+        <source>Direct mode needs a USB connection; over Bluetooth this can’t be carried.</source>
+        <translation>O Modo direto precisa de uma conexão USB; por Bluetooth isso não pode ser transmitido.</translation>
+    </message>
+    <message>
+        <source>%1 doesn’t carry %2.</source>
+        <translation>%1 não transmite %2.</translation>
+    </message>
+    <message>
+        <source>A Bluetooth host has no channel for it. Bind to a Satellite host.</source>
+        <translation>Um host Bluetooth não tem canal para isso. Vincule a um host Satélite.</translation>
+    </message>
+    <message>
+        <source>%1 doesn’t advertise mouse control.</source>
+        <translation>%1 não anuncia controle de mouse.</translation>
+    </message>
+    <message>
+        <source>%1 doesn’t advertise %2.</source>
+        <translation>%1 não anuncia %2.</translation>
+    </message>
+</context>
+<context>
+    <name>BindingStrip</name>
+    <message>
+        <source>Binding</source>
+        <translation>Vínculo</translation>
+    </message>
+    <message>
+        <source>Edit ›</source>
+        <translation>Editar ›</translation>
+    </message>
+    <message>
+        <source>Configure binding</source>
+        <translation>Configurar vínculo</translation>
+    </message>
+    <message numerus="yes">
+        <source>Show %n more binding settings</source>
+        <translation>
+            <numerusform>Ver mais %n configuração do vínculo</numerusform>
+            <numerusform>Ver mais %n configurações do vínculo</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Also in this binding</source>
+        <translation>Também neste vínculo</translation>
+    </message>
+</context>
+<context>
+    <name>BlockerDialog</name>
+    <message>
+        <source>Connection lost</source>
+        <translation>Conexão perdida</translation>
+    </message>
+    <message>
+        <source>Controller unplugged</source>
+        <translation>Controle desconectado</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message>
+        <source>Reconnect</source>
+        <translation>Reconectar</translation>
+    </message>
+    <message>
+        <source>%1 stopped responding. Input isn’t getting through. It may be asleep or off your network.</source>
+        <translation>%1 parou de responder. A entrada não está chegando. Pode estar em suspensão ou fora da sua rede.</translation>
+    </message>
+    <message>
+        <source>Holding the binding so you can reconnect. Re-plug to keep configuring, or close this screen.</source>
+        <translation>Mantendo o vínculo para você reconectar. Conecte novamente para continuar configurando ou feche esta tela.</translation>
+    </message>
+</context>
+<context>
+    <name>CapabilityTable</name>
+    <message>
+        <source>Available</source>
+        <translation>Disponível</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Indisponível</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation type="unfinished">Desligado</translation>
+    </message>
+    <message>
+        <source>Pending</source>
+        <translation>Pendente</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>desconhecido</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>sim</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>não</translation>
+    </message>
+    <message>
+        <source>In %1</source>
+        <translation>Entrada %1</translation>
+    </message>
+    <message>
+        <source>Link %1</source>
+        <translation>Link %1</translation>
+    </message>
+    <message>
+        <source>Type %1</source>
+        <translation>Tipo %1</translation>
+    </message>
+    <message>
+        <source>Host %1</source>
+        <translation>Host %1</translation>
+    </message>
+    <message>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <source>Carries</source>
+        <translation>Transmite</translation>
+    </message>
+    <message>
+        <source>In</source>
+        <translation>Entrada</translation>
+    </message>
+    <message>
+        <source>Link</source>
+        <translation>Link</translation>
+    </message>
+    <message>
+        <source>Type</source>
+        <translation>Tipo</translation>
+    </message>
+    <message>
+        <source>Host</source>
+        <translation>Host</translation>
+    </message>
+    <message>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+</context>
+<context>
+    <name>ConfigureBindingPage</name>
+    <message>
+        <source>Configure binding</source>
+        <translation>Configurar vínculo</translation>
+    </message>
+    <message>
+        <source>Bind controller</source>
+        <translation>Vincular o controle</translation>
+    </message>
+    <message>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation>Transmitindo</translation>
+    </message>
+    <message>
+        <source>Bound</source>
+        <translation>Vinculado</translation>
+    </message>
+    <message>
+        <source>Not bound</source>
+        <translation>Sem vínculo</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Padrão</translation>
+    </message>
+    <message>
+        <source>Direct</source>
+        <translation>Direto</translation>
+    </message>
+    <message>
+        <source>Direct access denied — another app owns this device.</source>
+        <translation>Acesso direto negado — outro app está usando este dispositivo.</translation>
+    </message>
+    <message>
+        <source>Unplug and replug the controller to finish switching.</source>
+        <translation>Desconecte e reconecte o controle para concluir a mudança.</translation>
+    </message>
+    <message>
+        <source>The controller didn’t come back cleanly from Direct — replug it.</source>
+        <translation>O controle não voltou corretamente do Direto — reconecte-o.</translation>
+    </message>
+    <message>
+        <source>Claiming controller…</source>
+        <translation>Adquirindo o controle…</translation>
+    </message>
+    <message>
+        <source>slot %1</source>
+        <translation>slot %1</translation>
+    </message>
+    <message>
+        <source>unbound</source>
+        <translation>sem vínculo</translation>
+    </message>
+    <message>
+        <source>type %1</source>
+        <translation>tipo %1</translation>
+    </message>
+    <message>
+        <source>type —</source>
+        <translation>tipo —</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation type="unfinished">Desligado</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <translation>Pad</translation>
+    </message>
+    <message>
+        <source>Mouse</source>
+        <translation>Mouse</translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Encontrado</translation>
+    </message>
+    <message>
+        <source>Needs pairing</source>
+        <translation>Parear novamente</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Off-line</translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation>Pronto</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Conectando…</translation>
+    </message>
+    <message>
         <source>Online</source>
-        <translation type="unfinished"></translation>
+        <translation>On-line</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/BindChooserDialog.qml" line="134"/>
-        <source>Satellites already driven by another slot are not offered.</source>
-        <translation type="unfinished"></translation>
+        <source>Unsteady</source>
+        <translation>Instável</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n slots free</source>
+        <translation>
+            <numerusform>%n slot livre</numerusform>
+            <numerusform>%n slots livres</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>0 slots free — %1 will be unbound</source>
+        <translation>0 slots livres — %1 será desvinculado</translation>
+    </message>
+    <message>
+        <source>0 slots free — one pad will be unbound</source>
+        <translation>0 slots livres — um controle será desvinculado</translation>
+    </message>
+    <message>
+        <source>Pick a destination to continue.</source>
+        <translation>Escolha um destino para continuar.</translation>
+    </message>
+    <message>
+        <source>Waiting on the controller catalog.</source>
+        <translation>Aguardando o catálogo de controles.</translation>
+    </message>
+    <message>
+        <source>Nothing is sent until you apply.</source>
+        <translation>Nada é enviado até você aplicar.</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Conexão</translation>
+    </message>
+    <message>
+        <source>standard · kept</source>
+        <translation>padrão · mantido</translation>
+    </message>
+    <message>
+        <source>claiming</source>
+        <translation>adquirindo</translation>
+    </message>
+    <message>
+        <source>standard</source>
+        <translation>padrão</translation>
+    </message>
+    <message>
+        <source>Destination</source>
+        <translation>Destino</translation>
+    </message>
+    <message>
+        <source>sending descriptor</source>
+        <translation>enviando descritor</translation>
+    </message>
+    <message>
+        <source>%1 is no longer available. Unplug and reconnect it, then try again.</source>
+        <translation>%1 não está mais disponível. Desconecte e reconecte, depois tente novamente.</translation>
+    </message>
+    <message>
+        <source>Couldn’t reach %1. Make sure it’s on and on your network.</source>
+        <translation>Não foi possível alcançar %1. Verifique se está ligado e na sua rede.</translation>
+    </message>
+    <message>
+        <source>%1 refused the binding.</source>
+        <translation>%1 recusou o vínculo.</translation>
+    </message>
+    <message>
+        <source>Apply cancelled. Nothing was changed.</source>
+        <translation>Aplicação cancelada. Nada foi alterado.</translation>
+    </message>
+    <message>
+        <source>Couldn’t apply the binding.</source>
+        <translation>Não foi possível aplicar o vínculo.</translation>
+    </message>
+    <message>
+        <source>Direct wasn’t available — bound on Standard instead.</source>
+        <translation>O Direto não estava disponível — vinculado no modo Padrão.</translation>
+    </message>
+    <message>
+        <source>Controller bound — %1 is live on %2.</source>
+        <translation>Controle vinculado — %1 está ativo em %2.</translation>
+    </message>
+    <message>
+        <source>Binding removed — %1 is no longer driving a host.</source>
+        <translation>Vínculo removido — %1 não está mais controlando um host.</translation>
+    </message>
+    <message>
+        <source>Unsteady link</source>
+        <translation>Conexão instável</translation>
+    </message>
+    <message>
+        <source>Still routing, but packets are dropping. Move closer or switch to USB.</source>
+        <translation>Ainda roteando, mas pacotes estão sendo perdidos. Aproxime-se ou mude para USB.</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Dispensar</translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation>Entrada</translation>
+    </message>
+    <message>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <source>Layout guessed</source>
+        <translation>Layout adivinhado</translation>
+    </message>
+    <message>
+        <source>Not recognised. Direct mode guesses this controller’s layout, so some inputs may read wrong. You can switch back anytime.</source>
+        <translation>Não reconhecido. O Modo direto adivinha o layout deste controle, então algumas entradas podem sair erradas. Você pode voltar quando quiser.</translation>
+    </message>
+    <message>
+        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path — gyro, touchpad and lightbar can’t be carried.</source>
+        <translation>O Modo direto precisa de uma conexão USB. Por Bluetooth, este controle usa o caminho Padrão — giroscópio, touchpad e barra de luz não podem ser transmitidos.</translation>
+    </message>
+    <message>
+        <source>Functions</source>
+        <translation>Funções</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>Gyro</source>
+        <translation type="unfinished">Giroscópio</translation>
+    </message>
+    <message>
+        <source>No gyro</source>
+        <translation type="unfinished">Sem giroscópio</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>No touchpad</source>
+        <translation>Sem touchpad</translation>
+    </message>
+    <message>
+        <source>Lightbar</source>
+        <translation type="unfinished">Barra de luz</translation>
+    </message>
+    <message>
+        <source>No hosts found</source>
+        <translation>Nenhum host encontrado</translation>
+    </message>
+    <message>
+        <source>Scan your network for a Satellite host, or pair one over Bluetooth. Once a host appears, come back to bind %1.</source>
+        <translation>Procure um host Satélite na sua rede ou pareie um por Bluetooth. Quando um host aparecer, volte para vincular %1.</translation>
+    </message>
+    <message>
+        <source>Scan your network for a Satellite host, or pair one over Bluetooth.</source>
+        <translation>Procure um host Satélite na sua rede ou pareie um por Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Manage destinations ›</source>
+        <translation>Gerenciar destinos ›</translation>
+    </message>
+    <message>
+        <source>This PC pairs as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.</source>
+        <translation>Este PC pareia como controle Bluetooth. Giroscópio, touchpad e mouse precisam de um host Satélite.</translation>
+    </message>
+    <message>
+        <source>Gets</source>
+        <translation>Recebe</translation>
+    </message>
+    <message>
+        <source>Waiting on the type…</source>
+        <translation>Aguardando o tipo…</translation>
+    </message>
+    <message>
+        <source>Sends back</source>
+        <translation>Devolve</translation>
+    </message>
+    <message>
+        <source>No return channel</source>
+        <translation>Sem canal de retorno</translation>
+    </message>
+    <message>
+        <source>Binding</source>
+        <translation>Vínculo</translation>
+    </message>
+    <message>
+        <source>Emulate as</source>
+        <translation>Emular como</translation>
+    </message>
+    <message>
+        <source>Gamepad</source>
+        <translation>Controle</translation>
+    </message>
+    <message>
+        <source>Fixed by the Bluetooth HID profile.</source>
+        <translation>Definido pelo perfil HID do Bluetooth.</translation>
+    </message>
+    <message>
+        <source>Reading the controller catalog from %1…</source>
+        <translation>Lendo o catálogo de controles de %1…</translation>
+    </message>
+    <message>
+        <source>Couldn’t load types.</source>
+        <translation>Não foi possível carregar os tipos.</translation>
+    </message>
+    <message>
+        <source>Motion</source>
+        <translation>Movimento</translation>
+    </message>
+    <message>
+        <source>Tilt and gyro aiming on the host.</source>
+        <translation>Inclinação e mira giroscópica no host.</translation>
+    </message>
+    <message>
+        <source>Feedback from the host drives the pad’s motors.</source>
+        <translation>O retorno do host aciona os motores do controle.</translation>
+    </message>
+    <message>
+        <source>Nothing to tune for this combination — see why on the right. The pad is ready to bind.</source>
+        <translation>Nada a ajustar nesta combinação — veja o motivo à direita. O controle está pronto para vincular.</translation>
+    </message>
+    <message>
+        <source>What carries</source>
+        <translation>O que é transmitido</translation>
+    </message>
+    <message>
+        <source>pending</source>
+        <translation>pendente</translation>
+    </message>
+    <message>
+        <source>%1/%2 live</source>
+        <translation>%1/%2 ativos</translation>
+    </message>
+    <message>
+        <source>Unbind</source>
+        <translation type="unfinished">Desvincular</translation>
+    </message>
+    <message>
+        <source>Unbind %1</source>
+        <translation>Desvincular %1</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished">Fechar</translation>
+    </message>
+    <message>
+        <source>Apply</source>
+        <translation type="unfinished">Aplicar</translation>
+    </message>
+    <message>
+        <source>Bind</source>
+        <translation>Vincular</translation>
+    </message>
+    <message>
+        <source>Leave without applying?</source>
+        <translation>Sair sem aplicar?</translation>
+    </message>
+    <message>
+        <source>Nothing has been sent yet. Your changes will be discarded.</source>
+        <translation>Nada foi enviado ainda. Suas alterações serão descartadas.</translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation>Descartar</translation>
+    </message>
+    <message>
+        <source>Keep editing</source>
+        <translation>Continuar editando</translation>
+    </message>
+    <message>
+        <source>Windows can take up to 20 seconds to hand over the device.</source>
+        <translation>O Windows pode levar até 20 segundos para liberar o dispositivo.</translation>
     </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="31"/>
         <source>Connections</source>
         <translation type="unfinished">Conexões</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="33"/>
-        <source>%1 found · nothing remembered yet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="34"/>
-        <source>%1 streaming · %2 remembered</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="63"/>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="100"/>
         <source>Found</source>
-        <translation type="unfinished"></translation>
+        <translation>Encontrado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="64"/>
         <source>Needs pairing</source>
-        <translation type="unfinished"></translation>
+        <translation>Parear novamente</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="65"/>
         <source>Offline</source>
-        <translation type="unfinished"></translation>
+        <translation>Off-line</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="66"/>
         <source>Ready</source>
-        <translation type="unfinished"></translation>
+        <translation>Pronto</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="67"/>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="341"/>
         <source>Connecting…</source>
-        <translation type="unfinished"></translation>
+        <translation>Conectando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="68"/>
         <source>Online</source>
-        <translation type="unfinished"></translation>
+        <translation>On-line</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="69"/>
-        <source>Unstable</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="103"/>
         <source>Scanning…</source>
         <translation type="unfinished">Buscando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="103"/>
         <source>Scan</source>
         <translation type="unfinished">Buscar</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="133"/>
-        <source>Searching your LAN…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="134"/>
-        <source>No satellites found yet — hit Scan to look again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="193"/>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="336"/>
         <source>Pair…</source>
-        <translation type="unfinished"></translation>
+        <translation>Parear…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="207"/>
-        <source>Remembered</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="228"/>
-        <source>No remembered satellites yet — pair one and it is saved here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="301"/>
         <source>%1 • UDP %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 • UDP %2</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="309"/>
         <source>%1 · last %2 pings</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 · últimos %2 pings</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="331"/>
         <source>Disconnect</source>
-        <translation type="unfinished"></translation>
+        <translation>Desconectar</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="341"/>
-        <source>Reconnect</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ConnectionsPage.qml" line="347"/>
         <source>Forget</source>
         <translation type="unfinished">Esquecer</translation>
     </message>
     <message>
-        <source>Pair with %1</source>
-        <translation type="obsolete">Parear com %1</translation>
-    </message>
-    <message>
         <source>Cancel</source>
-        <translation type="obsolete">Cancelar</translation>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found · nothing paired yet</source>
+        <translation>
+            <numerusform>%n encontrado · nada pareado ainda</numerusform>
+            <numerusform>%n encontrados · nada pareado ainda</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n online</source>
+        <translation>
+            <numerusform>%n on-line</numerusform>
+            <numerusform>%n on-line</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation>
+            <numerusform>%n pareado</numerusform>
+            <numerusform>%n pareados</numerusform>
+        </translation>
     </message>
     <message>
-        <source>Pairing…</source>
-        <translation type="obsolete">Pareando…</translation>
+        <source>scanning…</source>
+        <translation>buscando…</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n encontrado</numerusform>
+            <numerusform>%n encontrados</numerusform>
+        </translation>
     </message>
     <message>
-        <source>Pair</source>
-        <translation type="obsolete">Parear</translation>
+        <source>Looking for satellites</source>
+        <translation>Procurando satélites</translation>
+    </message>
+    <message>
+        <source>Scanning your network over mDNS and UDP broadcast. Hosts appear here as they answer.</source>
+        <translation>Buscando na sua rede por mDNS e transmissão UDP. Os hosts aparecem aqui conforme respondem.</translation>
+    </message>
+    <message>
+        <source>No satellites found</source>
+        <translation>Nenhum satélite encontrado</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once the free Satellite app is running on it and both machines are on the same network.</source>
+        <translation>Um PC aparece aqui assim que o app Satellite gratuito estiver rodando nele e as duas máquinas estiverem na mesma rede.</translation>
+    </message>
+    <message>
+        <source>Get Satellite ↗</source>
+        <translation>Obter o Satellite ↗</translation>
+    </message>
+    <message>
+        <source>Scan again</source>
+        <translation>Buscar de novo</translation>
+    </message>
+    <message>
+        <source>%1, found, %2</source>
+        <translation>%1, encontrado, %2</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation>Pareado</translation>
+    </message>
+    <message>
+        <source>Nothing paired yet</source>
+        <translation>Nada pareado ainda</translation>
+    </message>
+    <message>
+        <source>Pair a satellite and Dish saves it here for next time.</source>
+        <translation>Pareie um satélite e o Dish o salva aqui para a próxima vez.</translation>
+    </message>
+    <message>
+        <source>%1, %2</source>
+        <translation>%1, %2</translation>
+    </message>
+    <message>
+        <source>Carrying</source>
+        <translation>Transmitindo</translation>
+    </message>
+    <message>
+        <source>Nothing bound yet</source>
+        <translation>Nada vinculado ainda</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation type="unfinished">Conectar</translation>
+    </message>
+    <message>
+        <source>More actions for %1</source>
+        <translation>Mais ações para %1</translation>
+    </message>
+    <message>
+        <source>Forget %1?</source>
+        <translation>Esquecer %1?</translation>
+    </message>
+    <message>
+        <source>Its pairing key is deleted — you’ll need the PIN again.</source>
+        <translation>A chave de pareamento dele é apagada — você vai precisar do PIN de novo.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n bindings</source>
+        <translation>
+            <numerusform>%n vínculo</numerusform>
+            <numerusform>%n vínculos</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n bindings ride on it and will be dropped:</source>
+        <translation>
+            <numerusform>%n vínculo depende dele e será removido:</numerusform>
+            <numerusform>%n vínculos dependem dele e serão removidos:</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>%1 — as %2</source>
+        <translation>%1 — como %2</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation>Instável</translation>
     </message>
 </context>
 <context>
     <name>ContentDialog</name>
     <message>
-        <location filename="../src/qml/kit/ContentDialog.qml" line="35"/>
         <source>OK</source>
-        <translation type="unfinished"></translation>
+        <translation>OK</translation>
     </message>
     <message>
-        <location filename="../src/qml/kit/ContentDialog.qml" line="36"/>
         <source>Cancel</source>
         <translation type="unfinished">Cancelar</translation>
     </message>
@@ -221,746 +887,559 @@
 <context>
     <name>ControllersPage</name>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="32"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="39"/>
         <source>Controllers</source>
-        <translation type="unfinished"></translation>
+        <translation>Controles</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="42"/>
-        <source>No connections yet — pair a Satellite to get started</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="44"/>
-        <source> online · nothing bound</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="45"/>
-        <source>%1 of %2 online</source>
-        <translation type="unfinished">%1 de %2 on-line</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="46"/>
-        <source> · nothing bound</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="53"/>
-        <source>STREAMING · DISPLAY KEPT AWAKE</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="79"/>
         <source>No controllers connected</source>
         <translation type="unfinished">Nenhum controle conectado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="80"/>
         <source>Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.</source>
-        <translation type="unfinished"></translation>
+        <translation>Conecte um controle Xbox, PlayStation ou genérico por USB ou Bluetooth — o Windows o detecta e o Dish o lista aqui automaticamente.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="81"/>
         <source>Open Connections</source>
-        <translation type="unfinished"></translation>
+        <translation>Abrir Conexões</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="176"/>
         <source>Registering controller…</source>
-        <translation type="unfinished"></translation>
+        <translation>Registrando o controle…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="230"/>
-        <source>Bound to %1</source>
-        <translation type="unfinished">Vinculado a %1</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="232"/>
-        <source> · as %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="233"/>
-        <source>Unbound</source>
-        <translation type="unfinished">Não vinculado</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="252"/>
         <source>Bluetooth</source>
-        <translation type="unfinished"></translation>
+        <translation>Bluetooth</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="256"/>
         <source>Gyro</source>
         <translation type="unfinished">Giroscópio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="256"/>
         <source>No gyro</source>
         <translation type="unfinished">Sem giroscópio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="262"/>
         <source>Lightbar</source>
         <translation type="unfinished">Barra de luz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="284"/>
-        <source>%1 Hz</source>
-        <translation type="unfinished">%1 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="285"/>
-        <source>~%1 Hz</source>
-        <translation type="unfinished">~%1 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="291"/>
         <source>Motion %1 Hz</source>
-        <translation type="unfinished"></translation>
+        <translation>Movimento %1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="297"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="400"/>
         <source>Poll %1 Hz</source>
-        <translation type="unfinished"></translation>
+        <translation>Sondagem %1 Hz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="310"/>
-        <source>Bind…</source>
-        <translation type="unfinished">Vincular…</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="325"/>
-        <source>Emulate…</source>
-        <translation type="unfinished">Emular…</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="330"/>
-        <source>Unbind</source>
-        <translation type="unfinished">Desvincular</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="356"/>
-        <source>USB PATH</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="369"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="370"/>
         <source>Standard</source>
-        <translation type="unfinished"></translation>
+        <translation>Padrão</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="369"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="370"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="374"/>
         <source>Direct</source>
-        <translation type="unfinished"></translation>
+        <translation>Direto</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="369"/>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="375"/>
-        <source>Auto</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="389"/>
         <source>Claiming controller…</source>
-        <translation type="unfinished"></translation>
+        <translation>Adquirindo o controle…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="425"/>
-        <source>Controls…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="452"/>
         <source>events/s %1   sends/s %2</source>
-        <translation type="unfinished"></translation>
+        <translation>eventos/s %1   envios/s %2</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="457"/>
         <source>total %1</source>
-        <translation type="unfinished"></translation>
+        <translation>total %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="529"/>
         <source>Battery wired</source>
         <translation type="unfinished">Bateria com fio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="530"/>
         <source>Battery %1% ↑</source>
         <translation type="unfinished">Bateria %1 % ↑</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="531"/>
         <source>Battery full</source>
         <translation type="unfinished">Bateria cheia</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="532"/>
         <source>Battery %1%</source>
         <translation type="unfinished">Bateria %1 %</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="546"/>
         <source>Unplug and replug the controller to finish switching.</source>
-        <translation type="unfinished"></translation>
+        <translation>Desconecte e reconecte o controle para concluir a mudança.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="549"/>
-        <source>Standard isn&apos;t responding — pick Direct, retry, or replug.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="552"/>
         <source>Direct access denied — another app owns this device.</source>
-        <translation type="unfinished"></translation>
+        <translation>Acesso direto negado — outro app está usando este dispositivo.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="555"/>
         <source>Direct claim is busy — another app or driver holds the device.</source>
-        <translation type="unfinished"></translation>
+        <translation>A aquisição direta está ocupada — outro app ou driver está com o dispositivo.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="558"/>
-        <source>Direct claim couldn&apos;t start the controller&apos;s report stream.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControllersPage.qml" line="561"/>
         <source>The device dropped during the claim — a replug is needed.</source>
-        <translation type="unfinished"></translation>
+        <translation>O dispositivo caiu durante a aquisição — é preciso reconectá-lo.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n connected</source>
+        <translation>
+            <numerusform>%n conectado</numerusform>
+            <numerusform>%n conectados</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n bound</source>
+        <translation>
+            <numerusform>%n vinculado</numerusform>
+            <numerusform>%n vinculados</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Conectado</translation>
+    </message>
+    <message>
+        <source>%1, bound to %2</source>
+        <translation>%1, vinculado a %2</translation>
+    </message>
+    <message>
+        <source>%1, not bound</source>
+        <translation>%1, sem vínculo</translation>
+    </message>
+    <message>
+        <source>Bound · %1 ›</source>
+        <translation>Vinculado · %1 ›</translation>
+    </message>
+    <message>
+        <source>not bound</source>
+        <translation>sem vínculo</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>No touchpad</source>
+        <translation>Sem touchpad</translation>
+    </message>
+    <message>
+        <source>Dead zones…</source>
+        <translation>Zonas mortas…</translation>
+    </message>
+    <message>
+        <source>Remap…</source>
+        <translation>Remapear…</translation>
+    </message>
+    <message>
+        <source>Input path</source>
+        <translation>Caminho de entrada</translation>
+    </message>
+    <message>
+        <source>Configure binding</source>
+        <translation>Configurar vínculo</translation>
+    </message>
+    <message>
+        <source>Configure controls</source>
+        <translation>Configurar comandos</translation>
+    </message>
+    <message>
+        <source>Dead zones &amp; motion</source>
+        <translation>Zonas mortas e movimento</translation>
+    </message>
+    <message>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <source>Standard mode isn’t responding — switch to Direct, retry, or replug.</source>
+        <translation>O Modo padrão não está respondendo — mude para Direto, tente de novo ou reconecte.</translation>
+    </message>
+    <message>
+        <source>Direct claim couldn’t start the controller’s report stream.</source>
+        <translation>A aquisição direta não conseguiu iniciar o fluxo de relatórios do controle.</translation>
     </message>
 </context>
 <context>
     <name>ControlsRemapPage</name>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="33"/>
         <source>Configure controls</source>
-        <translation type="unfinished"></translation>
+        <translation>Configurar comandos</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="35"/>
         <source>%1 · raw DirectInput remap</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 · remapeamento bruto do DirectInput</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="36"/>
         <source>Raw DirectInput remap</source>
-        <translation type="unfinished"></translation>
+        <translation>Remapeamento bruto do DirectInput</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="81"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="89"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="104"/>
         <source>Unassigned</source>
-        <translation type="unfinished"></translation>
+        <translation>Não atribuído</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="83"/>
         <source>%1 %2</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 %2</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="91"/>
         <source>Button %1 · digital</source>
-        <translation type="unfinished"></translation>
+        <translation>Botão %1 · digital</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="92"/>
         <source>Axis %1 · analog</source>
-        <translation type="unfinished"></translation>
+        <translation>Eixo %1 · analógico</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="99"/>
         <source>Button %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Botão %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="102"/>
         <source>Hat %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Hat %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="162"/>
         <source>waiting for input…</source>
-        <translation type="unfinished"></translation>
+        <translation>aguardando entrada…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="204"/>
         <source>Not remappable</source>
-        <translation type="unfinished"></translation>
+        <translation>Não remapeável</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="210"/>
-        <source>This controller uses its built-in mapping and can&apos;t be remapped here.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="248"/>
         <source>Listening for input</source>
-        <translation type="unfinished"></translation>
+        <translation>Capturando entrada</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="249"/>
         <source>Click a control to rebind it</source>
-        <translation type="unfinished"></translation>
+        <translation>Clique em um comando para remapeá-lo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="257"/>
         <source>Press the input on your controller to assign &lt;b&gt;%1&lt;/b&gt;. Idle jitter is ignored — a resting pad never self-assigns.</source>
-        <translation type="unfinished"></translation>
+        <translation>Acione o comando no seu controle para atribuir &lt;b&gt;%1&lt;/b&gt;. A variação em repouso é ignorada — um controle parado nunca se atribui sozinho.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="258"/>
-        <source>Then physically press or move the input on your controller to bind it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="267"/>
         <source>Stop capture</source>
-        <translation type="unfinished"></translation>
+        <translation>Parar captura</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="299"/>
         <source>Buttons &amp; D-pad</source>
-        <translation type="unfinished"></translation>
+        <translation>Botões e D-pad</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="302"/>
         <source>A (bottom)</source>
-        <translation type="unfinished"></translation>
+        <translation>A (baixo)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="303"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="305"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="307"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="309"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="311"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="313"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="315"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="317"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="319"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="321"/>
         <source>Button</source>
-        <translation type="unfinished"></translation>
+        <translation>Botão</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="304"/>
         <source>B (right)</source>
-        <translation type="unfinished"></translation>
+        <translation>B (direita)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="306"/>
         <source>X (left)</source>
-        <translation type="unfinished"></translation>
+        <translation>X (esquerda)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="308"/>
         <source>Y (top)</source>
-        <translation type="unfinished"></translation>
+        <translation>Y (superior)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="310"/>
         <source>Left shoulder</source>
-        <translation type="unfinished"></translation>
+        <translation>Ombro esquerdo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="312"/>
         <source>Right shoulder</source>
-        <translation type="unfinished"></translation>
+        <translation>Ombro direito</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="314"/>
         <source>Back</source>
         <translation type="unfinished">Voltar</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="316"/>
         <source>Start</source>
-        <translation type="unfinished"></translation>
+        <translation>Start</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="318"/>
         <source>Left thumb</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógico esquerdo (clique)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="320"/>
         <source>Right thumb</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógico direito (clique)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="322"/>
         <source>D-pad up</source>
-        <translation type="unfinished"></translation>
+        <translation>Direcional para cima</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="324"/>
         <source>D-pad down</source>
-        <translation type="unfinished"></translation>
+        <translation>Direcional para baixo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="326"/>
         <source>D-pad left</source>
-        <translation type="unfinished"></translation>
+        <translation>Direcional para a esquerda</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="328"/>
         <source>D-pad right</source>
-        <translation type="unfinished"></translation>
+        <translation>Direcional para a direita</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="355"/>
         <source>Sticks &amp; triggers</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógicos e gatilhos</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="358"/>
         <source>Left stick X</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógico esquerdo X</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="359"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="361"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="363"/>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="365"/>
         <source>Axis</source>
-        <translation type="unfinished"></translation>
+        <translation>Eixo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="360"/>
         <source>Left stick Y</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógico esquerdo Y</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="362"/>
         <source>Right stick X</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógico direito X</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="364"/>
         <source>Right stick Y</source>
-        <translation type="unfinished"></translation>
+        <translation>Analógico direito Y</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="366"/>
         <source>Left trigger</source>
-        <translation type="unfinished"></translation>
+        <translation>Gatilho esquerdo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="368"/>
         <source>Right trigger</source>
-        <translation type="unfinished"></translation>
+        <translation>Gatilho direito</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="392"/>
         <source>Invert left stick Y</source>
-        <translation type="unfinished"></translation>
+        <translation>Inverter Y do analógico esquerdo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="406"/>
         <source>Invert right stick Y</source>
-        <translation type="unfinished"></translation>
+        <translation>Inverter Y do analógico direito</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="421"/>
         <source>Stored for this controller model — applies on the next report, no re-attach.</source>
-        <translation type="unfinished"></translation>
+        <translation>Salvo para este modelo de controle — vale já no próximo relatório, sem precisar reconectar.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/ControlsRemapPage.qml" line="428"/>
         <source>Reset to defaults</source>
-        <translation type="unfinished"></translation>
+        <translation>Restaurar padrões</translation>
+    </message>
+    <message>
+        <source>%1 — %2</source>
+        <translation>%1 — %2</translation>
+    </message>
+    <message>
+        <source>Activate, then press the input to assign it.</source>
+        <translation>Ative e depois pressione a entrada para atribuí-la.</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>Limpar</translation>
+    </message>
+    <message>
+        <source>Clear %1</source>
+        <translation>Limpar %1</translation>
+    </message>
+    <message>
+        <source>This controller uses its built-in mapping and can’t be remapped here.</source>
+        <translation>Este controle usa seu mapeamento interno e não pode ser remapeado aqui.</translation>
+    </message>
+    <message>
+        <source>Then physically press or move the input on your controller to bind it. Esc cancels.</source>
+        <translation>Agora pressione ou mova fisicamente a entrada no seu controle para vinculá-la. Esc cancela.</translation>
+    </message>
+    <message>
+        <source>No input seen — click the row to try again.</source>
+        <translation>Nenhuma entrada detectada — clique na linha para tentar de novo.</translation>
     </message>
 </context>
 <context>
     <name>DeadzoneSettingsPage</name>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="25"/>
         <source>Dead zones &amp; motion</source>
-        <translation type="unfinished"></translation>
+        <translation>Zonas mortas e movimento</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="26"/>
         <source>Per-device tuning — applied live</source>
-        <translation type="unfinished"></translation>
+        <translation>Ajuste por dispositivo — aplicado na hora</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="52"/>
         <source>Connect a controller to adjust its dead zones.</source>
         <translation type="unfinished">Conecte um controle para ajustar suas zonas mortas.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="95"/>
         <source>Gyro</source>
         <translation type="unfinished">Giroscópio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="96"/>
         <source>No gyro</source>
         <translation type="unfinished">Sem giroscópio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="108"/>
         <source>Stick dead zone</source>
-        <translation type="unfinished"></translation>
+        <translation>Zona morta do analógico</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="119"/>
         <source>Trigger dead zone</source>
-        <translation type="unfinished"></translation>
+        <translation>Zona morta do gatilho</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="140"/>
         <source>Forward motion (gyro)</source>
-        <translation type="unfinished"></translation>
+        <translation>Encaminhar movimento (giroscópio)</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="141"/>
         <source>Send gyroscope and accelerometer readings to the host.</source>
-        <translation type="unfinished"></translation>
+        <translation>Enviar as leituras do giroscópio e do acelerômetro para o host.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="147"/>
         <source>Motion forwarding unavailable — this device has no gyroscope.</source>
-        <translation type="unfinished"></translation>
+        <translation>Encaminhamento de movimento indisponível — este dispositivo não tem giroscópio.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DeadzoneSettingsPage.qml" line="160"/>
-        <source>Overrides are stored per device and pushed into the live input processor immediately.</source>
-        <translation type="unfinished"></translation>
+        <source>No controllers connected</source>
+        <translation type="unfinished">Nenhum controle conectado</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>Restaurar</translation>
+    </message>
+    <message>
+        <source>Reset dead zones for %1</source>
+        <translation>Restaurar zonas mortas de %1</translation>
+    </message>
+    <message>
+        <source>Overrides are stored per device and take effect immediately.</source>
+        <translation>As personalizações são salvas por dispositivo e entram em vigor imediatamente.</translation>
     </message>
 </context>
 <context>
     <name>DonatePage</name>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="28"/>
-        <location filename="../src/qml/pages/DonatePage.qml" line="30"/>
         <source>Support Dish</source>
         <translation type="unfinished">Apoiar o Dish</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="31"/>
         <source>Dish is free and open source — donations keep it that way</source>
-        <translation type="unfinished"></translation>
+        <translation>Dish é gratuito e de código aberto — as doações mantêm essa promessa</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="73"/>
         <source>Support the project</source>
-        <translation type="unfinished"></translation>
+        <translation>Apoie o projeto</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="80"/>
         <source>Dish runs on coffee and goodwill.</source>
         <translation type="unfinished">O Dish funciona a café e boa vontade.</translation>
     </message>
     <message>
-        <source>Dish, Satellite, and every Dish client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells. Donations are what keep them that way.</source>
-        <translation type="obsolete">Dish, Satellite e todos os clientes Dish são gratuitos, de código aberto, sem anúncios e sem analytics. Sem recursos pagos, sem upsell. As doações os mantêm assim.</translation>
-    </message>
-    <message>
-        <source>Sponsor on GitHub Sponsors (recommended)</source>
-        <translation type="obsolete">Patrocinar no GitHub Sponsors (recomendado)</translation>
-    </message>
-    <message>
-        <source>Monthly sponsorship, processed by GitHub. Lowest fees, no platform cut — the most stable way to support Dish, and the one GitHub matches dollar-for-dollar where eligible.</source>
-        <translation type="obsolete">Patrocínio mensal, processado pelo GitHub. Menores taxas, sem corte da plataforma — a forma mais estável de apoiar o Dish, e a única que o GitHub iguala dólar por dólar quando elegível.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="166"/>
         <source>Recurring</source>
         <translation type="unfinished">Recorrente</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="166"/>
         <source>Card, PayPal, GitHub credit</source>
         <translation type="unfinished">Cartão, PayPal, crédito do GitHub</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="167"/>
-        <source>Open GitHub Sponsors →</source>
-        <translation type="unfinished">Abrir GitHub Sponsors →</translation>
-    </message>
-    <message>
-        <source>Tip jar. Buy us a coffee, no account required. Ko-fi takes no cut on one-time tips, so every dollar reaches the project.</source>
-        <translation type="obsolete">Caixa de gorjetas. Pague-nos um café, sem precisar de conta. O Ko-fi não fica com nada nas gorjetas únicas, então cada dólar chega ao projeto.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="171"/>
         <source>One-time</source>
         <translation type="unfinished">Única vez</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="172"/>
         <source>Card, Apple Pay, Google Pay, PayPal</source>
         <translation type="unfinished">Cartão, Apple Pay, Google Pay, PayPal</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="173"/>
-        <source>Open Ko-fi →</source>
-        <translation type="unfinished">Abrir Ko-fi →</translation>
-    </message>
-    <message>
-        <source>Quick one-time gift or a monthly membership. Card, Apple Pay, or Google Pay. Great if you don&apos;t have a GitHub account.</source>
-        <translation type="obsolete">Presente único rápido ou assinatura mensal. Cartão, Apple Pay ou Google Pay. Ótimo se você não tem conta no GitHub.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="89"/>
         <source>Dish, Satellite, and every client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells — donations are what keep them true.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dish, Satellite e todo cliente são gratuitos, de código aberto, sem anúncios e sem analytics. Nada de recursos pagos, nada de upsell — as doações são o que mantêm essa promessa.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="127"/>
         <source>Sponsor on GitHub Sponsors</source>
-        <translation type="unfinished"></translation>
+        <translation>Patrocine no GitHub Sponsors</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="138"/>
         <source>Recommended — lowest fees, matched by GitHub where eligible.</source>
-        <translation type="unfinished"></translation>
+        <translation>Recomendado — menores taxas, equiparadas pelo GitHub onde elegível.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="147"/>
         <source>Thank you. Every dollar, every star, every shared link. — Emir</source>
-        <translation type="unfinished"></translation>
+        <translation>Obrigado. Cada dólar, cada estrela, cada link compartilhado. — Emir</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="163"/>
         <source>Monthly sponsorship, processed by GitHub. Lowest fees, no platform cut, and the most stable way to support Dish month after month.</source>
-        <translation type="unfinished"></translation>
+        <translation>Patrocínio mensal, processado pelo GitHub. Menores taxas, sem corte da plataforma e a forma mais estável de apoiar o Dish mês a mês.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="169"/>
         <source>Tip jar. Buy us a coffee, no account required — Ko-fi takes no cut on one-time tips.</source>
-        <translation type="unfinished"></translation>
+        <translation>Caixinha de gorjeta. Pague um café para nós, sem precisar de conta — o Ko-fi não cobra nada em gorjetas únicas.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="175"/>
-        <source>Quick one-time gift or a monthly membership. Great if you don&apos;t have a GitHub account.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="177"/>
         <source>Either</source>
         <translation type="unfinished">Qualquer um</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="177"/>
         <source>Card, Apple Pay, Google Pay</source>
         <translation type="unfinished">Cartão, Apple Pay, Google Pay</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="178"/>
-        <source>Open Buy Me a Coffee →</source>
-        <translation type="unfinished">Abrir Buy Me a Coffee →</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="212"/>
         <source>Recommended</source>
         <translation type="unfinished">Recomendado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="238"/>
         <source>Cadence</source>
-        <translation type="unfinished"></translation>
+        <translation>Frequência</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="247"/>
         <source>Pays with</source>
-        <translation type="unfinished"></translation>
+        <translation>Pagamento</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="293"/>
         <source>What your donation pays for</source>
         <translation type="unfinished">Para o que a sua doação realmente vai</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/DonatePage.qml" line="302"/>
-        <source>%1Hosting%2 — dish.tinkernorth.com and every signed-installer mirror. %1Code signing%2 — the EV certificate that keeps SmartScreen friendly, renewed yearly. %1Store fees%2 — listings and policy upkeep. %1Time%2 — honest answer: most of it.</source>
-        <translation type="unfinished"></translation>
+        <source>GitHub Sponsors</source>
+        <translation>GitHub Sponsors</translation>
     </message>
     <message>
-        <source>Hosting. dish.tinkernorth.com, tinkernorth.com, and every signed-installer mirror. AWS isn&apos;t free, even at our scale.</source>
-        <translation type="obsolete">Hospedagem. dish.tinkernorth.com, tinkernorth.com e cada espelho de instalador assinado. A AWS não é gratuita, mesmo na nossa escala.</translation>
+        <source>Ko-fi</source>
+        <translation>Ko-fi</translation>
     </message>
     <message>
-        <source>Code-signing certificates. Windows SmartScreen only plays nice because we pay for an EV certificate every year.</source>
-        <translation type="obsolete">Certificados de assinatura de código. O Windows SmartScreen só coopera porque pagamos um certificado EV todo ano.</translation>
+        <source>Buy Me a Coffee</source>
+        <translation>Buy Me a Coffee</translation>
     </message>
     <message>
-        <source>Store developer fees. The platform accounts and the time to keep each listing compliant with every new policy round.</source>
-        <translation type="obsolete">Taxas de desenvolvedor das lojas. As contas de plataforma e o tempo para manter cada listagem em conformidade com cada nova rodada de políticas.</translation>
+        <source>Quick one-time gift or a monthly membership. Great if you don’t have a GitHub account.</source>
+        <translation>Doação rápida e única ou uma assinatura mensal. Ótimo se você não tem conta no GitHub.</translation>
     </message>
     <message>
-        <source>Time. Honest answer: most of it. Dish is a nights-and-weekends project. Donations let us say yes to working on it.</source>
-        <translation type="obsolete">Tempo. Resposta honesta: a maior parte dele. O Dish é um projeto de noites e fins de semana. As doações nos permitem dizer sim a trabalhar nele.</translation>
-    </message>
-    <message>
-        <source>Thank you. Every dollar, every star, every shared link. They all add up. Emir</source>
-        <translation type="obsolete">Obrigado. Cada dólar, cada estrela, cada link compartilhado. Tudo soma. Emir</translation>
-    </message>
-</context>
-<context>
-    <name>EmulatePicker</name>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="24"/>
-        <source>Emulate controller</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="25"/>
-        <source>Apply</source>
-        <translation type="unfinished">Aplicar</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="56"/>
-        <source>Choose how this controller appears to the host.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="67"/>
-        <source>Loading controller types…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="85"/>
-        <source>Updating controller types…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="96"/>
-        <source>No controller types available for this connection.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/EmulatePicker.qml" line="136"/>
-        <source>unverified</source>
-        <translation type="unfinished"></translation>
+        <source>&lt;b&gt;Hosting&lt;/b&gt; — dish.tinkernorth.com and every signed-installer mirror. &lt;b&gt;Code signing&lt;/b&gt; — the EV certificate that keeps SmartScreen friendly, renewed yearly. &lt;b&gt;Store fees&lt;/b&gt; — listings and policy upkeep. &lt;b&gt;Time&lt;/b&gt; — honest answer: most of it.</source>
+        <translation>&lt;b&gt;Hospedagem&lt;/b&gt; — dish.tinkernorth.com e todos os mirrors de instaladores assinados. &lt;b&gt;Assinatura de código&lt;/b&gt; — o certificado EV que mantém o SmartScreen amigável, renovado todo ano. &lt;b&gt;Taxas de loja&lt;/b&gt; — anúncios das lojas e conformidade com as políticas. &lt;b&gt;Tempo&lt;/b&gt; — resposta honesta: a maior parte dele.</translation>
     </message>
 </context>
 <context>
     <name>ErrorBanner</name>
     <message>
-        <location filename="../src/qml/kit/ErrorBanner.qml" line="29"/>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Tentar novamente</translation>
     </message>
 </context>
 <context>
     <name>FeatureSettings</name>
     <message>
-        <location filename="../src/FeatureSettings.cpp" line="47"/>
         <source>Off</source>
         <translation>Desligado</translation>
     </message>
     <message>
-        <location filename="../src/FeatureSettings.cpp" line="51"/>
         <source>Follow game</source>
         <translation>Seguir o jogo</translation>
     </message>
@@ -968,1929 +1447,2196 @@
 <context>
     <name>HelpScreen</name>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="33"/>
         <source>CONCEPTS</source>
         <translation type="unfinished">CONCEITOS</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="36"/>
         <source>What is Dish?</source>
         <translation type="unfinished">O que é o Dish?</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="37"/>
         <source>Dish turns a controller plugged into this PC into a wireless gamepad for another PC. It forwards input over your local network to the free Satellite helper.</source>
         <translation type="unfinished">O Dish transforma um controle conectado a este PC em um gamepad sem fio para outro PC. Ele encaminha a entrada pela sua rede local ao ajudante gratuito Satellite.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="41"/>
         <source>What is Satellite?</source>
         <translation type="unfinished">O que é o Satellite?</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="42"/>
-        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC&apos;s games as a regular controller. Without Satellite, games can&apos;t see your controller. Install it from tinkernorth.com/satellite.</source>
-        <translation type="unfinished">O Satellite é um programa pequeno, gratuito e de código aberto que roda no PC anfitrião. Ele recebe a entrada do Dish por Wi-Fi e se apresenta aos jogos desse PC como um controle comum. Sem o Satellite, os jogos não enxergam seu controle. Instale-o em tinkernorth.com/satellite.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="46"/>
-        <source>What&apos;s motion and what&apos;s the touchpad?</source>
-        <translation type="unfinished">O que é movimento e o que é o touchpad?</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="47"/>
-        <source>Motion is a controller&apos;s gyroscope used as aim assist, forwarded as the gyro inside a PlayStation pad. The touchpad forwards a DualSense / DualShock 4 touchpad. Both need a PlayStation-style controller and a Satellite connection.</source>
-        <translation type="unfinished">Movimento é o giroscópio de um controle usado como auxílio de mira, encaminhado como o giroscópio de um controle PlayStation. O touchpad encaminha um touchpad DualSense / DualShock 4. Ambos precisam de um controle estilo PlayStation e uma conexão Satellite.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="50"/>
         <source>BEST PERFORMANCE</source>
         <translation type="unfinished">MELHOR DESEMPENHO</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="53"/>
-        <source>What&apos;s the best setup for low latency?</source>
-        <translation type="unfinished">Qual é a melhor configuração para baixa latência?</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="54"/>
         <source>Both PCs on the same router, wired Ethernet where you can, 5 GHz Wi-Fi otherwise. Dish needs this PC and the host PC on the same local network — it sends input as small UDP packets, so a fast LAN keeps the delay tiny.</source>
         <translation type="unfinished">Ambos os PCs no mesmo roteador, Ethernet com fio quando possível, Wi-Fi de 5 GHz caso contrário. O Dish precisa deste PC e do PC anfitrião na mesma rede local — ele envia a entrada como pequenos pacotes UDP, então uma LAN rápida mantém o atraso mínimo.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="58"/>
         <source>Is wired better than wireless?</source>
         <translation type="unfinished">Com fio é melhor que sem fio?</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="59"/>
         <source>For the controller-to-PC leg, a USB controller has no radio latency. For the PC-to-PC leg, connect both machines to the router with Ethernet if you can.</source>
         <translation type="unfinished">Para o trecho controle-para-PC, um controle USB não tem latência de rádio. Para o trecho PC-para-PC, conecte ambas as máquinas ao roteador por Ethernet se puder.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="62"/>
         <source>TROUBLESHOOTING</source>
         <translation type="unfinished">SOLUÇÃO DE PROBLEMAS</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="65"/>
-        <source>Dish can&apos;t find any Satellites. What now?</source>
-        <translation type="unfinished">O Dish não encontra nenhum Satellite. E agora?</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="66"/>
-        <source>Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Tap Scan in Connections to retry.</source>
-        <translation type="unfinished">Verifique se o Satellite está em execução no PC anfitrião (o ícone da bandeja deve estar visível). Confirme que ambos os PCs estão na mesma rede. Redes de convidados e 2,4 GHz vs 5 GHz no mesmo roteador contam como diferentes. Toque em Buscar em Conexões para tentar novamente.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="70"/>
         <source>My PIN keeps getting rejected.</source>
         <translation type="unfinished">Meu PIN continua sendo rejeitado.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="71"/>
-        <source>The PIN is shown by Satellite on the host PC and changes if you restart it. Check the digits right before you type, and make sure you&apos;re pairing with the right Satellite if more than one is listed.</source>
-        <translation type="unfinished">O PIN é exibido pelo Satellite no PC anfitrião e muda se você reiniciá-lo. Verifique os dígitos pouco antes de digitar e certifique-se de parear com o Satellite certo se houver mais de um listado.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="75"/>
         <source>My controller keeps disconnecting mid-game.</source>
         <translation type="unfinished">Meu controle continua desconectando no meio do jogo.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="76"/>
-        <source>Most disconnects come from Wi-Fi switching bands or the controller&apos;s own wireless dropping. Prefer wired Ethernet on both PCs and a wired controller. Dish keeps the session alive while the app is open.</source>
-        <translation type="unfinished">A maioria das desconexões vem do Wi-Fi trocando de banda ou da própria conexão sem fio do controle caindo. Prefira Ethernet com fio em ambos os PCs e um controle com fio. O Dish mantém a sessão ativa enquanto o app está aberto.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="80"/>
-        <source>Motion (gyro aim) isn&apos;t working.</source>
-        <translation type="unfinished">Movimento (mira por giroscópio) não funciona.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="81"/>
         <source>Motion needs three things: a Satellite connection, a controller with a gyroscope (DualSense, DualShock 4, Switch Pro), and a PlayStation-style controller type on the slot. Switch the emulated type to PlayStation to enable the motion channel.</source>
         <translation type="unfinished">O movimento precisa de três coisas: uma conexão Satellite, um controle com giroscópio (DualSense, DualShock 4, Switch Pro) e um tipo de controle estilo PlayStation no slot. Mude o tipo emulado para PlayStation para ativar o canal de movimento.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="84"/>
         <source>ABOUT DISH</source>
         <translation type="unfinished">SOBRE O DISH</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="87"/>
         <source>Is Dish open source?</source>
         <translation type="unfinished">O Dish é de código aberto?</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="88"/>
         <source>Yes. Dish (Windows, Android, Linux, Mac) and Satellite are all released under LGPL-3.0, source on GitHub at github.com/TinkerNorth. Pull requests welcome.</source>
         <translation type="unfinished">Sim. Dish (Windows, Android, Linux, Mac) e Satellite são lançados sob LGPL-3.0, código no GitHub em github.com/TinkerNorth. Pull requests são bem-vindos.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="92"/>
         <source>What does Dish collect?</source>
         <translation type="unfinished">O que o Dish coleta?</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="93"/>
-        <source>Almost nothing. Dish doesn&apos;t send gameplay or controller input anywhere except the host PC on your local network. Anonymous crash reports are on by default and can be turned off (Settings → Diagnostics). See the privacy policy for the full list.</source>
-        <translation type="unfinished">Quase nada. O Dish não envia jogos nem entrada de controle para lugar algum, exceto o PC anfitrião na sua rede local. Relatórios de falhas anônimos estão ativados por padrão e podem ser desativados (Configurações → Diagnóstico). Veja a política de privacidade para a lista completa.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="96"/>
         <source>LINKS</source>
         <translation type="unfinished">LINKS</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="97"/>
         <source>Privacy policy</source>
         <translation type="unfinished">Política de privacidade</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="98"/>
         <source>View source on GitHub</source>
         <translation type="unfinished">Ver código no GitHub</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="106"/>
         <source>Help &amp; FAQ</source>
         <translation type="unfinished">Ajuda e FAQ</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="214"/>
-        <source>Back</source>
-        <translation type="unfinished">Voltar</translation>
+        <source>How Dish works, and what to try when it doesn’t</source>
+        <translation>Como o Dish funciona e o que tentar quando não funciona</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/HelpScreen.qml" line="219"/>
-        <source>Done</source>
-        <translation type="unfinished"></translation>
+        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from tinkernorth.com/satellite.</source>
+        <translation>O Satellite é um programa pequeno, gratuito e de código aberto que roda no PC anfitrião. Ele recebe a entrada do Dish por Wi-Fi e se apresenta aos jogos daquele PC como um controle comum. Sem o Satellite, os jogos não conseguem ver o seu controle. Instale-o em tinkernorth.com/satellite.</translation>
+    </message>
+    <message>
+        <source>What’s motion and what’s the touchpad?</source>
+        <translation>O que é o movimento e o que é o touchpad?</translation>
+    </message>
+    <message>
+        <source>Motion is a controller’s gyroscope used as aim assist, forwarded as the gyro inside a PlayStation pad. The touchpad forwards a DualSense / DualShock 4 touchpad. Both need a PlayStation-style controller and a Satellite connection.</source>
+        <translation>Movimento é o giroscópio de um controle usado como auxílio de mira, encaminhado como o giroscópio de dentro de um controle PlayStation. O touchpad encaminha o touchpad de um DualSense / DualShock 4. Os dois precisam de um controle estilo PlayStation e de uma conexão Satellite.</translation>
+    </message>
+    <message>
+        <source>What’s the best setup for low latency?</source>
+        <translation>Qual é a melhor configuração para baixa latência?</translation>
+    </message>
+    <message>
+        <source>Dish can’t find any satellites. What now?</source>
+        <translation>O Dish não encontra nenhum satélite. E agora?</translation>
+    </message>
+    <message>
+        <source>Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Click Scan in Connections to retry.</source>
+        <translation>Verifique se o Satellite está rodando no PC anfitrião (o ícone dele deve aparecer na bandeja). Confirme que os dois PCs estão na mesma rede. Redes de convidados e 2,4 GHz vs 5 GHz no mesmo roteador contam como redes diferentes. Clique em Buscar na tela Conexões para tentar de novo.</translation>
+    </message>
+    <message>
+        <source>The PIN is shown by Satellite on the host PC and changes if you restart it. Check the digits right before you type, and make sure you’re pairing with the right Satellite if more than one is listed.</source>
+        <translation>O PIN é exibido pelo Satellite no PC anfitrião e muda se você reiniciá-lo. Confira os dígitos logo antes de digitar e verifique se está pareando com o satélite certo caso haja mais de um na lista.</translation>
+    </message>
+    <message>
+        <source>Most disconnects come from Wi-Fi switching bands or the controller’s own wireless dropping. Prefer wired Ethernet on both PCs and a wired controller. Dish keeps the session alive while the app is open.</source>
+        <translation>A maioria das desconexões vem do Wi-Fi trocando de banda ou do próprio sem fio do controle caindo. Prefira Ethernet com fio nos dois PCs e um controle com fio. O Dish mantém a sessão ativa enquanto o app está aberto.</translation>
+    </message>
+    <message>
+        <source>Motion (gyro aim) isn’t working.</source>
+        <translation>O movimento (mira giroscópica) não está funcionando.</translation>
+    </message>
+    <message>
+        <source>Almost nothing. Dish doesn’t send gameplay or controller input anywhere except the host PC on your local network. Anonymous crash reports are on by default and can be turned off (Settings → Diagnostics). See the privacy policy for the full list.</source>
+        <translation>Quase nada. O Dish não envia jogo nem entrada de controle para lugar nenhum além do PC anfitrião na sua rede local. Relatórios de falhas anônimos vêm ativados por padrão e podem ser desativados (Configurações → Diagnóstico). Veja a política de privacidade para a lista completa.</translation>
     </message>
 </context>
 <context>
     <name>HomePage</name>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="32"/>
-        <location filename="../src/qml/pages/HomePage.qml" line="38"/>
         <source>Home</source>
-        <translation type="unfinished"></translation>
+        <translation>Início</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="41"/>
         <source>Plug in a controller and pair a Satellite to get started</source>
-        <translation type="unfinished"></translation>
+        <translation>Conecte um controle e pareie um satélite para começar</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="46"/>
         <source> · nothing streaming</source>
-        <translation type="unfinished"></translation>
+        <translation> · nada transmitindo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="47"/>
         <source>Nothing streaming</source>
-        <translation type="unfinished"></translation>
+        <translation>Nada transmitindo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="76"/>
-        <source>Pad</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="78"/>
         <source>This PC</source>
-        <translation type="unfinished"></translation>
+        <translation>Este PC</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="80"/>
         <source>Satellite</source>
-        <translation type="unfinished"></translation>
+        <translation>Satélite</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="235"/>
         <source>Bind…</source>
         <translation type="unfinished">Vincular…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="236"/>
         <source>Choose a satellite for this pad</source>
-        <translation type="unfinished"></translation>
+        <translation>Escolha um satélite para este controle</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="262"/>
-        <source>Add a controller</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="263"/>
-        <source>Wired, or Bluetooth</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="304"/>
-        <source>Streaming — do not close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="359"/>
-        <source>1 controller streaming</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="360"/>
-        <source>%1 controllers streaming</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="363"/>
-        <source>1 satellite online</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="364"/>
-        <source>%1 satellites online</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="375"/>
         <source>Registering controller…</source>
-        <translation type="unfinished"></translation>
+        <translation>Registrando o controle…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="378"/>
-        <source>Unbound · Bluetooth</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="380"/>
-        <source>Unbound · wired</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="380"/>
         <source>Unbound</source>
         <translation type="unfinished">Não vinculado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="384"/>
         <source>as %1</source>
-        <translation type="unfinished"></translation>
+        <translation>como %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="386"/>
         <source>Bluetooth</source>
-        <translation type="unfinished"></translation>
+        <translation>Bluetooth</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="389"/>
-        <source>Bound</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="395"/>
         <source>Battery wired</source>
         <translation type="unfinished">Bateria com fio</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="396"/>
         <source>Battery %1% ↑</source>
         <translation type="unfinished">Bateria %1 % ↑</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="397"/>
         <source>Battery full</source>
         <translation type="unfinished">Bateria cheia</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="398"/>
         <source>Battery %1%</source>
         <translation type="unfinished">Bateria %1 %</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="405"/>
         <source>idle</source>
-        <translation type="unfinished"></translation>
+        <translation>inativo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="408"/>
-        <source>%1 Hz</source>
-        <translation type="unfinished">%1 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="409"/>
-        <source>~%1 Hz</source>
-        <translation type="unfinished">~%1 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="413"/>
         <source>live</source>
-        <translation type="unfinished"></translation>
+        <translation>ativo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="420"/>
         <source>Found</source>
-        <translation type="unfinished"></translation>
+        <translation>Encontrado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="421"/>
         <source>Needs pairing</source>
-        <translation type="unfinished"></translation>
+        <translation>Parear novamente</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="422"/>
         <source>Offline</source>
-        <translation type="unfinished"></translation>
+        <translation>Off-line</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="423"/>
         <source>Ready</source>
-        <translation type="unfinished"></translation>
+        <translation>Pronto</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="424"/>
         <source>Connecting…</source>
-        <translation type="unfinished"></translation>
+        <translation>Conectando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="425"/>
         <source>Online</source>
-        <translation type="unfinished"></translation>
+        <translation>On-line</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/HomePage.qml" line="426"/>
-        <source>Unstable</source>
-        <translation type="unfinished"></translation>
+        <source>Set up a controller</source>
+        <translation>Configurar um controle</translation>
+    </message>
+    <message>
+        <source>Plug one in, then pick where it goes</source>
+        <translation>Conecte um e escolha para onde ele vai</translation>
+    </message>
+    <message>
+        <source>nothing to draw</source>
+        <translation>nada para desenhar</translation>
+    </message>
+    <message>
+        <source>No destination</source>
+        <translation>Sem destino</translation>
+    </message>
+    <message>
+        <source>nothing paired</source>
+        <translation>nada pareado</translation>
+    </message>
+    <message>
+        <source>Nothing set up yet</source>
+        <translation>Nada configurado ainda</translation>
+    </message>
+    <message>
+        <source>Setup fills this diagram in, one answer at a time — and hands it back finished.</source>
+        <translation>A configuração preenche este diagrama, uma resposta por vez — e o devolve pronto.</translation>
+    </message>
+    <message>
+        <source>Set up Dish ›</source>
+        <translation>Configurar o Dish ›</translation>
+    </message>
+    <message>
+        <source>%1, bound to %2, %3</source>
+        <translation>%1, vinculado a %2, %3</translation>
+    </message>
+    <message>
+        <source>%1, not bound</source>
+        <translation>%1, sem vínculo</translation>
+    </message>
+    <message>
+        <source>Report rate: measured. Latency: median round-trip ÷ 2 over the last 64 pings.</source>
+        <translation>Taxa de relatórios: medida. Latência: mediana do tempo de ida e volta ÷ 2 nos últimos 64 pings.</translation>
+    </message>
+    <message>
+        <source>events/s %1   sends/s %2</source>
+        <translation>eventos/s %1   envios/s %2</translation>
+    </message>
+    <message>
+        <source>total %1</source>
+        <translation>total %1</translation>
+    </message>
+    <message>
+        <source>Configure binding</source>
+        <translation>Configurar vínculo</translation>
+    </message>
+    <message>
+        <source>Configure binding…</source>
+        <translation>Configurar vínculo…</translation>
+    </message>
+    <message>
+        <source>Unbind</source>
+        <translation type="unfinished">Desvincular</translation>
+    </message>
+    <message>
+        <source>Configure controls…</source>
+        <translation>Configurar controles…</translation>
+    </message>
+    <message>
+        <source>Dead zones…</source>
+        <translation>Zonas mortas…</translation>
+    </message>
+    <message>
+        <source>Binding removed</source>
+        <translation>Vínculo removido</translation>
+    </message>
+    <message>
+        <source>Configure controls</source>
+        <translation>Configurar comandos</translation>
+    </message>
+    <message>
+        <source>Dead zones &amp; motion</source>
+        <translation>Zonas mortas e movimento</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n controllers streaming</source>
+        <translation>
+            <numerusform>%n controle transmitindo</numerusform>
+            <numerusform>%n controles transmitindo</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n satellites online</source>
+        <translation>
+            <numerusform>%n satélite on-line</numerusform>
+            <numerusform>%n satélites on-line</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <source>slot %1 of %2</source>
+        <translation>slot %1 de %2</translation>
+    </message>
+    <message>
+        <source>direct · raw HID</source>
+        <translation>direto · HID bruto</translation>
+    </message>
+    <message>
+        <source>standard</source>
+        <translation>padrão</translation>
+    </message>
+    <message>
+        <source>Standard mode can’t carry it — switch to Direct.</source>
+        <translation>O Modo padrão não consegue transmitir isso — mude para Direto.</translation>
+    </message>
+    <message>
+        <source>no gyro · pad</source>
+        <translation>sem giroscópio · controle</translation>
+    </message>
+    <message>
+        <source>No gyro on this controller.</source>
+        <translation>Este controle não tem giroscópio.</translation>
+    </message>
+    <message>
+        <source>no gyro · link</source>
+        <translation>sem giroscópio · link</translation>
+    </message>
+    <message>
+        <source>gyro off</source>
+        <translation>giroscópio desligado</translation>
+    </message>
+    <message>
+        <source>Motion forwarding is off for this device.</source>
+        <translation>O encaminhamento de movimento está desligado para este dispositivo.</translation>
+    </message>
+    <message>
+        <source>gyro on</source>
+        <translation>giroscópio ligado</translation>
+    </message>
+    <message>
+        <source>no touchpad · pad</source>
+        <translation>sem touchpad · controle</translation>
+    </message>
+    <message>
+        <source>No touchpad on this controller.</source>
+        <translation>Este controle não tem touchpad.</translation>
+    </message>
+    <message>
+        <source>no touchpad · link</source>
+        <translation>sem touchpad · link</translation>
+    </message>
+    <message>
+        <source>touchpad off</source>
+        <translation>touchpad desligado</translation>
+    </message>
+    <message>
+        <source>Touchpad routing is off for this binding.</source>
+        <translation>O roteamento do touchpad está desligado para este vínculo.</translation>
+    </message>
+    <message>
+        <source>touchpad → mouse</source>
+        <translation>touchpad → mouse</translation>
+    </message>
+    <message>
+        <source>touchpad → pad</source>
+        <translation>touchpad → pad</translation>
+    </message>
+    <message>
+        <source>rumble on</source>
+        <translation>vibração ligada</translation>
+    </message>
+    <message>
+        <source>rumble off</source>
+        <translation>vibração desligada</translation>
+    </message>
+    <message>
+        <source>Rumble is off for this binding.</source>
+        <translation>A vibração está desligada para este vínculo.</translation>
+    </message>
+    <message>
+        <source>no lightbar · pad</source>
+        <translation>sem barra de luz · controle</translation>
+    </message>
+    <message>
+        <source>No lightbar on this controller.</source>
+        <translation>Este controle não tem barra de luz.</translation>
+    </message>
+    <message>
+        <source>lightbar off</source>
+        <translation>barra de luz desligada</translation>
+    </message>
+    <message>
+        <source>Lightbar following is off in Settings.</source>
+        <translation>O seguimento da barra de luz está desligado nas Configurações.</translation>
+    </message>
+    <message>
+        <source>lightbar on</source>
+        <translation>barra de luz ligada</translation>
+    </message>
+    <message>
+        <source>dead zones stick %1% · trigger %2%</source>
+        <translation>zonas mortas analógico %1 % · gatilho %2 %</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation>Instável</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <comment>the controller column of the wire diagram</comment>
+        <translation>Controle</translation>
+    </message>
+</context>
+<context>
+    <name>KitGallery</name>
+    <message>
+        <source>Light</source>
+        <translation type="unfinished">Claro</translation>
+    </message>
+    <message>
+        <source>Dark</source>
+        <translation type="unfinished">Escuro</translation>
+    </message>
+    <message>
+        <source>System</source>
+        <translation type="unfinished">Sistema</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Conexão</translation>
+    </message>
+    <message>
+        <source>standard · kept</source>
+        <translation>padrão · mantido</translation>
+    </message>
+    <message>
+        <source>Destination</source>
+        <translation>Destino</translation>
+    </message>
+    <message>
+        <source>sending descriptor</source>
+        <translation>enviando descritor</translation>
+    </message>
+    <message>
+        <source>direct · claimed</source>
+        <translation>direto · assumido</translation>
+    </message>
+    <message>
+        <source>no answer</source>
+        <translation>sem resposta</translation>
+    </message>
+    <message>
+        <source>waiting</source>
+        <translation>aguardando</translation>
+    </message>
+    <message>
+        <source>Buttons &amp; sticks</source>
+        <translation>Botões e analógicos</translation>
+    </message>
+    <message>
+        <source>Gyro</source>
+        <translation type="unfinished">Giroscópio</translation>
+    </message>
+    <message>
+        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
+        <translation>O Modo padrão não consegue transmitir isso — mude a conexão para Direto.</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>Turned off for this binding.</source>
+        <translation>Desativado para este vínculo.</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>Waiting on a destination.</source>
+        <translation>Aguardando um destino.</translation>
+    </message>
+    <message>
+        <source>as Xbox 360</source>
+        <translation>como Xbox 360</translation>
+    </message>
+    <message>
+        <source>standard</source>
+        <translation>padrão</translation>
+    </message>
+    <message>
+        <source>rumble on</source>
+        <translation>vibração ligada</translation>
+    </message>
+    <message>
+        <source>no gyro · pad</source>
+        <translation>sem giroscópio · controle</translation>
+    </message>
+    <message>
+        <source>This pad has no gyro.</source>
+        <translation>Este controle não tem giroscópio.</translation>
+    </message>
+    <message>
+        <source>no touchpad · pad</source>
+        <translation>sem touchpad · controle</translation>
+    </message>
+    <message>
+        <source>This pad has no touchpad.</source>
+        <translation>Este controle não tem touchpad.</translation>
+    </message>
+    <message>
+        <source>lightbar off</source>
+        <translation>barra de luz desligada</translation>
+    </message>
+    <message>
+        <source>dead zones L 12 · R 12</source>
+        <translation>zonas mortas L 12 · R 12</translation>
+    </message>
+    <message>
+        <source>Looking for a pad…</source>
+        <translation>Procurando um controle…</translation>
+    </message>
+    <message>
+        <source>scanning · usb and bt</source>
+        <translation>buscando · usb e bt</translation>
+    </message>
+    <message>
+        <source>USB · Standard · ~250 Hz</source>
+        <translation>USB · Padrão · ~250 Hz</translation>
+    </message>
+    <message>
+        <source>No destination</source>
+        <translation>Sem destino</translation>
+    </message>
+    <message>
+        <source>step 2</source>
+        <translation>etapa 2</translation>
+    </message>
+    <message>
+        <source>Searching…</source>
+        <translation>Buscando…</translation>
+    </message>
+    <message>
+        <source>0 found</source>
+        <translation>0 encontrados</translation>
+    </message>
+    <message>
+        <source>satellite · 3 slots free</source>
+        <translation>satélite · 3 slots livres</translation>
+    </message>
+    <message>
+        <source>Kit gallery</source>
+        <translation>Galeria do kit</translation>
+    </message>
+    <message>
+        <source>DishButton</source>
+        <translation>DishButton</translation>
+    </message>
+    <message>
+        <source>Primary</source>
+        <translation>Primário</translation>
+    </message>
+    <message>
+        <source>Outline</source>
+        <translation>Contorno</translation>
+    </message>
+    <message>
+        <source>Unbind</source>
+        <translation type="unfinished">Desvincular</translation>
+    </message>
+    <message>
+        <source>Small</source>
+        <translation>Pequeno</translation>
+    </message>
+    <message>
+        <source>Edit ›</source>
+        <translation>Editar ›</translation>
+    </message>
+    <message>
+        <source>KitButton alias</source>
+        <translation>alias KitButton</translation>
+    </message>
+    <message>
+        <source>OutlineButton alias</source>
+        <translation>alias OutlineButton</translation>
+    </message>
+    <message>
+        <source>CapabilityChip</source>
+        <translation>CapabilityChip</translation>
+    </message>
+    <message>
+        <source>No gyro</source>
+        <translation type="unfinished">Sem giroscópio</translation>
+    </message>
+    <message>
+        <source>12%</source>
+        <translation>12 %</translation>
+    </message>
+    <message>
+        <source>Verified</source>
+        <translation>Verificado</translation>
+    </message>
+    <message>
+        <source>Layout guessed</source>
+        <translation>Layout adivinhado</translation>
+    </message>
+    <message>
+        <source>as DualSense</source>
+        <translation>como DualSense</translation>
+    </message>
+    <message>
+        <source>StatusDot · LiveStat</source>
+        <translation>StatusDot · LiveStat</translation>
+    </message>
+    <message>
+        <source>Card</source>
+        <translation>Card</translation>
+    </message>
+    <message>
+        <source>filled · default inset</source>
+        <translation>preenchido · recuo padrão</translation>
+    </message>
+    <message>
+        <source>outline only</source>
+        <translation>somente contorno</translation>
+    </message>
+    <message>
+        <source>outline · dense</source>
+        <translation>contorno · denso</translation>
+    </message>
+    <message>
+        <source>ActionCard</source>
+        <translation>ActionCard</translation>
+    </message>
+    <message>
+        <source>Set up a controller</source>
+        <translation>Configurar um controle</translation>
+    </message>
+    <message>
+        <source>Plug one in, then pick where it goes</source>
+        <translation>Conecte um e escolha para onde ele vai</translation>
+    </message>
+    <message>
+        <source>Bind…</source>
+        <translation type="unfinished">Vincular…</translation>
+    </message>
+    <message>
+        <source>Pick a destination</source>
+        <translation>Escolha um destino</translation>
+    </message>
+    <message>
+        <source>SelectRow</source>
+        <translation>SelectRow</translation>
+    </message>
+    <message>
+        <source>192.168.1.24 · mDNS · 3 slots free</source>
+        <translation>192.168.1.24 · mDNS · 3 slots livres</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation>Pareado</translation>
+    </message>
+    <message>
+        <source>192.168.1.31 · LAN · 4 slots free</source>
+        <translation>192.168.1.31 · LAN · 4 slots livres</translation>
+    </message>
+    <message>
+        <source>Needs pairing</source>
+        <translation>Parear novamente</translation>
+    </message>
+    <message>
+        <source>ZeroPad Arcade Stick</source>
+        <translation>ZeroPad Arcade Stick</translation>
+    </message>
+    <message>
+        <source>USB · Standard</source>
+        <translation>USB · Padrão</translation>
+    </message>
+    <message>
+        <source>OptionCard</source>
+        <translation>OptionCard</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Padrão</translation>
+    </message>
+    <message>
+        <source>Read through Windows’ gamepad layer. Works with everything.</source>
+        <translation>Lido pela camada de gamepad do Windows. Funciona com tudo.</translation>
+    </message>
+    <message>
+        <source>Direct</source>
+        <translation>Direto</translation>
+    </message>
+    <message>
+        <source>Dish talks to the pad itself. Adds gyro and the touchpad.</source>
+        <translation>O Dish fala direto com o controle. Adiciona giroscópio e touchpad.</translation>
+    </message>
+    <message>
+        <source>SegmentedControl · ComboButton</source>
+        <translation>SegmentedControl · ComboButton</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation type="unfinished">Desligado</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <translation>Pad</translation>
+    </message>
+    <message>
+        <source>Mouse</source>
+        <translation>Mouse</translation>
+    </message>
+    <message>
+        <source>Xbox 360</source>
+        <translation>Xbox 360</translation>
+    </message>
+    <message>
+        <source>DualSense</source>
+        <translation>DualSense</translation>
+    </message>
+    <message>
+        <source>Switch Pro</source>
+        <translation>Switch Pro</translation>
+    </message>
+    <message>
+        <source>DishToolTip</source>
+        <translation>DishToolTip</translation>
+    </message>
+    <message>
+        <source>Collapse navigation</source>
+        <translation>Recolher navegação</translation>
+    </message>
+    <message>
+        <source>LabeledSwitch · RadioMark · SliderRow</source>
+        <translation>LabeledSwitch · RadioMark · SliderRow</translation>
+    </message>
+    <message>
+        <source>Motion</source>
+        <translation>Movimento</translation>
+    </message>
+    <message>
+        <source>Send the pad’s gyro to the host.</source>
+        <translation>Enviar o giroscópio do controle para o host.</translation>
+    </message>
+    <message>
+        <source>This pad has no motors.</source>
+        <translation>Este controle não tem motores.</translation>
+    </message>
+    <message>
+        <source>Left stick</source>
+        <translation>Analógico esquerdo</translation>
+    </message>
+    <message>
+        <source>KitTextField · RowButton</source>
+        <translation>KitTextField · RowButton</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation type="unfinished">PIN</translation>
+    </message>
+    <message>
+        <source>That PIN wasn’t accepted. Check the code on ORION-PC and try again.</source>
+        <translation>Esse PIN não foi aceito. Confira o código no ORION-PC e tente novamente.</translation>
+    </message>
+    <message>
+        <source>Help &amp; FAQ</source>
+        <translation type="unfinished">Ajuda e FAQ</translation>
+    </message>
+    <message>
+        <source>What Dish sends, and what it never does.</source>
+        <translation>O que o Dish envia e o que ele nunca faz.</translation>
+    </message>
+    <message>
+        <source>Open source licenses</source>
+        <translation type="unfinished">Licenças de código aberto</translation>
+    </message>
+    <message>
+        <source>Everything Dish is built on.</source>
+        <translation>Tudo em que o Dish é construído.</translation>
+    </message>
+    <message>
+        <source>DishProgressBar · LoadingSpinner</source>
+        <translation>DishProgressBar · LoadingSpinner</translation>
+    </message>
+    <message>
+        <source>Resolving from ORION-PC’s catalog…</source>
+        <translation>Resolvendo pelo catálogo do ORION-PC…</translation>
+    </message>
+    <message>
+        <source>Stopped</source>
+        <translation>Parado</translation>
+    </message>
+    <message>
+        <source>ErrorBanner · Callout</source>
+        <translation>ErrorBanner · Callout</translation>
+    </message>
+    <message>
+        <source>Couldn’t read the catalog from ORION-PC.</source>
+        <translation>Não foi possível ler o catálogo do ORION-PC.</translation>
+    </message>
+    <message>
+        <source>Retry to resolve it.</source>
+        <translation>Tente novamente para resolver.</translation>
+    </message>
+    <message>
+        <source>Unsteady link</source>
+        <translation>Conexão instável</translation>
+    </message>
+    <message>
+        <source>Still routing, but packets are dropping. Move closer or switch to USB.</source>
+        <translation>Ainda roteando, mas pacotes estão sendo perdidos. Aproxime-se ou mude para USB.</translation>
+    </message>
+    <message>
+        <source>Nothing is changed until the last step.</source>
+        <translation>Nada é alterado até a última etapa.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off on this PC. Turn it on in Windows Settings to use a wireless pad, or plug one in over USB.</source>
+        <translation>O Bluetooth está desativado neste PC. Ative-o nas Configurações do Windows para usar um controle sem fio, ou conecte um por USB.</translation>
+    </message>
+    <message>
+        <source>Open Bluetooth settings ↗</source>
+        <translation>Abrir configurações de Bluetooth ↗</translation>
+    </message>
+    <message>
+        <source>ORION-PC stopped responding.</source>
+        <translation>ORION-PC parou de responder.</translation>
+    </message>
+    <message>
+        <source>EmptyState · SectionHeader · Eyebrow</source>
+        <translation>EmptyState · SectionHeader · Eyebrow</translation>
+    </message>
+    <message>
+        <source>Connected</source>
+        <translation>Conectado</translation>
+    </message>
+    <message>
+        <source>Binding</source>
+        <translation>Vínculo</translation>
+    </message>
+    <message>
+        <source>No PCs found yet</source>
+        <translation>Nenhum PC encontrado ainda</translation>
+    </message>
+    <message>
+        <source>Dish looks on your local network. Satellite must be running on the PC you want to drive.</source>
+        <translation>O Dish procura na sua rede local. O Satellite precisa estar em execução no PC que você quer comandar.</translation>
+    </message>
+    <message>
+        <source>Rescan</source>
+        <translation>Buscar novamente</translation>
+    </message>
+    <message>
+        <source>BrandGlyph</source>
+        <translation>BrandGlyph</translation>
+    </message>
+    <message>
+        <source>Dish</source>
+        <translation>Dish</translation>
+    </message>
+    <message>
+        <source>StepList</source>
+        <translation>StepList</translation>
+    </message>
+    <message>
+        <source>Overlays</source>
+        <translation>Overlays</translation>
+    </message>
+    <message>
+        <source>ContentDialog</source>
+        <translation>ContentDialog</translation>
+    </message>
+    <message>
+        <source>ConfirmDialog</source>
+        <translation>ConfirmDialog</translation>
+    </message>
+    <message>
+        <source>ApplyOverlay</source>
+        <translation>ApplyOverlay</translation>
+    </message>
+    <message>
+        <source>BlockerDialog · host</source>
+        <translation>BlockerDialog · host</translation>
+    </message>
+    <message>
+        <source>BlockerDialog · pad</source>
+        <translation>BlockerDialog · controle</translation>
+    </message>
+    <message>
+        <source>Toast · success</source>
+        <translation>Toast · sucesso</translation>
+    </message>
+    <message>
+        <source>Binding applied</source>
+        <translation>Vínculo aplicado</translation>
+    </message>
+    <message>
+        <source>Toast · warning</source>
+        <translation>Toast · aviso</translation>
+    </message>
+    <message>
+        <source>Direct fell back to Standard</source>
+        <translation>Direto voltou para o Padrão</translation>
+    </message>
+    <message>
+        <source>Toast · error</source>
+        <translation>Toast · erro</translation>
+    </message>
+    <message>
+        <source>Server unreachable — has it moved networks?</source>
+        <translation>Servidor inacessível — ele mudou de rede?</translation>
+    </message>
+    <message>
+        <source>Page</source>
+        <translation>Page</translation>
+    </message>
+    <message>
+        <source>Controllers</source>
+        <translation>Controles</translation>
+    </message>
+    <message>
+        <source>A page inset, on the shell’s Mica ground.</source>
+        <translation>Um painel embutido, sobre o fundo Mica da janela.</translation>
+    </message>
+    <message>
+        <source>WireLine</source>
+        <translation>WireLine</translation>
+    </message>
+    <message>
+        <source>idle</source>
+        <translation>inativo</translation>
+    </message>
+    <message>
+        <source>1000 Hz · ~3.4 ms</source>
+        <translation>1000 Hz · ~3,4 ms</translation>
+    </message>
+    <message>
+        <source>binding…</source>
+        <translation>vinculando…</translation>
+    </message>
+    <message>
+        <source>CapabilityTable</source>
+        <translation>CapabilityTable</translation>
+    </message>
+    <message>
+        <source>BindingStrip</source>
+        <translation>BindingStrip</translation>
+    </message>
+    <message>
+        <source>WizardBanner</source>
+        <translation>WizardBanner</translation>
+    </message>
+    <message>
+        <source>as Xbox 360 · rumble</source>
+        <translation>como Xbox 360 · vibração</translation>
+    </message>
+    <message>
+        <source>Pairing</source>
+        <translation>Pareamento</translation>
+    </message>
+    <message>
+        <source>Pair with ORION-PC</source>
+        <translation>Parear com ORION-PC</translation>
+    </message>
+    <message>
+        <source>Pair</source>
+        <translation type="unfinished">Parear</translation>
+    </message>
+    <message>
+        <source>Enter the six-digit code shown on ORION-PC.</source>
+        <translation>Digite o código de seis dígitos exibido em ORION-PC.</translation>
+    </message>
+    <message>
+        <source>Setup</source>
+        <translation>Configuração</translation>
+    </message>
+    <message>
+        <source>Leave setup?</source>
+        <translation>Sair da configuração?</translation>
+    </message>
+    <message>
+        <source>Nothing has been sent yet. Your answers will be discarded.</source>
+        <translation>Nada foi enviado ainda. Suas respostas serão descartadas.</translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation>Descartar</translation>
+    </message>
+    <message>
+        <source>Keep setting up</source>
+        <translation>Continuar configurando</translation>
+    </message>
+    <message>
+        <source>Windows can take up to 20 seconds to hand over the device.</source>
+        <translation>O Windows pode levar até 20 segundos para liberar o dispositivo.</translation>
     </message>
 </context>
 <context>
     <name>LicensesPage</name>
     <message>
-        <location filename="../src/qml/pages/LicensesPage.qml" line="25"/>
-        <location filename="../src/qml/pages/LicensesPage.qml" line="27"/>
-        <location filename="../src/qml/pages/LicensesPage.qml" line="34"/>
         <source>Open source licenses</source>
         <translation type="unfinished">Licenças de código aberto</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/LicensesPage.qml" line="28"/>
-        <source>Acknowledgements for the libraries Dish is built on</source>
-        <translation type="unfinished"></translation>
+        <source>Acknowledgements for the libraries Dish is built on.</source>
+        <translation type="unfinished">Créditos das bibliotecas em que o Dish é construído.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/LicensesPage.qml" line="37"/>
-        <source>Acknowledgements for the libraries Dish is built on. Tap a row to open its license.</source>
-        <translation type="unfinished">Créditos das bibliotecas em que o Dish é construído. Toque em uma linha para abrir sua licença.</translation>
+        <source>No license manifest</source>
+        <translation>Sem manifesto de licenças</translation>
+    </message>
+    <message>
+        <source>The bundled acknowledgements could not be read from this build.</source>
+        <translation>Não foi possível ler os créditos incluídos nesta versão.</translation>
+    </message>
+    <message>
+        <source>Dish %1 · TinkerNorth · LGPL-3.0</source>
+        <translation>Dish %1 · TinkerNorth · LGPL-3.0</translation>
     </message>
 </context>
 <context>
     <name>Main</name>
     <message>
-        <location filename="../src/qml/Main.qml" line="24"/>
         <source>Dish</source>
-        <translation type="unfinished"></translation>
+        <translation>Dish</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation>Transmitindo</translation>
+    </message>
+    <message>
+        <source>Stop streaming and quit?</source>
+        <translation>Parar a transmissão e sair?</translation>
+    </message>
+    <message>
+        <source>A controller is still streaming and the display is being kept awake.</source>
+        <translation>Um controle ainda está transmitindo e a tela está sendo mantida ativa.</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Sair</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
     </message>
 </context>
 <context>
     <name>PairingDialog</name>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="37"/>
         <source>Pairing</source>
-        <translation type="unfinished"></translation>
+        <translation>Pareamento</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="38"/>
         <source>Pair with %1</source>
         <translation type="unfinished">Parear com %1</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="40"/>
         <source>Cancel</source>
         <translation type="unfinished">Cancelar</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="41"/>
         <source>Pairing…</source>
         <translation type="unfinished">Pareando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="41"/>
         <source>Pair</source>
         <translation type="unfinished">Parear</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="62"/>
-        <source>Enter the 6-digit PIN shown on the Satellite&apos;s screen.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="92"/>
         <source>or</source>
-        <translation type="unfinished"></translation>
+        <translation>ou</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="103"/>
         <source>Type this PIN on &lt;b&gt;%1&lt;/b&gt; to approve the pairing.</source>
-        <translation type="unfinished"></translation>
+        <translation>Digite este PIN em &lt;b&gt;%1&lt;/b&gt; para aprovar o pareamento.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="152"/>
         <source>Waiting for approval on the satellite…</source>
-        <translation type="unfinished"></translation>
+        <translation>Aguardando aprovação no satélite…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="154"/>
         <source>Approved — connecting…</source>
-        <translation type="unfinished"></translation>
+        <translation>Aprovado — conectando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="156"/>
         <source>The operator declined the pairing.</source>
-        <translation type="unfinished"></translation>
+        <translation>O operador recusou o pareamento.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="158"/>
         <source>No approval — the code expired.</source>
-        <translation type="unfinished"></translation>
+        <translation>Sem aprovação — o código expirou.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="168"/>
         <source>New code</source>
-        <translation type="unfinished"></translation>
+        <translation>Novo código</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/PairingDialog.qml" line="175"/>
         <source>~2 min</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>QObject</name>
-    <message>
-        <source>Share crash reports</source>
-        <translation type="vanished">Compartilhar relatórios de falhas</translation>
+        <translation>~2 min</translation>
     </message>
     <message>
-        <source>On by default — turn off to opt out. Shares anonymized crash logs and stack traces to help fix bugs; no gameplay or controller input is included. (No crash backend is wired yet.)</source>
-        <translation type="vanished">Ativado por padrão — desative para não participar. Compartilha logs de falhas anonimizados e stack traces para ajudar a corrigir bugs; nenhum jogo ou entrada de controle é incluído. (Nenhum backend de falhas conectado ainda.)</translation>
+        <source>%1 is running a different Satellite version. Update both, then pair again.</source>
+        <translation>%1 está executando uma versão diferente do Satellite. Atualize os dois e pareie de novo.</translation>
+    </message>
+    <message>
+        <source>Couldn’t reach %1. Make sure it’s on and on your network.</source>
+        <translation>Não foi possível alcançar %1. Verifique se está ligado e na sua rede.</translation>
+    </message>
+    <message>
+        <source>%1 hasn’t approved the pairing yet.</source>
+        <translation>%1 ainda não aprovou o pareamento.</translation>
+    </message>
+    <message>
+        <source>That PIN wasn’t accepted. Check the code on %1 and try again.</source>
+        <translation>Esse PIN não foi aceito. Confira o código em %1 e tente novamente.</translation>
+    </message>
+    <message>
+        <source>The code changes if the Satellite screen was refreshed.</source>
+        <translation>O código muda se a tela do Satellite foi atualizada.</translation>
+    </message>
+    <message>
+        <source>Enter the 6-digit PIN shown on the Satellite’s screen.</source>
+        <translation>Digite o PIN de 6 dígitos exibido na tela do Satellite.</translation>
+    </message>
+    <message>
+        <source>Pairing PIN, 6 digits</source>
+        <translation>PIN de pareamento, 6 dígitos</translation>
     </message>
 </context>
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="28"/>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="31"/>
         <source>Settings</source>
         <translation type="unfinished">Configurações</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="34"/>
         <source>Light</source>
         <translation type="unfinished">Claro</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="34"/>
         <source>Dark</source>
         <translation type="unfinished">Escuro</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="34"/>
         <source>System</source>
         <translation type="unfinished">Sistema</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="36"/>
         <source>Follow game</source>
         <translation type="unfinished">Seguir o jogo</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="37"/>
         <source>Off</source>
         <translation type="unfinished">Desligado</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="82"/>
         <source>Setup &amp; help</source>
-        <translation type="unfinished"></translation>
+        <translation>Configuração e ajuda</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="86"/>
-        <source>Setup guide</source>
-        <translation type="unfinished">Guia de configuração</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="87"/>
-        <source>Walk through connection and controller setup. Re-run any time.</source>
-        <translation type="unfinished">Percorra a configuração de conexão e controle. Execute novamente quando quiser.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="92"/>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="95"/>
         <source>Help &amp; FAQ</source>
         <translation type="unfinished">Ajuda e FAQ</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="93"/>
         <source>Concepts, performance tips, and troubleshooting.</source>
         <translation type="unfinished">Conceitos, dicas de desempenho e solução de problemas.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="104"/>
         <source>Appearance</source>
-        <translation type="unfinished"></translation>
+        <translation>Aparência</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="112"/>
         <source>Theme</source>
         <translation type="unfinished">Tema</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="118"/>
         <source>Choose how Dish looks. System matches your Windows light or dark setting.</source>
         <translation type="unfinished">Escolha como o Dish aparece. &quot;Sistema&quot; segue a configuração clara ou escura do Windows.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="142"/>
         <source>Forwarded features</source>
-        <translation type="unfinished"></translation>
+        <translation>Recursos encaminhados</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="154"/>
         <source>Light bar</source>
         <translation type="unfinished">Barra de luz</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="160"/>
         <source>Follow game: the controller LED matches the host game. Off: leave the LED untouched.</source>
         <translation type="unfinished">Seguir o jogo: o LED do controle corresponde ao jogo anfitrião. Desligado: deixar o LED intocado.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="179"/>
-        <source>Features only apply when your controller&apos;s hardware supports them — the controller list shows what was detected.</source>
-        <translation type="unfinished">Os recursos só se aplicam quando o hardware do seu controle os suporta — a lista de controles mostra o que foi detectado.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="200"/>
         <source>Controller tuning</source>
-        <translation type="unfinished"></translation>
+        <translation>Ajuste do controle</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="204"/>
         <source>Dead zones &amp; motion…</source>
-        <translation type="unfinished"></translation>
+        <translation>Zonas mortas e movimento…</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="205"/>
         <source>Per-device stick / trigger flats and gyro forwarding.</source>
-        <translation type="unfinished"></translation>
+        <translation>Zonas mortas de analógico / gatilho e encaminhamento de giroscópio por dispositivo.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="207"/>
         <source>Dead zones &amp; motion</source>
-        <translation type="unfinished"></translation>
+        <translation>Zonas mortas e movimento</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="216"/>
         <source>Diagnostics</source>
-        <translation type="unfinished"></translation>
+        <translation>Diagnóstico</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="221"/>
-        <source>Crash reporting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="222"/>
         <source>Anonymous crash reports help fix bugs. Opt out any time.</source>
-        <translation type="unfinished"></translation>
+        <translation>Relatórios de falhas anônimos ajudam a corrigir bugs. Desative quando quiser.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="235"/>
         <source>About</source>
-        <translation type="unfinished"></translation>
+        <translation>Sobre</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="239"/>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="242"/>
         <source>Open source licenses</source>
         <translation type="unfinished">Licenças de código aberto</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="240"/>
         <source>Acknowledgements for the libraries Dish is built on.</source>
         <translation type="unfinished">Créditos das bibliotecas em que o Dish é construído.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="246"/>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="248"/>
         <source>Support Dish</source>
         <translation type="unfinished">Apoiar o Dish</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="247"/>
         <source>Donate via GitHub Sponsors, Ko-fi, or Buy Me a Coffee.</source>
         <translation type="unfinished">Doe via GitHub Sponsors, Ko-fi ou Buy Me a Coffee.</translation>
     </message>
     <message>
-        <location filename="../src/qml/pages/SettingsPage.qml" line="252"/>
         <source>Dish %1 · TinkerNorth · LGPL-3.0</source>
-        <translation type="unfinished"></translation>
+        <translation>Dish %1 · TinkerNorth · LGPL-3.0</translation>
+    </message>
+    <message>
+        <source>Set up Dish</source>
+        <translation>Configurar o Dish</translation>
+    </message>
+    <message>
+        <source>Walk through input, destination and binding. Re-run any time.</source>
+        <translation>Percorra entrada, destino e vínculo. Refaça quando quiser.</translation>
+    </message>
+    <message>
+        <source>Features only apply when your controller’s hardware supports them — the controller list shows what was detected.</source>
+        <translation>Os recursos só se aplicam quando o hardware do seu controle os suporta — a lista de controles mostra o que foi detectado.</translation>
+    </message>
+    <message>
+        <source>Share crash reports</source>
+        <translation type="unfinished">Compartilhar relatórios de falhas</translation>
     </message>
 </context>
 <context>
-    <name>SetupGuideDialog</name>
+    <name>SetupWizardPage</name>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="43"/>
-        <source>Setup guide · step %1 of %2</source>
-        <translation type="unfinished"></translation>
+        <source>Set up Dish</source>
+        <translation>Configurar o Dish</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="44"/>
-        <source>Find and pair your Satellite</source>
-        <translation type="unfinished">Encontre e pareie seu Satellite</translation>
+        <source>Nothing is changed until the last step</source>
+        <translation>Nada é alterado até a última etapa</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="45"/>
-        <source>Plug in a controller</source>
-        <translation type="unfinished"></translation>
+        <source>Step 1 of 3 · Input</source>
+        <translation>Etapa 1 de 3 · Entrada</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="46"/>
-        <source>You&apos;re set</source>
-        <translation type="unfinished"></translation>
+        <source>Step 2 of 3 · Destination</source>
+        <translation>Etapa 2 de 3 · Destino</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="47"/>
-        <source>Next</source>
-        <translation type="unfinished">Avançar</translation>
+        <source>Step 3 of 3 · Type</source>
+        <translation>Etapa 3 de 3 · Tipo</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="47"/>
-        <source>Finish</source>
-        <translation type="unfinished">Concluir</translation>
+        <source>Step 3 of 3 · Feel</source>
+        <translation>Etapa 3 de 3 · Sensação</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="48"/>
-        <source>Close</source>
-        <translation type="unfinished">Fechar</translation>
+        <source>Step 3 of 3 · Review</source>
+        <translation>Etapa 3 de 3 · Revisão</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="142"/>
-        <source>Dish reaches a host PC over your local network. Both machines must be on the same Wi-Fi or LAN.</source>
-        <translation type="unfinished">O Dish alcança um PC anfitrião pela sua rede local. Ambas as máquinas devem estar na mesma Wi-Fi ou LAN.</translation>
+        <source>Sending…</source>
+        <translation>Enviando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="155"/>
-        <source>Scanning your network…</source>
-        <translation type="unfinished"></translation>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <source>Direct</source>
+        <translation>Direto</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Padrão</translation>
+    </message>
+    <message>
+        <source>satellite · 0 slots free</source>
+        <translation>satélite · 0 slots livres</translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="157"/>
-        <source>%n satellite(s) found</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <source>satellite · %n slots free</source>
+        <translation>
+            <numerusform>satélite · %n slot livre</numerusform>
+            <numerusform>satélite · %n slots livres</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="158"/>
-        <source>No satellites found yet</source>
-        <translation type="unfinished"></translation>
+        <source>Looking for a pad…</source>
+        <translation>Procurando um controle…</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="166"/>
-        <source>Scanning…</source>
-        <translation type="unfinished">Buscando…</translation>
+        <source>scanning · usb and bt</source>
+        <translation>buscando · usb e bt</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="166"/>
-        <source>Rescan</source>
-        <translation type="unfinished"></translation>
+        <source>No destination</source>
+        <translation>Sem destino</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="248"/>
-        <source>Pair…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="266"/>
-        <source>Don&apos;t see your PC?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="267"/>
-        <source>Install the free Satellite app on the PC you want to play on — satellites on your LAN appear here automatically, no IP to type in.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="271"/>
-        <source>Get Satellite for your PC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="279"/>
-        <source>Connected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="280"/>
-        <source>%1 is online. Next: a controller.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="303"/>
-        <source>They are listed below and on the Controllers page — bind one to a satellite and it starts streaming.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="304"/>
-        <source>Plug in an Xbox, PlayStation, or generic pad. It shows up here the moment Windows sees it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Find your PC on the network</source>
-        <translation type="obsolete">Encontre seu PC na rede</translation>
-    </message>
-    <message>
-        <source>Enter the operator PIN</source>
-        <translation type="obsolete">Insira o PIN do operador</translation>
-    </message>
-    <message>
-        <source>Pick your Satellite and enter the 6-digit PIN it shows on the host screen. Once accepted, the pairing is remembered.</source>
-        <translation type="obsolete">Escolha seu Satellite e insira o PIN de 6 dígitos que ele mostra na tela do anfitrião. Uma vez aceito, o pareamento é lembrado.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="291"/>
-        <source>Physical controllers only — Windows has no on-screen pad. Connect one over USB or Bluetooth and it appears as a slot automatically.</source>
-        <translation type="unfinished"></translation>
+        <source>step 2</source>
+        <translation>etapa 2</translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="300"/>
-        <source>%n controller(s) detected</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n encontrado</numerusform>
+            <numerusform>%n encontrados</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="301"/>
-        <source>Waiting for a controller</source>
-        <translation type="unfinished"></translation>
+        <source>pick one</source>
+        <translation>escolha um</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="337"/>
-        <source>Pick what the host sees</source>
-        <translation type="unfinished"></translation>
+        <source>Searching…</source>
+        <translation>Buscando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="338"/>
-        <source>Per slot, Emulate chooses what the pad appears as on the host — from the satellite&apos;s own catalog.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="350"/>
-        <source>%n satellite(s) online</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <source>binding…</source>
+        <translation>vinculando…</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="351"/>
-        <source>No satellite online yet</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="354"/>
-        <source>%n controller(s) ready</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
+        <source>—</source>
+        <translation>—</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="355"/>
-        <source>no controllers yet</source>
-        <translation type="unfinished"></translation>
+        <source>as —</source>
+        <translation>como —</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/SetupGuideDialog.qml" line="363"/>
-        <source>Bind a controller to a satellite on the Controllers page and play. Re-run this guide any time from Settings, and see Help &amp; FAQ for concepts and troubleshooting.</source>
-        <translation type="unfinished"></translation>
+        <source>as %1 · %2</source>
+        <translation>como %1 · %2</translation>
+    </message>
+    <message>
+        <source>as %1</source>
+        <translation>como %1</translation>
+    </message>
+    <message>
+        <source>%1 is no longer available. Unplug and reconnect it, then try again.</source>
+        <translation>%1 não está mais disponível. Desconecte e reconecte, depois tente novamente.</translation>
+    </message>
+    <message>
+        <source>Couldn’t reach %1. Make sure it’s on and on your network.</source>
+        <translation>Não foi possível alcançar %1. Verifique se está ligado e na sua rede.</translation>
+    </message>
+    <message>
+        <source>%1 refused the binding. Try again.</source>
+        <translation>%1 recusou o vínculo. Tente novamente.</translation>
+    </message>
+    <message>
+        <source>Direct wasn’t available — %1 is bound over Standard.</source>
+        <translation>O Direto não estava disponível — %1 está vinculado no modo Padrão.</translation>
+    </message>
+    <message>
+        <source>Controller bound — %1 is live on %2.</source>
+        <translation>Controle vinculado — %1 está ativo em %2.</translation>
+    </message>
+    <message>
+        <source>‹ Back</source>
+        <translation>‹ Voltar</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message>
+        <source>Setup</source>
+        <translation>Configuração</translation>
+    </message>
+    <message>
+        <source>Leave setup?</source>
+        <translation>Sair da configuração?</translation>
+    </message>
+    <message>
+        <source>Nothing has been sent yet. Your answers will be discarded.</source>
+        <translation>Nada foi enviado ainda. Suas respostas serão descartadas.</translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation>Descartar</translation>
+    </message>
+    <message>
+        <source>Keep setting up</source>
+        <translation>Continuar configurando</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Conexão</translation>
+    </message>
+    <message>
+        <source>standard · kept</source>
+        <translation>padrão · mantido</translation>
+    </message>
+    <message>
+        <source>switching path</source>
+        <translation>mudando de caminho</translation>
+    </message>
+    <message>
+        <source>Destination</source>
+        <translation>Destino</translation>
+    </message>
+    <message>
+        <source>sending descriptor</source>
+        <translation>enviando descritor</translation>
+    </message>
+    <message>
+        <source>Windows can take up to 20 seconds to hand over the device.</source>
+        <translation>O Windows pode levar até 20 segundos para liberar o dispositivo.</translation>
+    </message>
+</context>
+<context>
+    <name>StepList</name>
+    <message>
+        <source>done</source>
+        <translation>concluído</translation>
+    </message>
+    <message>
+        <source>in progress</source>
+        <translation>em andamento</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>falhou</translation>
+    </message>
+    <message>
+        <source>pending</source>
+        <translation>pendente</translation>
+    </message>
+    <message>
+        <source>%1 — %2 · %3</source>
+        <translation>%1 — %2 · %3</translation>
+    </message>
+    <message>
+        <source>%1 — %2</source>
+        <translation>%1 — %2</translation>
     </message>
 </context>
 <context>
     <name>WelcomeScreen</name>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="33"/>
         <source>Welcome</source>
-        <translation type="unfinished"></translation>
+        <translation>Boas-vindas</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="34"/>
         <source>Your controller, on your PC</source>
         <translation type="unfinished">Seu controle, no seu PC</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="35"/>
         <source>Dish forwards a real game controller plugged into this PC to another PC running Satellite, over your local network. Plug in a pad and it shows up ready to play.</source>
         <translation type="unfinished">O Dish encaminha um controle de jogo real conectado a este PC para outro PC executando o Satellite, pela sua rede local. Conecte um controle e ele aparece pronto para jogar.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="40"/>
         <source>How it works</source>
-        <translation type="unfinished"></translation>
+        <translation>Como funciona</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="41"/>
         <source>A short hop over Wi-Fi</source>
         <translation type="unfinished">Um curto salto por Wi-Fi</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="42"/>
-        <source>Your controller&apos;s button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.</source>
-        <translation type="unfinished">Os pressionamentos de botão, analógicos e movimento do seu controle viajam para um pequeno ajudante gratuito chamado Satellite em execução no PC anfitrião. O Satellite se apresenta aos jogos dele como um gamepad comum. Sem configuração extra por jogo.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="47"/>
         <source>One more thing</source>
-        <translation type="unfinished"></translation>
+        <translation>Mais uma coisa</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="48"/>
         <source>Install Satellite on the host PC</source>
         <translation type="unfinished">Instale o Satellite no PC anfitrião</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="49"/>
         <source>Satellite is free and open source. Grab it from dish.tinkernorth.com, run the installer, and Dish will find it automatically. You can finish this intro now and install Satellite later.</source>
-        <translation type="unfinished"></translation>
+        <translation>O Satellite é gratuito e de código aberto. Baixe em dish.tinkernorth.com, execute o instalador e o Dish o encontrará automaticamente. Você pode concluir esta introdução agora e instalar o Satellite depois.</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="50"/>
         <source>Open download page</source>
         <translation type="unfinished">Abrir página de download</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="54"/>
-        <source>You&apos;re set</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="55"/>
         <source>Ready when you are</source>
         <translation type="unfinished">Pronto quando você estiver</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="56"/>
-        <source>Open the setup guide for a walkthrough, or jump straight in and pair with a Satellite on your network.</source>
-        <translation type="unfinished">Abra o guia de configuração para um passo a passo, ou comece direto e pareie com um Satellite na sua rede.</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="144"/>
         <source>Back</source>
         <translation type="unfinished">Voltar</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="150"/>
         <source>Skip</source>
         <translation type="unfinished">Pular</translation>
     </message>
     <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="155"/>
-        <source>Not now</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="160"/>
-        <source>Open setup guide</source>
-        <translation type="unfinished">Abrir guia de configuração</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/onboarding/WelcomeScreen.qml" line="160"/>
         <source>Next</source>
         <translation type="unfinished">Avançar</translation>
+    </message>
+    <message>
+        <source>Your controller’s button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.</source>
+        <translation>Os botões, os analógicos e o movimento do seu controle chegam a um pequeno ajudante gratuito chamado Satellite, que roda no PC anfitrião. Para os jogos dele, o Satellite aparece como um gamepad comum. Sem configuração extra por jogo.</translation>
+    </message>
+    <message>
+        <source>You’re set</source>
+        <translation>Tudo pronto</translation>
+    </message>
+    <message>
+        <source>Finish walks you through input, destination and binding — about a minute. You can also skip and do it later from Set up in the rail.</source>
+        <translation>Concluir leva você por entrada, destino e vínculo — cerca de um minuto. Você também pode pular e fazer isso depois em Configurar, na barra lateral.</translation>
+    </message>
+    <message>
+        <source>Finish</source>
+        <translation type="unfinished">Concluir</translation>
     </message>
 </context>
 <context>
     <name>WindowTitleBar</name>
     <message>
-        <location filename="../src/qml/WindowTitleBar.qml" line="111"/>
         <source>Expand navigation</source>
-        <translation type="unfinished"></translation>
+        <translation>Expandir navegação</translation>
     </message>
     <message>
-        <location filename="../src/qml/WindowTitleBar.qml" line="111"/>
         <source>Collapse navigation</source>
-        <translation type="unfinished"></translation>
+        <translation>Recolher navegação</translation>
     </message>
     <message>
-        <location filename="../src/qml/WindowTitleBar.qml" line="127"/>
         <source>Dish</source>
-        <translation type="unfinished"></translation>
+        <translation>Dish</translation>
+    </message>
+</context>
+<context>
+    <name>WizardBanner</name>
+    <message>
+        <source>done</source>
+        <translation>concluído</translation>
+    </message>
+    <message>
+        <source>current</source>
+        <translation>atual</translation>
+    </message>
+    <message>
+        <source>not started</source>
+        <translation>não iniciado</translation>
+    </message>
+    <message>
+        <source>%1 — %2</source>
+        <translation>%1 — %2</translation>
+    </message>
+    <message>
+        <source>Input</source>
+        <translation>Entrada</translation>
+    </message>
+    <message>
+        <source>Destination</source>
+        <translation>Destino</translation>
+    </message>
+    <message>
+        <source>Binding</source>
+        <translation>Vínculo</translation>
+    </message>
+    <message>
+        <source>Step %1, %2</source>
+        <translation>Etapa %1, %2</translation>
+    </message>
+    <message>
+        <source>Sub-step %1 of 3</source>
+        <translation>Subetapa %1 de 3</translation>
+    </message>
+</context>
+<context>
+    <name>WizardDestinationPage</name>
+    <message>
+        <source>Pair…</source>
+        <translation>Parear…</translation>
+    </message>
+    <message>
+        <source>Continue ›</source>
+        <translation>Continuar ›</translation>
+    </message>
+    <message>
+        <source>Picking an unpaired host asks for its PIN.</source>
+        <translation>Escolher um host não pareado pede o PIN dele.</translation>
+    </message>
+    <message>
+        <source>The scan keeps running while you read.</source>
+        <translation>A busca continua enquanto você lê.</translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Encontrado</translation>
+    </message>
+    <message>
+        <source>Needs pairing</source>
+        <translation>Parear novamente</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Off-line</translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation>Pronto</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Conectando…</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>On-line</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation>Instável</translation>
+    </message>
+    <message>
+        <source>0 slots free — one pad will be unbound</source>
+        <translation>0 slots livres — um controle será desvinculado</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n slots free</source>
+        <translation>
+            <numerusform>%n slot livre</numerusform>
+            <numerusform>%n slots livres</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Which PC?</source>
+        <translation>Qual PC?</translation>
+    </message>
+    <message>
+        <source>Pick the PC this controller should drive.</source>
+        <translation>Escolha o PC que este controle deve comandar.</translation>
+    </message>
+    <message>
+        <source>Scanning your Wi-Fi for a Satellite host.</source>
+        <translation>Buscando um host Satélite no seu Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>Scanning your Wi-Fi</source>
+        <translation>Buscando no seu Wi-Fi</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n encontrado</numerusform>
+            <numerusform>%n encontrados</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Needs pairing, PIN</source>
+        <translation>Parear novamente, PIN</translation>
+    </message>
+    <message>
+        <source>No PCs found yet</source>
+        <translation>Nenhum PC encontrado ainda</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once the free Satellite app is running on it and both machines are on the same network.</source>
+        <translation>Um PC aparece aqui assim que o app Satellite gratuito estiver rodando nele e as duas máquinas estiverem na mesma rede.</translation>
+    </message>
+    <message>
+        <source>Don’t see your PC? Install the free Satellite app on it.</source>
+        <translation>Não vê seu PC? Instale o app gratuito Satellite nele.</translation>
+    </message>
+    <message>
+        <source>Get Satellite ↗</source>
+        <translation>Obter o Satellite ↗</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation type="unfinished">Buscando…</translation>
+    </message>
+    <message>
+        <source>Rescan</source>
+        <translation>Buscar novamente</translation>
+    </message>
+    <message>
+        <source>Pairing is one-time. After this, Dish reconnects to it by itself.</source>
+        <translation>O pareamento acontece uma única vez. Depois disso, o Dish se reconecta sozinho.</translation>
+    </message>
+</context>
+<context>
+    <name>WizardFeelPage</name>
+    <message>
+        <source>Continue ›</source>
+        <translation>Continuar ›</translation>
+    </message>
+    <message>
+        <source>%1 extras · %2 available</source>
+        <translation>%1 extras · %2 disponíveis</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>The pad’s motors buzz on feedback from the game.</source>
+        <translation>Os motores do controle vibram com o retorno do jogo.</translation>
+    </message>
+    <message>
+        <source>Motion</source>
+        <translation>Movimento</translation>
+    </message>
+    <message>
+        <source>Forwards this pad’s gyro to the game as motion.</source>
+        <translation>Encaminha o giroscópio deste controle ao jogo como movimento.</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>Send the touchpad as a touchpad, or route it as a mouse.</source>
+        <translation>Envie o touchpad como touchpad ou direcione-o como mouse.</translation>
+    </message>
+    <message>
+        <source>Lightbar</source>
+        <translation type="unfinished">Barra de luz</translation>
+    </message>
+    <message>
+        <source>The game drives the pad’s light bar. Lightbar forwarding is a global setting.</source>
+        <translation>O jogo controla a barra de luz do controle. O encaminhamento da barra de luz é uma configuração global.</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation type="unfinished">Desligado</translation>
+    </message>
+    <message>
+        <source>Pad</source>
+        <translation>Pad</translation>
+    </message>
+    <message>
+        <source>Mouse</source>
+        <translation>Mouse</translation>
+    </message>
+    <message>
+        <source>How should it feel?</source>
+        <translation>Como deve ser a sensação?</translation>
+    </message>
+    <message>
+        <source>Only the extras your input and destination both support are shown.</source>
+        <translation>Só aparecem os extras que sua entrada e seu destino suportam.</translation>
+    </message>
+    <message>
+        <source>%1 — %2</source>
+        <translation>%1 — %2</translation>
+    </message>
+    <message>
+        <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
+        <translation>Nada aqui foi salvo ainda. Tudo vai junto com o vínculo na próxima etapa.</translation>
+    </message>
+</context>
+<context>
+    <name>WizardInputPage</name>
+    <message>
+        <source>Continue ›</source>
+        <translation>Continuar ›</translation>
+    </message>
+    <message>
+        <source>Nothing is sent until the last step.</source>
+        <translation>Nada é enviado até a última etapa.</translation>
+    </message>
+    <message>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <source>USB</source>
+        <translation>USB</translation>
+    </message>
+    <message>
+        <source>Direct</source>
+        <translation>Direto</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Padrão</translation>
+    </message>
+    <message>
+        <source>Plug your controller in</source>
+        <translation>Conecte seu controle</translation>
+    </message>
+    <message>
+        <source>Which controller?</source>
+        <translation>Qual controle?</translation>
+    </message>
+    <message>
+        <source>Into any USB port, or turn on a pad already paired to this PC. Windows sees it, and it appears here — there is no list to add it to.</source>
+        <translation>Em qualquer porta USB, ou ligue um controle já pareado com este PC. O Windows o reconhece e ele aparece aqui — não existe lista para adicioná-lo.</translation>
+    </message>
+    <message>
+        <source>Each is drawn as the node it will become on Home, with what it can carry beside it.</source>
+        <translation>Cada um é desenhado como o nó que ele será no Início, com o que pode transmitir ao lado.</translation>
+    </message>
+    <message>
+        <source>A wired pad is the safest first run: it can use the Direct path, and it can’t run out of battery mid-setup.</source>
+        <translation>Um controle com fio é a primeira tentativa mais segura: ele pode usar o caminho Direto e não fica sem bateria no meio da configuração.</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>Gyro</source>
+        <translation type="unfinished">Giroscópio</translation>
+    </message>
+    <message>
+        <source>No gyro</source>
+        <translation type="unfinished">Sem giroscópio</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>No touchpad</source>
+        <translation>Sem touchpad</translation>
+    </message>
+    <message>
+        <source>Lightbar</source>
+        <translation type="unfinished">Barra de luz</translation>
+    </message>
+    <message>
+        <source>How should Dish read it?</source>
+        <translation>Como o Dish deve lê-lo?</translation>
+    </message>
+    <message>
+        <source>Windows’ gamepad layer. No prompt.</source>
+        <translation>Camada de gamepad do Windows. Sem prompt.</translation>
+    </message>
+    <message>
+        <source>Recommended</source>
+        <translation type="unfinished">Recomendado</translation>
+    </message>
+    <message>
+        <source>Raw HID claim. Lowest latency.</source>
+        <translation>Acesso HID bruto. Menor latência.</translation>
+    </message>
+    <message>
+        <source>Layout guessed</source>
+        <translation>Layout adivinhado</translation>
+    </message>
+    <message>
+        <source>Not recognised — Direct would guess this pad’s layout. Try it, then switch if it feels off.</source>
+        <translation>Não reconhecido — o Direto adivinharia o layout deste controle. Teste e mude se parecer estranho.</translation>
+    </message>
+    <message>
+        <source>Read over Bluetooth — Windows’ gamepad layer.</source>
+        <translation>Lido por Bluetooth — camada de gamepad do Windows.</translation>
+    </message>
+    <message>
+        <source>Read through Windows’ gamepad layer.</source>
+        <translation>Lido pela camada de gamepad do Windows.</translation>
+    </message>
+    <message>
+        <source>This PC has no Bluetooth adapter — plug a pad in over USB.</source>
+        <translation>Este PC não tem adaptador Bluetooth — conecte um controle por USB.</translation>
+    </message>
+    <message>
+        <source>Bluetooth is off on this PC. Turn it on in Windows Settings to use a wireless pad, or plug one in over USB.</source>
+        <translation>O Bluetooth está desativado neste PC. Ative-o nas Configurações do Windows para usar um controle sem fio, ou conecte um por USB.</translation>
+    </message>
+    <message>
+        <source>Open Bluetooth settings ↗</source>
+        <translation>Abrir configurações de Bluetooth ↗</translation>
+    </message>
+    <message>
+        <source>Nothing appearing? A pad Windows itself doesn’t list won’t reach Dish either — check Windows’ own Devices first.</source>
+        <translation>Nada aparecendo? Um controle que o próprio Windows não lista também não chega ao Dish — verifique os Dispositivos do Windows primeiro.</translation>
+    </message>
+</context>
+<context>
+    <name>WizardReviewPage</name>
+    <message>
+        <source>Bind</source>
+        <translation>Vincular</translation>
+    </message>
+    <message>
+        <source>This is the first thing that is sent.</source>
+        <translation>Esta é a primeira coisa a ser enviada.</translation>
+    </message>
+    <message>
+        <source>rumble</source>
+        <translation>vibração</translation>
+    </message>
+    <message>
+        <source>gyro</source>
+        <translation>giroscópio</translation>
+    </message>
+    <message>
+        <source>touchpad</source>
+        <translation>touchpad</translation>
+    </message>
+    <message>
+        <source>mouse</source>
+        <translation>mouse</translation>
+    </message>
+    <message>
+        <source>lightbar</source>
+        <translation>barra de luz</translation>
+    </message>
+    <message>
+        <source>Gyro</source>
+        <translation type="unfinished">Giroscópio</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>Mouse</source>
+        <translation>Mouse</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>Lightbar</source>
+        <translation type="unfinished">Barra de luz</translation>
+    </message>
+    <message>
+        <source>Controller</source>
+        <translation>Controle</translation>
+    </message>
+    <message>
+        <source>No gyro</source>
+        <translation type="unfinished">Sem giroscópio</translation>
+    </message>
+    <message>
+        <source>No touchpad</source>
+        <translation>Sem touchpad</translation>
+    </message>
+    <message>
+        <source>No mouse</source>
+        <translation>Sem mouse</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Sem vibração</translation>
+    </message>
+    <message>
+        <source>No lightbar</source>
+        <translation>Sem barra de luz</translation>
+    </message>
+    <message>
+        <source>%1 off</source>
+        <translation>%1: desligado</translation>
+    </message>
+    <message>
+        <source>%1 pending</source>
+        <translation>%1: pendente</translation>
+    </message>
+    <message>
+        <source>Review and bind</source>
+        <translation>Revisar e vincular</translation>
+    </message>
+    <message>
+        <source>Everything above is decided. Bind draws the wire for real.</source>
+        <translation>Tudo acima está decidido. Vincular traça o fio de verdade.</translation>
+    </message>
+    <message>
+        <source>Sends</source>
+        <translation>Envia</translation>
+    </message>
+    <message>
+        <source>Gets</source>
+        <translation>Recebe</translation>
+    </message>
+    <message>
+        <source>%1 is full — %2 will be unbound when this binding lands.</source>
+        <translation>%1 está cheio — %2 será desvinculado quando este vínculo for aplicado.</translation>
+    </message>
+    <message>
+        <source>Nothing on %1 has changed yet. Bind is the first and only write.</source>
+        <translation>Nada em %1 mudou ainda. Vincular é a primeira e única escrita.</translation>
+    </message>
+</context>
+<context>
+    <name>WizardTypePage</name>
+    <message>
+        <source>Continue ›</source>
+        <translation>Continuar ›</translation>
+    </message>
+    <message>
+        <source>Types offered by %1’s catalog.</source>
+        <translation>Tipos oferecidos pelo catálogo de %1.</translation>
+    </message>
+    <message>
+        <source>Rumble</source>
+        <translation>Vibração</translation>
+    </message>
+    <message>
+        <source>Motion / gyro</source>
+        <translation>Movimento / giroscópio</translation>
+    </message>
+    <message>
+        <source>Touchpad</source>
+        <translation>Touchpad</translation>
+    </message>
+    <message>
+        <source>How should the PC see it?</source>
+        <translation>Como o PC deve vê-lo?</translation>
+    </message>
+    <message>
+        <source>Pick the controller the PC should report. Each unlocks different extras — this pad limits all three the same way.</source>
+        <translation>Escolha o controle que o PC deve informar. Cada um libera extras diferentes — este controle limita os três da mesma forma.</translation>
+    </message>
+    <message>
+        <source>Reading %1’s controller catalog…</source>
+        <translation>Lendo o catálogo de controles de %1…</translation>
+    </message>
+    <message>
+        <source>Reading the controller catalog…</source>
+        <translation>Lendo o catálogo de controles…</translation>
+    </message>
+    <message>
+        <source>Dish cannot offer a type it has not read. Retry once the host is reachable.</source>
+        <translation>O Dish não pode oferecer um tipo que não leu. Tente novamente quando o host estiver acessível.</translation>
+    </message>
+    <message>
+        <source>Best fit</source>
+        <translation>Melhor opção</translation>
     </message>
 </context>
 <context>
     <name>dish::AppModel</name>
     <message>
-        <location filename="../src/AppModel.cpp" line="81"/>
-        <source>The satellite wouldn&apos;t accept that controller — binding undone.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/AppModel.cpp" line="502"/>
         <source>Controller</source>
-        <translation type="unfinished"></translation>
+        <translation>Controle</translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="506"/>
-        <source>Couldn&apos;t switch %1 to Direct mode — keeping it on Standard.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/AppModel.cpp" line="509"/>
         <source>%1 needs to be unplugged and reconnected.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 precisa ser desconectado e reconectado.</translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="512"/>
         <source>%1 stayed on Direct mode.</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 continuou no Modo direto.</translation>
     </message>
     <message>
-        <location filename="../src/AppModel.cpp" line="515"/>
-        <source>Couldn&apos;t return %1 to Standard mode.</source>
-        <translation type="unfinished"></translation>
+        <source>The satellite wouldn’t accept that controller — binding undone.</source>
+        <translation>O satélite não aceitou esse controle — vínculo desfeito.</translation>
+    </message>
+    <message>
+        <source>Couldn’t switch %1 to Direct mode — keeping it on Standard.</source>
+        <translation>Não foi possível mudar %1 para o Modo direto — mantendo no Padrão.</translation>
+    </message>
+    <message>
+        <source>Couldn’t return %1 to Standard mode.</source>
+        <translation>Não foi possível retornar %1 ao Modo padrão.</translation>
+    </message>
+    <message>
+        <source>Controller disconnected — its binding was removed.</source>
+        <translation>Controle desconectado — seu vínculo foi removido.</translation>
+    </message>
+    <message>
+        <source>Controller disconnected — unbound from %1.</source>
+        <translation>Controle desconectado — desvinculado de %1.</translation>
     </message>
 </context>
 <context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
-        <location filename="../src/Network/WifiConnectionManager.cpp" line="225"/>
         <source>Refusing to connect to a non-local address (%1).</source>
-        <translation type="unfinished"></translation>
+        <translation>Recusando conectar a um endereço não local (%1).</translation>
     </message>
 </context>
 <context>
     <name>dish::qml::AppViewModel</name>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="230"/>
         <source>No connections yet</source>
         <translation type="unfinished">Nenhuma conexão ainda</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="232"/>
-        <location filename="../src/qml/AppViewModel.cpp" line="242"/>
-        <source>%1 remembered</source>
-        <translation type="unfinished">%1 pareado(s)</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="236"/>
-        <source>%1 online</source>
-        <translation type="unfinished">%1 on-line</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="240"/>
-        <source>Tap Manage to add one</source>
-        <translation type="unfinished">Toque em Gerenciar para adicionar um</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="244"/>
-        <source>%1 of %2 online</source>
-        <translation type="unfinished">%1 de %2 on-line</translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="438"/>
-        <source>Couldn&apos;t reach the satellite to load controller types.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="440"/>
-        <source>The satellite couldn&apos;t provide controller types right now.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="442"/>
         <source>The satellite sent an unreadable controller-type list.</source>
-        <translation type="unfinished"></translation>
+        <translation>O satélite enviou uma lista de tipos de controle ilegível.</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="620"/>
         <source>https://github.com/sponsors/TinkerNorth</source>
         <translation type="unfinished">https://github.com/sponsors/TinkerNorth</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="622"/>
         <source>https://ko-fi.com/tinkernorth</source>
         <translation type="unfinished">https://ko-fi.com/tinkernorth</translation>
     </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="623"/>
         <source>https://buymeacoffee.com/tinkernorth</source>
         <translation type="unfinished">https://buymeacoffee.com/tinkernorth</translation>
     </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation>
+            <numerusform>%n pareado</numerusform>
+            <numerusform>%n pareados</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n online</source>
+        <translation>
+            <numerusform>%n on-line</numerusform>
+            <numerusform>%n on-line</numerusform>
+        </translation>
+    </message>
     <message>
-        <location filename="../src/qml/AppViewModel.cpp" line="771"/>
-        <source>Couldn&apos;t open browser</source>
-        <translation type="unfinished">Não foi possível abrir o navegador</translation>
+        <source>Open Connections to add one</source>
+        <translation>Abra Conexões para adicionar uma</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 of %n online</source>
+        <translation>
+            <numerusform>%1 de %n on-line</numerusform>
+            <numerusform>%1 de %n on-line</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Couldn’t reach the satellite to load controller types.</source>
+        <translation>Não foi possível alcançar o satélite para carregar os tipos de controle.</translation>
+    </message>
+    <message>
+        <source>The satellite couldn’t provide controller types right now.</source>
+        <translation>O satélite não conseguiu fornecer os tipos de controle agora.</translation>
+    </message>
+    <message>
+        <source>Couldn’t open browser</source>
+        <translation>Não foi possível abrir o navegador</translation>
     </message>
 </context>
 <context>
     <name>dish::source::ThemePreferenceStore</name>
     <message>
-        <location filename="../src/source/store/ThemePreferenceStore.cpp" line="45"/>
         <source>Light</source>
         <translation>Claro</translation>
     </message>
     <message>
-        <location filename="../src/source/store/ThemePreferenceStore.cpp" line="47"/>
         <source>Dark</source>
         <translation>Escuro</translation>
     </message>
     <message>
-        <location filename="../src/source/store/ThemePreferenceStore.cpp" line="51"/>
         <source>System</source>
         <translation>Sistema</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::ConnectionsDialog</name>
-    <message>
-        <source>Connections</source>
-        <translation type="vanished">Conexões</translation>
-    </message>
-    <message>
-        <source>FOUND</source>
-        <translation type="vanished">ENCONTRADOS</translation>
-    </message>
-    <message>
-        <source>REMEMBERED</source>
-        <translation type="vanished">LEMBRADOS</translation>
-    </message>
-    <message>
-        <source>Scan</source>
-        <translation type="vanished">Buscar</translation>
-    </message>
-    <message>
-        <source>Connect</source>
-        <translation type="vanished">Conectar</translation>
-    </message>
-    <message>
-        <source>Forget</source>
-        <translation type="vanished">Esquecer</translation>
-    </message>
-    <message>
-        <source>Scanning…</source>
-        <translation type="vanished">Buscando…</translation>
-    </message>
-    <message>
-        <source>Pairing…</source>
-        <translation type="vanished">Pareando…</translation>
-    </message>
-    <message>
-        <source> • online</source>
-        <translation type="vanished"> • on-line</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::DeadzoneSettingsView</name>
-    <message>
-        <source>Dead zones</source>
-        <translation type="vanished">Zonas mortas</translation>
-    </message>
-    <message>
-        <source>Done</source>
-        <translation type="vanished">Concluído</translation>
-    </message>
-    <message>
-        <source>CONTROLLERS</source>
-        <translation type="vanished">CONTROLES</translation>
-    </message>
-    <message>
-        <source>Connect a controller to adjust its dead zones.</source>
-        <translation type="vanished">Conecte um controle para ajustar suas zonas mortas.</translation>
-    </message>
-    <message>
-        <source>A larger dead zone ignores more stick or trigger travel near rest — raise it if a worn controller drifts on its own.</source>
-        <translation type="vanished">Uma zona morta maior ignora mais curso do analógico ou gatilho perto do repouso — aumente-a se um controle gasto desvia sozinho.</translation>
-    </message>
-    <message>
-        <source>Stick: %1</source>
-        <translation type="vanished">Analógico: %1</translation>
-    </message>
-    <message>
-        <source>Trigger: %1</source>
-        <translation type="vanished">Gatilho: %1</translation>
-    </message>
-    <message>
-        <source>Forward motion</source>
-        <translation type="vanished">Encaminhar movimento</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::DonatePill</name>
-    <message>
-        <source>Support Dish</source>
-        <translation type="vanished">Apoiar o Dish</translation>
-    </message>
-    <message>
-        <source>Dismiss for a day</source>
-        <translation type="vanished">Ocultar por um dia</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::DonateView</name>
-    <message>
-        <source>Recommended</source>
-        <translation type="vanished">Recomendado</translation>
-    </message>
-    <message>
-        <source>CADENCE</source>
-        <translation type="vanished">FREQUÊNCIA</translation>
-    </message>
-    <message>
-        <source>PAYS WITH</source>
-        <translation type="vanished">PAGAMENTO</translation>
-    </message>
-    <message>
-        <source>Support Dish</source>
-        <translation type="vanished">Apoiar o Dish</translation>
-    </message>
-    <message>
-        <source>https://github.com/sponsors/TinkerNorth</source>
-        <comment>url_sponsors (localizable override)</comment>
-        <translation type="vanished">https://github.com/sponsors/TinkerNorth</translation>
-    </message>
-    <message>
-        <source>https://ko-fi.com/tinkernorth</source>
-        <comment>url_kofi (localizable override)</comment>
-        <translation type="vanished">https://ko-fi.com/tinkernorth</translation>
-    </message>
-    <message>
-        <source>https://buymeacoffee.com/tinkernorth</source>
-        <comment>url_bmac (localizable override)</comment>
-        <translation type="vanished">https://buymeacoffee.com/tinkernorth</translation>
-    </message>
-    <message>
-        <source>SUPPORT THE PROJECT</source>
-        <translation type="vanished">APOIE O PROJETO</translation>
-    </message>
-    <message>
-        <source>Dish runs on coffee and goodwill.</source>
-        <translation type="vanished">O Dish funciona a café e boa vontade.</translation>
-    </message>
-    <message>
-        <source>Dish, Satellite, and every Dish client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells. Donations are what keep them that way.</source>
-        <translation type="vanished">Dish, Satellite e todos os clientes Dish são gratuitos, de código aberto, sem anúncios e sem analytics. Sem recursos pagos, sem upsell. As doações os mantêm assim.</translation>
-    </message>
-    <message>
-        <source>Sponsor on GitHub Sponsors (recommended)</source>
-        <translation type="vanished">Patrocinar no GitHub Sponsors (recomendado)</translation>
-    </message>
-    <message>
-        <source>Monthly sponsorship, processed by GitHub. Lowest fees, no platform cut — the most stable way to support Dish, and the one GitHub matches dollar-for-dollar where eligible.</source>
-        <translation type="vanished">Patrocínio mensal, processado pelo GitHub. Menores taxas, sem corte da plataforma — a forma mais estável de apoiar o Dish, e a única que o GitHub iguala dólar por dólar quando elegível.</translation>
-    </message>
-    <message>
-        <source>Recurring</source>
-        <translation type="vanished">Recorrente</translation>
-    </message>
-    <message>
-        <source>Card, PayPal, GitHub credit</source>
-        <translation type="vanished">Cartão, PayPal, crédito do GitHub</translation>
-    </message>
-    <message>
-        <source>Open GitHub Sponsors →</source>
-        <translation type="vanished">Abrir GitHub Sponsors →</translation>
-    </message>
-    <message>
-        <source>Tip jar. Buy us a coffee, no account required. Ko-fi takes no cut on one-time tips, so every dollar reaches the project.</source>
-        <translation type="vanished">Caixa de gorjetas. Pague-nos um café, sem precisar de conta. O Ko-fi não fica com nada nas gorjetas únicas, então cada dólar chega ao projeto.</translation>
-    </message>
-    <message>
-        <source>One-time</source>
-        <translation type="vanished">Única vez</translation>
-    </message>
-    <message>
-        <source>Card, Apple Pay, Google Pay, PayPal</source>
-        <translation type="vanished">Cartão, Apple Pay, Google Pay, PayPal</translation>
-    </message>
-    <message>
-        <source>Open Ko-fi →</source>
-        <translation type="vanished">Abrir Ko-fi →</translation>
-    </message>
-    <message>
-        <source>Quick one-time gift or a monthly membership. Card, Apple Pay, or Google Pay. Great if you don&apos;t have a GitHub account.</source>
-        <translation type="vanished">Presente único rápido ou assinatura mensal. Cartão, Apple Pay ou Google Pay. Ótimo se você não tem conta no GitHub.</translation>
-    </message>
-    <message>
-        <source>Either</source>
-        <translation type="vanished">Qualquer um</translation>
-    </message>
-    <message>
-        <source>Card, Apple Pay, Google Pay</source>
-        <translation type="vanished">Cartão, Apple Pay, Google Pay</translation>
-    </message>
-    <message>
-        <source>Open Buy Me a Coffee →</source>
-        <translation type="vanished">Abrir Buy Me a Coffee →</translation>
-    </message>
-    <message>
-        <source>What your donation pays for</source>
-        <translation type="vanished">Para o que a sua doação realmente vai</translation>
-    </message>
-    <message>
-        <source>Hosting. dish.tinkernorth.com, tinkernorth.com, and every signed-installer mirror. AWS isn&apos;t free, even at our scale.</source>
-        <translation type="vanished">Hospedagem. dish.tinkernorth.com, tinkernorth.com e cada espelho de instalador assinado. A AWS não é gratuita, mesmo na nossa escala.</translation>
-    </message>
-    <message>
-        <source>Code-signing certificates. Windows SmartScreen only plays nice because we pay for an EV certificate every year.</source>
-        <translation type="vanished">Certificados de assinatura de código. O Windows SmartScreen só coopera porque pagamos um certificado EV todo ano.</translation>
-    </message>
-    <message>
-        <source>Store developer fees. The platform accounts and the time to keep each listing compliant with every new policy round.</source>
-        <translation type="vanished">Taxas de desenvolvedor das lojas. As contas de plataforma e o tempo para manter cada listagem em conformidade com cada nova rodada de políticas.</translation>
-    </message>
-    <message>
-        <source>Time. Honest answer: most of it. Dish is a nights-and-weekends project. Donations let us say yes to working on it.</source>
-        <translation type="vanished">Tempo. Resposta honesta: a maior parte dele. O Dish é um projeto de noites e fins de semana. As doações nos permitem dizer sim a trabalhar nele.</translation>
-    </message>
-    <message>
-        <source>Thank you. Every dollar, every star, every shared link. They all add up. Emir</source>
-        <translation type="vanished">Obrigado. Cada dólar, cada estrela, cada link compartilhado. Tudo soma. Emir</translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation type="vanished">Fechar</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::EmulatePicker</name>
-    <message>
-        <source>Emulate</source>
-        <translation type="vanished">Emular</translation>
-    </message>
-    <message>
-        <source>EMULATE</source>
-        <translation type="vanished">EMULAR</translation>
-    </message>
-    <message>
-        <source>Choose what %1 appears as on the host.</source>
-        <translation type="vanished">Escolha como %1 aparece no host.</translation>
-    </message>
-    <message>
-        <source>No controller types available yet.</source>
-        <translation type="vanished">Nenhum tipo de controle disponível ainda.</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">Cancelar</translation>
-    </message>
-    <message>
-        <source>Apply</source>
-        <translation type="vanished">Aplicar</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::ExternalLink</name>
-    <message>
-        <source>Couldn&apos;t open browser</source>
-        <translation type="vanished">Não foi possível abrir o navegador</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::HelpView</name>
-    <message>
-        <source>Help &amp; FAQ</source>
-        <translation type="vanished">Ajuda e FAQ</translation>
-    </message>
-    <message>
-        <source>Walk me through setup</source>
-        <translation type="vanished">Guie-me pela configuração</translation>
-    </message>
-    <message>
-        <source>Open the setup guide. It points you at the right screen to connect and pair.</source>
-        <translation type="vanished">Abra o guia de configuração. Ele leva você à tela certa para conectar e parear.</translation>
-    </message>
-    <message>
-        <source>Open setup guide</source>
-        <translation type="vanished">Abrir guia de configuração</translation>
-    </message>
-    <message>
-        <source>CONCEPTS</source>
-        <translation type="vanished">CONCEITOS</translation>
-    </message>
-    <message>
-        <source>What is Dish?</source>
-        <translation type="vanished">O que é o Dish?</translation>
-    </message>
-    <message>
-        <source>Dish turns a controller plugged into this PC into a wireless gamepad for another PC. It forwards input over your local network to the free Satellite helper.</source>
-        <translation type="vanished">O Dish transforma um controle conectado a este PC em um gamepad sem fio para outro PC. Ele encaminha a entrada pela sua rede local ao ajudante gratuito Satellite.</translation>
-    </message>
-    <message>
-        <source>What is Satellite?</source>
-        <translation type="vanished">O que é o Satellite?</translation>
-    </message>
-    <message>
-        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC&apos;s games as a regular controller. Without Satellite, games can&apos;t see your controller. Install it from tinkernorth.com/satellite.</source>
-        <translation type="vanished">O Satellite é um programa pequeno, gratuito e de código aberto que roda no PC anfitrião. Ele recebe a entrada do Dish por Wi-Fi e se apresenta aos jogos desse PC como um controle comum. Sem o Satellite, os jogos não enxergam seu controle. Instale-o em tinkernorth.com/satellite.</translation>
-    </message>
-    <message>
-        <source>What&apos;s motion and what&apos;s the touchpad?</source>
-        <translation type="vanished">O que é movimento e o que é o touchpad?</translation>
-    </message>
-    <message>
-        <source>Motion is a controller&apos;s gyroscope used as aim assist, forwarded as the gyro inside a PlayStation pad. The touchpad forwards a DualSense / DualShock 4 touchpad. Both need a PlayStation-style controller and a Satellite connection.</source>
-        <translation type="vanished">Movimento é o giroscópio de um controle usado como auxílio de mira, encaminhado como o giroscópio de um controle PlayStation. O touchpad encaminha um touchpad DualSense / DualShock 4. Ambos precisam de um controle estilo PlayStation e uma conexão Satellite.</translation>
-    </message>
-    <message>
-        <source>BEST PERFORMANCE</source>
-        <translation type="vanished">MELHOR DESEMPENHO</translation>
-    </message>
-    <message>
-        <source>What&apos;s the best setup for low latency?</source>
-        <translation type="vanished">Qual é a melhor configuração para baixa latência?</translation>
-    </message>
-    <message>
-        <source>Both PCs on the same router, wired Ethernet where you can, 5 GHz Wi-Fi otherwise. Dish needs this PC and the host PC on the same local network — it sends input as small UDP packets, so a fast LAN keeps the delay tiny.</source>
-        <translation type="vanished">Ambos os PCs no mesmo roteador, Ethernet com fio quando possível, Wi-Fi de 5 GHz caso contrário. O Dish precisa deste PC e do PC anfitrião na mesma rede local — ele envia a entrada como pequenos pacotes UDP, então uma LAN rápida mantém o atraso mínimo.</translation>
-    </message>
-    <message>
-        <source>Is wired better than wireless?</source>
-        <translation type="vanished">Com fio é melhor que sem fio?</translation>
-    </message>
-    <message>
-        <source>For the controller-to-PC leg, a USB controller has no radio latency. For the PC-to-PC leg, connect both machines to the router with Ethernet if you can.</source>
-        <translation type="vanished">Para o trecho controle-para-PC, um controle USB não tem latência de rádio. Para o trecho PC-para-PC, conecte ambas as máquinas ao roteador por Ethernet se puder.</translation>
-    </message>
-    <message>
-        <source>TROUBLESHOOTING</source>
-        <translation type="vanished">SOLUÇÃO DE PROBLEMAS</translation>
-    </message>
-    <message>
-        <source>Dish can&apos;t find any Satellites. What now?</source>
-        <translation type="vanished">O Dish não encontra nenhum Satellite. E agora?</translation>
-    </message>
-    <message>
-        <source>Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Tap Scan in Connections to retry.</source>
-        <translation type="vanished">Verifique se o Satellite está em execução no PC anfitrião (o ícone da bandeja deve estar visível). Confirme que ambos os PCs estão na mesma rede. Redes de convidados e 2,4 GHz vs 5 GHz no mesmo roteador contam como diferentes. Toque em Buscar em Conexões para tentar novamente.</translation>
-    </message>
-    <message>
-        <source>My PIN keeps getting rejected.</source>
-        <translation type="vanished">Meu PIN continua sendo rejeitado.</translation>
-    </message>
-    <message>
-        <source>The PIN is shown by Satellite on the host PC and changes if you restart it. Check the digits right before you type, and make sure you&apos;re pairing with the right Satellite if more than one is listed.</source>
-        <translation type="vanished">O PIN é exibido pelo Satellite no PC anfitrião e muda se você reiniciá-lo. Verifique os dígitos pouco antes de digitar e certifique-se de parear com o Satellite certo se houver mais de um listado.</translation>
-    </message>
-    <message>
-        <source>My controller keeps disconnecting mid-game.</source>
-        <translation type="vanished">Meu controle continua desconectando no meio do jogo.</translation>
-    </message>
-    <message>
-        <source>Most disconnects come from Wi-Fi switching bands or the controller&apos;s own wireless dropping. Prefer wired Ethernet on both PCs and a wired controller. Dish keeps the session alive while the app is open.</source>
-        <translation type="vanished">A maioria das desconexões vem do Wi-Fi trocando de banda ou da própria conexão sem fio do controle caindo. Prefira Ethernet com fio em ambos os PCs e um controle com fio. O Dish mantém a sessão ativa enquanto o app está aberto.</translation>
-    </message>
-    <message>
-        <source>Motion (gyro aim) isn&apos;t working.</source>
-        <translation type="vanished">Movimento (mira por giroscópio) não funciona.</translation>
-    </message>
-    <message>
-        <source>Motion needs three things: a Satellite connection, a controller with a gyroscope (DualSense, DualShock 4, Switch Pro), and a PlayStation-style controller type on the slot. Switch the emulated type to PlayStation to enable the motion channel.</source>
-        <translation type="vanished">O movimento precisa de três coisas: uma conexão Satellite, um controle com giroscópio (DualSense, DualShock 4, Switch Pro) e um tipo de controle estilo PlayStation no slot. Mude o tipo emulado para PlayStation para ativar o canal de movimento.</translation>
-    </message>
-    <message>
-        <source>ABOUT DISH</source>
-        <translation type="vanished">SOBRE O DISH</translation>
-    </message>
-    <message>
-        <source>Is Dish open source?</source>
-        <translation type="vanished">O Dish é de código aberto?</translation>
-    </message>
-    <message>
-        <source>Yes. Dish (Windows, Android, Linux, Mac) and Satellite are all released under LGPL-3.0, source on GitHub at github.com/TinkerNorth. Pull requests welcome.</source>
-        <translation type="vanished">Sim. Dish (Windows, Android, Linux, Mac) e Satellite são lançados sob LGPL-3.0, código no GitHub em github.com/TinkerNorth. Pull requests são bem-vindos.</translation>
-    </message>
-    <message>
-        <source>What does Dish collect?</source>
-        <translation type="vanished">O que o Dish coleta?</translation>
-    </message>
-    <message>
-        <source>Almost nothing. Dish doesn&apos;t send gameplay or controller input anywhere except the host PC on your local network. Anonymous crash reports are on by default and can be turned off (Settings → Diagnostics). See the privacy policy for the full list.</source>
-        <translation type="vanished">Quase nada. O Dish não envia jogos nem entrada de controle para lugar algum, exceto o PC anfitrião na sua rede local. Relatórios de falhas anônimos estão ativados por padrão e podem ser desativados (Configurações → Diagnóstico). Veja a política de privacidade para a lista completa.</translation>
-    </message>
-    <message>
-        <source>https://dish.tinkernorth.com/privacy/dish-windows/</source>
-        <comment>url_privacy_policy (localizable override)</comment>
-        <translation type="vanished">https://dish.tinkernorth.com/privacy/dish-windows/</translation>
-    </message>
-    <message>
-        <source>https://github.com/TinkerNorth</source>
-        <comment>url_github (localizable override)</comment>
-        <translation type="vanished">https://github.com/TinkerNorth</translation>
-    </message>
-    <message>
-        <source>LINKS</source>
-        <translation type="vanished">LINKS</translation>
-    </message>
-    <message>
-        <source>Privacy policy</source>
-        <translation type="vanished">Política de privacidade</translation>
-    </message>
-    <message>
-        <source>View source on GitHub</source>
-        <translation type="vanished">Ver código no GitHub</translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation type="vanished">Fechar</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::LicensesView</name>
-    <message>
-        <source>Open source licenses</source>
-        <translation type="vanished">Licenças de código aberto</translation>
-    </message>
-    <message>
-        <source>Acknowledgements for the libraries Dish is built on. Tap a row to open its license.</source>
-        <translation type="vanished">Créditos das bibliotecas em que o Dish é construído. Toque em uma linha para abrir sua licença.</translation>
-    </message>
-    <message>
-        <source>No license information bundled.</source>
-        <translation type="vanished">Nenhuma informação de licença incluída.</translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation type="vanished">Fechar</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::MainWindow</name>
-    <message>
-        <source>Settings</source>
-        <translation type="vanished">Configurações</translation>
-    </message>
-    <message>
-        <source>Manage</source>
-        <translation type="vanished">Gerenciar</translation>
-    </message>
-    <message>
-        <source>CONTROLLERS</source>
-        <translation type="vanished">CONTROLES</translation>
-    </message>
-    <message>
-        <source>No controllers connected</source>
-        <translation type="vanished">Nenhum controle conectado</translation>
-    </message>
-    <message>
-        <source>No connections yet</source>
-        <translation type="vanished">Nenhuma conexão ainda</translation>
-    </message>
-    <message>
-        <source>%1 remembered</source>
-        <translation type="vanished">%1 pareado(s)</translation>
-    </message>
-    <message>
-        <source>%1 online</source>
-        <translation type="vanished">%1 on-line</translation>
-    </message>
-    <message>
-        <source>Tap Manage to add one</source>
-        <translation type="vanished">Toque em Gerenciar para adicionar um</translation>
-    </message>
-    <message>
-        <source>%1 of %2 online</source>
-        <translation type="vanished">%1 de %2 on-line</translation>
-    </message>
-    <message>
-        <source>Error</source>
-        <translation type="vanished">Erro</translation>
-    </message>
-    <message>
-        <source>Dead zones</source>
-        <translation type="vanished">Zonas mortas</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::PairingDialog</name>
-    <message>
-        <source>Pair with %1</source>
-        <translation type="vanished">Parear com %1</translation>
-    </message>
-    <message>
-        <source>PAIRING</source>
-        <translation type="vanished">PAREANDO</translation>
-    </message>
-    <message>
-        <source>Enter the 6-digit PIN displayed on %1</source>
-        <translation type="vanished">Digite o PIN de 6 dígitos exibido em %1</translation>
-    </message>
-    <message>
-        <source>PIN</source>
-        <translation type="vanished">PIN</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">Cancelar</translation>
-    </message>
-    <message>
-        <source>Pair</source>
-        <translation type="vanished">Parear</translation>
-    </message>
-    <message>
-        <source>Pairing…</source>
-        <translation type="vanished">Pareando…</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::SettingsDialog</name>
-    <message>
-        <source>Settings</source>
-        <translation type="vanished">Configurações</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::SettingsView</name>
-    <message>
-        <source>Settings</source>
-        <translation type="vanished">Configurações</translation>
-    </message>
-    <message>
-        <source>Done</source>
-        <translation type="vanished">Pronto</translation>
-    </message>
-    <message>
-        <source>FORWARDED FEATURES</source>
-        <translation type="vanished">RECURSOS ENCAMINHADOS</translation>
-    </message>
-    <message>
-        <source>Light bar</source>
-        <translation type="vanished">Barra de luz</translation>
-    </message>
-    <message>
-        <source>Follow game: the controller LED matches the host game. Off: leave the LED untouched.</source>
-        <translation type="vanished">Seguir o jogo: o LED do controle corresponde ao jogo anfitrião. Desligado: deixar o LED intocado.</translation>
-    </message>
-    <message>
-        <source>Features only apply when your controller&apos;s hardware supports them — the controller list shows what was detected.</source>
-        <translation type="vanished">Os recursos só se aplicam quando o hardware do seu controle os suporta — a lista de controles mostra o que foi detectado.</translation>
-    </message>
-    <message>
-        <source>CONTROLLER TUNING</source>
-        <translation type="vanished">AJUSTE DO CONTROLE</translation>
-    </message>
-    <message>
-        <source>Dead zones &amp;&amp; motion…</source>
-        <translation type="vanished">Zonas mortas e movimento…</translation>
-    </message>
-    <message>
-        <source>SETUP &amp; HELP</source>
-        <translation type="vanished">CONFIGURAÇÃO E AJUDA</translation>
-    </message>
-    <message>
-        <source>Setup guide</source>
-        <translation type="vanished">Guia de configuração</translation>
-    </message>
-    <message>
-        <source>Walk through connection and controller setup. Re-run any time.</source>
-        <translation type="vanished">Percorra a configuração de conexão e controle. Execute novamente quando quiser.</translation>
-    </message>
-    <message>
-        <source>Help &amp; FAQ</source>
-        <translation type="vanished">Ajuda e FAQ</translation>
-    </message>
-    <message>
-        <source>Concepts, performance tips, and troubleshooting.</source>
-        <translation type="vanished">Conceitos, dicas de desempenho e solução de problemas.</translation>
-    </message>
-    <message>
-        <source>APPEARANCE</source>
-        <translation type="vanished">APARÊNCIA</translation>
-    </message>
-    <message>
-        <source>Theme</source>
-        <translation type="vanished">Tema</translation>
-    </message>
-    <message>
-        <source>Choose how Dish looks. System matches your Windows light or dark setting.</source>
-        <translation type="vanished">Escolha como o Dish aparece. &quot;Sistema&quot; segue a configuração clara ou escura do Windows.</translation>
-    </message>
-    <message>
-        <source>DIAGNOSTICS</source>
-        <translation type="vanished">DIAGNÓSTICO</translation>
-    </message>
-    <message>
-        <source>ABOUT</source>
-        <translation type="vanished">SOBRE</translation>
-    </message>
-    <message>
-        <source>Open source licenses</source>
-        <translation type="vanished">Licenças de código aberto</translation>
-    </message>
-    <message>
-        <source>Acknowledgements for the libraries Dish is built on.</source>
-        <translation type="vanished">Créditos das bibliotecas em que o Dish é construído.</translation>
-    </message>
-    <message>
-        <source>Support Dish</source>
-        <translation type="vanished">Apoiar o Dish</translation>
-    </message>
-    <message>
-        <source>Donate via GitHub Sponsors, Ko-fi, or Buy Me a Coffee.</source>
-        <translation type="vanished">Doe via GitHub Sponsors, Ko-fi ou Buy Me a Coffee.</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::SetupWizardView</name>
-    <message>
-        <source>Setup guide</source>
-        <translation type="vanished">Guia de configuração</translation>
-    </message>
-    <message>
-        <source>STEP 1 · CONNECT</source>
-        <translation type="vanished">ETAPA 1 · CONECTAR</translation>
-    </message>
-    <message>
-        <source>Find and pair your Satellite</source>
-        <translation type="vanished">Encontre e pareie seu Satellite</translation>
-    </message>
-    <message>
-        <source>Dish reaches a host PC over your local network. Both machines must be on the same Wi-Fi or LAN.</source>
-        <translation type="vanished">O Dish alcança um PC anfitrião pela sua rede local. Ambas as máquinas devem estar na mesma Wi-Fi ou LAN.</translation>
-    </message>
-    <message>
-        <source>Find your PC on the network</source>
-        <translation type="vanished">Encontre seu PC na rede</translation>
-    </message>
-    <message>
-        <source>Open Connections and tap Scan. Satellites running on your LAN appear automatically — no IP to type in.</source>
-        <translation type="vanished">Abra Conexões e toque em Buscar. Os Satellites em execução na sua LAN aparecem automaticamente — nenhum IP para digitar.</translation>
-    </message>
-    <message>
-        <source>Enter the operator PIN</source>
-        <translation type="vanished">Insira o PIN do operador</translation>
-    </message>
-    <message>
-        <source>Pick your Satellite and enter the 6-digit PIN it shows on the host screen. Once accepted, the pairing is remembered.</source>
-        <translation type="vanished">Escolha seu Satellite e insira o PIN de 6 dígitos que ele mostra na tela do anfitrião. Uma vez aceito, o pareamento é lembrado.</translation>
-    </message>
-    <message>
-        <source>STEP 2 · CONTROLLER</source>
-        <translation type="vanished">ETAPA 2 · CONTROLE</translation>
-    </message>
-    <message>
-        <source>Plug in or pair a controller</source>
-        <translation type="vanished">Conecte ou pareie um controle</translation>
-    </message>
-    <message>
-        <source>There is no on-screen pad to pick on Windows — Dish forwards any real controller this PC sees.</source>
-        <translation type="vanished">No Windows não há controle na tela para escolher — o Dish encaminha qualquer controle real que este PC veja.</translation>
-    </message>
-    <message>
-        <source>It appears automatically</source>
-        <translation type="vanished">Ele aparece automaticamente</translation>
-    </message>
-    <message>
-        <source>Connect an Xbox, PlayStation, or generic gamepad over USB or Bluetooth. Windows detects it and Dish lists it as a new slot.</source>
-        <translation type="vanished">Conecte um gamepad Xbox, PlayStation ou genérico via USB ou Bluetooth. O Windows o detecta e o Dish o lista como um novo slot.</translation>
-    </message>
-    <message>
-        <source>Confirm it&apos;s detected</source>
-        <translation type="vanished">Confirme que ele foi detectado</translation>
-    </message>
-    <message>
-        <source>The controller shows up on the dashboard with its capabilities (motion, lightbar, battery). Bind it to a paired Satellite to start streaming.</source>
-        <translation type="vanished">O controle aparece no painel com seus recursos (movimento, lightbar, bateria). Vincule-o a um Satellite pareado para começar a transmitir.</translation>
-    </message>
-    <message>
-        <source>STEP 3 · LET&apos;S GO</source>
-        <translation type="vanished">ETAPA 3 · VAMOS LÁ</translation>
-    </message>
-    <message>
-        <source>Here&apos;s what we&apos;ll do</source>
-        <translation type="vanished">Veja o que vamos fazer</translation>
-    </message>
-    <message>
-        <source>Summary</source>
-        <translation type="vanished">Resumo</translation>
-    </message>
-    <message>
-        <source>Connection: Wi-Fi / LAN to Satellite.
-Controller: any pad this PC detects.</source>
-        <translation type="vanished">Conexão: Wi-Fi / LAN para o Satellite.
-Controle: qualquer controle que este PC detecte.</translation>
-    </message>
-    <message>
-        <source>What&apos;s next</source>
-        <translation type="vanished">O que vem a seguir</translation>
-    </message>
-    <message>
-        <source>Tap Finish to open Connections. Scan for your Satellite, pair it with the PIN, then bind a connected controller to start playing.</source>
-        <translation type="vanished">Toque em Concluir para abrir Conexões. Busque seu Satellite, pareie-o com o PIN e vincule um controle conectado para começar a jogar.</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation type="vanished">Voltar</translation>
-    </message>
-    <message>
-        <source>Step %1 of %2</source>
-        <translation type="vanished">Etapa %1 de %2</translation>
-    </message>
-    <message>
-        <source>Finish</source>
-        <translation type="vanished">Concluir</translation>
-    </message>
-    <message>
-        <source>Next</source>
-        <translation type="vanished">Avançar</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::SlotCard</name>
-    <message>
-        <source>%1 Hz</source>
-        <translation type="vanished">%1 Hz</translation>
-    </message>
-    <message>
-        <source>~%1 Hz</source>
-        <translation type="vanished">~%1 Hz</translation>
-    </message>
-    <message>
-        <source>Controller report rate (measured).</source>
-        <translation type="vanished">Taxa de relatórios do controle (medida).</translation>
-    </message>
-    <message>
-        <source>Controller report rate (estimated from recent activity).</source>
-        <translation type="vanished">Taxa de relatórios do controle (estimada pela atividade recente).</translation>
-    </message>
-    <message>
-        <source>Motion (gyro) sample rate.</source>
-        <translation type="vanished">Taxa de amostragem de movimento (giroscópio).</translation>
-    </message>
-    <message>
-        <source>USB-direct poll rate (measured).</source>
-        <translation type="vanished">Taxa de sondagem USB direta (medida).</translation>
-    </message>
-    <message>
-        <source>Gyro</source>
-        <translation type="vanished">Giroscópio</translation>
-    </message>
-    <message>
-        <source>No gyro</source>
-        <translation type="vanished">Sem giroscópio</translation>
-    </message>
-    <message>
-        <source>Motion available — this controller has a gyro/accelerometer and motion aiming is being forwarded.</source>
-        <translation type="vanished">Movimento disponível: este controle tem giroscópio/acelerômetro e a mira por movimento está sendo encaminhada.</translation>
-    </message>
-    <message>
-        <source>Motion not available — this controller has no gyro/accelerometer, so motion aiming can&apos;t be forwarded.</source>
-        <translation type="vanished">Movimento indisponível: este controle não tem giroscópio/acelerômetro, então a mira por movimento não pode ser encaminhada.</translation>
-    </message>
-    <message>
-        <source>Lightbar</source>
-        <translation type="vanished">Barra de luz</translation>
-    </message>
-    <message>
-        <source>Lightbar available — this controller has an RGB LED. It follows the host game&apos;s colour unless the Light bar setting is Off.</source>
-        <translation type="vanished">Lightbar disponível: este controle tem um LED RGB. Ele segue a cor do jogo anfitrião, a menos que a configuração da barra de luz esteja desligada.</translation>
-    </message>
-    <message>
-        <source>Battery %1%</source>
-        <translation type="vanished">Bateria %1 %</translation>
-    </message>
-    <message>
-        <source>Battery %1% ↑</source>
-        <translation type="vanished">Bateria %1 % ↑</translation>
-    </message>
-    <message>
-        <source>Battery wired</source>
-        <translation type="vanished">Bateria com fio</translation>
-    </message>
-    <message>
-        <source>Battery full</source>
-        <translation type="vanished">Bateria cheia</translation>
-    </message>
-    <message>
-        <source>This host has no internal battery (a desktop) — reported as wired / full charge.</source>
-        <translation type="vanished">Este anfitrião não tem bateria interna (um desktop) — informado como com fio / carga total.</translation>
-    </message>
-    <message>
-        <source>Battery at %1% and charging.</source>
-        <translation type="vanished">Bateria em %1 % e carregando.</translation>
-    </message>
-    <message>
-        <source>Battery full (%1%).</source>
-        <translation type="vanished">Bateria cheia (%1 %).</translation>
-    </message>
-    <message>
-        <source>Battery low — %1% remaining.</source>
-        <translation type="vanished">Bateria fraca — %1 % restante.</translation>
-    </message>
-    <message>
-        <source>Battery at %1%.</source>
-        <translation type="vanished">Bateria em %1 %.</translation>
-    </message>
-    <message>
-        <source>Bound to %1</source>
-        <translation type="vanished">Vinculado a %1</translation>
-    </message>
-    <message>
-        <source>Unbind</source>
-        <translation type="vanished">Desvincular</translation>
-    </message>
-    <message>
-        <source>Unbound</source>
-        <translation type="vanished">Não vinculado</translation>
-    </message>
-    <message>
-        <source>Bind…</source>
-        <translation type="vanished">Vincular…</translation>
-    </message>
-    <message>
-        <source>Emulate…</source>
-        <translation type="vanished">Emular…</translation>
-    </message>
-</context>
-<context>
-    <name>dish::ui::WelcomeDialog</name>
-    <message>
-        <source>WELCOME</source>
-        <translation type="vanished">BEM-VINDO</translation>
-    </message>
-    <message>
-        <source>Your controller, on your PC</source>
-        <translation type="vanished">Seu controle, no seu PC</translation>
-    </message>
-    <message>
-        <source>Dish forwards a real game controller plugged into this PC to another PC running Satellite, over your local network. Plug in a pad and it shows up ready to play.</source>
-        <translation type="vanished">O Dish encaminha um controle de jogo real conectado a este PC para outro PC executando o Satellite, pela sua rede local. Conecte um controle e ele aparece pronto para jogar.</translation>
-    </message>
-    <message>
-        <source>HOW IT WORKS</source>
-        <translation type="vanished">COMO FUNCIONA</translation>
-    </message>
-    <message>
-        <source>A short hop over Wi-Fi</source>
-        <translation type="vanished">Um curto salto por Wi-Fi</translation>
-    </message>
-    <message>
-        <source>Your controller&apos;s button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.</source>
-        <translation type="vanished">Os pressionamentos de botão, analógicos e movimento do seu controle viajam para um pequeno ajudante gratuito chamado Satellite em execução no PC anfitrião. O Satellite se apresenta aos jogos dele como um gamepad comum. Sem configuração extra por jogo.</translation>
-    </message>
-    <message>
-        <source>ONE MORE THING</source>
-        <translation type="vanished">MAIS UMA COISA</translation>
-    </message>
-    <message>
-        <source>Install Satellite on the host PC</source>
-        <translation type="vanished">Instale o Satellite no PC anfitrião</translation>
-    </message>
-    <message>
-        <source>Satellite is free and open source. Grab it from tinkernorth.com/satellite, run the installer, and Dish will find it automatically. You can finish this intro now and install Satellite later.</source>
-        <translation type="vanished">O Satellite é gratuito e de código aberto. Baixe-o em tinkernorth.com/satellite, execute o instalador e o Dish o encontrará automaticamente. Você pode terminar esta introdução agora e instalar o Satellite depois.</translation>
-    </message>
-    <message>
-        <source>Open download page</source>
-        <translation type="vanished">Abrir página de download</translation>
-    </message>
-    <message>
-        <source>YOU&apos;RE SET</source>
-        <translation type="vanished">TUDO PRONTO</translation>
-    </message>
-    <message>
-        <source>Ready when you are</source>
-        <translation type="vanished">Pronto quando você estiver</translation>
-    </message>
-    <message>
-        <source>Open the setup guide for a walkthrough, or jump straight in and pair with a Satellite on your network.</source>
-        <translation type="vanished">Abra o guia de configuração para um passo a passo, ou comece direto e pareie com um Satellite na sua rede.</translation>
-    </message>
-    <message>
-        <source>Open setup guide</source>
-        <translation type="vanished">Abrir guia de configuração</translation>
-    </message>
-    <message>
-        <source>https://tinkernorth.com/satellite</source>
-        <comment>url_satellite (localizable override)</comment>
-        <translation type="vanished">https://tinkernorth.com/satellite</translation>
-    </message>
-    <message>
-        <source>Back</source>
-        <translation type="vanished">Voltar</translation>
-    </message>
-    <message>
-        <source>Skip</source>
-        <translation type="vanished">Pular</translation>
-    </message>
-    <message>
-        <source>Next</source>
-        <translation type="vanished">Avançar</translation>
-    </message>
-    <message>
-        <source>Get started</source>
-        <translation type="vanished">Começar</translation>
     </message>
 </context>
 </TS>

@@ -27,8 +27,6 @@ QString stableKeyOf(const models::DiscoveredServer& s) {
 QList<models::DiscoveredServer>
 DiscoveryGateway::mergeDiscovered(const QList<models::DiscoveredServer>& broadcast,
                                   const QList<models::DiscoveredServer>& mdns) {
-    // Insertion-ordered map keyed by stable key (machineId-preferring). Mirrors
-    // android's LinkedHashMap<stableKey, server> then sortedBy name.
     QList<models::DiscoveredServer> ordered; // preserves first-seen order
     QHash<QString, int> indexByKey;          // stable key → index in `ordered`
 
@@ -37,7 +35,7 @@ DiscoveryGateway::mergeDiscovered(const QList<models::DiscoveredServer>& broadca
         const QString key = stableKeyOf(server);
         const auto it = indexByKey.constFind(key);
         if (it != indexByKey.constEnd()) {
-            ordered[it.value()] = server; // last write wins on key (android map put)
+            ordered[it.value()] = server; // last write wins on the key
         } else {
             indexByKey.insert(key, static_cast<int>(ordered.size()));
             ordered.append(server);

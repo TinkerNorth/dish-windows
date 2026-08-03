@@ -6,8 +6,6 @@
 namespace dish::input {
 
 std::int16_t axisAt(const JoystickSnapshot& snap, int index) {
-    // Out-of-range / null reads neutral so a pad with fewer axes than the
-    // default layout assumes never reads past its real axis array.
     if (snap.axes == nullptr || index < 0 || index >= snap.axisCount) { return 0; }
     return snap.axes[index];
 }
@@ -18,31 +16,19 @@ bool buttonAt(const JoystickSnapshot& snap, int index) {
 }
 
 std::uint8_t triggerFromAxis(std::int16_t v) {
-    // Negative (and centre-or-below) → released. The positive half of the
-    // int16 span maps linearly to 0..255 — same shape the controller path
-    // uses for the 0..32767 trigger axes.
     if (v <= 0) { return 0; }
     return static_cast<std::uint8_t>((static_cast<int>(v) * 255) / 32767);
 }
 
-bool hasTriggerAxes(const JoystickSnapshot& snap) {
-    // Six or more axes is the DirectInput signature for "two sticks + two
-    // dedicated trigger axes". Four/five axes is "two sticks, triggers are
-    // buttons".
-    return snap.axisCount >= 6;
-}
+bool hasTriggerAxes(const JoystickSnapshot& snap) { return snap.axisCount >= 6; }
 
 namespace {
 
-// Drive one logical button from its remapped source index. -1 (unassigned)
-// reads neutral so the bit stays clear.
 void applyButton(std::uint16_t& btn, std::uint16_t bit, const JoystickSnapshot& snap, int source) {
     if (source >= 0 && buttonAt(snap, source)) { btn |= bit; }
 }
 
-// Resolve a trigger source to its 0..255 value. An Axis source scales through
-// triggerFromAxis (same shape the controller path uses); a Button source is
-// full-scale on press. An unassigned (-1) source reads neutral.
+// A Button source is full-scale on press; an unassigned (-1) source reads 0.
 std::uint8_t triggerValue(const JoystickSnapshot& snap, const TriggerSource& src) {
     if (src.index < 0) { return 0; }
     if (src.kind == TriggerSourceKind::Axis) { return triggerFromAxis(axisAt(snap, src.index)); }
@@ -53,12 +39,10 @@ std::uint8_t triggerValue(const JoystickSnapshot& snap, const TriggerSource& src
 
 namespace {
 
-// Deliberate-press threshold for an axis capture. ~half the int16 range — well
-// above the kDefaultStickFlat (~10 %) noise floor the processor already filters,
-// so a user has to actually shove the stick/trigger to assign it, and a resting
-// axis (even a trigger that rests at the negative extreme) never self-assigns.
-// A constant here (not a reference to the bridge's kDefaultStickFlat) keeps this
-// TU SDL-free and the predicate purely arithmetic.
+// ~half the int16 range, well above the ~10 % stick-flat noise floor, so a
+// resting axis (even a trigger resting at the negative extreme) never
+// self-assigns. Duplicated rather than referencing the bridge's default flat,
+// to keep this TU SDL-free.
 constexpr int kCaptureAxisThreshold = 16000;
 
 } // namespace
@@ -74,11 +58,9 @@ bool captureHatPasses(int hatValue) { return (hatValue & 0xFF) != hat::kCentered
 
 JoystickRemap withAssignment(JoystickRemap base, RemapTarget target, int kind, int index) {
     const auto setButton = [&](RemapButton b) { base.buttons[static_cast<int>(b)] = index; };
-    // Routing a DPAD direction differs by capture kind: a Hat capture points the
-    // dpad at that hat index (and drops any button override for the direction so
-    // the hat wins); a Button capture routes the direction to the button (and
-    // detaches the hat for THAT remap only by leaving hatIndex — other directions
-    // still read the hat unless individually reassigned).
+    // A Hat capture points the dpad at that hat and drops the direction's
+    // button override so the hat wins; a Button capture leaves hatIndex alone,
+    // so the other directions keep reading the hat.
     const auto setDpad = [&](RemapButton b) {
         if (kind == static_cast<int>(CaptureKind::Hat)) {
             base.hatIndex = index;
@@ -87,9 +69,7 @@ JoystickRemap withAssignment(JoystickRemap base, RemapTarget target, int kind, i
             base.buttons[static_cast<int>(b)] = index;
         }
     };
-    // A trigger source's kind follows the capture kind: an Axis capture is an
-    // analogue trigger axis, a Button capture is a digital (full-scale-on-press)
-    // trigger. Either way the explicit choice disables the adaptive fallback.
+    // Either way the explicit choice disables the adaptive fallback.
     const auto setTrigger = [&](TriggerSource& t) {
         t.kind = (kind == static_cast<int>(CaptureKind::Button)) ? TriggerSourceKind::Button
                                                                  : TriggerSourceKind::Axis;
@@ -181,10 +161,6 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     using B = GamepadInputProcessor::Buttons;
     GamepadInputProcessor::DeviceState st{};
 
-    // Under the DEFAULT remap a pad with < 6 axes used right stick 2/3 and
-    // sourced triggers from buttons 8/9. The adaptive flags preserve that for
-    // the default while an explicit user remap is honoured verbatim. Compute
-    // the fallback once so right-stick and trigger paths share it.
     const bool fewAxes = !hasTriggerAxes(snap);
 
     // ── Sticks ──────────────────────────────────────────────────────────────
@@ -196,7 +172,6 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     int rightX = remap.rightStickX;
     int rightY = remap.rightStickY;
     if (remap.useAdaptiveRightStick && fewAxes) {
-        // Historical 4/5-axis fallback: right stick on 2/3.
         rightX = 2;
         rightY = 3;
     }
@@ -223,15 +198,11 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     applyButton(btn, B::kB, snap, src(RemapButton::B));
     applyButton(btn, B::kX, snap, src(RemapButton::X));
     applyButton(btn, B::kY, snap, src(RemapButton::Y));
-    // The guide/home key (historically button 8) maps to no XUSB bit; it is
-    // simply not routed to any logical button, so it stays dropped here.
 
     // ── Triggers ────────────────────────────────────────────────────────────
     if (remap.useAdaptiveTriggers && fewAxes) {
-        // Historical 4/5-axis fallback: triggers from buttons 8/9 at full scale.
-        // (See the long-form rationale that lived here before: a generic 4-axis
-        // pad cannot disambiguate L2/R2 vs back/start statically; this is the
-        // ambiguity the per-device remap resolves.)
+        // A generic < 6-axis pad cannot be told statically whether buttons 8/9
+        // are L2/R2 or something else; the per-device remap resolves it.
         st.lt = buttonAt(snap, 8) ? 255 : 0;
         st.rt = buttonAt(snap, 9) ? 255 : 0;
     } else {
@@ -240,8 +211,7 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     }
 
     // ── Hat → dpad ──────────────────────────────────────────────────────────
-    // SDL_HAT_* is a bitmask so diagonals (e.g. up-right) set two dpad bits. A
-    // negative hatIndex (or a pad with no hat) leaves the dpad clear.
+    // SDL_HAT_* is a bitmask, so a diagonal sets two dpad bits.
     const std::uint8_t h =
         (remap.hatIndex >= 0 && snap.hats != nullptr && remap.hatIndex < snap.hatCount)
             ? snap.hats[remap.hatIndex]

@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The wake subsystem was refactored onto the kernel: the old util::
-// ScreenWakeController (one class that both derived the streaming count and
-// effected the inhibitor) is now split into composer::streamingSlotCount (pure
-// derivation), composer::WakeStateComposer (count -> WakeState), and composer::
-// WakeStateController (effect SetThreadExecutionState via the inhibitor). This
-// file keeps pinning the SAME contract the old mirror did — the bindings x
-// link-state count and the 0<->positive acquire/release no-thrash behaviour —
-// against the new split, end-to-end through the composer with the fake inhibitor.
-// The composer/controller halves are exercised in depth in
-// test_wake_state_composer.cpp / test_wake_state_controller.cpp.
+// End-to-end over the wake split: streamingSlotCount -> WakeStateComposer ->
+// WakeStateController -> inhibitor, with a fake inhibitor standing in for Win32.
 
 #include "Util/DisplaySleepInhibitor.h"
 #include "architecture/Observable.h"
@@ -63,11 +55,6 @@ class FakeInhibitor : public DisplaySleepInhibitor {
 
 } // namespace
 
-// ---------------------------------------------------------------------------
-// streamingSlotCount — the pure bindings x link-state derivation (preserved
-// from the old ScreenWakeController::streamingCount).
-// ---------------------------------------------------------------------------
-
 TEST_CASE("streamingSlotCount: zero when nothing is bound", "[wake]") {
     QHash<QString, QString> bindings;
     QHash<QString, LinkState> states;
@@ -76,9 +63,8 @@ TEST_CASE("streamingSlotCount: zero when nothing is bound", "[wake]") {
 }
 
 TEST_CASE("streamingSlotCount: ignores bindings to non-live LinkStates", "[wake]") {
-    // Only LinkState::Connected counts as "streaming" — everything else
-    // (Saved / Connecting / Ready / Found / Stale / Unstable) is a paired or
-    // pending row whose session isn't actually exchanging packets.
+    // Only Connected counts as streaming; every other state is a paired or
+    // pending row whose session is not exchanging packets.
     QHash<QString, QString> bindings{
         {"slot-a", "conn-1"}, {"slot-b", "conn-2"}, {"slot-c", "conn-3"}};
     QHash<QString, LinkState> states{
@@ -105,15 +91,9 @@ TEST_CASE("streamingSlotCount: unknown connection counts as not-streaming", "[wa
     REQUIRE(streamingSlotCount(bindings, states) == 0);
 }
 
-// ---------------------------------------------------------------------------
-// End-to-end: count -> WakeStateComposer -> WakeStateController -> inhibitor.
-// The same acquire/release-on-0<->positive contract the old controller had.
-// ---------------------------------------------------------------------------
-
 namespace {
 
-// A small harness mirroring how AppModel wires the wake subsystem: an int
-// Observable feeding the composer, the controller subscribing it.
+// Mirrors how AppModel wires the wake subsystem.
 struct WakeHarness {
     Observable<int> count{0};
     Observable<int> keepOn{0};
@@ -177,9 +157,8 @@ TEST_CASE("wake: stop releases the inhibitor (deliberate teardown)", "[wake]") {
 }
 
 TEST_CASE("wake: tolerates a null inhibitor", "[wake]") {
-    // Defensive: a future build flag or stripped-down packaging may pass
-    // nullptr (e.g. headless). The controller must still bookkeep without
-    // crashing across connect/disconnect transitions.
+    // A headless or stripped-down build can pass nullptr; the controller must
+    // still bookkeep without crashing.
     Observable<int> count{0};
     Observable<int> keepOn{0};
     WakeStateComposer composer{count, keepOn};

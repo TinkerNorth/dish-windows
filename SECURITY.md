@@ -1,253 +1,197 @@
-# Security policy — TinkerNorth
+# Security policy
 
-This file covers all five TinkerNorth repositories that ship the
-wireless-gamepad product end-to-end:
-
-- [`satellite`](https://github.com/TinkerNorth/satellite) — server (Windows / Linux / macOS)
-- [`dish-android`](https://github.com/TinkerNorth/dish-android) — Android client
-- [`dish-linux`](https://github.com/TinkerNorth/dish-linux) — Linux client (Qt6 / SDL2)
-- [`dish-mac`](https://github.com/TinkerNorth/dish-mac) — macOS client (SwiftUI)
-- [`dish-windows`](https://github.com/TinkerNorth/dish-windows) — Windows client (Qt6 / SDL2)
-
-Each repo has its own `CONTRIBUTING.md#security` section with
-ecosystem-specific local commands; this file is the single source of
-truth for **(1) reporting a vulnerability**, **(2) what we do with the
-report**, and **(3) how a downstream consumer verifies a release
-artifact**.
-
----
+This file covers the Dish Windows client. The same policy and the same
+reporting channel apply across the TinkerNorth clients and the
+[`satellite`](https://github.com/TinkerNorth/satellite) server.
 
 ## Reporting a vulnerability
 
 **Do not file a public issue for a suspected vulnerability.**
 
-Use one of:
+Use either:
 
-1. **GitHub private vulnerability reporting** — open the repo, click
-   *Security → Report a vulnerability*. This is preferred because it
-   creates a tracked advisory and a private discussion thread.
-2. **Email** — `security@tinkernorth.invalid` (PGP key on request).
-   Include the repo, version (commit SHA or release tag), reproduction
-   steps, and impact.
+1. **GitHub private vulnerability reporting.** Open this repository, then
+   *Security* > *Report a vulnerability*. Preferred, because it creates a
+   tracked advisory and a private discussion thread.
+2. **Email** `security@tinkernorth.com` (PGP key on request). Include the
+   version (commit SHA or release tag), reproduction steps, and impact.
 
-Please do **not** test exploits against infrastructure you don't own.
-The on-LAN threat model already covers an attacker with packet-injection
-ability on the local network — that's the documented design boundary,
-not a bug.
+Please do not test exploits against infrastructure you do not own. The
+on-LAN threat model below already assumes an attacker with packet-injection
+ability on the local network; that is the documented design boundary, not a
+bug.
 
-### Response SLA
+### Response targets
 
-| Severity | Triage acknowledgement | Initial assessment | Fix target |
+| Severity | Acknowledgement | Initial assessment | Fix target |
 |---|---|---|---|
 | Critical (CVSS >= 9.0) | 1 business day | 3 business days | 14 days, coordinated disclosure |
-| High (CVSS 7.0–8.9)    | 2 business days | 5 business days | 30 days |
-| Medium / Low           | 5 business days | 10 business days | next minor release |
+| High (CVSS 7.0-8.9) | 2 business days | 5 business days | 30 days |
+| Medium / Low | 5 business days | 10 business days | next minor release |
 
-If we miss the SLA, you may publish 90 days after the original report
-date regardless. We'd rather know than not know.
+If we miss these, you may publish 90 days after the original report date
+regardless.
 
 ### Scope
 
-In scope:
-
-- All four repos in this directory.
-- Release artifacts attached to GitHub Releases for any of the four repos.
-- The wire protocol (`token(4) | counter(4) | ChaCha20-Poly1305`).
-- The pairing flow + HTTP/SSE web UI exposed by `satellite`.
+In scope: this repository, the release artifacts attached to its GitHub
+Releases, the wire protocol, and the pairing flow.
 
 Out of scope:
 
-- Anything that requires the attacker to already have local privileges
-  on the user's PC (root, Administrator, ability to drop binaries in
-  `%APPDATA%`, etc.).
-- The vendored ViGEmBus driver itself — file with [nefarius/ViGEmBus](https://github.com/nefarius/ViGEmBus).
-- DoS via raw network flooding — UDP without rate-limit is a known
-  trade-off for hot-path latency; mitigations belong in the network
-  fabric, not the protocol.
-
----
+- Anything that requires the attacker to already have local privileges on the
+  user's PC (Administrator, or the ability to write to `%LOCALAPPDATA%` or the
+  install directory).
+- The ViGEmBus driver the server side depends on. File with
+  [nefarius/ViGEmBus](https://github.com/nefarius/ViGEmBus).
+- Denial of service by raw network flooding. The data plane is unauthenticated
+  UDP with no rate limit, which is a deliberate latency trade-off; mitigation
+  belongs in the network fabric.
 
 ## Supported versions
 
-| Repo | Supported | Notes |
-|---|---|---|
-| `satellite` | latest minor on `main`; previous minor for 90 days | Windows is the canonical target; Linux is supported; macOS ships as a stub (no virtual gamepad) |
-| `dish-android` | latest minor on `main`; previous minor for 90 days | minSdk 24 |
-| `dish-linux` | latest minor on `main`; previous minor for 90 days | tracks the oldest LTS the release CI builds against |
-| `dish-mac` | latest minor on `main`; previous minor for 90 days | macOS 13+ |
+The project has not cut a `v*` tag yet, so there is no released version to
+support. Once releases begin: the latest minor on `main` is supported, the
+previous minor receives high and critical backports for 90 days, and patch
+releases are issued on demand for the latest minor.
 
-Patch releases (`vX.Y.Z+1`) are issued on demand for the latest minor;
-the previous minor only receives backports for high/critical fixes.
+Windows 10 and Windows 11 x64 are the supported platforms.
 
----
+## Threat model
 
-## How CI prevents vulnerable code from shipping
+Dish sends gamepad input from this PC to a `satellite` server on the same
+local network. Three surfaces matter.
 
-Each repo runs the same shape of gates:
+### Discovery
 
-**On every PR** (blocking):
+The client listens for UDP broadcast beacons on port 9879 and browses mDNS.
+Both are unauthenticated by construction. Anyone on the LAN can advertise a
+server, and a beacon can claim any name and address. Discovery decides only
+what appears in the list; it grants no trust. Trust comes from pairing.
 
-- Action-pin lint — every `uses:` line must reference a 40-char SHA.
-- Allowlist expiry — `.security/allowlist.yaml` entries must be unexpired.
-- Dependency review — GitHub advisory DB (PR-only).
-- OSV-Scanner — vendored components + manifest deps; ecosystem-specific
-  scope (see each repo's `security.yml`).
-- Gitleaks — secret scanning over the worktree.
-- CodeQL — `cpp` for `satellite` / `dish-linux`, `swift` for `dish-mac`,
-  `java-kotlin` + `cpp` for `dish-android`.
+### Pairing and TLS
 
-**On every tagged release** (also blocking):
+Pairing and the REST control plane are HTTPS on port 9443. The satellite
+presents a **self-signed certificate**, so there is no CA chain to validate.
+The client pins the SHA-256 fingerprint of the certificate it first saw for a
+given satellite id and rejects any later certificate that differs, keeping the
+original pin (`src/core/net/Tofu.*`, `src/source/http/SatelliteTlsVerifier.*`).
 
-- Re-run of every PR-time gate against the tagged commit.
-- Required-secrets gate — refuses to publish if the platform signing
-  secret is missing for a tag (Windows Authenticode, Apple Developer ID
-  + notarization, Android keystore). `workflow_dispatch` runs against
-  feature branches still produce `-unsigned` artifacts for testing the
-  pipeline.
-- Artifact-level vulnerability scan — Anchore Grype, fails on
-  CRITICAL/HIGH.
-- SBOM generation — Syft, both SPDX-JSON and CycloneDX-JSON.
-- `SHA256SUMS` over every artifact + its signatures + the SBOMs.
-- Cosign keyless signing — every artifact and `SHA256SUMS` get a `.sig`
-  + `.crt`, anchored in the Sigstore transparency log.
-- SLSA L3 build provenance — `slsa-framework/slsa-github-generator`
-  emits `<repo>.intoto.jsonl`.
+What trust-on-first-use protects against: an attacker who joins the network
+*after* you paired cannot impersonate your server, even with full control of
+DNS, ARP, and routing. The fingerprint mismatch is a hard reject and the pin is
+not overwritten.
 
-The result: a known-vulnerable dep, a missing signature, or a tampered
-binary all fail the release before any artifact lands on the GitHub
-Release page.
+What it does not protect against: an attacker already in position at the moment
+of **first** contact. First contact trusts whatever certificate it is given.
+Pair on a network you control.
 
----
+The PIN carries the pairing key exactly once, over that pinned TLS channel.
+Authenticated REST calls carry an HMAC-SHA256 proof of key possession rather
+than the key itself. A PIN observed during the pairing window is enough for an
+attacker on the same LAN to pair. Treat one as a password while it is live.
 
-## Verifying a release artifact (consumer recipe)
+### Streaming
 
-This recipe works the same way for every release, every repo, every
-platform — only the artifact filenames change.
+The data plane is UDP on port 9876, encrypted with ChaCha20-Poly1305 IETF using
+a session key derived per session by HKDF-SHA256 from the pairing key, the
+server-supplied session salt, and the session token. The raw pairing key never
+encrypts a packet. The nonce is `direction(1) | 0x00 x7 | counter(4 BE)`, with
+the direction byte keeping the two halves of a session from colliding, and the
+4-byte token is the AAD.
 
-### 0) Pre-requisites
+This gives confidentiality and integrity for input reports and for the rumble,
+lightbar, and battery return path. An observer on the LAN cannot read your
+input or forge a packet the server will accept.
 
-```bash
-# cosign 2.x
-brew install cosign            # macOS
-go install github.com/sigstore/cosign/v2/cmd/cosign@latest
+It does not hide **that** you are streaming, or to whom, or how much. Packet
+timing and volume are visible, and gamepad input rate is not a subtle signal.
+There is no padding and no cover traffic.
 
-# slsa-verifier (for the SLSA provenance step)
-go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
+Replay is rejected in one direction only. The client drops a server-to-client
+packet whose counter is less than or equal to the last one it accepted. Packets
+are otherwise unordered UDP; a dropped packet is a dropped input frame, by
+design.
+
+There is no rate limit. Anyone who can reach port 9876 can make the client and
+server spend cycles on packets that fail authentication.
+
+### If you are on a hostile LAN
+
+- Pair on a network you trust. The one moment TOFU cannot defend is first
+  contact.
+- A certificate-mismatch rejection means something changed. Either the server
+  was reinstalled or someone is in the middle. Do not clear the pin to make the
+  error go away without knowing which.
+- Assume the fact and the volume of your session are observable.
+- Nothing here defends against an attacker who already has code execution on
+  this PC. Configuration lives in `HKCU\Software\TinkerNorth\Dish`, and the
+  pairing key is stored there for anyone running as you.
+
+## How CI keeps vulnerable code out
+
+On every pull request and every push to `main`, blocking:
+
+- Action-pin lint. Every `uses:` line must reference a 40-char commit SHA.
+- Allowlist expiry. `.security/allowlist.yaml` entries must carry `cve`,
+  `reason`, `owner`, and an unexpired `expires`.
+- OSV-Scanner over the worktree.
+- Gitleaks secret scan.
+- CodeQL `cpp` analysis, `security-extended` and `security-and-quality` query
+  packs, on a Windows runner so MSVC-only constructs are covered.
+
+Advisory, not blocking: GitHub `dependency-review-action` runs on pull requests
+with `continue-on-error: true`, because it needs Advanced Security, which the
+repository did not have while it was private.
+
+`security.yml` also runs weekly on a schedule. On a `v*` tag, `release.yml`
+re-runs the action-pin lint, allowlist expiry, OSV-Scanner, and gitleaks jobs
+against the tagged commit before it builds anything.
+
+## What a release actually contains
+
+A GitHub Release for a `v*` tag carries exactly two files:
+
+- `dish-windows.zip`: `dish.exe`, the Qt runtime DLLs and QML modules staged by
+  `windeployqt`, and a `SHA256SUMS` text file listing every other file in the
+  bundle.
+- `dish-windows.spdx.json`: an SPDX-JSON SBOM of the bundle, generated by Syft
+  via `anchore/sbom-action`.
+
+Verify the download:
+
+```powershell
+Expand-Archive .\dish-windows.zip -DestinationPath .\dish-windows
+$expected = Get-Content .\dish-windows\SHA256SUMS |
+    Where-Object { $_ -match 'dish\.exe' } |
+    ForEach-Object { $_.Split()[0] }
+$actual = (Get-FileHash .\dish-windows\dish.exe -Algorithm SHA256).Hash.ToLower()
+if ($expected -ne $actual) { throw "checksum mismatch" } else { "ok" }
 ```
 
-### 1) Download every file from the Release
-
-For tag `vX.Y.Z` of `<repo>` (one of `satellite`, `dish-android`,
-`dish-linux`, `dish-mac`):
-
-```bash
-gh release download vX.Y.Z -R TinkerNorth/<repo> -D ./release
-cd release
-ls
-```
-
-You should see (filenames vary per repo):
-
-```
-satellite-...        # platform binary / installer / .app / .apk / etc.
-satellite-....sig    # cosign signature
-satellite-....crt    # cosign certificate
-SHA256SUMS
-SHA256SUMS.sig
-SHA256SUMS.crt
-satellite.sbom.spdx.json
-satellite.sbom.cdx.json
-satellite.intoto.jsonl   # SLSA L3 provenance
-```
-
-### 2) Verify the checksum bundle
-
-```bash
-sha256sum -c SHA256SUMS         # Linux / Windows
-shasum -a 256 -c SHA256SUMS     # macOS
-```
-
-Every line must say `OK`. A failure here means the artifact was
-modified after release.
-
-### 3) Verify cosign signed `SHA256SUMS` from the right workflow
-
-```bash
-cosign verify-blob \
-  --certificate SHA256SUMS.crt \
-  --signature   SHA256SUMS.sig \
-  --certificate-identity-regexp '^https://github\.com/TinkerNorth/<repo>/\.github/workflows/release\.yml@refs/tags/v.*$' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  SHA256SUMS
-```
-
-Output ends with `Verified OK`. The `--certificate-identity-regexp`
-binds the signature to a specific workflow path on `TinkerNorth/<repo>` —
-substitute the actual GitHub organisation. A match means the signature
-came from a tagged-release run of `release.yml` on the public commit
-that produced these artifacts; the Sigstore transparency log
-(`https://search.sigstore.dev/`) carries the same record.
-
-To verify each artifact individually (not just `SHA256SUMS`):
-
-```bash
-for f in *.exe *.zip *.deb *.AppImage *.apk *.aab; do
-  [ -f "$f" ] || continue
-  cosign verify-blob \
-    --certificate "$f.crt" \
-    --signature   "$f.sig" \
-    --certificate-identity-regexp '^https://github\.com/TinkerNorth/<repo>/\.github/workflows/release\.yml@refs/tags/v.*$' \
-    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-    "$f"
-done
-```
-
-### 4) Verify the SLSA L3 provenance
-
-```bash
-slsa-verifier verify-artifact \
-  --provenance-path <repo>.intoto.jsonl \
-  --source-uri      github.com/TinkerNorth/<repo> \
-  --source-tag      vX.Y.Z \
-  <artifact-filename>
-```
-
-This proves the artifact was produced by a tagged run of `release.yml`
-on the named source repo. Output ends with
-`PASSED: SLSA verification passed`.
-
-### 5) (Optional) Inspect the SBOM
-
-```bash
-# Top-level summary
-syft attestation --output spdx-json release/<repo>.sbom.spdx.json
-
-# Or just diff against last release
-diff <(jq -S . prev-release/<repo>.sbom.spdx.json) \
-     <(jq -S . release/<repo>.sbom.spdx.json) \
-  | less
-```
-
----
+Understand what that check is worth. `SHA256SUMS` lives inside the zip it
+describes, and nothing signs either one. It catches a truncated or corrupted
+download. It does not prove the zip came from this project, because anyone who
+could replace the zip could replace the `SHA256SUMS` inside it. Until the gaps
+below are closed, the trust anchor is the GitHub Release page itself.
 
 ## Known gaps
 
-- **Branch protection on `main`.** Three of the four repos run on a
-  free org plan that does not expose required-status-check enforcement
-  for private repositories. Direct pushes to `main` are blocked by
-  convention only; the per-repo CI workflows are the de-facto gate.
-  See the matching `README.md` in each repo for the full text.
-- **Vendored-header scanners.** `satellite/lib/` and
-  `satellite/vigem/include/` are not understood by ecosystem scanners.
-  We feed OSV-Scanner a synthetic `osv-scanner.toml` derived from
-  [`lib/VENDORED.md` in TinkerNorth/satellite](https://github.com/TinkerNorth/satellite/blob/main/lib/VENDORED.md), and the
-  `vendored-freshness` CI job fails if any `Last-vendored:` date is
-  more than 90 days old. This is best-effort, not exhaustive — file an
-  advisory if you spot a vendored component that's missing from
-  `VENDORED.md`.
-- **macOS satellite is a stub.** No signed DriverKit equivalent of
-  ViGEmBus exists, so the macOS server build runs the protocol stack
-  but rejects controller-add requests with `ACK_ERR_VIGEM_UNAVAIL`. The
-  artifact name (`satellite-macos-stub-...`) reflects this. Don't open
-  a vulnerability report for the absence of virtual-gamepad creation
-  on macOS — it's a documented platform gap.
+- **No release signing.** The exe is not Authenticode-signed, so SmartScreen
+  warns on first run of a fresh download. There are no cosign keyless
+  signatures for the zip or the SBOM.
+- **No build provenance.** SLSA provenance is not generated. There is no
+  cryptographic link from an artifact back to the workflow run and commit that
+  produced it.
+- **No artifact vulnerability scan at release.** Dependencies are scanned in
+  source form by OSV-Scanner and the dependency review; the built bundle is not
+  scanned by Grype or an equivalent.
+- **One SBOM format.** SPDX-JSON only. There is no CycloneDX SBOM.
+- **`SHA256SUMS` is unsigned and in-band.** See above.
+- **No release has shipped.** `release.yml` has never run against a tag, so the
+  pipeline described here is verified by reading it, not by having produced an
+  artifact.
+
+These are tracked in the roadmap section of
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Nothing in this document should be read
+as claiming any of them exists today.

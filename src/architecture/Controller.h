@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Controller<S> — the C++ analogue of AbstractController<S>: the side-effect
-// actuator, mirror image of a Composer. Subscribes to one upstream Observable
-// and runs apply() on each value (including the current value on start).
-// start() is idempotent; teardown is deliberate — a subclass may override
-// stop() to survive (e.g. a crash-reporting opt-in that outlives a screen).
+// Controller<S>: side-effect actuator, runs apply() on each upstream value.
+// See architecture/README.md.
 
 #pragma once
 
@@ -20,7 +17,6 @@ template <class S> class Controller {
     Controller& operator=(const Controller&) = delete;
     virtual ~Controller() = default;
 
-    // Idempotent: a second start() while already running is a no-op.
     void start() {
         if (started_) { return; }
         started_ = true;
@@ -34,8 +30,7 @@ template <class S> class Controller {
   protected:
     virtual void apply(const S& value) = 0;
 
-    // Runs once per (re)start, after the idempotency guard and before the
-    // subscription is established — a hook for re-arming post-stop state.
+    // Hook for re-arming state a previous stop() tore down.
     virtual void onStarting() {}
 
     void cancelCollection() {

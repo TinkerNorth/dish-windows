@@ -1,19 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Color palette lifted verbatim from dish-android/res/values/colors.xml so
-// every client renders identically side-by-side. Same hex values as
-// dish-mac/UI/Theme.swift.
-//
-// Workstream 3d (Settings + full theme): this file now carries BOTH the dark
-// palette (unchanged, the deep-space default) AND a light palette mirroring
-// every dark token role, plus a selectable "active palette" so the app can
-// re-theme at runtime (dark / light / system). The `Theme::primary` etc.
-// accessors keep the exact call-site syntax every other widget uses — they read
-// the active palette, so a re-apply re-themes the whole app. See DESIGN.md for
-// the token <-> hex mapping (now documenting both palettes) and the cross-repo
-// schema (BRAND.md). The light tokens MUST stay in lockstep with dish-android's
-// non-night `values/` resources and the other clients.
+// Colour tokens, lifted verbatim from dish-android's colors.xml so every client
+// renders identically side-by-side. Both palettes MUST stay in lockstep with the
+// android `values/` and `values-night/` resources; see DESIGN.md for the token
+// <-> hex mapping and BRAND.md for the cross-repo schema.
 
 #pragma once
 
@@ -22,10 +13,6 @@
 
 namespace dish::ui {
 
-// The full set of design-token colours for one appearance (dark or light).
-// Mirrors the DESIGN.md token table 1:1 — every role has a value, none is left
-// palette-specific. Pure data: no behaviour, no Source. The active instance is
-// selected by setActivePalette(); the Theme accessors read from it.
 struct ThemePalette {
     QRgb background;
     QRgb surface;
@@ -39,48 +26,32 @@ struct ThemePalette {
     QRgb success;
     QRgb error;
     QRgb warning;
-    // The donation accent ("pulse" — dish-android colorPulse). The ONE hue Dish
-    // uses beyond cyan, reserved for the Support Dish surface + its rail entry.
+    // The donation accent — the one hue Dish uses beyond cyan, reserved for the
+    // Support Dish surface and its rail entry.
     QRgb pulse;
-    // Brand-glyph tint. The shipped SVGs bake a fixed light-cyan that computes
-    // to 1.7:1 on a white card, so BrandGlyph re-tints by PALETTE (never by
-    // state — the dot still carries state colour).
+    // The shipped SVGs bake a light-cyan that computes to 1.7:1 on a white card,
+    // so BrandGlyph re-tints by palette (never by state).
     QRgb glyph;
-    // Disabled-control foreground. >= 3:1 on `surface` in both palettes, so a
-    // disabled primary action stays readable; never multiplied by an opacity on
-    // top of an already-muted colour.
+    // Disabled-control foreground, >= 3:1 on `surface` in both palettes. Never
+    // multiplied by an opacity on top of an already-muted colour.
     QRgb disabledFg;
-    // Drawn-but-unavailable INFORMATION (a capability a layer refuses, and the
-    // reason for it). Full opacity, >= 4.5:1 — distinct from `disabledFg`,
+    // Drawn-but-unavailable INFORMATION, >= 4.5:1. Distinct from `disabledFg`,
     // which is for controls.
     QRgb mutedStrong;
 };
 
-// Which appearance the app is rendering. SYSTEM is resolved to one of
-// dark/light by the OS-preference reader before a palette is selected, so the
-// active palette is always a concrete dark/light set. Mirrors dish-android's
-// ThemeMode { SYSTEM, LIGHT, DARK } (source/store/ThemePreferenceStore.kt) —
-// the *resolved* half of it (SYSTEM never reaches the palette selection).
+// The resolved half of android's ThemeMode: System is resolved to one of these
+// before a palette is selected.
 enum class Appearance { Dark, Light };
 
-// The canonical dark palette (the historical deep-space default) and the new
-// light palette. Exposed so the completeness test can iterate both and assert
-// every role differs / is populated. constexpr — pure compile-time data.
 const ThemePalette& darkPalette();
 const ThemePalette& lightPalette();
-
-// Resolve an Appearance to its palette.
 const ThemePalette& paletteFor(Appearance appearance);
 
 struct Theme {
-    // Cyan / deep-space palette (dark) by default — mirrors dish-website. See
-    // DESIGN.md for the token name <-> hex mapping and the cross-repo schema.
-    //
-    // These are NON-const statics that alias the *active* palette's fields, so
-    // call sites (the QML ThemeBridge accessors) resolve to the currently-
-    // applied appearance. setActivePalette() rewrites them. Initialised to the
-    // dark values so a build that never calls setActivePalette() renders the
-    // deep-space default.
+    // Non-const statics aliasing the ACTIVE palette's fields, so call sites
+    // resolve to the currently-applied appearance. setActivePalette() rewrites
+    // them; they start on dark so a build that never calls it still renders.
     static QRgb background;
     static QRgb surface;
     static QRgb surfaceDim;
@@ -99,23 +70,17 @@ struct Theme {
     static QRgb mutedStrong;
 };
 
-// Swap the active palette (the Theme::* tokens above). Pure state mutation;
-// the QML ThemeBridge re-reads these on its refresh() and the native chrome
-// flips its immersive-dark attribute — there is no widget stylesheet anymore.
+// Swaps the Theme::* tokens. Callers must re-read them: the QML ThemeBridge
+// does so on refresh(), and the native chrome flips its immersive-dark attribute.
 void setActivePalette(const ThemePalette& palette);
 
-// The currently-active appearance (Dark unless setActiveAppearance set Light).
 Appearance activeAppearance();
 void setActiveAppearance(Appearance appearance);
 
-// OS appearance-preference seam. Reads the Windows
-// HKCU\...\Themes\Personalize\AppsUseLightTheme value (0 -> Dark, 1 -> Light),
-// falling back to the Qt 6 QStyleHints::colorScheme() where the registry value
-// is absent, and to Dark if neither resolves. Injected as a std::function in
-// tests so SYSTEM resolution can be driven without touching the real registry.
+// The OS appearance-preference seam. Injected as a std::function in tests so
+// System resolution can be driven without touching the real registry.
 Appearance detectSystemAppearance();
 
-// Format a QRgb as a `#RRGGBB` string (diagnostics + any string-styled sink).
 QString hex(QRgb c);
 
 } // namespace dish::ui

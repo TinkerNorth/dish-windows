@@ -1,18 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The two-up choice card — the wizard's Standard | Direct path picker, and any
-// other "here are the two ways this can work" question. Same selection rule as
-// SelectRow (1px Theme.primary + Theme.primaryFill, never 2px); the difference
-// is shape, not semantics: a card gives the body room to explain the trade,
-// where a row only has a sub-line.
-//
-// The badge is a CapabilityChip, never a third pill style: `Recommended` is Ok,
-// `Layout guessed` is Warn. A judgement about an option belongs on the option
-// that carries the risk.
-//
-// ←/→ move AND select among sibling cards, matching SegmentedControl: a control
-// with one value has no difference between focused and chosen.
+// The two-up choice card. Same selection rule as SelectRow; the difference is
+// shape, not semantics — a card gives the body room to explain the trade-off.
+// ←/→ move AND select among sibling cards.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -25,8 +16,6 @@ AbstractButton {
     property bool selected: false
     property string title: ""
     property string body: ""
-    // Empty hides the badge entirely (the design draws no badge on Standard's
-    // sibling once the pad is verified).
     property string badgeText: ""
     property int badgeTone: CapabilityChip.Ok
 
@@ -51,9 +40,8 @@ AbstractButton {
 
     HoverHandler { cursorShape: Qt.PointingHandCursor }
 
-    // Move to the adjacent sibling card and choose it. Clamped at both ends;
-    // the sibling test is structural (same parent, exposes `selected`) so it
-    // never escapes the group into the footer buttons.
+    // Clamped at both ends; the sibling test is structural (same parent,
+    // exposes `selected`) so it never escapes the group into the footer.
     function stepSelection(forward) {
         if (!control.enabled)
             return;
@@ -96,7 +84,6 @@ AbstractButton {
             }
         }
 
-        // The global focus ring: 2px outside the border, on visualFocus only.
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2
@@ -136,8 +123,6 @@ AbstractButton {
         Text {
             text: control.body
             visible: control.body.length > 0
-            // The explanation is information, so it keeps full opacity in a
-            // contrast-tuned colour rather than riding a dim.
             color: Theme.mutedStrong
             font.pixelSize: Tokens.textMeta
             wrapMode: Text.WordWrap

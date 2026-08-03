@@ -9,8 +9,6 @@ namespace dish::net {
 
 WinsockInit::WinsockInit() {
     WSADATA data{};
-    // 2.2 is the only version anyone has shipped in this millennium and what
-    // every Windows since XP supports; matching the satellite server.
     const int rc = ::WSAStartup(MAKEWORD(2, 2), &data);
     ok_ = (rc == 0);
 }

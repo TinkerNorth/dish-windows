@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// SatelliteHttpClientVerifierTest (ADAPT). Port of dish-android
-// core/net/SatelliteHttpClientVerifierTest against source/http's
-// verifyPeerCertificate + a real SatellitePinRepository. The fake "SSL session"
-// is just the cert DER byte buffer (empty = no peer cert). Pins are keyed per
-// satellite id. Load-bearing vector: DER {1,2,3} -> SHA-256
-// 039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81.
+// The fake "SSL session" is just the cert DER buffer, empty meaning no peer
+// cert. kFp123 is the SHA-256 of DER {1, 2, 3}.
 
 #include "source/http/SatelliteTlsVerifier.h"
 
@@ -46,14 +42,14 @@ TEST_CASE("the same cert later matches without re-pinning", "[tlsverify]") {
     CHECK(verifyPeerCertificate(kSat, pins, der({1, 2, 3})));
     const auto afterFirst = pins.pinnedFingerprint(kSat);
     CHECK(verifyPeerCertificate(kSat, pins, der({1, 2, 3})));
-    CHECK(pins.pinnedFingerprint(kSat) == afterFirst); // unchanged
+    CHECK(pins.pinnedFingerprint(kSat) == afterFirst);
 }
 
 TEST_CASE("a different cert after pinning is rejected and the pin left intact", "[tlsverify]") {
     SatellitePinRepository pins(makeSharedSettings());
     pins.pin(kSat, kFp123);
     CHECK_FALSE(verifyPeerCertificate(kSat, pins, der({9, 9, 9})));
-    CHECK(pins.pinnedFingerprint(kSat) == kFp123); // still the original
+    CHECK(pins.pinnedFingerprint(kSat) == kFp123);
 }
 
 TEST_CASE("a session without a peer cert is rejected", "[tlsverify]") {
@@ -89,7 +85,7 @@ TEST_CASE("pins are kept per satellite id", "[tlsverify]") {
     int mismatches = 0;
     CHECK(verifyPeerCertificate(QStringLiteral("a"), pins, der({1, 2, 3}), [&] { ++mismatches; }));
     CHECK(verifyPeerCertificate(QStringLiteral("b"), pins, der({4, 5, 6}), [&] { ++mismatches; }));
-    CHECK(mismatches == 0); // each is a first-use for its own id
+    CHECK(mismatches == 0); // a first use for each id, not a mismatch
     CHECK(pins.pinnedFingerprint(QStringLiteral("a")).value().size() == 64);
     CHECK(pins.pinnedFingerprint(QStringLiteral("b")).value().size() == 64);
 }

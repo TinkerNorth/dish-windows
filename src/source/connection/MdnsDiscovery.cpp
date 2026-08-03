@@ -27,28 +27,26 @@ namespace {
 constexpr const char* kMulticastGroup = "224.0.0.251";
 constexpr std::uint16_t kMulticastPort = 5353;
 
-// DNS record types we care about.
 constexpr std::uint16_t kTypeA = 1;
 constexpr std::uint16_t kTypePtr = 12;
 constexpr std::uint16_t kTypeTxt = 16;
 constexpr std::uint16_t kTypeSrv = 33;
 
-// IN class with the QU (unicast-response) bit set — RFC 6762 §5.4. Asking for
-// a unicast reply means the responder answers straight to our source port, so
-// a one-shot client doesn't need to join the multicast group to receive.
+// IN class with the QU (unicast-response) bit set — RFC 6762 §5.4. The
+// responder then answers straight to our source port, so a one-shot client
+// never has to join the multicast group to receive.
 constexpr std::uint16_t kClassInQu = 0x8001;
 
-// Once at least one satellite has answered, keep listening only this long for
-// stragglers before returning — the responder replies in well under a
-// millisecond, so there is no reason to burn the full discovery window.
+// Straggler window after the first answer. The responder replies in well under
+// a millisecond, so burning the full discovery window buys nothing.
 constexpr int kGraceMs = 600;
 
 std::uint16_t read16(const std::uint8_t* p) {
     return static_cast<std::uint16_t>((p[0] << 8) | p[1]);
 }
 
-// Build the PTR query for `_satellite._udp.local.`. 12-byte header + the
-// question (length-prefixed labels + type + class).
+// The PTR query for `_satellite._udp.local.`: 12-byte header + the question
+// (length-prefixed labels + type + class).
 std::vector<std::uint8_t> buildQuery() {
     std::vector<std::uint8_t> q;
     const std::uint8_t header[12] = {0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0}; // qdcount = 1
@@ -70,9 +68,6 @@ std::vector<std::uint8_t> buildQuery() {
 
 namespace detail {
 
-// Read a DNS name at `off`, following 0xC0 compression pointers. Returns the
-// bytes consumed *at the original offset* (a pointer counts as 2), or 0 on a
-// malformed packet.
 std::size_t skipName(const std::uint8_t* p, std::size_t len, std::size_t off) {
     std::size_t consumed = 0;
     bool jumped = false;
@@ -101,8 +96,6 @@ std::size_t skipName(const std::uint8_t* p, std::size_t len, std::size_t off) {
     return 0;
 }
 
-// Read a DNS name into `out` (dot-separated, no trailing dot). Returns false
-// on malformed input.
 bool readName(const std::uint8_t* p, std::size_t len, std::size_t off, std::string& out) {
     out.clear();
     std::size_t guard = 0;
@@ -125,9 +118,8 @@ bool readName(const std::uint8_t* p, std::size_t len, std::size_t off, std::stri
     return false;
 }
 
-// Parse one mDNS response packet into a DiscoveredServer, if it carries the
-// SRV + A + TXT records of a satellite. The responder packs all of those into
-// a single packet, so a per-packet parse is sufficient.
+// The responder packs SRV + A + TXT into a single packet, so a per-packet parse
+// is sufficient — no cross-packet record assembly needed.
 std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std::size_t len) {
     if (len < 12) { return std::nullopt; }
     const std::uint16_t qd = read16(p + 4);
@@ -194,8 +186,6 @@ std::optional<models::DiscoveredServer> parseResponse(const std::uint8_t* p, std
     }
 
     if (ip.empty() || (!haveSrv && !haveTxt)) { return std::nullopt; }
-    // Hand the parsed records to the pure mapping layer (TXT > SRV > defaults,
-    // mid extraction). The instance label becomes the service name.
     return mdnsServiceToServer(QString::fromStdString(instance), QString::fromStdString(ip),
                                srvPort, txt);
 }
@@ -216,8 +206,8 @@ std::optional<int> mdnsTxtInt(const QHash<QString, QByteArray>& txt, const QStri
 std::optional<QString> mdnsTxtString(const QHash<QString, QByteArray>& txt, const QString& key) {
     const auto it = txt.constFind(key);
     if (it == txt.constEnd() || it->isNull()) { return std::nullopt; }
-    // Non-const on purpose: const would block the implicit move into the
-    // returned optional and force a QString copy on every hit.
+    // Non-const on purpose: const blocks the implicit move into the returned
+    // optional and costs a QString copy on every hit.
     QString trimmed = QString::fromUtf8(*it).trimmed();
     if (trimmed.isEmpty()) { return std::nullopt; }
     return trimmed;
@@ -231,7 +221,6 @@ std::optional<models::DiscoveredServer> mdnsServiceToServer(const QString& servi
     models::DiscoveredServer s;
     s.name = serviceName.isEmpty() ? hostAddress : serviceName;
     s.ip = hostAddress;
-    // udp: TXT "udp" > SRV port (only when > 0) > default.
     if (const auto txtUdp = mdnsTxtInt(txt, QStringLiteral("udp"))) {
         s.udpPort = *txtUdp;
     } else if (srvPort > 0) {
@@ -294,8 +283,8 @@ QList<models::DiscoveredServer> MdnsDiscovery::discover(int timeoutMs) {
         if (seen.contains(key)) { continue; }
         seen.insert(key);
         result.append(*server);
-        // Got an answer — cap the remaining wait at a short grace window so a
-        // launch-time scan returns promptly instead of idling for `timeoutMs`.
+        // Cap the remaining wait so a launch-time scan returns promptly instead
+        // of idling out the full `timeoutMs`.
         deadline = std::min(hardDeadline, steady_clock::now() + milliseconds(kGraceMs));
     }
 

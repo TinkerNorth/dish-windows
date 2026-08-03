@@ -1,479 +1,203 @@
 # Dish Windows
 
-Native Windows desktop client for the Satellite wireless-gamepad server.
-Mirrors the functionality of the Dish Android, Mac, and Linux clients: LAN
-discovery, PIN pairing, encrypted UDP input streaming (ChaCha20-Poly1305),
-heartbeats, and multiple parallel server sessions.
+[![Windows CI](https://github.com/TinkerNorth/dish-windows/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/TinkerNorth/dish-windows/actions/workflows/windows-ci.yml)
 
-Physical controllers only — no virtual on-screen touch gamepad (matches
-dish-mac; the touch overlay belongs to dish-android where the form factor
-makes sense).
+Turns the gamepads attached to a Windows PC into wireless controllers for
+another machine on the same network. Dish finds
+[Satellite](https://github.com/TinkerNorth/satellite) servers on the LAN, pairs
+with a PIN over HTTPS, and streams encrypted controller input over UDP; the
+satellite plugs a matching virtual pad into the host, so games there see a real
+controller.
 
-## Architecture
+**Dish needs a Satellite server running on your LAN.** It is one half of a pair
+and does nothing on its own. It is the Windows sibling of `dish-android`,
+`dish-mac` and `dish-linux`; all four speak the same protocol to the same
+server and look identical to it.
 
-```
-Qt6 Widgets (MainWindow, ConnectionsDialog, PairingDialog, SlotCard)
-  └── AppModel (QObject, UI thread)
-        ├── ConnectionHub      ── aggregates live + remembered sessions
-        ├── WifiConnectionManager
-        │     └── WifiConnection (per-server)
-        │           └── SatelliteClient  ── encrypted UDP + heartbeat + ACK loop
-        ├── LANDiscovery       ── legacy UDP broadcast listener on :9879
-        ├── MdnsDiscovery      ── mDNS / Bonjour browse (modern discovery path)
-        ├── PairingClient      ── TCP pair handshake on :9878
-        ├── HTTPClient         ── POST/DELETE /api/connections on :9877
-        └── SDLGamepadBridge   ── SDL_GameController event pump (own thread)
-              └── GamepadInputProcessor → SatelliteClient.sendReport()
-                                        → sendMotion / sendBattery / sendTouchpad
-```
+Physical controllers only. There is no on-screen touch gamepad; that belongs to
+`dish-android`, where the form factor makes sense.
 
-### Hot path (input → wire)
+## Status
 
-The hot path is the only thing that runs at gamepad polling rate; every
-other subsystem is bookkeeping and stays off it.
+Pre-release, version 0.1.0. Nothing has been tagged yet, so the install section
+below describes what the release pipeline produces once a `v*` tag is pushed.
+The implementation is at protocol-1 parity with the other clients and the test
+suite is broad, but the live session loop, the SDL input threading and the USB
+claim path cannot be exercised in CI (no socket, no satellite, no controller)
+and are verified by hand.
+[Known limitations](docs/ARCHITECTURE.md#not-yet-implemented) tracks what is
+landed versus what is a tested-but-unwired specification.
 
-```
-  ┌────────────────┐      ┌───────────────────────┐      ┌──────────────────────┐
-  │ SDL gamepad    │ ───► │ GamepadInputProcessor │ ───► │ SatelliteClient      │
-  │ thread         │      │  • XUSB packing       │      │  • ChaCha20-Poly1305 │
-  │ (own std::thr) │      │  • axis/trigger scale │      │  • IP_TOS = DSCP EF  │
-  └────────────────┘      │  • atomic counter     │      │  • raw sendto()      │
-                          └───────────────────────┘      └──────────┬───────────┘
-                                                                    │
-                                                                    ▼
-                                                              UDP :9876 → server
-```
+## What it does
 
-No queue, no Qt event hop, no cross-thread signal. The UI thread never
-appears on this path; it only updates 1 Hz telemetry from counters the
-SDL thread publishes lock-free.
+- LAN discovery over mDNS (`_satellite._udp.local.`) with a UDP broadcast
+  fallback for older satellites
+- PIN pairing over HTTPS against the satellite's self-signed certificate,
+  pinned trust-on-first-use so a swapped certificate aborts the request
+- ChaCha20-Poly1305 input streaming over UDP, sent straight off the input
+  thread
+- SDL2 (XInput for Xbox-class pads) plus an opt-in USB-direct raw-HID path for
+  DualSense, DualShock 4 and 8BitDo class pads
+- Motion, battery and touchpad forwarded up; rumble and light bar driven back
+  down by the host
+- Several satellites side by side, with per-slot controller binding
+- Per-device deadzones, button remapping, and a guided setup wizard
+- Holds the display awake while a slot is streaming, releases it on the last
+  unbind
+- Light and dark themes, six UI languages
 
-## Low-latency strategies (mirrored from Android / Mac / Linux)
+## Install and run
 
-- **Direct `sendto()` from the SDL gamepad thread.** Each `SDL_CONTROLLER*`
-  event fires the native Winsock send inline — no queue, no Qt event hop,
-  no cross-thread signal. Same pattern as the POSIX siblings.
-- **Raw Winsock UDP socket** (not `QUdpSocket`) so we can set `IP_TOS = 0xB8`
-  (DSCP EF class, expedited forwarding) and bypass framework-level queueing.
-  *Caveat:* Windows since Vista strips `IP_TOS` from outbound packets by
-  default for non-admin processes. The `setsockopt` call doesn't fail, so
-  we set it anyway in case the user has the `DisableUserTOSSetting=0`
-  registry override on; meanwhile the rest of the latency win still holds.
-  A future enhancement could wire up qWAVE.dll (`QOSCreateHandle`) for
-  proper DSCP marking — see `HANDOFF.md`.
-- **SDL2 → XInput on Windows.** SDL_GameController uses XInput natively for
-  Xbox-class controllers (the lowest-latency Windows gamepad API) and falls
-  back to the SDL HID layer for everything else.
-- **libsodium `crypto_aead_chacha20poly1305_ietf`** produces the exact same
-  wire format as the Android JNI / CryptoKit.ChaChaPoly / libsodium used by
-  the other clients and the Satellite server.
-- **Per-session heartbeat + ACK threads** so the hot input path is never
-  contended by book-keeping traffic.
-- **Lock-free `AtomicCounter` for the nonce** and a single short-held mutex
-  on the routing-table lookup keep the hot path branch-free and
-  allocation-free.
-- **No SIGPIPE on Windows.** Winsock doesn't raise signals on a remote
-  disconnect, so `MSG_NOSIGNAL` is `#define`d to 0 and we get the same
-  "send to a closed peer survives" guarantee for free.
+Download `dish-windows.zip` from the Releases page, unzip it anywhere, and run
+`dish.exe`. The zip carries the Qt runtime and QML modules alongside the
+executable, so there is nothing to install and no admin rights are needed.
+Settings persist in the Windows registry under `HKEY_CURRENT_USER`; a crash
+writes a minidump and a symbolized `crash.log` to `%LOCALAPPDATA%\Dish`. You
+need 64-bit Windows 10 or Windows 11, a gamepad, and a reachable Satellite
+server.
 
-## Rumble (return path)
+## Build from source
 
-Rumble flows the opposite direction to the input hot path: a game on the
-satellite host writes to the virtual controller's vibration channel, the
-satellite forwards a `MSG_RUMBLE = 0x0009` packet back over the encrypted
-UDP socket, and the dish actuates the matching SDL controller via XInput.
+- Visual Studio 2022 with the Desktop development with C++ workload, or the
+  standalone Build Tools
+- CMake 3.21+ and Ninja
+- Qt 6.7+ (Core, Gui, Network, Svg, Quick, Qml, QuickControls2; Linguist tools
+  for the translation catalogues)
+- libsodium and SDL2, resolved by vcpkg from `vcpkg.json`
 
-```
-  ┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐
-  │ SatelliteClient      │ ───► │ WifiConnection       │ ───► │ SDLGamepadBridge     │
-  │  • receive thread    │      │  • per-conn handler  │      │  • applyRumble(...)  │
-  │  • parseRumbleMsg    │      │    (installed by     │      │  • queue → SDL thread│
-  │  • dispatch to       │      │     AppModel via     │      │    → SDL_Game-       │
-  │    handler           │      │     poolChanged)     │      │      ControllerRumble│
-  └──────────────────────┘      └──────────────────────┘      └──────────┬───────────┘
-                                                                         │
-                                                                         ▼
-                                                              XInputSetState (Xbox)
-                                                              or HID rumble report
-```
-
-The wire format is documented in
-[`satellite/README.md`](https://github.com/TinkerNorth/satellite#rumble-return-path).
-On the dish-windows side:
-
-* **Parser** — `SatelliteClient::parseRumbleMessage` is a pure static
-  decoder so unit tests can exercise byte layouts without a live socket
-  (see `tests/test_satellite_client_rumble.cpp`).
-* **Routing** — `AppModel::installRumbleHandlers` walks the `WifiConnection`
-  pool on every `poolChanged` and attaches a handler that resolves
-  `connId → slotId → deviceId` via the `ConnectionHub` bindings, then
-  calls `SDLGamepadBridge::applyRumble`.
-* **Actuation** — `SDL_GameControllerRumble(strong, weak, durMs)` for the
-  motors; for Xbox-class controllers SDL routes that straight through to
-  XInput's native dual-motor API. A no-op on pads without rumble.
-
-The SDL output calls run on the SDL thread, not the receive thread that
-decoded the packet: `applyRumble` pushes an `OutputCommand` onto a
-thread-safe `OutputCommandQueue` and `SDLGamepadBridge::runLoop` drains it,
-resolving the `SDL_GameController*` on the SDL thread. That closes a
-use-after-close race — the SDL thread is also the only thread allowed to
-`SDL_GameControllerClose` a controller on device removal.
-
-## Light bar (return path)
-
-The DualSense / DualShock 4 light bar has its own return path, **decoupled
-from rumble** (Task 1.4): a game that only changes the LED colour — with no
-vibration — still drives the pad. The satellite emits a dedicated
-`MSG_LIGHTBAR = 0x000D` packet whose inner payload is
-`controller_index(1) + r(1) + g(1) + b(1)`.
-
-* **Parser** — `SatelliteClient::parseLightbarMessage`, a pure static
-  decoder (see `tests/test_satellite_client_lightbar.cpp`).
-* **Routing** — `AppModel` installs a lightbar handler alongside the rumble
-  handler; it resolves the bound device the same way and calls
-  `SDLGamepadBridge::applyLightbar`, which queues an `OutputCommand` so
-  `SDL_GameControllerSetLED(R, G, B)` runs on the SDL thread. A no-op on
-  pads without an LED.
-* **Capability** — when a bound pad reports `SDL_GameControllerHasLED`, the
-  `MSG_CONTROLLER_ADD` capability word carries `CAP_LIGHTBAR = 0x0008`
-  (`caps = analogTriggers | rumble | motion | CAP_LIGHTBAR`). The satellite
-  sends colour over `MSG_LIGHTBAR` only.
-* **Setting** — a *Light bar* preference (**Settings** button → *Follow
-  game* / *Off*) gates the apply. *Off* suppresses the host colour; it does
-  not affect rumble. The choice is persisted via `FeatureSettings`. The pure
-  routing rule lives in `LightbarRouting.h` and is unit-tested in
-  `tests/test_lightbar_routing.cpp`.
-
-## Cross-platform behaviour parity
-
-The following behaviours mirror dish-android, dish-mac, and dish-linux, so
-user-visible behaviour stays predictable across platforms:
-
-- **Display-sleep inhibitor while streaming.** A `ScreenWakeController` reads
-  `hub.bindings × hub.connections`, derives a streaming-slot count, and
-  calls `SetThreadExecutionState(ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED |
-  ES_CONTINUOUS)` on every 0↔positive transition. Released on the last
-  unbind / disconnect, so a forgotten session doesn't pin the display awake
-  forever. Works against Modern Standby / "S0 low-power idle" on laptops
-  (Windows uses the same flag for both screen-off and system-sleep).
-- **Connection state recovery.** `PairingClient` carries a `reachable` flag
-  on every `PairResponse` (true iff we received a JSON body). `classify(...)`
-  splits the outcome into `Success | AuthRequired | Unreachable`; the
-  manager fans those out to either `openSession`, a PIN dialog, or an error
-  toast. A moved/offline server now surfaces a clear *"Server unreachable
-  — has it moved networks?"* message instead of trapping the user behind an
-  unanswerable PIN prompt. Mirrors dish-android PR #43.
-- **Auto-reconnect fast path.** `WifiConnectionManager::pairAndConnect`
-  skips the TCP pair handshake entirely when an empty PIN comes in and a
-  64-char shared key is already on disk, going straight to `openSession`.
-  A moved server then fails fast in the HTTP layer rather than bouncing
-  through pair → `PairingRequired`.
-- **Per-device deadzones.** `GamepadInputProcessor` carries a per-device
-  `Deadzones { stickFlat, triggerFlat }` table; reports are filtered
-  (`|v| <= flat → 0`) before they leave the processor. The default profile
-  (~10 % stick / ~5 % trigger) is installed by `SDLGamepadBridge` when each
-  controller attaches. Mirrors Android's per-device
-  `InputDevice.getMotionRange(axis).getFlat()` pipeline.
-- **Device-capability log on attach.** Every `SDL_CONTROLLERDEVICEADDED`
-  logs a one-shot `DEVCAPS` line via the `dish.input` Qt logging category,
-  carrying the stable id, controller name + type (SDL's
-  `SDL_GameControllerType` enum), USB VID / PID, and the SDL GUID. Aimed
-  at users reporting *"my pad doesn't work"* — same idea as Android's
-  SatelliteJNI `DEVCAPS` log.
-- **Motion-capability chip in the controller list.** Each controller row
-  carries a small chip showing whether that pad has a gyro/accelerometer:
-  a cyan *"Gyro"* chip when motion aiming is available and being forwarded
-  (DualSense / DualShock 4 / Switch-class pads), or a dimmed *"No gyro"*
-  chip when the pad has no motion hardware (Xbox pads). The state is always
-  drawn — never just an absent indicator — so *"motion not available"* is
-  unambiguous. The capability comes from `SDL_GameControllerHasSensor` and
-  is plumbed `SDLGamepadBridge → ControllerSlot.capabilities → SlotCard`.
-  Mirrors the capability chip in dish-mac's slot card.
-- **Lightbar-capability chip in the controller list.** A pad with an
-  addressable RGB LED (DualSense / DualShock 4 — detected via
-  `SDL_GameControllerHasLED`) also gets a *"Lightbar"* chip. Unlike the
-  motion chip this is shown only when the LED is present — most pads have
-  none and a *"no lightbar"* callout would just be noise. Same plumbing
-  path as the motion chip.
-
-## mDNS / Bonjour discovery (Task 1.6)
-
-Discovery runs **two paths in parallel**, merged by `ip:udpPort`:
-
-- **`LANDiscovery`** — the legacy UDP broadcast beacon listener on `:9879`.
-  Kept as a fallback for satellites that predate the mDNS responder.
-- **`MdnsDiscovery`** — an mDNS / Bonjour browse for the satellite service
-  type. mDNS reaches subnets that drop broadcast traffic, so it is the
-  modern primary path.
-
-`WifiConnectionManager::startDiscovery` runs the mDNS scan on a second pool
-thread so the combined wall time is one timeout, not two, then logs a
-per-path `broadcast=N mdns=N merged=N` line so the hit-rate can be compared
-in the field. A server heard on both paths is labelled *"mDNS + broadcast"*.
-
-## Controller-type hint (MSG_CONTROLLER_TYPE)
-
-When a pad binds, `SDLGamepadBridge` classifies it via
-`SDL_GameControllerGetType` into the satellite's cosmetic Xbox / PlayStation
-kind and the connection layer sends a `MSG_CONTROLLER_TYPE = 0x0008` hint.
-A PS3 / PS4 / PS5 pad maps to `CONTROLLER_TYPE_PLAYSTATION` so the receiver
-plugs in a virtual DualShock 4 (touchpad + IMU + lightbar surface) rather
-than an Xbox 360 pad; everything else maps to `CONTROLLER_TYPE_XBOX`.
-
-## Battery reporting (Task 1.2)
-
-`SDLGamepadBridge` polls each controller's charge on a 30 s per-device gate
-(`SDL_JoystickCurrentPowerLevel`) and forwards a `MSG_BATTERY = 0x000B`
-packet — `controller_index + level + status`. SDL only exposes a coarse
-EMPTY / LOW / MEDIUM / FULL bucket for wireless pads; a wired or
-unreadable pad falls back to the **host machine's** battery (the laptop's
-percentage + charging state, or 100 % / wired on a desktop). The capability
-is advertised per-device: `CAP_MOTION` and `CAP_LIGHTBAR` are OR-ed into the
-`MSG_CONTROLLER_ADD` word only for a pad that actually has the hardware, so
-an Xbox pad advertises neither. The latest sample drives a battery chip in
-the controller list.
-
-## Touchpad forwarding (Task 1.3)
-
-A DualSense / DualShock 4 trackpad is forwarded as `MSG_TOUCHPAD = 0x000C` —
-up to two fingers plus the clickable-pad button. `SDLGamepadBridge`
-accumulates SDL's per-finger down / move / up events into a full two-finger
-snapshot and maps SDL's `0..1` coordinates to the resolution-independent
-centre-origin int16 wire frame via `touchpadCoordToInt16`. Each finger
-carries a **monotonic tracking id**, bumped on every fresh contact so the
-receiver can correlate a finger across frames even when the other finger
-lifts. `SatelliteClient::encodeTouchpadPayload` pins the 12-byte layout;
-the receiver routes it per the paired device's touchpad mode (DS4 / mouse /
-off).
-
-## Controller registration (non-blocking)
-
-A `MSG_CONTROLLER_ADD` is acknowledged asynchronously: `WifiConnection`
-sends the add, then **polls** the satellite's `MSG_CONTROLLER_ACK` from a
-`QTimer` on the Qt main thread rather than spinning with `QThread::msleep`
-(which used to freeze the UI for up to ~2 s). The dashboard shows an
-indeterminate spinner while a registration is in flight (`state().busy`).
-If the server rejects the add — no backend, no free slots, plugin failure —
-`WifiConnection` emits `registrationFailed`, `ConnectionHub` rolls the
-local binding back so the slot card reflects reality, and the error is
-surfaced as a toast.
-
-## Requirements
-
-- Windows 10 (build 19041 / 20H1) or newer, 64-bit
-- Visual Studio 2022 with the "Desktop development with C++" workload, or
-  the standalone Build Tools for Visual Studio 2022
-- CMake 3.21+
-- Ninja (`winget install Ninja-build.Ninja` or `choco install ninja`)
-- Qt 6.2+ (the CI workflow installs 6.7.3 via `jurplel/install-qt-action`)
-- libsodium 1.0.18+ and SDL2 2.30+ (via vcpkg — see below)
-- A compatible gamepad (Xbox One / Series controller via XInput, DualSense,
-  DualShock 4, 8BitDo, …)
-- A Satellite server reachable on your LAN
-
-### Install build dependencies
-
-The fastest path is the bundled installer — same idea as
-`satellite/install-dependencies.bat`. From an elevated cmd / PowerShell:
+The bundled installer sets all of that up in five idempotent steps. From an
+elevated prompt:
 
 ```cmd
 install-dependencies.bat
 ```
 
-That runs five idempotent steps via winget + aqtinstall + a vcpkg
-bootstrap:
-
-1. Visual Studio 2022 Build Tools (Desktop C++ workload + Win11 SDK)
-2. CMake + Ninja
-3. LLVM (clang-format + clang-tidy)
-4. Python 3 + aqtinstall + Qt 6.7.3 to `C:\Qt`
-5. vcpkg cloned to `%USERPROFILE%\vcpkg`, with `VCPKG_ROOT` +
-   `CMAKE_PREFIX_PATH` persisted to your user env
-
-Total ~12 GB download, ~30–60 min wall-clock on a clean Win11 box.
-Some installers (VS Build Tools in particular) trigger a UAC prompt —
-approve them when asked.
-
-If you'd rather drive the install by hand:
+It installs the VS Build Tools, CMake and Ninja, LLVM, Python plus aqtinstall
+plus Qt 6.7.3 into `C:\Qt`, and clones vcpkg to `%USERPROFILE%\vcpkg`,
+persisting `VCPKG_ROOT` and `CMAKE_PREFIX_PATH`. Budget roughly 12 GB and half
+an hour on a clean machine. Then, from any PowerShell window (the build script
+finds MSVC through `vswhere` and imports `vcvars64.bat` itself):
 
 ```powershell
-winget install Microsoft.VisualStudio.2022.BuildTools `
-    --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
-winget install Kitware.CMake
-winget install Ninja-build.Ninja
-winget install LLVM.LLVM
-winget install Python.Python.3.12
-python -m pip install --user --upgrade aqtinstall
-python -m aqt install-qt windows desktop 6.7.3 win64_msvc2019_64 --outputdir C:\Qt
-git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
-& $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-[Environment]::SetEnvironmentVariable('VCPKG_ROOT', "$env:USERPROFILE\vcpkg", 'User')
-[Environment]::SetEnvironmentVariable('CMAKE_PREFIX_PATH', 'C:\Qt\6.7.3\msvc2019_64', 'User')
-```
-
-`vcpkg.json` pins `libsodium` and `sdl2`; the CMake toolchain file
-(`$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake`) resolves and builds
-them on the first `cmake` configure.
-
-## Build & Run
-
-After `install-dependencies.bat` has finished, open a fresh PowerShell
-window (any window — the build script auto-finds MSVC via `vswhere` and
-sources `vcvars64.bat` for you):
-
-```powershell
-cd dish-windows
 scripts\build.ps1 release
 .\build-release\dish.exe
 ```
 
-For a debug build with tests:
+`scripts\build.ps1 debug` builds into `build-debug\` instead, and a second
+`test` argument runs ctest after the build. `CONTRIBUTING.md` has the long-form
+CMake invocation and the hook, format and lint setup.
 
-```powershell
-scripts\build.ps1 debug test
-```
+## How it works
 
-Or the long form:
-
-```powershell
-cmake -S . -B build -G Ninja `
-    -DCMAKE_BUILD_TYPE=Release `
-    "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-cmake --build build --parallel
-.\build\dish.exe
-```
-
-## Install (per-user)
-
-`dish.exe` needs its companion Qt DLLs to run outside the build tree. The
-canonical Windows tool for that is `windeployqt.exe`, shipped with Qt:
-
-```powershell
-mkdir $env:USERPROFILE\Apps\Dish
-Copy-Item build-release\dish.exe $env:USERPROFILE\Apps\Dish\
-& "$env:QT_DIR\bin\windeployqt.exe" --release --no-translations `
-    $env:USERPROFILE\Apps\Dish\dish.exe
-```
-
-The release CI workflow does the same thing and uploads a zip you can
-unpack anywhere on `%PATH%`.
-
-## Project Layout
+The app is a unidirectional-dataflow core with a Qt Quick projection on top.
+Sources of truth own state, pure composers derive from it, QML binds and
+renders, and QML sends commands back. `src/qml/` could be deleted and replaced
+with a different front end without touching anything below it.
 
 ```
-dish-windows/
-├── CMakeLists.txt
-├── vcpkg.json                 # libsodium + SDL2 deps for vcpkg manifest mode
-├── install-dependencies.bat   # one-shot toolchain installer (mirrors satellite)
-├── scripts/build.ps1
-├── packaging/
-│   ├── dish.ico               # embedded into dish.exe via dish.rc
-│   ├── dish.png               # 256 × 256 source asset
-│   ├── dish.svg               # vector source
-│   └── dish.rc                # version info + icon resource
-└── src/
-    ├── main.cpp               # QApplication entry + WSAStartup + sodium_init
-    ├── AppModel.{h,cpp}       # top-level QObject
-    ├── Models/                # DiscoveredServer, PairResponse, …
-    ├── Network/               # Winsock sockets, crypto, discovery, pairing, HTTP
-    ├── Input/                 # SDL bridge + XUSB mapping
-    ├── Util/                  # AtomicCounter, hex, endian helpers, sleep inhibitor
-    └── UI/                    # Qt widgets + theme
+src/qml/          Qt Quick UI: AppViewModel facade, role models, frameless chrome
+src/composer/     Composers (pure derive), Controllers (effects), Coordinators
+src/source/       StateSources and IO gateways: discovery, HTTP, USB, stores
+src/repository/   Durable keyed storage over QSettings
+src/core/         Pure, Qt-free: reducers and FSMs, wire crypto, input math
+src/architecture/ The kernel: Observable, StateSource, Composer, Controller, Repository
+src/Input/        SDL bridge, XUSB packing, output command queue
+src/Network/      Winsock UDP session, REST client, pairing, connection pool
+src/UI/           Theme palettes, font probes, crash handler, license manifest
 ```
 
-## Protocol parity
+The input hot path is the deliberate exception and is not routed through that
+kernel. An SDL controller event runs `GamepadInputProcessor` and then
+`SatelliteClient::sendReport` inline on the SDL thread: pack the XUSB report,
+encrypt it, and call `sendto()` on a raw Winsock socket. No queue, no Qt event
+hop, no cross-thread signal. The UI thread never
+appears on the path; it only reads counters the input thread publishes
+lock-free. The USB-direct read loop feeds the same `publish` entry point on its
+own thread.
 
-All message types, byte layouts, port numbers and JSON shapes match the
-other Dish clients verbatim so all four can talk to the same server and
-appear identical to it:
+Layer rules, the state-capture doctrine (`AsyncState<T>` versus a reducer FSM),
+the UI binding contract and the hardening roadmap are in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), the kernel primitives in
+[`src/architecture/README.md`](src/architecture/README.md), the QML surface in
+[`docs/QML_CONTRACT.md`](docs/QML_CONTRACT.md) and
+[`docs/QML_UI_KIT.md`](docs/QML_UI_KIT.md), the design tokens in
+[`DESIGN.md`](DESIGN.md).
 
-| Field            | Value            |
-| ---------------- | ---------------- |
-| Discovery port   | UDP 9879 (listen)|
-| Pairing port     | TCP 9878         |
-| HTTP API port    | TCP 9877         |
-| Streaming port   | UDP 9876         |
-| AEAD             | ChaCha20-Poly1305 IETF |
-| Nonce            | counter, BE, left-padded to 12 bytes |
-| Packet layout    | `token(4) \| counter(4) \| ciphertext+tag` |
-| AAD              | token (4 bytes)  |
-| XUSB report      | 12 bytes, little-endian |
-| Heartbeat period | 2 s              |
-| Miss threshold   | 5 consecutive    |
+## Protocol
+
+Ports, byte layouts and JSON shapes match the other Dish clients so all four
+are interchangeable to a satellite. The authoritative contract lives in
+`satellite/docs/contract.md`; the client-side mirror is
+[`src/core/model/Protocol.h`](src/core/model/Protocol.h).
+
+| | |
+|---|---|
+| Protocol version | 1 |
+| Discovery | UDP 9879 broadcast beacons, plus mDNS `_satellite._udp.local.` |
+| Pairing and REST API | HTTPS 9443, self-signed certificate, TOFU-pinned |
+| Streaming | UDP 9876 |
+| REST auth | `X-Device-Id` + `X-Hmac-Proof` = hex(HMAC-SHA256(pairingKey, `"satellite-proof:"` + deviceId)) |
+| Topology | REST only: `PUT /api/connections` upserts the whole desired controller set |
+| Session key | HKDF-SHA256(ikm = pairingKey, salt = sessionSalt, info = `"satellite-session-v1"` \|\| token) |
+| AEAD | ChaCha20-Poly1305 IETF |
+| Nonce | direction(1) \| 0x00 x7 \| counter(4 BE) |
+| AAD | token (4 bytes, BE) |
+| Packet | `token(4) \| counter(4 BE) \| ciphertext+tag` |
+| Up | INPUT 0x0001, HEARTBEAT 0x0002, MOTION 0x000A, BATTERY 0x000B, TOUCHPAD 0x000C |
+| Down | HEARTBEAT_ACK 0x0003, RUMBLE 0x0009, LIGHTBAR 0x000D, SESSION_CLOSE 0x000F |
+| Input report | 12 bytes XUSB, little-endian |
+| Heartbeat | every 2 s; not responding at 2 misses, dead at 5 |
+
+## Translations
+
+Six catalogues in `translations/`: English, Bosnian, German, Spanish, French
+and Brazilian Portuguese. They compile to `.qm` files embedded in the binary at
+`:/i18n/`, and the app picks one at startup by walking `QLocale::uiLanguages()`
+so Windows' preferred UI language wins over the regional format setting.
+
+English is a real catalogue rather than the untranslated fallback: a `%n`
+message carries one source string but needs one form per plural category, and
+Bosnian has three. Vocabulary is sourced from `dish-android`, whose catalogues
+are older and reviewed, via `scripts/seed-from-android.py`.
+
+`scripts/check-translations.ps1` re-runs `lupdate` in CI and fails on any diff,
+so a new user-facing string cannot land without its catalogue entry. If it
+fails, run `cmake --build <build-dir> --target update_translations` and commit
+the result. Coverage is reported but never enforced; translating a string is a
+separate act from extracting it.
 
 ## Testing
 
 ```powershell
 scripts\build.ps1 debug test
-# or
+# or, against an existing build tree
 ctest --test-dir build-debug --output-on-failure
 ```
 
-Unit tests cover the hex/byte-packing utilities, the big-endian helpers,
-the XUSB input mapping (axis and trigger scaling, button bitfield,
-per-device deadzone application, zero-on-disconnect fan-out), the motion /
-battery / touchpad publish paths (rate-limiting, pass-through), the
-SDL→wire conversion helpers (gyro / accel / touchpad scale), the
-`MSG_MOTION` / `MSG_BATTERY` / `MSG_TOUCHPAD` / `MSG_RUMBLE` / `MSG_LIGHTBAR`
-encoders + decoders, the `CAP_MOTION` / `CAP_LIGHTBAR` per-device
-capability folds, the lock-free atomic counter under contention, the
-lenient beacon JSON and mDNS decoders, the model codable round-trips, the
-`PairingClient::classify` outcome arms (Success / AuthRequired /
-Unreachable), and the `ScreenWakeController` acquire/release lifecycle via
-a fake `DisplaySleepInhibitor` (so the suite never has to actually flip
-`SetThreadExecutionState`). They run in well under a second and do not
-open sockets.
-
-## Development
-
-Install the build dependencies (see above), then enable the pre-commit
-hook:
-
-```powershell
-scripts\build.ps1 debug          # generates build-debug/compile_commands.json
-scripts\setup-hooks.ps1          # points core.hooksPath at .githooks/
-```
-
-Format / lint manually (Git for Windows ships the bash shell the hook
-runs under; the CLI binaries below come from LLVM):
-
-```powershell
-clang-format -i $(git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp')
-clang-tidy -p build-debug $(git ls-files 'src/*.cpp')
-```
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow, header
-policy, and review expectations.
-
-## License
-
-Distributed under the terms of the **GNU Lesser General Public License v3.0
-or later**. See [`LICENSE`](LICENSE) (LGPL) and [`COPYING.GPL3`](COPYING.GPL3)
-(the GPL v3 the LGPL incorporates by reference).
+One `DishTests` executable links the `dish_core` library. It covers the pure
+core exhaustively, with no mocks and no sockets: the reducer FSMs (USB path
+switching, pairing, session lifecycle, capture mode, apply sequencing),
+`AsyncState` transitions, the wire encoders and decoders against interop
+vectors shared with the satellite and dish-android, session crypto, XUSB
+mapping and deadzones, HID report parsing and transport classification, the
+beacon and mDNS parsers, TOFU pinning, and every repository against a shared
+contract. The design system is tested too: palette completeness, WCAG contrast
+ratios in both themes, font-family probes, and placeholder integrity plus
+plural-form order across all six translation catalogues.
 
 ## Contributing
 
-Changes should land on `main` through a pull request. The `Windows CI`
-workflow (`.github/workflows/windows-ci.yml`) runs the `clang-format`
-check, the debug build + ctest, `clang-tidy`, and a release build on every
-PR and on `main` pushes. The `Security` workflow
-(`.github/workflows/security.yml`) and `CodeQL` workflow
-(`.github/workflows/codeql.yml`) run alongside it — action-pin lint,
-OSV-Scanner, gitleaks, dependency review, allowlist-expiry check, and
-CodeQL `cpp` analysis. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
-LGPL header policy, branching, hook setup, and the local-equivalent
-security commands.
-
-> **Note on branch protection.** GitHub's branch-protection and repository-
-> ruleset features are not available for private repositories on the free
-> org plan this repo lives under, so direct pushes to `main` are not
-> blocked at the platform level. Treat the PR-based flow as a convention
-> and rely on the CI workflows as the quality gate.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow, the LGPL header
+policy, hook setup and review expectations. Changes land on `main` through a
+pull request; `Windows CI`, `Security` and `CodeQL` run on every one.
 
 ## Security
 
-Vulnerability disclosure: [`SECURITY.md`](SECURITY.md). The release
-pipeline produces SHA256SUMS and an SBOM (SPDX) — see
-[`CONTRIBUTING.md#security`](CONTRIBUTING.md#security) for the
-verification recipe. Cosign keyless signing + SLSA L3 provenance are
-on the roadmap (see [`HANDOFF.md`](HANDOFF.md)).
+Vulnerability disclosure: [`SECURITY.md`](SECURITY.md). Dish is LAN-only and
+talks to no TinkerNorth-operated server. Release artifacts ship with SHA256SUMS
+and an SPDX SBOM.
+
+## License
+
+LGPL-3.0-or-later. See [`LICENSE`](LICENSE) for the LGPL and
+[`COPYING.GPL3`](COPYING.GPL3) for the GPL v3 it incorporates by reference.

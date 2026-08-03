@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The reducer render-key -> QML token-string mappers, shared by every model /
-// view-model that vends the contract's stable tokens (ConnectionListModel rows,
-// SlotListModel's bound-satellite join, AppViewModel's bind-chooser payload).
-// One switch per enum so the vocabulary can't drift between surfaces; the QML
-// side localizes/colors FROM these tokens and never re-derives them.
+// Render-key -> QML token-string mappers. One switch per enum, shared by every
+// surface that vends these tokens, so the vocabulary cannot drift; QML
+// localizes and colours FROM the tokens and never re-derives them.
 
 #pragma once
 

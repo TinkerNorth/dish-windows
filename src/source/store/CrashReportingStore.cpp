@@ -8,7 +8,7 @@
 namespace dish::source {
 
 bool CrashReportingStore::readInitial(QSettings& settings) {
-    // Absent -> kDefaultEnabled (true). The D4 opt-out default.
+    // Absent -> kDefaultEnabled (true): collection is opt-out.
     return settings.value(QLatin1String(kKeyCollectionEnabled), kDefaultEnabled).toBool();
 }
 
@@ -23,7 +23,6 @@ CrashReportingStore::~CrashReportingStore() = default;
 
 void CrashReportingStore::setEnabled(bool enabled) {
     settings_->setValue(QLatin1String(kKeyCollectionEnabled), enabled);
-    // Distinct-until-changed in the Observable suppresses a redundant emit.
     setState(enabled);
 }
 

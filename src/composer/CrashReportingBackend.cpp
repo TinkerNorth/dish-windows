@@ -12,11 +12,8 @@ Q_LOGGING_CATEGORY(lcCrash, "dish.crash")
 } // namespace
 
 void NoopCrashReportingBackend::setEnabled(bool enabled) {
-    // No backend this wave (D4). Record the flip so a developer can confirm the
-    // opt-in/opt-out plumbing fires; a real backend (minidump / Sentry /
-    // Crashpad) would replace this body.
-    qCInfo(lcCrash) << "crash-reporting collection set to" << enabled
-                    << "(no backend wired — D4 deferred)";
+    // Logged only so a developer can confirm the opt-in plumbing fires.
+    qCInfo(lcCrash) << "crash-reporting collection set to" << enabled << "(no backend wired)";
 }
 
 } // namespace dish::composer

@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Compact dropdown chooser (design FCombo): the current value + a caret in a
-// recessed pill; activating it opens an in-scene menu of options. Emits
-// picked(option) — the selected value streams back through `value`, so the
-// control never holds its own truth.
-//
-// It is a real AbstractButton, not a Rectangle with a MouseArea: a keyboard
-// user must be able to reach it, see that they have (the focus ring), open it
-// with Space/Enter, and have Narrator call it a combo box.
+// The drop-down trigger. It emits `picked` and never holds its own truth — the
+// caller streams the selection back through `value`. A real AbstractButton, not
+// a Rectangle with a MouseArea, so it is keyboard-reachable and Narrator calls
+// it a combo box.
 
 // Bound: the Repeater delegate references the outer `control` id alongside its
 // `required` model props — static resolution needs bound component behavior.
@@ -52,8 +48,8 @@ AbstractButton {
         Rectangle {
             anchors.fill: parent
             radius: Tokens.radiusButton
-            // The pill is a filled recess, so the interaction wash is tinted
-            // into it rather than laid over a transparent ground.
+            // A filled recess, so the interaction wash tints into it rather
+            // than laying over a transparent ground.
             color: control.down ? Qt.tint(Theme.surfaceDim, Theme.primaryPress)
                  : control.hovered ? Qt.tint(Theme.surfaceDim, Theme.primaryHover)
                  : Theme.surfaceDim
@@ -66,7 +62,6 @@ AbstractButton {
             }
         }
 
-        // The global focus ring: 2px outside the border, on visualFocus only.
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2
@@ -90,7 +85,6 @@ AbstractButton {
         Text {
             text: "▾"
             font.family: Tokens.monoFamily
-            // Nothing in the app renders below the 10px floor, caret included.
             font.pixelSize: Tokens.textChip
             color: control.enabled ? Theme.muted : Theme.disabledFg
             anchors.verticalCenter: parent.verticalCenter

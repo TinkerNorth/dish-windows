@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// SlotLiveStats (pure display mapper). Pins the slot card's live-stats decision
-// layer: which rate chip to show and whether it is a live reading or a "~peak"
-// estimate, mirroring dish-android ControllerAdapter.controllerRateText /
-// gyroRatePill. Qt-free — the widget owns only the final "%1 Hz" / "~%1 Hz"
-// formatting. No timers / sockets; plain value-in, value-out.
 
 #include "UI/SlotLiveStats.h"
 
@@ -17,8 +11,6 @@ using dish::ui::motionRateChip;
 using dish::ui::pollRateChip;
 using dish::ui::RateChip;
 using dish::ui::RateChipKind;
-
-// ── gamepad chip ──────────────────────────────────────────────────────────────
 
 TEST_CASE("gamepadRateChip: a USB-direct pad with a live rate shows it live", "[slotlivestats]") {
     SlotLiveRates r;
@@ -40,8 +32,6 @@ TEST_CASE("gamepadRateChip: a routed pad shows the peak with a ~", "[slotlivesta
 
 TEST_CASE("gamepadRateChip: a routed pad with a live rate still shows the peak",
           "[slotlivestats]") {
-    // Only Direct renders the live value; a routed pad always shows the peak
-    // window (android: `direct && controllerHz > 0` is the only live branch).
     SlotLiveRates r;
     r.gamepadHz = 45;
     r.gamepadPeakHz = 60;
@@ -67,8 +57,6 @@ TEST_CASE("gamepadRateChip: a USB-direct pad that is momentarily idle falls back
     REQUIRE(c.hz == 250);
 }
 
-// ── motion chip ───────────────────────────────────────────────────────────────
-
 TEST_CASE("motionRateChip: a live gyro rate shows live (no ~)", "[slotlivestats]") {
     SlotLiveRates r;
     r.motionHz = 250;
@@ -83,8 +71,6 @@ TEST_CASE("motionRateChip: an idle gyro is hidden", "[slotlivestats]") {
     r.motionPeakHz = 250; // a recorded peak does not resurrect the chip
     REQUIRE(motionRateChip(r).kind == RateChipKind::Hidden);
 }
-
-// ── poll-rate chip ────────────────────────────────────────────────────────────
 
 TEST_CASE("pollRateChip: shown live for a USB-direct pad with a measurement", "[slotlivestats]") {
     SlotLiveRates r;
@@ -104,8 +90,6 @@ TEST_CASE("pollRateChip: hidden for a non-direct pad even if a stale value linge
 TEST_CASE("pollRateChip: hidden for a direct pad with no measurement yet", "[slotlivestats]") {
     REQUIRE(pollRateChip(SlotLiveRates{}, /*usbDirect=*/true).kind == RateChipKind::Hidden);
 }
-
-// ── SlotLiveRates::hasAny ─────────────────────────────────────────────────────
 
 TEST_CASE("SlotLiveRates::hasAny is false when every rate is zero", "[slotlivestats]") {
     REQUIRE_FALSE(SlotLiveRates{}.hasAny());

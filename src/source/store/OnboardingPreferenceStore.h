@@ -1,22 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// OnboardingPreferenceStore — the first-run "welcome seen" StateSource
-// (Workstream 3a). Owns two persisted flags and republishes them reactively.
-// Mirrors dish-android source/store/OnboardingPreferenceStore.kt (an
-// AbstractStateSource<OnboardingState> holding welcomeCompleted +
-// dashboardHintDismissed).
+// The first-run "welcome seen" StateSource: two persisted flags, republished
+// reactively.
 //
-// Re-expressed as a Wave-0 StateSource<OnboardingState> over QSettings. The two
-// flags are simple scalar preferences (not a keyed collection), so they live
-// directly in the Source over QSettings the way FeatureSettings does — there is
-// no separate keyed Repository to split out (and hence no RepositoryContract to
-// instantiate; the contract is for Repository<K,V> collections).
-//
-// Persisted keys/store name are kept verbatim from android for cross-client
-// schema continuity: "onboarding_welcome_completed" /
-// "onboarding_dashboard_hint_dismissed" under "user_preferences". Both default
-// false so a fresh install shows the welcome pager.
+// The keys and store name are a cross-client schema shared with the other Dish
+// clients, so renaming one is a migration. Both default false so a fresh
+// install shows the welcome pager.
 
 #pragma once
 

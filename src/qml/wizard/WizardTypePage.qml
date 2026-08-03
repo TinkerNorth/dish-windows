@@ -1,20 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Wizard page 3 — Binding · type. What the PC should see.
-//
-// One card per catalog type, each carrying the SAME three-row capability table
-// under one shared `Carries · In · Link · Type · Host` header. Nothing expands
-// on selection, so the types are actually comparable.
-//
-// The TYPE and HOST columns are REAL here, not placeholders: the catalog's
-// per-type features and the host's advertised features are both parsed and both
-// solved in C++. What stays honest instead is Pending — a row reads Pending
-// whenever there is no host or the catalog has not resolved, and a cross is
-// never drawn from a catalog we could not read.
-//
-// Never a guessed type: a catalog still loading shows the loader, and a catalog
-// that failed with nothing cached shows a retry with Continue disabled.
+// Wizard page 3 — Binding · type. What the PC should see. Every type card shares
+// one capability table so the types are actually comparable. A row reads Pending
+// whenever the host or its catalog is unresolved — a cross is never drawn from a
+// catalog we could not read, and a type is never guessed.
 
 // Bound: the card delegate reads the outer `page` id alongside its modelData.
 pragma ComponentBehavior: Bound
@@ -42,9 +32,8 @@ ColumnLayout {
     }
 
     function activated() {
-        // The one round-trip before the bind: reading the host's catalog. Keyed
-        // on the DESTINATION, never on the pad: the pad has no binding yet, and
-        // the slot-keyed read resolves through hub_->bindings().
+        // Keyed on the DESTINATION, never on the pad: the pad has no binding
+        // yet, and the slot-keyed read resolves through hub_->bindings().
         if (page.draft.hasDestination)
             App.refreshEmulateForHost(page.draft.hostId);
         page.reload();
@@ -80,9 +69,8 @@ ColumnLayout {
         }
     }
 
-    // The three rows the wizard compares, in the frame's order. `revision` is
-    // named at the call site so the draft is a binding dependency — a plain
-    // function call is not one.
+    // `revision` is named at the call site so the draft is a binding dependency
+    // — a plain function call is not one.
     function typeRows(candidateType, revision) {
         const all = page.draft.rowsFor(candidateType);
         const wanted = [
@@ -225,7 +213,6 @@ ColumnLayout {
                         ColorAnimation { duration: Tokens.durFast }
                     }
                 }
-                // The global focus ring, outside the border, on visualFocus only.
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: -2

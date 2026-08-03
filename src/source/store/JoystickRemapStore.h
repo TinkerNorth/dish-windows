@@ -1,33 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// JoystickRemapStore — the per-VID:PID raw-joystick button/axis REMAP. Backs the
-// "Configure controls" page (android parity): a user-correctable routing table
-// that overrides the best-guess default DirectInput layout in
-// Input/JoystickMapping for a specific generic pad whose buttons are scrambled.
+// The per-VID:PID raw-joystick button/axis remap behind the "Configure controls"
+// page: a user-correctable routing table that overrides the best-guess
+// DirectInput layout in Input/JoystickMapping for a generic pad whose buttons
+// are scrambled.
 //
-// Two layers, mirroring UsbPathPreferenceStore exactly (the migration plan's
-// kernel SoC split — a durable Repository wrapped in a reactive Source):
+// A corrupt blob falls back to empty and a partially-garbled entry falls back to
+// that key's default remap, so an unrecognised field from a newer build is
+// ignored rather than fatal. remapFor returns nullopt when nothing is stored and
+// the caller uses the default.
 //
-//   * JoystickRemapRepository — dumb, synchronous, thread-safe storage (one
-//     std::mutex; no Observables). A KeyedRepository<QString, JoystickRemapEntry>
-//     keyed by the "%04x:%04x" vid:pid string, persisted as ONE JSON object
-//     under the dedicated "joystick_remaps" key — DISJOINT from
-//     "usb_path_choices" so the two never collide. A corrupt blob falls back to
-//     empty; an unknown / partially-garbled entry falls back to the DEFAULT
-//     remap for that key (forward-compat — a newer build's fields we don't know
-//     are simply ignored, never crash, never guess).
-//
-//   * JoystickRemapStore — the StateSource<map<vid:pid, JoystickRemap>> over the
-//     repo. Hydrates from repo.all() on construction; setRemap/clearRemap
-//     persist through AND republish; an unchanged setRemap short-circuits (no
-//     re-emit) via JoystickRemap::operator==. remapFor(vid, pid) returns
-//     std::nullopt when nothing is stored — the caller then uses the default
-//     JoystickRemap (mapJoystick's default-overload behaviour).
-//
-// The vid:pid key namespace is its own dedicated "joystick_remaps" key, disjoint
-// from the path / deadzone / motion namespaces, so clear() touches only this
-// store's data.
+// The "joystick_remaps" key namespace is disjoint from the path, deadzone and
+// motion namespaces, which is what keeps clear() from touching another store.
 
 #pragma once
 

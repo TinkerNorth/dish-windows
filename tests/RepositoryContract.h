@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// RepositoryContract — the 8 standard property tests every concrete
-// Repository<K,V> must pass, mirroring dish-android's AbstractRepositoryContract.
-// Call from a TEST_CASE; each SECTION gets a fresh repository from makeRepo().
-//
-//   TEST_CASE("MyRepo satisfies the contract", "[repository]") {
-//       dish::test::runRepositoryContract<Key, Value>(
-//           [] { return std::make_unique<MyRepo>(...); },   // fresh + empty
-//           [](int i) { return makeKey(i); },
-//           [](const Key& k) { return makeValue(k); });
-//   }
+// The property tests every concrete Repository<K,V> must pass. Call from a
+// TEST_CASE; Catch2 re-runs the body per SECTION, so makeRepo() must hand back
+// a fresh empty repository each time.
 
 #pragma once
 

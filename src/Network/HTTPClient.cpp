@@ -21,7 +21,6 @@ namespace {
 
 constexpr int kTimeoutMs = 5000;
 
-// Parse a reply body into a JSON object; empty object on malformed/empty.
 QJsonObject parseObject(const QByteArray& body) {
     if (body.isEmpty()) { return {}; }
     QJsonParseError err{};
@@ -44,18 +43,15 @@ void HTTPClient::perform(const QString& url, const QByteArray& method, const QBy
                          std::function<void(const RawReply&)> done) {
     QNetworkRequest req((QUrl(url)));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    // Every authenticated route carries the device id + a proof of the pairing
-    // key, so a diverged key fails HERE with a terminal 401 instead of a
-    // silently-undecryptable UDP session (contract §hmacProof).
+    // The proof header exists so a diverged pairing key fails here with a
+    // terminal 401 rather than as a silently undecryptable UDP session.
     if (!deviceId.isEmpty()) { req.setRawHeader("X-Device-Id", deviceId.toUtf8()); }
     if (!hmacProof.isEmpty()) { req.setRawHeader("X-Hmac-Proof", hmacProof.toUtf8()); }
     if (!acceptLanguage.isEmpty()) { req.setRawHeader("Accept-Language", acceptLanguage.toUtf8()); }
     if (!ifNoneMatch.isEmpty()) { req.setRawHeader("If-None-Match", ifNoneMatch.toUtf8()); }
 
-    // Self-signed cert: there is no CA chain to validate, so peer verification
-    // is off (curl --insecure). Trust is enforced by the TOFU pin verifier on
-    // the `encrypted` signal below — VerifyNone here just stops Qt from refusing
-    // the self-signed chain before we get a chance to pin it.
+    // VerifyNone only stops Qt refusing the self-signed chain before we get a
+    // chance to pin it; the `encrypted` handler below is the real gate.
     QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
     tls.setPeerVerifyMode(QSslSocket::VerifyNone);
     req.setSslConfiguration(tls);
@@ -65,10 +61,9 @@ void HTTPClient::perform(const QString& url, const QByteArray& method, const QBy
     auto* reply = nam_->sendCustomRequest(req, method, body);
     QObject::connect(reply, &QNetworkReply::sslErrors, reply,
                      [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
-    // TOFU pin check: once the handshake completes the peer cert is available.
-    // First contact pins + proceeds; a cert whose fingerprint differs from the
-    // pin aborts the request (the `finished` handler then reports it unreachable,
-    // exactly as a dropped connection would). No verifier installed → no-op.
+    // `encrypted` is the earliest point the peer cert is available. An abort here
+    // surfaces through `finished` as unreachable, indistinguishable from a
+    // dropped connection.
     if (pinVerifier_) {
         QObject::connect(reply, &QNetworkReply::encrypted, reply, [this, reply, host] {
             const QByteArray der = reply->sslConfiguration().peerCertificate().toDer();
@@ -81,8 +76,8 @@ void HTTPClient::perform(const QString& url, const QByteArray& method, const QBy
         const auto statusVar = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
         out.status = statusVar.isValid() ? statusVar.toInt() : 0;
         out.body = reply->readAll();
-        // A transport-level failure with no HTTP status is unreachable; a body
-        // (including a 4xx/5xx error body) means the server answered.
+        // A 4xx/5xx body still means the server answered; only a missing status
+        // AND an empty body is a transport failure.
         out.reachable = out.status != 0 || !out.body.isEmpty();
         out.etag = QString::fromUtf8(reply->rawHeader("ETag"));
         done(out);

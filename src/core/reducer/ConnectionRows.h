@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pure connection-row shaping: glyph / dot-color / status-chip / "is this link
-// live" derivation from a UiLinkState, plus the row label/detail composition as
-// STRING KEYS + ARGS rather than localized text. This is the fix for android's
-// one architectural wart — ConnectionsComposer reaches Context.getString to
-// localize the row detail; here the composer stays Qt-free and emits a
-// RowDetailKey + the (ip, udpPort) args, and the UI layer turns that into the
-// localized string. Mirrors dish-android ui/common/ConnectionGlyphs.kt
-// (glyphForConnection / dotColorForState / statusChipTextRes) +
-// ui/connections/ConnectionRows.kt (paintConnection) + ControllerAdapter
-// (isLiveLink), with the localization pushed up to the UI per the SoC rule "a
-// Composer never touches tr()/widget types — emit keys, localize in the UI".
+// Connection-row shaping: glyph, dot colour, status chip and liveness from a
+// UiLinkState. Everything is emitted as keys and args, never localized text, so
+// the composer layer never reaches for tr(); the UI resolves the keys.
 
 #pragma once
 
@@ -19,35 +11,24 @@
 
 namespace dish::reducer {
 
-// Which kind of connection a row represents. Windows is physical-controllers-
-// only, so only Satellite is wired here; the Bluetooth-HID-peripheral kind
-// android carries is phone-only and out of scope. The enum is kept open so the
-// glyph/chip mappers below read like the android table.
+// Only Satellite is wired: this client is physical-controllers-only.
 enum class ConnectionKind { Satellite };
 
-// The glyph (icon) a row shows, as a stable key the UI resolves to a Qt icon /
-// resource. Mirrors android glyphForConnection(SATELLITE, state): Connected ->
-// the "connected" satellite, Saved/Stale -> the "off" satellite, everything
-// else -> the base satellite glyph.
+// Icon keys the UI resolves to Qt resources.
 enum class ConnectionGlyph { SatelliteBase, SatelliteConnected, SatelliteOff };
 
-// The status-dot tint, as a semantic color token (resolved to a Theme color in
-// the UI). Mirrors android dotColorForState: Connected -> success,
-// Connecting/Unstable -> primary, Stale -> warning, the rest -> muted.
+// Semantic colour tokens the UI resolves against the theme.
 enum class DotColor { Success, Primary, Warning, Muted };
 
-// The status-chip text, as a key the UI localizes (the cross-client chip
-// vocabulary). One key per LinkState; mirrors android statusChipTextRes.
+// One key per LinkState, the chip vocabulary shared across the Dish clients.
 enum class StatusChipKey { Found, NeedsPairing, Offline, Ready, Connecting, Online, Unstable };
 
-// The row's detail line, as a key + args (NOT localized text). The UI formats
-// "<ip> • UDP <port>" from the args under its own .ts catalog. This is the
-// seam that keeps the composer Qt/tr()-free.
+// The UI formats the detail line from the (ip, udpPort) args under its own
+// catalogue, which is what keeps this layer free of tr().
 enum class RowDetailKey { DiscoveredRow };
 
-// True iff the link is actively streaming. A Faltering (Unstable) link is still
-// streaming, so it counts as live everywhere on the dashboard exactly as the
-// connections screen treats it. Mirrors android LinkState.isLiveLink().
+// An Unstable link is still streaming, so the dashboard and the connections
+// screen both count it as live.
 inline bool isLiveLink(UiLinkState state) {
     return state == UiLinkState::Connected || state == UiLinkState::Unstable;
 }

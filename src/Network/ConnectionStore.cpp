@@ -6,7 +6,7 @@
 namespace dish::net {
 
 ConnectionStore::ConnectionStore(std::unique_ptr<QSettings> settings) {
-    // Adopt any injected QSettings as the shared backing store for the three
+    // An injected QSettings becomes the shared backing store for all three
     // repositories; otherwise the facade opens the default HKCU store.
     std::shared_ptr<QSettings> shared =
         settings ? std::shared_ptr<QSettings>(std::move(settings)) : nullptr;

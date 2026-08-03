@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Coverage for the pure rumble bridge helpers in core/reducer/RumbleRouting.h:
-// the 16-bit -> 8-bit magnitude scaler (rumbleMagnitudeTo255) and the safe-
-// duration clamp (rumbleSafeDurationMs). Replicates dish-android
-// hotpath/input/RumbleBridgeHelpersTest (PURE) — distinct from the MSG_RUMBLE
-// decode that test_satellite_client_rumble already pins (that test covers the
-// wire byte layout; this one covers the post-decode scaling the actuator uses).
 
 #include "core/reducer/RumbleRouting.h"
 
@@ -16,8 +9,6 @@
 
 using dish::reducer::rumbleMagnitudeTo255;
 using dish::reducer::rumbleSafeDurationMs;
-
-// ── rumbleMagnitudeTo255 ─────────────────────────────────────────────────────
 
 TEST_CASE("rumbleMagnitudeTo255: magnitude 0 stays 0", "[rumble][helpers]") {
     REQUIRE(rumbleMagnitudeTo255(0) == 0);
@@ -59,13 +50,10 @@ TEST_CASE("rumbleMagnitudeTo255: scaling is monotonic across the range", "[rumbl
         REQUIRE(v >= prev);
         prev = v;
     }
-    // Endpoints pinned explicitly so the loop step can't skip a regression at 0
-    // or the max.
+    // Pinned explicitly: the loop step can skip the endpoints.
     REQUIRE(rumbleMagnitudeTo255(0) == 0);
     REQUIRE(rumbleMagnitudeTo255(65535) == 255);
 }
-
-// ── rumbleSafeDurationMs ─────────────────────────────────────────────────────
 
 TEST_CASE("rumbleSafeDurationMs: duration 0 is preserved as the stop sentinel",
           "[rumble][helpers]") {

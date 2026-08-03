@@ -1,42 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The transient toast / snackbar host — drop it ONCE at the app shell so a
-// one-shot App.errorMessage (and any other transient notice) has somewhere to
-// land. A bottom-center stack of rail-accented pills (Theme.surface fill,
-// Theme.outline border, a tone-coloured leading rule), each fading + sliding in,
-// sitting for Tokens.durToast, then fading out. Safe to call show() repeatedly —
-// each call pushes a new toast with its own auto-dismiss timer.
+// The ONE elevated surface in the app: the only thing that floats without a
+// scrim, so the shadow is what separates it from the page. Dialogs have none.
 //
-// TONES ARE error | warning | success. There is no `info` tone: persistent state
-// lives on the surface that owns it, so an informational toast is by
-// construction state that has escaped its surface. A stray "info" maps to
-// success and warns.
-//
-// This is the ONE elevated surface in the app — it is the only thing that floats
-// without a scrim, so the shadow is what separates it from the page. Dialogs
-// deliberately have none.
-//
-// API:
-//   show(message)                       // severity defaults to "error"
-//   show(message, severity)             // severity ∈ "error" | "warning" | "success"
-//
-// Wiring (in AppShell.qml / Main.qml — declare one and connect App.errorMessage):
-//   Kit.NotificationToastHost { id: toastHost }
-//   Connections {
-//       target: App
-//       function onErrorMessage(m) { toastHost.show(m) }   // m: string
-//   }
-//
-// It reparents nothing and paints nothing of its own beyond the toasts, so it is
-// safe to place as a sibling of the shell's content (give it the same anchors as
-// the content area, or anchors.fill of the window body) — it only draws at the
-// bottom-center within its own bounds.
+// There is no `info` tone. Persistent state lives on the surface that owns it,
+// so an informational toast is by construction state that has escaped its
+// surface; a stray "info" maps to success and warns.
 
-// Bound component behavior so the toast delegate can reference the outer `host`
-// id (its show/_dismiss API + tuning props) and its own `required` model roles
-// statically — keeps binding resolution static and qmllint quiet (matches
-// ConnectionsPage / ControllersPage).
+// Bound: the toast delegate reads the outer `host` id and its own required
+// model roles.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -48,30 +21,20 @@ import Dish.Chrome
 Item {
     id: host
 
-    // How long (ms) a toast stays before it auto-dismisses.
     property int durationMs: Tokens.durToast
-    // Cap the visible stack so a flood of errors can't grow without bound; the
-    // oldest is dropped when a new one would exceed this (DROP_OLDEST, matching
-    // the source-layer channel policy).
+    // DROP_OLDEST beyond this, so a flood of errors can't grow without bound.
     property int maxVisible: 4
 
-    // Don't eat clicks meant for the content beneath us — only the toast pills
-    // themselves are interactive (their own MouseArea). The host fills its parent
-    // purely to host the bottom-anchored stack.
+    // The host itself must stay hit-transparent: only the pills take clicks.
     anchors.fill: parent
 
-    // Monotonic id so each toast is individually addressable for dismissal.
     property int _nextId: 1
 
-    // The backing model of live toasts: { toastId, message, severity }. A
-    // ListModel + Repeater (not an imperative createObject loop) so the stack is
-    // declarative and each entry's lifetime is the model row's lifetime.
+    // { toastId, message, severity }. A ListModel rather than createObject so
+    // each toast's lifetime is its row's lifetime.
     ListModel { id: toastModel }
 
-    // Push a toast. `severity` is one of "error" | "warning" | "success" and
-    // defaults to "error" (the App.errorMessage channel). Safe to call any number
-    // of times; each call appends a row with its own auto-dismiss timer (declared
-    // on the delegate). An empty message is ignored.
+    // `severity` defaults to "error" (the App.errorMessage channel).
     function show(message, severity) {
         if (!message || message.length === 0)
             return;
@@ -84,15 +47,12 @@ Item {
         }
         if (sev !== "warning" && sev !== "success")
             sev = "error";
-        // DROP_OLDEST: trim from the front until there's room for the new one.
         while (toastModel.count >= host.maxVisible)
             toastModel.remove(0);
         toastModel.append({ toastId: host._nextId++, message: message, severity: sev });
     }
 
-    // Remove a toast by id (the delegate calls this when its timer fires or the
-    // user taps it). Resolved by id, not index, because the index shifts as
-    // earlier toasts dismiss.
+    // By id, not index: the index shifts as earlier toasts dismiss.
     function _dismiss(toastId) {
         for (let i = 0; i < toastModel.count; ++i) {
             if (toastModel.get(i).toastId === toastId) {
@@ -102,8 +62,6 @@ Item {
         }
     }
 
-    // The stack itself: bottom-centered, newest at the bottom. A Column laid out
-    // bottom-up so a new toast pushes in beneath the existing ones.
     Column {
         id: stack
         anchors.bottom: parent.bottom
@@ -121,13 +79,11 @@ Item {
                 required property string message
                 required property string severity
 
-                // Size to the pill; the pill sizes to its content.
                 implicitWidth: pill.implicitWidth
                 implicitHeight: pill.implicitHeight
                 width: implicitWidth
                 height: implicitHeight
 
-                // Severity → the leading rule colour. Three tones, no info.
                 readonly property color accent: toast.severity === "success" ? Theme.success
                                               : toast.severity === "warning" ? Theme.warning
                                               : Theme.error
@@ -137,8 +93,6 @@ Item {
 
                 Rectangle {
                     id: pill
-                    // The ONE elevated Dish surface: a surface pill with a 3px
-                    // tone rule down the left edge and a soft shadow.
                     implicitWidth: Math.min(pillRow.implicitWidth + 28, 380)
                     implicitHeight: Math.max(pillRow.implicitHeight + 24, 40)
                     radius: Tokens.radiusButton
@@ -153,8 +107,6 @@ Item {
                         shadowColor: Qt.rgba(0, 0, 0, 0.45)
                     }
 
-                    // Leading severity rule down the left edge (squared — it
-                    // reads as a rule, not a bar).
                     Rectangle {
                         anchors.left: parent.left
                         anchors.top: parent.top
@@ -183,8 +135,7 @@ Item {
                             Layout.alignment: Qt.AlignVCenter
                         }
 
-                        // Explicit dismiss affordance, drawn as a vector: the
-                        // design bans ✕ as text (no reliable Windows glyph).
+                        // Drawn, not typed: ✕ has no reliable Windows glyph.
                         Canvas {
                             id: dismissMark
                             implicitWidth: Tokens.s5
@@ -194,7 +145,7 @@ Item {
                                 var ctx = getContext("2d");
                                 ctx.reset();
                                 // The whole pill is the dismiss target, so the
-                                // mark brightens with the pill, not on its own.
+                                // mark brightens with the pill.
                                 var c = pillMouse.containsMouse ? Theme.onSurface : Theme.muted;
                                 ctx.strokeStyle = Qt.rgba(c.r, c.g, c.b, c.a);
                                 ctx.lineWidth = 1.4;
@@ -216,10 +167,9 @@ Item {
                         }
                     }
 
-                    // Tap anywhere on the toast to dismiss it early. A toast is
-                    // never in the tab order: it announces itself as an
-                    // AlertMessage and disappears on its own, so taking keyboard
-                    // focus would interrupt whatever the user is actually doing.
+                    // Never in the tab order: it announces itself as an
+                    // AlertMessage and leaves on its own, so taking focus would
+                    // interrupt whatever the user is actually doing.
                     MouseArea {
                         id: pillMouse
                         anchors.fill: parent
@@ -229,11 +179,8 @@ Item {
                     }
                 }
 
-                // ── Enter / exit motion ──────────────────────────────────────
-                // Fade + slide up on appear; the auto-dismiss is a one-shot Timer
-                // started on completion. (No exit slide: removing the model row
-                // destroys the delegate, so we keep the appear motion and let the
-                // ListModel removal carry the disappearance.)
+                // Appear motion only: removing the model row destroys the
+                // delegate, so there is nothing left to animate out.
                 opacity: 0
                 transform: Translate { id: slide; y: 12 }
 

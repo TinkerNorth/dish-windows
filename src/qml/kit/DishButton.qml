@@ -1,18 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// THE button. One type, three variants (Primary / Outline / Destructive) and
-// two sizes (Normal / Small). States — hover, press, keyboard focus, disabled —
-// are NEVER variants: writing `variant: Off` would lose the accessibility state
-// the whole design leans on.
-//
-// Disabled is `enabled: false` (so UI Automation / Narrator report it) PLUS
-// Tokens.disabledOpacity PLUS Theme.disabledFg — never a muted colour
-// multiplied by an opacity, which composites to ~2:1 and makes the one control
-// the user is waiting for the least readable thing on the page.
-//
-// KitButton.qml and OutlineButton.qml are one-line aliases over this so the
-// existing call sites keep working; new code instantiates DishButton directly.
+// The one button type. States (hover, press, focus, disabled) are never
+// variants — `enabled: false` is what UI Automation and Narrator report.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -27,11 +17,9 @@ Button {
     property int variant: DishButton.Outline
     property int size: DishButton.Normal
 
-    // Card-action density: 11px label in a 24px pill (the design's "small"),
-    // not a new font size.
     readonly property bool compact: control.size === DishButton.Small
 
-    // The label colour — and, for the two outlined variants, the border colour.
+    // The label colour, and for the outlined variants the border colour too.
     readonly property color foreground: !control.enabled ? Theme.disabledFg
                                       : control.variant === DishButton.Primary ? Theme.onPrimary
                                       : control.variant === DishButton.Destructive ? Theme.error
@@ -64,8 +52,7 @@ Button {
         Rectangle {
             anchors.fill: parent
             radius: Tokens.radiusButton
-            // Primary carries its state in the fill; the outlined pair carry it
-            // in the wash over a transparent ground so a Mica surface still
+            // The outlined pair wash over a transparent ground so Mica still
             // reads through a button placed on bare chrome.
             color: control.variant === DishButton.Primary
                      ? (!control.enabled ? Theme.surfaceDim
@@ -78,8 +65,6 @@ Button {
                      : (control.down ? Theme.primaryPress
                         : control.hovered ? Theme.primaryHover
                         : "transparent")
-            // A filled primary has no border at rest; keyboard focus adds the
-            // 1px solid rule the ring sits outside of.
             border.width: control.variant === DishButton.Primary
                           ? (control.visualFocus ? 1 : 0) : 1
             border.color: control.variant === DishButton.Primary
@@ -91,8 +76,7 @@ Button {
             }
         }
 
-        // The global focus ring: 2px Theme.focusRing OUTSIDE the border, on
-        // visualFocus only, so a mouse press never rings.
+        // visualFocus, not focus: a mouse press must never ring.
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2

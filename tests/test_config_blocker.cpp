@@ -1,19 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ConfigUiStateBlockerTest (PURE, 13) — port of dish-android ui/main/
-// ConfigUiStateBlockerTest against core/reducer/ConfigBlocker.h, closing the
-// "no pure home in Windows src" gap tests/PARITY.md flagged. All 13 android
-// cases are replicated one-to-one (same defaults: host "s:1" selected, loaded,
-// controller present, no connections), plus a pin of the isLiveLink predicate
-// the rule reads (android ControllerAdapter.isLiveLink / IsLiveLinkTest).
-//
-// The android rule, in precedence order: nothing until loaded; controller loss
-// blocks everything; no host selected -> no host blocker; a missing/non-live
-// host -> HostLost (label from the summary, else the remembered map, else
-// empty; reconnecting only while a Connecting summary exists); an Unstable
-// host -> HostUnsteady unless dismissed FOR THAT HOST — and a dismissal never
-// suppresses a real loss.
+// Precedence: nothing until loaded; controller loss beats everything; no host
+// selected means no host blocker; a missing or non-live host is HostLost (label
+// from the summary, else the remembered map, else empty); an Unstable host is
+// HostUnsteady unless dismissed for that host.
 
 #include "core/reducer/ConfigBlocker.h"
 
@@ -34,13 +25,10 @@ using dish::reducer::UiLinkState;
 
 namespace {
 
-// Mirrors the android test's summary(id, live, label = id) helper.
 BlockerHostRow summary(const std::string& id, UiLinkState live, const std::string& label = {}) {
     return BlockerHostRow{id, label.empty() ? id : label, live};
 }
 
-// Mirrors the android test's state(...) helper defaults: host "s:1" selected,
-// loaded, controller present, nothing connected/remembered/dismissed.
 struct Args {
     bool loaded = true;
     bool controllerPresent = true;
@@ -161,8 +149,6 @@ TEST_CASE("ConfigBlocker: every link state resolves to a deterministic blocker",
 }
 
 TEST_CASE("ConfigBlocker: isLiveLink is true only for Connected and Unstable", "[config-blocker]") {
-    // android ControllerAdapter.isLiveLink (IsLiveLinkTest): the two states
-    // that actually stream.
     CHECK(isLiveLink(UiLinkState::Connected));
     CHECK(isLiveLink(UiLinkState::Unstable));
     CHECK_FALSE(isLiveLink(UiLinkState::Found));

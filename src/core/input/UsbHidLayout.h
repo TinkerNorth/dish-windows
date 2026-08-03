@@ -1,27 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbHidLayout — the PURE, Qt-free gamepad field map distilled from a HID report
-// descriptor, plus the bit-exact decoder over it. 1:1 port of dish-android
-// app/src/main/cpp/usb_hid_descriptor.{h,cpp} (usbhid::HidLayout /
-// parseReportDescriptor / decodeFromLayout).
-//
-// Why this exists on Windows: the generic-HID fallback decoder guesses fixed
-// byte offsets, which only match pads that happen to share the canonical
-// axes/hat/buttons packing. Android fixes that by parsing the device's report
-// descriptor into this HidLayout at attach and decoding each report through it.
-// Windows cannot read the raw report descriptor (hid.dll only exposes preparsed
-// data), so the layout is built from HidP_GetCaps/GetValueCaps/GetButtonCaps
-// instead — see source/usb/HidLayoutFromCaps.h. Keeping parseReportDescriptor
-// here anyway (a) preserves the android surface 1:1 and (b) lets the tests build
-// layouts from android's known-good descriptor vectors and pin decodeFromLayout
-// against the exact same expectations android pins.
-//
-// decodeFromLayout is a template over the output-state type: android writes into
-// gamepad::DeviceState (sLX/bLT/...), Windows into usbparse::ParsedReport
-// (lx/lt/...). Templating on the four stick + two trigger + wButtons field names
-// keeps the math byte-for-byte while avoiding an include cycle with
-// UsbReportParsers.h (whose ParserState carries a HidLayout).
+// The gamepad field map distilled from a HID report descriptor, plus the
+// bit-exact decoder over it. The fixed-offset fallback decoder only fits pads
+// that happen to use the canonical packing, so a real layout is derived per
+// device instead. Windows cannot read the raw report descriptor (hid.dll exposes
+// only preparsed data), so production builds the layout from
+// HidP_GetCaps/GetValueCaps/GetButtonCaps in source/usb/HidLayoutFromCaps.h;
+// parseReportDescriptor stays here as the canonical constructor the shared
+// cross-client decode vectors are pinned against. decodeFromLayout is templated
+// on the output state to avoid an include cycle with UsbReportParsers.h.
 
 #pragma once
 
@@ -40,10 +28,8 @@ struct HidAxis {
     std::int32_t logicalMax = 0;
 };
 
-// A gamepad field map distilled from a HID report descriptor: where each
-// stick/trigger/hat/button lives within the input report. Fixed-size (no heap)
-// so it can be stored per device and read on the report hot path. Mirrors
-// android usbhid::HidLayout field-for-field.
+// Where each stick/trigger/hat/button lives within the input report. Fixed-size,
+// no heap, so it can be stored per device and read on the report hot path.
 struct HidLayout {
     bool valid = false;
     std::uint8_t reportId = 0; // 0 means the device sends no report-id prefix byte
@@ -59,8 +45,6 @@ struct HidLayout {
 
 inline constexpr std::size_t kMaxUsages = 16;
 inline constexpr std::uint8_t kMaxButtons = 16;
-
-// ── Bit-exact helpers (mirror usb_hid_descriptor.cpp's statics) ───────────────
 
 inline std::int32_t signExtend(std::uint32_t v, std::uint8_t bytes) {
     if (bytes == 0 || bytes >= 4) { return static_cast<std::int32_t>(v); }
@@ -113,8 +97,8 @@ inline std::uint8_t scaleTrig8(std::uint32_t raw, const HidAxis& a) {
     return static_cast<std::uint8_t>(scaled);
 }
 
-// The generic-HID button-index -> XUSB map (button 1 = A ... button 11 = Guide),
-// the same convention the fixed-offset fallback and android's buttonBit use.
+// Button 1 = A through button 11 = Guide, the convention the fixed-offset
+// fallback and the other clients also use.
 inline std::uint16_t layoutButtonBit(std::uint8_t idx) {
     switch (idx) {
     case 0:
@@ -167,9 +151,8 @@ inline std::uint16_t dpadBitsForDir(int dir) {
     }
 }
 
-// First declaration of an axis wins (mirrors android setAxis). Public rather
-// than file-local because the Windows caps-derived builder (HidLayoutFromCaps)
-// assigns fields through the same rules the descriptor parser uses.
+// First declaration of an axis wins. Public because the caps-derived builder in
+// HidLayoutFromCaps must assign fields through the same rules.
 inline void setAxis(HidAxis& a, std::uint32_t bit, std::uint32_t size, std::int32_t lo,
                     std::int32_t hi) {
     if (a.present) { return; }
@@ -180,9 +163,8 @@ inline void setAxis(HidAxis& a, std::uint32_t bit, std::uint32_t size, std::int3
     a.logicalMax = hi;
 }
 
-// Generic Desktop right stick is Z/Rz and triggers are Rx/Ry, matching the
-// convention the fixed-offset fallback already assumes; Simulation
-// Brake/Accelerator also map to the triggers. Mirrors android assignUsage.
+// Generic Desktop right stick is Z/Rz and triggers are Rx/Ry, matching what the
+// fixed-offset fallback assumes; Simulation Brake/Accelerator also feed triggers.
 inline void assignUsage(HidLayout& out, std::uint32_t page, std::uint32_t usage, std::uint32_t bit,
                         std::uint32_t size, std::int32_t lo, std::int32_t hi) {
     if (page == 0x01) {
@@ -226,12 +208,8 @@ inline void assignUsage(HidLayout& out, std::uint32_t page, std::uint32_t usage,
     }
 }
 
-// Parses a HID report descriptor into the gamepad field map. Pure and
-// defensive: returns false and leaves the layout invalid on malformed input or
-// when nothing gamepad-like is found, so callers fall back to a fixed-offset
-// guess. Byte-for-byte port of android parseReportDescriptor. Unreachable from
-// production Windows IO (no raw-descriptor read exists) but kept as the
-// canonical layout constructor for the shared decode tests.
+// Returns false and leaves the layout invalid on malformed input or when nothing
+// gamepad-like is found, so callers fall back to a fixed-offset guess.
 inline bool parseReportDescriptor(const std::uint8_t* desc, std::size_t len, HidLayout& out) {
     out = HidLayout{};
 
@@ -352,13 +330,10 @@ inline bool parseReportDescriptor(const std::uint8_t* desc, std::size_t len, Hid
     return out.valid;
 }
 
-// Decodes one input report into the XUSB state using a parsed layout. Pure;
-// byte-for-byte android decodeFromLayout. StateT supplies wButtons/lt/rt and the
-// four stick fields (usbparse::ParsedReport on Windows, gamepad::DeviceState on
-// android). NOTE the platform contract: offsets are relative to the post-id
-// payload when reportId != 0 and to the buffer start otherwise — Windows
-// ReadFile prepends a 0x00 id byte even for id-less devices, so the gateway
-// strips it first (see HidLayoutFromCaps.h stripsReportIdPrefix).
+// StateT supplies wButtons, lt/rt and the four stick fields. Bit offsets are
+// relative to the post-id payload when reportId != 0 and to the buffer start
+// otherwise; Windows ReadFile prepends a 0x00 id byte even for id-less devices,
+// so the gateway strips it first (HidLayoutFromCaps.h stripsReportIdPrefix).
 template <typename StateT>
 inline bool decodeFromLayout(const std::uint8_t* buf, std::size_t len, StateT& s,
                              const HidLayout& L) {

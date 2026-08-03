@@ -54,8 +54,7 @@ QVariant ConnectionListModel::data(const QModelIndex& index, int role) const {
     case LiveLinkRole:
         return rd::isLiveLink(r.live);
     case LatencyTextRole:
-        // Pre-formatted here (the pure core formatter) so both UIs render the
-        // identical figure; empty until the window has samples.
+        // Empty until the window has samples — never a fabricated "~0.0 ms".
         return r.latencySamples > 0 ? QString::fromStdString(rd::formatLatencyMs(r.latencyOneWayMs))
                                     : QString();
     case LatencySamplesRole:

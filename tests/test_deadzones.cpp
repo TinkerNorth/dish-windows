@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pins the pure core/input/Deadzones.h layer (Workstream 2d extracted the
-// arithmetic out of the hot-path GamepadInputProcessor). The processor-level
-// deadzone behaviour (per-device profiles, publish integration, remove) is
-// already covered by test_gamepad_input_processor.cpp; this file pins the pure
-// scalar functions directly so the math has its own unit. Mirrors the android
-// `flat` rule: sticks |v| <= flat -> 0, triggers v <= flat -> 0, and the
-// scale helpers (axis [-1,1] -> int16, trigger [0,1] -> 0..255). PURE.
+// The scalar math only; the processor-level deadzone behaviour is covered by
+// test_gamepad_input_processor.cpp.
 
 #include "core/input/Deadzones.h"
 
@@ -19,9 +14,9 @@ namespace dz = dish::input::deadzone;
 
 TEST_CASE("applyStick zeroes at or below the flat magnitude", "[input][deadzone]") {
     REQUIRE(dz::applyStick(0, 3277) == 0);
-    REQUIRE(dz::applyStick(3277, 3277) == 0);  // exactly at flat -> 0
-    REQUIRE(dz::applyStick(-3277, 3277) == 0); // negative at flat -> 0
-    REQUIRE(dz::applyStick(1500, 3277) == 0);  // below flat -> 0
+    REQUIRE(dz::applyStick(3277, 3277) == 0);
+    REQUIRE(dz::applyStick(-3277, 3277) == 0);
+    REQUIRE(dz::applyStick(1500, 3277) == 0);
     REQUIRE(dz::applyStick(-2000, 3277) == 0);
 }
 
@@ -36,7 +31,6 @@ TEST_CASE("applyStick handles INT16_MIN without overflow", "[input][deadzone]") 
     // std::abs(INT16_MIN) would overflow a 16-bit signed; the impl widens to
     // int32 so the most-negative value still passes a small flat.
     REQUIRE(dz::applyStick(INT16_MIN, 100) == INT16_MIN);
-    // A flat covering the whole range still zeroes it.
     REQUIRE(dz::applyStick(INT16_MIN, 32767) == INT16_MIN); // |−32768| > 32767 -> passes
     REQUIRE(dz::applyStick(-32767, 32767) == 0);            // |−32767| == flat -> 0
 }
@@ -44,7 +38,7 @@ TEST_CASE("applyStick handles INT16_MIN without overflow", "[input][deadzone]") 
 TEST_CASE("applyTrigger zeroes at or below the flat", "[input][deadzone]") {
     REQUIRE(dz::applyTrigger(0, 13) == 0);
     REQUIRE(dz::applyTrigger(5, 13) == 0);
-    REQUIRE(dz::applyTrigger(13, 13) == 0); // exactly at flat -> 0
+    REQUIRE(dz::applyTrigger(13, 13) == 0);
 }
 
 TEST_CASE("applyTrigger passes values above the flat", "[input][deadzone]") {

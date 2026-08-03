@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// SatellitePinRepositoryTest (ADAPT) + RepositoryContract. Port of dish-android
-// repository/SatellitePinRepositoryTest: per-id pin round-trip, durability across
-// a fresh repo over the same store, selective forget, and the hard namespace
-// isolation invariant (a pin never reads back as a shared key; clear()/all()
-// touch only the pin prefix).
 
 #include "repository/SatellitePinRepository.h"
 #include "repository/SatelliteSharedKeyRepository.h"
@@ -68,9 +62,7 @@ TEST_CASE("a pin does not leak into the sibling shared-key namespace", "[pin]") 
     SatellitePinRepository pins(store);
     SatelliteSharedKeyRepository keys(store);
     pins.pin("satellite:mid:a", "CAFE");
-    // Same id in the co-tenant shared-key repo must NOT see the pin...
     CHECK_FALSE(keys.get("satellite:mid:a").has_value());
-    // ...but a fresh pin repo over the same store still reads it.
     CHECK(SatellitePinRepository(store).pinnedFingerprint("satellite:mid:a") ==
           QStringLiteral("CAFE"));
 }

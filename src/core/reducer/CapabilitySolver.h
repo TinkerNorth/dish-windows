@@ -1,34 +1,23 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// CapabilitySolver — the single owner of the four-layer capability vocabulary
-// shared by the wizard's type table and Configure binding's WHAT CARRIES
-// matrix. Two surfaces used to derive this independently; that is exactly how
-// they drift.
+// The single owner of the capability vocabulary shared by the wizard's type table
+// and Configure binding's WHAT CARRIES matrix, so the two surfaces cannot drift.
 //
-//     available = controller n transport n type n host
+//     available = input n link n type n host
 //
-//   * Input  — what the pad itself reports (gyro / touchpad / rumble / lightbar)
-//   * Link   — the USB path: Direct carries everything, Standard carries the
-//              gamepad, its triggers and rumble
-//   * Type   — the catalog type's `features` (an Xbox 360 type carries no gyro
-//              however good the pad is)
-//   * Host   — the satellite's `hostFeatures` (mouse control, rumble return);
-//              a Bluetooth host is Windows' own gamepad layer and carries only
-//              the gamepad, its triggers and rumble
+//   Input  what the pad itself reports
+//   Link   the USB path: Direct carries everything, Standard carries the gamepad,
+//          its triggers and rumble
+//   Type   the catalog type's features: an Xbox 360 type carries no gyro however
+//          good the pad is
+//   Host   the satellite's hostFeatures. A Bluetooth host is Windows' own gamepad
+//          layer and carries only the gamepad, its triggers and rumble
 //
-// Four verdicts, and the distinctions between them are the whole point:
-//   Available   — every layer carries it and the user has it on
-//   Unavailable — a layer refuses it; `failingLayer` names the FIRST one, which
-//                 is the one whose fix is actionable
-//   Off         — every layer carries it and the USER switched it off
-//   Pending     — the host or its catalog has not resolved. Never a guess: an
-//                 unread layer NEVER refuses, so a `x` is never drawn from an
-//                 unresolved catalog.
-//
-// Pure, Qt-free, header-only: the vocabulary must be testable without a
-// satellite, a catalog fetch or a QML engine. Localised copy lives in QML — the
-// solver returns tokens only.
+// Off means every layer carries it and the user switched it off, which is why it
+// is distinct from Unavailable. Pending means the host or catalog has not
+// resolved; an unread layer never refuses, so a cross is never drawn from a
+// guess. Returns tokens only; localized copy lives in QML.
 
 #pragma once
 
@@ -39,28 +28,28 @@ namespace dish::reducer {
 enum class CapLayer { Input, Link, Type, Host };
 enum class CapVerdict { Available, Unavailable, Pending, Off };
 
-// The seven features, in the fixed render order both surfaces use.
+// Declaration order is the render order both surfaces use.
 enum class CapFeature { Gamepad, Triggers, Motion, Touchpad, Mouse, Rumble, Lightbar };
 
 struct CapabilityInputs {
-    // Input layer — what the pad itself reports.
     bool padMotion = false;
     bool padTouchpad = false;
     bool padRumble = true; // every supported pad has motors today
     bool padLightbar = false;
-    // Link layer.
-    bool linkDirect = false;   // usb && directCapable && draft wants Direct
-    bool linkUsb = false;      // false => Bluetooth transport
+
+    bool linkDirect = false;   // usb && directCapable && the draft wants Direct
+    bool linkUsb = false;      // false means Bluetooth transport
     bool padClaimable = false; // pathSupported
-    // Type layer. `typeResolved == false` => the type layer refuses nothing.
-    bool typeResolved = false;
+
+    bool typeResolved = false; // false means the type layer refuses nothing
     bool typeMotion = false, typeTouchpad = false, typeRumble = false, typeLightbar = false;
-    // Host layer. `hostResolved == false` => Pending.
-    bool hostResolved = false;
+
+    bool hostResolved = false; // false means Pending
     bool hostIsBluetooth = false;
     bool hostMouseControl = false;
     bool hostRumble = false;
-    // User gates (drive `Off`, never `Unavailable`).
+
+    // User gates drive Off, never Unavailable.
     bool userMotionOn = true, userRumbleOn = true;
     int userTouchpadMode = 0; // 0=off 1=pad 2=mouse
 };
@@ -75,10 +64,8 @@ struct CapabilityRow {
 
 namespace detail {
 
-// `linkUsb` / `padClaimable` do not change the transport SET (only `linkDirect`
-// does); they are carried so the caller can pick the right REASON — "switch to
-// Direct" for a claimable USB pad vs "Direct needs a USB connection" over
-// Bluetooth. The solver never vends a sentence.
+// `linkUsb` and `padClaimable` never change the carried set, only `linkDirect`
+// does; they are carried so the caller can pick the right reason to show.
 inline bool inputCarries(const CapabilityInputs& in, CapFeature f) {
     switch (f) {
     case CapFeature::Gamepad:
@@ -88,7 +75,7 @@ inline bool inputCarries(const CapabilityInputs& in, CapFeature f) {
         return in.padMotion;
     case CapFeature::Touchpad:
         return in.padTouchpad;
-    // Mouse is a ROUTING of the touchpad, so the pad needs one to drive it.
+    // Mouse is a routing of the touchpad, so the pad needs one to drive it.
     case CapFeature::Mouse:
         return in.padTouchpad;
     case CapFeature::Rumble:
@@ -100,7 +87,7 @@ inline bool inputCarries(const CapabilityInputs& in, CapFeature f) {
 }
 
 inline bool linkCarries(const CapabilityInputs& in, CapFeature f) {
-    if (in.linkDirect) { return true; } // a raw-HID claim carries every feature
+    if (in.linkDirect) { return true; } // a raw-HID claim carries everything
     switch (f) {
     case CapFeature::Gamepad:
     case CapFeature::Triggers:
@@ -112,8 +99,8 @@ inline bool linkCarries(const CapabilityInputs& in, CapFeature f) {
 }
 
 inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {
-    // An unread catalog refuses nothing — a guessed "unsupported" is worse than
-    // no table. The Pending verdict below is what tells the user we don't know.
+    // An unread catalog refuses nothing: a guessed "unsupported" is worse than no
+    // table, and the Pending verdict is what says we do not know yet.
     if (!in.typeResolved) { return true; }
     switch (f) {
     case CapFeature::Gamepad:
@@ -123,8 +110,7 @@ inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {
         return in.typeMotion;
     case CapFeature::Touchpad:
         return in.typeTouchpad;
-    // Mouse is a routing of the touchpad, not a catalog type feature.
-    case CapFeature::Mouse:
+    case CapFeature::Mouse: // a routing, not a catalog type feature
         return true;
     case CapFeature::Rumble:
         return in.typeRumble;
@@ -137,8 +123,7 @@ inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {
 inline bool hostCarries(const CapabilityInputs& in, CapFeature f) {
     if (!in.hostResolved) { return true; } // same rule as the type layer
     if (in.hostIsBluetooth) {
-        // Windows' own gamepad layer: no motion channel, no touch channel, no
-        // lightbar return.
+        // Windows' own gamepad layer has no motion, touch or lightbar channel.
         return f == CapFeature::Gamepad || f == CapFeature::Triggers || f == CapFeature::Rumble;
     }
     switch (f) {
@@ -156,8 +141,8 @@ inline bool hostCarries(const CapabilityInputs& in, CapFeature f) {
     return false;
 }
 
-// Whether the USER has this feature switched on. Only reachable when all four
-// layers carry it, so it can never masquerade as "unsupported".
+// Only reached once all four layers carry the feature, so a user switch can never
+// masquerade as unsupported.
 inline bool userEnabled(const CapabilityInputs& in, CapFeature f) {
     switch (f) {
     case CapFeature::Motion:
@@ -175,9 +160,8 @@ inline bool userEnabled(const CapabilityInputs& in, CapFeature f) {
 
 } // namespace detail
 
-// True while the host, or the catalog that describes what a type carries, has
-// not resolved. A Bluetooth host needs no catalog — it is not a satellite and
-// offers no types — so only a satellite host waits on one.
+// A Bluetooth host is not a satellite and offers no types, so only a satellite
+// host waits on a catalog.
 inline bool capabilitiesPending(const CapabilityInputs& in) {
     return !in.hostResolved || (!in.hostIsBluetooth && !in.typeResolved);
 }
@@ -199,15 +183,14 @@ inline std::vector<CapabilityRow> solveCapabilities(const CapabilityInputs& in) 
         row.hostOk = detail::hostCarries(in, f);
 
         if (pending) {
-            // No blame while unresolved: the table shows a dash, not a cross.
             row.verdict = CapVerdict::Pending;
         } else if (row.inOk && row.linkOk && row.typeOk && row.hostOk) {
             row.verdict = detail::userEnabled(in, f) ? CapVerdict::Available : CapVerdict::Off;
         } else {
             row.verdict = CapVerdict::Unavailable;
             row.hasFailingLayer = true;
-            // The FIRST failing layer, in Input -> Link -> Type -> Host order:
-            // the one whose fix the user can actually act on.
+            // The first failing layer in Input, Link, Type, Host order: the one
+            // whose fix the user can actually act on.
             row.failingLayer = !row.inOk     ? CapLayer::Input
                                : !row.linkOk ? CapLayer::Link
                                : !row.typeOk ? CapLayer::Type

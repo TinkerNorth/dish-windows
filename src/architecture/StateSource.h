@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// StateSource<S> — the C++ analogue of dish-android's AbstractStateSource<S>:
-// the owned-state primitive. Owns one Observable<S>, exposes it read-only via
-// state(), and mutates only through protected setState. Lifecycle is opt-in
-// via start()/stop() (there is no Android lifecycle on Windows — most
-// process-scoped sources just live for the app's lifetime).
+// StateSource<S>: owns one Observable<S>, read-only out, mutated via setState.
+// See architecture/README.md.
 
 #pragma once
 

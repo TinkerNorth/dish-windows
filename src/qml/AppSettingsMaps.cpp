@@ -32,8 +32,8 @@ source::ThemeMode themeModeFromInt(int value) {
         return source::ThemeMode::Dark;
     case 2:
     default:
-        // 2 IS System; everything else lands here too — lenient, mirroring
-        // themeModeFromStorage's unknown -> System default.
+        // Out-of-range is System too, matching themeModeFromStorage's lenient
+        // unknown -> System default.
         return source::ThemeMode::System;
     }
 }
@@ -41,8 +41,6 @@ source::ThemeMode themeModeFromInt(int value) {
 QVariantMap deadzoneRowFor(const QString& deviceId, const QString& name, bool hasGyro,
                            const dish::repository::DeadzoneRepository* deadzoneRepo,
                            const dish::source::MotionEnabledStore* motionStore) {
-    // Seed from the durable override, else the bridge's default profile — the
-    // exact seeding rule DeadzoneSettingsView::addDeviceCard uses.
     int stickFlat = kDefaultDeadzoneStickFlat;
     int triggerFlat = kDefaultDeadzoneTriggerFlat;
     if (deadzoneRepo != nullptr) {
@@ -51,9 +49,8 @@ QVariantMap deadzoneRowFor(const QString& deviceId, const QString& name, bool ha
             triggerFlat = stored->triggerFlat;
         }
     }
-    // Motion is keyed by the device id (the Widgets view's slotKey) and defaults
-    // on; only a gyro pad shows the toggle, but we surface the value regardless so
-    // the page decides visibility off hasGyro.
+    // Surfaced whether or not the pad has a gyro; the page owns the toggle's
+    // visibility off hasGyro.
     bool forwardMotion = source::MotionEnabledStore::kDefaultEnabled;
     if (motionStore != nullptr) { forwardMotion = motionStore->isEnabled(deviceId.toStdString()); }
 
@@ -82,7 +79,7 @@ QVariantList licenseRows(const dish::ui::LicenseManifest& manifest) {
     QVariantList out;
     for (const auto& entry : manifest.libraries) {
         const QString name = dish::ui::licenseDisplayName(entry);
-        if (name.isEmpty()) { continue; } // an unnamed entry is hidden (adapter rule)
+        if (name.isEmpty()) { continue; }
         QVariantMap m;
         m[QStringLiteral("name")] = name;
         m[QStringLiteral("version")] = dish::ui::licenseVersionLabel(entry);

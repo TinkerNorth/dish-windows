@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 
-// Coverage for util::hostBatteryFromSnapshot — the pure mapping from the
-// SYSTEM_POWER_STATUS fields to the MSG_BATTERY (0x000B) wire (level, status)
-// pair. The live readHostBattery() wraps this around a GetSystemPowerStatus
-// call; the mapping is split out so every branch is testable without driving
-// the Win32 API. Same pattern as test_satellite_client_motion.cpp — the pure
-// function is the seam.
+// hostBatteryFromSnapshot is split out of readHostBattery() so every branch of
+// the SYSTEM_POWER_STATUS to MSG_BATTERY (level, status) mapping is reachable
+// without driving GetSystemPowerStatus.
 
 #include "Util/HostBattery.h"
 
@@ -20,7 +17,7 @@ using dish::util::SystemPowerSnapshot;
 
 namespace {
 
-// SYSTEM_POWER_STATUS field values used across the cases.
+// The values Win32 documents for the SYSTEM_POWER_STATUS fields.
 constexpr std::uint8_t kAcOffline = 0;
 constexpr std::uint8_t kAcOnline = 1;
 constexpr std::uint8_t kAcUnknown = 255;
@@ -83,9 +80,8 @@ TEST_CASE("99% on AC counts as full (Windows tops out a couple points shy)", "[h
 }
 
 TEST_CASE("on AC, charging bit clear, not near full reports discharging", "[hostbattery]") {
-    // Rare but real: some firmware briefly drops the charging bit mid-charge.
-    // The mapping treats it as discharging so the UI never shows a stale
-    // "charging" — it self-corrects on the next 30 s poll.
+    // Some firmware briefly drops the charging bit mid-charge; reading that as
+    // discharging self-corrects on the next 30 s poll, a stale "charging" would not.
     SystemPowerSnapshot snap;
     snap.acLineStatus = kAcOnline;
     snap.batteryFlag = kFlagHigh;
@@ -102,14 +98,14 @@ TEST_CASE("unknown battery percentage maps to the 0xFF sentinel", "[hostbattery]
     snap.batteryLifePercent = kPercentUnknown;
     const auto r = hostBatteryFromSnapshot(snap);
     REQUIRE(r.level == dish::util::kBatteryLevelUnknown);
-    // Status with no AC info and an unknown flag falls through to discharging
-    // — the most conservative non-charging assumption.
+    // No AC info plus an unknown flag falls through to discharging, the most
+    // conservative non-charging assumption.
     REQUIRE(r.status == dish::util::kBatteryStatusDischarging);
 }
 
 TEST_CASE("low battery on AC + charging keeps the level intact", "[hostbattery]") {
-    // The level is reported verbatim regardless of status — the SlotCard's
-    // low-battery styling is a UI decision, not a wire one.
+    // The level goes out verbatim: low-battery styling is a UI decision, not a
+    // wire one.
     SystemPowerSnapshot snap;
     snap.acLineStatus = kAcOnline;
     snap.batteryFlag = static_cast<std::uint8_t>(kFlagLow | kFlagCharging);

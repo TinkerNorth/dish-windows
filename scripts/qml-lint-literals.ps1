@@ -3,23 +3,20 @@
     Fails a build that hard-codes a design value in a QML page.
 
 .DESCRIPTION
-    The design system has exactly one job: one name per colour, one name per
-    metric. A page that writes `#4FE3FF`, `radius: 8` or `font.pixelSize: 11`
-    has forked the system silently — it still renders, it just stops following
-    the palette and the scale. Nothing caught that before this script.
+    A page that writes `#4FE3FF`, `radius: 8` or `font.pixelSize: 11` has
+    forked the design system silently: it still renders, it just stops
+    following the palette and the scale.
 
     Scope:
-      * `src/qml/kit/**` is SKIPPED. The kit is where literals are legal: it is
-        the layer that TURNS tokens into pixels, and a token defined in terms of
-        itself is not a token.
+      * `src/qml/kit/**` is SKIPPED. The kit is the layer that TURNS tokens
+        into pixels; a token defined in terms of itself is not a token.
       * `src/qml/wizard/**` and `src/qml/shared/**` are ERRORS in -Mode error.
-        They are greenfield, written against the finished token surface, and
-        must be clean on day one.
+        They were written against the finished token surface.
       * Everything else outside the kit WARNS. Those files predate the token
-        surface; flipping them to error is the recorded follow-up.
+        surface; promoting them to error is the recorded follow-up.
 
-    Only `-Mode error` violations set the exit code, so the CI step can run in
-    error mode from day one and the warnings stay informational.
+    Only errors set the exit code, so CI can run in error mode while the
+    warnings stay informational.
 
 .PARAMETER Mode
     `error` (default) or `warn`. In `warn` mode nothing fails the build; every
@@ -40,14 +37,13 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
-    # git ls-files is the authority on which paths are tracked AND on their
-    # casing — a generated or build-tree copy of a page must not be scanned.
+    # git ls-files, not Get-ChildItem: it settles both tracked-ness and casing,
+    # and keeps build-tree copies of a page out of the scan.
     $files = @(git ls-files 'src/qml/*.qml')
     if ($LASTEXITCODE -ne 0) { throw 'git ls-files failed' }
 
-    # Each rule is (name, regex). The regexes are deliberately narrow: they match
-    # a literal being ASSIGNED to a design property, not any appearance of a
-    # number, so `width: parent.width - 8` and `Qt.point(0, 0)` stay quiet.
+    # Deliberately narrow: these match a literal ASSIGNED to a design property,
+    # not any number, so `width: parent.width - 8` stays quiet.
     $rules = @(
         @{ Name = 'raw colour literal';        Pattern = '#[0-9A-Fa-f]{3,8}\b' },
         @{ Name = 'Qt.rgba() colour';          Pattern = 'Qt\.rgba\(' },
@@ -58,7 +54,6 @@ try {
         @{ Name = 'hand-rolled disabled opacity'; Pattern = 'opacity\s*:\s*0\.4' }
     )
 
-    # The greenfield directories, which must be clean on day one.
     $strictPrefixes = @('src/qml/wizard/', 'src/qml/shared/')
 
     $errorCount = 0
@@ -66,25 +61,22 @@ try {
 
     foreach ($file in $files) {
         $normalized = $file -replace '\\', '/'
-        # The kit is the allow-listed layer: it defines the pixels the tokens
-        # name, so it is exempt by design, not by omission.
+        # Exempt by design, not by omission: see the kit note in the header.
         if ($normalized -like 'src/qml/kit/*') { continue }
-        # A tracked path can be absent from the worktree (a deletion that is not
-        # staged yet, a half-applied rebase). Scanning is not the place to fail.
+        # A tracked path can be missing from the worktree (unstaged deletion,
+        # half-applied rebase); a lint scan is not the place to fail on that.
         if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { continue }
 
         $strict = $false
         foreach ($prefix in $strictPrefixes) {
             if ($normalized.StartsWith($prefix)) { $strict = $true; break }
         }
-        # In warn mode nothing is fatal, including the greenfield dirs.
         if ($Mode -eq 'warn') { $strict = $false }
 
         $lineNumber = 0
         foreach ($line in (Get-Content -LiteralPath $file -Encoding UTF8)) {
             $lineNumber++
-            # A whole-line comment is prose, not code — a token table written in
-            # a header comment must not fail the build.
+            # A token table written in a header comment must not fail a build.
             if ($line -match '^\s*(//|\*|/\*)') { continue }
 
             foreach ($rule in $rules) {

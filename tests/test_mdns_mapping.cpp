@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// MdnsDiscoveryMappingTest (PURE) — the service->DiscoveredServer mapping layer
-// that sits above the wire-DNS parser (test_mdns_discovery.cpp covers the wire
-// layer). Port of dish-android source/connection/MdnsDiscoveryMappingTest:
-// TXT-int/string extraction, port precedence (TXT > SRV(>0) > defaults), machineId
-// from the "mid" key, empty-name->ip fallback, null-host->nullopt.
+// Port precedence is TXT > SRV (when > 0) > compiled-in defaults.
 
 #include "source/connection/MdnsDiscovery.h"
 
@@ -26,8 +22,6 @@ using dish::net::mdnsTxtString;
 namespace {
 QByteArray b(const char* s) { return QByteArray(s); }
 } // namespace
-
-// ── mdnsTxtInt ──────────────────────────────────────────────────────────────
 
 TEST_CASE("mdnsTxtInt parses a numeric value", "[mdnsmap]") {
     QHash<QString, QByteArray> txt{{"udp", b("9876")}};
@@ -53,8 +47,6 @@ TEST_CASE("mdnsTxtInt is null for a non-numeric value", "[mdnsmap]") {
     QHash<QString, QByteArray> txt{{"udp", b("not-a-port")}};
     CHECK_FALSE(mdnsTxtInt(txt, "udp").has_value());
 }
-
-// ── mdnsServiceToServer ─────────────────────────────────────────────────────
 
 TEST_CASE("mdnsServiceToServer returns nullopt for a null host", "[mdnsmap]") {
     CHECK_FALSE(mdnsServiceToServer("sat", "", 9876, {}).has_value());

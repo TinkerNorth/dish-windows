@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The proactive re-key wiring (contract §Crypto: clients SHOULD re-PUT once
-// the send counter crosses 0xF0000000): the alive tick must fire the manager's
-// onRekey callback when reducer::counterNeedsRepush trips, exactly once per
-// approach, and re-arm only after the re-key lands (counter back under the
-// threshold). The tick is driven directly through the test seam — no timer
-// waits.
+// Contract §Crypto: a client SHOULD re-PUT once its send counter crosses
+// 0xF0000000. The alive tick is driven through the test seam, so no timer waits.
 
 #include "Network/SatelliteClient.h"
 #include "Network/WifiConnection.h"
@@ -40,8 +36,8 @@ using dish::net::WifiConnectionTestAccess;
 
 namespace {
 
-// The QTimer markConnected starts needs an application object; Catch2's main
-// doesn't make one.
+// The QTimer markConnected starts needs an application object, which Catch2's
+// main does not create.
 void ensureApp() {
     if (QCoreApplication::instance() != nullptr) { return; }
     static int argc = 1;
@@ -104,11 +100,10 @@ TEST_CASE("alive tick fires the rekey callback once per threshold approach and r
         /*onDead=*/[] {}, /*onClose=*/[](std::uint8_t) {}, /*onReconcile=*/[] {},
         /*onRekey=*/[&rekeyCalls] { rekeyCalls++; });
 
-    // Below the threshold: no fire.
     WifiConnectionTestAccess::tick(conn);
     CHECK(rekeyCalls == 0);
 
-    // Crossing 0xF0000000 fires the callback exactly once, not once per tick.
+    // Once per approach, not once per tick.
     SatelliteClientTestAccess::seedSendCounter(*client, dish::reducer::kCounterRepushThreshold);
     WifiConnectionTestAccess::tick(conn);
     CHECK(rekeyCalls == 1);
@@ -116,15 +111,13 @@ TEST_CASE("alive tick fires the rekey callback once per threshold approach and r
     WifiConnectionTestAccess::tick(conn);
     CHECK(rekeyCalls == 1);
 
-    // The re-key lands (fresh token/key, as the manager's rekey installs): the
-    // counter restarts under the threshold and the latch re-arms without an
-    // immediate re-fire.
+    // Installing a fresh token/key is what the manager's rekey does: the counter
+    // restarts under the threshold and the latch re-arms without re-firing.
     client->setConnectionParams({0x55, 0x66, 0x77, 0x88}, key(0x3C));
     CHECK_FALSE(dish::reducer::counterNeedsRepush(client->sendCounter()));
     WifiConnectionTestAccess::tick(conn);
     CHECK(rekeyCalls == 1);
 
-    // The next approach to exhaustion fires again.
     SatelliteClientTestAccess::seedSendCounter(*client, dish::reducer::kCounterRepushThreshold);
     WifiConnectionTestAccess::tick(conn);
     CHECK(rekeyCalls == 2);

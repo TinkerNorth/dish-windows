@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pure exponential reconnect-backoff schedule (contract/android parity:
-// 1s, 2s, 4s, … capped at 60s). Free function so the schedule is unit-testable
-// without a clock or timer. Mirrors dish-android
-// SatelliteConnectionManager.scheduleRetry (RETRY_BASE_MS shl (attempt-1),
-// coerced to RETRY_MAX_MS, shift capped at RETRY_MAX_SHIFT).
+// The reconnect-backoff schedule: 1s, 2s, 4s ... capped at 60s. Shared with the
+// other Dish clients; keep the curve in step with them.
 
 #pragma once
 
@@ -17,9 +14,7 @@ inline constexpr std::int64_t kBackoffBaseMs = 1000;  // first silent retry afte
 inline constexpr std::int64_t kBackoffMaxMs = 60'000; // capped at 60s
 inline constexpr int kBackoffMaxShift = 6;            // 1000<<6 == 64000 → capped to 60000
 
-// Delay before the `attempt`-th consecutive silent retry. `attempt` is 1-based
-// (the first retry after a death is attempt 1 → kBackoffBaseMs). Clamped so a
-// long outage doesn't overflow the shift or exceed the 60s ceiling. A
+// `attempt` is 1-based. Clamped so a long outage cannot overflow the shift; a
 // non-positive attempt is treated as the first.
 inline std::int64_t backoffDelayMs(int attempt) {
     const int shift =

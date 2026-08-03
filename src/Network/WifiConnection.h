@@ -19,24 +19,18 @@
 
 namespace dish::net {
 
-// Internal wire-level session state for one Satellite connection (the "Presence"
-// axis). Distinct from the UI-facing [models::LinkState] (Models.h), which folds
-// pairing/discovery in on top of this. Mirrors dish-android SatelliteSessionState.
+// Wire-level session state, distinct from the UI-facing models::LinkState, which
+// folds pairing and discovery in on top of this.
 //
-// - Idle       — no live session (paired or not).
-// - Linking    — session PUT / auth handshake in flight. UI chip: "Connecting…".
-// - Live       — UDP socket open, heartbeat acks flowing. UI chip: "Online".
-// - Faltering  — Live, heartbeat-miss count non-zero and below the death
-//                threshold. UI chip: "Unsteady". Not yet entered (the native
-//                alive-poll only exposes a binary isAlive()).
-// - Stale      — the session collapsed but the chip reads "Needs pairing": a
-//                terminal 401 / close-notify(unpaired) dropped the key, or a
-//                silent retry is in flight. Mirrors android's staleSatelliteIds.
+// - Idle       — no live session, paired or not.
+// - Linking    — session PUT / auth handshake in flight.
+// - Live       — UDP socket open, heartbeat acks flowing.
+// - Faltering  — live but past the miss threshold and short of the death one.
+// - Stale      — collapsed with the key dropped by a terminal 401 or a
+//                close-notify(unpaired), or a silent retry is in flight.
 enum class SessionState { Idle, Linking, Live, Faltering, Stale };
 
-// Thread-safe holder for the live SatelliteClient pointer. Writes from the Qt
-// main thread (markConnected/markDisconnected); reads from the SDL gamepad
-// thread on every report. Guarded by std::mutex.
+// Written on the Qt main thread, read on the SDL input thread every report.
 class ClientRef {
   public:
     std::shared_ptr<SatelliteClient> get() const {
@@ -53,11 +47,9 @@ class ClientRef {
     std::shared_ptr<SatelliteClient> value_;
 };
 
-// A single live or potential WiFi session to one Satellite server. Slots are
-// DECLARATIVE (contract §Session): the connection holds the desired descriptor
-// per slot plus the applied state the satellite last confirmed. Topology rides
-// REST (session PUT on connect, per-controller PUT/DELETE while live) — UDP
-// never mutates it. Mirrors dish-android source/connection/SatelliteConnection.
+// One live or potential WiFi session to a satellite. Slots are declarative: this
+// holds the desired descriptor per slot plus the applied state the satellite last
+// confirmed. Topology rides REST only, never UDP.
 class WifiConnection : public QObject {
     Q_OBJECT
   public:
@@ -73,42 +65,33 @@ class WifiConnection : public QObject {
     std::optional<QString> boundSlotId() const { return boundSlotId_; }
     std::shared_ptr<SatelliteClient> client() const { return clientRef_.get(); }
 
-    // Latest one-way latency readout for the live session: median heartbeat-
-    // RTT/2 (ms, rounded to the 0.1 ms display precision) + the RTT sample
-    // count. 0 / 0 while no session is live or the window is unseeded. Refreshed
-    // by the 1 s alive-poll off the client's latencySnapshot(); zeroed with the
-    // session in teardownClient so a dead row never shows a stale figure.
+    // Rounded to the 0.1 ms display precision. 0 / 0 with no live session or an
+    // unseeded window, and zeroed on teardown so a dead row shows no figure.
     double latencyOneWayMs() const { return latencyOneWayMs_; }
     int latencySamples() const { return latencySamples_; }
 
-    // The epoch the satellite stamped on our last PUT/GET — the reference the
-    // heartbeat-ack epoch is compared against. -1 until the first PUT lands.
+    // What the heartbeat-ack epoch is compared against. -1 until the first PUT.
     int lastAppliedEpoch() const { return lastAppliedEpoch_; }
     void adoptEpoch(int epoch) { lastAppliedEpoch_ = epoch; }
-    // Session-level mouseControl grant from the last session PUT (the server
-    // computes it only there — contract §hostFeatures).
+    // The server computes this grant only at session PUT, never per controller.
     bool mouseControlGranted() const { return mouseControlGranted_; }
 
     void updateServer(const models::DiscoveredServer& s);
     void markConnecting();
-    // Adopt the UDP tuple + applied state from a session PUT response. `onDead`
-    // fires on heartbeat death; `onClose` on an authenticated close-notify (the
-    // reason byte); `onReconcile` when the enriched-ack epoch/bitmap drifts;
-    // `onRekey` once per approach when the send counter crosses the proactive
-    // re-PUT threshold (contract §Crypto).
+    // Adopts the UDP tuple and applied state from a session PUT response.
+    // `onRekey` fires once per approach to the send-counter threshold, not once
+    // per tick. All four callbacks arrive on the main thread's alive-poll.
     void markConnected(const std::shared_ptr<SatelliteClient>& client, const QString& connectionId,
                        int epoch, bool mouseControlGranted, std::function<void()> onDead,
                        std::function<void(std::uint8_t reason)> onClose,
                        std::function<void()> onReconcile, std::function<void()> onRekey);
     void markDisconnected();
-    // Like markDisconnected, but lands in Stale (the "Needs pairing" chip cue)
-    // instead of Idle. Used by the terminal-401 / unpaired / silent-retry paths.
+    // markDisconnected but landing in Stale, for the terminal-401, unpaired and
+    // silent-retry paths.
     void markStale();
 
-    // ── Declarative slots ───────────────────────────────────────────────────
-    // One desired slot: ctrlIdx + the WHOLE descriptor, plus whether the
-    // satellite confirmed it applied (the slot's virtual pad exists). Streams
-    // are gated on `registered`.
+    // `registered` means the satellite confirmed the virtual pad exists. Every
+    // stream is gated on it.
     struct SlotBinding {
         int controllerIndex = 0;
         int controllerType = proto::kControllerTypeXbox;
@@ -118,38 +101,29 @@ class WifiConnection : public QObject {
         bool registered = false;
     };
 
-    // Bind a slot with its FINAL descriptor (the type + touchpad mode travel
-    // with the attach — no default-then-correct phase). While live, the manager
-    // converges it via a controller PUT (`onSlotChanged`); while idle it rides
-    // the next session PUT.
+    // The type and touchpad mode travel with the attach, so there is no
+    // default-then-correct phase. While live the manager converges it via a
+    // controller PUT; while idle it rides the next session PUT.
     void attachSlot(const QString& slotId, int controllerType, bool hasLightbar, bool hasMotion,
                     std::uint8_t touchpadMode = proto::kTouchpadModeOff);
     void detachSlot();
-    // Detach by slotId (the hub may unbind a specific slot).
     void detachSlot(const QString& slotId);
 
-    // The desired descriptor for a slot (whole), or nullopt if unknown.
     std::optional<models::ControllerDescriptor> descriptorFor(const QString& slotId) const;
-    // All desired descriptors (the controllers[] for a session PUT).
+    // The controllers[] for a session PUT.
     QList<models::ControllerDescriptor> desiredDescriptors() const;
-    // Slot id owning a controller index, or empty.
     QString slotIdForIndex(int ctrlIdx) const;
-    // True when any slot requests mouse touchpad mode (drives hostFeatures).
+    // Drives hostFeatures on the session PUT.
     bool wantsMouseControl() const;
 
-    // Fold a session/controller PUT's apply results into the slot state:
-    // registered=true (and motion status cached) for a live slot (ok or
-    // replugFailed), registered=false otherwise. Mirrors android applyResults.
     void applyResults(const QList<models::ControllerApplyDto>& results);
-    // True when the GET applied view matches our desired set (incl. the mouse
-    // grant) — the caller adopts the epoch instead of re-PUTting. Pure-ish;
-    // delegates the diff to the reconcile reducer.
+    // True when the caller may adopt the epoch instead of re-PUTting.
     bool matchesAppliedView(const models::SessionViewDto& view) const;
-    // The 16-bit bitmap of registered controller indices (for the ack compare).
+    // Registered controller indices, for comparison against the ack's bitmap.
     std::uint16_t registeredBitmap() const;
 
-    // Hot path: called directly from the SDL gamepad thread. Gated on the bound
-    // slot being registered (an unapplied descriptor is dropped server-side).
+    // Hot path, called on the SDL input thread. Silently drops unless the bound
+    // slot is registered, since the server would discard it anyway.
     void sendReport(std::uint16_t buttons, std::uint8_t lt, std::uint8_t rt, std::int16_t lx,
                     std::int16_t ly, std::int16_t rx, std::int16_t ry);
     void sendMotion(std::int16_t gyroX, std::int16_t gyroY, std::int16_t gyroZ, std::int16_t accelX,
@@ -160,8 +134,8 @@ class WifiConnection : public QObject {
                       std::int16_t finger1X, std::int16_t finger1Y, bool buttonPressed,
                       std::uint32_t eventTimeMs);
 
-    // Per-connection rumble/lightbar handlers — stored here (not the per-session
-    // SatelliteClient) so they survive reconnects; markConnected re-installs them.
+    // Held here rather than on the per-session SatelliteClient so they survive a
+    // reconnect; markConnected re-installs them.
     using RumbleHandler = std::function<void(const SatelliteClient::RumbleMessage&)>;
     void setRumbleHandler(RumbleHandler handler);
     using LightbarHandler = std::function<void(const SatelliteClient::LightbarMessage&)>;
@@ -169,23 +143,17 @@ class WifiConnection : public QObject {
 
   signals:
     void changed();
-    // The latency readout moved (the 1 s alive-poll saw a new display value).
-    // Deliberately NOT `changed`: that signal fans out into the hub/AppModel
-    // rebuild cascade, which a per-second cosmetic tick must not thrash — the
-    // same patch-not-rebuild rule the slot live-rates follow.
+    // Kept separate from `changed` because that fans out into the hub and
+    // AppModel rebuild cascade, which a 1 Hz cosmetic tick must not thrash.
     void telemetryChanged();
-    // Transient one-shot — a controller descriptor failed to apply server-side.
     void errorOccurred(const QString& message);
-    // A slot's descriptor changed while the session is live → the manager
-    // converges it via PUT /api/connections/{id}/controllers/{idx}.
+    // The manager converges it via PUT /api/connections/{id}/controllers/{idx}.
     void slotChanged(const QString& slotId);
-    // A registered slot was detached while live → the manager removes it via
-    // DELETE /api/connections/{id}/controllers/{idx}.
+    // The manager removes it via DELETE the same path.
     void slotRemoved(int ctrlIdx);
 
   private:
-    // Test-only seam so the alive-tick wiring is drivable without the 1 s
-    // timer. Declared but never defined in production.
+    // Test-only seam to drive the alive tick without the 1 s timer.
     friend class WifiConnectionTestAccess;
 
     QString id_;
@@ -195,36 +163,31 @@ class WifiConnection : public QObject {
     std::optional<QString> boundSlotId_;
     int lastAppliedEpoch_ = -1;
     bool mouseControlGranted_ = false;
-    // Display-rounded latency readout (see the accessors). Main-thread only.
+    // Main-thread only.
     double latencyOneWayMs_ = 0.0;
     int latencySamples_ = 0;
 
-    // slotId → desired binding. A QHash would do, but std::map keeps the
-    // descriptor iteration order deterministic (by slot id) for reproducible PUTs.
+    // std::map, not QHash, so descriptor iteration order stays deterministic and
+    // PUT bodies are reproducible.
     std::map<QString, SlotBinding> slots_;
 
     ClientRef clientRef_;
     QTimer* aliveTimer_ = nullptr;
-    // Driven from the main-thread alive-poll (NOT receive-thread callbacks) so
-    // the session FSM + REST never run off the UDP receive thread.
+    // Driven from the main-thread alive-poll, never a receive-thread callback, so
+    // the session FSM and REST never run off the UDP receive thread.
     std::function<void()> onDead_;
     std::function<void(std::uint8_t reason)> onClose_;
     std::function<void()> onReconcile_;
     std::function<void()> onRekey_;
-    // Single-fire latch for onRekey_: re-armed only once the re-key lands (the
-    // fresh counter drops back under the threshold), so a slow/failed re-PUT
-    // is not re-requested every tick.
+    // Re-armed only once the counter drops back under the threshold, so a slow or
+    // failed re-PUT is not re-requested every tick.
     bool rekeyRequested_ = false;
 
     RumbleHandler rumbleHandler_;
     LightbarHandler lightbarHandler_;
 
-    // Build a whole descriptor from a binding (caps folded from hasMotion /
-    // hasLightbar + the analog-trigger/rumble base).
     models::ControllerDescriptor descriptorOf(const SlotBinding& b) const;
     int lowestFreeIndex() const;
-    // The 1 s alive-poll body: latency refresh, close-notify/death dispatch,
-    // reconcile nudge, proactive re-key.
     void onAliveTick();
     void teardownClient();
 };

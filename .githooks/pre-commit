@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Dish Windows pre-commit hook: autofixes clang-format on staged C/C++
-# sources and runs clang-tidy in advisory mode. Skips gracefully if either
-# tool is missing — CI enforces both checks in strict mode. Runs under Git
-# for Windows' bundled bash; you don't need WSL.
+# Reformats staged C/C++ sources in place with clang-format and re-stages
+# them, then runs clang-tidy advisory-only. Skips either tool if it is not
+# installed; CI enforces both in strict mode. Runs under Git for Windows'
+# bundled bash, no WSL needed.
+#
+# This file must stay LF-terminated: a CRLF checkout makes the kernel look
+# for an interpreter named "bash\r" and the hook silently never runs.
 set -euo pipefail
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
-# Collect staged C/C++ sources under src/ and tests/ (added/copied/modified),
-# NUL-separated to handle paths with spaces.
+# -z, then split: NUL separation is what makes paths with spaces survive.
 staged=$(git diff --cached --name-only --diff-filter=ACM -z \
     -- 'src/*.cpp' 'src/*.h' 'src/*.hpp' 'tests/*.cpp' 'tests/*.h' \
     | tr '\0' '\n' | sed '/^$/d')
@@ -29,10 +31,8 @@ else
 fi
 
 # ── clang-tidy (advisory) ────────────────────────────────────────────────
-# Needs a compile_commands.json. We generate one in build-debug via CMake
-# (CMAKE_EXPORT_COMPILE_COMMANDS is ON in CMakeLists.txt). Match CI: report
-# warnings but don't block the commit on stylistic findings — .clang-tidy's
-# WarningsAsErrors='' is authoritative.
+# Advisory to match CI: .clang-tidy's WarningsAsErrors='' is authoritative,
+# so a stylistic finding must not block a commit.
 if command -v clang-tidy >/dev/null 2>&1; then
     if [ -f build-debug/compile_commands.json ]; then
         cpp_files=()

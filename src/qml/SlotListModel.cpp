@@ -14,9 +14,8 @@ namespace {
 
 constexpr std::uint8_t kBatteryLevelUnknown = 0xFF;
 
-// The stable phase token the QML path control switches on. Kept here (a
-// view-model string concern) rather than on the Qt-free FSM enum; a test pins it
-// indirectly through the role. Mirrors the android PathCard's phase strings.
+// Mirrors dish-android's phase strings, which are the shared vocabulary. Kept
+// here rather than on the Qt-free FSM enum, which must not carry UI strings.
 QString pathPhaseToken(reducer::UsbPhase phase) {
     switch (phase) {
     case reducer::UsbPhase::Routed:
@@ -35,16 +34,13 @@ QString pathPhaseToken(reducer::UsbPhase phase) {
     return QStringLiteral("routed"); // unreachable; total switch
 }
 
-// The resolved desired path the toggle reads as selected. The stamped value is
-// always the FSM's resolved PathChoice (Direct/Standard) — Auto resolves to one
-// of these — so only those two strings appear; "auto" is an input to
-// setSlotPath, never a reflected desired.
+// Only two strings appear: the stamped value is always the FSM's RESOLVED
+// choice. "auto" is an input to setSlotPath, never a reflected desired.
 QString desiredPathToken(reducer::PathChoice choice) {
     return choice == reducer::PathChoice::Direct ? QStringLiteral("direct")
                                                  : QStringLiteral("standard");
 }
 
-// The last Direct-claim failure reason for the inline note. Empty when none.
 QString directFailureToken(const std::optional<reducer::DirectClaimFailure>& failure) {
     if (!failure.has_value()) { return {}; }
     switch (*failure) {
@@ -60,9 +56,6 @@ QString directFailureToken(const std::optional<reducer::DirectClaimFailure>& fai
     return {}; // unreachable; total switch
 }
 
-// Semantic dot-color token a SlotCard paints: green only when the bound session
-// is genuinely Connected, amber for any other bound-but-not-live state, muted
-// when unbound. Mirrors SlotCard::setSlot's dot logic exactly.
 QString dotColorToken(const models::ControllerSlot& s) {
     if (!s.boundStatus.has_value()) { return QStringLiteral("muted"); }
     return s.boundStatus->live == models::LinkState::Connected ? QStringLiteral("success")
@@ -123,8 +116,8 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
     case BatteryKnownRole:
         return s.capabilities.batteryLevel != kBatteryLevelUnknown;
 
-    // Live-stat roles delegate to the SAME pure SlotLiveStats mapper the widget
-    // SlotCard uses, so the two UIs can never disagree about which chip shows.
+    // Which rate chips render is the pure SlotLiveStats mapper's decision, not
+    // the delegate's.
     case GamepadHzRole: {
         const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
         return chip.hz;
@@ -156,9 +149,6 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return chip.kind != ui::RateChipKind::Hidden;
     }
 
-    // Bound-satellite join roles: read through the connection row matched by
-    // boundConnectionId. The unbound / vanished-row fallbacks are the inert
-    // empties (the Home page's ghost-card state).
     case SatIpRole: {
         const auto* row = rowForSlot(s);
         return row != nullptr ? QString::fromStdString(row->ip) : QString();
@@ -180,8 +170,8 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return row != nullptr ? tokens::glyphToken(row->glyph) : QString();
     }
     case SatLatencyTextRole: {
-        // Same formatter + same samples gate as ConnectionListModel, so the
-        // Home wire label and the Connections row can never disagree.
+        // Same formatter and samples gate as ConnectionListModel, so the Home
+        // wire label and the Connections row can never disagree.
         const auto* row = rowForSlot(s);
         return row != nullptr && row->latencySamples > 0
                    ? QString::fromStdString(reducer::formatLatencyMs(row->latencyOneWayMs))
@@ -199,11 +189,10 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
     case PathSupportedRole:
         return s.pathSupported;
     case ClaimInProgressRole:
-        // The single derived "switching" state (pure reducer): true through the
-        // whole path-switch lifecycle — the transitional FSM phase AND the device-
-        // form/telemetry settle (Direct until its synthetic's poll rate is
-        // measured, Standard until the synthetic is gone). Drives the toggle's
-        // spinner + disabled state with no arbitrary timer.
+        // Wider than the FSM phase: a switch is not done until the device form
+        // and its telemetry settle too (Direct until the synthetic's poll rate
+        // is measured, Standard until the synthetic is gone). That is what lets
+        // the spinner end on a real event rather than an arbitrary timer.
         return reducer::slotPathSwitching(s.pathPhase, s.desiredPath, s.usbDirect,
                                           s.liveRates.directPollHz, s.directFailure.has_value());
     case DirectFailureRole:
@@ -260,12 +249,9 @@ void SlotListModel::setState(const QList<models::ControllerSlot>& slotList) {
     const int oldCount = static_cast<int>(slots_.size());
     const int newCount = static_cast<int>(slotList.size());
 
-    // Append/remove only the tail delta so a steady slot list with a moved Hz
-    // value never resets the ListView (no full reset). Slot identity is by
-    // position here: the AppModel emits a stable-ordered list (virtual slot
-    // first, then attached pads in a stable order), and a slot's per-row content
-    // is patched in place via dataChanged below. A genuine add/remove shifts the
-    // tail, which the count delta covers.
+    // Row identity is POSITIONAL: this leans on AppModel emitting a
+    // stable-ordered list (virtual slot first, then attached pads), so only the
+    // tail delta is inserted/removed and survivors are patched in place.
     if (newCount > oldCount) {
         beginInsertRows({}, oldCount, newCount - 1);
         slots_ = slotList;
@@ -278,9 +264,6 @@ void SlotListModel::setState(const QList<models::ControllerSlot>& slotList) {
         slots_ = slotList;
     }
 
-    // Patch the surviving rows: emit one dataChanged spanning [0, min) so a
-    // binding re-reads any role whose value moved. Cheap for the handful of
-    // slots a machine ever has, and correct without a per-role diff.
     const int common = newCount < oldCount ? newCount : oldCount;
     if (common > 0) { emit dataChanged(index(0), index(common - 1)); }
 
@@ -289,8 +272,8 @@ void SlotListModel::setState(const QList<models::ControllerSlot>& slotList) {
 
 void SlotListModel::setConnectionRows(const std::vector<composer::ConnectionRow>& rows) {
     connectionRows_ = rows;
-    // Only the join roles read through the rows; scoping the dataChanged to
-    // them keeps the ~1 Hz latency tick from re-evaluating every slot binding.
+    // Scoped to the join roles so the ~1 Hz latency tick does not re-evaluate
+    // every slot-side binding.
     if (!slots_.isEmpty()) {
         static const QList<int> kJoinRoles{
             SatIpRole,    SatLinkStateRole,   SatChipRole,          SatDotColorRole,

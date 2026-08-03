@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// SlotPathFields — the PURE slot-identity x controllers-map -> path-fields
-// mapper that AppModel::rebuild() stamps onto each slot, and the synthetic
-// slot-id (vpKey) parse the view model resolves a slot's (vid, pid) through.
-// These pin the cross-reference WITHOUT a live UsbGamepadManager (which opens
-// real USB/SDL and would hang): a routed device reflects its controller's
-// phase/desired; a synthetic reflects its own Direct entry; a pad with no
-// controller (an Xbox/XInput pad the gateway never enumerates) is unsupported.
+// Deliberately kept off a live UsbGamepadManager: that opens real USB/SDL and
+// would hang.
 
 #include "core/reducer/SlotPathFields.h"
 
@@ -19,7 +14,6 @@ using namespace dish::reducer;
 
 namespace {
 
-// One tracked controller entry, as controllers() would return it.
 UsbController controller(int vid, int pid, UsbPhase phase, PathChoice desired) {
     UsbController c;
     c.vendorId = vid;
@@ -58,8 +52,7 @@ TEST_CASE("slotPathFields: a synthetic (Direct) device reports Direct phase + de
 
 TEST_CASE("slotPathFields: a pad with no controller is unsupported (Xbox/XInput)",
           "[slotpath][map]") {
-    // The controllers map has a DualSense, but the slot is an Xbox pad (a
-    // different vid/pid the raw-HID gateway never enumerates) -> no entry.
+    // The raw-HID gateway never enumerates Xbox pads, so the map has no entry.
     const auto controllers =
         mapOf(controller(0x054C, 0x0CE6, UsbPhase::Direct, PathChoice::Direct));
     const auto f = slotPathFields(0x045E, 0x028E, controllers); // Xbox 360 pad
@@ -89,8 +82,7 @@ TEST_CASE("slotPathFields: a Direct failure is carried through for the inline no
 
 TEST_CASE("parseSyntheticSlotId: a packed vpKey string round-trips to (vid, pid)",
           "[slotpath][resolve]") {
-    // The synthetic slot id is std::to_string(vpKey); parsing it must recover the
-    // exact (vid, pid) the controllers map is keyed on.
+    // The synthetic slot id is std::to_string(vpKey), the controllers map's key.
     const int vid = 0x054C;
     const int pid = 0x0CE6;
     const int key = slotPathVpKey(vid, pid);
@@ -101,13 +93,13 @@ TEST_CASE("parseSyntheticSlotId: a packed vpKey string round-trips to (vid, pid)
 }
 
 TEST_CASE("parseSyntheticSlotId: an SDL slot id (or junk) does not parse", "[slotpath][resolve]") {
-    // An SDL id is "sdl:<iid>" — never an all-digit string, so it falls through
-    // to the bridge-device lookup the view model does instead.
+    // An SDL id is "sdl:<iid>", never all-digit, so it falls through to the
+    // bridge-device lookup instead.
     REQUIRE_FALSE(parseSyntheticSlotId("sdl:3").has_value());
     REQUIRE_FALSE(parseSyntheticSlotId("").has_value());
     REQUIRE_FALSE(parseSyntheticSlotId("-5").has_value());
     REQUIRE_FALSE(parseSyntheticSlotId("12abc").has_value());
-    // A value past the 32-bit packed range is rejected (never a real key).
+    // Past the 32-bit packed range: never a real key.
     REQUIRE_FALSE(parseSyntheticSlotId("99999999999").has_value());
 }
 
@@ -125,8 +117,8 @@ TEST_CASE("slotPathSwitching: the derived loading state over the full switch flo
     CHECK(slotPathSwitching(UsbPhase::Claiming, PathChoice::Direct, false, 0, false));
     CHECK(slotPathSwitching(UsbPhase::AwaitingFramework, PathChoice::Standard, true, 0, false));
 
-    // Want Direct: switching until a synthetic exists AND its poll rate is measured
-    // (the observed "Hz comes in a moment later" window).
+    // Want Direct: switching until a synthetic exists AND its poll rate is
+    // measured — the Hz arrives a moment after the claim.
     CHECK(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, false, 0,
                             false)); // not synthetic yet
     CHECK(slotPathSwitching(UsbPhase::Direct, PathChoice::Direct, true, 0,
@@ -140,7 +132,6 @@ TEST_CASE("slotPathSwitching: the derived loading state over the full switch flo
     CHECK_FALSE(
         slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, false, 0, false)); // back on SDL
 
-    // A settled Standard slot at rest is never switching.
     CHECK_FALSE(slotPathSwitching(UsbPhase::Routed, PathChoice::Standard, false, 0, false));
 
     // Terminal / failure states surface an error note, never a perpetual spinner.

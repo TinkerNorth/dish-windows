@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The apply overlay's step rows: one row per REAL async action, never a
-// spinner. The Connection step alone can sit for 20s while Windows hands the
-// device over — that is precisely why it is a step with a name and a caption
-// and not an undifferentiated wait.
+// One row per REAL async action, never a spinner: the Connection step alone can
+// sit for 20s while Windows hands the device over.
 //
 // `steps` is a plain array of
 //   { label: string, meta: string, state: "done"|"active"|"pending"|"failed" }
-// The caller owns the copy; this component owns the markers and the a11y
-// announcement. Two callers (the wizard's Review page and Configure binding),
-// which is why it is here and not inlined twice.
+// The caller owns the copy; this owns the markers and the a11y announcement.
 
 // Bound: the delegate reads the outer `list` id alongside its required
-// modelData, so static resolution needs bound component behavior.
+// modelData.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -26,8 +22,8 @@ Column {
 
     spacing: 0
 
-    // The spoken state word. Kept out of the delegate so the four strings live
-    // in one place and the marker glyphs cannot drift from what is announced.
+    // Kept out of the delegate so the marker glyphs cannot drift from what is
+    // announced.
     function stateLabel(s) {
         if (s === "done")
             return qsTr("done");
@@ -62,8 +58,8 @@ Column {
             height: Math.max(16, labelText.implicitHeight, metaText.implicitHeight)
                     + 2 * Tokens.s3
 
-            // A step that has not started yet is the one legal information dim:
-            // it is a control-shaped placeholder, not a fact the user must read.
+            // The one legal information dim: a not-yet-started step is a
+            // control-shaped placeholder, not a fact the user must read.
             opacity: stepRow.stepState === "pending" ? Tokens.disabledOpacity : 1.0
 
             Accessible.role: Accessible.StaticText
@@ -97,9 +93,6 @@ Column {
                     font.pixelSize: Tokens.textSummary
                 }
 
-                // The active ring: an outline circle with an accent top arc,
-                // spun by an animator. Reduced motion leaves the arc parked —
-                // the arc alone still reads as "this one".
                 Canvas {
                     id: ring
                     visible: stepRow.stepState === "active"

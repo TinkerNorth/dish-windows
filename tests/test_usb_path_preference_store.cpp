@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// UsbPathPreferenceStoreTest (ADAPT, 6) + RepositoryContract. Port of
-// dish-android source/store/UsbPathPreferenceStoreTest.kt. Android mocks
-// SharedPreferences with a shared backing map; here the durable repo runs over
-// an isolated in-memory QSettings (the C++ fake). Exercises the per-(vid,pid)
-// round-trip, durability across re-construction, the unchanged-write
-// short-circuit (no Observable re-emit), and the corrupt / forward-incompatible
-// blob fallbacks. The backing UsbPathPreferenceRepository also satisfies Wave 0's
-// RepositoryContract.
 
 #include "source/store/UsbPathPreferenceStore.h"
 
@@ -55,7 +46,7 @@ TEST_CASE("setChoice then choiceFor round-trips per vid and pid", "[usb-pathstor
 
     REQUIRE(store.choiceFor(kVidXbox, kPidXbox).has_value());
     CHECK(*store.choiceFor(kVidXbox, kPidXbox) == PathChoice::Direct);
-    CHECK_FALSE(store.choiceFor(kVidDs4, kPidDs4).has_value()); // an unrelated pad is unaffected.
+    CHECK_FALSE(store.choiceFor(kVidDs4, kPidDs4).has_value());
 }
 
 TEST_CASE("choices survive into a fresh store over the same prefs", "[usb-pathstore]") {
@@ -90,14 +81,13 @@ TEST_CASE("setChoice to the current value does not re-emit", "[usb-pathstore]") 
     UsbPathPreferenceStore store(&repo);
     store.setChoice(kVidXbox, kPidXbox, PathChoice::Direct);
 
-    // Probe AFTER the first write: an eager initial emission, then nothing on the
-    // unchanged repeat (the store short-circuits, matching android's assertSame).
+    // Probing after the first write, so count 1 is the eager initial emission.
     StateSourceProbe<UsbPathChoiceMap> probe(store.state());
     REQUIRE(probe.count() == 1);
 
     store.setChoice(kVidXbox, kPidXbox, PathChoice::Direct);
 
-    CHECK(probe.count() == 1); // no re-emit.
+    CHECK(probe.count() == 1);
 }
 
 TEST_CASE("a corrupt choices blob falls back to an empty map without crashing", "[usb-pathstore]") {
@@ -113,8 +103,7 @@ TEST_CASE("a corrupt choices blob falls back to an empty map without crashing", 
 
 TEST_CASE("an unknown stored path value is dropped on read for forward-compat", "[usb-pathstore]") {
     auto settings = makeSharedSettings();
-    // A value written by a newer build (a PathChoice constant this build does not
-    // know) is ignored. The key is the "%04x:%04x" vid:pid form.
+    // A PathChoice constant a newer build wrote. The key is "%04x:%04x" vid:pid.
     settings->setValue(QLatin1String(UsbPathPreferenceRepository::kChoicesKey),
                        QByteArray(R"({"045e:028e":"teleport"})"));
 
@@ -122,6 +111,5 @@ TEST_CASE("an unknown stored path value is dropped on read for forward-compat", 
     UsbPathPreferenceStore store(&repo);
 
     CHECK_FALSE(store.choiceFor(kVidXbox, kPidXbox).has_value());
-    // Sanity: the key shape the store computes matches the seeded key.
     CHECK(usbPathKeyFor(kVidXbox, kPidXbox) == QStringLiteral("045e:028e"));
 }

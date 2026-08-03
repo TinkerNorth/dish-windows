@@ -1,21 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Dead zones & motion detail (SCR §7.2): one card per device — name + gyro chip
-// + a per-device Reset, stick/trigger dead-zone sliders side by side, and the
-// motion toggle (or the no-gyro line) under a hairline — capped at a readable
-// 640 px measure.
+// Dead zones & motion detail, one card per device.
 //
-// The sliders PRESENT percentages of the full axis travel (the design's 0-30 %
-// scale) while the persisted values stay in the raw units the input processor
-// consumes (stick flat 0..32767, trigger flat 0..255) — the mapping lives here
-// so neither the store schema nor the hot path changes.
+// The sliders PRESENT percentages of full axis travel while the persisted values
+// stay in the raw units the input processor consumes (stick flat 0..32767,
+// trigger flat 0..255) — the mapping lives here so neither the store schema nor
+// the hot path changes.
 //
-// D38 / SCR §12.17 — a drag must not hammer the repository. `moved` keeps the
-// tuning live while the user drags, but rate-limited to one push per
-// Tokens.durNormal; `committed` (release) is the authoritative write. There is
-// exactly one seam, App.setDeadzones, and it persists AND pushes into the live
-// processor, which is why the footer note is literally true.
+// A drag must not hammer the repository: `moved` keeps the tuning live but
+// rate-limited to one push per Tokens.durNormal; `committed` (release) is the
+// authoritative write.
 
 pragma ComponentBehavior: Bound
 
@@ -31,24 +26,19 @@ Kit.Page {
     readonly property string headerTitle: qsTr("Dead zones & motion")
     readonly property string headerSub: qsTr("Per-device tuning — applied live")
 
-    // Raw-axis full ranges the percentages map over.
     readonly property real stickRange: 32767
     readonly property real triggerRange: 255
     readonly property int percentMax: 30
 
-    // The design's readable measure for the tuning cards (SCR §7.2).
     readonly property int bodyWidth: 640
 
     function toPercent(raw, range) { return Math.round(raw / range * 100); }
     function fromPercent(pct, range) { return Math.round(pct / 100 * range); }
 
-    // Device rows from App.deadzoneDevices(): { id, name, hasGyro, stickFlat,
-    // triggerFlat, forwardMotion }. Re-pulled whenever the rows move via
-    // App.deadzonesChanged (a device attached/detached, or a set landed).
     property var deviceModel: App.deadzoneDevices()
 
-    // The gesture in flight. Only one slider can be dragged at a time, so a
-    // single pending triple is enough.
+    // The gesture in flight. Only one slider can be dragged at a time, so one
+    // pending triple is enough.
     property string pendingDeviceId: ""
     property int pendingStick: 0
     property int pendingTrigger: 0
@@ -60,8 +50,6 @@ Kit.Page {
         onTriggered: deadzonePage.flush()
     }
 
-    // `moved`: keep the live processor tracking the drag, at most one write per
-    // interval (the seam persists too — see the header note).
     function pushLive(deviceId, stickPct, triggerPct) {
         deadzonePage.pendingDeviceId = deviceId;
         deadzonePage.pendingStick = stickPct;
@@ -71,8 +59,7 @@ Kit.Page {
         }
     }
 
-    // `committed`: the authoritative write on release; supersedes any pending
-    // live push so the gesture ends on exactly one value.
+    // Supersedes any pending live push so the gesture ends on exactly one value.
     function commit(deviceId, stickPct, triggerPct) {
         livePush.stop();
         deadzonePage.pendingDeviceId = deviceId;
@@ -141,14 +128,12 @@ Kit.Page {
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
-                        // Absent capabilities are still drawn, negated (SYS §7.5).
                         Kit.CapabilityChip {
                             tone: deviceCard.hasGyro ? Kit.CapabilityChip.Present
                                                      : Kit.CapabilityChip.Absent
                             text: deviceCard.hasGyro ? qsTr("Gyro") : qsTr("No gyro")
                         }
-                        // Per-device escape hatch: the repository's own default
-                        // is a zero flat on both axes (SCR §12.17).
+                        // The repository's own default is a zero flat on both axes.
                         Kit.DishButton {
                             size: Kit.DishButton.Small
                             text: qsTr("Reset")
@@ -165,10 +150,10 @@ Kit.Page {
                         columns: 2
                         columnSpacing: Tokens.s10
 
-                        // The design's `1fr 1fr`. Layouts split surplus from the
-                        // PREFERRED widths, so without an equal preference the
-                        // column boundary would follow the label lengths — and
-                        // then twitch as the live % readout changes width.
+                        // Layouts split surplus from the PREFERRED widths, so
+                        // without an equal preference the column boundary would
+                        // follow the label lengths, then twitch as the live %
+                        // readout changes width.
                         readonly property int cellWidth:
                             (deadzonePage.bodyWidth - 2 * Tokens.s7 - Tokens.s10) / 2
 
@@ -211,8 +196,6 @@ Kit.Page {
                         checked: deviceCard.modelData.forwardMotion === true
                         onToggled: checked => App.setMotionEnabled(deviceCard.deviceId, checked)
                     }
-                    // Unavailable INFORMATION renders at full opacity in
-                    // mutedStrong — never a dimmed control's colour (D49).
                     Label {
                         Layout.fillWidth: true
                         Layout.topMargin: Tokens.s2

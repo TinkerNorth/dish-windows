@@ -17,19 +17,15 @@ using util::putU16Be;
 using util::putU32Be;
 using util::readU16Be;
 
-// Windows has no MSG_NOSIGNAL; it doesn't generate SIGPIPE either, so 0 is the
-// correct hot-path flag.
+// Windows has no MSG_NOSIGNAL and raises no SIGPIPE, so 0 is correct here.
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
 
 namespace {
-// 16-byte Poly1305 tag appended by the AEAD.
-constexpr std::size_t kAuthTag = 16;
+constexpr std::size_t kAuthTag = 16;   // Poly1305 tag appended by the AEAD
 constexpr std::size_t kHeaderSize = 8; // token(4) + counter(4)
 
-// Monotonic microseconds for the heartbeat ping clock. steady_clock never runs
-// backwards; 0 is reserved as the "no ping in flight" sentinel.
 std::int64_t nowSteadyUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
@@ -39,7 +35,9 @@ std::int64_t nowSteadyUs() {
 
 SatelliteClient::SatelliteClient() {
     if (sodium_init() < 0) {
-        // sodium_init is idempotent and returns 1 if already initialised; <0 is fatal.
+        // Unrecoverable, but there is nothing to report to yet; encryptPacket
+        // then fails on every send, so the session stays silent rather than
+        // shipping plaintext.
     }
 }
 
@@ -49,12 +47,12 @@ bool SatelliteClient::openSocket(const std::string& ip, int port) {
     const SOCKET s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == INVALID_SOCKET) { return false; }
 
-    // DSCP EF (Expedited Forwarding). Best-effort — Windows strips IP_TOS for
-    // non-admin processes by default, but the call doesn't error.
+    // DSCP EF, best-effort only: Windows strips IP_TOS for non-admin processes
+    // by default, and the call still reports success.
     DWORD tos = 0xB8;
     ::setsockopt(s, IPPROTO_IP, IP_TOS, reinterpret_cast<const char*>(&tos), sizeof(tos));
 
-    // 500 ms recv timeout so the ACK loop can poll `ackRunning_` cleanly.
+    // Bounds the recv block so the ACK loop can poll `ackRunning_` and exit.
     DWORD rtv = 500;
     ::setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&rtv), sizeof(rtv));
 
@@ -87,7 +85,7 @@ void SatelliteClient::setConnectionParams(const std::array<std::uint8_t, 4>& tok
         token_ = token;
         tokenBe_ = util::readU32Be(token.data()); // the 4 raw token bytes are already big-endian
         key_ = key;
-        // Counters restart at 1 every PUT (no cross-session nonce reuse); recv
+        // Safe to restart only because the key rotated with the token; the recv
         // guard resets so the first server packet is accepted.
         sendCounter_.reset(1);
         lastRecvCounter_ = 0;
@@ -99,9 +97,7 @@ void SatelliteClient::setConnectionParams(const std::array<std::uint8_t, 4>& tok
     backendAvailable_.store(-1, std::memory_order_relaxed);
     activeControllerCount_.store(-1, std::memory_order_relaxed);
     sessionCloseReason_.store(-1, std::memory_order_relaxed);
-    // The ping clock + RTT window restart with the session: a stale in-flight
-    // stamp must not pair with the new session's first ack, and the readout
-    // must answer this session only.
+    // A stale in-flight stamp must not pair with the new session's first ack.
     pingSentUs_.store(0, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> lock(latencyMtx_);
@@ -112,7 +108,7 @@ void SatelliteClient::setConnectionParams(const std::array<std::uint8_t, 4>& tok
 void SatelliteClient::sendReport(int controllerIndex, std::uint16_t buttons, std::uint8_t lt,
                                  std::uint8_t rt, std::int16_t lx, std::int16_t ly, std::int16_t rx,
                                  std::int16_t ry) {
-    // Payload: controllerIndex(1) + XUSB_REPORT(12 LE) = 13 bytes.
+    // controllerIndex(1) + XUSB_REPORT(12, LE).
     std::uint8_t payload[13]{};
     payload[0] = static_cast<std::uint8_t>(controllerIndex);
     payload[1] = static_cast<std::uint8_t>(buttons & 0xFFU);
@@ -134,9 +130,8 @@ void SatelliteClient::sendReport(int controllerIndex, std::uint16_t buttons, std
 std::array<std::uint8_t, 17> SatelliteClient::encodeMotionPayload(
     std::uint8_t controllerIndex, std::int16_t gyroX, std::int16_t gyroY, std::int16_t gyroZ,
     std::int16_t accelX, std::int16_t accelY, std::int16_t accelZ, std::uint32_t timestampDeltaUs) {
-    // ctrlIdx(1) + 6×int16 LE + uint32 LE = 17 bytes. The receiver decodes with
-    // decodeMotionReport() (explicit LE byte-shifts), so write the matching LE
-    // layout explicitly — struct-layout-independent.
+    // Written as explicit LE byte-shifts, not a struct copy, because the receiver
+    // decodes the same way and neither side may depend on struct layout.
     std::array<std::uint8_t, 17> out{};
     out[0] = controllerIndex;
     auto storeLe16 = [&out](int off, std::int16_t v) {
@@ -185,10 +180,8 @@ std::array<std::uint8_t, 16> SatelliteClient::encodeTouchpadPayload(
     std::uint8_t controllerIndex, bool finger0Active, std::uint8_t finger0Id, std::int16_t finger0X,
     std::int16_t finger0Y, bool finger1Active, std::uint8_t finger1Id, std::int16_t finger1X,
     std::int16_t finger1Y, bool buttonPressed, std::uint32_t eventTimeMs) {
-    // ctrlIdx(1) + flags(1) + f0(id1 + x2 + y2) + f1(id1 + x2 + y2) +
-    // eventTimeMs(u32 LE) = 16 bytes. The trailing eventTimeMs is the
-    // protocol-1 addition — the server now requires the 15-byte post-ctrlIdx
-    // body (msgLen >= 16 inner) or it drops the packet.
+    // The server drops the packet unless the post-ctrlIdx body is the full 15
+    // bytes, so the trailing eventTimeMs is mandatory even when unused.
     std::array<std::uint8_t, 16> out{};
     out[0] = controllerIndex;
     std::uint8_t flags = 0;
@@ -235,8 +228,8 @@ void SatelliteClient::sendEncrypted(std::uint16_t msgType, const std::uint8_t* p
     putU16Be(inner.data() + 2, static_cast<std::uint16_t>(len));
     if (len > 0) { std::memcpy(inner.data() + 4, payload, len); }
 
-    // One hold draws key, token and counter together: a re-key swapping
-    // mid-send can never pair an old key with a fresh counter.
+    // One hold, so a re-key landing mid-send can never pair an old key with a
+    // fresh counter.
     std::array<std::uint8_t, 4> token{};
     std::uint32_t tokenBe = 0;
     std::array<std::uint8_t, 32> key{};
@@ -248,15 +241,14 @@ void SatelliteClient::sendEncrypted(std::uint16_t msgType, const std::uint8_t* p
         key = key_;
         seq = sendCounter_.next();
     }
-    // Never wrap (contract §Crypto): sealing a second plaintext under one
-    // (key, nonce) leaks keystream, so past 2^32-1 the session goes silent
-    // instead — the proactive re-key (alive tick → counterNeedsRepush) re-PUTs
-    // long before.
+    // Must never wrap: a second plaintext under one (key, nonce) leaks
+    // keystream, so past 2^32-1 the session goes silent instead. The proactive
+    // re-key re-PUTs long before that.
     const auto ctr = reducer::wireSendCounter(seq);
     if (!ctr.has_value()) { return; }
 
-    // Packet: token(4) | counter(4 BE) | ciphertext+tag. The AEAD nonce
-    // (dir|0×7|counter) and AAD (token BE) are built inside wire::encryptPacket.
+    // token(4) | counter(4 BE) | ciphertext+tag. The nonce and AAD are built
+    // inside wire::encryptPacket.
     std::vector<std::uint8_t> packet(kHeaderSize + innerLen + kAuthTag);
     std::memcpy(packet.data(), token.data(), 4);
     putU32Be(packet.data() + 4, *ctr);
@@ -290,10 +282,9 @@ void SatelliteClient::heartbeatLoop() {
     using namespace std::chrono;
     while (heartbeatRunning_.load(std::memory_order_relaxed)) {
         sendEncrypted(kMsgHeartbeatPing, nullptr, 0);
-        // The RTT clock starts here, on this session's own stamp. Arm only when
-        // no ping is outstanding (or the outstanding one aged past the loss
-        // cap) — overwriting would pair a late ack with the newer ping's stamp
-        // and read artificially low (reducer::shouldArmPing).
+        // Arm only when no ping is outstanding, or the outstanding one aged past
+        // the loss cap. Overwriting would pair a late ack with the newer ping's
+        // stamp and read artificially low.
         const std::int64_t now = nowSteadyUs();
         if (reducer::shouldArmPing(pingSentUs_.load(std::memory_order_relaxed), now)) {
             pingSentUs_.store(now, std::memory_order_relaxed);
@@ -302,7 +293,7 @@ void SatelliteClient::heartbeatLoop() {
         if (missed >= kHeartbeatMissMax) {
             connectionAlive_.store(false, std::memory_order_relaxed);
         }
-        // Sleep in 100ms chunks so stopHeartbeat() returns promptly.
+        // Chunked so stopHeartbeat() returns promptly.
         auto slept = 0U;
         while (heartbeatRunning_.load(std::memory_order_relaxed) && slept < kHeartbeatIntervalMs) {
             std::this_thread::sleep_for(milliseconds(100));
@@ -338,7 +329,7 @@ void SatelliteClient::receiveLoop() {
 
 void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
     if (n < kHeaderSize + kAuthTag) { return; }
-    // Snapshot the material + replay mark in one hold (a re-key swaps them).
+    // One hold for the material and the replay mark; a re-key swaps them together.
     std::array<std::uint8_t, 4> token{};
     std::uint32_t tokenBe = 0;
     std::array<std::uint8_t, 32> key{};
@@ -353,9 +344,7 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
     if (std::memcmp(buf, token.data(), 4) != 0) { return; }
 
     const std::uint32_t counter = util::readU32Be(buf + 4);
-    // Per-direction replay guard (server→client): drop counter <= last seen
-    // (first packet exempt while lastRecvCounter_ == 0).
-    if (lastRecv != 0 && counter <= lastRecv) { return; }
+    if (lastRecv != 0 && counter <= lastRecv) { return; } // replay guard
 
     std::vector<std::uint8_t> plain(n - kHeaderSize);
     unsigned long long plainLen = 0;
@@ -364,22 +353,20 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
         return;
     }
     {
-        // Advance the mark only if no re-key raced the decrypt (only this
-        // thread advances it, so an unchanged value means same session).
+        // Advance only if no re-key raced the decrypt. Since this is the only
+        // thread that advances it, an unchanged value means the same session.
         std::lock_guard<std::mutex> lock(materialMtx_);
         if (lastRecvCounter_ == lastRecv) { lastRecvCounter_ = counter; }
     }
     if (plainLen < 4) { return; }
     const std::uint16_t msgType = readU16Be(plain.data());
-    // Inner payload starts after the 4-byte type+length header.
     const std::uint8_t* body = plain.data() + 4;
     const std::size_t bodyLen = static_cast<std::size_t>(plainLen) - 4;
 
     if (msgType == kMsgHeartbeatAck) {
-        // Pair the ack with the in-flight ping: consume the clock (exchange, so
-        // a duplicate ack can't double-count) and slide the RTT into the window.
-        // push() itself drops a sample past the loss cap — a reclaimed ping's
-        // stale ack never skews the median.
+        // exchange(), so a duplicate ack cannot double-count the same ping.
+        // push() drops a sample past the loss cap, so a reclaimed ping's late ack
+        // never skews the median.
         const std::int64_t sent = pingSentUs_.exchange(0, std::memory_order_relaxed);
         if (sent != 0) {
             const double rttMs = static_cast<double>(nowSteadyUs() - sent) / 1000.0;
@@ -424,8 +411,7 @@ void SatelliteClient::processIncoming(const std::uint8_t* buf, std::size_t n) {
         if (bodyLen < 1) { return; }
         const std::uint8_t reason = body[0];
         sessionCloseReason_.store(static_cast<std::int32_t>(reason), std::memory_order_relaxed);
-        // The session is gone server-side now; mark dead so the alive-poll
-        // doesn't wait out the full death window.
+        // Gone server-side already, so skip the heartbeat death window.
         connectionAlive_.store(false, std::memory_order_relaxed);
         CloseHandler handler;
         {
@@ -463,9 +449,6 @@ SatelliteClient::LatencySnapshot SatelliteClient::latencySnapshot() const {
 
 std::optional<SatelliteClient::HeartbeatAck>
 SatelliteClient::parseHeartbeatAck(const std::uint8_t* payload, std::size_t len) {
-    // backendAvailable(1) + totalActiveControllers(1) + epoch(u16 BE) +
-    // activeBitmap(u16 BE) = 6 bytes. A bare ack from a pre-protocol-1 server
-    // is shorter → nullopt (liveness still counts, reconcile doesn't).
     if (payload == nullptr || len < proto::kHeartbeatAckPayloadBytes) { return std::nullopt; }
     HeartbeatAck a;
     a.backendAvailable = payload[0] != 0;
@@ -477,7 +460,6 @@ SatelliteClient::parseHeartbeatAck(const std::uint8_t* payload, std::size_t len)
 
 std::optional<SatelliteClient::LightbarMessage>
 SatelliteClient::parseLightbarMessage(const std::uint8_t* payload, std::size_t len) {
-    // ctrlIdx + r + g + b = 4 bytes exactly.
     if (payload == nullptr || len < 4) { return std::nullopt; }
     LightbarMessage lm;
     lm.controllerIndex = payload[0];
@@ -489,7 +471,6 @@ SatelliteClient::parseLightbarMessage(const std::uint8_t* payload, std::size_t l
 
 std::optional<SatelliteClient::RumbleMessage>
 SatelliteClient::parseRumbleMessage(const std::uint8_t* payload, std::size_t len) {
-    // Fixed 7-byte payload: ctrlIdx + strong + weak + dur (all BE).
     if (payload == nullptr || len < kRumblePayloadLen) { return std::nullopt; }
     RumbleMessage rm;
     rm.controllerIndex = payload[0];

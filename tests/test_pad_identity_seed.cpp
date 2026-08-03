@@ -1,20 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The emulation-type seed, resolved with the pad's REAL identity.
-//
-// seedControllerType has always had two overloads: an identity-aware one that
-// consults the catalog's `emulates` hints, and an identity-LESS convenience one
-// documented as degrading to "first offered type". AppModel called the
-// identity-less one for every bound slot, so the hint machinery never ran in
-// production: on a catalog that lists a PlayStation type first, a Nintendo
-// Switch Pro pad was declared to the satellite as a virtual DualShock 4 — a PS4
-// controller the user never owned.
-//
-// These pin the composed ladder the call site must perform: resolve the pad
-// identity behind the slot (reducer::padIdentityFor), format it into the
-// catalog's vid:pid vocabulary (reducer::vidPidKey), and seed with it. Pure —
-// no AppModel, no SDL, no satellite.
+// seedControllerType has an identity-aware overload and an identity-less one
+// that degrades to "first offered type". Calling the identity-less one for every
+// bound slot is what declared a Switch Pro pad to the satellite as a virtual
+// DualShock 4, so these pin the full ladder the call site must run: resolve the
+// pad identity, format it as a vid:pid key, then seed with it.
 
 #include "Models/Models.h"
 #include "core/model/Protocol.h"
@@ -66,8 +57,8 @@ CatalogEmulatesDto usbHint(const QString& vidPid) {
     return e;
 }
 
-// A satellite catalog that OFFERS PlayStation first — the shape that turned
-// every bound pad into a virtual DS4 — but which does carry `emulates` hints.
+// Offers PlayStation first, the shape that turned every bound pad into a virtual
+// DS4, but does carry `emulates` hints.
 CatalogDto playStationFirstCatalog() {
     CatalogDto c;
     c.controllerTypes.push_back(typeRow(proto::kControllerTypePlayStation,
@@ -112,8 +103,6 @@ TEST_CASE("padIdentityFor: a 0:0 descriptor is identity-less, not a key", "[padi
 
 TEST_CASE("seed: a Switch Pro is NOT declared a DualShock 4 by a PlayStation-first catalog",
           "[padidentity][catalog]") {
-    // THE PHANTOM PS4. First-offered would answer PlayStation; the pad's own
-    // identity must win.
     const std::vector<PresentSlot> shown = {present("sdl:0", kSwitchProVid, kSwitchProPid)};
     const int seeded = seedForSlot("sdl:0", shown, playStationFirstCatalog());
     REQUIRE(seeded != proto::kControllerTypePlayStation);
@@ -130,8 +119,8 @@ TEST_CASE("seed: the identity is resolved through a USB-direct synthetic slot to
 
 TEST_CASE("seed: a pad with no matching hint still takes the catalog's first offered type",
           "[padidentity][catalog]") {
-    // The documented degradation is preserved — this is not a regression of the
-    // first-offered rule, only of dropping the identity before consulting it.
+    // First-offered is still the documented fallback; only dropping the identity
+    // before consulting it was wrong.
     const std::vector<PresentSlot> shown = {present("sdl:0", 0x20d6, 0xa713)};
     REQUIRE(seedForSlot("sdl:0", shown, playStationFirstCatalog()) ==
             proto::kControllerTypePlayStation);

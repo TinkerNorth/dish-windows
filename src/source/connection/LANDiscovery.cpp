@@ -24,8 +24,8 @@ QList<models::DiscoveredServer> LANDiscovery::discover(int port, int timeoutMs) 
     BOOL reuse = TRUE;
     ::setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse),
                  sizeof(reuse));
-    // Windows has no SO_REUSEPORT — SO_REUSEADDR covers the same use case here
-    // (multiple processes listening on the same UDP broadcast port).
+    // Windows has no SO_REUSEPORT; SO_REUSEADDR covers the same case here
+    // (several processes listening on one UDP broadcast port).
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -36,9 +36,7 @@ QList<models::DiscoveredServer> LANDiscovery::discover(int port, int timeoutMs) 
         return {};
     }
 
-    // Winsock SO_RCVTIMEO is a DWORD of milliseconds, not a timeval. Same
-    // 300 ms cadence as Linux so quiet networks don't extend the caller's
-    // deadline noticeably.
+    // Winsock SO_RCVTIMEO is a DWORD of milliseconds, not a timeval.
     DWORD rtv = 300;
     ::setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&rtv), sizeof(rtv));
 

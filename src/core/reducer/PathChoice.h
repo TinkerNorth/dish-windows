@@ -1,20 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// PathChoice — a user's explicit per-model USB input-path override. Pure,
-// Qt-free port of dish-android source/usb/PathChoice.kt 1:1.
-//
-// Two values: Direct (claim the raw HID device ourselves) and Standard (let the
-// framework — SDL/XInput on Windows — own the pad). The ABSENCE of a stored
-// value means Auto: a verified fast-lane model resolves to Direct, everything
-// else to Standard (see resolvePathChoice in UsbPathMachine.h). Auto is
-// therefore represented as std::nullopt at the storage boundary, never as a
-// third enum value — exactly mirroring the Kotlin `PathChoice?` shape.
-//
-// Storage values are persisted verbatim in the per-VID:PID preference store;
-// add values, never rename an existing one. An unrecognised stored value (a
-// constant written by a newer build) decodes back to std::nullopt (Auto) for
-// forward-compat — the PathChoiceTest pins this.
+// A user's explicit per-model USB input-path override: Direct claims the raw HID
+// device, Standard lets SDL/XInput own the pad. Auto is the ABSENCE of a stored
+// value (std::nullopt), never a third enum value, so resolvePathChoice in
+// UsbPathMachine.h can pick per model.
 
 #pragma once
 
@@ -29,8 +19,8 @@ enum class PathChoice {
     Standard,
 };
 
-// Persisted in the cloud-backed user preferences on android; here, in QSettings.
-// Add values, never rename existing ones.
+// Persisted verbatim in the per-VID:PID QSettings store. Add values, never
+// rename an existing one.
 inline constexpr std::string_view kPathChoiceStorageDirect = "direct";
 inline constexpr std::string_view kPathChoiceStorageStandard = "standard";
 
@@ -41,11 +31,11 @@ inline std::string toStorageValue(PathChoice choice) {
     case PathChoice::Standard:
         return std::string(kPathChoiceStorageStandard);
     }
-    return std::string(kPathChoiceStorageStandard); // unreachable; total switch
+    return std::string(kPathChoiceStorageStandard); // unreachable: the switch is total
 }
 
-// Decode a stored value back to a PathChoice. An absent (nullopt in, e.g. the
-// store never wrote one) or unrecognised value resolves to std::nullopt = Auto.
+// An unrecognised value (one a newer build wrote) resolves to Auto rather than
+// failing, for forward-compat.
 inline std::optional<PathChoice> pathChoiceFromStorageValue(std::string_view value) {
     if (value == kPathChoiceStorageDirect) { return PathChoice::Direct; }
     if (value == kPathChoiceStorageStandard) { return PathChoice::Standard; }

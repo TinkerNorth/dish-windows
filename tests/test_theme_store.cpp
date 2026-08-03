@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Coverage for Workstream 3d: the ThemePreferenceStore (dark/light/system mode),
-// the full light-token palette, and the live re-apply ThemeController. There is
-// no android @Test for the store (a plain AbstractStateSource); these pin the
-// RULES the android code expresses (ThemeMode.toStorageValue/fromStorageValue,
-// the SYSTEM default, setMode persist + distinct emit) plus the Windows light-
-// palette deliverable: palette completeness (every dark role has a light token,
-// and they genuinely differ) and SYSTEM resolution through a stubbed OS reader,
-// the round-trip store->controller->palette driven via the kernel ControllerProbe
-// + a recording apply sink (the house pattern). No real registry is touched.
 
 #include "UI/Theme.h"
 #include "architecture/Observable.h"
@@ -54,8 +44,6 @@ std::unique_ptr<ThemePreferenceStore> makeStore(const QTemporaryDir& dir) {
 
 } // namespace
 
-// --- Pure storage mappings --------------------------------------------------
-
 TEST_CASE("themeMode storage round-trips for all three modes", "[settings][theme]") {
     REQUIRE(themeModeFromStorage(themeModeToStorage(ThemeMode::System)) == ThemeMode::System);
     REQUIRE(themeModeFromStorage(themeModeToStorage(ThemeMode::Light)) == ThemeMode::Light);
@@ -74,9 +62,8 @@ TEST_CASE("themeModeFromStorage is lenient -- unknown values fall back to System
     REQUIRE(themeModeFromStorage(QString()) == ThemeMode::System);
     REQUIRE(themeModeFromStorage(QStringLiteral("")) == ThemeMode::System);
     REQUIRE(themeModeFromStorage(QStringLiteral("garbage")) == ThemeMode::System);
-    // A forward-newer value the schema doesn't know yet -> System (not a crash).
     REQUIRE(themeModeFromStorage(QStringLiteral("oled-black-2027")) == ThemeMode::System);
-    // Case-exact only: "Light" is not the token.
+    // Case-exact only.
     REQUIRE(themeModeFromStorage(QStringLiteral("Light")) == ThemeMode::System);
     REQUIRE(themeModeFromStorage(QStringLiteral("light")) == ThemeMode::Light);
 }
@@ -87,8 +74,6 @@ TEST_CASE("themeModeLabel returns the locale-aware strings", "[settings][theme]"
     REQUIRE(themeModeLabel(ThemeMode::Dark) == QCoreApplication::translate(ctx, "Dark"));
     REQUIRE(themeModeLabel(ThemeMode::System) == QCoreApplication::translate(ctx, "System"));
 }
-
-// --- Store behaviour --------------------------------------------------------
 
 TEST_CASE("ThemePreferenceStore defaults to System on a fresh store", "[settings][theme]") {
     QTemporaryDir dir;
@@ -118,31 +103,24 @@ TEST_CASE("ThemePreferenceStore emits only on an actual transition", "[settings]
     StateSourceProbe<ThemeMode> probe(store->state());
     REQUIRE(probe.count() == 1); // replayed current
 
-    store->setMode(ThemeMode::System); // already System — no-op
+    store->setMode(ThemeMode::System);
     REQUIRE(probe.count() == 1);
 
-    store->setMode(ThemeMode::Dark); // real change
+    store->setMode(ThemeMode::Dark);
     REQUIRE(probe.count() == 2);
 
-    store->setMode(ThemeMode::Dark); // redundant — no re-emit
+    store->setMode(ThemeMode::Dark);
     REQUIRE(probe.count() == 2);
     REQUIRE(probe.latest() == ThemeMode::Dark);
 }
-
-// --- Palette completeness (the light-token deliverable) ---------------------
 
 TEST_CASE("light palette defines every dark token role and differs from dark",
           "[settings][theme]") {
     const ThemePalette& dark = darkPalette();
     const ThemePalette& light = lightPalette();
 
-    // Every role in the table has a concrete (non-zero-alpha for opaque roles)
-    // value in BOTH palettes — none left dark-only / default-initialized. We
-    // assert each opaque body/surface/text role is fully opaque (alpha 0xFF) in
-    // both, which catches a forgotten/zeroed light token.
+    // A forgotten or zeroed light token shows up as a non-opaque role.
     const auto opaque = [](QRgb c) { return qAlpha(c) == 0xFF; };
-    // The donation accent (pulse) rides the same completeness bar: opaque in
-    // both palettes, and AA-darkened (not aliased) on light.
     REQUIRE(opaque(dark.pulse));
     REQUIRE(opaque(light.pulse));
     REQUIRE(light.pulse != dark.pulse);
@@ -158,8 +136,6 @@ TEST_CASE("light palette defines every dark token role and differs from dark",
         REQUIRE(opaque(c));
     }
 
-    // The two palettes must genuinely differ on the body/surface/text roles so
-    // "light" is a distinct set, not a dark alias.
     REQUIRE(light.background != dark.background);
     REQUIRE(light.surface != dark.surface);
     REQUIRE(light.surfaceDim != dark.surfaceDim);
@@ -170,18 +146,15 @@ TEST_CASE("light palette defines every dark token role and differs from dark",
     REQUIRE(light.disabledFg != dark.disabledFg);
     REQUIRE(light.mutedStrong != dark.mutedStrong);
 
-    // Light surfaces are lighter than dark surfaces (sanity: the appearance flips).
     REQUIRE(qGray(light.background) > qGray(dark.background));
     REQUIRE(qGray(light.surface) > qGray(dark.surface));
-    // ...and light body text is darker than dark body text.
     REQUIRE(qGray(light.onSurface) < qGray(dark.onSurface));
-    // The brand glyph darkens on light so it survives a white card (the shipped
-    // SVG hex computes to 1.7:1 there).
+    // The brand glyph darkens on light so it survives a white card: the shipped
+    // SVG hex computes to 1.7:1 there.
     REQUIRE(qGray(light.glyph) < qGray(dark.glyph));
-    // NOTE: disabledFg is deliberately NOT in the "light is darker" set. A dead
-    // control recedes, which on a white card means PALER — light #8A93A6 is
-    // lighter than dark #6C7799 on purpose, and both clear 3:1 on their own
-    // surface (asserted in test_theme_contrast.cpp).
+    // disabledFg is deliberately NOT in the "light is darker" set: a dead control
+    // recedes, which on a white card means paler. Both clear 3:1 on their own
+    // surface (test_theme_contrast.cpp).
 }
 
 TEST_CASE("paletteFor maps the appearance to its palette", "[settings][theme]") {
@@ -189,15 +162,12 @@ TEST_CASE("paletteFor maps the appearance to its palette", "[settings][theme]") 
     REQUIRE(paletteFor(Appearance::Light).background == lightPalette().background);
 }
 
-// --- Controller: resolve SYSTEM + re-apply on a mode change -----------------
-
 namespace {
 
-// A recording apply sink + a stubbable system reader, the house fake pattern.
 struct ThemeHarness {
     Observable<ThemeMode> mode{ThemeMode::System};
     Appearance systemAppearance = Appearance::Dark; // what SYSTEM resolves to
-    std::vector<Appearance> applied;                // recorded re-themes
+    std::vector<Appearance> applied;
 
     ThemeController controller{mode, [this] { return systemAppearance; },
                                [this](Appearance a) { applied.push_back(a); }};
@@ -217,7 +187,6 @@ TEST_CASE("ThemeController resolves SYSTEM via the stubbed OS reader (both ways)
         h.systemAppearance = Appearance::Light;
         REQUIRE(h.controller.resolve(ThemeMode::System) == Appearance::Light);
     }
-    // Explicit modes ignore the reader.
     ThemeHarness h;
     h.systemAppearance = Appearance::Dark;
     REQUIRE(h.controller.resolve(ThemeMode::Light) == Appearance::Light);
@@ -231,11 +200,11 @@ TEST_CASE("ThemeController re-themes on each mode change (store->controller->pal
 
     ControllerProbe<ThemeController> probe(h.controller);
     probe.start();
-    // start() applies the current value immediately: SYSTEM -> Light.
+    // start() applies the current value immediately.
     REQUIRE(h.applied.size() == 1);
     REQUIRE(h.applied.back() == Appearance::Light);
 
-    h.mode.set(ThemeMode::Dark); // LIGHT/DARK flip
+    h.mode.set(ThemeMode::Dark);
     REQUIRE(h.applied.size() == 2);
     REQUIRE(h.applied.back() == Appearance::Dark);
 
@@ -243,7 +212,6 @@ TEST_CASE("ThemeController re-themes on each mode change (store->controller->pal
     REQUIRE(h.applied.size() == 3);
     REQUIRE(h.applied.back() == Appearance::Light);
 
-    // The recorded sequence is the round-trip, not store-only.
     REQUIRE(h.applied ==
             std::vector<Appearance>{Appearance::Light, Appearance::Dark, Appearance::Light});
 }
@@ -255,27 +223,21 @@ TEST_CASE("ThemeController: switching System resolution re-themes when re-emitte
     ControllerProbe<ThemeController> probe(h.controller);
     probe.start();
     REQUIRE(h.applied.back() == Appearance::Dark);
-    // Move to an explicit mode and back to System with the OS now reading Light.
     h.mode.set(ThemeMode::Light);
     h.systemAppearance = Appearance::Light;
     h.mode.set(ThemeMode::System);
     REQUIRE(h.applied.back() == Appearance::Light);
 }
 
-// --- Active-token state after the startup resolution ------------------------
-// The QML ThemeBridge reads the live dish::ui::Theme::* statics (surface,
-// background, ...) at render time. The "body renders LIGHT under System+OS-dark"
-// bug was that the rendered tokens did not match the resolved appearance. These
-// pin the invariant that drives those statics: applying the appearance a mode +
-// OS reading resolves to leaves Theme::* equal to that appearance's palette — so
-// whatever the bridge reads matches what was resolved. Pure global-state checks
-// (no QML engine); the statics are process-global, so each section re-applies.
+// The QML ThemeBridge reads the dish::ui::Theme::* statics at render time, so
+// applying a resolved appearance must leave those statics on that appearance's
+// palette. The statics are process-global, hence the re-apply per section and
+// the restore at the end.
 
 namespace {
 
-// The production startup decision, distilled: resolve the mode (System via the
-// reader) and apply it to the active palette — exactly what the ThemeController's
-// real apply sink and the QmlEntryPoint System re-resolve both do.
+// Mirrors the production startup decision: resolve the mode (System through the
+// OS reader) and apply it to the active palette.
 void applyResolved(ThemeMode mode, Appearance systemReading) {
     const Appearance resolved = mode == ThemeMode::Light  ? Appearance::Light
                                 : mode == ThemeMode::Dark ? Appearance::Dark
@@ -291,8 +253,7 @@ TEST_CASE("active Theme tokens match the resolved appearance after startup", "[s
         REQUIRE(dish::ui::activeAppearance() == Appearance::Dark);
         REQUIRE(dish::ui::Theme::surface == darkPalette().surface);
         REQUIRE(dish::ui::Theme::background == darkPalette().background);
-        // The exact seam the QML Card binds (color: Theme.surface) — must be dark,
-        // not the light 0xFFFFFFFF the bug rendered.
+        // The exact seam the QML Card binds (color: Theme.surface).
         REQUIRE(dish::ui::Theme::surface != lightPalette().surface);
     }
     SECTION("System + OS light -> light tokens") {
@@ -311,7 +272,6 @@ TEST_CASE("active Theme tokens match the resolved appearance after startup", "[s
         REQUIRE(dish::ui::activeAppearance() == Appearance::Dark);
         REQUIRE(dish::ui::Theme::surface == darkPalette().surface);
     }
-    // Restore the process-global default so a later test reading the statics is
-    // not perturbed by whichever section ran last.
+    // Restore the process-global default for whatever test runs next.
     dish::ui::setActiveAppearance(Appearance::Dark);
 }

@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// PairingClient::classify maps a parsed POST /api/pair reply to an Outcome the
-// manager fans out (Success / Pending / AuthRequired / VersionMismatch /
-// Unreachable). Protocol-1: the PIN paths always answer HTTP 200; the dish
-// classifies on ok/pending, not the status — except 409 (protocol skew).
+// Protocol-1 PIN paths always answer HTTP 200, so classify() keys off ok/pending
+// rather than the status. The one exception is 409, which marks protocol skew.
 
 #include "Models/Models.h"
 #include "Network/PairingClient.h"
@@ -24,7 +22,6 @@ template <typename Arm> bool holds(const PairingClient::Outcome& o) {
     return std::holds_alternative<Arm>(o);
 }
 
-// A reachable 200 reply with the given ok/pending/sharedKey.
 PairResponse reply200(bool ok, bool pending, const QString& key) {
     PairResponse r;
     r.httpStatus = 200;
@@ -81,8 +78,8 @@ TEST_CASE("classify: unreachable without error falls back to default", "[pairing
     r.reachable = false;
     const auto o = PairingClient::classify(r);
     REQUIRE(holds<PairingClient::Unreachable>(o));
-    // Locale-aware fallback — pin against the same translate() call the
-    // production code uses so it stays green under every bundled translator.
+    // Pin against the same translate() call the production code makes, so this
+    // stays green under every bundled translator.
     REQUIRE(std::get<PairingClient::Unreachable>(o).message ==
             QCoreApplication::translate("dish::net::PairingClient", "Server unreachable"));
 }

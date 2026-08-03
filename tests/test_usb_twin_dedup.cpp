@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbTwinDedupTest — the twin-dedup arbitration (core/reducer/UsbTwinDedup.h),
-// a 1:1 port of dish-android ui/main/SyntheticTwinDedupTest.kt plus the
-// Windows-specific claim->suppress->detach->restore arbitration the prompt
-// requires. Pure; no IO. The reducer answers "which SDL/framework device ids are
-// hidden by an active USB-direct synthetic of the same model" so a pad visible to
-// both paths streams via exactly one (double input is a bug).
+// Which SDL/framework device ids an active USB-direct synthetic of the same model
+// hides, so a pad visible to both paths streams through exactly one.
 
 #include "core/reducer/UsbTwinDedup.h"
 
@@ -61,8 +57,7 @@ TEST_CASE("twin-dedup a routed controller of a different model stays visible", "
 
 TEST_CASE("twin-dedup Xbox routed pad is never hidden because Xbox never synthesizes",
           "[usb-dedup]") {
-    // XInput hides Xbox from raw HID, so an Xbox pad is never a synthetic. A Sony
-    // synthetic present alongside an Xbox routed pad leaves the Xbox pad on SDL.
+    // XInput hides Xbox pads from raw HID, so one is never a synthetic.
     std::vector<SyntheticTwin> syn = {synthetic(kSonyVid, kDs4Pid)};
     std::vector<RoutedDevice> dev = {routed("sdl:xbox", kXboxVid, kXboxPid),
                                      routed("sdl:ds4", kSonyVid, kDs4Pid)};
@@ -89,7 +84,7 @@ TEST_CASE("twin-dedup one synthetic with two routed twins hides the disconnectin
                                      routed("sdl:8", kSonyVid, kDs4Pid, /*disconnecting=*/true)};
     const auto hidden = suppressedRoutedIds(syn, dev);
     CHECK(hidden.size() == 1);
-    CHECK(has(hidden, "sdl:8")); // the disconnecting ghost is hidden, the live twin survives.
+    CHECK(has(hidden, "sdl:8"));
 }
 
 TEST_CASE("twin-dedup one synthetic with two live routed twins hides exactly one", "[usb-dedup]") {
@@ -125,15 +120,12 @@ TEST_CASE("twin-dedup synthetics only hide twins of their own model", "[usb-dedu
     CHECK_FALSE(has(hidden, "sdl:8"));
 }
 
-// ── claim -> suppress -> detach -> restore (the Windows arbitration lifecycle) ──
-
 TEST_CASE("twin-dedup detach restores the SDL twin", "[usb-dedup]") {
     std::vector<RoutedDevice> dev = {routed("sdl:7", kSonyVid, kDs4Pid)};
 
-    // Claim active: the SDL twin is suppressed.
     std::vector<SyntheticTwin> claimed = {synthetic(kSonyVid, kDs4Pid)};
     CHECK(has(suppressedRoutedIds(claimed, dev), "sdl:7"));
 
-    // Detach / claim-failure: no synthetics -> the SDL twin is visible again.
+    // Detach or claim-failure: no synthetics, so the twin is visible again.
     CHECK(suppressedRoutedIds({}, dev).empty());
 }

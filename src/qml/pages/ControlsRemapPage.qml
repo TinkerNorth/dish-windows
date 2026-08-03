@@ -1,32 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Configure controls (SCR §7.1) — the per-(vid,pid) raw-joystick remap for one
-// slot, reachable from the Controllers card and nowhere else. A capture card on
-// top, then two columns: Buttons & D-pad on the left, Sticks & triggers plus the
-// invert toggles on the right. Each assign row is the capture affordance: click
-// it, then physically press the input.
-//
-// Capture is an ARMED MODE, and an armed mode needs escapes (D39 / SCR §12.18):
-//   * Esc cancels it.
-//   * It auto-expires after kCaptureTimeoutMs with an inline note, so a user who
-//     armed the wrong row is never stuck waiting on an input they cannot give.
-//   * Every row carries a real Clear control — the contract defines -1 as
-//     "unassigned" and nothing in the UI produced it before.
-//   * stopInputCapture() is bound to THREE exits — destruction, stack
-//     deactivation and the window going inactive — because a forgotten arm
-//     leaves the bridge streaming raw reports forever.
-//
-// The 2px accent border on the capture card is the one 2px border in the app: it
-// is an ARMED state, not a selection, and selection is 1px everywhere else.
-//
-// All data and actions come from the frozen App contract (slotRemap /
-// assignSlotInput / setSlotInvert / resetSlotRemap / startInputCapture /
-// stopInputCapture / rawInputCaptured). slotRemap is a one-shot read, so it is
-// re-pulled after every mutation.
+// Configure controls — the per-(vid,pid) raw-joystick remap for one slot. Each
+// assign row arms a capture: click it, then physically press the input. Capture
+// is an ARMED MODE, so it has escapes (Esc, a timeout, and three stopInputCapture
+// exits) — a forgotten arm leaves the bridge streaming raw reports forever.
 
-// Bound so the shared assign-row delegate resolves the page id statically and
-// its required model bindings resolve.
+// Bound: the shared assign-row delegate resolves the page id and its required
+// model bindings statically.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -47,7 +28,6 @@ Kit.Page {
         ? qsTr("%1 · raw DirectInput remap").arg(page.slotName)
         : qsTr("Raw DirectInput remap")
 
-    // The design's readable measure for the two-column remap board (SCR §7.1).
     readonly property int bodyWidth: 760
 
     // How long an armed row waits for a deliberate input before giving up. Long
@@ -59,13 +39,12 @@ Kit.Page {
     readonly property int kindButton: 1
     readonly property int kindHat: 2
 
-    // The effective remap last read from App.slotRemap(slotId). Re-pulled on load
-    // and after every assign/invert/reset (slotRemap is one-shot). An empty
-    // object means the slot resolved to no (vid,pid) — the not-remappable note.
+    // Re-pulled on load and after every assign/invert/reset: slotRemap is
+    // one-shot. An empty object means the slot resolved to no (vid,pid) — the
+    // not-remappable note.
     property var remap: ({})
 
-    // The logical output currently capturing ("" = none) and its display label
-    // for the capture card. Only one row captures at a time.
+    // Only one row captures at a time.
     property string capturingTarget: ""
     property string capturingLabel: ""
 
@@ -76,9 +55,8 @@ Kit.Page {
     readonly property bool capturing: page.capturingTarget.length > 0
     readonly property bool hasRemap: page.remap && page.remap.a !== undefined
 
-    // The window losing focus is a leave: an Alt-Tab away from an armed row is
-    // indistinguishable from abandoning it, and the bridge must not keep
-    // streaming behind another app.
+    // The window losing focus is a leave: the bridge must not keep streaming raw
+    // reports behind another app.
     readonly property bool windowActive: page.Window.active
 
     Component.onCompleted: page.refresh()
@@ -112,9 +90,7 @@ Kit.Page {
         page.remap = App.slotRemap(page.slotId);
     }
 
-    // Arm one logical output: point the bridge's filter at this slot and
-    // remember which output the next raw input binds to. Re-pointing from
-    // another row restarts the budget with it.
+    // Re-pointing the filter from another row restarts the budget with it.
     function beginCapture(target, label) {
         page.captureExpired = false;
         page.capturingTarget = target;
@@ -147,8 +123,6 @@ Kit.Page {
         return value !== undefined && value !== null && value >= 0;
     }
 
-    // Render the current source of a plain button/stick/hat output: the int
-    // index roles read -1 when unassigned. `kind` labels the readout.
     function indexLabel(value, kindWord) {
         if (!page.isAssigned(value)) {
             return qsTr("Unassigned");
@@ -156,7 +130,7 @@ Kit.Page {
         return qsTr("%1 %2").arg(kindWord).arg(value);
     }
 
-    // Render a trigger source: {kind:"axis"|"button", index:int}.
+    // A trigger source is {kind:"axis"|"button", index:int}.
     function triggerLabel(obj) {
         if (!obj || !page.isAssigned(obj.index)) {
             return qsTr("Unassigned");
@@ -251,10 +225,8 @@ Kit.Page {
     ]
 
     // ---- Raw-input capture sink --------------------------------------------
-    // The FIRST deliberate raw input for THIS slot lands on the armed output,
-    // then capture stops and the readouts refresh. The bridge filters to the
-    // capturing slot and rejects idle jitter, so a resting pad never
-    // self-assigns.
+    // The bridge filters to the capturing slot and rejects idle jitter, so a
+    // resting pad never self-assigns.
     Connections {
         target: App
 
@@ -269,12 +241,8 @@ Kit.Page {
     }
 
     // ---- The assign row -----------------------------------------------------
-    // One Component, two Repeaters: the row is drawn once, not twice, and it is
-    // not an inline `component` type (a page declares no types).
-    //
-    // Two real controls side by side rather than one region with a hover-only
-    // affordance stacked on it: arming and clearing are both reachable by
-    // keyboard, and neither can swallow the other's click.
+    // One Component, two Repeaters: the row is written once, and it is not an
+    // inline `component` type (a page declares no types).
     Component {
         id: assignRowDelegate
 
@@ -314,7 +282,6 @@ Kit.Page {
                         radius: Tokens.radiusChip
                         color: armButton.hovered ? Theme.primaryHover : "transparent"
                     }
-                    // The global ring: 2px focusRing outside the bounds, on
                     // visualFocus only, so a mouse press never rings.
                     Rectangle {
                         anchors.fill: parent
@@ -458,8 +425,7 @@ Kit.Page {
                     }
                 }
 
-                // The expiry note. Information the user must read, so a colour
-                // rather than an opacity.
+                // Information the user must read: a colour, never an opacity.
                 Label {
                     visible: page.captureExpired && !page.capturing
                     Layout.fillWidth: true
@@ -471,7 +437,6 @@ Kit.Page {
             }
         }
 
-        // Two columns: Buttons & D-pad left; Sticks & triggers + inverts right.
         GridLayout {
             visible: page.hasRemap
             Layout.fillWidth: true

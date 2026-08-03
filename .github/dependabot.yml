@@ -8,18 +8,11 @@ updates:
     labels:
       - "ci"
     ignore:
-      # lukka/run-vcpkg >= 11.6 is held back deliberately. v11.6 defaults
-      # vcpkg binary caching to the GHA `x-gha` source, but our manifest-mode
-      # `vcpkg install` runs inside the later CMake configure step, which does
-      # not receive ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL — so Configure
-      # fails with "The GHA binary source requires the ACTIONS_RUNTIME_TOKEN
-      # and ACTIONS_CACHE_URL environment variables to be set." The bump was
-      # merged once (#19) and reverted in e2a4b69; dependabot then re-opened
-      # it (#26) with identically failing CI.
-      # Lift this ignore once the workflows adopt the documented x-gha
-      # env-export recipe (export both variables into the configure step's
-      # environment) or set VCPKG_BINARY_SOURCES explicitly — then the bump
-      # can be retaken.
+      # v11.6 defaults vcpkg binary caching to the GHA `x-gha` source, but our
+      # manifest-mode install runs inside the CMake configure step, which never
+      # receives ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL — configure then
+      # fails outright. Lift once the workflows export those two variables into
+      # the configure step, or set VCPKG_BINARY_SOURCES explicitly.
       - dependency-name: "lukka/run-vcpkg"
         versions:
           - ">=11.6"

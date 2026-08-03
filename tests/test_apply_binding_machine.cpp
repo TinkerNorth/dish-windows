@@ -1,20 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ApplyBindingMachine — the pure sequencer behind the apply overlay (the wizard's
-// Review page and Configure binding's Apply both drive it). These pin the rules
-// that make the overlay honest:
-//
-//   * the Connection step is SKIPPED, not faked, when no path switch is needed,
-//   * a Direct claim that times out is a FALLBACK to Standard, so the run
-//     CONTINUES and the caller raises a warning — never an error,
-//   * Cancel is accepted only while the claim is in flight; the REST round-trip
-//     cannot be half-applied and offers no escape,
-//   * the pad vanishing is terminal from any live phase (a claim can retire the
-//     very slot id the page opened with),
-//   * a finished run keeps its result.
-//
-// No timers, no sockets, no satellite: the wall clock is fed in as events.
+// No timers and no sockets here: the wall clock reaches the machine as Tick
+// events, so every timing rule below is exact rather than flaky.
 
 #include "core/reducer/ApplyBindingMachine.h"
 
@@ -31,12 +19,12 @@ namespace ev = dish::reducer::apply_event;
 
 namespace {
 
-// A run that needs the 20 s path switch, parked on its Connection step.
+// A run parked on its Connection step, mid path switch.
 ApplyState switching(bool wantsDirect = true) {
     return reduceApply(ApplyState{}, ev::Start{/*needsPathSwitch=*/true, wantsDirect});
 }
 
-// A run parked on its Destination step, having skipped the path switch.
+// A run parked on its Destination step, path switch skipped.
 ApplyState binding() {
     return reduceApply(ApplyState{}, ev::Start{/*needsPathSwitch=*/false, /*wantsDirect=*/false});
 }
@@ -81,7 +69,6 @@ TEST_CASE("apply machine: a settled Direct claim hands off with no fallback", "[
     REQUIRE(s.phase == ApplyPhase::Binding);
     REQUIRE(s.destination == ApplyStepState::Active);
     REQUIRE_FALSE(s.directFellBack);
-    // The elapsed clock restarts per step, so the 4 s hint belongs to one step.
     REQUIRE(s.elapsedMsOnStep == 0);
 }
 
@@ -102,8 +89,8 @@ TEST_CASE("apply machine: switching back to Standard on purpose is not a fallbac
 }
 
 TEST_CASE("apply machine: a claim that times out continues to the bind", "[apply][machine]") {
-    // The 20 s budget expiring means the OS never handed the device over. The
-    // pad still streams over Standard, so this is a warning and the run goes on.
+    // The claim expiring only means the OS never handed the device over; the pad
+    // still streams over Standard, so this is a warning and the run goes on.
     const auto s = reduceApply(switching(), ev::PathTimedOut{});
     REQUIRE(s.phase == ApplyPhase::Binding);
     REQUIRE(s.connection == ApplyStepState::Done);
@@ -130,7 +117,7 @@ TEST_CASE("apply machine: a rejected bind reports the satellite refusing it", "[
 TEST_CASE("apply machine: an unreachable host is distinct from a refusal", "[apply][machine]") {
     const auto rejected = reduceApply(binding(), ev::BindRejected{/*unreachable=*/true});
     REQUIRE(rejected.failure == ApplyFailure::HostUnreachable);
-    // ...and a round-trip that simply never answers IS an unreachable host.
+    // A round-trip that never answers folds into the same HostUnreachable reason.
     const auto timedOut = reduceApply(binding(), ev::BindTimedOut{});
     REQUIRE(timedOut.phase == ApplyPhase::Failed);
     REQUIRE(timedOut.destination == ApplyStepState::Failed);
@@ -199,13 +186,12 @@ TEST_CASE("apply machine: the elapsed clock only runs while a step is in flight"
     s = reduceApply(s, ev::Tick{250});
     REQUIRE(s.elapsedMsOnStep == 500);
 
-    // Crossing the step boundary restarts it — the 4 s hint is about THIS step.
+    // Crossing a step boundary restarts it: the 4 s slow hint is per step.
     s = reduceApply(s, ev::PathSettled{/*direct=*/true});
     REQUIRE(s.elapsedMsOnStep == 0);
     s = reduceApply(s, ev::Tick{4000});
     REQUIRE(s.elapsedMsOnStep == 4000);
 
-    // A terminal run stops accumulating.
     s = reduceApply(s, ev::BindAccepted{});
     const int frozen = s.elapsedMsOnStep;
     s = reduceApply(s, ev::Tick{1000});
@@ -213,8 +199,8 @@ TEST_CASE("apply machine: the elapsed clock only runs while a step is in flight"
 }
 
 TEST_CASE("apply machine: out-of-phase step events are ignored", "[apply][machine]") {
-    // The timers are real and can fire late; a stale budget must not corrupt a
-    // run that has already moved on.
+    // The production timers are real and can fire late; a stale budget must not
+    // corrupt a run that has already moved on.
     const auto bindingState = binding();
     REQUIRE(reduceApply(bindingState, ev::PathSettled{true}).phase == ApplyPhase::Binding);
     REQUIRE(reduceApply(bindingState, ev::PathTimedOut{}).phase == ApplyPhase::Binding);
@@ -227,8 +213,8 @@ TEST_CASE("apply machine: out-of-phase step events are ignored", "[apply][machin
 }
 
 TEST_CASE("apply machine: Start restarts a failed run cleanly", "[apply][machine]") {
-    // "Failed" leaves the draft intact and the primary live again, so the very
-    // next event a run can see is another Start.
+    // Failed leaves the draft intact and the primary live again, so the next
+    // event a run can legitimately see is another Start.
     const auto failed = reduceApply(binding(), ev::BindRejected{});
     REQUIRE(failed.phase == ApplyPhase::Failed);
 

@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Coverage for the pure rumble routing reducer in core/reducer/RumbleRouting.h:
-// resolveRumble (connId snapshot -> bound device id), combinedRumblePlan
-// (strong/weak across one or two actuators), and isRumbleStop. Replicates
-// dish-android hotpath/input/RumbleRouterTest (PURE) with the Phone-vibrator and
-// DirectUsb arms DROPPED (physical-only; USB-direct is workstream 2g) — the
-// surviving arm is android's Framework(deviceId), here the bound SDL device id.
-// The collision rule (a connected match wins over a stale one with the same id;
-// among equal matches the first wins) is preserved.
 
 #include "core/reducer/RumbleRouting.h"
 
@@ -32,8 +23,6 @@ RumbleConnectionSnapshot conn(const char* id, bool connected, const char* boundD
 }
 
 } // namespace
-
-// ── resolveRumble ────────────────────────────────────────────────────────────
 
 TEST_CASE("resolveRumble routes to the device bound at the matched connection",
           "[rumble][routing]") {
@@ -62,16 +51,13 @@ TEST_CASE("resolveRumble yields None against an empty snapshot", "[rumble][routi
 
 TEST_CASE("resolveRumble yields None when the matched connection has nothing bound",
           "[rumble][routing]") {
-    // A connection exists for the id but no slot/device is bound to it — there
-    // is no physical pad to actuate.
     std::vector<RumbleConnectionSnapshot> snap{conn("wifi:a", true, "")};
     REQUIRE_FALSE(resolveRumble(snap, QStringLiteral("wifi:a")).valid());
 }
 
 TEST_CASE("resolveRumble prefers the connected connection when two share an id",
           "[rumble][routing]") {
-    // A stale session must not steal a live controller's rumble: the connected
-    // match wins even when it appears later in the snapshot.
+    // A stale session must not steal a live controller's rumble.
     std::vector<RumbleConnectionSnapshot> snap{
         conn("wifi:a", false, "sdl:stale"),
         conn("wifi:a", true, "sdl:live"),
@@ -83,7 +69,6 @@ TEST_CASE("resolveRumble prefers the connected connection when two share an id",
 
 TEST_CASE("resolveRumble falls back to the first match when none are connected",
           "[rumble][routing]") {
-    // All matches stale -> the first in snapshot order wins (deterministic).
     std::vector<RumbleConnectionSnapshot> snap{
         conn("wifi:a", false, "sdl:first"),
         conn("wifi:a", false, "sdl:second"),
@@ -101,8 +86,6 @@ TEST_CASE("resolveRumble ignores connections with a different id", "[rumble][rou
     };
     REQUIRE(resolveRumble(snap, QStringLiteral("wifi:y")).deviceId == QStringLiteral("sdl:y"));
 }
-
-// ── combinedRumblePlan ───────────────────────────────────────────────────────
 
 TEST_CASE("combinedRumblePlan separates strong and weak across two actuators", "[rumble][plan]") {
     const auto plan = combinedRumblePlan(2, 200, 100);
@@ -157,16 +140,14 @@ TEST_CASE("combinedRumblePlan yields nothing when there are no actuators", "[rum
     REQUIRE(combinedRumblePlan(0, 200, 100).empty());
 }
 
-// ── isRumbleStop ─────────────────────────────────────────────────────────────
-
 TEST_CASE("isRumbleStop is true when both magnitudes are zero or duration is zero",
           "[rumble][stop]") {
-    REQUIRE(isRumbleStop(0, 0, 100));   // no amplitude
-    REQUIRE(isRumbleStop(500, 500, 0)); // zero duration
+    REQUIRE(isRumbleStop(0, 0, 100));
+    REQUIRE(isRumbleStop(500, 500, 0));
 }
 
 TEST_CASE("isRumbleStop is false when there is a positive magnitude and duration",
           "[rumble][stop]") {
-    REQUIRE_FALSE(isRumbleStop(500, 0, 100)); // strong only
-    REQUIRE_FALSE(isRumbleStop(0, 500, 100)); // weak only
+    REQUIRE_FALSE(isRumbleStop(500, 0, 100));
+    REQUIRE_FALSE(isRumbleStop(0, 500, 100));
 }

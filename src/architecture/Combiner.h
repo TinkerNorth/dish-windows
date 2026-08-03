@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Combiner<Out, Ins...> — the C++ analogue of Kotlin Flow.combine used by
-// dish-android's AbstractComposer. Combines N upstream Observables through a
-// pure transform into one derived Observable<Out>: computes once eagerly at
-// construction (= SharingStarted.Eagerly, so consumers never see a stale
-// initial) and recomputes on any upstream change, emitting only when the
-// result differs (distinct-until-changed, inherited from Observable::set).
-//
-// Non-movable: it captures `this` in its upstream subscriptions. Own it by
-// value as a member or via std::make_unique.
+// Combiner<Out, Ins...>: N upstream Observables through a pure transform into
+// one derived Observable<Out>. See architecture/README.md.
 
 #pragma once
 

@@ -1,22 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Support Dish (SCR §7.5) — a rail destination, so no back chevron (D46 /
-// SCR §12.24b) and it scrolls through Kit.Page's single page-level scroller
-// rather than clipping to prove a mock fits (SCR §12.24d). LEFT: the hero
-// (heart medallion, pulse eyebrow, headline, lead, the filled GitHub Sponsors
-// CTA, the thanks line). RIGHT: the three donation rails as real Kit.RowButtons
-// — focusable, named, keyboard-activatable (D46 / SCR §12.24c) — each with its
-// cadence / pays-with meta beneath, then the "What your donation pays for" card.
+// Support Dish — a rail destination (hero column plus the three donation rails).
 //
 // Pulse pink (Theme.pulse / pulseFill / pulseEdge) is the ONE hue Dish uses
 // beyond cyan and is scoped to THIS surface and the rail heart — nowhere else.
-//
-// Bound to the real `App` surface: App.donateSponsorsUrl / -KofiUrl / -BmacUrl
-// and App.openExternalUrl (routes through ExternalLink so a failure toasts).
-// See docs/QML_CONTRACT.md §1b.
 
-// Bind outer-component ids (donatePage) into the rail Repeater delegates.
+// Bound: the rail delegates reference the outer `donatePage` id.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -32,13 +22,10 @@ Kit.Page {
     readonly property string headerTitle: qsTr("Support Dish")
     readonly property string headerSub: qsTr("Dish is free and open source — donations keep it that way")
 
-    // Brand donation URLs from the App surface (defaults mirror DonateView; the
-    // C++ side carries the localizable overrides).
     readonly property string urlSponsors: App.donateSponsorsUrl
     readonly property string urlKofi: App.donateKofiUrl
     readonly property string urlBmac: App.donateBmacUrl
 
-    // The design's fixed hero column; the rails take the remaining measure.
     readonly property int heroWidth: 330
 
     readonly property var rails: [
@@ -71,9 +58,7 @@ Kit.Page {
         }
     ]
 
-    // Route through App.openExternalUrl so a failed open raises the same toast
-    // the Widgets DonateView did (via ExternalLink), not a silent
-    // Qt.openUrlExternally.
+    // App.openExternalUrl, never Qt.openUrlExternally: a failed open must toast.
     function openUrl(url) {
         if (url && url.length > 0) {
             App.openExternalUrl(url);
@@ -82,14 +67,12 @@ Kit.Page {
 
     GridLayout {
         width: parent ? parent.width : implicitWidth
-        // The 330px | flexible grid collapses to one column when the content
-        // pane is narrow: the hero column is FIXED, so two columns only fit
-        // once the rail column keeps a readable measure.
+        // The hero column is FIXED width, so two columns only fit once the rail
+        // column still keeps a readable measure.
         columns: donatePage.width < Tokens.stackBreakpoint ? 1 : 2
         columnSpacing: Tokens.s10
         rowSpacing: Tokens.s10
 
-        // ── Hero (left column) ───────────────────────────────────────────────
         ColumnLayout {
             Layout.preferredWidth: donatePage.heroWidth
             Layout.fillWidth: donatePage.width < Tokens.stackBreakpoint
@@ -106,7 +89,7 @@ Kit.Page {
 
                 Label {
                     anchors.centerIn: parent
-                    text: "♥" // ♥ — brand glyph, not localized
+                    text: "♥" // brand glyph, not localized
                     color: Theme.pulse
                     font.pixelSize: Tokens.glyphLg
                 }
@@ -137,9 +120,8 @@ Kit.Page {
                 wrapMode: Text.WordWrap
             }
 
-            // The one solid-pulse control in the app. Not a Kit.DishButton: the
-            // kit's variants are all accent-toned and pulse must not leak into
-            // them (SCR §7.5). It still carries the global focus treatment (D50).
+            // Hand-rolled rather than a Kit.DishButton: the kit's variants are
+            // all accent-toned and pulse must not leak into them.
             AbstractButton {
                 id: sponsorCta
 
@@ -179,7 +161,7 @@ Kit.Page {
 
                     Label {
                         Layout.leftMargin: Tokens.s8
-                        text: "♥" // ♥ — brand glyph, not localized
+                        text: "♥" // brand glyph, not localized
                         color: Theme.onPrimary
                         font.pixelSize: Tokens.textBase
                     }
@@ -211,7 +193,6 @@ Kit.Page {
             }
         }
 
-        // ── Rails + the what-it-pays-for card (right column) ─────────────────
         ColumnLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignTop
@@ -234,9 +215,6 @@ Kit.Page {
                         onClicked: donatePage.openUrl(rail.modelData.url)
                     }
 
-                    // Cadence | Pays-with meta, and the recommendation, under the
-                    // row rather than inside it: the row is the control, this is
-                    // the annotation (and it keeps pulse off a pill style, D58).
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.leftMargin: Tokens.s6
@@ -270,9 +248,8 @@ Kit.Page {
                 }
             }
 
-            // "What your donation pays for" — bold leads inline; the bold tag
-            // alone carries the emphasis, so no Theme colour is stringified into
-            // markup (D64's sibling hazard).
+            // Bold tags only: a Theme colour stringified into StyledText markup
+            // yields #AARRGGBB, which parses as #RRGGBBAA — silently wrong.
             Kit.Card {
                 Layout.fillWidth: true
                 Layout.topMargin: Tokens.s2

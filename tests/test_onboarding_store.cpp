@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Coverage for dish::source::OnboardingPreferenceStore (Workstream 3a). There is
-// NO android @Test for this store (it is a plain AbstractStateSource); these
-// cases pin the RULE its android code expresses — welcomeCompleted /
-// dashboardHintDismissed default false (first run shows the pager), the command
-// methods flip + persist, the flags are independent, resetWelcome clears both,
-// and emission is distinct-until-changed. Modelled on test_feature_settings.cpp:
-// a QTemporaryDir-backed QSettings is injected, and a relaunch is simulated by a
-// second instance over the same ini. Distinct-until-changed is asserted via the
-// kernel StateSourceProbe (the recorded emission sequence).
+// Both flags default false so a first run shows the welcome pager. A relaunch is
+// simulated by a second store over the same ini.
 
 #include "source/store/OnboardingPreferenceStore.h"
 
@@ -53,10 +46,8 @@ TEST_CASE("OnboardingPreferenceStore: markWelcomeCompleted flips + persists",
         auto store = makeStore(dir);
         store->markWelcomeCompleted();
         REQUIRE(store->welcomeCompleted());
-        // The other flag is untouched.
         REQUIRE_FALSE(store->dashboardHintDismissed());
     }
-    // Relaunch: a second instance over the same ini reads true.
     {
         auto reloaded = makeStore(dir);
         REQUIRE(reloaded->welcomeCompleted());
@@ -71,7 +62,6 @@ TEST_CASE("OnboardingPreferenceStore: dismissDashboardHint is independent of wel
     auto store = makeStore(dir);
     store->dismissDashboardHint();
     REQUIRE(store->dashboardHintDismissed());
-    // welcomeCompleted must NOT have been touched.
     REQUIRE_FALSE(store->welcomeCompleted());
 }
 
@@ -109,7 +99,7 @@ TEST_CASE("OnboardingPreferenceStore: emission is distinct-until-changed", "[onb
     auto store = makeStore(dir);
 
     StateSourceProbe<OnboardingState> probe(store->state());
-    // 1 emission so far: the current value replayed to the new subscriber.
+    // The one emission is the current value replayed to the new subscriber.
     REQUIRE(probe.count() == 1);
 
     store->markWelcomeCompleted(); // real transition
@@ -133,8 +123,7 @@ TEST_CASE("OnboardingPreferenceStore: resetWelcome after no-op does not emit",
 
     StateSourceProbe<OnboardingState> probe(store->state());
     REQUIRE(probe.count() == 1);
-    // A fresh store is already {false,false}; resetWelcome sets {false,false} —
-    // distinct-until-changed suppresses the re-emit.
+    // A fresh store is already {false,false}, so resetWelcome writes no change.
     store->resetWelcome();
     REQUIRE(probe.count() == 1);
 }

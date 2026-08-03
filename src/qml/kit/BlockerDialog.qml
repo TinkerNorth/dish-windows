@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The two TERMINAL blockers, and only those two: the host stopped answering, or
-// the pad was pulled. The page really is unusable while the path is gone, so it
-// says so and offers the one action that helps.
+// The two terminal blockers only. An unsteady link is an inline ErrorBanner:
+// a flapping link would raise and dismiss a modal the user cannot outrun.
 //
-// An unsteady link is NOT here. A flapping link would raise and dismiss a modal
-// repeatedly and trap the user in a dialog they cannot outrun; it is an inline
-// ErrorBanner above the editor instead.
-//
-// No retry countdown, ever: reconnect backoff exists in the session state
-// machine but is not wired to the live connection manager, so any number this
-// sheet printed would be fiction.
+// No retry countdown: reconnect backoff lives in the session state machine and
+// is not wired to the live connection manager, so any number here is fiction.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -27,7 +21,6 @@ ContentDialog {
     }
 
     property int kind: BlockerDialog.ConnectionLost
-    // Names the host in the connection-lost body; ignored by the other kind.
     property string hostName: ""
 
     signal reconnectRequested()
@@ -37,8 +30,7 @@ ContentDialog {
     heading: blocker.hostLost ? qsTr("Connection lost") : qsTr("Controller unplugged")
 
     rejectText: qsTr("Cancel")
-    // Only the host-lost blocker has an action; an unplugged pad is fixed with
-    // a hand, not a button.
+    // An unplugged pad is fixed with a hand, not a button.
     acceptText: blocker.hostLost ? qsTr("Reconnect") : ""
 
     onAccepted: blocker.reconnectRequested()
@@ -48,8 +40,6 @@ ContentDialog {
             spacing: Tokens.s5
             Layout.fillWidth: true
 
-            // Colour is never the only channel, but the dot travels with the
-            // sentence beside it, which is the channel that carries the meaning.
             StatusDot {
                 token: blocker.hostLost ? "error" : "warning"
                 Layout.alignment: Qt.AlignTop

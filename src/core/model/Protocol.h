@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pure, Qt-free protocol-1 constants + tiny mappers shared by the wire layer,
-// the REST DTO parsers and the pure reducers. Mirrors the authoritative
-// satellite/src/core/types.h subset the CLIENT needs (opcodes, caps, apply
-// results, close reasons, touchpad modes, controller types, crypto/timeout
-// sizes). Frozen for downstream waves once this lands — see
-// satellite/docs/contract.md.
+// Protocol-1 constants and mappers shared by the wire layer, the REST DTO parsers
+// and the reducers. The client-side subset of the authoritative
+// satellite/src/core/types.h; see satellite/docs/contract.md.
 
 #pragma once
 
@@ -16,15 +13,12 @@
 
 namespace dish::proto {
 
-// REST + wire protocol version. Rides in every pairing/session request so any
-// future change is gateable (contract §Versioning).
+// Rides in every pairing/session request so a future change is gateable.
 inline constexpr int kProtocolVersion = 1;
 
-// ── UDP opcodes (contract §UDP messages) ────────────────────────────────────
-// Topology-mutation opcodes 0x0004/5/6/7/8 and 0x000E are DELETED in
-// protocol-1 — they are intentionally NOT defined here so a stray reference
-// fails to compile. Up: INPUT/HEARTBEAT/MOTION/BATTERY/TOUCHPAD. Down:
-// HEARTBEAT_ACK (enriched), RUMBLE, LIGHTBAR, SESSION_CLOSE.
+// ── UDP opcodes ─────────────────────────────────────────────────────────────
+// The topology-mutation opcodes 0x0004..0x0008 and 0x000E are gone in
+// protocol-1; leaving them undefined makes a stray reference fail to compile.
 inline constexpr std::uint16_t kMsgInput = 0x0001;        // c→s ctrlIdx + GamepadReport(12)
 inline constexpr std::uint16_t kMsgHeartbeat = 0x0002;    // c→s empty
 inline constexpr std::uint16_t kMsgHeartbeatAck = 0x0003; // s→c enriched (see below)
@@ -35,18 +29,16 @@ inline constexpr std::uint16_t kMsgTouchpad = 0x000C;     // c→s ctrlIdx + 15 
 inline constexpr std::uint16_t kMsgLightbar = 0x000D;     // s→c ctrlIdx + r + g + b
 inline constexpr std::uint16_t kMsgSessionClose = 0x000F; // s→c reason(1)
 
-// MSG_HEARTBEAT_ACK payload length (after the 4-byte inner type+len header):
-// backendAvailable(1) + totalActiveControllers(1) + epoch(u16 BE) +
-// activeBitmap(u16 BE) = 6 bytes. The epoch/bitmap pair drives the reconcile.
+// After the 4-byte inner type+len header: backendAvailable(1) +
+// totalActiveControllers(1) + epoch(u16 BE) + activeBitmap(u16 BE).
 inline constexpr int kHeartbeatAckPayloadBytes = 6;
 
-// MSG_TOUCHPAD payload length (after the 1-byte ctrlIdx): flags(1) +
-// f0(id1+x2+y2) + f1(id1+x2+y2) + eventTimeMs(u32 LE) = 15 bytes. The trailing
-// eventTimeMs is the protocol-1 addition (was 12); the server now requires
-// msgLen >= 16 inner so a 12-byte body is dropped.
+// After the 1-byte ctrlIdx: flags(1) + f0(id1+x2+y2) + f1(id1+x2+y2) +
+// eventTimeMs(u32 LE). The server requires an inner msgLen >= 16, so the
+// pre-protocol-1 12-byte body without eventTimeMs is dropped.
 inline constexpr int kTouchpadPayloadBytes = 15;
 
-// ── MSG_SESSION_CLOSE reason byte (contract §UDP messages) ───────────────────
+// ── MSG_SESSION_CLOSE reason byte ───────────────────────────────────────────
 inline constexpr std::uint8_t kCloseReasonShutdown = 0; // server going down
 inline constexpr std::uint8_t kCloseReasonKicked = 1;   // admin kick (transient)
 inline constexpr std::uint8_t kCloseReasonReplaced = 2; // superseded by a newer PUT
@@ -81,7 +73,7 @@ inline std::string_view touchpadModeName(std::uint8_t mode) {
     }
 }
 
-// Inverse of touchpadModeName; unknown → off (the server's default too).
+// Unknown maps to off, matching the server's default.
 inline std::uint8_t touchpadModeFromName(std::string_view name) {
     if (name == "ds4") { return kTouchpadModeDs4; }
     if (name == "mouse") { return kTouchpadModeMouse; }
@@ -89,9 +81,8 @@ inline std::uint8_t touchpadModeFromName(std::string_view name) {
 }
 
 // ── Per-controller apply outcome (PUT/controller-PUT response) ───────────────
-// Wire form is the lowercase string (protocol constant, never localized). The
-// numeric code mirrors satellite APPLY_* so the old UDP-ack error mapping can
-// be re-keyed onto strings.
+// Wire form is the lowercase string, never localized; the numeric codes mirror
+// satellite APPLY_*.
 inline constexpr std::uint8_t kApplyOk = 0;
 inline constexpr std::uint8_t kApplyNoSlots = 1;
 inline constexpr std::uint8_t kApplyPluginFailed = 2;
@@ -122,9 +113,8 @@ inline std::string_view applyResultName(std::uint8_t code) {
     }
 }
 
-// Parse a wire apply-result string into its code. An unrecognised string (a
-// result a newer server invented) maps to kApplyUnknown rather than guessing
-// success/failure — the caller treats it as not-live.
+// A result a newer server invented maps to kApplyUnknown rather than guessing
+// success or failure; the caller treats it as not-live.
 inline std::uint8_t applyResultFromName(std::string_view name) {
     if (name == "ok") { return kApplyOk; }
     if (name == "noSlots") { return kApplyNoSlots; }
@@ -136,20 +126,18 @@ inline std::uint8_t applyResultFromName(std::string_view name) {
     return kApplyUnknown;
 }
 
-// A slot is LIVE (streams keep flowing) when the descriptor applied OK, or when
-// a replug failed: the previous pad is left untouched and `appliedType` reports
-// the type still in force. Every other code means the slot is not plugged.
+// A failed replug still counts as live: the previous pad is left untouched and
+// `appliedType` reports the type still in force.
 inline bool applyResultSlotIsLive(std::uint8_t code) {
     return code == kApplyOk || code == kApplyReplugFailed;
 }
 
-// ── 401 machine-readable cause (contract §Error model) ──────────────────────
-// Either code is TERMINAL: drop the key, surface "re-pair needed", stop
-// retrying. Carried in the 401 body `{"error":"unauthorized","code":...}`.
+// ── 401 machine-readable cause, from the body's `code` field ─────────────────
+// Either code is terminal: drop the key, surface "re-pair needed", stop retrying.
 inline constexpr std::string_view kAuthCodeNotPaired = "NOT_PAIRED";
 inline constexpr std::string_view kAuthCodeBadProof = "BAD_PROOF";
 
-// ── Host-feature deny reasons (descriptor grant, never localized) ───────────
+// ── Host-feature deny reasons (wire strings, never localized) ───────────────
 inline constexpr std::string_view kHostDenyNotSupported = "notSupported";
 inline constexpr std::string_view kHostDenyBackendUnavailable = "backendUnavailable";
 inline constexpr std::string_view kHostDenyDenied = "denied";

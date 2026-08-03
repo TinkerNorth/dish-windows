@@ -13,9 +13,8 @@ namespace dish::chrome {
 
 namespace {
 
-// The OS "animate controls and elements inside windows" setting, inverted.
-// Absent the Win32 API (non-Windows builds) motion is allowed — the safe
-// default is the richer one, since a missing probe is not a stated preference.
+// Without the Win32 probe, motion stays allowed: a missing probe is not a
+// stated preference.
 bool probeReducedMotion() {
 #ifdef Q_OS_WIN
     BOOL animationsOn = TRUE;
@@ -33,13 +32,10 @@ bool probeReducedMotion() {
 TokensBridge::TokensBridge(QObject* parent)
     : QObject(parent), reducedMotion_(probeReducedMotion()) {}
 
-// Probed explicitly (Cascadia Mono -> Consolas -> Segoe UI Mono -> generic)
-// rather than asking for the platform FixedFont, which resolves to Courier New
-// on several Windows configurations. See ui::preferredMonoFamily.
+// Probed by name rather than asking for the platform FixedFont, which resolves
+// to Courier New on several Windows configurations.
 QString TokensBridge::monoFamily() const { return ui::preferredMonoFamily(); }
 
-// Inter is bundled (main.cpp registers :/fonts) and is the design's UI face;
-// the rest of the stack is the Windows system sans.
 QString TokensBridge::sansFamily() const { return ui::preferredSansFamily(); }
 
 void TokensBridge::refreshMotionPreference() {

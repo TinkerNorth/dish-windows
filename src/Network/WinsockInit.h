@@ -5,15 +5,10 @@
 
 namespace dish::net {
 
-// RAII wrapper around WSAStartup / WSACleanup. Windows requires every process
-// that uses Winsock to call WSAStartup() at least once before any socket(),
-// connect(), bind(), etc. and to call WSACleanup() the same number of times
-// to release internal resources.
-//
-// The dish-linux / dish-mac siblings have no equivalent because POSIX sockets
-// don't need explicit init. Instantiate a single WinsockInit on the stack of
-// `main()` so the lifetime brackets every socket call in the app — including
-// LANDiscovery, PairingClient, and the per-session SatelliteClient threads.
+// RAII pairing of WSAStartup / WSACleanup, which Winsock requires per process
+// before any socket call and in matching counts. Lives on `main()`'s stack so
+// its lifetime brackets every socket in the app, including the per-session
+// SatelliteClient threads.
 class WinsockInit {
   public:
     WinsockInit();
@@ -24,9 +19,7 @@ class WinsockInit {
     WinsockInit(WinsockInit&&) = delete;
     WinsockInit& operator=(WinsockInit&&) = delete;
 
-    // True if WSAStartup returned 0. The constructor doesn't throw on
-    // failure — callers should check and surface a clean error if Winsock
-    // wouldn't initialize (essentially impossible on a healthy Windows box).
+    // The constructor does not throw, so callers must check this.
     bool ok() const { return ok_; }
 
   private:

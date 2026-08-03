@@ -1,20 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The ConnectionCoordinator: the imperative command surface over the connection
-// subsystem that RE-EXPOSES (never mirrors) the ConnectionsComposer's derived
-// row list. Built on the real WifiConnectionManager + ConnectionHub + an
-// in-memory ConnectionStore (no sockets are opened — these exercise the
-// bind/unbind/forget orchestration + the re-exposed reactive list, not live
-// connects). Re-derives the satellite arms of dish-android
-// composer/ConnectionCoordinatorTest (the Bluetooth-HID-peripheral arms are
-// phone-only and out of scope for Windows).
-//
-// Remembered satellites are seeded in the store BEFORE the coordinator is built,
-// so the coordinator's eager initial refresh picks them up (in production a
-// remember always rides a manager action that fires poolChanged). Reactivity is
-// then driven through the real signal paths: bind/unbind fire the hub's
-// `changed`, forget fires the manager's `poolChanged`.
+// Drives the real WifiConnectionManager + ConnectionHub over an in-memory
+// ConnectionStore, so no sockets are opened. Reactivity comes through the real
+// signals: bind/unbind fire the hub's `changed`, forget fires `poolChanged`.
 
 #include "Network/ConnectionHub.h"
 #include "Network/ConnectionStore.h"
@@ -40,11 +29,9 @@ using dish::test::makeSharedSettings;
 
 namespace {
 
-// WifiConnectionManager builds an HTTPClient (QNetworkAccessManager), whose
-// app-static factory asserts unless a QCoreApplication exists. The test runner
-// (Catch2WithMain) creates none, so stand one up once for the process. A
-// function-local static with a leaked argv keeps it alive for every coordinator
-// test without disturbing the other translation units.
+// WifiConnectionManager builds an HTTPClient whose app-static factory asserts
+// unless a QCoreApplication exists, and Catch2WithMain creates none. The
+// function-local static with a leaked argv keeps one alive for the process.
 void ensureApp() {
     if (QCoreApplication::instance() != nullptr) { return; }
     static int argc = 1;
@@ -66,10 +53,9 @@ DiscoveredServer sat(const QString& machineId, const QString& ip, const QString&
 
 QString midId(const QString& machineId) { return QStringLiteral("mid:") + machineId; }
 
-// Owns the full satellite stack on an isolated in-memory store, in the AppModel
-// construction order (store -> manager -> hub -> coordinator). Remembered
-// satellites passed in are seeded BEFORE the coordinator is constructed so its
-// eager initial refresh sees them.
+// Construction order matches AppModel (store -> manager -> hub -> coordinator).
+// The seed is remembered BEFORE the coordinator exists so its eager initial
+// refresh sees it.
 struct Fixture {
     std::unique_ptr<dish::net::ConnectionStore> store;
     std::unique_ptr<dish::net::WifiConnectionManager> wifi;
@@ -101,16 +87,13 @@ TEST_CASE("coordinator: initial connections list is empty when no sources have d
 
 TEST_CASE("coordinator: connections() re-exposes the SAME observable (no mirror)", "[coord]") {
     Fixture f;
-    // The re-exposed reference is the composer's own Observable: subscribing to
-    // it and then driving an upstream (a bind -> hub changed -> refresh) must
-    // deliver to that exact subscription.
-    f.hub->bind(QStringLiteral("slot-A"), midId("m1")); // no-op binding (no such conn) but fires
+    f.hub->bind(QStringLiteral("slot-A"), midId("m1")); // no such conn, but it fires
     int emissions = 0;
     auto sub = f.coord->connections().subscribe(
         [&](const std::vector<ConnectionRow>&) { ++emissions; }, /*emitCurrent=*/true);
     const int afterInitial = emissions; // the eager replay
     f.hub->unbind(QStringLiteral("slot-A"));
-    REQUIRE(emissions >= afterInitial); // the same observable is what the coordinator returns
+    REQUIRE(emissions >= afterInitial);
 }
 
 TEST_CASE("coordinator: a remembered satellite appears as a Saved row", "[coord]") {
@@ -166,7 +149,6 @@ TEST_CASE("coordinator: forgetConnection clears the binding then forgets the sat
 
     f.coord->forgetConnection(midId("m1"));
 
-    // The remembered row is gone (forget dropped it) and the binding with it.
     REQUIRE(f.coord->connections().value().empty());
     REQUIRE(f.wifi->remembered().isEmpty());
     REQUIRE_FALSE(f.hub->bindings().contains(QStringLiteral("slot-A")));
@@ -204,23 +186,15 @@ TEST_CASE("coordinator: rows are sorted by label", "[coord]") {
     REQUIRE(rows[1].label == "Zeta");
 }
 
-// ── Reconnect / disconnect commands (the Widgets contract gaps) ──────────────
-//
-// The LIVE orchestration is verified at runtime, not here: reconnectConnection()
-// always kicks a real startDiscovery() (blocking Winsock/mDNS on the thread pool)
-// when the id isn't already in a current scan, and a successful reconnect/
-// disconnect opens or tears down a real session — none of which has a network
-// seam in this harness (see test_session_manager). Driving those paths hangs the
-// test process on exit. So below we pin only the network-free contract: a
-// disconnect with no live session is a graceful no-op that must NOT forget.
+// The live orchestration has no network seam in this harness: reconnectConnection()
+// kicks a real blocking startDiscovery() and a successful reconnect/disconnect
+// opens or tears down a real session, which hangs the test process on exit. Only
+// the network-free contract is pinned below.
 
 TEST_CASE("coordinator: disconnect of a remembered-but-not-live satellite keeps its row "
           "(graceful, not a forget)",
           "[coord][disconnect]") {
     Fixture f({sat("m1", "10.0.0.1", "Pc")});
-    // No live session exists, so disconnect opens no socket — it is a graceful
-    // no-op that must NOT drop the remembered row/key (the contrast with forget,
-    // which does). The row stays exactly Saved.
     f.coord->disconnectConnection(midId("m1"));
     REQUIRE_FALSE(f.wifi->remembered().isEmpty());
     const auto r = f.row(midId("m1"));

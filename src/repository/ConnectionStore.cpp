@@ -14,25 +14,18 @@ namespace dish::repository {
 
 namespace {
 
-// The stable id the rest of dish-windows keys a satellite on: "mid:<machineId>"
-// when present, else "wifi:<ip>:<udpPort>". This is DiscoveredServer::id() /
-// WifiConnection::idFor — kept identical so the shared-key the session manager
-// stores under WifiConnection::idFor(server) lines up with what this facade
-// writes. (dish-android prefixes with "satellite:"; dish-windows uses the
-// existing "mid:"/"wifi:" scheme — the prefix is internal, only consistency
-// matters.)
+// Must stay WifiConnection::idFor verbatim: the session manager files a
+// satellite's pairing key under that id, so any divergence orphans the key.
 QString idForServer(const models::DiscoveredServer& server) {
     return net::WifiConnection::idFor(server);
 }
 
 bool isBlank(const QString& s) { return s.trimmed().isEmpty(); }
 
-// One-time, in-place upgrade of a pre-2a install: the monolithic ConnectionStore
-// stored the remembered list under "wifi_list" and pairing keys under
-// "wifi_shared_key/<id>". Copy them into the new "satellite_list" /
-// "satellite_shared_key:<id>" namespaces so a user who paired before this change
-// keeps their satellites + keys (no forced re-pair). Idempotent: skips once the
-// new keys exist.
+// One-time in-place upgrade: older installs kept the remembered list under
+// "wifi_list" and pairing keys under "wifi_shared_key/<id>". Copying them into
+// the current namespaces is what spares those users a forced re-pair.
+// Idempotent: skips once the new keys exist.
 void migrateLegacyNamespaces(QSettings& settings) {
     if (!settings.contains(QLatin1String(keys::kSatelliteListKey)) &&
         settings.contains(QLatin1String(keys::kLegacyWifiListKey))) {
@@ -65,8 +58,8 @@ ConnectionStore::ConnectionStore(std::shared_ptr<QSettings> settings)
 }
 
 QString ConnectionStore::getOrCreateDeviceId() {
-    // Non-const on purpose: const would block the implicit move on the return
-    // below and force a QString copy on the (overwhelmingly common) hit path.
+    // Non-const on purpose: const blocks the implicit move on the return below
+    // and costs a QString copy on the common hit path.
     auto existing = settings_->value(QLatin1String(keys::kDeviceIdKey)).toString();
     if (!existing.isEmpty()) { return existing; }
     const auto fresh =
@@ -81,9 +74,8 @@ QList<models::RememberedWifi> ConnectionStore::remembered() const {
 }
 
 bool ConnectionStore::refreshKnownBox(const models::DiscoveredServer& server) {
-    // The beacon has no machineId. Find an existing STABLE row (one that DID
-    // advertise a machineId) at the same address and refresh its name + ports in
-    // place — don't mint an ip:port ghost beside it.
+    // A stable row is one that DID advertise a machineId; refreshing it in place
+    // is what stops an ip:port ghost being minted beside it.
     for (const auto& row : satellites_->all()) {
         if (!isBlank(row.machineId) && row.ip == server.ip && row.udpPort == server.udpPort) {
             models::RememberedWifi refreshed = row;
@@ -99,9 +91,8 @@ bool ConnectionStore::refreshKnownBox(const models::DiscoveredServer& server) {
 
 void ConnectionStore::collapseLegacyGhosts(const models::DiscoveredServer& server,
                                            const QString& id) {
-    // The box just gained a stable id. For every legacy row (no machineId) at the
-    // same address: carry its pairing key forward to the stable id (the stable
-    // row's own key wins if it already has one), then drop the ghost's key + row.
+    // Carry each ghost's pairing key forward to the stable id, but never over an
+    // existing one — the stable row's own key wins.
     for (const auto& row : satellites_->all()) {
         if (isBlank(row.machineId) && row.ip == server.ip && row.udpPort == server.udpPort) {
             if (!keys_->get(id).has_value()) {
@@ -115,8 +106,8 @@ void ConnectionStore::collapseLegacyGhosts(const models::DiscoveredServer& serve
 
 void ConnectionStore::migratePinOnAddressChange(const std::optional<QString>& oldIp,
                                                 const QString& newIp) {
-    // The cert pin follows the box (pin keyed by IP). A pin already trusted at
-    // the new address is NOT overwritten; the old-address pin is ALWAYS dropped.
+    // A pin already trusted at the new address is NOT overwritten; the
+    // old-address pin is ALWAYS dropped.
     if (!oldIp.has_value() || *oldIp == newIp) { return; }
     if (!pins_->pinnedFingerprint(newIp).has_value()) {
         if (const auto oldPin = pins_->pinnedFingerprint(*oldIp)) { pins_->pin(newIp, *oldPin); }
@@ -125,8 +116,7 @@ void ConnectionStore::migratePinOnAddressChange(const std::optional<QString>& ol
 }
 
 void ConnectionStore::rememberSatellite(const models::DiscoveredServer& server) {
-    // A beacon without a machineId never mints a fresh row — it only refreshes a
-    // known stable row at the same address.
+    // A beacon without a machineId never mints a fresh row.
     if (isBlank(server.machineId) && refreshKnownBox(server)) { return; }
 
     const QString id = idForServer(server);
@@ -145,7 +135,6 @@ void ConnectionStore::rememberSatellite(const models::DiscoveredServer& server) 
     row.pairPort = server.pairPort;
     row.httpPort = server.httpPort;
     row.machineId = server.machineId;
-    // Idempotent: an identical row is not re-written.
     if (!existing.has_value() || *existing != row) { satellites_->put(id, row); }
 }
 
@@ -175,8 +164,8 @@ void ConnectionStore::refreshFromDiscovery(const QList<models::DiscoveredServer>
 void ConnectionStore::forgetSatellite(const QString& id) {
     // Pin is keyed by IP; drop it via the row's IP before the row goes.
     if (const auto row = satellites_->get(id)) { pins_->forget(row->ip); }
-    // Key removed BEFORE the row so a crash mid-forget leaves a re-pairable row,
-    // not an orphaned key.
+    // Key before row: a crash mid-forget then leaves a re-pairable row rather
+    // than an orphaned key.
     keys_->remove(id);
     satellites_->remove(id);
 }

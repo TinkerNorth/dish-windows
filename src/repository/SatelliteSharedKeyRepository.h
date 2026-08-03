@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// SatelliteSharedKeyRepository — per-satellite pairing-key store.
-//
-// Stores the hex pairing key established during pairing, under the
+// SatelliteSharedKeyRepository — per-satellite pairing-key store, under the
 // "satellite_shared_key:<id>" namespace of the shared connection-store
-// QSettings. Dumb synchronous storage with one std::mutex; no Observables
-// inside. The session manager reads the key to derive a session key; identity
-// consolidation migrates it across address/identity changes without a re-pair.
-// Mirrors dish-android repository/SatelliteSharedKeyRepository.kt.
+// QSettings. The session manager reads the key to derive a session key.
 //
-// Co-tenants the cert-pin repo and remembered list in one QSettings file; kept
-// disjoint by key prefix. all()/clear() touch only this repo's prefix, so a
-// shared key never leaks into the pin namespace and clear() preserves siblings.
+// The key is stored as PLAINTEXT HEX in the user's registry hive, with no DPAPI
+// wrap. That is a documented, deliberate trade-off — see PRIVACY.md and
+// SECURITY.md before changing it.
+//
+// Co-tenants the cert-pin repo and remembered list in one QSettings file, kept
+// disjoint by key prefix, so all()/clear() must stay prefix-scoped: a shared key
+// must never leak into the pin namespace.
 
 #pragma once
 
