@@ -133,6 +133,13 @@ jobs:
           format: spdx-json
           artifact-name: dish-windows-sbom.spdx.json
           output-file: dish-windows.spdx.json
+          # Off because the action's attach path re-downloads its own artifact
+          # over the REST API, which needs an actions: read scope this job
+          # deliberately does not grant ("Resource not accessible by
+          # integration"). Redundant anyway: the publish step below ships
+          # dish-windows.spdx.json as a release asset, unzipped and covered by
+          # SHA256SUMS, which the action's zipped attach is neither.
+          upload-release-assets: false
 
       # Manifest of the bundle's contents, shipped inside the zip. Paths are
       # relative to the bundle root: windeployqt lays plugins out in
