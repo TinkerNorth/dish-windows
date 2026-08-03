@@ -1,24 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Controllers destination — the inventory of pads (design v3 "S09 ·
-// Controllers"): everything that belongs to the DEVICE, nothing that belongs to
-// a binding. `Bind…`, `Emulate…` and `Unbind` are gone; all three write a
-// binding, so all three live on Home and in the setup wizard. The card's one
-// binding-aware element is the `Bound · <host> ›` readout that hands off to the
-// binding editor — an unbound pad prints a mono `not bound` and offers no
-// control at all.
-//
-// Two v3 rules shape the content. Absence is DRAWN, never merely missing: a pad
-// with no gyro renders the outlined `No gyro` chip at full opacity rather than
-// nothing. And colour carries live-vs-idle only — the `~` marks a derived
-// figure, so an estimated rate on a live wire still reads live.
-//
-// Every value binds the frozen App contract; no business logic lives here.
+// The Controllers destination — the inventory of pads: everything that belongs
+// to the DEVICE, nothing that belongs to a binding. Binding writes all live on
+// Home and in the setup wizard; the card's one binding-aware element is the
+// `Bound · <host> ›` hand-off into the binding editor.
 
-// Bound so the slot delegate references the outer `page` id and its `required`
-// model props statically. `App` stays unqualified: a runtime context property
-// the linter cannot resolve (the accepted limitation every page notes).
+// Bound: the slot delegate references the outer `page` id and its `required`
+// model props statically.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -31,29 +20,24 @@ Kit.Page {
     id: page
     title: qsTr("Controllers")
 
-    // ---- Shell header contract (rendered by AppShell, not by this body).
-    // Counts come from the one shared surface so two headers can never
-    // disagree; this page owns only the wording.
+    // Rendered by AppShell, not by this body; the page owns only the wording.
     readonly property string headerTitle: qsTr("Controllers")
-    // Two counts, so each half is its own %n message joined by the shared "·".
+    // Each half is its own %n message: plural forms do not survive a join.
     readonly property string headerSub: qsTr("%n connected", "", App.slotCount)
                                         + " · " + qsTr("%n bound", "", App.boundSlotCount)
     readonly property string headerDot: App.slotCount > 0 ? "success" : "muted"
 
-    // The enclosing shell StackView, type-erased through `var` so the shell's
-    // dynamic `shellApi` resolves without lint warnings.
+    // var-typed so the shell's dynamic `shellApi` resolves without lint warnings.
     readonly property var shellStack: StackView.view
     readonly property var shellApi: shellStack ? shellStack.shellApi : null
 
-    // At or under this charge the battery pill turns amber (the design draws
-    // 18 % as the low case).
+    // At or under this charge the battery chip turns amber.
     readonly property int batteryLowLevel: 20
 
-    // LiveStat owns the rate formatter — nothing else in the app formats a
-    // rate — so the composed meta line borrows this instance.
+    // LiveStat owns the one rate formatter in the app; the composed meta line
+    // borrows this instance for it.
     Kit.LiveStat { id: rateFormat; visible: false }
 
-    // ---- Empty state --------------------------------------------------------
     // Centred in the content viewport: the wrapper spans the ScrollView's
     // height, and with the list hidden it is the only laid-out child.
     Item {
@@ -69,8 +53,7 @@ Kit.Page {
             body: qsTr("Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.")
             actionText: qsTr("Open Connections")
             showAction: true
-            // Destination 2 is the Connections rail entry (AppShell order —
-            // Home / Controllers / Connections).
+            // Destination 2 is Connections (AppShell rail order).
             onActionRequested: if (page.shellApi) page.shellApi.selectDestination(2)
         }
     }
@@ -81,7 +64,6 @@ Kit.Page {
         width: parent.width
         spacing: Tokens.s5
 
-        // ---- CONNECTED ------------------------------------------------------
         RowLayout {
             Layout.fillWidth: true
             spacing: Tokens.s4
@@ -91,9 +73,7 @@ Kit.Page {
             Kit.LiveStat { text: qsTr("%n connected", "", App.slotCount) }
         }
 
-        // One card per attached pad. The list is content-sized and inert: the
-        // page's single scroller owns all overflow, and the model's scoped
-        // dataChanged keeps a moving Hz value from resetting the view.
+        // Content-sized and inert: the page's single scroller owns all overflow.
         ListView {
             id: slotList
             Layout.fillWidth: true
@@ -106,7 +86,6 @@ Kit.Page {
                 id: card
                 width: ListView.view ? ListView.view.width : implicitWidth
 
-                // Slot roles this card consumes (contract §2 + §7.2).
                 required property string slotId
                 required property string name
                 required property bool bound
@@ -129,8 +108,6 @@ Kit.Page {
                 required property bool motionHzShown
                 required property int pollHz
                 required property bool pollHzShown
-                // USB input-path roles. The two segments reflect these; picking
-                // one forwards the wire token to App.setSlotPath.
                 required property string pathPhase
                 required property string desiredPath
                 required property bool pathSupported
@@ -145,23 +122,20 @@ Kit.Page {
                                  ? qsTr("%1, bound to %2").arg(card.name).arg(card.boundLabel)
                                  : qsTr("%1, not bound").arg(card.name)
 
-                // The bands are evenly spaced by the layout, and an invisible
-                // band costs nothing: a Qt layout skips hidden items and their
-                // spacing, so the registering variant really does replace the
-                // card rather than leaving a gap where it was.
+                // A Qt layout skips hidden items AND their spacing, so the
+                // registering variant really replaces the card rather than
+                // leaving a gap where the other bands were.
                 contentItem: ColumnLayout {
                     spacing: Tokens.s5
 
-                    // ── Registering: the busy variant replaces every band ────
                     RowLayout {
                         visible: card.registering
                         Layout.fillWidth: true
                         spacing: Tokens.s6
 
                         Kit.BrandGlyph {
-                            // The shipped `*-animated` files carry no <animate>
-                            // element, so the transient is the bar below, not
-                            // the glyph.
+                            // The shipped `*-animated` SVGs carry no <animate>
+                            // element, so the bar below is the transient.
                             glyph: "dish"
                             Layout.preferredWidth: Tokens.glyphLg
                             Layout.preferredHeight: Tokens.glyphLg
@@ -192,7 +166,6 @@ Kit.Page {
                         Layout.fillWidth: true
                     }
 
-                    // ── Band 1: dot · name · meta · binding readout ──────────
                     RowLayout {
                         visible: !card.registering
                         Layout.fillWidth: true
@@ -211,16 +184,12 @@ Kit.Page {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
                         }
-                        // The name owns the row's slack, so a long device name
-                        // elides instead of shoving the readout off the card.
                         Kit.LiveStat {
                             live: card.live
                             text: page.metaText(card)
                             Layout.alignment: Qt.AlignVCenter
                         }
 
-                        // The card's ONLY binding-aware control: the hand-off
-                        // into the binding editor.
                         Kit.DishButton {
                             visible: card.bound
                             text: qsTr("Bound · %1 ›").arg(card.boundLabel)
@@ -229,7 +198,6 @@ Kit.Page {
                             Layout.alignment: Qt.AlignVCenter
                             onClicked: page.openBindingEditor(card.slotId)
                         }
-                        // Unbound pads have no such row — you bind from Home.
                         Kit.LiveStat {
                             visible: !card.bound
                             text: qsTr("not bound")
@@ -237,14 +205,11 @@ Kit.Page {
                         }
                     }
 
-                    // ── Band 2: capability chips + battery + rate readouts ───
                     Flow {
                         visible: !card.registering
                         Layout.fillWidth: true
                         spacing: Tokens.s3
 
-                        // Absence is drawn: the negated chip renders outlined at
-                        // full opacity, never hidden.
                         Kit.CapabilityChip {
                             text: card.hasMotion ? qsTr("Gyro") : qsTr("No gyro")
                             tone: card.hasMotion ? Kit.CapabilityChip.Present
@@ -255,17 +220,16 @@ Kit.Page {
                             tone: card.hasTouchpad ? Kit.CapabilityChip.Present
                                                    : Kit.CapabilityChip.Absent
                         }
-                        // Lightbar is named only when the pad has an RGB LED —
-                        // "no lightbar" is the normal case, not a finding.
+                        // Named only when present: "no lightbar" is the normal
+                        // case, not a finding.
                         Kit.CapabilityChip {
                             visible: card.hasLightbar
                             text: qsTr("Lightbar")
                             tone: Kit.CapabilityChip.Present
                         }
-                        // Battery only once a real reading landed (255 is
-                        // unknown — that is what batteryKnown is for). On a
-                        // Bluetooth pad the status-4 reading is the HOST battery
-                        // substitute and would contradict the wireless link.
+                        // On a Bluetooth pad a status-4 ("wired") reading is the
+                        // HOST battery substitute, and would contradict the
+                        // wireless link — drop it rather than show it.
                         Kit.CapabilityChip {
                             visible: card.batteryKnown
                                      && !(card.bluetooth && card.batteryStatus === 4)
@@ -274,8 +238,6 @@ Kit.Page {
                                   ? Kit.CapabilityChip.Low : Kit.CapabilityChip.Neutral
                         }
 
-                        // Rate readouts. Colour carries live-vs-idle; the `~`
-                        // inside the text carries measured-vs-derived.
                         Kit.LiveStat {
                             visible: card.motionHzShown
                             live: card.live
@@ -288,7 +250,6 @@ Kit.Page {
                         }
                     }
 
-                    // ── Band 3: device actions · the input-path control ──────
                     RowLayout {
                         visible: !card.registering
                         Layout.fillWidth: true
@@ -310,9 +271,8 @@ Kit.Page {
 
                         Item { Layout.fillWidth: true }
 
-                        // Hidden entirely — never disabled — for a pad the
-                        // raw-HID path cannot claim; a Bluetooth pad is never
-                        // path-supported.
+                        // Hidden entirely, never disabled, for a pad the raw-HID
+                        // path cannot claim (a Bluetooth pad never can).
                         Kit.Eyebrow {
                             visible: card.pathSupported
                             mutedTone: true
@@ -337,7 +297,6 @@ Kit.Page {
                         }
                     }
 
-                    // ── Band 4: what the path is doing, in words ─────────────
                     // Every path failure is an inline reason. Never a toast.
                     RowLayout {
                         visible: !card.registering && card.pathSupported
@@ -374,7 +333,6 @@ Kit.Page {
         }
     }
 
-    // ---- Telemetry footer ---------------------------------------------------
     // Pinned outside the scroller so it holds while the slot list moves.
     footer: Item {
         implicitHeight: telemetryRow.implicitHeight + Tokens.s8
@@ -403,8 +361,6 @@ Kit.Page {
         }
     }
 
-    // ---- Navigation ---------------------------------------------------------
-
     function openBindingEditor(slotId) {
         if (!page.shellApi)
             return;
@@ -412,8 +368,7 @@ Kit.Page {
                                  qsTr("Configure binding"), { slotId: slotId });
     }
 
-    // The raw-joystick remap detail. It needs slotId / slotName BEFORE load,
-    // which is exactly what pushDetail's initial-property map is for.
+    // Needs slotId / slotName BEFORE load — pushDetail's initial-property map.
     function openRemap(slotId, slotName) {
         if (!page.shellApi)
             return;
@@ -429,10 +384,6 @@ Kit.Page {
                                  qsTr("Dead zones & motion"), {});
     }
 
-    // ---- Helpers (presentation only; wording owned by this page) ------------
-
-    // The mono meta beside the name: transport, then the report rate when one
-    // is known. `~` marks a derived figure; the colour is live-vs-idle.
     function metaText(row) {
         var parts = [];
         parts.push(row.bluetooth ? qsTr("Bluetooth") : qsTr("USB"));
@@ -444,23 +395,19 @@ Kit.Page {
         return parts.join(" · ");
     }
 
-    // Battery wording (contract §2: 2=charging, 3=full, 4=wired; batteryKnown
-    // already gates the unknown 255 out).
+    // Wire status codes: 2=charging, 3=full, 4=wired.
     function batteryLabel(level, status) {
         if (status === 4) { return qsTr("Battery wired"); }
         if (status === 2) { return qsTr("Battery %1% ↑").arg(level); }
         if (status === 3) { return qsTr("Battery full"); }
         return qsTr("Battery %1%").arg(level);
     }
-    // Low = the pack is at or under the threshold and not charging.
     function batteryLow(level, status) {
         return level <= page.batteryLowLevel && status !== 2;
     }
 
-    // The inline note beside the path segments for the non-happy FSM states.
-    // The phase drives the needs-replug / restore-stuck lines (warning); a
-    // directFailure token drives the failure-reason line (error). Empty for the
-    // steady routed / direct / claiming states.
+    // The inline note for the non-happy path states; empty for the steady
+    // routed / direct / claiming ones.
     function pathNoteText(phase, failure) {
         if (phase === "needsReplug") {
             return qsTr("Unplug and replug the controller to finish switching.");
@@ -482,8 +429,7 @@ Kit.Page {
         }
         return "";
     }
-    // The phase notes are warning-toned; only a claim-failure reason (with no
-    // phase note taking precedence) reads in the error tone.
+    // Phase notes are warning-toned; only a claim failure reads as an error.
     function pathNoteIsError(phase, failure) {
         return phase !== "needsReplug" && phase !== "restoreStuck"
                && failure.length > 0;

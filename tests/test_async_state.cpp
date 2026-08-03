@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Exhaustive pure tests for core/AsyncState.h — the canonical Idle/Loading/
-// Success/Error container. Pins every transition, the stale-while-revalidate
-// data retention, and the ==/distinct-until-changed equality the Observable
-// relies on. Qt-free, like the type under test.
 
 #include "core/AsyncState.h"
 
@@ -24,8 +19,8 @@ using dish::core::toSuccess;
 
 namespace {
 
-// A typed reason enum stands in for the per-flow error codes real callers use
-// (CatalogError, PairFailure, …) — proves AsyncState carries reasons AS DATA.
+// Stands in for the per-flow error codes real callers use (CatalogError,
+// PairFailure), so the reason travels as data rather than as a string.
 enum class FetchError { Unreachable, ServerError, Malformed };
 
 using IntState = AsyncState<int, FetchError>;

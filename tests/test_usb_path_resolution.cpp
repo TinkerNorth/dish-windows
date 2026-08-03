@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// UsbPathResolutionTest (PURE, 4). 1:1 port of dish-android source/usb/
-// UsbPathResolutionTest.kt — the path-resolution policy lifted out of the
-// coordinator so each branch is checkable directly. An explicit stored pick
-// always wins; absent one, auto-Direct ONLY a verified fast-lane model with no
-// prior failure; everything else (unknown model / a model that just failed)
-// defaults to Standard.
 
 #include "core/reducer/UsbPathMachine.h"
 

@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ConnectionListModel — the QAbstractListModel adapter over the derived
-// connection-row list (composer::ConnectionRow) the QML Connections page binds
-// to. These tests pin the ADAPTER: roleNames coverage, row-count tracking,
-// data() per role (including the pre-mapped render-key tokens), and the minimal
-// change signals on a count delta vs. an in-place patch. The model is driven
-// directly with hand-built ConnectionRow vectors (the same value the
-// ConnectionCoordinator's composer emits); no live network is stood up.
+// The model is driven with hand-built ConnectionRow vectors, the same value the
+// ConnectionCoordinator's composer emits. No live network is stood up.
 
 #include "core/reducer/ConnectionRows.h"
 #include "qml/ConnectionListModel.h"
@@ -24,8 +19,7 @@ namespace rd = dish::reducer;
 
 namespace {
 
-// QSignalSpy stand-in (DishTests links Catch2, not Qt6::Test). Counts the
-// rows-changed signals and records the last insert/remove span.
+// QSignalSpy stand-in: DishTests links Catch2, not Qt6::Test.
 struct RowSpy {
     int inserts = 0;
     int removes = 0;
@@ -125,8 +119,7 @@ TEST_CASE("ConnectionListModel: data maps a connected row's roles + tokens", "[c
     REQUIRE(roleOf(model, 0, ConnectionListModel::GlyphRole).toString() == "satelliteConnected");
     REQUIRE(roleOf(model, 0, ConnectionListModel::BoundSlotIdRole).toString() == "slot-1");
     REQUIRE(roleOf(model, 0, ConnectionListModel::LiveLinkRole).toBool());
-    // The latency readout is pre-formatted by the pure core helper so both UIs
-    // render the identical figure; the sample count gates + captions it.
+    // Pre-formatted by the pure core helper so both UIs render the same figure.
     REQUIRE(roleOf(model, 0, ConnectionListModel::LatencyTextRole).toString() == "~3.4 ms");
     REQUIRE(roleOf(model, 0, ConnectionListModel::LatencySamplesRole).toInt() == 64);
 }
@@ -141,8 +134,7 @@ TEST_CASE("ConnectionListModel: a saved row maps offline tokens + a non-live lin
     REQUIRE(roleOf(model, 0, ConnectionListModel::GlyphRole).toString() == "satelliteOff");
     REQUIRE(roleOf(model, 0, ConnectionListModel::BoundSlotIdRole).toString().isEmpty());
     REQUIRE_FALSE(roleOf(model, 0, ConnectionListModel::LiveLinkRole).toBool());
-    // No live session -> no samples -> the latency text stays empty (the QML
-    // caption additionally gates on linkState === "connected").
+    // No samples, so no text; the QML caption also gates on linkState.
     REQUIRE(roleOf(model, 0, ConnectionListModel::LatencyTextRole).toString().isEmpty());
     REQUIRE(roleOf(model, 0, ConnectionListModel::LatencySamplesRole).toInt() == 0);
 }
@@ -195,9 +187,8 @@ TEST_CASE("ConnectionListModel: a same-count chip change emits dataChanged, not 
 
 TEST_CASE("ConnectionListModel: countChanged fires on a row-count delta, not a same-count patch",
           "[connmodel][signals]") {
-    // The reactive `count` property (the bind-button enable rule reads it) must
-    // re-emit only when the row count actually moves — an in-place patch (same
-    // count, new state) must NOT, or QML re-evaluates the gate needlessly.
+    // The bind-button enable rule binds to `count`, so an in-place patch must
+    // not re-emit it or QML re-evaluates the gate needlessly.
     ConnectionListModel model;
     model.setRows({savedRow()});
 
@@ -205,18 +196,15 @@ TEST_CASE("ConnectionListModel: countChanged fires on a row-count delta, not a s
     QObject::connect(&model, &ConnectionListModel::countChanged,
                      [&countEmissions] { ++countEmissions; });
 
-    // Same count, different state -> dataChanged only, no countChanged.
     auto patched = savedRow();
     patched.live = rd::UiLinkState::Connected;
     model.setRows({patched});
     REQUIRE(countEmissions == 0);
 
-    // Row added -> countChanged.
     model.setRows({patched, connectedRow()});
     REQUIRE(countEmissions == 1);
     REQUIRE(model.count() == 2);
 
-    // Row removed -> countChanged again.
     model.setRows({patched});
     REQUIRE(countEmissions == 2);
     REQUIRE(model.count() == 1);

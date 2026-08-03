@@ -5,9 +5,7 @@
 
 #if defined(_WIN32)
 
-// <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
-// then dbghelp, which depends on the base Win32 types. <shlobj.h> for the
-// Known-Folder lookup of %LOCALAPPDATA%.
+// <windows.h> must precede dbghelp, which depends on the base Win32 types.
 #include <windows.h>
 
 #include <dbghelp.h>
@@ -26,20 +24,19 @@ namespace dish::crash {
 
 namespace {
 
-// Re-entry guard: if the handler itself faults (or a second thread crashes
-// while we're mid-write), bail rather than recurse into MiniDumpWriteDump.
+// If the handler itself faults, or a second thread crashes mid-write, bail
+// rather than recurse into MiniDumpWriteDump.
 LONG g_inHandler = 0;
 
-// The resolved crash directory (%LOCALAPPDATA%\Dish), filled once at install()
-// on the main thread while the heap/CRT are healthy, so the fault path only
-// concatenates fixed wide-char buffers — no allocation, no SHGetKnownFolderPath
-// from inside the filter.
+// Resolved once at install() while the heap and CRT are still healthy, so the
+// fault path only concatenates fixed buffers — no allocation, no
+// SHGetKnownFolderPath from inside the filter.
 wchar_t g_crashDir[MAX_PATH] = {0};
 wchar_t g_dumpPath[MAX_PATH] = {0};
 wchar_t g_logPath[MAX_PATH] = {0};
 bool g_pathsReady = false;
 
-// Append a NUL-terminated wide string to dst (bounded). Tiny, allocation-free.
+// Bounded, allocation-free append.
 void wappend(wchar_t* dst, size_t cap, const wchar_t* src) {
     const size_t cur = wcslen(dst);
     for (size_t i = 0; cur + i + 1 < cap && src[i] != L'\0'; ++i) {
@@ -56,7 +53,6 @@ void buildPaths() {
         wappend(g_crashDir, MAX_PATH, L"\\Dish");
         CoTaskMemFree(base);
     } else {
-        // Fallback to the current directory if the Known Folder lookup fails.
         wappend(g_crashDir, MAX_PATH, L".\\Dish");
     }
     CreateDirectoryW(g_crashDir, nullptr); // ignore "already exists"
@@ -68,7 +64,7 @@ void buildPaths() {
     g_pathsReady = true;
 }
 
-// Best-effort raw file write — opens, appends, closes. No CRT, no Qt, no heap.
+// Best-effort, and no CRT / Qt / heap, so it is callable from the filter.
 void writeAll(HANDLE file, const char* data, DWORD len) {
     DWORD written = 0;
     while (written < len) {
@@ -79,7 +75,7 @@ void writeAll(HANDLE file, const char* data, DWORD len) {
 }
 void writeStr(HANDLE file, const char* s) { writeAll(file, s, static_cast<DWORD>(std::strlen(s))); }
 
-// Format an unsigned 64-bit value as hex into buf ("0x...."). Returns buf.
+// "0x" + 16 digits + NUL, hence the 19-byte minimum.
 const char* hex64(std::uint64_t v, char* buf, size_t cap) {
     static const char digits[] = "0123456789abcdef";
     if (cap < 19) {

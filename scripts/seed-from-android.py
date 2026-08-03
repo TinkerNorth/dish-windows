@@ -42,10 +42,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# Qt orders <numerusform> by the target language's plural rules. For the two
-# form languages that is [singular, plural]; Bosnian carries the Slavic paucal
-# and needs a third slot for 2-4. tests/test_translations.cpp asserts this
-# ordering against the compiled .qm rather than trusting the table.
+# Qt orders <numerusform> by the target language's plural rules; Bosnian needs
+# a third slot for the Slavic paucal (2-4). tests/test_translations.cpp asserts
+# this ordering against the compiled .qm rather than trusting the table.
 NUMERUS_ORDER = {
     "bs": ["one", "few", "other"],
     "de": ["one", "other"],
@@ -64,12 +63,12 @@ LOCALES = {
     "pt_BR": "values-pt-rBR",
 }
 
-# Qt numerus source text -> (android plurals name, placeholder mapping).
-# The mapping lists which Qt placeholder each Android positional argument
-# becomes: "n" is the %n count, "1" is Qt's %1, and so on.
+# Qt numerus source text -> (android plurals name, placeholder mapping). The
+# mapping says which Qt placeholder each Android positional argument becomes:
+# "n" is the %n count, "1" is Qt's %1.
 PLURAL_MAP = {
-    # Android's status_remembered is the same "how many hosts are saved" counter;
-    # both apps now spell it "paired" after the LinkState vocabulary alignment.
+    # Android still calls this counter status_remembered; both apps spell it
+    # "paired" in the UI.
     "%n paired": ("status_remembered", {"1": "n"}),
     "%1 of %n online": ("status_connected_of", {"1": "1", "2": "n"}),
 }
@@ -80,10 +79,9 @@ def normalise(text: str) -> str:
     text = html.unescape(text)
     # Android escapes apostrophes and quotes inside XML text; Qt does not.
     text = text.replace("\\'", "'").replace('\\"', '"').replace("\\n", "\n")
-    # Android's literal percent is %%; Qt's is %%.
+    # A literal percent is "%%" on Android and a bare "%" in Qt.
     text = text.replace("%%", "%")
-    # Both placeholder dialects collapse to {k} so wording can be compared
-    # without the argument syntax getting in the way.
+    # Collapse both placeholder dialects to {k} so only the wording is compared.
     text = re.sub(r"%(\d+)\$[sd]", r"{\1}", text)
     text = re.sub(r"%(\d+)", r"{\1}", text)
     text = re.sub(r"\s+", " ", text)
@@ -126,14 +124,13 @@ def load_android(res_dir: Path, qualifier: str) -> tuple[dict, dict]:
 def seed(ts_path: Path, locale: str, base: dict, tr: dict,
          base_plurals: dict, tr_plurals: dict, dry_run: bool) -> tuple[int, list]:
     """Fill untranslated messages in one .ts from the Android maps."""
-    # Index Android's English by normalised text so a Qt source can find it.
     by_english: dict[str, str] = {}
     collisions: set[str] = set()
     for name, english in base.items():
         key = normalise(english)
         if key in by_english and by_english[key] != name:
-            # Two Android resources with identical English. Either translation
-            # is defensible, so refuse to pick and let the translator decide.
+            # Two Android resources, identical English. Either translation is
+            # defensible, so refuse to pick and leave it to the translator.
             collisions.add(key)
         by_english[key] = name
 
@@ -172,7 +169,6 @@ def seed(ts_path: Path, locale: str, base: dict, tr: dict,
                 if text is None:
                     break
                 text = html.unescape(text).replace("\\'", "'")
-                # Rewrite each Android argument to the Qt slot it maps to.
                 for android_idx, qt_slot in argmap.items():
                     text = re.sub(rf"%{android_idx}\$[sd]", f"%{qt_slot}", text)
                 rendered.append(re.sub(r"\s+", " ", text).strip())
@@ -189,7 +185,7 @@ def seed(ts_path: Path, locale: str, base: dict, tr: dict,
             seeded += 1
             continue
 
-        # Non-numerus: skip anything already carrying text.
+        # A local translation always wins over the importer.
         if (target.text or "").strip():
             continue
         key = normalise(source)
@@ -209,8 +205,8 @@ def seed(ts_path: Path, locale: str, base: dict, tr: dict,
         seeded += 1
 
     if not dry_run and seeded:
-        # ElementTree drops the doctype Qt writes; put it back so the file stays
-        # a valid .ts. lupdate rewrites the formatting canonically afterwards.
+        # ElementTree drops the doctype, so put it back or the file stops being
+        # a valid .ts. lupdate re-canonicalises the formatting afterwards.
         body = ET.tostring(tree.getroot(), encoding="unicode")
         ts_path.write_text(
             '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE TS>\n' + body + "\n",

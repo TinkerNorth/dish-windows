@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Wizard page 5 — Review and bind. Read the whole wire back, then commit it in
-// ONE call.
-//
-// Every slot in the banner is filled and the wire is still dashed: the banner
-// is the review, and this card is only the part the banner cannot draw — what
-// the wire carries in each direction, with the absent capabilities still named.
-//
-// Bind is the first and only write in the flow. Pages 1-4 called no setter, so
-// everything the user decided travels here, in App.applyBinding(), and the
-// surface stays open on failure with the draft intact.
+// Wizard page 5 — Review and bind. The banner IS the review; this card is only
+// what the banner cannot draw — what the wire carries in each direction, absent
+// capabilities still named. Bind is the first and only write in the flow: pages
+// 1-4 call no setter, and the surface stays open on failure, draft intact.
 
 // Bound: the chip delegates read the outer `page` id alongside their modelData.
 pragma ComponentBehavior: Bound
@@ -32,8 +26,8 @@ ColumnLayout {
     readonly property string primaryLabel: qsTr("Bind")
     readonly property string hint: qsTr("This is the first thing that is sent.")
 
-    // The one write. It returns false so the wizard does not step: the apply
-    // overlay owns the screen from here, and the outcome decides what happens.
+    // Returns false so the wizard does not step: the apply overlay owns the
+    // screen from here, and the outcome decides what happens.
     function primaryActivated() {
         App.applyBinding(page.draft.slotId, page.draft.hostId, page.draft.type,
                          page.draft.desiredPath, page.draft.motionOn, page.draft.rumbleOn,
@@ -49,17 +43,18 @@ ColumnLayout {
     // `revision` is read so the solver re-runs when the draft moves.
     readonly property var solved: page.draft.revision >= 0 ? page.draft.capabilityRows() : []
 
+    // Bumped to re-run the host accounting below: an invokable call is not a
+    // binding dependency.
     property int accounting: 0
 
-    // The pad this host would push off to make room, or "" when it has room.
     readonly property string displacedPad: page.accounting >= 0
                                          ? App.displacedSlotName(page.draft.hostId) : ""
 
     readonly property var sendChips: page.buildChips(["gamepad", "motion", "touchpad", "mouse"])
     readonly property var getChips: page.buildChips(["rumble", "lightbar"])
 
-    // The banner's wire suffix: what actually rides the wire, in the app's own
-    // lowercase telemetry voice ("as Xbox 360 · rumble").
+    // The banner's wire suffix, in the app's lowercase telemetry voice
+    // ("as Xbox 360 · rumble").
     readonly property string extrasSummary: {
         const parts = [];
         if (page.verdictOf("rumble") === "available")

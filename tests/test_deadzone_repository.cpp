@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// DeadzoneRepository tests (Workstream 2d) + the Wave 0 RepositoryContract.
-// Pins the per-device deadzone profile store: per-device round-trip, durability
-// across a fresh repo over the same store, selective remove, namespace
-// isolation from the co-tenant pin/shared-key namespaces, and corrupt-blob
-// resilience (a garbled value for one device reads back as absent, not a crash).
 
 #include "repository/DeadzoneRepository.h"
 #include "repository/SatellitePinRepository.h"
@@ -84,7 +78,6 @@ TEST_CASE("clear wipes only the deadzone namespace", "[deadzone]") {
     deadzones.clear();
 
     CHECK_FALSE(deadzones.deadzonesFor("pad-1").has_value());
-    // The co-tenant pin survives the deadzone clear.
     CHECK(pins.pinnedFingerprint("satellite:mid:x") == QStringLiteral("CAFE"));
 }
 
@@ -93,17 +86,14 @@ TEST_CASE("a deadzone does not leak into the sibling pin namespace", "[deadzone]
     DeadzoneRepository deadzones(store);
     SatellitePinRepository pins(store);
     deadzones.setDeadzones("pad-1", {4000, 10});
-    // The pin repo, keyed by the same string, must NOT surface the deadzone blob.
     CHECK_FALSE(pins.pinnedFingerprint("pad-1").has_value());
 }
 
 TEST_CASE("a corrupt stored value reads back as absent, not a crash", "[deadzone]") {
     auto store = makeSharedSettings();
-    // Write garbage directly under the deadzone key for a device.
     store->setValue(QStringLiteral("deadzone:pad-1"), QByteArrayLiteral("{not json"));
     DeadzoneRepository repo(store);
     CHECK_FALSE(repo.deadzonesFor("pad-1").has_value());
-    // all() skips the corrupt entry rather than throwing.
     CHECK(repo.all().empty());
 }
 
@@ -111,7 +101,7 @@ TEST_CASE("keyOf returns the entry's device id", "[deadzone]") {
     DeadzoneRepository repo(makeSharedSettings());
     const DeadzoneEntry e{"pad-7", 1234, 7};
     CHECK(repo.keyOf(e) == QStringLiteral("pad-7"));
-    // The value-overload put(value) routes through keyOf.
+    // The value overload of put() routes through keyOf.
     repo.put(e);
     CHECK(repo.deadzonesFor("pad-7")->stickFlat == 1234);
 }

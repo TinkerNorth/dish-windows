@@ -41,10 +41,6 @@ void GamepadInputProcessor::publish(const DeviceId& id, const DeviceState& state
         ++telEvents_;
         ++telSends_;
         ++telTotalSent_;
-        // Bump the per-device gamepad live-rate counter under the lock we're
-        // already holding — allocation-free after the first event (the node is
-        // reused), no new lock on the send path. The InputRateStore samples this
-        // ~1 Hz to derive the displayed gamepad Hz.
         rateCounters_[id].gamepad.fetch_add(1, std::memory_order_relaxed);
         snapshot = sender_;
     }
@@ -75,9 +71,6 @@ void GamepadInputProcessor::remove(const DeviceId& id) {
     states_.erase(id);
     deadzones_.erase(id);
     lastMotionUs_.erase(id);
-    // Drop the live-rate counters too, so a device that re-attaches under the
-    // same id starts its counter from 0 and the tracker re-baselines cleanly
-    // rather than seeing a counter that appears to leap forward.
     rateCounters_.erase(id);
 }
 
@@ -98,28 +91,20 @@ bool GamepadInputProcessor::publishMotionAt(const DeviceId& id, const MotionSamp
         std::lock_guard<std::mutex> lock(mtx_);
         MotionGate& gate = lastMotionUs_[id];
         if (gate.hasEmitted && nowUs - gate.lastUs < kMotionMinIntervalUs) {
-            // Inside the rate-limit window — drop. Deliberately do NOT update
-            // `gate`; otherwise a hot stream of dropped samples would push the
-            // gate forward and starve the legitimate sender for longer than
-            // one period.
+            // Deliberately do NOT advance `gate`: a hot stream of dropped
+            // samples would push it forward and starve the sender for longer
+            // than one period.
             return false;
         }
-        // `deltaUs` is reported relative to the previous *emitted* packet,
-        // not the previous attempt — that's what the receiver wants for
-        // accurate inter-arrival timing. uint32 overflow is bounded by
-        // the spec's documented 32-bit range (~71 minutes). On the very
-        // first emission (`hasEmitted` false) delta stays 0 — the spec's
-        // first-packet sentinel — regardless of what the clock reads.
+        // Relative to the previous *emitted* packet, not the previous attempt,
+        // so the receiver gets true inter-arrival timing. Delta stays 0 on the
+        // first emission — the wire spec's first-packet sentinel.
         if (gate.hasEmitted) {
             const std::uint64_t d = nowUs - gate.lastUs;
             deltaUs = (d > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : static_cast<std::uint32_t>(d);
         }
         gate.lastUs = nowUs;
         gate.hasEmitted = true;
-        // Count only forwarded motion samples (we got past the rate-limit gate),
-        // matching what actually reaches the wire — counting dropped attempts
-        // would over-report a stream the gate is throttling. Same already-held
-        // lock; no new lock on the send path.
         rateCounters_[id].motion.fetch_add(1, std::memory_order_relaxed);
         snapshot = motionSender_;
     }
@@ -138,9 +123,6 @@ void GamepadInputProcessor::publishMotion(const DeviceId& id, const MotionSample
 }
 
 void GamepadInputProcessor::publishBattery(const DeviceId& id, const BatterySample& sample) {
-    // Pure pass-through — no coalescing. MSG_BATTERY is a fixed 30 s
-    // heartbeat, so an unchanged sample must still reach the wire; the SDL
-    // bridge's 30 s poll gate is what bounds the rate.
     BatterySender snapshot;
     {
         std::lock_guard<std::mutex> lock(mtx_);
@@ -171,9 +153,8 @@ GamepadInputProcessor::TelemetrySnapshot GamepadInputProcessor::drainTelemetry()
     return snap;
 }
 
-// These three forward to the pure, host-testable core/input layer (Workstream
-// 2d extracted the arithmetic there). They stay declared on this header so the
-// processor's existing callers + tests keep their call sites unchanged.
+// Thin forwarders to the pure core/input layer, kept so existing call sites
+// stay unchanged.
 std::int16_t scaleAxis(float v, float maxMagnitude) { return deadzone::scaleAxis(v, maxMagnitude); }
 
 std::uint8_t scaleTrigger(float v) { return deadzone::scaleTrigger(v); }

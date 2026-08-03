@@ -9,9 +9,8 @@ namespace dish::composer {
 
 namespace {
 
-// Map the wire-level net::SessionState onto the Qt-free presence enum the pure
-// mappers consume. One-to-one; kept at the Qt boundary so the composer/reducers
-// carry no Network dependency.
+// Kept at the Qt boundary so the composer and reducers carry no Network
+// dependency.
 reducer::SessionPresence presenceOf(net::SessionState state) {
     switch (state) {
     case net::SessionState::Idle:
@@ -36,16 +35,10 @@ ConnectionCoordinator::ConnectionCoordinator(net::WifiConnectionManager* wifi,
       bindings_({}), staleIds_({}) {
     composer_ = std::make_unique<ConnectionsComposer>(sessions_, remembered_, discoveredIds_,
                                                       bindings_, staleIds_);
-    // Bridge the composer's Observable to a Qt signal so existing QObject
-    // consumers can connect. The authoritative value stays connections().value().
     composerSub_ = composer_->state().subscribe(
         [this](const std::vector<ConnectionRow>&) { emit connectionsChanged(); },
         /*emitCurrent=*/false);
 
-    // Feed the upstreams from the manager's Qt signals. poolChanged fires on any
-    // per-connection state change (the manager forwards each WifiConnection's
-    // `changed`), so the sessions snapshot is rebuilt there; discoveredChanged
-    // drives discovery + remembered re-points.
     QObject::connect(wifi_, &net::WifiConnectionManager::poolChanged, this, [this] {
         refreshSessions();
         refreshRemembered();
@@ -54,19 +47,16 @@ ConnectionCoordinator::ConnectionCoordinator(net::WifiConnectionManager* wifi,
         refreshDiscovered();
         refreshRemembered();
     });
-    // The 1 s telemetry tick (latency readout) re-derives the sessions snapshot
-    // WITHOUT the poolChanged fan-out (hub/AppModel rebuilds): only the derived
-    // rows move, and the composer's distinct-until-changed passes just the real
-    // display changes through.
+    // The 1 s latency tick refreshes sessions WITHOUT the poolChanged fan-out
+    // (which re-runs the hub/AppModel rebuilds); distinct-until-changed then
+    // passes only the readouts that actually moved.
     QObject::connect(wifi_, &net::WifiConnectionManager::poolTelemetryChanged, this,
                      [this] { refreshSessions(); });
-    // ConnectionHub owns the binding table; its `changed` fires after a
-    // bind/unbind, so mirror the bindings upstream off it.
     QObject::connect(hub_, &net::ConnectionHub::changed, this,
                      &ConnectionCoordinator::refreshBindings);
 
-    // Eager initial population so a subscriber attached right after construction
-    // sees the current world (matching SharingStarted.Eagerly).
+    // Eager, so a subscriber attached right after construction sees the current
+    // world rather than waiting for the first signal.
     refreshSessions();
     refreshRemembered();
     refreshDiscovered();
@@ -90,13 +80,13 @@ void ConnectionCoordinator::refreshSessions() {
         s.name = server.name.toStdString();
         s.ip = server.ip.toStdString();
         s.udpPort = server.udpPort;
-        // Already display-rounded by the connection's alive-poll, so the
-        // snapshot's exact == keys distinct-until-changed on visible moves.
+        // Already display-rounded by the alive-poll, so exact == keys
+        // distinct-until-changed on visible moves only.
         s.latencyOneWayMs = conn->latencyOneWayMs();
         s.latencySamples = conn->latencySamples();
         next.push_back(std::move(s));
-        // A parked-Stale session also marks its id stale, so a remembered row at
-        // the same id reads "Needs pairing" even after the live row is gone.
+        // Mark the id stale too, so a remembered row at the same id keeps
+        // reading "Needs pairing" after the live row is gone.
         if (conn->state() == net::SessionState::Stale) {
             stale.push_back(conn->id().toStdString());
         }
@@ -156,28 +146,20 @@ std::optional<ConnectionRow> ConnectionCoordinator::summary(const std::string& i
 }
 
 void ConnectionCoordinator::bind(const QString& slotId, const QString& connectionId) {
-    // ConnectionHub owns the binding table + the descriptor-carrying attachSlot
-    // (it resolves the bound pad's type/caps via the capability fns AppModel
-    // installed). It emits `changed`, which mirrors the bindings upstream.
     hub_->bind(slotId, connectionId);
 }
 
 void ConnectionCoordinator::unbind(const QString& slotId) { hub_->unbind(slotId); }
 
 void ConnectionCoordinator::forgetConnection(const QString& connectionId) {
-    // Unbind any slot pointing at this connection first (drops the binding +
-    // detaches the satellite slot), then forget the host (row + key + pin).
-    // Mirrors android forgetConnection's unbind-then-forget ordering.
+    // Unbind before forgetting: the detach needs the host still on file.
     const auto bindings = hub_->bindings();
     for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
         if (it.value() == connectionId) { hub_->unbind(it.key()); }
     }
     wifi_->forget(connectionId);
-    // forget() only fires poolChanged when there was a LIVE connection to drop;
-    // a remembered-but-offline satellite leaves no pooled row, so the remembered
-    // upstream wouldn't otherwise re-read. Refresh both here so the forgotten
-    // row leaves the derived list immediately. (The composer recomputes once on
-    // the resulting upstream set; distinct-until-changed coalesces the pair.)
+    // forget() only fires poolChanged when there was a LIVE connection to drop,
+    // so a remembered-but-offline satellite would otherwise linger in the list.
     refreshRemembered();
     refreshSessions();
 }
@@ -185,20 +167,16 @@ void ConnectionCoordinator::forgetConnection(const QString& connectionId) {
 void ConnectionCoordinator::autoReconnectAll() { wifi_->autoReconnectAll(); }
 
 void ConnectionCoordinator::reconnectConnection(const QString& connectionId) {
-    // Prefer the freshest discovered endpoint if this satellite is in the
-    // current scan (same machineId id) — its IP is guaranteed current.
+    // A currently-discovered endpoint has a guaranteed-current IP, so prefer it.
     for (const auto& s : wifi_->discoveredServers()) {
         if (s.id() == connectionId) {
             wifi_->connectTo(s);
             return;
         }
     }
-    // Not in the current scan: kick a discovery pass so a moved box is relearned
-    // (the manager persists any new IP and re-attempts on scan completion), AND
-    // attempt the last-known persisted endpoint right now. The key persists (no
-    // PIN); if the box is still at its last address this connects immediately,
-    // and if it moved the scan-driven relearn picks it up — either way the user
-    // no longer has to manually rescan first. Mirrors ConnectionsDialog::onReconnectClicked.
+    // Otherwise do both: a discovery pass relearns a box that moved, and the
+    // last-known address is tried immediately in case it did not. Either way the
+    // user never has to rescan by hand.
     wifi_->startDiscovery();
     for (const auto& r : wifi_->remembered()) {
         if (r.id == connectionId) {
@@ -209,8 +187,6 @@ void ConnectionCoordinator::reconnectConnection(const QString& connectionId) {
 }
 
 void ConnectionCoordinator::disconnectConnection(const QString& connectionId) {
-    // Graceful teardown only — the remembered row + key stay. The pooled row
-    // flips to its post-disconnect presence on the resulting poolChanged.
     wifi_->disconnect(connectionId);
 }
 

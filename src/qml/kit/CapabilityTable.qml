@@ -1,22 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The four-layer capability matrix — the one place the vocabulary
-// "available = controller ∩ transport ∩ type ∩ host" is drawn. Two callers:
-// the wizard's type cards (compact) and Configure binding's WHAT CARRIES panel.
-//
-// `rows` is the QVariantList App.capabilityForCandidate() returns, each row
-// augmented by the CALLER with { name, why }. This component never asks the
-// domain anything — it takes rows and draws them.
-//
-// Two rules the mocks got wrong and this component fixes:
-//  * Every layer cell shows its TRUE state. The "name only the first failing
-//    layer" rule applies to the sentence, not the cells; a later failure drawn
-//    neutral reads as a pass, and the user fixes the wrong thing. The first
-//    failure is heavier instead.
-//  * A Pending row draws a dash in all four cells, never a cross. An
-//    unresolved catalog is "we do not know yet", and a guessed "unsupported"
-//    is worse than no table.
+// The four-layer capability matrix. Every layer cell shows its TRUE state: the
+// "name only the first failing layer" rule is for the sentence, not the cells —
+// a later failure drawn neutral reads as a pass and the user fixes the wrong
+// thing. A Pending row dashes all four cells; a guessed "unsupported" is worse
+// than no table.
 
 // Bound: the row delegate reads the outer `table` id and nests a cell Repeater.
 pragma ComponentBehavior: Bound
@@ -31,23 +20,21 @@ Item {
     //    hasFailingLayer, name, why }]
     property var rows: []
     property bool showHeader: true
-    // The wizard's type card: no per-row why line, tighter rows.
     property bool compact: false
 
     readonly property int layerColumnWidth: 40
     readonly property int verdictColumnWidth: 66
-    // The 292px panel cannot carry a name column AND four 40px layer columns AND
-    // the verdict word on one line — the names elide to three letters. So the
-    // full form puts the layers on their own labelled line under the name (SCR
-    // 6.6's own layout); only the wizard's compact table keeps aligned columns,
-    // where the shared header is the point.
+    // A 292px panel cannot carry the name, four 40px layer columns and the
+    // verdict on one line — the names elide to three letters. So the full form
+    // stacks the layers under the name; only the compact table, where the
+    // shared header is the point, keeps aligned columns.
     readonly property bool stacked: !table.compact
 
     implicitWidth: 60 + 4 * table.layerColumnWidth + table.verdictColumnWidth
     implicitHeight: column.implicitHeight
 
-    // Four verdicts, four words. "Off" means the user turned it off and nothing
-    // else — a pad with no gyro reading "Off" sends them hunting for a switch.
+    // "Off" means the user turned it off and nothing else — a pad with no gyro
+    // reading "Off" sends them hunting for a switch.
     function verdictText(v) {
         if (v === "available")
             return qsTr("Available");
@@ -62,15 +49,12 @@ Item {
         return v === "available" ? Theme.success : Theme.mutedStrong;
     }
 
-    // The spoken form of one cell, for the per-row description.
     function cellStateText(ok, pending) {
         if (pending)
             return qsTr("unknown");
         return ok ? qsTr("yes") : qsTr("no");
     }
 
-    // "Gyro: Unavailable. In yes, Link no, Type yes, Host no. Standard mode
-    //  can't carry it — switch the connection to Direct."
     function rowDescription(row) {
         if (!row)
             return "";
@@ -91,7 +75,6 @@ Item {
         width: table.width
         spacing: 0
 
-        // ── Header ───────────────────────────────────────────────────────────
         Item {
             id: header
             visible: table.showHeader
@@ -149,7 +132,6 @@ Item {
             }
         }
 
-        // ── Rows ─────────────────────────────────────────────────────────────
         Repeater {
             model: table.rows
 
@@ -167,8 +149,6 @@ Item {
                 readonly property string why: !table.compact
                                               && capRow.modelData.why !== undefined
                                             ? capRow.modelData.why : ""
-                // The four cells, left to right, each with the "fix this one
-                // first" flag the sentence below repeats in words.
                 readonly property var layerCells: [
                     { "label": qsTr("In"), "ok": capRow.modelData.inOk === true,
                       "heavy": capRow.failing === "input" },
@@ -222,8 +202,6 @@ Item {
                             text: capRow.modelData.name !== undefined ? capRow.modelData.name : ""
                             elide: Text.ElideRight
                             font.pixelSize: Tokens.textSummary
-                            // Full opacity even when unavailable: the label is
-                            // the part the user has to read.
                             color: capRow.verdict === "available" ? Theme.onSurface
                                                                   : Theme.mutedStrong
                         }
@@ -267,9 +245,6 @@ Item {
                         }
                     }
 
-                    // The layers, labelled, on their own line — the full-width
-                    // form. Every cell still shows its TRUE state; only the
-                    // first failure is heavier.
                     Row {
                         id: stackedCells
                         visible: table.stacked

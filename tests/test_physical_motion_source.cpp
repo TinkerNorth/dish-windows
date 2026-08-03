@@ -1,18 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// PhysicalMotionSourceTest (ADAPT, 13) + PhysicalMotionProbeTest (ADAPT, 5),
-// against the PURE core/input/PhysicalMotionSource.h. Ports dish-android
-// source/sensor/PhysicalMotionSource.kt + PhysicalMotionProbe.kt logic:
-//   * convertControllerSample — identity-axis gyro rad/s -> wire int16
-//     (zero->zero, full-scale->int16 max, axes NOT remapped, accel passes
-//     through already-scaled, over-scale clamps to the int16 range);
-//   * shouldEmitGyro — accel-gated first emission;
-//   * filterByCapability — keep reachable & gyro & user-enabled, drop the rest,
-//     unknown slot treated as no-motion;
-//   * probeHasGyro — the per-device gyro-availability predicate (API-31 gate on
-//     android -> the SDL HasSensor boolean here).
-// The wire scale matches Input/SdlMotionConvert (gyro +/-2000 deg/s, accel +/-4 g).
+// The wire scale matches Input/SdlMotionConvert: gyro +/-2000 deg/s, accel +/-4 g.
 
 #include "core/input/PhysicalMotionSource.h"
 
@@ -33,8 +22,6 @@ float degToRad(float deg) { return deg * kPi / 180.0f; }
 using Conn = int;
 
 } // namespace
-
-// ── convertControllerSample (5) ──────────────────────────────────────────────
 
 TEST_CASE("zero gyro maps to zero", "[physical-motion]") {
     const auto s = motion::convertControllerSample(0.0f, 0.0f, 0.0f, 0, 0, 0);
@@ -77,8 +64,6 @@ TEST_CASE("gyro beyond full scale clamps to the int16 range", "[physical-motion]
     CHECK(s.gyroY == -32768);
 }
 
-// ── shouldEmitGyro (4) ───────────────────────────────────────────────────────
-
 TEST_CASE("shouldEmitGyro is true when the pad has no accelerometer", "[physical-motion]") {
     CHECK(motion::shouldEmitGyro(/*hasAccelSensor=*/false, /*accelSeen=*/false));
 }
@@ -94,8 +79,6 @@ TEST_CASE("shouldEmitGyro is true once accel has reported", "[physical-motion]")
 TEST_CASE("shouldEmitGyro accel-absent path ignores accelSeen", "[physical-motion]") {
     CHECK(motion::shouldEmitGyro(/*hasAccelSensor=*/false, /*accelSeen=*/true));
 }
-
-// ── filterByCapability (5) ───────────────────────────────────────────────────
 
 TEST_CASE("filterByCapability keeps a reachable slot with gyro AND enabled", "[physical-motion]") {
     const std::map<std::string, Conn> reachable{{"9", 1}};
@@ -116,8 +99,7 @@ TEST_CASE("filterByCapability drops a slot the user toggled motion off for", "[p
 }
 
 TEST_CASE("filterByCapability drops a reachable slot missing from gates", "[physical-motion]") {
-    // Startup race: reachability emits before the capability map. Unknown ->
-    // no-motion (safe).
+    // Startup race: reachability emits before the capability map.
     const std::map<std::string, Conn> reachable{{"9", 1}};
     const std::map<std::string, motion::MotionGate> gates{};
     CHECK(motion::filterByCapability(reachable, gates).empty());
@@ -132,10 +114,7 @@ TEST_CASE("filterByCapability per-slot keeps the enabled one, drops the disabled
     CHECK(motion::filterByCapability(reachable, gates) == expected);
 }
 
-// ── probeHasGyro (4) ─────────────────────────────────────────────────────────
-
 TEST_CASE("probeHasGyro is false when the sensor API is unavailable", "[physical-motion]") {
-    // Android's API-below-31 gate -> here the SDL sensor API absent.
     CHECK_FALSE(motion::probeHasGyro(/*sensorApiAvailable=*/false, /*deviceHasGyro=*/true));
 }
 

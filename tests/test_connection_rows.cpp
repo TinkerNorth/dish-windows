@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// The pure connection-row render mappers: glyph / dot-color / status-chip key
-// per (kind, LinkState), and the isLiveLink predicate. Emitted as keys (the UI
-// resolves them to Qt icons/colors/strings), so these assert the mapping table
-// the android tests pin against the resource ids. Replicates dish-android
-// ui/common/ConnectionGlyphsTest (19) + ui/main/IsLiveLinkTest (2), re-derived
-// against the Qt-bound key enums.
 
 #include "core/reducer/ConnectionRows.h"
 
@@ -15,8 +8,6 @@
 #include <array>
 
 using namespace dish::reducer;
-
-// ── glyphForConnection (kind, state) -> ConnectionGlyph ──────────────────────
 
 TEST_CASE("glyph: satellite Connected uses the connected glyph", "[rows][glyph]") {
     REQUIRE(glyphForConnection(ConnectionKind::Satellite, UiLinkState::Connected) ==
@@ -44,8 +35,6 @@ TEST_CASE("glyph: satellite Connecting/Found/Ready/Unstable use the base glyph",
             ConnectionGlyph::SatelliteBase);
 }
 
-// ── dotColorForState ─────────────────────────────────────────────────────────
-
 TEST_CASE("dot: Connected is success green", "[rows][dot]") {
     REQUIRE(dotColorForState(UiLinkState::Connected) == DotColor::Success);
 }
@@ -65,8 +54,6 @@ TEST_CASE("dot: Saved/Ready/Found collapse to muted", "[rows][dot]") {
     REQUIRE(dotColorForState(UiLinkState::Found) == DotColor::Muted);
 }
 
-// ── statusChipKey ────────────────────────────────────────────────────────────
-
 TEST_CASE("chip: each LinkState maps to its shared vocabulary key", "[rows][chip]") {
     REQUIRE(statusChipKey(UiLinkState::Found) == StatusChipKey::Found);
     REQUIRE(statusChipKey(UiLinkState::Stale) == StatusChipKey::NeedsPairing);
@@ -77,9 +64,6 @@ TEST_CASE("chip: each LinkState maps to its shared vocabulary key", "[rows][chip
     REQUIRE(statusChipKey(UiLinkState::Unstable) == StatusChipKey::Unstable);
 }
 
-// ── exhaustiveness (every state resolves; mirrors android's "every LinkState
-//    has a chip text / dot color / non-zero glyph") ──────────────────────────
-
 namespace {
 constexpr std::array<UiLinkState, 7> kAllStates = {
     UiLinkState::Found,      UiLinkState::Stale,     UiLinkState::Saved,   UiLinkState::Ready,
@@ -88,16 +72,14 @@ constexpr std::array<UiLinkState, 7> kAllStates = {
 
 TEST_CASE("rows: every state has a chip, a dot color, and a glyph", "[rows][exhaustive]") {
     for (const auto state : kAllStates) {
-        // Each call is total (the switch has a default) — exercising every state
-        // proves no arm is missing. The values are pinned in the cases above.
+        // Every mapper has a default arm, so this only proves totality; the
+        // values themselves are pinned in the cases above.
         (void)statusChipKey(state);
         (void)dotColorForState(state);
         (void)glyphForConnection(ConnectionKind::Satellite, state);
     }
     SUCCEED();
 }
-
-// ── isLiveLink (Connected/Unstable are live) ─────────────────────────────────
 
 TEST_CASE("isLiveLink: connected and unstable are live", "[rows][live]") {
     REQUIRE(isLiveLink(UiLinkState::Connected));

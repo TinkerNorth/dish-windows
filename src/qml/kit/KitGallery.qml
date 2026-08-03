@@ -1,22 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The states gallery: every kit component, every state, one screen, both
-// palettes. It is the library's proof-of-work — a component whose hover, focus,
-// disabled and selected states were never drawn side by side is a component
-// whose states drifted.
+// Every kit component, every state, one screen, both palettes. There is no
+// runtime entry point: it ships in the module so qmllint and qmlcachegen see
+// it, and a developer reaches it by pointing Main.qml at it.
 //
-// There is NO runtime entry point. It ships in the module (so it compiles, and
-// so qmllint and qmlcachegen see it) and is reached by a developer pointing
-// Main.qml at it. It is not behind a debug flag this pass.
-//
-// It is the one kit file allowed to touch `App` — the theme switcher at the top
-// has to be able to flip the palette, which is the whole point of a gallery.
-// No other component here reads the domain.
-//
-// QtQuick.Controls.Basic is imported UNDER A NAMESPACE on purpose: an
-// unqualified `Page` would be ambiguous between Controls' Page and this
-// directory's Page.qml, and the gallery has to instantiate ours.
+// The one kit file allowed to touch `App` — the theme switcher is the point.
+// QtQuick.Controls.Basic is imported under a namespace because an unqualified
+// `Page` would be ambiguous between Controls' Page and this directory's.
 
 import QtQuick
 import QtQuick.Controls.Basic as QC
@@ -28,7 +19,6 @@ Item {
     readonly property var themeOptions: [qsTr("Light"), qsTr("Dark"), qsTr("System")]
     readonly property int bodyWidth: Math.max(320, scroller.availableWidth - 2 * Tokens.pagePadding)
 
-    // ── Specimen data ────────────────────────────────────────────────────────
     readonly property var demoSteps: [
         { "label": qsTr("Connection"), "meta": qsTr("standard · kept"), "state": "done" },
         { "label": qsTr("Destination"), "meta": qsTr("sending descriptor"), "state": "active" }
@@ -89,8 +79,7 @@ Item {
                                              "sub": qsTr("satellite · 3 slots free"),
                                              "empty": false, "hot": false, "tone": "accent" })
 
-    // A plain cell: the Flow lays these out, and a cell wider than the row gets
-    // a row of its own.
+    // A cell wider than the Flow's row gets a row of its own.
     component Specimen: Column {
         width: 300
         spacing: Tokens.s4
@@ -112,7 +101,6 @@ Item {
             padding: Tokens.pagePadding
             spacing: Tokens.s9
 
-            // ── Palette switcher ─────────────────────────────────────────────
             SectionHeader {
                 label: qsTr("Kit gallery")
                 glyph: "dish-master"
@@ -128,7 +116,6 @@ Item {
                 width: gallery.bodyWidth
                 spacing: Tokens.s8
 
-                // ── DishButton ───────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("DishButton") }
                     Row {
@@ -175,7 +162,6 @@ Item {
                     }
                 }
 
-                // ── CapabilityChip ───────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("CapabilityChip") }
                     Flow {
@@ -190,7 +176,6 @@ Item {
                     }
                 }
 
-                // ── StatusDot + LiveStat ─────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("StatusDot · LiveStat") }
                     Row {
@@ -218,7 +203,6 @@ Item {
                     }
                 }
 
-                // ── Card ─────────────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("Card") }
                     Card {
@@ -250,7 +234,6 @@ Item {
                     }
                 }
 
-                // ── ActionCard ───────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("ActionCard") }
                     ActionCard {
@@ -278,7 +261,6 @@ Item {
                     }
                 }
 
-                // ── SelectRow ────────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("SelectRow") }
                     SelectRow {
@@ -308,7 +290,6 @@ Item {
                     }
                 }
 
-                // ── OptionCard ───────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("OptionCard") }
                     OptionCard {
@@ -326,7 +307,6 @@ Item {
                     }
                 }
 
-                // ── Selection + input primitives ─────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("SegmentedControl · ComboButton") }
                     SegmentedControl {
@@ -354,11 +334,8 @@ Item {
                     }
                 }
 
-                // ── DishToolTip ──────────────────────────────────────────────
-                // A tooltip has one state and it is transient, so the specimen
-                // is a permanently-open one: what matters is that the fill, the
-                // hairline and the text read against BOTH palettes, which the
-                // theme switcher at the top of this gallery flips live.
+                // Held open: the state that matters is whether the fill, the
+                // hairline and the text read against both palettes.
                 Specimen {
                     Eyebrow { text: qsTr("DishToolTip") }
                     Item {
@@ -428,7 +405,6 @@ Item {
                     }
                 }
 
-                // ── Feedback surfaces ────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("DishProgressBar · LoadingSpinner") }
                     DishProgressBar { width: parent.width }
@@ -509,7 +485,6 @@ Item {
                     }
                 }
 
-                // ── BrandGlyph ───────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("BrandGlyph") }
                     Row {
@@ -558,7 +533,6 @@ Item {
                     }
                 }
 
-                // ── StepList ─────────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("StepList") }
                     StepList {
@@ -575,7 +549,6 @@ Item {
                     }
                 }
 
-                // ── Overlays (opened, not laid out) ──────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("Overlays") }
                     DishButton {
@@ -619,7 +592,6 @@ Item {
                     }
                 }
 
-                // ── Page ─────────────────────────────────────────────────────
                 Specimen {
                     Eyebrow { text: qsTr("Page") }
                     Page {
@@ -639,7 +611,6 @@ Item {
                     }
                 }
 
-                // ── WireLine (full width) ────────────────────────────────────
                 Specimen {
                     width: gallery.bodyWidth
                     Eyebrow { text: qsTr("WireLine") }
@@ -663,7 +634,6 @@ Item {
                     }
                 }
 
-                // ── CapabilityTable (full width) ─────────────────────────────
                 Specimen {
                     width: gallery.bodyWidth
                     Eyebrow { text: qsTr("CapabilityTable") }
@@ -679,7 +649,6 @@ Item {
                     }
                 }
 
-                // ── BindingStrip (full width + overflow) ─────────────────────
                 Specimen {
                     width: gallery.bodyWidth
                     Eyebrow { text: qsTr("BindingStrip") }
@@ -701,7 +670,6 @@ Item {
                     }
                 }
 
-                // ── WizardBanner (full width) ────────────────────────────────
                 Specimen {
                     width: gallery.bodyWidth
                     Eyebrow { text: qsTr("WizardBanner") }
@@ -748,7 +716,6 @@ Item {
         }
     }
 
-    // ── The overlay family, declared once ────────────────────────────────────
     ContentDialog {
         id: plainDialog
         eyebrow: qsTr("Pairing")

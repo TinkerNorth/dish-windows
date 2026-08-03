@@ -3,27 +3,21 @@
     Fails a build whose translation catalogues no longer match the source.
 
 .DESCRIPTION
-    Nothing was watching this before. Between the last catalogue refresh and the
-    v3 redesign the app grew 618 user-facing strings that `translations/*.ts`
-    had never heard of, while 208 dead widget-era entries sat in the files
-    pretending to be work. Every one of those strings shipped in English to a
-    German, Spanish, French, Bosnian or Brazilian user, and the build was green
-    the whole time, because a stale .ts is not a compile error.
+    A stale .ts is not a compile error, so without this check a build stays
+    green while every new string ships in English to non-English users.
 
-    This is the thing that was missing. It re-runs lupdate with the same flags
-    CMake's `update_translations` target uses, then asks git whether anything
-    changed. A clean tree means the catalogues describe the code. A dirty one
-    means a string was added, edited or deleted without refreshing them, and the
-    diff it prints is exactly the refresh the author owes.
+    Re-runs lupdate with the same flags CMake's `update_translations` target
+    uses, then asks git whether anything changed. A dirty tree means a string
+    was added, edited or deleted without refreshing the catalogues, and the
+    fix is the one line the failure message prints.
 
-    The fix is always the same one line, which the failure message states:
+    NOTE: this REWRITES translations/*.ts in your working tree. It refuses to
+    run if they are already dirty, so nothing of yours is lost, but expect
+    modified files afterwards.
 
-        cmake --build <build-dir> --target update_translations
-
-    Coverage is reported but never enforced. Translating a new string is a
-    separate act from extracting it, often by a different person on a different
-    day, and a gate that blocks the code until the words arrive just teaches
-    people to skip the gate.
+    Coverage is reported, never enforced: translating a string is a separate
+    act from extracting it, and a gate that waits for the words would just get
+    routed around.
 
 .PARAMETER LinguistBin
     Directory holding lupdate. Defaults to QT_ROOT_DIR/bin (what
@@ -42,11 +36,10 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-# Windows PowerShell promotes a native command's stderr into ErrorRecords, and
-# under $ErrorActionPreference = 'Stop' that terminates the script. git writes
-# routine advisories there ("LF will be replaced by CRLF"), so every git call
-# below goes through this. core.safecrlf=false silences that particular note at
-# the source; relaxing the preference covers whatever else git decides to say.
+# Windows PowerShell turns a native command's stderr into ErrorRecords, which
+# under 'Stop' kills the script over routine git advisories ("LF will be
+# replaced by CRLF"). core.safecrlf=false silences that one at the source;
+# relaxing the preference covers whatever else git decides to say.
 function Invoke-Git {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
     $previous = $ErrorActionPreference
@@ -60,12 +53,8 @@ function Invoke-Git {
 
 Push-Location $repoRoot
 try {
-    # Keep these identical to LUPDATE_OPTIONS in CMakeLists.txt. If they drift,
-    # the gate fails on formatting rather than on content and everyone starts
-    # ignoring it.
-    #   -locations none : the catalogues are tracked, so they must change only
-    #                     when a STRING changes, not when a line moves.
-    #   -no-obsolete    : drop messages whose source is gone instead of hoarding.
+    # Keep identical to LUPDATE_OPTIONS in CMakeLists.txt. On drift the gate
+    # fails on formatting rather than content, and people learn to ignore it.
     $lupdateArgs = @('-locations', 'none', '-no-obsolete')
 
     $lupdate = $null
@@ -84,8 +73,8 @@ try {
         $onPath = Get-Command lupdate -ErrorAction SilentlyContinue
         if ($onPath) { $lupdate = $onPath.Source }
     }
-    # Same last-resort scan scripts/build.ps1 uses, so running this by hand on a
-    # dev box needs no environment setup that building does not already need.
+    # Same last-resort scan build.ps1 does, so running this by hand needs no
+    # setup beyond what building already needs.
     if (-not $lupdate -and (Test-Path 'C:\Qt')) {
         $lupdate = Get-ChildItem 'C:\Qt' -Filter 'lupdate.exe' -Recurse -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
@@ -100,8 +89,8 @@ try {
         Write-Error 'No tracked catalogues under translations/.'
     }
 
-    # A dirty tree BEFORE the refresh would make the diff below unreadable —
-    # the author's own edits and lupdate's would be indistinguishable.
+    # With a dirty tree the diff below can't distinguish the author's edits
+    # from lupdate's, and this script would overwrite unsaved work.
     $preexisting = @(Invoke-Git diff --name-only -- 'translations')
     if ($preexisting.Count -gt 0) {
         Write-Error ("translations/ has uncommitted changes before the check ran: " +
@@ -126,22 +115,19 @@ try {
         Write-Host '  Fix:  cmake --build <build-dir> --target update_translations'
         Write-Host '        git add translations/'
         Write-Host ''
-        # ASCII only in this block: Windows PowerShell reads a BOM-less UTF-8
-        # script as the system codepage, and this is the one message a person
-        # reads at the moment the gate stops them.
+        # ASCII only below: Windows PowerShell reads a BOM-less UTF-8 script as
+        # the system codepage, and this is the message that has to be legible.
         Write-Host '  Then translate the new entries, or leave them for a translator.'
         Write-Host '  An untranslated entry falls back to English, which is what'
         Write-Host '  happens today anyway - only now it is visible.'
         exit 1
     }
 
-    # Informational only. Reported so a reviewer can see a language sliding
-    # without the gate deciding when that becomes someone's problem.
     Write-Host ''
     Write-Host 'Catalogues are in sync. Coverage:'
     # XPath rather than dotted property access: under Set-StrictMode the dotted
-    # form throws on any catalogue shaped even slightly differently, and a
-    # coverage READOUT must never be the thing that fails the gate.
+    # form throws on any slightly differently shaped catalogue, and a coverage
+    # readout must never be the thing that fails the gate.
     foreach ($ts in ($catalogues | Sort-Object)) {
         $doc = New-Object System.Xml.XmlDocument
         $doc.PreserveWhitespace = $true
@@ -155,8 +141,8 @@ try {
             if ($null -eq $node) { continue }
             $forms = $node.SelectNodes('numerusform')
             if ($forms.Count -gt 0) {
-                # A plural counts as translated once any form carries text; the
-                # all-or-nothing rule is a unit test's job, not this readout's.
+                # Any one form counts; enforcing all-or-nothing is a unit
+                # test's job, not this readout's.
                 foreach ($form in $forms) {
                     if (-not [string]::IsNullOrWhiteSpace($form.InnerText)) { $translated++; break }
                 }

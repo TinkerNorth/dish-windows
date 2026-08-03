@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// StableKeyTest (PURE) — the machineId identity key. Port of dish-android
-// core/model/StableKeyTest: machineId wins, ip:udpPort is the fallback, the same
-// machineId at different IPs is one key, a blank machineId is treated as absent.
 
 #include "core/model/IdentityKey.h"
 

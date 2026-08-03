@@ -26,17 +26,12 @@
 namespace dish::qml {
 
 int runQmlApp(dish::AppModel& model) {
-    // Basic + a custom theme built from the C++ Theme tokens (ThemeBridge). The
-    // FluentWinUI3 style needs Qt 6.8 and isn't available here, so we do NOT use
-    // it; the chrome (Mica + snap) comes from the native filter, not the style.
+    // FluentWinUI3 needs Qt 6.8 and is unavailable here; the Win11 look comes
+    // from the native chrome filter, not the style.
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
-    // The AppViewModel (and the two role models it owns) is the frozen QML
-    // contract surface — registered as a context property so every page reads
-    // `App.*` without re-importing. The model outlives the engine (both are on
-    // this stack frame). The role-bearing list models are registered uncreatable
-    // so QML can name their role enums / type in delegates if needed; instances
-    // are only ever vended through App.slots / App.connections.
+    // Uncreatable: instances are only ever vended through App.slotModel /
+    // App.connectionModel, but QML must be able to name the type in a delegate.
     qmlRegisterUncreatableType<dish::qml::SlotListModel>(
         "Dish.Chrome", 1, 0, "SlotListModel",
         QStringLiteral("SlotListModel is owned by AppViewModel"));
@@ -46,15 +41,10 @@ int runQmlApp(dish::AppModel& model) {
 
     dish::qml::AppViewModel appVm(&model);
 
-    // model.start() already ran the ThemeController, but the smoke checklist
-    // caught a System+dark cold start rendering the BODY light while the title
-    // bar sampled dark — an ordering interaction between the controller's apply
-    // and this entry point. Rather than depend on who ran last, resolve the
-    // persisted mode to a concrete appearance HERE, unconditionally, for all
-    // three modes (idempotent when the controller already applied the same
-    // thing): the active palette then provably matches the mode at the instant
-    // the QML Theme singleton is registered and first read. A later
-    // setThemeMode re-themes live via the AppViewModel theme-applied sink below.
+    // model.start() already ran the ThemeController, but depending on who ran
+    // last let a System+dark cold start paint the body light under a dark title
+    // bar. Re-resolving here unconditionally (idempotent) makes the active
+    // palette provably match the mode before the Theme singleton is first read.
     {
         const auto mode = model.themeStore()->mode();
         const auto appearance = mode == dish::source::ThemeMode::Light ? dish::ui::Appearance::Light
@@ -64,16 +54,12 @@ int runQmlApp(dish::AppModel& model) {
         dish::ui::setActiveAppearance(appearance);
     }
 
-    // Own the two QML singletons explicitly and register them by instance, rather
-    // than relying on QML_SINGLETON auto-registration. Under this target's LTCG
+    // Registered BY INSTANCE, not via QML_SINGLETON: under this target's LTCG
     // (/GL) the generated QQmlModuleRegistration static initializer is stripped,
-    // so the auto-registered `ChromeBridge`/`Theme` names never reach the engine —
-    // every `Theme.*` / `ChromeBridge.*` reference in QML resolves to a
-    // ReferenceError, leaving the window at QtQuick's default WHITE and the body
-    // unthemed. Registering the instances here makes the names resolvable AND lets
-    // us hand QML the very objects we wire to the native chrome / re-theme sink.
-    // They are declared before the engine so they outlive it. QML must not delete
-    // them, so register with CppOwnership.
+    // so the auto-registered names never reach the engine and every `Theme.*` /
+    // `ChromeBridge.*` reference becomes a ReferenceError — leaving the window
+    // at QtQuick's default white. Declared before the engine so they outlive it;
+    // CppOwnership so QML never deletes them.
     auto* bridge = new dish::chrome::ChromeBridge(qApp);
     auto* themeBridge = new dish::chrome::ThemeBridge(qApp);
     auto* tokensBridge = new dish::chrome::TokensBridge(qApp);
@@ -87,9 +73,8 @@ int runQmlApp(dish::AppModel& model) {
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("App"), &appVm);
 
-    // A shared borrow of the chrome filter so the theme-applied sink (below) can
-    // flip the native immersive-dark attribute after the window exists. Filled by
-    // the objectCreated handler; null until then.
+    // The theme sink below outlives this scope but the chrome only exists once
+    // the window does, so the sink borrows it indirectly. Null until then.
     auto chromeHolder = std::make_shared<dish::chrome::FramelessWindowChrome*>(nullptr);
 
     QObject::connect(
@@ -97,37 +82,33 @@ int runQmlApp(dish::AppModel& model) {
         [bridge, themeBridge, chromeHolder](QObject* obj, const QUrl&) {
             auto* window = qobject_cast<QQuickWindow*>(obj);
             if (!window) { return; }
-            // The chrome filter outlives the window (parented to the app). Mica
-            // + the native hit-test attach once the platform window exists.
+            // Parented to the app, not the window: it must survive the messages
+            // that still pump while the engine tears the window down.
             auto* chrome = new dish::chrome::FramelessWindowChrome(window, qApp);
             *chromeHolder = chrome;
             qApp->installNativeEventFilter(chrome);
             if (bridge) { bridge->setChrome(chrome); }
             const bool mica = chrome->applyMicaBackdrop();
-            // Push the resolved STARTUP appearance so a persisted Light mode paints
-            // the solid light background + light chrome from the first frame. The
-            // theme-applied sink only fires on a later user toggle, so without this
-            // a cold start in Light kept the dark Mica backdrop until the user
-            // toggled the theme.
+            // The theme-applied sink only fires on a later user toggle, so the
+            // STARTUP appearance has to be pushed here or a cold start in Light
+            // keeps the dark Mica backdrop until the user toggles the theme.
             const bool startupDark = dish::ui::activeAppearance() == dish::ui::Appearance::Dark;
             chrome->setImmersiveDarkMode(startupDark);
             if (bridge) {
                 bridge->setMicaActive(mica);
                 bridge->setDark(startupDark);
             }
-            // Belt-and-braces for the System+dark cold-start body-vs-chrome
-            // split: any binding that evaluated before the palette settled
-            // re-reads now that the window exists.
+            // Any binding that evaluated before the palette settled re-reads
+            // now that the window exists.
             if (themeBridge) { themeBridge->refresh(); }
         },
         Qt::DirectConnection);
 
-    // Route App.openExternalUrl through the shared ExternalLink helper; a false
-    // return falls through to App.errorMessage (the QML toast channel).
+    // A false return falls through to App.errorMessage (the QML toast channel).
     appVm.setExternalOpenSink([](const QString& url) { return dish::ui::openExternalUrl(url); });
 
-    // After a theme change: re-read the C++ tokens into the QML Theme singleton
-    // and flip the native chrome's immersive-dark attribute so the frame matches.
+    // The frame must re-theme with the body, or it drifts light while the body
+    // re-darks.
     appVm.setThemeAppliedSink([themeBridge, chromeHolder, bridge](bool dark) {
         if (themeBridge) { themeBridge->refresh(); }
         if (bridge) {

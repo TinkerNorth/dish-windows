@@ -13,19 +13,15 @@ namespace dish::repository {
 
 namespace {
 
-// One QSettings key holds the whole list (android keeps it under "preferences"
-// inside a dedicated "motion_preferences" prefs file). Each element is
-// {k:<storageKey>, slot:<value.slotId>, on:<bool>}. The storage key is kept
-// independent of the value's own slotId so put(key, value)/get(key) round-trip
-// the value verbatim even when they differ — the Map<K,V> faithfulness the
-// RepositoryContract pins. In normal use key == value.slotId, so the persisted
-// `k` and `slot` coincide.
+// One QSettings key holds the whole list; each element is {k:<storageKey>,
+// slot:<value.slotId>, on:<bool>}. The storage key is kept independent of the
+// value's own slotId so put(key, value)/get(key) round-trip verbatim even when
+// they differ — the Map<K,V> faithfulness RepositoryContract pins.
 constexpr const char* kListKey = "motion_preferences";
 constexpr const char* kFieldKey = "k";
 constexpr const char* kFieldSlot = "slot";
 constexpr const char* kFieldOn = "on";
 
-// One persisted (storageKey -> value) row.
 struct Row {
     QString key;
     MotionPreference value;
@@ -46,8 +42,7 @@ std::vector<Row> readRows(const QSettings& settings) {
     if (raw.isEmpty()) { return {}; }
     QJsonParseError err{};
     const auto doc = QJsonDocument::fromJson(raw, &err);
-    // Corrupt blob -> empty (don't crash on garbled prefs); a non-array shape is
-    // treated the same way.
+    // Corrupt or non-array blob -> empty; garbled prefs must not crash startup.
     if (err.error != QJsonParseError::NoError || !doc.isArray()) { return {}; }
 
     std::vector<Row> out;
@@ -55,7 +50,7 @@ std::vector<Row> readRows(const QSettings& settings) {
         if (!v.isObject()) { continue; }
         const auto obj = v.toObject();
         const QString slot = obj.value(QLatin1String(kFieldSlot)).toString();
-        // Legacy rows (pre-storage-key) only carried `slot`; key falls back to it.
+        // Older rows carried only `slot`; the key falls back to it.
         const QString key = obj.contains(QLatin1String(kFieldKey))
                                 ? obj.value(QLatin1String(kFieldKey)).toString()
                                 : slot;
@@ -106,9 +101,7 @@ std::vector<MotionPreference> MotionPreferenceRepository::all() const {
 void MotionPreferenceRepository::put(const QString& slotId, const MotionPreference& value) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto rows = readRows(*settings_);
-    // Storage key authoritative: replace the row under this key in place (the
-    // list never grows on a repeat put for the same key); store the value
-    // verbatim under it.
+    // Replace in place so the list never grows on a repeat put for one key.
     rows.erase(
         std::remove_if(rows.begin(), rows.end(), [&](const Row& r) { return r.key == slotId; }),
         rows.end());

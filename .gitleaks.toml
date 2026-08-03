@@ -12,12 +12,19 @@ useDefault = true
 
 [allowlist]
 description = "Allowlist for known non-secret strings in dish-windows."
+
+# Anchored. gitleaks treats these as unanchored regexes against the whole
+# path, so a bare `LICENSE` also exempted packaging/fonts/Inter-LICENSE.txt
+# and would exempt anything else with LICENSE anywhere in its path.
 paths = [
-    '''COPYING\.GPL3''',
-    '''LICENSE''',
+    '''^COPYING\.GPL3$''',
+    '''^LICENSE$''',
 ]
 
 regexes = [
-    # Wire-protocol port numbers (documented in CONTRIBUTING.md).
-    '''9876|9877|9878|9879''',
+    # Wire-protocol port numbers (documented in CONTRIBUTING.md). Anchored to
+    # the whole match: unanchored, this suppressed any finding whose secret
+    # merely CONTAINED "9876" — a real key with those four digits in it would
+    # have been silently dropped.
+    '''^(9876|9877|9878|9879)$''',
 ]

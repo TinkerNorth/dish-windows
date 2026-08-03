@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Tests for the Task 1.6 mDNS sender path: the DNS wire parser
-// (compression-pointer + bounds handling), the response → DiscoveredServer
-// decode, and the two-path discovery merge / source tagging.
 
 #include "source/connection/MdnsDiscovery.h"
 
@@ -19,8 +15,6 @@ using dish::models::DiscoverySource;
 
 namespace {
 
-// ── mDNS packet builders ────────────────────────────────────────────────────
-
 void put16(std::vector<std::uint8_t>& v, std::uint16_t x) {
     v.push_back(static_cast<std::uint8_t>(x >> 8));
     v.push_back(static_cast<std::uint8_t>(x & 0xFF));
@@ -33,8 +27,7 @@ void put32(std::vector<std::uint8_t>& v, std::uint32_t x) {
     v.push_back(static_cast<std::uint8_t>(x & 0xFF));
 }
 
-// Append a DNS name as length-prefixed labels + terminator. `dotted` carries
-// no trailing dot, e.g. "sat-1._satellite._udp.local".
+// `dotted` carries no trailing dot, e.g. "sat-1._satellite._udp.local".
 void writeName(std::vector<std::uint8_t>& v, const std::string& dotted) {
     std::size_t i = 0;
     while (i < dotted.size()) {
@@ -47,7 +40,6 @@ void writeName(std::vector<std::uint8_t>& v, const std::string& dotted) {
     v.push_back(0);
 }
 
-// Append a resource record: name + type + class + ttl + rdlen + rdata.
 void appendRr(std::vector<std::uint8_t>& v, const std::string& name, std::uint16_t type,
               const std::vector<std::uint8_t>& rdata) {
     writeName(v, name);
@@ -86,10 +78,8 @@ std::vector<std::uint8_t> ptrRdata(const std::string& target) {
     return r;
 }
 
-// Build a TXT entry "key=value" string.
 std::string kv(const std::string& key, const std::string& value) { return key + "=" + value; }
 
-// Header for a response carrying `answerCount` answer records, no questions.
 std::vector<std::uint8_t> responseHeader(int answerCount) {
     std::vector<std::uint8_t> v;
     put16(v, 0);      // id
@@ -102,8 +92,6 @@ std::vector<std::uint8_t> responseHeader(int answerCount) {
 }
 
 } // namespace
-
-// ── DNS name decoding ───────────────────────────────────────────────────────
 
 TEST_CASE("readName decodes a plain length-prefixed name", "[mdns]") {
     std::vector<std::uint8_t> v;
@@ -146,8 +134,6 @@ TEST_CASE("skipName counts a compression pointer as two bytes", "[mdns]") {
     // Name at offset 9: "baz" label (4 bytes) + pointer (2 bytes) = 6 consumed.
     CHECK(detail::skipName(v.data(), v.size(), 9) == 6);
 }
-
-// ── Response parsing ────────────────────────────────────────────────────────
 
 TEST_CASE("parseResponse decodes a full satellite response", "[mdns]") {
     auto pkt = responseHeader(4);
@@ -231,7 +217,3 @@ TEST_CASE("parseResponse rejects an rdlen that overruns the packet", "[mdns]") {
     pkt.insert(pkt.end(), {10, 0, 0, 9});
     CHECK_FALSE(detail::parseResponse(pkt.data(), pkt.size()).has_value());
 }
-
-// The two-path discovery merge + source tagging + pinId moved to
-// test_discovery_gateway.cpp (DiscoveryGateway owns mergeDiscovered now), and
-// the TXT→DiscoveredServer mapping layer lives in test_mdns_mapping.cpp.

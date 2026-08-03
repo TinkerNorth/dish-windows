@@ -1,19 +1,28 @@
 ---
 name: Feature Request
-about: Suggest an idea for this project
+about: Suggest something the Windows client should do
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
 ---
 
-## Problem Statement
-<!-- A clear description of the problem. Ex. I'm always frustrated when... -->
+## The problem
 
-## Proposed Solution
-<!-- A clear description of what you want to happen -->
+<!-- What you are trying to do and where the app gets in the way. -->
 
-## Alternatives Considered
-<!-- A description of any alternative solutions or features you've considered -->
+## What you would like instead
 
-## Additional Context
-<!-- Add any other context or screenshots about the feature request here -->
+<!-- A description of the behaviour you want. -->
+
+## Alternatives you considered
+
+<!-- Workarounds you tried, or other designs that would also solve it. -->
+
+## Anything else
+
+<!-- Screenshots, mockups, links to how another tool does it.
+
+     If this needs the satellite server to change too, say so: protocol changes
+     have to land in `satellite` and in the Android, Linux and macOS clients at
+     the same time, which is a much larger piece of work than a Windows-only
+     change. -->

@@ -1,19 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Wizard page 4 — Binding · feel. What the wire should carry.
-//
-// All four rows, always. "Nothing to tune" is still a full step: every row
-// renders, and an unavailable one names the layer that refused it. This page is
-// never skipped, because "there is nothing here for you" is information.
-//
-// Only the CONTROL dims. The label and the reason stay at full strength — the
-// dead control is the obvious part; WHY it is dead is the part the user came
-// for, and fading it is fading the answer.
-//
-// Draft only. The reasons come from BindingDraft.whyFor(), which is also what
-// Configure binding reads, so the same pad can never get two different
-// explanations of why its gyro is dead.
+// Wizard page 4 — Binding · feel. All four rows render always; an unavailable one
+// names the layer that refused it, and only the CONTROL dims — the reason is the
+// part the user came for. Reasons come from BindingDraft.whyFor(), which
+// Configure binding reads too, so one pad never gets two explanations.
 
 // Bound: the row delegate reads the outer `page` id alongside its modelData.
 pragma ComponentBehavior: Bound
@@ -106,7 +97,6 @@ ColumnLayout {
         return null;
     }
 
-    // The body becomes the failing layer's sentence when a layer refuses it.
     function bodyFor(descriptor) {
         if (page.carries(descriptor.feature))
             return descriptor.body;
@@ -197,7 +187,6 @@ ColumnLayout {
                     }
                 }
 
-                // Only the control dims.
                 Kit.LabeledSwitch {
                     id: feelSwitch
                     visible: !feelRow.modelData.segmented

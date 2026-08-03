@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// The pure session-FSM decision logic as documentation (no sockets, no Qt):
-// the reconcile diff ((lastEpoch,lastBitmap,desired,applied) → action), the
-// late-slot converge, the exponential backoff schedule, and the send-counter
-// re-push guard. Mirrors the rules in dish-android SatelliteConnection /
-// SatelliteConnectionManager that ~93 android tests pin.
 
 #include "core/reducer/Backoff.h"
 #include "core/reducer/Reconcile.h"
@@ -18,8 +12,6 @@ namespace reducer = dish::reducer;
 using reducer::AppliedSlot;
 using reducer::DesiredSlot;
 
-// ── expectedBitmap ──────────────────────────────────────────────────────────
-
 TEST_CASE("expectedBitmap sets one bit per registered controller index", "[reconcile][bitmap]") {
     REQUIRE(reducer::expectedBitmap({}) == 0);
     REQUIRE(reducer::expectedBitmap({{0, 0}}) == 0x0001);
@@ -29,10 +21,8 @@ TEST_CASE("expectedBitmap sets one bit per registered controller index", "[recon
     REQUIRE(reducer::expectedBitmap({{16, 0}}) == 0x0000);
 }
 
-// ── reconcileNeeded (the heartbeat-ack drift trigger) ───────────────────────
-
 TEST_CASE("reconcileNeeded: no enriched ack yet -> never", "[reconcile][trigger]") {
-    // serverEpoch < 0 means no enriched ack has been seen.
+    // serverEpoch < 0 is the "no enriched ack seen" sentinel.
     REQUIRE_FALSE(reducer::reconcileNeeded(-1, -1, 3, 0x0001));
 }
 
@@ -55,8 +45,6 @@ TEST_CASE("reconcileNeeded: unknown bitmap (<0) skips the bitmap arm", "[reconci
     REQUIRE_FALSE(reducer::reconcileNeeded(3, -1, 3, 0x0003));
     REQUIRE(reducer::reconcileNeeded(4, -1, 3, 0x0003));
 }
-
-// ── appliedMatchesDesired (the GET converge decision) ───────────────────────
 
 TEST_CASE("appliedMatchesDesired: identical sets match", "[reconcile][converge]") {
     std::vector<DesiredSlot> desired = {{0, 0}, {1, 1}};
@@ -83,8 +71,8 @@ TEST_CASE("appliedMatchesDesired: a missing desired slot forces re-PUT", "[recon
 }
 
 TEST_CASE("appliedMatchesDesired: a mouse-grant mismatch forces re-PUT", "[reconcile][converge]") {
-    // Even when slots line up, wants≠granted (the grant is only computed at
-    // session PUT) forces the converge.
+    // The grant is only computed at session PUT, so wants != granted forces a
+    // converge even when the slots line up.
     std::vector<DesiredSlot> desired = {{0, 0}};
     std::vector<AppliedSlot> applied = {{0, 0, true}};
     REQUIRE(reducer::appliedMatchesDesired(desired, applied, /*mouseMatch=*/true));
@@ -92,8 +80,8 @@ TEST_CASE("appliedMatchesDesired: a mouse-grant mismatch forces re-PUT", "[recon
 }
 
 TEST_CASE("appliedMatchesDesired: a touchpad-mode drift forces re-PUT", "[reconcile][converge]") {
-    // A server-side mode reset (e.g. session rebuilt without the ds4 pad
-    // render) must not be invisible — touchpad packets would silently die.
+    // A server-side mode reset must not be invisible: touchpad packets would
+    // silently die.
     std::vector<DesiredSlot> desired = {{0, 1, /*touchpadMode=*/0}};       // want ds4
     std::vector<AppliedSlot> applied = {{0, 1, true, /*touchpadMode=*/2}}; // got off
     REQUIRE_FALSE(reducer::appliedMatchesDesired(desired, applied));
@@ -109,8 +97,6 @@ TEST_CASE("appliedMatchesDesired: a server that omits touchpadMode skips the mod
     std::vector<AppliedSlot> applied = {{0, 1, true, std::nullopt}};
     REQUIRE(reducer::appliedMatchesDesired(desired, applied));
 }
-
-// ── lateSlotConverge (slots that change during the PUT round-trip) ──────────
 
 TEST_CASE("lateSlotConverge: nothing changed -> no follow-ups", "[reconcile][converge]") {
     std::vector<DesiredSlot> sent = {{0, 0}};
@@ -129,7 +115,7 @@ TEST_CASE("lateSlotConverge: a newly-added slot resyncs", "[reconcile][converge]
 
 TEST_CASE("lateSlotConverge: a changed type resyncs", "[reconcile][converge]") {
     std::vector<DesiredSlot> sent = {{0, 0}};
-    std::vector<DesiredSlot> desired = {{0, 1}}; // type changed
+    std::vector<DesiredSlot> desired = {{0, 1}};
     const auto c = reducer::lateSlotConverge(sent, desired);
     REQUIRE(c.resyncs == std::vector<std::uint8_t>{0});
     REQUIRE(c.removes.empty());
@@ -143,17 +129,15 @@ TEST_CASE("lateSlotConverge: a removed slot deletes", "[reconcile][converge]") {
     REQUIRE(c.removes == std::vector<std::uint8_t>{1});
 }
 
-// ── Backoff schedule (exponential 1s → 60s, contract/android parity) ────────
-
 TEST_CASE("backoffDelayMs is exponential, capped at 60s", "[reconnect][backoff]") {
-    REQUIRE(reducer::backoffDelayMs(1) == 1000);  // 1s
-    REQUIRE(reducer::backoffDelayMs(2) == 2000);  // 2s
-    REQUIRE(reducer::backoffDelayMs(3) == 4000);  // 4s
-    REQUIRE(reducer::backoffDelayMs(4) == 8000);  // 8s
-    REQUIRE(reducer::backoffDelayMs(5) == 16000); // 16s
-    REQUIRE(reducer::backoffDelayMs(6) == 32000); // 32s
-    REQUIRE(reducer::backoffDelayMs(7) == 60000); // 1000<<6 = 64000 → capped 60s
-    REQUIRE(reducer::backoffDelayMs(8) == 60000); // stays capped
+    REQUIRE(reducer::backoffDelayMs(1) == 1000);
+    REQUIRE(reducer::backoffDelayMs(2) == 2000);
+    REQUIRE(reducer::backoffDelayMs(3) == 4000);
+    REQUIRE(reducer::backoffDelayMs(4) == 8000);
+    REQUIRE(reducer::backoffDelayMs(5) == 16000);
+    REQUIRE(reducer::backoffDelayMs(6) == 32000);
+    REQUIRE(reducer::backoffDelayMs(7) == 60000); // 1000<<6 = 64000, capped to 60s
+    REQUIRE(reducer::backoffDelayMs(8) == 60000);
     REQUIRE(reducer::backoffDelayMs(100) == 60000);
 }
 
@@ -161,8 +145,6 @@ TEST_CASE("backoffDelayMs treats a non-positive attempt as the first", "[reconne
     REQUIRE(reducer::backoffDelayMs(0) == 1000);
     REQUIRE(reducer::backoffDelayMs(-5) == 1000);
 }
-
-// ── Send-counter re-push guard (contract §Crypto) ───────────────────────────
 
 TEST_CASE("counterNeedsRepush fires once the send counter crosses 0xF0000000",
           "[reconnect][counter]") {
@@ -190,7 +172,7 @@ TEST_CASE("clampedSendCounter clamps past exhaustion so the repush poll never wr
     REQUIRE(reducer::clampedSendCounter(0xFFFFFFFFull) == 0xFFFFFFFFu);
     REQUIRE(reducer::clampedSendCounter(0x100000000ull) == 0xFFFFFFFFu);
     REQUIRE(reducer::clampedSendCounter(0xFFFFFFFFFFFFFFFFull) == 0xFFFFFFFFu);
-    // The composition the alive tick polls: past exhaustion the guard keeps
-    // reading re-PUT needed instead of wrapping back under the threshold.
+    // What the alive tick polls: past exhaustion the guard keeps reading re-PUT
+    // needed instead of wrapping back under the threshold.
     REQUIRE(reducer::counterNeedsRepush(reducer::clampedSendCounter(0x100000000ull)));
 }

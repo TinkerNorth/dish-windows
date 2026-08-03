@@ -1,24 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The dashed ACTION CARD — the design's list-density invitation control
-// ("+ Add a controller", the unbound pad's "Bind…"), frame 18 "Action card —
-// states". A dashed accent border over the primary-fill wash; the cyan wash
-// deepens on interaction (rest = Theme.primaryFill, hover = Theme.primaryPress
-// at 18 %, pressed = Theme.accentWash24), keyboard focus turns the border solid
-// and adds the 2px Theme.focusRing ring, and disabled drops the control to
-// Tokens.disabledOpacity with Theme.disabledFg text.
-//
-// `placeholder` is the same dashed shape with no action in it (the wizard
-// banner's empty pad / host slot): outline-coloured dash, no wash, no hover, no
-// press, no focus ring, no cursor change and NO opacity change — an empty slot
-// is information, not a dead control.
-//
-// The dashed stroke is a Canvas (Qt 6.7 Shapes has no rounded dashed rect
-// primitive); it repaints on palette / focus / mode flips like the title bar's
-// glyph canvases. Colours reach the 2D context through Qt.rgba(), never
-// String(color): QML stringifies a translucent colour as #AARRGGBB and Canvas
-// parses it as #RRGGBBAA.
+// The dashed invitation control ("+ Add a controller"), plus `placeholder`: the
+// same dashed shape with no action in it, which is information rather than a
+// dead control and so never dims.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -27,13 +12,9 @@ import Dish.Chrome
 AbstractButton {
     id: card
 
-    // The accent headline ("+ Add a controller" — pass showPlus for the +).
     property string title: ""
-    // The muted explainer line ("Wired, or Bluetooth").
     property string subtitle: ""
-    // Draw the leading "+" glyph (the Add variant; Bind… has none).
     property bool showPlus: false
-    // An ActionCard that is not an action: the dashed style keeps one owner.
     property bool placeholder: false
 
     focusPolicy: card.placeholder ? Qt.NoFocus : Qt.StrongFocus
@@ -44,9 +25,6 @@ AbstractButton {
     leftPadding: Tokens.s6
     rightPadding: Tokens.s6
 
-    // A placeholder is never dimmed — it is drawn-but-unavailable INFORMATION,
-    // and the 0.55 rule is legal only on a control the user could otherwise
-    // press.
     opacity: (card.placeholder || card.enabled) ? 1.0 : Tokens.disabledOpacity
 
     Accessible.role: card.placeholder ? Accessible.StaticText : Accessible.Button
@@ -59,9 +37,6 @@ AbstractButton {
     }
 
     background: Item {
-        // Keyboard-focus ring: 2px Theme.focusRing just outside the border
-        // (design boxShadow 0 0 0 2px). visualFocus keeps a mouse press from
-        // ringing — the ring is the keyboard cue.
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2
@@ -72,8 +47,6 @@ AbstractButton {
             border.color: Theme.focusRing
         }
 
-        // The wash: rest = the primary-fill token; hover / pressed deepen to
-        // the design's 18 / 24 % accent alphas. A placeholder has none.
         Rectangle {
             anchors.fill: parent
             radius: Tokens.radiusCard
@@ -88,8 +61,7 @@ AbstractButton {
             }
         }
 
-        // The dashed border: accent for an action, the plain hairline for a
-        // placeholder; solid under keyboard focus.
+        // Canvas because Qt 6.7 Shapes has no rounded dashed rect primitive.
         Canvas {
             id: borderCanvas
             anchors.fill: parent

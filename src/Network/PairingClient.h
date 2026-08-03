@@ -14,61 +14,50 @@
 
 namespace dish::net {
 
-// Blocking protocol-1 pairing over the satellite's HTTPS client server (:9443,
-// self-signed cert, TOFU-pinned via the verifier below — the pairing exchange
-// carries the sharedKey exactly once, so it gets the same pin gate as the
-// session REST path). POST /api/pair has three modes
-// (contract §Pairing): Path A (operator `pin`), Path B (client-shown
-// `clientPin` → pending, then poll GET /api/pair/status), and key rotation
-// (`hmacProof` of the current key → fresh key). DELETE /api/pair self-unpairs.
-// All carry `protocolVersion`. Mirrors dish-android core/net/SatelliteHttpClient
-// pair/pairStatus/unpair. The blocking calls drive a nested QEventLoop around
-// the async QNetworkAccessManager so the public API stays synchronous (called
-// from a QtConcurrent worker, never the UI thread).
+// Blocking pairing against the satellite's HTTPS server (:9443, self-signed,
+// TOFU-pinned). The exchange carries the sharedKey exactly once, so it gets the
+// same pin gate as the session REST path.
+//
+// Each call drives a nested QEventLoop around the async QNetworkAccessManager to
+// keep the API synchronous, so it MUST be invoked from a worker thread and never
+// from the UI thread.
 class PairingClient {
   public:
-    // Classification of a PairResponse — the manager fans the variant out to an
-    // error toast, a PIN dialog, a poll, or the openSession path. The arms map
-    // 1:1 onto reducer::PairVerdict (the pure rule); the success arm carries the
-    // shared key directly. VersionMismatch (409) is terminal "client too old".
+    // Arms map 1:1 onto reducer::PairVerdict; the success arm carries the shared
+    // key directly.
     struct Success {
         QString sharedKeyHex;
     };
     struct Pending {};         // Path B accepted — poll /api/pair/status
-    struct AuthRequired {};    // reachable, no key — first-time pair / forgot us
-    struct VersionMismatch {}; // 409 — protocol skew
+    struct AuthRequired {};    // reachable, no key — first-time pair, or it forgot us
+    struct VersionMismatch {}; // 409 — protocol skew, terminal
     struct Unreachable {
         QString message;
     };
     using Outcome = std::variant<Success, Pending, AuthRequired, VersionMismatch, Unreachable>;
 
-    // Pure classifier — driven only by fields on the response (status + ok +
-    // pending + sharedKey) so it is trivially unit-testable. Delegates the rule
-    // to reducer::classifyPair.
     static Outcome classify(const models::PairResponse& response);
 
-    // Path A / Path B (clientPin non-empty) pairing POST. `protocolVersion`
-    // rides in the body; both pin and clientPin are sent (empty when unused),
-    // matching the android shape — the server uses a valid `pin` first.
+    // Path A (operator `pin`) and Path B (client-shown `clientPin`, which answers
+    // Pending and is then polled). Both fields always ride in the body, empty when
+    // unused; the server tries a valid `pin` first.
     static models::PairResponse pair(const QString& ip, int port, const QString& deviceId,
                                      const QString& deviceName, const QString& pin,
                                      const QString& clientPin = QString());
 
-    // Key rotation / re-pair: POST /api/pair with `hmacProof` of the CURRENT
-    // key → a fresh sharedKey. A failed proof falls through to the PIN paths
-    // server-side (so this behaves like a fresh attempt then).
+    // Proves possession of the CURRENT key to get a fresh one. A failed proof
+    // falls through to the PIN paths server-side, so it degrades to a fresh
+    // attempt rather than an error.
     static models::PairResponse rotateKey(const QString& ip, int port, const QString& deviceId,
                                           const QString& deviceName, const QString& hmacProof);
 
-    // Path-B poll: GET /api/pair/status?deviceId=... → approved/pending/denied.
     static models::PairResponse pairStatus(const QString& ip, int port, const QString& deviceId);
 
-    // TOFU pin gate, keyed by host like the HTTPClient one (the pin store is
-    // shared). Called on the TLS `encrypted` edge with the peer cert DER; a
-    // false return aborts the exchange before any payload transits. Pairing is
-    // the natural pin-on-first-use moment: the first pair pins, later pairing /
-    // rotation must match. Unset (tests / early boot) = accept, preserving the
-    // pre-TOFU behavior only where no manager has wired the store yet.
+    // Called on the TLS `encrypted` edge with the peer cert DER; returning false
+    // aborts before any payload transits. Pairing is the pin-on-first-use moment,
+    // so the first pair pins and every later pair or rotation must match. Keyed by
+    // host, sharing the pin store with HTTPClient. Unset means accept, which only
+    // happens in tests and before a manager wires the store.
     using PinVerifier = std::function<bool(const QString& host, const QByteArray& certDer)>;
     static void setPinVerifier(PinVerifier verifier);
 

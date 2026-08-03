@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The 4-page first-run welcome pager (design flow 01): a centered hero (brand
-// mark on page one, eyebrow, title, body), step dots pinned near the bottom,
-// and a Back / Skip / Next bar in the bottom-right — over the bare window
-// surface with no rail (the shell appears when onboarding pops).
-//
-// Both exits are completions. Skip and Finish each emit finished(); only the
-// hand-off differs — Finish opens the setup wizard, Skip lands on Home. (A Skip
-// that did not persist the flag re-showed the whole welcome on every launch.)
+// The 4-page first-run welcome pager: centered hero, step dots, and a
+// Back / Skip / Next bar, over the bare window surface with no rail.
 
 pragma ComponentBehavior: Bound
 
@@ -21,16 +15,14 @@ import Dish.Chrome
 Item {
     id: screen
 
-    // Leave onboarding. runSetup=true also opens the setup wizard over the
-    // shell (the final page's primary action); Skip leaves without it. Either
-    // way the host marks onboarding complete.
+    // Both exits are completions: Skip emits this too, and the host marks
+    // onboarding complete either way — a Skip that did not persist the flag
+    // re-showed the whole welcome on every launch. runSetup=true (Finish) also
+    // asks the host to open the setup wizard.
     signal finished(bool runSetup)
 
-    // Satellite download URL. Kept as a property so a localized override can
-    // swap it without touching layout (parity with the Widgets url_satellite).
     readonly property string satelliteUrl: "https://dish.tinkernorth.com/downloads/satellite"
 
-    // cta: "" none, "satellite" opens the download page.
     ListModel {
         id: pages
         ListElement {
@@ -68,19 +60,16 @@ Item {
     readonly property bool onFinalPage: currentIndex === pageCount - 1
     readonly property var currentPage: pages.get(currentIndex)
 
-    // Esc leaves the same way Skip does — the flow is never a trap, and the
-    // exit is still a completion.
+    // Esc exits like Skip; the flow is never a trap.
     focus: true
     Keys.onEscapePressed: function (event) {
         screen.finished(false);
         event.accepted = true;
     }
 
-    // The primary is the first thing a new user ever sees; give it the keyboard
-    // and a real focus ring rather than an invisible default.
+    // TabFocusReason so the button shows its visual focus ring, not bare focus.
     Component.onCompleted: primaryButton.forceActiveFocus(Qt.TabFocusReason)
 
-    // ── Hero: centered column, pulled slightly above optical center. ─────────
     ColumnLayout {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: -Tokens.s9
@@ -126,7 +115,6 @@ Item {
         }
     }
 
-    // ── Step dots. ───────────────────────────────────────────────────────────
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
@@ -147,7 +135,6 @@ Item {
         }
     }
 
-    // ── Bottom bar: Back (past page one) · spacer · Skip · Next/Finish. ──────
     RowLayout {
         anchors.left: parent.left
         anchors.right: parent.right

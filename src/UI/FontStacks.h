@@ -1,19 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// FontStacks — the two font-family probes the Tokens singleton publishes.
-//
-// The design system asks for "the platform-generic monospace", which the old
-// TokensBridge implemented as QFontDatabase::systemFont(FixedFont). On several
-// Windows configurations that resolves to **Courier New** — a serif typewriter
-// face — and mono here is not decoration: it carries every Hz readout, IP,
-// latency and telemetry line ("this is a machine reading"). So the stack is
-// probed explicitly, in order, and the FixedFont generic is only the last
-// resort.
-//
-// Header-only + pure: `pickFamily` takes the available list as an argument, so
-// the ORDERING rule is unit-testable without a font database (the tests link
-// dish_core, not the Quick target where TokensBridge lives).
+// QFontDatabase::systemFont(FixedFont) resolves to Courier New on many Windows
+// installs, so the mono stack is probed explicitly instead. `pickFamily` takes
+// the available list as an argument, keeping the ordering rule testable without
+// a font database.
 
 #pragma once
 
@@ -24,9 +15,8 @@
 
 namespace dish::ui {
 
-// The first `candidates` entry present in `available` (case-insensitive —
-// Windows reports "Consolas", fontconfig may report "consolas"), else
-// `fallback`. Pure: no font database is touched.
+// Case-insensitive: Windows reports "Consolas", fontconfig may report
+// "consolas".
 inline QString pickFamily(const QStringList& candidates, const QStringList& available,
                           const QString& fallback) {
     for (const QString& candidate : candidates) {
@@ -37,8 +27,7 @@ inline QString pickFamily(const QStringList& candidates, const QStringList& avai
     return fallback;
 }
 
-// Cascadia Mono -> Consolas -> Segoe UI Mono -> the FixedFont generic. Never
-// returns Courier New while any of the three is installed.
+// Never returns Courier New while any of the three candidates is installed.
 inline QString preferredMonoFamily() {
     static const QStringList kCandidates{QStringLiteral("Cascadia Mono"),
                                          QStringLiteral("Consolas"),
@@ -47,8 +36,7 @@ inline QString preferredMonoFamily() {
                       QFontDatabase::systemFont(QFontDatabase::FixedFont).family());
 }
 
-// Inter (bundled — main.cpp registers it from :/fonts) -> Segoe UI Variable
-// Text -> Segoe UI -> whatever the application font already resolved to.
+// Inter is bundled; main.cpp registers it from :/fonts.
 inline QString preferredSansFamily() {
     static const QStringList kCandidates{QStringLiteral("Inter"),
                                          QStringLiteral("Segoe UI Variable Text"),

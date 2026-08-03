@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Protocol-1 UDP data-plane opcode coverage: the enriched heartbeat-ack parse
-// (backend/count/epoch/bitmap), close-notify reason mapping, the kept-opcode
-// values, and a compile-time guard that the deleted topology opcodes are gone.
 
 #include "Network/SatelliteClient.h"
 #include "core/model/Protocol.h"
@@ -18,8 +14,6 @@ using dish::net::SatelliteClient;
 namespace proto = dish::proto;
 namespace reducer = dish::reducer;
 
-// ── Opcode values (the kept set) ────────────────────────────────────────────
-
 TEST_CASE("kept opcode constants match the protocol-1 values", "[udp][opcodes]") {
     REQUIRE(SatelliteClient::kMsgInput == 0x0001);
     REQUIRE(SatelliteClient::kMsgHeartbeatPing == 0x0002);
@@ -32,12 +26,9 @@ TEST_CASE("kept opcode constants match the protocol-1 values", "[udp][opcodes]")
     REQUIRE(SatelliteClient::kMsgSessionClose == 0x000F);
 }
 
-// Compile-time guard: the deleted topology opcodes (0x0004 ADD, 0x0005 REMOVE,
-// 0x0006 ACK, 0x0007 SERVER_STATUS, 0x0008 TYPE, 0x000E CAPS) must NOT exist as
-// members. We can't reference a name that doesn't compile, so instead pin that
-// every defined opcode constant is one of the kept values — a re-introduced
-// 0x0004..0x0008/0x000E member would have to be added to this list to pass,
-// flagging the regression in review.
+// 0x0004..0x0008 and 0x000E were the topology opcodes, now removed. A test
+// cannot name a member that no longer compiles, so re-introducing one instead
+// forces an edit to this list, which surfaces the regression in review.
 TEST_CASE("deleted topology opcodes are absent from the opcode set", "[udp][opcodes]") {
     constexpr std::array<std::uint16_t, 9> kept = {
         SatelliteClient::kMsgInput,        SatelliteClient::kMsgHeartbeatPing,
@@ -51,8 +42,6 @@ TEST_CASE("deleted topology opcodes are absent from the opcode set", "[udp][opco
         REQUIRE_FALSE(isDeletedTopologyOpcode);
     }
 }
-
-// ── Enriched heartbeat ack (0x0003) ─────────────────────────────────────────
 
 TEST_CASE("parseHeartbeatAck decodes backend/count/epoch/bitmap", "[udp][heartbeat]") {
     // backendAvailable(1) + totalActiveControllers(1) + epoch(u16 BE) +
@@ -77,8 +66,7 @@ TEST_CASE("parseHeartbeatAck reads backendAvailable=false", "[udp][heartbeat]") 
 }
 
 TEST_CASE("parseHeartbeatAck rejects a bare (pre-protocol-1) ack", "[udp][heartbeat]") {
-    // A short ack (no enriched payload) → nullopt: liveness still counts, the
-    // reconcile fields just don't update.
+    // nullopt still counts as liveness; only the reconcile fields go unset.
     const std::uint8_t shortPayload[3] = {0x01, 0x00, 0x00};
     REQUIRE_FALSE(SatelliteClient::parseHeartbeatAck(shortPayload, sizeof(shortPayload)));
     REQUIRE_FALSE(SatelliteClient::parseHeartbeatAck(nullptr, 0));
@@ -92,16 +80,11 @@ TEST_CASE("parseHeartbeatAck epoch/bitmap are big-endian", "[udp][heartbeat]") {
     REQUIRE(ack->activeBitmap == 0x8001); // controllers 0 and 15
 }
 
-// ── Close-notify (0x000F) reason → action ───────────────────────────────────
-
 TEST_CASE("close-notify reason maps to the right teardown action", "[udp][close]") {
     using reducer::CloseAction;
-    // unpaired: trust revoked — drop the key and stop retrying.
     REQUIRE(reducer::closeActionForReason(proto::kCloseReasonUnpaired) ==
             CloseAction::DropKeyRePair);
-    // replaced: a newer PUT owns the session — stay down.
     REQUIRE(reducer::closeActionForReason(proto::kCloseReasonReplaced) == CloseAction::StayDown);
-    // shutdown / kicked: transient — reconnect on the backoff curve.
     REQUIRE(reducer::closeActionForReason(proto::kCloseReasonShutdown) ==
             CloseAction::RetryBackoff);
     REQUIRE(reducer::closeActionForReason(proto::kCloseReasonKicked) == CloseAction::RetryBackoff);
@@ -115,8 +98,6 @@ TEST_CASE("close-notify reason bytes match the contract", "[udp][close]") {
     REQUIRE(reducer::closeReasonName(proto::kCloseReasonUnpaired) == "unpaired");
     REQUIRE(reducer::closeReasonName(proto::kCloseReasonKicked) == "kicked");
 }
-
-// ── Rumble / lightbar decoders (kept opcodes, re-pinned) ────────────────────
 
 TEST_CASE("parseRumbleMessage decodes the 7-byte BE payload", "[udp][rumble]") {
     // ctrlIdx(1) strong(2 BE) weak(2 BE) durMs(2 BE).

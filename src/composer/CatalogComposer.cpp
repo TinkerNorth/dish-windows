@@ -8,8 +8,7 @@
 namespace dish::composer {
 
 QList<QString> knownTypeSlugs() {
-    // The protocol-1 controller types the client bundles art/translations for.
-    // Kept in lockstep with proto::kControllerType* (xbox360 = 0, ds4 = 1,
+    // Lockstep with proto::kControllerType* (xbox360 = 0, ds4 = 1,
     // dualsense = 2, switchpro = 3).
     return {QStringLiteral("xbox360"), QStringLiteral("ds4"), QStringLiteral("dualsense"),
             QStringLiteral("switchpro")};
@@ -20,9 +19,6 @@ QList<PickableType> offerableTypes(const models::CatalogDto& catalog) {
     QList<PickableType> out;
     out.reserve(catalog.controllerTypes.size());
     for (const auto& t : catalog.controllerTypes) {
-        // A type renders (and so is offered) as long as it carries a display
-        // name — a type newer than the app still gets a row from its server
-        // strings. A nameless catalog row is dropped.
         if (!reducer::isTypeOfferable(t)) { continue; }
         PickableType row;
         row.type = t.id;

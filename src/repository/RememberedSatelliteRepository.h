@@ -3,17 +3,10 @@
 //
 // RememberedSatelliteRepository — the durable list of remembered satellites.
 //
-// Unlike the per-key pin/shared-key repos, the remembered set is stored as ONE
-// JSON array under the "satellite_list" key of the shared connection-store
-// QSettings (a satellite re-appearing is a read-modify-write of the whole list,
-// keyed by its stable id). Dumb synchronous storage: one std::mutex guards the
-// read-modify-write; no Observables inside. A KeyedRepository<QString,
-// RememberedWifi> whose keyOf() is the row's stable id. Mirrors dish-android
-// repository/RememberedSatelliteRepository.kt (its RememberedSatellite is this
-// client's models::RememberedWifi).
-//
-// Corrupt persisted JSON falls back to an empty list rather than crashing — an
-// old/garbled blob must not brick discovery.
+// Unlike the per-key pin/shared-key repos, the whole set lives under the single
+// "satellite_list" key of the shared connection-store QSettings, so a satellite
+// re-appearing is a read-modify-write of the entire list. Corrupt JSON falls
+// back to an empty list; a garbled blob must not brick discovery.
 
 #pragma once
 
@@ -45,13 +38,12 @@ class RememberedSatelliteRepository
     void remove(const QString& id) override;
     void clear() override;
 
-    // Pull up the KeyedRepository value-overloads (put(value)/removeValue(value))
-    // hidden by the get/put/remove declarations above.
+    // Un-hide the KeyedRepository value-overloads the declarations above shadow.
     using arch::KeyedRepository<QString, models::RememberedWifi>::put;
     using arch::KeyedRepository<QString, models::RememberedWifi>::removeValue;
 
   private:
-    // Read/write the storage-key -> row map. Both assume mutex_ is held.
+    // Both assume mutex_ is held.
     QMap<QString, models::RememberedWifi> readEntries() const;
     void writeEntries(const QMap<QString, models::RememberedWifi>& entries);
 

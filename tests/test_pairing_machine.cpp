@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// PairingMachineTest (PURE) — the total forward (Path A, user-types-a-PIN)
-// pairing lifecycle FSM. Pins, for EVERY (phase x event): the exact next phase,
-// the retained typed PairFailure, and the carried/cleared pin. Mirrors the
-// exhaustive style of test_usb_path_machine.cpp (one section per phase + a
-// totality sweep). Covers the key rules the old single-toast forward path had
-// no way to express: a classified Success is NOT done (it waits for the live
-// session), every PairVerdict failure arm maps to a distinct retained reason,
-// Submit-from-Failed clears the prior reason (retry), and Cancel from any phase
-// resets to Idle. Qt-free — it builds against the real RestOutcome.h classifier.
+// The forward (user-types-a-PIN) pairing FSM, pinned for every (phase x event):
+// the next phase, the retained typed PairFailure, and the carried or cleared pin.
 
 #include "core/reducer/PairingMachine.h"
 #include "core/reducer/RestOutcome.h"
@@ -23,8 +16,6 @@ namespace pe = dish::reducer::pair_event;
 
 namespace {
 
-// Builder for a state in a given phase (mirrors the android-style `controller(…)`
-// helper in test_usb_path_machine.cpp).
 PairingState state(PairPhase phase, std::optional<PairFailure> failure = std::nullopt,
                    std::string pin = std::string()) {
     PairingState s;
@@ -36,8 +27,6 @@ PairingState state(PairPhase phase, std::optional<PairFailure> failure = std::nu
 
 } // namespace
 
-// ── Idle ───────────────────────────────────────────────────────────────────
-
 TEST_CASE("idle + submit starts an attempt carrying the pin", "[pair-fsm]") {
     const auto r = reducePairing(state(PairPhase::Idle), pe::Submit{"1234"});
     CHECK(r.phase == PairPhase::Submitting);
@@ -46,8 +35,6 @@ TEST_CASE("idle + submit starts an attempt carrying the pin", "[pair-fsm]") {
 }
 
 TEST_CASE("idle + reply is a stale no-op", "[pair-fsm]") {
-    // No attempt is in flight, so a classified reply for a settled/absent attempt
-    // is ignored regardless of which verdict it carries.
     for (const PairVerdict v :
          {PairVerdict::Success, PairVerdict::Pending, PairVerdict::AuthRequired,
           PairVerdict::VersionMismatch, PairVerdict::Unreachable}) {
@@ -66,13 +53,10 @@ TEST_CASE("idle + cancel stays idle", "[pair-fsm]") {
     CHECK(r == state(PairPhase::Idle));
 }
 
-// ── Submitting ───────────────────────────────────────────────────────────────
-
 TEST_CASE("submitting + classified success stays submitting until the session is live",
           "[pair-fsm]") {
-    // The crux rule: a Success verdict means "key adopted, session opening" — it
-    // is NOT terminal-success. We stay Submitting (pin retained) and wait for
-    // SessionConfirmedLive. This is what kills the online-count rising-edge guess.
+    // A Success verdict means "key adopted, session opening", not terminal
+    // success, so the phase waits for SessionConfirmedLive instead of guessing.
     const auto r = reducePairing(state(PairPhase::Submitting, std::nullopt, "1234"),
                                  pe::ReplyClassified{PairVerdict::Success});
     CHECK(r.phase == PairPhase::Submitting);
@@ -82,7 +66,7 @@ TEST_CASE("submitting + classified success stays submitting until the session is
 
 TEST_CASE("submitting + classified pending keeps waiting (not a terminal forward failure)",
           "[pair-fsm]") {
-    // Path A doesn't expect Pending; it must NOT collapse to Failed here.
+    // The forward path does not expect Pending, but must not collapse to Failed.
     const auto r = reducePairing(state(PairPhase::Submitting, std::nullopt, "1234"),
                                  pe::ReplyClassified{PairVerdict::Pending});
     CHECK(r.phase == PairPhase::Submitting);
@@ -136,10 +120,8 @@ TEST_CASE("submitting + cancel returns to idle", "[pair-fsm]") {
     CHECK(r == state(PairPhase::Idle));
 }
 
-// ── Succeeded ──────────────────────────────────────────────────────────────
-
 TEST_CASE("succeeded + submit starts a fresh attempt", "[pair-fsm]") {
-    // e.g. the live session later dropped and the user re-pairs.
+    // The live session can drop later and the user re-pairs.
     const auto r = reducePairing(state(PairPhase::Succeeded), pe::Submit{"4321"});
     CHECK(r.phase == PairPhase::Submitting);
     CHECK_FALSE(r.failure.has_value());
@@ -165,11 +147,8 @@ TEST_CASE("succeeded + cancel returns to idle", "[pair-fsm]") {
     CHECK(r == state(PairPhase::Idle));
 }
 
-// ── Failed ─────────────────────────────────────────────────────────────────
-
 TEST_CASE("failed + submit retries and clears the prior failure", "[pair-fsm]") {
-    // The retry rule: re-submitting from Failed drops the retained reason so the
-    // UI leaves the error state, and carries the new pin.
+    // Dropping the retained reason is what lets the UI leave the error state.
     const auto r =
         reducePairing(state(PairPhase::Failed, PairFailure::WrongPin, "1234"), pe::Submit{"5678"});
     CHECK(r.phase == PairPhase::Submitting);
@@ -178,7 +157,6 @@ TEST_CASE("failed + submit retries and clears the prior failure", "[pair-fsm]") 
 }
 
 TEST_CASE("failed + reply is a stale no-op (preserves the retained reason)", "[pair-fsm]") {
-    // A late reply for the already-failed attempt must not change the verdict.
     const auto failed = state(PairPhase::Failed, PairFailure::Unreachable, "1234");
     for (const PairVerdict v :
          {PairVerdict::Success, PairVerdict::Pending, PairVerdict::AuthRequired,
@@ -199,8 +177,6 @@ TEST_CASE("failed + cancel returns to idle and drops the reason", "[pair-fsm]") 
         reducePairing(state(PairPhase::Failed, PairFailure::VersionMismatch, "1234"), pe::Cancel{});
     CHECK(r == state(PairPhase::Idle));
 }
-
-// ── Every PairVerdict failure arm maps to its own retained reason ────────────
 
 TEST_CASE("each failing PairVerdict maps to its distinct PairFailure", "[pair-fsm]") {
     struct Case {
@@ -227,11 +203,6 @@ TEST_CASE("each failing PairVerdict maps to its distinct PairFailure", "[pair-fs
         CHECK_FALSE(r.failure.has_value());
     }
 }
-
-// ── End-to-end: classifyPair feeds ReplyClassified ───────────────────────────
-// Pins that the EXISTING pure classifier (RestOutcome.h) composes with this
-// reducer — the manager will build a PairReply, classify it, and feed the
-// verdict in exactly this way.
 
 TEST_CASE("classifyPair drives the reply transition end-to-end", "[pair-fsm]") {
     auto submitThenReply = [](const PairReply& reply) {
@@ -294,8 +265,6 @@ TEST_CASE("classifyPair drives the reply transition end-to-end", "[pair-fsm]") {
     }
 }
 
-// ── The full happy path ──────────────────────────────────────────────────────
-
 TEST_CASE("happy path: idle -> submit -> success-verdict -> session-live -> succeeded",
           "[pair-fsm]") {
     auto s = state(PairPhase::Idle);
@@ -308,8 +277,6 @@ TEST_CASE("happy path: idle -> submit -> success-verdict -> session-live -> succ
     CHECK_FALSE(s.failure.has_value());
     CHECK(s.pin.empty());
 }
-
-// ── Cancel from every phase ──────────────────────────────────────────────────
 
 TEST_CASE("cancel from every phase resets to a clean idle", "[pair-fsm]") {
     const PairingState states[] = {
@@ -325,8 +292,6 @@ TEST_CASE("cancel from every phase resets to a clean idle", "[pair-fsm]") {
         CHECK(r.pin.empty());
     }
 }
-
-// ── Totality + the failure invariant ─────────────────────────────────────────
 
 TEST_CASE("reducePairing is total over every phase and event", "[pair-fsm]") {
     const PairEvent events[] = {
@@ -346,9 +311,8 @@ TEST_CASE("reducePairing is total over every phase and event", "[pair-fsm]") {
                                  ? std::optional<PairFailure>(PairFailure::WrongPin)
                                  : std::nullopt;
         for (const auto& e : events) {
-            // No (phase x event) throws (the visit + switch are total), and the
-            // core invariant holds for every result: failure is populated IFF
-            // the resulting phase is Failed.
+            // The invariant every arm must hold: a failure is populated if and
+            // only if the resulting phase is Failed.
             const auto r = reducePairing(state(phase, failure, "1234"), e);
             CHECK((r.failure.has_value() == (r.phase == PairPhase::Failed)));
         }
@@ -356,7 +320,6 @@ TEST_CASE("reducePairing is total over every phase and event", "[pair-fsm]") {
 }
 
 TEST_CASE("starting an attempt always clears a stale failure", "[pair-fsm]") {
-    // From any phase, a Submit lands in Submitting with no retained reason.
     for (const PairPhase phase :
          {PairPhase::Idle, PairPhase::Submitting, PairPhase::Succeeded, PairPhase::Failed}) {
         const auto failure = phase == PairPhase::Failed

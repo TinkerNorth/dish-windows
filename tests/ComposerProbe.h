@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Test probe for Composer/Combiner output: captures the derived-state emission
-// sequence, mirroring dish-android's ComposerProbe. `fakeUpstream` builds a
-// settable Observable to inject as a combiner input.
 
 #pragma once
 

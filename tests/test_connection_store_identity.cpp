@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ConnectionStoreIdentityTest (6) + ConnectionStoreEndpointRefreshTest (13),
-// ADAPT. Port of dish-android's two ConnectionStore facade test files: machineId
-// consolidation (one physical receiver = one row keyed on machineId), legacy
-// ip:port -> machineId upgrade carrying the pairing key, cert-pin migration on
-// address change, and forget dropping the row + key + pin together.
-//
-// dish-windows keys a satellite on DiscoveredServer::id() = "mid:<machineId>"
-// (stable) or "wifi:<ip>:<udpPort>" (legacy) — the same id the session layer
-// uses — where android prefixes with "satellite:". The behaviour is identical;
-// only the id-string literals differ.
+// A satellite is keyed on DiscoveredServer::id(): "mid:<machineId>" when the
+// beacon carries one, else the legacy "wifi:<ip>:<udpPort>".
 
 #include "repository/ConnectionStore.h"
 
@@ -39,7 +31,6 @@ DiscoveredServer server(const QString& machineId, const QString& ip,
     return s;
 }
 
-// The stable id for a machineId; the legacy id for an address.
 QString midId(const QString& machineId) { return QStringLiteral("mid:") + machineId; }
 QString legacyId(const QString& ip, int udpPort = 9876) {
     return QStringLiteral("wifi:%1:%2").arg(ip).arg(udpPort);
@@ -49,8 +40,6 @@ const QString kKeyAA = QString(64, QLatin1Char('a'));
 const QString kKeyBB = QString(64, QLatin1Char('b'));
 
 } // namespace
-
-// ── Identity consolidation ──────────────────────────────────────────────────
 
 TEST_CASE("same machine at a new IP stays one row under the stable id", "[cstore]") {
     ConnectionStore store(makeSharedSettings());
@@ -96,7 +85,7 @@ TEST_CASE("an identity upgrade keeps the stable row's own key and purges the leg
     store.setSatelliteSharedKey(legacyId("10.0.0.5"), kKeyBB);
     store.setSatelliteSharedKey(midId("m1"), kKeyAA); // stable row already has its own key
     store.rememberSatellite(server("m1", "10.0.0.5"));
-    CHECK(store.satelliteSharedKey(midId("m1")) == kKeyAA); // stable wins
+    CHECK(store.satelliteSharedKey(midId("m1")) == kKeyAA);
     CHECK_FALSE(store.satelliteSharedKey(legacyId("10.0.0.5")).has_value());
 }
 
@@ -109,8 +98,6 @@ TEST_CASE("a beacon without a machineId refreshes a known stable row, no ghost",
     CHECK(rows[0].id == midId("m1"));
     CHECK(rows[0].name == QStringLiteral("New"));
 }
-
-// ── Endpoint refresh (refreshFromDiscovery) ─────────────────────────────────
 
 TEST_CASE("a scan re-points a remembered satellite at its current address", "[cstore]") {
     ConnectionStore store(makeSharedSettings());
@@ -149,7 +136,7 @@ TEST_CASE("a beacon without a machineId never re-points a row", "[cstore]") {
     store.refreshFromDiscovery({server("", "10.0.0.99")});
     const auto rows = store.remembered();
     REQUIRE(rows.size() == 1);
-    CHECK(rows[0].ip == QStringLiteral("10.0.0.5")); // unchanged
+    CHECK(rows[0].ip == QStringLiteral("10.0.0.5"));
 }
 
 TEST_CASE("a scan upgrades a legacy row to a stable id and carries the key", "[cstore]") {
@@ -191,7 +178,7 @@ TEST_CASE("an unchanged scan leaves the row identical", "[cstore]") {
     CHECK(before[0] == after[0]);
 }
 
-// ── Cert-pin migration (pin keyed by IP) ────────────────────────────────────
+// The pin is keyed by IP, so an address change has to migrate it.
 
 TEST_CASE("the cert pin follows the box to a new address", "[cstore]") {
     ConnectionStore store(makeSharedSettings());

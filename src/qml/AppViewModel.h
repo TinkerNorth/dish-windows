@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// AppViewModel — the single QML-facing exposure object over dish::AppModel. It
-// is a THIN adapter: it owns no UI state of its own beyond a cache of the values
-// it re-publishes as NOTIFY properties, and every command forwards verbatim to
-// the existing AppModel / WifiConnectionManager / ConnectionCoordinator. All
-// derivation (status text, connection rows, slot live-stats) already happens in
-// the C++ stores/composers; this class only maps them to Q_PROPERTY + role
-// models and re-emits change signals so QML bindings stream.
-//
-// Registered as a context property by QmlEntryPoint (the model outlives the
-// engine). Lives in dish_core so its mapping helpers are unit-testable without
-// the Quick/Qml stack; the QML registration is done in the Quick target.
+// The single QML-facing adapter over dish::AppModel: it derives nothing, it
+// only maps stores and composers onto Q_PROPERTY + role models. It lives in
+// dish_core so the mapping helpers stay testable without the Quick stack, and
+// the QmlEntryPoint registers it as a context property outliving the engine.
 
 #pragma once
 
@@ -45,138 +38,101 @@ namespace dish::qml {
 class AppViewModel : public QObject {
     Q_OBJECT
 
-    // ── Dashboard header (mirrors MainWindow::rebuildHeader) ─────────────────
+    // ── Dashboard header ─────────────────────────────────────────────────────
     Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
     Q_PROPERTY(QString summaryText READ summaryText NOTIFY stateChanged)
     Q_PROPERTY(int onlineCount READ onlineCount NOTIFY stateChanged)
     Q_PROPERTY(int connectionCount READ connectionCount NOTIFY stateChanged)
-    // True while any connection is registering a controller (the dashboard's
-    // indeterminate spinner). Mirrors MainUiState::busy.
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
 
-    // ── Live telemetry footer (mirrors MainWindow::onTelemetryTick) ──────────
-    // Sampled ~1 Hz off the processor; the bindings stream as the numbers move.
+    // ── Live telemetry footer, sampled ~1 Hz off the processor ───────────────
     Q_PROPERTY(int eventsPerSec READ eventsPerSec NOTIFY telemetryChanged)
     Q_PROPERTY(int sendsPerSec READ sendsPerSec NOTIFY telemetryChanged)
     Q_PROPERTY(qulonglong totalSent READ totalSent NOTIFY telemetryChanged)
 
-    // ── Pairing one-shot (mirrors MainWindow::showPairingPrompt) ─────────────
-    // pairingActive flips true when the AppModel parks a pairingTarget; the QML
-    // pairing sheet opens on it and calls clearPairingTarget() before showing.
+    // ── Pairing one-shot ─────────────────────────────────────────────────────
     Q_PROPERTY(bool pairingActive READ pairingActive NOTIFY stateChanged)
     Q_PROPERTY(QString pairingServerName READ pairingServerName NOTIFY stateChanged)
-    // The parked target's stable server id, so the sheet can drive BOTH pairing
-    // paths (forward submit + the auto-sent reverse PIN) for a satellite that
-    // demanded pairing mid-connect — not just the rows the user clicked.
+    // The parked target's stable id, so the sheet can drive both pairing paths
+    // for a satellite that demanded pairing mid-connect, not only clicked rows.
     Q_PROPERTY(QString pairingServerId READ pairingServerId NOTIFY stateChanged)
 
-    // ── Collections the page agents iterate ──────────────────────────────────
-    // The slot/controller model (a SlotCard per row) and the connection-row
-    // model (a ConnectionsDialog row per row). Both are owned children; the
-    // pointers are stable for the app lifetime so QML can bind once. NOT named
-    // `slots` because moc strips that token (the Q_SLOTS keyword), the same trap
-    // MainUiState::slotList avoids.
+    // ── Collections the pages iterate ────────────────────────────────────────
+    // Owned children with pointers stable for the app lifetime, so QML binds
+    // once. Not named `slots`: moc strips that token as the Q_SLOTS keyword.
     Q_PROPERTY(dish::qml::SlotListModel* slotModel READ slotModel CONSTANT)
     Q_PROPERTY(dish::qml::ConnectionListModel* connectionModel READ connectionModel CONSTANT)
 
-    // ── Settings: appearance + diagnostics (re-projections of the stores) ─────
-    // themeMode 0=Light 1=Dark 2=System (the SettingsPage chip order). setThemeMode
-    // forwards to ThemePreferenceStore; the ThemeController re-themes the live app
-    // off its Observable, and we re-emit so QML re-reads + the chrome dark-mode
-    // attribute follows. crashReportingEnabled forwards to CrashReportingStore.
+    // ── Settings: appearance + diagnostics ───────────────────────────────────
+    // themeMode 0=Light 1=Dark 2=System, the SettingsPage chip order.
     Q_PROPERTY(int themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged)
     Q_PROPERTY(bool crashReportingEnabled READ crashReportingEnabled WRITE setCrashReportingEnabled
                    NOTIFY crashReportingChanged)
 
     // ── About ─────────────────────────────────────────────────────────────────
-    // The build version string (CMake project VERSION, threaded in as DISH_VERSION).
+    // CMake project VERSION, threaded in as DISH_VERSION.
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
 
-    // ── Connections discovery (reactive) ─────────────────────────────────────
-    // The FOUND list + scan flag, exposed REACTIVELY so QML bindings stream as a
-    // scan lands (P2's plain invokables had no NOTIFY, so the FOUND list only
-    // refreshed on page recreation). The properties read THROUGH the kept
-    // invokables; discoveredChanged folds the manager's discoveredChanged PLUS
-    // the connection-row id set moving (the FOUND list excludes ids that already
-    // have a connections row — the one-spot rule), and scanning folds its
-    // scanningChanged.
+    // ── Connections discovery ────────────────────────────────────────────────
     Q_PROPERTY(QVariantList discoveredServers READ discoveredServers NOTIFY discoveredChanged)
     Q_PROPERTY(bool scanning READ isScanning NOTIFY scanningChanged)
 
-    // ── Reverse (host-initiated) pairing (reactive) ──────────────────────────
-    // The host shows a 4-digit PIN; the operator types it on the satellite. The
-    // sheet binds the phase ("idle"/"awaiting"/"approved"/"declined"/"timedout"),
-    // the PIN to display, and the server name. All fold the manager's
-    // reversePairingChanged into one NOTIFY.
+    // ── Reverse (host-initiated) pairing ─────────────────────────────────────
+    // Phase is "idle" | "awaiting" | "approved" | "declined" | "timedout".
     Q_PROPERTY(QString reversePairingPhase READ reversePairingPhase NOTIFY reversePairingChanged)
     Q_PROPERTY(QString reversePairingPin READ reversePairingPin NOTIFY reversePairingChanged)
     Q_PROPERTY(
         QString reversePairingServerName READ reversePairingServerName NOTIFY reversePairingChanged)
 
     // ── Emulate picker catalog lifecycle (AsyncState<CatalogDto>) ─────────────
-    // The Emulate sheet binds these so it shows a spinner while the catalog GET
-    // is in flight (with nothing cached yet), a typed error message + retry on
-    // failure, and an empty-vs-content distinction — instead of the old "the
-    // fetch silently returned nothing" (one static hint for loading/empty/error).
-    // All three fold AppModel::catalogStateChanged into one NOTIFY.
+    // emulateLoading is the in-flight GET with nothing cached yet; once content
+    // exists a revalidate shows the stale rows instead of a blank spinner.
     Q_PROPERTY(bool emulateLoading READ emulateLoading NOTIFY emulateStateChanged)
     Q_PROPERTY(QString emulateError READ emulateError NOTIFY emulateStateChanged)
     Q_PROPERTY(bool emulateStale READ emulateStale NOTIFY emulateStateChanged)
 
-    // ── First-run onboarding (mirrors maybeShowOnboarding's gate) ─────────────
-    // onboardingNeeded == !OnboardingPreferenceStore::welcomeCompleted(). Main.qml
-    // pushes the onboarding flow on it; markOnboardingComplete() persists the flag.
+    // ── First-run onboarding ─────────────────────────────────────────────────
     Q_PROPERTY(bool onboardingNeeded READ onboardingNeeded NOTIFY onboardingNeededChanged)
 
-    // ── Donate (brand defaults, mirroring DonateView's localizable URLs) ──────
+    // ── Donate ───────────────────────────────────────────────────────────────
     Q_PROPERTY(QString donateSponsorsUrl READ donateSponsorsUrl CONSTANT)
     Q_PROPERTY(QString donateKofiUrl READ donateKofiUrl CONSTANT)
     Q_PROPERTY(QString donateBmacUrl READ donateBmacUrl CONSTANT)
 
-    // ── Shell header + rail (contract A2) ────────────────────────────────────
-    // Primitive counts the pages compose their header sub-lines from (the
-    // design's "2 found · nothing remembered yet" / "2 of 3 online · nothing
-    // bound" strings are assembled in QML so the words stay in qsTr catalogs).
+    // ── Shell header + rail ──────────────────────────────────────────────────
+    // Counts only: the header sub-lines are assembled in QML so their words stay
+    // in the qsTr catalogues.
     Q_PROPERTY(int slotCount READ slotCount NOTIFY stateChanged)
     Q_PROPERTY(int boundSlotCount READ boundSlotCount NOTIFY stateChanged)
-    // Slots actively streaming (bound AND the link Connected) — the Home
-    // header's "N controllers streaming" count. Same composer::streamingSlotCount
-    // rule the wake controller inhibits the display on.
+    // Bound and the link Connected, the same composer::streamingSlotCount rule
+    // the wake controller inhibits the display on.
     Q_PROPERTY(int streamingSlotCount READ streamingSlotCount NOTIFY stateChanged)
     Q_PROPERTY(QString firstOnlineName READ firstOnlineName NOTIFY stateChanged)
     Q_PROPERTY(int foundCount READ foundCount NOTIFY discoveredChanged)
-    // True while the display-sleep inhibitor is held (a slot is streaming) —
-    // drives the header's "STREAMING · DISPLAY KEPT AWAKE" pill.
+    // True while the display-sleep inhibitor is held.
     Q_PROPERTY(bool keepAwakeActive READ keepAwakeActive NOTIFY stateChanged)
-    // The collapsible navigation rail's persisted state (48px icon rail vs
-    // 236px labeled pane). Written by the title-bar hamburger.
     Q_PROPERTY(
         bool railCollapsed READ railCollapsed WRITE setRailCollapsed NOTIFY railCollapsedChanged)
-    // The light-bar forwarding preference (Follow game / Off), surfaced so the
-    // QML Settings page carries the control the Widgets SettingsView had.
     Q_PROPERTY(bool lightbarFollowGame READ lightbarFollowGame WRITE setLightbarFollowGame NOTIFY
                    lightbarChanged)
 
-    // ── Bluetooth radio (the wizard's waiting step) ──────────────────────────
+    // ── Bluetooth radio ──────────────────────────────────────────────────────
     // Two facts, not one: an absent adapter and a switched-off radio need
-    // different copy (and only the second has an action). Sampled in the ctor
-    // and on refreshBluetoothState(); never blocks Continue — USB still works.
+    // different copy, and only the second has an action.
     Q_PROPERTY(bool bluetoothPresent READ bluetoothPresent NOTIFY bluetoothChanged)
     Q_PROPERTY(bool bluetoothEnabled READ bluetoothEnabled NOTIFY bluetoothChanged)
 
-    // ── Apply sequencer (the wizard's Review page + Configure binding) ───────
-    // One step per real async action. The Connection step can sit for 20 s while
-    // Windows hands the device over, which is exactly why it is a step with an
-    // elapsed clock and an escape rather than a spinner.
+    // ── Apply sequencer ──────────────────────────────────────────────────────
+    // The Connection step can sit for 20 s while Windows hands the device over,
+    // which is why it is a step with an elapsed clock and an escape.
     Q_PROPERTY(bool applyInFlight READ applyInFlight NOTIFY applyChanged)
     // "pending" | "active" | "done" | "failed" | "skipped".
     Q_PROPERTY(QString applyConnectionState READ applyConnectionState NOTIFY applyChanged)
     Q_PROPERTY(QString applyDestinationState READ applyDestinationState NOTIFY applyChanged)
-    // Milliseconds on the CURRENT step — drives the 4 s "Windows can take up to
-    // 20 seconds…" hint.
+    // Milliseconds on the current step.
     Q_PROPERTY(int applyElapsedMs READ applyElapsedMs NOTIFY applyChanged)
-    // True only while the Connection step is active: a claim aborts to Standard,
-    // which is a warning. The REST round-trip is never cancellable.
+    // Only while the Connection step is active: aborting a claim falls back to
+    // Standard, but the REST round-trip cannot be cancelled at all.
     Q_PROPERTY(bool applyCancellable READ applyCancellable NOTIFY applyChanged)
 
   public:
@@ -200,9 +156,8 @@ class AppViewModel : public QObject {
     ConnectionListModel* connectionModel() { return &connectionModel_; }
 
     int themeMode() const;
-    // Q_INVOKABLE (not just the property WRITE): the SettingsPage calls these as
-    // functions (App.setThemeMode(x)), which a bare WRITE accessor does not expose
-    // — QML can only assign the property otherwise.
+    // Q_INVOKABLE as well as the property WRITE: QML can only assign a WRITE
+    // accessor, and the pages call these as functions.
     Q_INVOKABLE void setThemeMode(int mode);
     bool crashReportingEnabled() const;
     Q_INVOKABLE void setCrashReportingEnabled(bool enabled);
@@ -234,201 +189,162 @@ class AppViewModel : public QObject {
     int applyElapsedMs() const { return apply_.elapsedMsOnStep; }
     bool applyCancellable() const;
 
-    // The external-open sink: the QmlEntryPoint injects the real ExternalLink
-    // path (which routes a failure through the NotificationQueue toast, matching
-    // Widgets). Returns true iff the open was handed off. When unset (tests / no
-    // entry point) the default below opens via QDesktopServices and reports a
-    // failure through errorMessage(). Kept as a seam so dish_core need not link
-    // the exe-only ExternalLink/NotificationQueue.
+    // A seam so dish_core need not link the exe-only ExternalLink and
+    // NotificationQueue. Returns true when the open was handed off; unset in
+    // tests, where the default falls back to QDesktopServices.
     using ExternalOpenSink = std::function<bool(const QString& url)>;
     void setExternalOpenSink(ExternalOpenSink sink) { externalOpenSink_ = std::move(sink); }
 
-    // The theme-applied sink: the QmlEntryPoint injects a callback that refreshes
-    // the QML Theme singleton + flips the chrome immersive-dark attribute to the
-    // resolved appearance (true == dark). Called after a setThemeMode so the live
-    // QML palette + the native title bar follow the new mode. Unset in tests.
+    // Runs after setThemeMode so the QML palette and the native title bar follow
+    // the new mode (true == dark). Unset in tests.
     using ThemeAppliedSink = std::function<void(bool dark)>;
     void setThemeAppliedSink(ThemeAppliedSink sink) { themeAppliedSink_ = std::move(sink); }
 
-    // ── Commands (forward verbatim to the existing AppModel surface) ─────────
+    // ── Commands, forwarded verbatim to the AppModel surface ────────────────
 
-    // Bind / unbind a slot to a connection (the SlotCard bind menu / Unbind).
     Q_INVOKABLE void bindSlot(const QString& slotId, const QString& connectionId);
     Q_INVOKABLE void unbindSlot(const QString& slotId);
 
-    // Force a slot's USB input path: "standard" (let SDL/XInput own the pad),
-    // "direct" (raw-HID claim), or "auto" (clear the override; the resolution
-    // policy decides). Resolves slotId -> (vid, pid) — a synthetic slot's id IS
-    // the packed vpKey string; an SDL slot's identity comes from the bridge
-    // device list — then forwards to the existing UsbGamepadManager::setPathChoice
-    // / clearChoice. AppModel already rebuilds + emits stateChanged on a USB path
-    // change, so the slot roles refresh with no new NOTIFY. A no-op when the slot
-    // has no resolvable (vid, pid) or no USB manager is wired.
+    // "standard" (SDL/XInput owns the pad), "direct" (raw-HID claim) or "auto"
+    // (clear the override). Resolving slotId to (vid, pid) differs per source: a
+    // synthetic slot's id IS the packed vpKey, an SDL slot's identity comes from
+    // the bridge device list. A no-op when neither resolves.
     Q_INVOKABLE void setSlotPath(const QString& slotId, const QString& choice);
 
-    // The connections a slot may actually bind to, for the bind chooser. Returns
-    // JS objects {connectionId,label,dotColor,glyph} via the SAME pure
-    // reducer::connectionsVisibleInPicker the Widgets SlotCard uses: connections
-    // bound to ANOTHER slot are excluded, live-available unbound ones are offered,
-    // and the slot's OWN current binding is held over even when offline. One-shot
-    // (read when the chooser opens, like emulateTypes), so no NOTIFY.
+    // Rows of {connectionId,label,dotColor,glyph} from the pure
+    // reducer::connectionsVisibleInPicker. One-shot, read when the chooser
+    // opens, so no NOTIFY.
     Q_INVOKABLE QVariantList availableConnectionsForSlot(const QString& slotId) const;
 
-    // Emulate picker: kick a catalog refresh, then read the offerable types +
-    // the slot's current type. emulateTypes returns a list of JS objects
-    // {type,slug,name,shortName,description,known}; emulateCurrentType the
-    // pre-selected wire id. setControllerType applies the choice.
+    // emulateTypes rows are {type,slug,name,shortName,description,known};
+    // emulateCurrentType is the pre-selected wire id.
     Q_INVOKABLE void refreshEmulate(const QString& slotId);
     Q_INVOKABLE QVariantList emulateTypes(const QString& slotId) const;
     Q_INVOKABLE int emulateCurrentType(const QString& slotId) const;
     Q_INVOKABLE void setControllerType(const QString& slotId, int type);
 
-    // The same three, keyed on the DESTINATION rather than an existing binding.
-    // The wizard and the bind-mode editor choose a type for a pad that is not
-    // bound yet, so the slot-keyed reads above vend nothing for them.
+    // The same three keyed on the destination rather than an existing binding:
+    // the wizard picks a type for a pad that is not bound yet, which the
+    // slot-keyed reads above vend nothing for.
     Q_INVOKABLE void refreshEmulateForHost(const QString& connectionId);
     Q_INVOKABLE QVariantList emulateTypesForHost(const QString& connectionId) const;
     Q_INVOKABLE int emulateCurrentTypeForHost(const QString& connectionId,
                                               const QString& slotId) const;
-    // Catalog-fetch lifecycle projection (see the Q_PROPERTYs above).
     bool emulateLoading() const;
     QString emulateError() const;
     bool emulateStale() const;
 
-    // Connections page: discovery + connect + forget. discoveredServers returns
-    // {name,ip,udpPort,pairPort,httpPort,machineId,source,id} objects for the
-    // FOUND list (the rows that aren't yet remembered surface only here).
+    // discoveredServers rows are
+    // {name,ip,udpPort,pairPort,httpPort,machineId,source,id}.
     Q_INVOKABLE void startDiscovery();
     Q_INVOKABLE bool isScanning() const;
     Q_INVOKABLE QVariantList discoveredServers() const;
     Q_INVOKABLE void forgetConnection(const QString& connectionId);
 
-    // Connect a discovered server by its STABLE id (resolves the server out of
-    // the live discovered list). De-raced replacement for connectByIndex — an
-    // index goes stale if the list reorders between read and call. Matches the
-    // Widgets onConnectClicked, which matches on s.id().
+    // Keyed on the stable id, never a list index: the discovered list can reorder
+    // between the read and the call.
     Q_INVOKABLE void connectByServerId(const QString& serverId);
 
-    // Reconnect a REMEMBERED (possibly currently-undiscovered) satellite by id
-    // WITHOUT a rescan requirement and WITHOUT re-pairing. Forwards to the
-    // coordinator's reconnectConnection (Widgets ConnectionsDialog Reconnect).
+    // Reconnects a remembered satellite that may not be discovered right now,
+    // with no rescan and no re-pairing.
     Q_INVOKABLE void reconnectConnection(const QString& connectionId);
 
-    // Graceful disconnect of a LIVE session WITHOUT forgetting (row + key stay).
-    // Forwards to the coordinator's disconnectConnection. Gate on the row's
-    // liveLink role: enable only when the link is live.
+    // Disconnects a live session without forgetting it: the row and the key stay.
     Q_INVOKABLE void disconnectConnection(const QString& connectionId);
 
-    // Pairing sheet: submit a PIN for a discovered server by its stable id,
-    // query the in-flight state, and clear the one-shot pairing trigger before
-    // showing the sheet. De-raced (resolves the server by id, matching
-    // connectByServerId) — the old index-based pairWithPin was removed (R14).
+    // clearPairingTarget consumes the one-shot trigger before the sheet shows.
     Q_INVOKABLE void pairByServerId(const QString& serverId, const QString& pin);
     Q_INVOKABLE bool isPairingInFlight(const QString& serverId) const;
     Q_INVOKABLE void clearPairingTarget();
 
-    // Reverse (host-initiated) pairing: kick a host-initiated pair for the
-    // discovered server with that stable id (de-raced, like connectByServerId);
-    // cancel an in-flight one. The displayed PIN + phase stream through the
-    // reversePairing* properties.
     Q_INVOKABLE void requestReversePairing(const QString& serverId);
     Q_INVOKABLE void cancelReversePairing();
 
     // ── Deadzone settings page ───────────────────────────────────────────────
-    // The per-device rows {id,name,hasGyro,stickFlat,triggerFlat,forwardMotion}
-    // (re-pull on deadzonesChanged). setDeadzones persists the override AND pushes
-    // it into the live processor (same pair the Widgets view + MainWindow do);
-    // setMotionEnabled forwards to MotionEnabledStore keyed by the device id.
+    // Rows of {id,name,hasGyro,stickFlat,triggerFlat,forwardMotion}, re-pulled on
+    // deadzonesChanged. setDeadzones both persists the override and pushes it
+    // into the live processor.
     Q_INVOKABLE QVariantList deadzoneDevices() const;
     Q_INVOKABLE void setDeadzones(const QString& deviceId, int stickFlat, int triggerFlat);
     Q_INVOKABLE void setMotionEnabled(const QString& deviceId, bool enabled);
 
     // ── Configure-controls (raw-joystick remap) page ─────────────────────────
-    // slotRemap returns the slot's EFFECTIVE remap as a JS object the page renders
-    // (which raw axis/button/hat each logical output reads + the invert states).
-    // assignSlotInput applies a capture result via the pure withAssignment helper
-    // and persists it (the store pushes into the bridge, so it takes effect live).
-    // setSlotInvert flips an invert flag; resetSlotRemap drops the override (revert
-    // to the default layout). All resolve slotId → (vid,pid) via the same resolver
-    // setSlotPath uses; a no-op for a slot with no resolvable identity.
+    // slotRemap is the EFFECTIVE remap: which raw axis/button/hat each logical
+    // output reads, plus the invert states. Persisting an assignment pushes it
+    // into the bridge, so it takes effect live. All resolve slotId to (vid,pid)
+    // the way setSlotPath does, and no-op when that fails.
     Q_INVOKABLE QVariantMap slotRemap(const QString& slotId) const;
     Q_INVOKABLE void assignSlotInput(const QString& slotId, const QString& target, int kind,
                                      int index);
     Q_INVOKABLE void setSlotInvert(const QString& slotId, const QString& which, bool on);
     Q_INVOKABLE void resetSlotRemap(const QString& slotId);
 
-    // Toggle the bridge's input-capture mode. While active, the page listens to
-    // rawInputCaptured for the capturing slot. startInputCapture remembers WHICH
-    // slot is capturing so the relay filters to it; stopInputCapture clears it.
+    // startInputCapture also records which slot is capturing, so the
+    // rawInputCaptured relay can filter to it.
     Q_INVOKABLE void startInputCapture(const QString& slotId);
     Q_INVOKABLE void stopInputCapture();
 
     // ── Bluetooth radio ──────────────────────────────────────────────────────
-    // Re-probe (cheap: a SetupAPI enumeration + a radio-find). Emits only on a
-    // real change. openBluetoothSettings deep-links the Windows Settings page.
+    // Emits only on a real change.
     Q_INVOKABLE void refreshBluetoothState();
     Q_INVOKABLE void openBluetoothSettings();
 
-    // ── The capability surface (wizard type table + Configure binding matrix) ─
-    // One row per feature, in the fixed render order, each
+    // ── The capability surface ───────────────────────────────────────────────
+    // One row per feature in fixed render order:
     // { feature, inOk, linkOk, typeOk, hostOk, verdict, failingLayer,
     //   hasFailingLayer }. feature / verdict / failingLayer are lowercase tokens
-    // ("motion", "unavailable", "link") — the C++ never vends a sentence, QML
-    // localizes. `hostKind` is "satellite" or "bluetooth"; `hostId` is the
-    // stable satellite id ("" = no destination chosen yet, which reads Pending).
-    // `desiredPath` is "standard" or "direct"; `touchpadMode` 0=off 1=pad 2=mouse.
+    // ("motion", "unavailable", "link"): the C++ never vends a sentence, QML
+    // localizes. hostKind is "satellite" or "bluetooth", hostId "" means no
+    // destination chosen yet, desiredPath is "standard" or "direct" and
+    // touchpadMode is 0=off 1=pad 2=mouse.
     Q_INVOKABLE QVariantList capabilityForCandidate(const QString& slotId, int type,
                                                     const QString& hostKind, const QString& hostId,
                                                     const QString& desiredPath, bool motionOn,
                                                     bool rumbleOn, int touchpadMode) const;
 
-    // What ONE catalog type carries, as { feature, supported } rows for the type
-    // picker's preview pills. Empty while the catalog is unresolved — a guessed
-    // pill is worse than none.
+    // { feature, supported } rows for the type picker's preview pills. Empty
+    // while the catalog is unresolved: a guessed pill is worse than none.
     Q_INVOKABLE QVariantList typeFeatureSummary(const QString& hostId, int type) const;
 
-    // False ⇒ every capability row renders Pending (never a cross).
+    // False means every capability row renders Pending, never a cross.
     Q_INVOKABLE bool catalogResolvedFor(const QString& hostId) const;
 
-    // ── Host slot accounting (the Destination sub-line, "<n> slots free") ────
-    // Never assert a slot NUMBER before bindSlot allocates one; these are the
-    // counts the pre-bind copy is composed from.
+    // ── Host slot accounting ─────────────────────────────────────────────────
+    // Counts only. A slot NUMBER must never be asserted before bindSlot
+    // allocates one.
     Q_INVOKABLE int hostBoundSlotCount(const QString& connectionId) const;
     Q_INVOKABLE int hostSlotCapacity() const;
-    // The pad that would be unbound if this host is already full; "" when none.
+    // The pad that would be unbound if this host is already full, "" when none.
     Q_INVOKABLE QString displacedSlotName(const QString& connectionId) const;
 
     // ── Binding-draft helpers ───────────────────────────────────────────────
-    // Re-resolve a slot id by (vid, pid) immediately before binding: a Direct
-    // claim RETIRES the framework slot id and replaces it with a synthetic twin,
-    // so an id the wizard opened with can be stale by the time Bind is pressed.
-    // Returns "" when the pad is genuinely gone.
+    // Re-resolve by (vid, pid) immediately before binding: a Direct claim retires
+    // the framework slot id for a synthetic twin, so the id the wizard opened
+    // with can already be stale. "" when the pad is genuinely gone.
     Q_INVOKABLE QString resolveSlotIdForBind(const QString& slotId) const;
-    // True iff the raw-HID fast lane knows this model's report layout. Drives
-    // the Direct card's "Layout guessed" chip; always false over Bluetooth.
+    // Whether the raw-HID fast lane knows this model's report layout. Always
+    // false over Bluetooth.
     Q_INVOKABLE bool isVerifiedModel(const QString& slotId) const;
-    // The per-satellite touchpad pick: "off" | "pad" | "mouse" ("off" when the
-    // user never picked one — the resolve ladder owns any richer default).
+    // "off" | "pad" | "mouse", "off" when the user never picked one: the resolve
+    // ladder owns any richer default.
     Q_INVOKABLE QString touchpadModeFor(const QString& connectionId) const;
     Q_INVOKABLE void setTouchpadMode(const QString& connectionId, const QString& mode);
-    // The read seam for motion forwarding, keyed exactly as setMotionEnabled
-    // writes. Without it a draft would seed from the default (on) and applying
-    // could silently re-enable gyro a user turned off on the Dead zones page.
+    // Keyed exactly as setMotionEnabled writes, so a draft seeded from it cannot
+    // silently re-enable gyro the user turned off on the Dead zones page.
     Q_INVOKABLE bool motionEnabledFor(const QString& slotId) const;
     Q_INVOKABLE bool rumbleEnabledFor(const QString& slotId) const;
     Q_INVOKABLE void setRumbleEnabled(const QString& slotId, bool on);
 
     // ── Apply ────────────────────────────────────────────────────────────────
-    // The ONE write the binding surfaces make. Drives the two-step overlay and
-    // terminates in exactly one applyFinished. Ignored while a run is in flight.
+    // The one write the binding surfaces make. Terminates in exactly one
+    // applyFinished, and is ignored while a run is already in flight.
     Q_INVOKABLE void applyBinding(const QString& slotId, const QString& connectionId, int type,
                                   const QString& desiredPath, bool motionOn, bool rumbleOn,
                                   int touchpadMode);
     // Accepted only while the Connection step is active.
     Q_INVOKABLE void cancelApply();
 
-    // The discovery-source label ("mDNS + broadcast") for a discovered server —
-    // the same string discoveredServers() already vends, addressable by id.
+    // The same discovery-source label discoveredServers() vends, by id.
     Q_INVOKABLE QString discoverySourceFor(const QString& serverId) const;
 
     // ── Licenses page ────────────────────────────────────────────────────────
@@ -436,113 +352,68 @@ class AppViewModel : public QObject {
     Q_INVOKABLE QVariantList licenses() const;
 
     // ── Onboarding + external links ──────────────────────────────────────────
-    // Persist the welcome-completed flag (Main.qml calls this when the flow's
-    // completed() fires). openExternalUrl routes through the injected sink so a
-    // failure raises the same toast the Widgets screens do.
     Q_INVOKABLE void markOnboardingComplete();
     Q_INVOKABLE void openExternalUrl(const QString& url);
 
   signals:
-    // Any header/slot/connection/pairing state changed (folds AppModel's
-    // stateChanged + the coordinator's connectionsChanged).
+    // Folds AppModel's stateChanged and the coordinator's connectionsChanged.
     void stateChanged();
-    // Telemetry footer numbers moved (the ~1 Hz sample).
     void telemetryChanged();
-    // Transient one-shot error, forwarded from AppModel::errorMessage so the QML
-    // toast host can surface it.
     void errorMessage(const QString& message);
 
-    // Settings property NOTIFYs. themeMode/crashReporting re-emit when the store
-    // republishes; onboardingNeeded flips false once markOnboardingComplete lands.
     void themeModeChanged();
     void crashReportingChanged();
     void onboardingNeededChanged();
 
-    // Discovery results moved (P2 had to re-pull discoveredServers() on the broad
-    // stateChanged; this is the precise edge to re-pull on). Folds the
-    // WifiConnectionManager's discoveredChanged AND a connection-row id-set move
-    // (pair landed / forget dropped a row — the FOUND list excludes those ids, so
-    // it must re-read then too). NOTIFY for the discoveredServers property so QML
-    // bindings stream as a scan lands.
+    // Folds the manager's discoveredChanged AND a connection-row id-set move:
+    // the FOUND list excludes ids that already have a row (the one-spot rule),
+    // so a pair landing or a forget has to re-read too.
     void discoveredChanged();
 
-    // The scan flag flipped (a scan started or finished). Folds the
-    // WifiConnectionManager's scanningChanged; NOTIFY for the scanning property.
     void scanningChanged();
-
-    // A reverse-pairing transition (phase / pin / server name moved). Folds the
-    // WifiConnectionManager's reversePairingChanged; NOTIFY for the three
-    // reversePairing* properties.
     void reversePairingChanged();
-
-    // The Emulate catalog fetch lifecycle moved (Loading/Success/Error). NOTIFY
-    // for emulateLoading / emulateError / emulateStale; folds AppModel's
-    // catalogStateChanged.
     void emulateStateChanged();
-
-    // The deadzone device rows / their seeded values moved (a device attached or
-    // detached, or a setDeadzones/setMotionEnabled landed). Re-pull deadzoneDevices().
     void deadzonesChanged();
-
-    // The rail collapse preference flipped (persisted; NOTIFY for railCollapsed).
     void railCollapsedChanged();
 
-    // The light-bar preference flipped (NOTIFY for lightbarFollowGame). Folds
-    // FeatureSettings::changed so an external mutation re-reads too.
+    // Folds FeatureSettings::changed so an external mutation re-reads too.
     void lightbarChanged();
 
-    // A one-shot pairing-success edge (a session reached Connected after a pair).
-    // Mirrors the rising edge of a connection going live; the QML pairing sheet
-    // closes on it. Best-effort, fired at most once per live transition.
+    // The rising edge of a connection going live after a pair. Best-effort,
+    // fired at most once per live transition.
     void pairingSucceeded();
 
-    // A raw input was captured for the slot currently capturing (the configure-
-    // controls page assigns it to the output it is editing). `kind` 0=axis /
-    // 1=button / 2=hat; `index` the raw source; `value` the axis int16 / 1 for a
-    // button / SDL_HAT_* bitmask for a hat. Re-emitted from AppModel's
-    // rawJoystickInput ONLY when the source deviceId maps to the capturing slot.
+    // kind is 0=axis 1=button 2=hat; value is the axis int16, 1 for a button, or
+    // an SDL_HAT_* bitmask. Re-emitted from AppModel's rawJoystickInput only when
+    // the source deviceId maps to the capturing slot.
     void rawInputCaptured(const QString& slotId, int kind, int index, int value);
 
-    // The Bluetooth radio's presence/enabled pair moved.
     void bluetoothChanged();
-
-    // Any field of the apply sequencer moved (phase, step states, elapsed).
     void applyChanged();
 
-    // Terminal apply result, fired exactly once per run. `reasonToken` is "" on
-    // success, else "slotGone" | "hostUnreachable" | "bindRejected" |
-    // "cancelled". `directFellBack` means the Direct claim did not land and the
-    // pad streams over Standard — a WARNING, never an error.
+    // Fired exactly once per run. reasonToken is "" on success, else "slotGone" |
+    // "hostUnreachable" | "bindRejected" | "cancelled". directFellBack means the
+    // Direct claim did not land and the pad streams over Standard, a warning
+    // rather than an error.
     void applyFinished(bool ok, const QString& reasonToken, bool directFellBack);
 
-    // A forward-PIN submit was rejected, keyed by the STABLE discovered-server
-    // id the sheet opened for. `reasonToken` is "wrongPin" | "versionMismatch" |
-    // "unreachable" | "pending". The sheet stays open and marks the field
-    // inline; the existing toast still fires and that duplication is fine.
+    // Keyed by the stable discovered-server id the sheet opened for. reasonToken
+    // is "wrongPin" | "versionMismatch" | "unreachable" | "pending". The toast
+    // fires as well, and that duplication is intended.
     void pairingFailed(const QString& serverId, const QString& reasonToken);
 
   private:
-    // Recompute the cached header/pairing fields + repush the slot model from
-    // the AppModel's current state slice, then emit stateChanged().
     void onStateChanged();
-    // Repush the connection model from the coordinator's derived rows.
     void onConnectionsChanged();
-    // Sample the processor telemetry (the same drain MainWindow does).
     void onTelemetryTick();
-    // Relay AppModel's rawJoystickInput: map the deviceId → slotId and re-emit
-    // rawInputCaptured only when it matches the currently-capturing slot.
     void onRawJoystickInput(const QString& deviceId, int kind, int index, int value);
 
     // ── Apply sequencer internals ────────────────────────────────────────────
-    // Feed the pure machine, stop the budgets it has outgrown, re-publish the
-    // properties, and fire applyFinished once when it reaches a terminal phase.
+    // Feeds the pure machine, stops the budgets it has outgrown, and fires
+    // applyFinished once on reaching a terminal phase.
     void dispatchApply(const reducer::ApplyEvent& event);
-    // Write the four settings + the binding and arm the 8 s budget.
     void beginApplyBind();
-    // The 250 ms tick: advance the elapsed clock and read the outcome of the
-    // step currently in flight off the state slice.
     void onApplyTick();
-    // The slot row with that id in the current state slice, or nullptr.
     const models::ControllerSlot* slotById(const QString& slotId) const;
 
     dish::AppModel* model_;
@@ -569,34 +440,29 @@ class AppViewModel : public QObject {
     QString pairingServerName_;
     QString pairingServerId_;
 
-    // The slot currently running an input capture, or empty when none. Set by
-    // startInputCapture, cleared by stopInputCapture; the rawJoystickInput relay
-    // filters to it so only the capturing slot's page sees the event.
+    // Empty when no capture is running. The rawJoystickInput relay filters to it
+    // so only the capturing slot's page sees the event.
     QString capturingSlotId_;
 
-    // Cached so onStateChanged can fire pairingSucceeded() on the rising edge of
-    // the online count (a fresh connection reached Connected).
+    // Edge detector for pairingSucceeded().
     int lastOnlineCount_ = 0;
 
-    // The connection-row id set as of the last onConnectionsChanged — the FOUND
-    // list excludes these ids (the one-spot rule), so a membership move re-emits
-    // discoveredChanged. An edge detector only: discoveredServers() re-reads the
-    // coordinator's authoritative rows on every call, never this cache.
+    // Edge detector only: discoveredServers() re-reads the coordinator's rows on
+    // every call, never this cache. A membership move re-emits discoveredChanged
+    // because the FOUND list excludes ids that already have a row.
     QSet<QString> connectionRowIds_;
 
-    // Cached onboarding gate so onStateChanged can fire onboardingNeededChanged
-    // only on a real transition (markOnboardingComplete is the only mover today,
-    // but the store could change out from under us).
+    // Edge detector, so onboardingNeededChanged fires only on a real transition.
     bool onboardingNeeded_ = false;
 
-    // Cached Bluetooth radio state (the probe enumerates SetupAPI, so it is
-    // sampled on demand rather than per binding read).
+    // The probe enumerates SetupAPI, so it is sampled on demand rather than on
+    // every binding read.
     bool bluetoothPresent_ = false;
     bool bluetoothEnabled_ = false;
 
     // ── Apply sequencer state ────────────────────────────────────────────────
-    // The pure machine plus the run's parameters, so the Connection step can
-    // hand off to the Destination step without the caller re-supplying them.
+    // The run's parameters are held so the Connection step can hand off to the
+    // Destination step without the caller re-supplying them.
     reducer::ApplyState apply_;
     QString applySlotId_;
     QString applyConnectionId_;
@@ -612,15 +478,14 @@ class AppViewModel : public QObject {
     ExternalOpenSink externalOpenSink_;
     ThemeAppliedSink themeAppliedSink_;
 
-    // Store-observable subscriptions held for the model's lifetime so the
-    // store-side republish (theme/crash/onboarding) re-emits our Qt NOTIFYs.
+    // Held for the model's lifetime: dropping a subscription stops the store-side
+    // republish from reaching the Qt NOTIFYs.
     arch::Observable<source::ThemeMode>::Subscription themeSub_;
     arch::Observable<bool>::Subscription crashSub_;
     arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
     arch::Observable<composer::WakeState>::Subscription keepAwakeSub_;
 
-    // Rail-collapse persistence. UI-shell-only state, so the store lives here
-    // rather than on AppModel — the view model IS the shell's C++ edge.
+    // Shell-only state, so the store lives here rather than on AppModel.
     source::UiPreferenceStore uiPrefs_;
 };
 

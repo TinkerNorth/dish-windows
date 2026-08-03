@@ -12,22 +12,19 @@
 
 namespace dish::net {
 
-// Listens on UDP :9879 for Satellite beacon broadcasts. Mirrors
-// dish-mac/Network/LANDiscovery.swift and satellite_jni.cpp::discoverServers.
+// Listens on UDP :9879 for satellite beacon broadcasts.
 class LANDiscovery {
   public:
     static constexpr int kDefaultPort = 9879;
     static constexpr int kDefaultTimeoutMs = 4000;
 
-    // Blocking. Call from a background thread. Returns every unique server
-    // heard within `timeoutMs`. Each recv has a 300 ms timeout so quiet
-    // networks don't hang the caller past the deadline.
+    // Blocking; call from a background thread. Each recv has its own short
+    // timeout so a quiet network can't hang the caller past `timeoutMs`.
     static QList<models::DiscoveredServer> discover(int port = kDefaultPort,
                                                     int timeoutMs = kDefaultTimeoutMs);
 
-    // Lenient parse — public so unit tests can exercise the JSON path without
-    // opening a UDP socket. Returns std::nullopt for malformed beacons / the
-    // wrong service or any beacon with an empty `name`.
+    // Public so tests can exercise the JSON path without opening a UDP socket.
+    // nullopt for a malformed beacon, the wrong service, or an empty `name`.
     static std::optional<models::DiscoveredServer> parseBeacon(const QString& json,
                                                                const QString& observedIp);
 };

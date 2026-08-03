@@ -13,12 +13,10 @@ namespace dish::repository {
 
 namespace {
 
-// The per-device value is a tiny JSON object {d:<deviceId>, s:<stickFlat>,
-// t:<triggerFlat>}. Keeping it JSON (rather than sub-keys) means one settings
-// entry per device, so all()/clear() enumerate purely by the "deadzone:" prefix.
-// The entry's own `deviceId` is stored verbatim (independent of the storage key)
-// so get(key) returns the value exactly as put — the same Map<K,V> faithfulness
-// the RememberedSatelliteRepository keeps (and which RepositoryContract pins).
+// One JSON object per device (rather than sub-keys) keeps all()/clear() a pure
+// prefix enumeration. The entry's own `deviceId` is stored independently of the
+// storage key so get(key) returns exactly what put stored — the Map<K,V>
+// faithfulness RepositoryContract pins.
 constexpr const char* kFieldDevice = "d";
 constexpr const char* kFieldStick = "s";
 constexpr const char* kFieldTrigger = "t";
@@ -27,10 +25,9 @@ QString storageKey(const QString& deviceId) {
     return QLatin1String(keys::kDeadzonePrefix) + deviceId;
 }
 
-// Decode a stored value back to an entry; std::nullopt on a missing or corrupt
-// blob so a garbled value for one device never throws or bricks setup.
-// `fallbackDeviceId` is the storage key, used only for legacy blobs that predate
-// the stored `d` field.
+// nullopt on a missing or corrupt blob so a garbled value for one device never
+// bricks setup. `fallbackDeviceId` is the storage key, used only for older blobs
+// that predate the stored `d` field.
 std::optional<DeadzoneEntry> decodeEntry(const QString& fallbackDeviceId, const QByteArray& raw) {
     if (raw.isEmpty()) { return std::nullopt; }
     QJsonParseError err{};
@@ -99,7 +96,6 @@ std::vector<DeadzoneEntry> DeadzoneRepository::all() const {
 
 void DeadzoneRepository::put(const QString& deviceId, const DeadzoneEntry& value) {
     std::lock_guard<std::mutex> lock(mutex_);
-    // Storage key authoritative; store the value's flats verbatim under it.
     settings_->setValue(storageKey(deviceId), encodeEntry(value));
 }
 
@@ -111,9 +107,9 @@ void DeadzoneRepository::remove(const QString& deviceId) {
 void DeadzoneRepository::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     const QString prefix = QLatin1String(keys::kDeadzonePrefix);
-    // Wipe only this repo's namespace — co-tenant keys (pins, shared keys, the
-    // remembered list) survive. Collect first; removing while iterating
-    // allKeys() is unsafe.
+    // Only this repo's namespace: co-tenant pins, shared keys and the remembered
+    // list must survive. Collect first — removing while iterating allKeys() is
+    // unsafe.
     QStringList toRemove;
     for (const auto& key : settings_->allKeys()) {
         if (key.startsWith(prefix)) { toRemove.append(key); }

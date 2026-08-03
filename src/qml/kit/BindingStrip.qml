@@ -1,18 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// "The binding, printed underneath" — the BINDING eyebrow, the chips that spell
-// a binding out (emulated type, link path, motion, touchpad routing, rumble,
-// lightbar, dead zones) and the one Edit control. Composed entirely of Eyebrow +
-// CapabilityChip + DishButton; it exists as a component so the wrapping rule
-// lives in exactly one place.
-//
-// It NEVER collapses to a bare count. "5 settings" replaces seven labelled facts
-// with a number the user cannot expand, and reading the binding without pushing
-// a page is the strip's entire job. Instead: lay chips until they no longer fit,
-// then a real +N BUTTON that opens a popup listing the remainder WITH the reason
-// each one is dimmed. Below ~600px of content the chips take their own
-// full-width second line — vertical space is cheaper than meaning.
+// The binding, printed underneath. It never collapses to a bare count: reading
+// the binding without pushing a page is the strip's entire job.
 //
 // The fit is measured from the laid-out chips' implicit widths and assigned
 // imperatively. A binding would feed the measurement back into the layout it is
@@ -33,21 +23,19 @@ Item {
     // [{ text: string, tone: int /* CapabilityChip.Tone */, reason: string }]
     property var chips: []
     property bool showEdit: true
-    // The parent's content width, which is what the overflow rule is written
-    // against. 0 falls back to this item's own width.
+    // The parent's content width: what the overflow rule is written against.
     property int availableWidth: 0
 
     signal editRequested()
 
     readonly property int effectiveWidth: strip.availableWidth > 0 ? strip.availableWidth
                                                                    : strip.width
-    // The desperate width: the chips move to their own line rather than lose a
-    // single labelled fact.
+    // The chips take their own line rather than lose a single labelled fact.
     readonly property bool narrow: strip.effectiveWidth > 0
                                    && strip.effectiveWidth < Tokens.stackBreakpoint - 160
 
     readonly property int chipCount: strip.chips ? strip.chips.length : 0
-    // How many chips fit on the line. Never bound — see the header note.
+    // Never bound — see the header.
     property int shownCount: 0
     readonly property int hiddenCount: Math.max(0, strip.chipCount - strip.shownCount)
     readonly property var hiddenChips: strip.chips ? strip.chips.slice(strip.shownCount) : []
@@ -65,8 +53,6 @@ Item {
     onNarrowChanged: Qt.callLater(strip.relayoutChips)
     Component.onCompleted: strip.relayoutChips()
 
-    // The px the chip row may occupy: the whole line when the chips have their
-    // own, the gap between the eyebrow and Edit otherwise.
     function chipBudget() {
         if (strip.narrow)
             return layout.width > 0 ? layout.width : strip.effectiveWidth;
@@ -197,8 +183,6 @@ Item {
             }
         }
 
-        // The overflow control. A real focusable button, never a label: the
-        // remainder has to be reachable, and by keyboard.
         AbstractButton {
             id: overflowChip
 
@@ -260,8 +244,6 @@ Item {
         }
     }
 
-    // The remainder, each with the reason it reads the way it does — the part a
-    // bare count throws away.
     Popup {
         id: overflowPopup
 
@@ -271,7 +253,6 @@ Item {
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-        // Flat, like every surface that is not the toast.
         background: Rectangle {
             radius: Tokens.radiusCard
             color: Theme.surface
@@ -310,8 +291,6 @@ Item {
                               ? overflowRow.modelData.reason : ""
                         wrapMode: Text.WordWrap
                         font.pixelSize: Tokens.textMeta
-                        // Information, never dimmed: the reason is the part the
-                        // user opened this popup to read.
                         color: Theme.mutedStrong
                     }
                 }

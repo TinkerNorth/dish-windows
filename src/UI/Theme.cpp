@@ -13,13 +13,6 @@
 
 namespace dish::ui {
 
-// ── Palettes ────────────────────────────────────────────────────────────────
-// The dark palette is the historical deep-space default (lifted from
-// dish-android values-night/colors.xml). The light palette mirrors every dark
-// token role with a light-appropriate value (the non-night values/colors.xml +
-// the cross-client design system in BRAND.md). Every role in the dark set has a
-// counterpart here — palette completeness is asserted in test_theme_store.cpp.
-
 const ThemePalette& darkPalette() {
     static const ThemePalette kDark{
         /*background*/ 0xFF060818,
@@ -35,11 +28,8 @@ const ThemePalette& darkPalette() {
         /*success*/ 0xFF22C55E,
         /*error*/ 0xFFE74C3C,
         /*warning*/ 0xFFF59E0B,
-        // Donation accent — dish-android colorPulse, pulse pink on navy.
         /*pulse*/ 0xFFFF6FB5,
-        // Brand-glyph tint — the light-cyan the SVGs bake, now a token so the
-        // light palette can darken it (11.0:1 here, 1.7:1 on white).
-        /*glyph*/ 0xFF8FCFE3,
+        /*glyph*/ 0xFF8FCFE3,       // 11.0:1 here, but 1.7:1 on white — hence a token
         /*disabledFg*/ 0xFF6C7799,  // 4.2:1 on surface
         /*mutedStrong*/ 0xFF7E8CB4, // 5.6:1 on surface
     };
@@ -47,29 +37,25 @@ const ThemePalette& darkPalette() {
 }
 
 const ThemePalette& lightPalette() {
-    // Light appearance — the non-night design tokens. Body/surface roles invert
-    // to near-white; the cyan accent darkens to `primaryDark` so it keeps
-    // contrast on a light background (a bright cyan on white is illegible), with
-    // a deep-ink `onPrimary`/`onSurface` for text. Status hues stay in family
-    // but shift to AA-contrast-on-light variants. Mirrors dish-android's
-    // values/colors.xml (light) against values-night/ (dark).
+    // The cyan accent darkens here because a bright cyan on white is illegible;
+    // status hues stay in family but shift to AA-contrast-on-light variants.
     static const ThemePalette kLight{
-        /*background*/ 0xFFF5F7FC,  // body — soft off-white (--tn-ink light)
-        /*surface*/ 0xFFFFFFFF,     // card — white (--tn-night light)
-        /*surfaceDim*/ 0xFFE7ECF6,  // recessed — light grey (--tn-deep light)
-        /*primary*/ 0xFF0E7C97,     // accent — darkened cyan for contrast on white
-        /*primaryDark*/ 0xFF0A5E73, // pressed / disabled accent
-        /*onPrimary*/ 0xFFFFFFFF,   // text on primary
-        /*onSurface*/ 0xFF0C1430,   // body text — deep ink
-        /*muted*/ 0xFF5A6680,       // secondary text — slate
-        /*outline*/ 0x330E7C97,     // borders — darkened-cyan @ ~20% alpha
-        /*success*/ 0xFF1B873F,     // status — success (darker green on light)
-        /*error*/ 0xFFC0392B,       // status — error (darker red on light)
-        /*warning*/ 0xFFB7791F,     // status — warning (amber that reads on white)
-        /*pulse*/ 0xFFC2417F,       // donation accent — pink, AA-darkened on white
-        /*glyph*/ 0xFF2F7E96,       // brand glyph — darkened cyan (4.6:1 on white)
-        // NOTE: disabledFg is deliberately LIGHTER than its dark counterpart —
-        // "disabled" reads as receding, which on a white card means paler.
+        /*background*/ 0xFFF5F7FC,
+        /*surface*/ 0xFFFFFFFF,
+        /*surfaceDim*/ 0xFFE7ECF6,
+        /*primary*/ 0xFF0E7C97,
+        /*primaryDark*/ 0xFF0A5E73,
+        /*onPrimary*/ 0xFFFFFFFF,
+        /*onSurface*/ 0xFF0C1430,
+        /*muted*/ 0xFF5A6680,
+        /*outline*/ 0x330E7C97, // darkened-cyan @ ~20% alpha
+        /*success*/ 0xFF1B873F,
+        /*error*/ 0xFFC0392B,
+        /*warning*/ 0xFFB7791F,
+        /*pulse*/ 0xFFC2417F,
+        /*glyph*/ 0xFF2F7E96,
+        // Deliberately LIGHTER than its dark counterpart: "disabled" reads as
+        // receding, which on a white card means paler.
         /*disabledFg*/ 0xFF8A93A6,  // 3.1:1 on surface
         /*mutedStrong*/ 0xFF4B566E, // 7.4:1 on surface
     };
@@ -79,10 +65,6 @@ const ThemePalette& lightPalette() {
 const ThemePalette& paletteFor(Appearance appearance) {
     return appearance == Appearance::Light ? lightPalette() : darkPalette();
 }
-
-// ── Active palette (the Theme::* tokens) ────────────────────────────────────
-// Initialised to the dark values so a build that never calls setActivePalette()
-// is pixel-identical to the pre-3d app.
 
 QRgb Theme::background = darkPalette().background;
 QRgb Theme::surface = darkPalette().surface;
@@ -133,7 +115,7 @@ void setActiveAppearance(Appearance appearance) {
 
 Appearance detectSystemAppearance() {
 #ifdef Q_OS_WIN
-    // Windows personalisation: AppsUseLightTheme is 1 for light, 0 for dark.
+    // AppsUseLightTheme is 1 for light, 0 for dark.
     QSettings personalize(
         QStringLiteral(
             "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
@@ -143,7 +125,7 @@ Appearance detectSystemAppearance() {
         return appsLight.toInt() != 0 ? Appearance::Light : Appearance::Dark;
     }
 #endif
-    // Qt 6 style hint where the registry value is missing (or on non-Windows).
+    // Fall back to the Qt style hint where the registry value is missing.
     if (auto* hints = QGuiApplication::styleHints()) {
         if (hints->colorScheme() == Qt::ColorScheme::Light) { return Appearance::Light; }
         if (hints->colorScheme() == Qt::ColorScheme::Dark) { return Appearance::Dark; }

@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Coverage for the RAW-JOYSTICK fallback mapper in JoystickMapping.{h,cpp}.
-// Generic pads SDL classifies as a joystick but NOT a game controller (no entry
-// in SDL's mapping DB) have no normalised layout — this maps a raw axis/button/
-// hat snapshot to the GamepadInputProcessor::DeviceState the processor consumes,
-// using a best-guess default DirectInput layout. The mapper is pure / SDL-free
-// precisely so it can be exercised here without opening a device. Mirrors the
-// style of test_sdl_motion_convert.cpp.
-//
-// Default layout under test (see JoystickMapping.h):
-//   axes 0/1 = left stick X/Y; right stick = 3/4 (6-axis pads, triggers on 2/5)
-//   or 2/3 (4/5-axis pads, triggers from buttons); buttons 0-3 = A/B/X/Y,
-//   4/5 = shoulders, 6/7 = back/start, 10/11 = stick clicks; hat 0 → dpad.
-//   Y axes are inverted (SDL +down → report +up).
+// The default DirectInput layout every case below is measured against (see
+// JoystickMapping.h): axes 0/1 = left stick; right stick = 3/4 on 6-axis pads
+// (triggers on 2/5) or 2/3 otherwise (triggers from buttons); buttons 0-3 =
+// A/B/X/Y, 4/5 shoulders, 6/7 back/start, 10/11 stick clicks; hat 0 = dpad.
+// Y axes are inverted, since SDL reports +down and the wire wants +up.
 
 #include "Input/JoystickMapping.h"
 
@@ -37,8 +29,7 @@ namespace hat = dish::input::hat;
 
 namespace {
 
-// Build a snapshot over caller-owned arrays. The arrays must outlive the
-// snapshot (and the mapJoystick call) — every test below keeps them in scope.
+// The caller-owned arrays must outlive the snapshot and the mapJoystick call.
 JoystickSnapshot makeSnapshot(const std::int16_t* axes, int axisCount, const bool* buttons,
                               int buttonCount, const std::uint8_t* hats, int hatCount) {
     JoystickSnapshot s{};
@@ -53,18 +44,16 @@ JoystickSnapshot makeSnapshot(const std::int16_t* axes, int axisCount, const boo
 
 } // namespace
 
-// ── Safe accessors: out-of-range / null must not crash or misread ────────────
-
 TEST_CASE("axisAt returns 0 for out-of-range and null", "[joymap]") {
     std::array<std::int16_t, 2> axes{100, 200};
     JoystickSnapshot s = makeSnapshot(axes.data(), 2, nullptr, 0, nullptr, 0);
     REQUIRE(axisAt(s, 0) == 100);
     REQUIRE(axisAt(s, 1) == 200);
-    // Past the real count → neutral, not a heap over-read.
+    // Past the real count reads neutral rather than over-reading the heap.
     REQUIRE(axisAt(s, 2) == 0);
     REQUIRE(axisAt(s, 99) == 0);
     REQUIRE(axisAt(s, -1) == 0);
-    // Null array with a (lying) non-zero count still reads neutral.
+    // A null array with a lying non-zero count is also neutral.
     JoystickSnapshot bad = makeSnapshot(nullptr, 4, nullptr, 0, nullptr, 0);
     REQUIRE(axisAt(bad, 0) == 0);
 }
@@ -81,8 +70,6 @@ TEST_CASE("buttonAt returns false for out-of-range and null", "[joymap]") {
     REQUIRE(buttonAt(bad, 0) == false);
 }
 
-// ── triggerFromAxis ──────────────────────────────────────────────────────────
-
 TEST_CASE("triggerFromAxis maps the positive int16 half to 0..255", "[joymap]") {
     REQUIRE(triggerFromAxis(0) == 0);
     REQUIRE(triggerFromAxis(-1) == 0);
@@ -92,8 +79,6 @@ TEST_CASE("triggerFromAxis maps the positive int16 half to 0..255", "[joymap]") 
     REQUIRE(triggerFromAxis(16384) == 127);
 }
 
-// ── hasTriggerAxes ───────────────────────────────────────────────────────────
-
 TEST_CASE("hasTriggerAxes is true only with >= 6 axes", "[joymap]") {
     std::array<std::int16_t, 8> a{};
     REQUIRE(hasTriggerAxes(makeSnapshot(a.data(), 6, nullptr, 0, nullptr, 0)) == true);
@@ -102,8 +87,6 @@ TEST_CASE("hasTriggerAxes is true only with >= 6 axes", "[joymap]") {
     REQUIRE(hasTriggerAxes(makeSnapshot(a.data(), 4, nullptr, 0, nullptr, 0)) == false);
     REQUIRE(hasTriggerAxes(makeSnapshot(a.data(), 2, nullptr, 0, nullptr, 0)) == false);
 }
-
-// ── Stick routing: 6-axis pad (right stick on 3/4, triggers on 2/5) ─────────
 
 TEST_CASE("6-axis pad routes left 0/1, right 3/4 with Y inverted", "[joymap]") {
     // axis: 0=lx 1=ly 2=lt 3=rx 4=ry 5=rt
@@ -121,8 +104,6 @@ TEST_CASE("6-axis pad sources triggers from axes 2 and 5", "[joymap]") {
     REQUIRE(st.lt == 255);
     REQUIRE(st.rt == 127);
 }
-
-// ── Stick routing: 4-axis pad (right stick on 2/3, triggers from buttons) ───
 
 TEST_CASE("4-axis pad routes right stick to axes 2/3", "[joymap]") {
     // axis: 0=lx 1=ly 2=rx 3=ry
@@ -146,8 +127,6 @@ TEST_CASE("4-axis pad sources triggers from buttons 8/9 (no trigger axes)", "[jo
     REQUIRE(st.lt == 255);
     REQUIRE(st.rt == 255);
 }
-
-// ── Face / shoulder / system / stick-click buttons ──────────────────────────
 
 TEST_CASE("face buttons 0-3 map A/B/X/Y", "[joymap]") {
     std::array<bool, 4> buttons{};
@@ -187,19 +166,16 @@ TEST_CASE("shoulders 4/5, back/start 6/7, stick clicks 10/11", "[joymap]") {
 }
 
 TEST_CASE("button 8 (guide) maps to no XUSB bit", "[joymap]") {
-    // The XUSB report the processor consumes has no guide bit; pressing the
-    // guide key alone must not light any button (and must not alias Start/Back).
+    // The XUSB report has no guide bit, so guide must light nothing at all and
+    // must not alias Start or Back.
     std::array<bool, 9> buttons{};
     buttons[8] = true;
     auto st = mapJoystick(makeSnapshot(nullptr, 0, buttons.data(), 9, nullptr, 0));
-    // With >= 6 axes the trigger-from-button path is off, so button 8 has no
-    // effect at all. Provide 6 axes so triggers come from axes, isolating 8.
+    // 6 axes turns the trigger-from-button path off, isolating button 8.
     std::array<std::int16_t, 6> axes{};
     st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 9, nullptr, 0));
     REQUIRE(st.wButtons == 0);
 }
-
-// ── Hat → dpad: all 8 directions ─────────────────────────────────────────────
 
 TEST_CASE("hat maps all 8 directions to dpad bits", "[joymap]") {
     auto dpadFor = [](std::uint8_t h) -> std::uint16_t {
@@ -224,12 +200,7 @@ TEST_CASE("hat maps all 8 directions to dpad bits", "[joymap]") {
             (B::kDpadDown | B::kDpadLeft));
 }
 
-// ── Totality: a sparse pad with fewer axes/buttons than the layout assumes ──
-
 TEST_CASE("a minimal pad (2 axes, 2 buttons, no hat) maps safely", "[joymap]") {
-    // A bare pad far smaller than the default layout: only a left stick and two
-    // face buttons, no hat. Must produce a sane report with everything the pad
-    // lacks reading neutral — no crash, no over-read.
     std::array<std::int16_t, 2> axes{500, -600};
     std::array<bool, 2> buttons{true, false}; // A pressed
     auto st = mapJoystick(makeSnapshot(axes.data(), 2, buttons.data(), 2, nullptr, 0));
@@ -240,7 +211,6 @@ TEST_CASE("a minimal pad (2 axes, 2 buttons, no hat) maps safely", "[joymap]") {
     REQUIRE(st.lt == 0);
     REQUIRE(st.rt == 0);
     REQUIRE((st.wButtons & B::kA) != 0);
-    // No dpad / shoulders / triggers from a pad that lacks them.
     REQUIRE((st.wButtons & ~static_cast<std::uint16_t>(B::kA)) == 0);
 }
 
@@ -256,12 +226,7 @@ TEST_CASE("an all-zero snapshot maps to a neutral report", "[joymap]") {
     REQUIRE(st.rt == 0);
 }
 
-// ── DEFAULT-EQUIVALENCE: the parameterized overload under the default remap
-//    must equal the legacy overload for the same snapshot ──────────────────────
-
 TEST_CASE("default JoystickRemap matches the legacy mapJoystick overload", "[joymap][remap]") {
-    // A snapshot exercising sticks, both trigger paths, faces, shoulders,
-    // system buttons, stick clicks, and a hat — fed through BOTH overloads.
     std::array<std::int16_t, 6> axes{1000, -2000, 24000, 3000, -4000, 16384};
     std::array<bool, 12> buttons{true, false, true,  false, true, true,
                                  true, true,  false, false, true, true};
@@ -272,8 +237,7 @@ TEST_CASE("default JoystickRemap matches the legacy mapJoystick overload", "[joy
     auto viaDefault = mapJoystick(snap, JoystickRemap{});
     REQUIRE(legacy == viaDefault);
 
-    // And the same for a 4-axis pad (the adaptive right-stick + button-trigger
-    // fallback path) so default-equivalence covers BOTH branches.
+    // Again on a 4-axis pad, so both the direct and the adaptive branch are covered.
     std::array<std::int16_t, 4> axes4{500, 600, 700, 800};
     std::array<bool, 10> buttons4{};
     buttons4[8] = true; // adaptive left-trigger button
@@ -281,18 +245,14 @@ TEST_CASE("default JoystickRemap matches the legacy mapJoystick overload", "[joy
     REQUIRE(mapJoystick(snap4) == mapJoystick(snap4, JoystickRemap{}));
 }
 
-// ── NON-DEFAULT remaps: routing follows the table ───────────────────────────
-
 TEST_CASE("remap swaps A and B", "[joymap][remap]") {
     JoystickRemap remap{};
-    // Route logical A from source button 1 and logical B from source button 0.
     remap.buttons[static_cast<int>(RemapButton::A)] = 1;
     remap.buttons[static_cast<int>(RemapButton::B)] = 0;
 
     std::array<bool, 4> buttons{true, false, false, false}; // physical button 0 down
     std::array<std::int16_t, 6> axes{}; // 6 axes so the trigger-button path is off
     auto st = mapJoystick(makeSnapshot(axes.data(), 6, buttons.data(), 4, nullptr, 0), remap);
-    // Physical 0 now drives B (swapped), not A.
     REQUIRE((st.wButtons & B::kB) != 0);
     REQUIRE((st.wButtons & B::kA) == 0);
 
@@ -307,8 +267,8 @@ TEST_CASE("remap moves the right stick to axes 2/3 on a 6-axis pad", "[joymap][r
     remap.rightStickX = 2;
     remap.rightStickY = 3;
     remap.useAdaptiveRightStick = false; // explicit choice — no adaptive fallback
-    // 6 axes so adaptive would NOT trigger anyway; this asserts the explicit
-    // 2/3 routing overrides the default 3/4 even with dedicated trigger axes.
+    // 6 axes, so this pins that the explicit 2/3 routing beats the default 3/4
+    // even when the pad has dedicated trigger axes.
     std::array<std::int16_t, 6> axes{0, 0, 1111, 2222, 9999, 9999};
     auto st = mapJoystick(makeSnapshot(axes.data(), 6, nullptr, 0, nullptr, 0), remap);
     REQUIRE(st.rx == 1111);

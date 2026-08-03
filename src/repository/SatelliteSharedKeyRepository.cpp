@@ -15,8 +15,8 @@ SatelliteSharedKeyRepository::SatelliteSharedKeyRepository(std::shared_ptr<QSett
 
 std::optional<QString> SatelliteSharedKeyRepository::get(const QString& id) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    // Non-const on purpose: const would block the implicit move into the
-    // returned optional and force a QString copy on every hit.
+    // Non-const on purpose: const blocks the implicit move into the returned
+    // optional and costs a QString copy on every hit.
     auto v = settings_->value(QLatin1String(keys::kSharedKeyPrefix) + id).toString();
     if (v.isEmpty()) { return std::nullopt; }
     return v;
@@ -37,6 +37,7 @@ std::vector<QString> SatelliteSharedKeyRepository::all() const {
 
 void SatelliteSharedKeyRepository::put(const QString& id, const QString& keyHex) {
     std::lock_guard<std::mutex> lock(mutex_);
+    // Plaintext hex, by design — see the header and PRIVACY.md.
     settings_->setValue(QLatin1String(keys::kSharedKeyPrefix) + id, keyHex);
 }
 

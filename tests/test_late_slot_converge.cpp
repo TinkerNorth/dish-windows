@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Descriptor-aware late-slot converge: the sent-vs-desired descriptor diff a
-// session PUT runs when slots changed during its round-trip. Unlike the
-// (ctrlIdx,type) variant in test_session_reconcile, this diffs the WHOLE
-// descriptor — a touchpad-mode flip or a caps change on the same index is a
-// resync too. Replicates dish-android source/connection/LateSlotConvergeTest
-// (10), pure, no sockets.
+// Diffs the WHOLE descriptor, not just (ctrlIdx,type): a touchpad-mode flip or
+// a caps change on the same index is a resync too.
 
 #include "core/model/Protocol.h"
 #include "core/reducer/LateSlotConverge.h"
@@ -23,8 +19,6 @@ using reducer::lateSlotConvergeDesc;
 
 namespace {
 
-// A descriptor builder mirroring the android `desc(idx, type, caps, mode)`
-// helper; caps default to CAP_RUMBLE, mode default off.
 DescriptorSlot desc(std::uint8_t idx, std::uint8_t type = proto::kControllerTypeXbox,
                     std::uint16_t caps = proto::kCapRumble,
                     std::uint8_t mode = proto::kTouchpadModeOff) {

@@ -16,13 +16,10 @@ bool WakeStateController::isInhibiting() const {
 }
 
 void WakeStateController::apply(const WakeState& value) {
-    // Drop any emission that lands after a deliberate stop() (parity with
-    // android's `if (stopped) return` guard; the subscription is already torn
-    // down by the kernel, so this is belt-and-suspenders).
+    // Belt-and-braces: the kernel already tore the subscription down on stop().
     if (stopped_) { return; }
     if (inhibitor_ == nullptr) { return; }
-    // acquire/release are idempotent, so a same-intent re-emit is a no-op and the
-    // OS portal is only touched on a real 0<->positive flip.
+    // acquire/release are idempotent, so the OS is only touched on a real flip.
     if (value.shouldInhibit) {
         inhibitor_->acquire(reason_);
     } else {
@@ -38,7 +35,7 @@ void WakeStateController::onStarting() {
 void WakeStateController::stop() {
     stopped_ = true;
     cancelCollection();
-    // Deliberate teardown: never strand the wake flag when streaming ends.
+    // Release too, or the wake flag is stranded when streaming ends.
     if (inhibitor_ != nullptr) { inhibitor_->release(); }
 }
 

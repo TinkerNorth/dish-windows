@@ -9,28 +9,16 @@ on:
         description: "Tag to release (must already exist)"
         required: true
 
-# Builds a release `dish.exe` + Qt runtime bundle and uploads it to the
-# GitHub Releases page for the tag.
+# Builds a release dish.exe + Qt runtime bundle, SBOM and checksums, and
+# attaches them to the GitHub Release for the tag.
 #
-# This Windows release pipeline starts intentionally smaller than the
-# dish-linux one (which produces .deb / AppImage with cosign keyless sigs,
-# SBOMs, and SLSA L3 provenance). Once the basic exe-bundle flow is
-# proven to ship, the dish-linux `harden` job structure can be ported
-# wholesale — see HANDOFF.md item 6.
-#
-# Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
-#   actions/checkout                @ v6.0.2  → de0fac2e4500dabe0009e67214ff5f5447ce83dd
-#   actions/upload-artifact         @ v7.0.1  → 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-#   anchore/sbom-action             @ v0.24.0 → e22c389904149dbc22b58101806040fa8d37a610
-#   softprops/action-gh-release     @ v3.0.0  → b4309332981a82ec1c5618f44dd2e27cc8bfbfda
-#   ilammy/msvc-dev-cmd             @ v1.13.0 → 0b201ec74fa43914dc39ae48a89fd1d8cb592756
-#   jurplel/install-qt-action       @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
-#   lukka/run-vcpkg                 @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
+# No signing or provenance attestation yet; the artifacts are unsigned.
 
+# Read-only by default; only the job that publishes gets contents: write.
+# No id-token / attestations scope — nothing signs or attests here, and an
+# unused write scope on every job is just a wider blast radius.
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -39,6 +27,10 @@ concurrency:
 jobs:
   gates:
     name: PR-time gates against tag
+    # Must be a superset of what _security.yml declares, or the call fails.
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/_security.yml
     with:
       osv_scan_paths: |
@@ -54,14 +46,24 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 60
 
+    # The only job that needs to write: it creates the GitHub Release.
+    permissions:
+      contents: write
+
     env:
       VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
 
     steps:
+      # On a tag push this resolves to the empty string and checkout takes
+      # github.ref, which is already the tag. On workflow_dispatch it is the
+      # tag the operator typed — without this the dispatch path silently built
+      # the default branch and labelled the result a release.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.tag }}
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
@@ -95,8 +97,8 @@ jobs:
             -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
-      # --parallel 4 matches the windows-2022 runner's 4 vCPUs; Ninja's
-      # cores+2 default only oversubscribes the box.
+      # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
+      # only oversubscribes it.
       - name: Build
         run: cmake --build build --parallel 4 --target Dish
 
@@ -105,17 +107,24 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dish-windows | Out-Null
           Copy-Item build/dish.exe dish-windows/
-          # jurplel/install-qt-action v4 sets QT_ROOT_DIR (the install root) but
-          # NOT Qt6_DIR — the old "$env:Qt6_DIR/../../../bin" spelling resolved
-          # against an empty variable, so this step had never worked. It had
-          # never been caught because release.yml only fires on a v* tag and no
-          # tag has been pushed yet; windows-ci.yml already resolves the
-          # documented-correct way.
-          # --qmldir walks our QML sources so the Quick modules the app imports
-          # (QtQuick, Controls Basic, Layouts, Effects, Window) ship too. The
-          # frameless Quick chrome is the ONLY UI, so a QML-less bundle would
-          # open to a white window.
+          # --qmldir is required: the Quick chrome is the only UI, so a bundle
+          # without the QML modules opens to a white window.
+          # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.
           & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir src/qml dish-windows/dish.exe
+
+      # LGPLv3 s4(b) requires the licence to travel with the Combined Work, and
+      # Qt is linked under it. OFL-1.1 s2 requires the same for the four Inter
+      # faces compiled into the exe as Qt resources. Without these the zip is
+      # not redistributable.
+      - name: Stage licence texts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dish-windows/licenses | Out-Null
+          Copy-Item LICENSE            dish-windows/licenses/LICENSE.LGPL-3.0.txt
+          Copy-Item COPYING.GPL3       dish-windows/licenses/LICENSE.GPL-3.0.txt
+          Copy-Item THIRD_PARTY.md     dish-windows/licenses/
+          Copy-Item packaging/fonts/Inter-LICENSE.txt dish-windows/licenses/
+          Get-ChildItem dish-windows/licenses
 
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
@@ -125,17 +134,40 @@ jobs:
           artifact-name: dish-windows-sbom.spdx.json
           output-file: dish-windows.spdx.json
 
-      - name: Compute SHA256SUMS
+      # Manifest of the bundle's contents, shipped inside the zip. Paths are
+      # relative to the bundle root: windeployqt lays plugins out in
+      # subdirectories (platforms/, imageformats/, styles/) and basenames alone
+      # both lose that and can collide.
+      #
+      # Written as LF with no BOM. `Out-File -Encoding ascii` emits CRLF, which
+      # GNU coreutils `sha256sum -c` rejects as "no properly formatted
+      # checksum lines" — the manifest has to verify off Windows too.
+      - name: Compute bundle SHA256SUMS
         shell: pwsh
         run: |
-          Get-ChildItem dish-windows -Recurse -File |
-            ForEach-Object { "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
-            Out-File -FilePath dish-windows/SHA256SUMS -Encoding ascii
+          $root = (Resolve-Path dish-windows).Path
+          $lines = Get-ChildItem dish-windows -Recurse -File | ForEach-Object {
+            $rel = [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $rel"
+          }
+          [IO.File]::WriteAllText("$root/SHA256SUMS", ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
 
       - name: Zip release bundle
         shell: pwsh
         run: |
           Compress-Archive -Path dish-windows/* -DestinationPath dish-windows.zip -Force
+
+      # The manifest above is inside the zip, so it cannot attest to the zip.
+      # This one covers the artifacts a person actually downloads, and is what
+      # the release page's "verify your download" instructions point at.
+      - name: Compute release-asset SHA256SUMS
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem dish-windows.zip, dish-windows.spdx.json | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          }
+          [IO.File]::WriteAllText("$PWD/SHA256SUMS", ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
+          Get-Content SHA256SUMS
 
       - name: Upload release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -144,14 +176,20 @@ jobs:
           path: |
             dish-windows.zip
             dish-windows.spdx.json
+            SHA256SUMS
           retention-days: 30
 
+      # Publishes on both triggers. `tag_name` is explicit because on
+      # workflow_dispatch github.ref is the default branch, not the tag that
+      # was built, and action-gh-release would otherwise create a release
+      # against the branch ref.
       - name: Publish GitHub Release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
             dish-windows.zip
             dish-windows.spdx.json
+            SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: true

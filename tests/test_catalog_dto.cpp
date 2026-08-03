@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// CatalogDto forward-compatibility (the cache-relevant arm). Wave 1 already pins
-// the base catalog parse in test_models.cpp; this file locks ONLY the
-// forward-compat behavior the cache + picker depend on: a controller type newer
-// than the app still parses fully (name + unknown feature slugs preserved), so
-// the Emulate picker can render it from server strings and the cache can store
-// it. Replicates dish-android core/model/ModelsTest's
-// "CatalogDto parses controller types with unknown-slug tolerance" case +
-// CatalogComposer::offerableTypes' forward-compat projection.
+// Forward compatibility only: a controller type newer than the app must still
+// parse and render from server strings. The base parse lives in test_models.cpp.
 
 #include "Models/Models.h"
 #include "composer/CatalogComposer.h"
@@ -29,8 +23,6 @@ QJsonObject parse(const char* json) { return QJsonDocument::fromJson(QByteArray(
 
 TEST_CASE("CatalogDto tolerates an unknown controller slug + unknown feature keys",
           "[catalog][forwardcompat]") {
-    // Mirrors android ModelsTest: a future type (id 7 / hyperpad) with a feature
-    // slug the app has never heard of (warp) still parses fully.
     const auto catalog = CatalogDto::fromJson(parse(R"({
         "locale":"de",
         "protocolVersion":1,
@@ -48,8 +40,6 @@ TEST_CASE("CatalogDto tolerates an unknown controller slug + unknown feature key
 
     REQUIRE(catalog.locale == "de");
     REQUIRE(catalog.controllerTypes.size() == 2);
-    // A type newer than this app still parses fully: id, name and the unknown
-    // feature slug (with its requires code) all survive.
     REQUIRE(catalog.controllerTypes[1].id == 7);
     REQUIRE(catalog.controllerTypes[1].name == "HyperPad 9000");
     REQUIRE(catalog.controllerTypes[1].features.contains("warp"));
@@ -79,23 +69,19 @@ TEST_CASE("offerableTypes renders both known and unknown types from the catalog"
     // Catalog order is preserved.
     REQUIRE(rows[0].type == 0);
     REQUIRE(rows[0].slug == "xbox360");
-    REQUIRE(rows[0].known); // the client bundles art/translations for xbox360
+    REQUIRE(rows[0].known); // `known` = the client bundles art/translations
     REQUIRE(rows[1].slug == "ds4");
     REQUIRE(rows[1].known);
-    // dualsense (2) / switchpro (3) are bundled known slugs too.
     REQUIRE(rows[2].type == 2);
     REQUIRE(rows[2].slug == "dualsense");
     REQUIRE(rows[2].known);
     REQUIRE(rows[3].type == 3);
     REQUIRE(rows[3].slug == "switchpro");
     REQUIRE(rows[3].known);
-    // The forward-compat type renders from server strings and is flagged as not
-    // bundled (no local art/translations).
     REQUIRE(rows[4].type == 7);
     REQUIRE(rows[4].name == "HyperPad 9000");
     REQUIRE_FALSE(rows[4].known);
 
-    // knownTypeSlugs itself now carries the two new bundled slugs.
     const QList<QString> known = knownTypeSlugs();
     REQUIRE(known.contains(QStringLiteral("dualsense")));
     REQUIRE(known.contains(QStringLiteral("switchpro")));

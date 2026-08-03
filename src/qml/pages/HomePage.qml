@@ -1,23 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Home destination — the signal-path wiring diagram (design v3 "S07 · Home
-// — the bindings section"): one BOXED row per bound slot (pad node → wire →
-// satellite node, with the binding printed underneath in a Kit.BindingStrip), a
-// ghost row per dangling pad, and one bare "Set up a controller" row. Home is
-// the only surface that hands off into a binding editor: `Edit ›` pushes
-// ConfigureBindingPage, `Bind…` opens the setup wizard seeded with the slot.
-//
-// Two v3 rules shape the content. The emulated type does NOT ride the pad
-// sub-line — it is a property of the binding, so it lives in the strip. And a
-// status dot never travels alone: every dot is paired with its localized chip
-// and both come from the model's tokens, never a literal.
-//
-// Every value binds the frozen App contract; no business logic lives here.
+// The Home destination — the signal-path wiring diagram: one BOXED row per bound
+// slot (pad → wire → satellite, the binding printed underneath), a ghost row per
+// dangling pad. Two rules: the emulated type belongs to the BINDING, so it prints
+// in the strip and never on the pad sub-line; and a dot always travels with a
+// chip, both read from the model's tokens rather than a literal.
 
-// Bound so delegates reference the outer `page` id and their `required` model
-// props statically. `App` stays unqualified: a runtime context property the
-// linter cannot resolve (the accepted limitation every page notes).
+// Bound: delegates reference the outer `page` id and their `required` model props
+// statically.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -30,10 +21,7 @@ Kit.Page {
     id: page
     title: qsTr("Home")
 
-    // ---- Shell header contract (rendered by AppShell). Ladder per the v3
-    // header-copy table: fresh install → the getting-started nudge (muted);
-    // anything streaming → the count line (success); satellites online but
-    // nothing streaming (primary); else quiet (muted).
+    // ---- Shell header contract (rendered by AppShell) -----------------------
     readonly property string headerTitle: qsTr("Home")
     readonly property string headerSub: {
         if (App.slotCount === 0 && App.connectionCount === 0)
@@ -52,13 +40,10 @@ Kit.Page {
             return "primary";
         return "muted";
     }
-    // The ONE streaming pill in the app is the SHELL's, on every page. Home's
-    // old floating pill sat in the toast's lane, instructed the user to
-    // compensate for behaviour the app did not have, and is gone — this page
-    // declares no pill of its own.
+    // The ONE streaming pill in the app is the SHELL's, on every page; this page
+    // deliberately declares none of its own.
 
-    // The enclosing shell StackView, type-erased through `var` so the shell's
-    // dynamic `shellApi` resolves without lint warnings.
+    // var-typed so the shell's dynamic `shellApi` resolves without lint warnings.
     readonly property var shellStack: StackView.view
     readonly property var shellApi: shellStack ? shellStack.shellApi : null
 
@@ -80,10 +65,8 @@ Kit.Page {
                                     && bodyColumn.width < Tokens.stackBreakpoint
 
     // ---- Row keyboard model -------------------------------------------------
-    // The list is one focus stop: Up/Down move the row, Enter edits, Shift+F10
-    // (or the Menu key) opens the row context menu. The current row's facts are
-    // mirrored here as plain values so nothing reads a property off a delegate
-    // that may already be recycled.
+    // The list is one focus stop. The current row's facts are mirrored here as
+    // plain values so nothing reads a property off a recycled delegate.
     property string currentSlotId: ""
     property string currentSlotName: ""
     property bool currentBound: false
@@ -112,10 +95,9 @@ Kit.Page {
 
             Kit.Eyebrow {
                 mutedTone: true
-                // Disambiguated: the bare string "Pad" is also the touchpad
-                // routing mode (Off · Pad · Mouse), and one message cannot
-                // carry both senses — French renders that one "Pavé", which is
-                // a touchpad, not a controller.
+                // Disambiguated: bare "Pad" is also the touchpad routing mode
+                // (Off · Pad · Mouse) and one message cannot carry both senses —
+                // French renders that one "Pavé", a touchpad, not a controller.
                 text: qsTr("Pad", "the controller column of the wire diagram")
                 Layout.preferredWidth: page.nodePreferredWidth
             }
@@ -210,7 +192,7 @@ Kit.Page {
             delegate: Item {
                 id: rowRoot
 
-                // Slot roles this row consumes (contract §2 + the sat* join).
+                // Slot roles this row consumes, plus the sat* join.
                 required property int index
                 required property string slotId
                 required property string name
@@ -258,7 +240,6 @@ Kit.Page {
                                    + (rowRoot.showLatency ? " · " + rowRoot.satLatencyText : "")
                                  : qsTr("%1, not bound").arg(rowRoot.name)
 
-                // Keep the page's mirror of the focused row current.
                 ListView.onIsCurrentItemChanged: {
                     if (rowRoot.ListView.isCurrentItem)
                         page.setCurrentRow(rowRoot.slotId, rowRoot.name,
@@ -280,7 +261,7 @@ Kit.Page {
                     }
                 }
 
-                // Keyboard focus ring — the house style, drawn outside the box.
+                // The house focus ring is drawn OUTSIDE the box.
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: -Tokens.s1
@@ -295,7 +276,6 @@ Kit.Page {
                     id: rowCard
                     anchors.fill: parent
                     dense: true
-                    // A dangling pad's row is a ghost: hairline only, no fill.
                     filled: !rowRoot.ghost
 
                     contentItem: ColumnLayout {
@@ -321,9 +301,6 @@ Kit.Page {
                                 // resolves its delegate through QtQuick.Controls,
                                 // which this file does not import, so it logs
                                 // "Component is not ready" and never appears.
-                                // Kit.DishToolTip is the themed one; a bare
-                                // ToolTip paints Basic's system palette instead
-                                // of ours.
                                 Kit.DishToolTip {
                                     id: padTip
                                     text: rowRoot.name
@@ -406,8 +383,6 @@ Kit.Page {
                                         Layout.preferredHeight: Tokens.glyphSm
                                         Layout.alignment: Qt.AlignVCenter
                                     }
-                                    // The dot never travels alone: it and the
-                                    // chip below both read the row's tokens.
                                     Kit.StatusDot {
                                         token: rowRoot.satDotColor
                                         Layout.alignment: Qt.AlignVCenter
@@ -572,8 +547,6 @@ Kit.Page {
     }
 
     // ---- Telemetry footer ---------------------------------------------------
-    // Home is the default destination and the app's instrument panel; the same
-    // mono strip the Controllers page pins.
     footer: Item {
         implicitHeight: telemetryRow.implicitHeight + Tokens.s8
 
@@ -667,11 +640,9 @@ Kit.Page {
 
     // ---- Helpers (presentation only; wording owned by this page) ------------
 
-    // "2 controllers streaming" / "1 controller streaming". %n carries the count
-    // so each language picks its own plural form — Bosnian needs three, and an
+    // %n so each language picks its own plural form — Bosnian needs three, and an
     // explicit singular/plural pair can only ever express two. English is a
-    // catalogue like any other (translations/dish_en.ts) rather than the
-    // untranslated fallback, which is what used to force the "(s)" workaround.
+    // catalogue like any other (translations/dish_en.ts), not the raw fallback.
     function controllersStreamingText(n) {
         return qsTr("%n controllers streaming", "", n);
     }
@@ -679,11 +650,9 @@ Kit.Page {
         return qsTr("%n satellites online", "", n);
     }
 
-    // The pad card's sub-line. The emulated type is NOT here — it belongs to the
-    // binding and prints in the strip. A Bluetooth pad names its transport and
-    // suppresses the status-4 battery word, which is the HOST-battery
-    // substitute (a desktop reads 100%/WIRED when the pad's own charge is
-    // unknown) and would contradict the wireless link.
+    // On a Bluetooth pad a status-4 ("wired") reading is the HOST battery
+    // substitute and would contradict the wireless link — drop it rather than
+    // show it.
     function padSubText(row) {
         if (row.registering)
             return qsTr("Registering controller…");
@@ -726,7 +695,7 @@ Kit.Page {
         return 0;
     }
 
-    // Battery wording (contract §2: 2=charging, 3=full, 4=wired; batteryKnown
+    // Battery wording (2=charging, 3=full, 4=wired; batteryKnown
     // gates the unknown 255 out).
     function batteryText(level, status) {
         if (status === 4) { return qsTr("Battery wired"); }
@@ -753,9 +722,7 @@ Kit.Page {
     }
 
     // ---- The binding strip --------------------------------------------------
-    // The binding printed underneath the wire, in the v3 order: emulated type ·
-    // link path · motion · touchpad routing · rumble · lightbar · dead zones.
-    // Anything that cannot carry is still named, with the layer that stops it.
+    // Anything that cannot carry is still NAMED, with the layer that stops it.
     // `epoch` enlists the state graph so the invokable reads re-evaluate.
     function stripChips(row, epoch) {
         var chips = [];

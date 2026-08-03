@@ -1,26 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The inline failure row — the shared "this failed, here is what to do" surface
-// so pages stop hand-rolling a bare `Label { color: Theme.error }`. A tone-tinted
-// rounded rect with a leading dot, the diagnosis in Theme.onSurface, an optional
-// `detail` next-step line, and an optional Retry that emits `retryRequested()`.
-//
-// An error is a DIAGNOSIS AND A NEXT STEP, never an apology — hence two strings:
+// The inline failure row. An error is a diagnosis AND a next step, never an
+// apology — hence two strings:
 //   text:   "Server unreachable"
 //   detail: "Has it moved networks?"
-//
-// Two documented callers: the inline unsteady-link banner on Configure binding
-// (tone: Warning — a faltering link is not a failure, and a modal on a flapping
-// link is a trap) and the catalog-retry row in the wizard's type step.
-//
-// Usage:
-//   Kit.ErrorBanner {
-//       text: lastError
-//       detail: qsTr("Check the host is on the same network.")
-//       showRetry: true
-//       onRetryRequested: App.reconnectConnection(connectionId)
-//   }
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -32,24 +16,18 @@ Rectangle {
 
     enum Tone { Error, Warning }
 
-    // The failure message (the diagnosis).
     property string text: ""
-    // The next step. Errors that name no next step are not finished.
     property string detail: ""
     // Error is a failure; Warning is "live but faltering".
     property int tone: ErrorBanner.Error
-    // The retry button's label.
     property string retryText: qsTr("Retry")
-    // Whether to show the Retry button at all.
     property bool showRetry: false
 
-    // Emitted when the user taps Retry — the page decides what to re-run.
     signal retryRequested()
 
     readonly property color toneColor: banner.tone === ErrorBanner.Warning
                                        ? Theme.warning : Theme.error
 
-    // Collapse to nothing when there's no message to show.
     visible: banner.text.length > 0
 
     implicitHeight: layout.implicitHeight + 2 * Tokens.s6
@@ -72,7 +50,6 @@ Rectangle {
         anchors.bottomMargin: Tokens.s6
         spacing: Tokens.s5
 
-        // Leading tone dot — the same dot affordance the kit uses for status.
         StatusDot {
             token: banner.tone === ErrorBanner.Warning ? "warning" : "error"
             Layout.alignment: Qt.AlignTop
@@ -101,8 +78,6 @@ Rectangle {
             }
         }
 
-        // Quiet outline action so the message keeps the visual weight; emits the
-        // signal rather than acting, so the page owns the retry behavior.
         DishButton {
             text: banner.retryText
             visible: banner.showRetry

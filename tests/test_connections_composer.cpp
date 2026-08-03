@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// The ConnectionsComposer: a kernel Composer deriving the flat connections list
-// from five upstream Observables via a pure transform. Asserts the pure
-// buildConnectionSummaries table AND the reactive contract through ComposerProbe
-// (eager initial, distinct-until-changed, recompute-on-any-upstream-change,
-// re-emit on an inner session transition). Mirrors the behaviors the android
-// ConnectionsComposer + ConnectionCoordinatorTest pin for the satellite path
-// (Bluetooth arms are phone-only and out of scope).
 
 #include "architecture/Observable.h"
 #include "composer/ConnectionsComposer.h"
@@ -57,8 +49,6 @@ RememberedSnapshot rememberedSat(const std::string& id, const std::string& ip, i
 
 } // namespace
 
-// ── The pure transform (buildConnectionSummaries) ────────────────────────────
-
 TEST_CASE("composer transform: empty everything yields no rows", "[composer][transform]") {
     REQUIRE(buildConnectionSummaries({}, {}, {}, {}, {}).empty());
 }
@@ -100,9 +90,8 @@ TEST_CASE("composer transform: a live session row is Connected and carries its b
 
 TEST_CASE("composer transform: a live session's latency readout lands on its row",
           "[composer][transform]") {
-    // The one-way readout (median heartbeat-RTT/2 + sample count) rides the
-    // session snapshot onto the derived row; a remembered-only satellite has no
-    // session, so its row keeps the 0 / 0 default and the UI shows no caption.
+    // The readout is a median heartbeat-RTT/2; a remembered-only satellite has
+    // no session, so its row keeps the 0 / 0 default.
     auto live = session("mid:a", SessionPresence::Live, "10.0.0.1", 9876, "Pc");
     live.latencyOneWayMs = 3.4;
     live.latencySamples = 64;
@@ -120,7 +109,6 @@ TEST_CASE("composer transform: a live session's latency readout lands on its row
 
 TEST_CASE("composer transform: a live session prefers its own (fresher) address over remembered",
           "[composer][transform]") {
-    // Remembered at the old IP; the live session re-pointed to a new one.
     const auto rows =
         buildConnectionSummaries({session("mid:a", SessionPresence::Live, "10.0.0.9", 9876, "Pc")},
                                  {rememberedSat("mid:a", "10.0.0.1", 9876, "Pc")}, {}, {}, {});
@@ -155,7 +143,6 @@ TEST_CASE("composer transform: a live-but-unremembered session still gets a row"
 }
 
 TEST_CASE("composer transform: a ghost with no ip is dropped", "[composer][transform]") {
-    // Neither the (absent-ip) session nor a remembered row names an address.
     const auto rows =
         buildConnectionSummaries({session("mid:a", SessionPresence::Idle, "")}, {}, {}, {}, {});
     REQUIRE(rows.empty());
@@ -182,8 +169,6 @@ TEST_CASE("composer transform: a nameless server labels by ip", "[composer][tran
     REQUIRE(rows[0].label == "10.0.0.1");
 }
 
-// ── The reactive Composer (eager + distinct + recompute via ComposerProbe) ───
-
 TEST_CASE("ConnectionsComposer derives eagerly: the probe sees an initial snapshot",
           "[composer][reactive]") {
     Observable<std::vector<SessionSnapshot>> sessions{{}};
@@ -195,8 +180,6 @@ TEST_CASE("ConnectionsComposer derives eagerly: the probe sees an initial snapsh
     ConnectionsComposer composer(sessions, remembered, discovered, bindings, stale);
     ComposerProbe<std::vector<ConnectionRow>> probe(composer.state());
 
-    // SharingStarted.Eagerly analogue: the value exists before the first
-    // upstream change, so the probe's initial replay is the computed list.
     REQUIRE(probe.count() == 1);
     REQUIRE(probe.latest().size() == 1);
     REQUIRE(probe.latest()[0].live == UiLinkState::Saved);
@@ -235,14 +218,12 @@ TEST_CASE("ConnectionsComposer is distinct-until-changed: a no-op upstream set d
     ComposerProbe<std::vector<ConnectionRow>> probe(composer.state());
 
     REQUIRE(probe.count() == 1);
-    // Push an equal session list: the upstream Observable suppresses it (==),
-    // so the composer never recomputes. Even if it did, the derived list is
-    // identical, so the output Observable would suppress the re-emit too.
+    // Suppressed twice over: the upstream Observable drops the equal set, and
+    // the derived list would be identical anyway.
     sessions.set({session("mid:a", SessionPresence::Live, "10.0.0.1")});
     REQUIRE(probe.count() == 1);
 
-    // A discovered-set change that doesn't alter any row (no matching id) also
-    // produces an identical derived list -> no re-emit.
+    // A discovered id matching no row leaves the derived list unchanged.
     discovered.set({"mid:other"});
     REQUIRE(probe.count() == 1);
 }

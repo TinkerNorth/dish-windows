@@ -1,24 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Connections destination — the inventory of HOSTS (design v3 "S10 ·
-// Connections"): manage the link, report the bindings riding on it. FOUND above
-// REMEMBERED, mirroring Controllers row for row. There is no path into a
-// binding editor from here: a host carries up to four slots, so no row maps to
-// one binding and the CARRYING manifest is read-only — never a link.
-//
-// Two v3 rules shape the content. The dot never travels alone: every dot is
-// paired with its localized chip and both read the model's tokens, never a
-// literal. And forgetting a host drops every binding on it, so the confirm NAMES
-// the pads it will drop — a confirm that says "some bindings will be lost" is
-// not a confirm.
-//
-// All behavior forwards to App (QML_CONTRACT.md A2); this file holds zero
-// business logic.
+// The Connections destination — the inventory of HOSTS: manage the link, report
+// the bindings riding on it. There is no path into a binding editor from here:
+// a host carries up to four slots, so no row maps to one binding and the
+// CARRYING manifest is read-only, never a link.
 
-// Bound so delegates reference the outer `page` id and their `required` model
-// props statically. `App` stays unqualified: a runtime context property the
-// linter cannot resolve (the accepted limitation every page notes).
+// Bound: delegates reference the outer `page` id and their `required` model
+// props statically.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -31,11 +20,10 @@ Kit.Page {
     id: page
     title: qsTr("Connections")
 
-    // ---- Shell header contract (rendered by AppShell, not by this body).
+    // Rendered by AppShell, not by this body.
     readonly property string headerTitle: qsTr("Connections")
-    // Two independent counts can't both be %n in one message, so the live half
-    // carries the plural and the remembered half is its own counted message,
-    // joined by the same "·" the rest of the sub-lines use.
+    // Two independent counts can't both be %n in one message, so each half is
+    // its own counted message.
     readonly property string headerSub: App.connectionCount === 0
         ? qsTr("%n found · nothing paired yet", "", App.foundCount)
         : qsTr("%n online", "", App.onlineCount) + " · "
@@ -252,7 +240,7 @@ Kit.Page {
                 id: host
                 width: ListView.view ? ListView.view.width : implicitWidth
 
-                // ConnectionListModel roles (QML_CONTRACT.md §3).
+                // ConnectionListModel roles, see docs/QML_CONTRACT.md.
                 required property string connectionId
                 required property string label
                 required property string ip

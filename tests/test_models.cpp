@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Protocol-1 DTO round-trips: parse the contract's exact example JSON for
-// pair / PUT-session / GET-session / capabilities / catalog, and build the
-// session-PUT request body (controllers[] descriptor array). The shapes must
-// match satellite/src/net/webserver.cpp byte-for-byte (semantically).
+// Every JSON literal here is a verbatim example from the Protocol-1 contract;
+// they are the oracle, so do not "tidy" them.
 
 #include "Models/Models.h"
 #include "core/model/Protocol.h"
@@ -21,8 +19,6 @@ namespace proto = dish::proto;
 namespace {
 QJsonObject parse(const char* json) { return QJsonDocument::fromJson(QByteArray(json)).object(); }
 } // namespace
-
-// ── Identity (machineId-preferring stable key) ──────────────────────────────
 
 TEST_CASE("DiscoveredServer::id prefers machineId over ip:port", "[models][identity]") {
     DiscoveredServer s;
@@ -57,8 +53,6 @@ TEST_CASE("DiscoveredServer.fromJson defaults missing ports", "[models]") {
     REQUIRE(s.pairPort == kDefaultPairPort);
     REQUIRE(s.httpPort == kDefaultHttpPort);
 }
-
-// ── PairResponse (Path A / Path B / status poll) ────────────────────────────
 
 TEST_CASE("PairResponse parses Path-A success {ok, sharedKey}", "[models][pair]") {
     const auto r = PairResponse::fromJson(parse(
@@ -109,10 +103,7 @@ TEST_CASE("PairResponse default-constructed is reachable=false", "[models][pair]
     REQUIRE(r.httpStatus == 0);
 }
 
-// ── SessionResponse (PUT /api/connections) ──────────────────────────────────
-
 TEST_CASE("SessionResponse parses the contract's PUT example", "[models][session]") {
-    // The exact shape from contract.md §Session (PUT response).
     const auto r = SessionResponse::fromJson(parse(R"({
         "connectionId":"conn_ab12cd34",
         "token":"0007a1b2",
@@ -162,11 +153,11 @@ TEST_CASE("SessionResponse maps each per-controller result string to its code",
     REQUIRE(one("backendUnavailable").resultCode == proto::kApplyBackendUnavailable);
     REQUIRE(one("invalidType").resultCode == proto::kApplyInvalidType);
     REQUIRE(one("invalidIndex").resultCode == proto::kApplyInvalidIndex);
-    // replugFailed leaves the previous pad live; everything but ok/replugFailed
-    // is not-live.
+    // replugFailed leaves the previous pad live; every other non-ok result does
+    // not.
     REQUIRE(one("replugFailed").slotIsLive());
     REQUIRE_FALSE(one("noSlots").slotIsLive());
-    // An unknown result from a newer server maps to kApplyUnknown (not-live).
+    // A result string from a newer server must land on kApplyUnknown.
     REQUIRE(one("somethingNew").resultCode == proto::kApplyUnknown);
     REQUIRE_FALSE(one("somethingNew").slotIsLive());
 }
@@ -178,7 +169,6 @@ TEST_CASE("SessionResponse flags the terminal 401 body", "[models][session]") {
     const auto badProof =
         SessionResponse::fromJson(parse(R"({"error":"unauthorized","code":"BAD_PROOF"})"));
     REQUIRE(badProof.unauthorized());
-    // A non-auth error body is not unauthorized.
     REQUIRE_FALSE(SessionResponse::fromJson(parse(R"({"error":"boom"})")).unauthorized());
 }
 
@@ -189,8 +179,6 @@ TEST_CASE("SessionResponse parses a host-feature denial with reason", "[models][
     REQUIRE(r.mouseControl.reason.has_value());
     REQUIRE(*r.mouseControl.reason == "notSupported");
 }
-
-// ── ControllerPutResponse (PUT /controllers/{idx}) ──────────────────────────
 
 TEST_CASE("ControllerPutResponse parses {epoch, controller}", "[models][session]") {
     const auto r = ControllerPutResponse::fromJson(parse(R"({
@@ -205,8 +193,6 @@ TEST_CASE("ControllerPutResponse parses {epoch, controller}", "[models][session]
     REQUIRE(r.controller->ok());
     REQUIRE_FALSE(r.unauthorized());
 }
-
-// ── SessionViewDto (GET /api/connections/{id}) ──────────────────────────────
 
 TEST_CASE("SessionViewDto parses the contract's GET example", "[models][session]") {
     const auto v = SessionViewDto::fromJson(parse(R"({
@@ -242,9 +228,9 @@ TEST_CASE("SessionViewDto parses the contract's GET example", "[models][session]
 
 TEST_CASE("SessionViewControllerDto without caps/motion blocks reads as not-reported",
           "[models][session]") {
-    // An older satellite omits both blocks; the parse must distinguish "not
-    // told" from "told all-false" so reconcile never fights a server that
-    // simply predates the fields.
+    // An older server omits both blocks; the parse has to distinguish "not
+    // told" from "told all-false" or reconcile fights a server that simply
+    // predates the fields.
     const auto v = SessionViewDto::fromJson(parse(R"({
         "connectionId":"c","epoch":1,
         "controllers":[{"ctrlIdx":0,"active":true,"appliedType":1}]
@@ -254,8 +240,6 @@ TEST_CASE("SessionViewControllerDto without caps/motion blocks reads as not-repo
     REQUIRE_FALSE(v.controllers.first().motionSinkSupportedForType.has_value());
     REQUIRE_FALSE(v.controllers.first().motionBackendOk.has_value());
 }
-
-// ── CapabilitiesDto (GET /api/server/capabilities) ──────────────────────────
 
 TEST_CASE("CapabilitiesDto parses the contract's capabilities example", "[models][catalog]") {
     const auto c = CapabilitiesDto::fromJson(parse(R"({
@@ -283,14 +267,14 @@ TEST_CASE("CapabilitiesDto parses the contract's capabilities example", "[models
     REQUIRE(c.hostMouseControl.supported);
     REQUIRE(c.hostMouseControl.available == true);
     REQUIRE_FALSE(c.hostKeyboardControl.supported);
-    // keyboardControl carries no `available` — coarse runtime read is absent.
+    // keyboardControl carries no `available` key at all.
     REQUIRE_FALSE(c.hostKeyboardControl.available.has_value());
     REQUIRE(c.hostRumble.supported);
 }
 
 TEST_CASE("CapabilitiesDto without a host block reads hasHostBlock=false", "[models][catalog]") {
-    // Contract: absence means "older satellite, fall back to the default" —
-    // it must never read as a receiver that can do nothing.
+    // Contract: absence means "older server, fall back to the defaults", never
+    // "a receiver that can do nothing".
     const auto c = CapabilitiesDto::fromJson(
         parse(R"({"backend":{"id":"vigem","supported":true,"available":true}})"));
     REQUIRE_FALSE(c.hasHostBlock);
@@ -305,8 +289,6 @@ TEST_CASE("CapabilitiesDto surfaces a backend errorCode", "[models][catalog]") {
     REQUIRE(c.backendErrorCode.has_value());
     REQUIRE(*c.backendErrorCode == "DRIVER_MISSING");
 }
-
-// ── CatalogDto (GET /api/catalog) ───────────────────────────────────────────
 
 TEST_CASE("CatalogDto parses controllerTypes + hostFeatures from the contract example",
           "[models][catalog]") {
@@ -376,8 +358,6 @@ TEST_CASE("CatalogTypeDto without emulates reads as no hint", "[models][catalog]
     REQUIRE_FALSE(c.controllerTypes.first().emulates.has_value());
 }
 
-// ── ControllerDescriptor → JSON (the session-PUT request body) ──────────────
-
 TEST_CASE("ControllerDescriptor.toJson matches the contract's controllers[] element",
           "[models][descriptor]") {
     ControllerDescriptor d;
@@ -411,8 +391,6 @@ TEST_CASE("controllersJson builds the WHOLE desired array", "[models][descriptor
     REQUIRE(arr[1].toObject().value("ctrlIdx").toInt() == 1);
     REQUIRE(arr[1].toObject().value("touchpadMode").toString() == "mouse");
 }
-
-// ── RememberedWifi (machineId persisted) ────────────────────────────────────
 
 TEST_CASE("RememberedWifi round-trips through JSON list with machineId", "[models]") {
     RememberedWifi r;

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pins dish-windows session crypto to the SAME interop vectors the satellite
-// (tests/test_windows_platform.cpp) and dish-android (SessionCryptoTest) assert.
-// Any drift on any end is a cross-end protocol break, not a refactor.
+// The vectors below are the ones the satellite and dish-android assert too, so
+// a change here is a cross-end protocol break, never a refactor.
 
 #include "core/wire/SessionCrypto.h"
 
@@ -17,7 +16,7 @@
 using namespace dish::wire;
 
 namespace {
-// pairingKey = 01 02 .. 20 — the shared interop key all three ends use.
+// pairingKey = 01 02 .. 20, the shared interop key all three ends use.
 std::array<std::uint8_t, kCryptoKeySize> interopKey() {
     std::array<std::uint8_t, kCryptoKeySize> k{};
     for (std::size_t i = 0; i < k.size(); ++i) { k[i] = static_cast<std::uint8_t>(i + 1); }
@@ -56,11 +55,11 @@ TEST_CASE("verifyHmacProof accepts a matching proof and rejects tampering", "[wi
     const auto key = interopKey();
     const auto p1 = computeHmacProof(key.data(), "device-1");
     REQUIRE(verifyHmacProof(key.data(), "device-1", p1));
-    REQUIRE_FALSE(verifyHmacProof(key.data(), "device-2", p1)); // wrong device id
+    REQUIRE_FALSE(verifyHmacProof(key.data(), "device-2", p1));
     auto other = key;
     other[0] = static_cast<std::uint8_t>(other[0] ^ 0xFF);
-    REQUIRE_FALSE(verifyHmacProof(other.data(), "device-1", p1)); // diverged key
-    REQUIRE_FALSE(verifyHmacProof(key.data(), "device-1", ""));   // malformed hex
+    REQUIRE_FALSE(verifyHmacProof(other.data(), "device-1", p1));
+    REQUIRE_FALSE(verifyHmacProof(key.data(), "device-1", "")); // malformed hex
     REQUIRE_FALSE(verifyHmacProof(key.data(), "device-1", "abc"));
     auto bad = p1;
     bad[0] = 'z';
@@ -84,15 +83,15 @@ TEST_CASE("deriveSessionKey is deterministic, never the raw key, varies with inp
     std::uint8_t k2[kCryptoKeySize];
     deriveSessionKey(key.data(), salt, 0x12345678U, k1);
     deriveSessionKey(key.data(), salt, 0x12345678U, k2);
-    REQUIRE(std::memcmp(k1, k2, kCryptoKeySize) == 0);         // deterministic
+    REQUIRE(std::memcmp(k1, k2, kCryptoKeySize) == 0);
     REQUIRE(std::memcmp(k1, key.data(), kCryptoKeySize) != 0); // never the raw pairing key
 
     deriveSessionKey(key.data(), salt, 0x12345679U, k2);
-    REQUIRE(std::memcmp(k1, k2, kCryptoKeySize) != 0); // token changes the key
+    REQUIRE(std::memcmp(k1, k2, kCryptoKeySize) != 0); // the token changes the key
 
     const std::uint8_t salt2[kSessionSaltSize] = {0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6, 0x07, 0x19};
     deriveSessionKey(key.data(), salt2, 0x12345678U, k2);
-    REQUIRE(std::memcmp(k1, k2, kCryptoKeySize) != 0); // salt changes the key
+    REQUIRE(std::memcmp(k1, k2, kCryptoKeySize) != 0); // the salt changes the key
 }
 
 TEST_CASE("packet AEAD round-trips and the direction byte is bound into the nonce",
@@ -119,7 +118,7 @@ TEST_CASE("packet AEAD round-trips and the direction byte is bound into the nonc
     REQUIRE_FALSE(decryptPacket(key, kDirClientToServer, 1, 0xAABBCCDEU, ct,
                                 static_cast<std::size_t>(ctLen), pt, &ptLen));
 
-    // Same key + counter, opposite direction → different ciphertext (no nonce reuse).
+    // Same key + counter, opposite direction: different ciphertext, no nonce reuse.
     std::uint8_t ct2[64];
     unsigned long long ct2Len = 0;
     REQUIRE(

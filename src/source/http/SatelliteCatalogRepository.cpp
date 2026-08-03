@@ -13,18 +13,13 @@ namespace dish::source {
 
 namespace {
 
-// A reply is a valid catalog to cache iff the server answered 200 with a body
-// that parsed into a real catalog. The contract guarantees a 200 catalog carries
-// a non-empty `serverVersion`, so an empty one is the tell for a malformed /
-// blank body (HTTPClient::getCatalog already ran fromJson on it; a garbage body
-// yields a default-constructed DTO). A non-200 (server error) or unreachable
-// reply is likewise not a fill. Mirrors android's `status != 200 || body blank`
-// + decode-failure arms collapsed into one predicate.
+// The contract guarantees a 200 catalog carries a non-empty `serverVersion`, so
+// an empty one is the tell for a malformed or blank body: getCatalog already ran
+// fromJson, and a garbage body yields a default-constructed DTO.
 bool isValidFill(const models::CatalogDto& reply) {
     return reply.httpStatus == 200 && reply.reachable && !reply.serverVersion.isEmpty();
 }
 
-// Classify a non-304, non-fill reply into the typed failure reason. Pure.
 CatalogError classifyCatalogError(const models::CatalogDto& reply) {
     if (!reply.reachable) { return CatalogError::Unreachable; }
     if (reply.httpStatus != 200) { return CatalogError::ServerError; }
@@ -45,7 +40,6 @@ SatelliteCatalogRepository::SatelliteCatalogRepository(net::HTTPClient* http)
 void SatelliteCatalogRepository::catalogFor(const models::DiscoveredServer& server,
                                             const QString& satelliteId,
                                             const QString& acceptLanguage, CatalogCb cb) {
-    // Snapshot the cached entry (etag + last good copy) under the lock.
     QString conditionalEtag;
     std::optional<models::CatalogDto> cachedCatalog;
     {
@@ -59,33 +53,28 @@ void SatelliteCatalogRepository::catalogFor(const models::DiscoveredServer& serv
 
     fetch_(server.ip, server.httpPort, acceptLanguage, conditionalEtag,
            [this, satelliteId, cachedCatalog, cb = std::move(cb)](const models::CatalogDto& reply) {
-               // The pre-fetch baseline: a prior success iff we had something
-               // cached. The AsyncState transitions retain this `data` (marked
-               // stale) across a revalidate / failure so the picker never blanks.
+               // The pre-fetch baseline. The AsyncState transitions retain this
+               // `data` (marked stale) across a revalidate or failure, which is
+               // what stops the picker blanking.
                CatalogState prev = cachedCatalog
                                        ? core::toSuccess(CatalogState{}, *cachedCatalog)
                                        : core::asyncIdle<models::CatalogDto, CatalogError>();
-               // 304: the cache is still current — re-serve it as a stale-flagged
-               // Success (or, anomalously, a ServerError if we 304'd with nothing
-               // cached: the server claimed our cache is good but we have none).
+               // A 304 with nothing cached is anomalous — the server claimed our
+               // cache is good when we have none — so it reads as ServerError.
                if (reply.notModified) {
                    cb(cachedCatalog ? core::toRevalidated(prev)
                                     : core::toError(prev, CatalogError::ServerError));
                    return;
                }
-               // Not a fresh, well-formed 200 (server error, unreachable, or a
-               // malformed body): Error with the typed reason — STILL carrying the
-               // last good copy (stale-on-error), so the UI shows cached content.
+               // Error still carries the last good copy (stale-on-error), so the
+               // UI shows cached content beside the error chip.
                if (!isValidFill(reply)) {
                    cb(core::toError(prev, classifyCatalogError(reply)));
                    return;
                }
-               // A good 200: normalize a legacy/absent-version body into the
-               // client's canonical representation FIRST (contract: a client
-               // MAY substitute its own known shape for a recognized legacy
-               // version), so the cache and every caller see one schema and
-               // nothing downstream branches on catalogVersion. The SERVER's
-               // ETag still keys revalidation — normalization is client-local.
+               // Normalize BEFORE caching so one schema reaches the cache and
+               // every caller. The SERVER's ETag still keys revalidation —
+               // normalization is client-local and must not feed back into it.
                const models::CatalogDto normalized = catalog::normalizeCatalog(reply);
                {
                    std::lock_guard<std::mutex> lock(mutex_);

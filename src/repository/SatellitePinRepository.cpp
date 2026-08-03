@@ -15,8 +15,8 @@ SatellitePinRepository::SatellitePinRepository(std::shared_ptr<QSettings> settin
 
 std::optional<QString> SatellitePinRepository::get(const QString& id) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    // Non-const on purpose: const would block the implicit move into the
-    // returned optional and force a QString copy on every hit.
+    // Non-const on purpose: const blocks the implicit move into the returned
+    // optional and costs a QString copy on every hit.
     auto v = settings_->value(QLatin1String(keys::kCertPinPrefix) + id).toString();
     if (v.isEmpty()) { return std::nullopt; }
     return v;
@@ -48,9 +48,8 @@ void SatellitePinRepository::remove(const QString& id) {
 void SatellitePinRepository::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     const QString prefix = QLatin1String(keys::kCertPinPrefix);
-    // Wipe only this repo's namespace — co-tenant keys (shared keys, the
-    // remembered list) survive. Collect first; removing while iterating
-    // allKeys() is unsafe.
+    // Only this repo's namespace: co-tenant shared keys and the remembered list
+    // must survive. Collect first — removing while iterating allKeys() is unsafe.
     QStringList toRemove;
     for (const auto& key : settings_->allKeys()) {
         if (key.startsWith(prefix)) { toRemove.append(key); }

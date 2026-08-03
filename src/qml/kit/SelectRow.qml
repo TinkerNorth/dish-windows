@@ -1,29 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// THE selectable row. One component draws every "pick exactly one of these"
-// list in the app: the wizard's pad picker and host picker, the bind
-// destination list, the type list. There is no second radio row.
+// The one selectable row. Selection is 1px Theme.primary + Theme.primaryFill,
+// never 2px: the only 2px border in the app is the capture-armed card, which is
+// an armed state, not a selection.
 //
-// Selection is 1px Theme.primary + Theme.primaryFill — NEVER a 2px border. The
-// only 2px border in the app is the capture-armed card on Configure controls,
-// and that is an armed state, not a selection.
-//
-// The row does not own the group: it reports `picked()` and renders whatever
-// `selected` the caller binds, so the truth stays with the page. Up/Down move
-// AND select among sibling rows, because a control with one value has no
-// meaningful difference between "focused" and "chosen" — the arrow keys are how
-// a keyboard user reads the list.
-//
-// The `extra` slot is the DEFAULT property, so a caller writes trailing chips
-// as children:
-//
-//   Kit.SelectRow {
-//       title: padName
-//       subtitle: padLine
-//       onPicked: draft.adopt(padId)
-//       Flow { Kit.CapabilityChip { text: qsTr("Gyro") } }
-//   }
+// The row does not own the group — it reports `picked()` and renders whatever
+// `selected` the caller binds. Up/Down move AND select among sibling rows.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -36,17 +19,12 @@ AbstractButton {
     property bool selected: false
     property string title: ""
     property string subtitle: ""
-    // Optional leading brand asset name (host rows draw their satellite glyph).
     property string glyph: ""
-    // Optional StatusDot token; it rides directly beside the chip so the row
-    // never shows a bare dot — hue alone is not a status.
     property string dotToken: ""
-    // Optional trailing CapabilityChip.
     property string chipText: ""
     property int chipTone: CapabilityChip.Neutral
 
-    // Right-hand slot: chips, badges, anything the row should carry after its
-    // copy. Declared last so a caller's children land here.
+    // Right-hand slot: chips, badges, anything the row carries after its copy.
     default property alias extra: extraSlot.data
 
     // The caller applies the choice; the row never writes `selected` itself.
@@ -60,8 +38,6 @@ AbstractButton {
     leftPadding: Tokens.s5
     rightPadding: Tokens.s5
 
-    // Every clickable row is at least a comfortable hit target (Tokens.hitRow),
-    // however short its copy.
     implicitHeight: Math.max(Tokens.hitRow,
                              control.implicitContentHeight
                              + control.topPadding + control.bottomPadding)
@@ -79,10 +55,9 @@ AbstractButton {
     Keys.onUpPressed: control.stepSelection(false)
     Keys.onDownPressed: control.stepSelection(true)
 
-    // Move the selection to the adjacent sibling row and choose it. Clamped at
-    // both ends — a held arrow key must not wrap a destination choice around.
-    // The sibling test is structural (same parent, exposes picked()) so this
-    // works identically for a ListView delegate and a Column child.
+    // Clamped at both ends; the sibling test is structural (same parent,
+    // exposes picked()) so it works for a ListView delegate and a Column child
+    // alike.
     function stepSelection(forward) {
         if (!control.enabled)
             return;
@@ -102,9 +77,9 @@ AbstractButton {
         }
     }
 
-    // The default property is redirected to the `extra` slot, so this file's own
-    // objects all go through an explicit property: a bare child here (the cursor
-    // handler included) would be re-parented into that slot and only cover it.
+    // The default property is redirected to `extra`, so this file's own objects
+    // all go through an explicit property: a bare child (the cursor handler
+    // included) would re-parent into that slot and merely cover it.
     background: Item {
         HoverHandler { cursorShape: Qt.PointingHandCursor }
 
@@ -129,7 +104,6 @@ AbstractButton {
             }
         }
 
-        // The global focus ring: 2px outside the border, on visualFocus only.
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2
@@ -177,8 +151,6 @@ AbstractButton {
             Text {
                 text: control.subtitle
                 visible: control.subtitle.length > 0
-                // A sub-line is information the user reads, so it never rides an
-                // opacity — mutedStrong is a colour, tuned for contrast.
                 color: Theme.mutedStrong
                 font.pixelSize: Tokens.textMeta
                 elide: Text.ElideRight
@@ -186,9 +158,8 @@ AbstractButton {
             }
         }
 
-        // Caller-provided chips / badges. A positioner child with no explicit
-        // width reports its natural extent here, so the copy column (fillWidth
-        // + elide) is what gives way first at a narrow window.
+        // No explicit width, so this reports its natural extent and the copy
+        // column (fillWidth + elide) gives way first at a narrow window.
         Item {
             id: extraSlot
             implicitWidth: extraSlot.childrenRect.width

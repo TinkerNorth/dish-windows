@@ -1,34 +1,7 @@
 name: _security (reusable)
 
-# Reusable security workflow shared by all four TinkerNorth repos
-# (satellite, dish-android, dish-linux, dish-mac).
-#
-# Callers invoke this with:
-#
-#   jobs:
-#     security:
-#       uses: tinkernorth/satellite/.github/workflows/_security.yml@<pinned-sha>
-#       with:
-#         osv_scan_paths: '.'                 # comma- or newline-separated
-#         osv_config: 'osv-scanner.toml'      # optional, repo-relative
-#         gitleaks_enabled: true
-#         dependency_review_enabled: true
-#         action_pin_lint_enabled: true
-#         allowlist_expiry_enabled: true
-#
-# Owner / SHA pins below are documented for reviewers so they can verify
-# each pin against the upstream release tag with:
-#   gh api repos/<owner>/<repo>/git/ref/tags/<tag>
-#
-# Pin map (owner/repo @ tag → 40-char SHA), verify on update:
-#   actions/checkout                         @ v6.0.2  → de0fac2e4500dabe0009e67214ff5f5447ce83dd
-#   actions/dependency-review-action         @ v5.0.0  → a1d282b36b6f3519aa1f3fc636f609c47dddb294
-#   actions/setup-python                     @ v6.2.0  → a309ff8b426b58ec0e2a45f0f869d46889d02405
-#
-# OSV-Scanner and gitleaks are installed directly from upstream release
-# binaries (see the respective jobs below) rather than via third-party
-# action wrappers, so their version pins live in each job's env block
-# and not in this list.
+# Reusable security gates: action-pin lint, allowlist expiry, OSV-Scanner,
+# dependency review, gitleaks. Called by security.yml and release.yml.
 
 on:
   workflow_call:
@@ -64,10 +37,17 @@ on:
         type: boolean
         default: true
 
+# A called workflow's permissions are capped by the caller's — asking for more
+# than the caller granted fails the job outright, it does not silently
+# downgrade. So this block is the contract every caller must satisfy: keep it
+# to what the jobs below actually use.
+#   contents: read       — checkout
+#   pull-requests: read  — dependency-review reads the PR's dependency diff
+# No security-events scope: the gitleaks SARIF goes to upload-artifact, not to
+# code scanning. Add it back here AND in every caller if that ever changes.
 permissions:
   contents: read
   pull-requests: read
-  security-events: write
 
 jobs:
   action-pin-lint:
@@ -84,9 +64,8 @@ jobs:
           set -euo pipefail
           fail=0
           while IFS= read -r -d '' file; do
-            # Strip trailing comments before parsing so `# v1.2.3` tag hints are fine.
-            # Match only YAML mapping keys: optional indent, optional list dash, then `uses:`.
-            # This avoids false positives from string literals inside `run: |` blocks.
+            # Match only YAML mapping keys, not `uses:` inside a `run: |` block,
+            # and strip trailing `# v1.2.3` tag hints before comparing.
             awk '
               /^[[:space:]]*#/ { next }
               {
@@ -168,16 +147,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Install OSV-Scanner directly from upstream release rather than via a
-      # third-party action wrapper. This avoids action-interface drift and
-      # keeps the supply-chain surface minimal.
+      # Installed from the upstream release rather than an action wrapper, to
+      # keep the supply-chain surface minimal.
       - name: Install OSV-Scanner
         shell: bash
         env:
           OSV_SCANNER_VERSION: "1.9.0"
-          # SHA-256 of osv-scanner_linux_amd64 from the upstream release.
-          # Update in lockstep with OSV_SCANNER_VERSION; verify against
-          # `osv-scanner_SHA256SUMS` on the release page.
+          # Bump in lockstep with the version above; verify against
+          # osv-scanner_SHA256SUMS on the release page.
           OSV_SCANNER_SHA256: "d9c1deedc23372a25049458e1e2f2bb9ad4098e2e2038118b9fec42f28f93ffb" # osv-scanner_linux_amd64 v1.9.0
         run: |
           set -euo pipefail
@@ -212,12 +189,8 @@ jobs:
           rc=$?
           set -e
           printf '%s\n' "$out"
-          # OSV-Scanner exit codes:
-          #   0   — no vulnerabilities found
-          #   1   — vulnerabilities found
-          #   128 — no package sources discovered (e.g. C/C++ vendored headers
-          #         without a manifest). Treat as a non-fatal warning so the
-          #         scanner can be wired in incrementally per repo.
+          # Exit 128 means "no package sources discovered", which a C++ tree
+          # without a recognised manifest hits routinely. Not a finding.
           if [ "$rc" -eq 128 ] || \
              { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'No package sources found'; }; then
             echo "::warning::OSV-Scanner found no package sources in the requested paths — treating as non-fatal."
@@ -233,9 +206,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Dependency review requires GitHub Advanced Security on private
-      # repositories. The HANDOFF tracks enabling GHAS as a follow-up;
-      # until then this step is best-effort and surfaces as a warning.
+      # Needs Advanced Security, which a private repo does not have; the step
+      # is advisory until then. Drop continue-on-error once public.
       - name: Review changed dependencies
         continue-on-error: true
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
@@ -253,15 +225,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Install gitleaks directly from the upstream release rather than via
-      # gitleaks/gitleaks-action, which now requires a paid license for
-      # org accounts. Pin both the version and the binary SHA-256.
+      # Not gitleaks/gitleaks-action: that requires a paid license for org
+      # accounts. Installed from the upstream release instead.
       - name: Install gitleaks
         shell: bash
         env:
           GITLEAKS_VERSION: "8.30.1"
-          # SHA-256 of gitleaks_<version>_linux_x64.tar.gz from the upstream
-          # release; verify with `gitleaks_<version>_checksums.txt`.
+          # Bump in lockstep with the version above; verify against
+          # gitleaks_<version>_checksums.txt.
           GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" # gitleaks_8.30.1_linux_x64.tar.gz
         run: |
           set -euo pipefail
@@ -276,8 +247,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # `detect` scans the full git history; `--redact` keeps secrets out
-          # of the log; non-zero exit code if any leak is found.
+          # --redact keeps any hit out of the public run log.
           gitleaks detect \
             --source=. \
             --redact \

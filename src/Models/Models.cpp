@@ -24,14 +24,12 @@ bool boolOr(const QJsonObject& obj, const char* key, bool fallback) {
     return fallback;
 }
 
-// Set the optional only when the key is a non-empty string.
 void setIfNonEmpty(std::optional<QString>& slot, const QJsonObject& obj, const char* key) {
     if (auto v = optString(obj, key); !v.isEmpty()) { slot = v; }
 }
 
-// Inverse of ControllerDescriptor::toJson's caps fold: the view's caps object
-// back into the proto::kCap* word. Unknown keys are ignored so a newer server
-// can add caps without breaking older clients.
+// Inverse of ControllerDescriptor::toJson's caps fold. Unknown keys are ignored
+// so a newer server can add caps without breaking older clients.
 std::uint16_t capsWordFromJson(const QJsonObject& caps) {
     std::uint16_t word = 0;
     if (boolOr(caps, "rumble", false)) { word |= proto::kCapRumble; }
@@ -66,8 +64,8 @@ DiscoveredServer DiscoveredServer::fromJson(const QJsonObject& obj) {
     s.udpPort = intOr(obj, "udpPort", kDefaultUdpPort);
     s.pairPort = intOr(obj, "pairPort", kDefaultPairPort);
     s.httpPort = intOr(obj, "httpPort", kDefaultHttpPort);
-    // Beacon advertises the stable id as "machineId"; mDNS TXT uses "mid". Accept
-    // either so both discovery transports populate the keying identity.
+    // The beacon calls it "machineId", mDNS TXT calls it "mid". Accept either so
+    // both discovery transports populate the keying identity.
     s.machineId = optString(obj, "machineId");
     if (s.machineId.isEmpty()) { s.machineId = optString(obj, "mid"); }
     return s;
@@ -80,8 +78,8 @@ PairResponse PairResponse::fromJson(const QJsonObject& obj) {
     setIfNonEmpty(r.error, obj, "error");
     setIfNonEmpty(r.sharedKey, obj, "sharedKey");
     r.protocolVersion = intOr(obj, "protocolVersion", proto::kProtocolVersion);
-    // We parsed a JSON body, so the server is reachable — even if ok=false.
-    // PairingClient sets reachable=false explicitly on every network-error path.
+    // A JSON body parsed, so the server is reachable even when ok=false.
+    // PairingClient sets reachable=false on every network-error path.
     r.reachable = true;
     return r;
 }
@@ -251,7 +249,7 @@ CatalogDto CatalogDto::fromJson(const QJsonObject& obj) {
     CatalogDto c;
     c.locale = optString(obj, "locale");
     c.protocolVersion = intOr(obj, "protocolVersion", proto::kProtocolVersion);
-    // Absent = the legacy v1 catalog, per contract — never default to current.
+    // Absent = the legacy v1 catalog per contract; never default to current.
     c.catalogVersion = intOr(obj, "catalogVersion", 1);
     c.serverVersion = optString(obj, "serverVersion");
     for (const auto& v : obj.value(QLatin1String("controllerTypes")).toArray()) {

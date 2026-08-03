@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Wizard page 1 — Input. Which pad, and how Dish should read it.
-//
-// Two states in one page, never two pages: WAITING (slotModel empty) is a full
-// step with real advice and a live scan — never a bare spinner — and it becomes
-// the picker the moment a pad appears. Nothing here writes: the path is a DRAFT
-// value applied with everything else by the last step, so setSlotPath is never
-// called from this file.
-//
-// The Verified / Unverified judgement does NOT ride the pad row: the risk it
-// describes exists only on the Direct path, so it rides the Direct card as
-// "Layout guessed" and the amber callout shows only while Direct is selected.
+// Wizard page 1 — Input. Which pad, and how Dish should read it. WAITING (empty
+// slotModel) and the picker are one page, not two: waiting is a full step with
+// real advice. Nothing here writes — the path is a DRAFT value the last step
+// applies, so setSlotPath is never called from this file.
 
 pragma ComponentBehavior: Bound
 
@@ -26,13 +19,13 @@ ColumnLayout {
 
     property BindingDraft draft
 
-    // Home ▸ Bind… pre-answers this page with a specific pad. Held as an id
-    // rather than written into the draft by the caller, because only the row
-    // itself knows the pad's name, transport and claimability.
+    // Home ▸ Bind… pre-answers this page. Held as an id rather than written into
+    // the draft by the caller, because only the row itself knows the pad's name,
+    // transport and claimability.
     property string seedSlotId: ""
 
-    // The pad the wizard adopted, republished so the banner and the review card
-    // can read it without re-walking the model.
+    // Republished so the banner and the review card read the adopted pad without
+    // re-walking the model.
     signal padAdopted(var info)
 
     // ── The wizard's step contract ──────────────────────────────────────────
@@ -50,13 +43,12 @@ ColumnLayout {
     property bool padClaimable: false
     property bool padVerified: false
 
-    // The path question is only a question when there are two answers.
     readonly property bool pathIsAQuestion: page.padClaimable && !page.padBluetooth
 
     spacing: Tokens.s6
 
-    // The one rate formatter (Kit.LiveStat owns the ~ rule; nothing else
-    // formats a rate). Invisible children are skipped by the layout.
+    // Kit.LiveStat owns the one rate formatter in the app; this hidden instance
+    // is borrowed for it (an invisible child is skipped by the layout).
     Kit.LiveStat {
         id: rateFormat
         visible: false
@@ -72,13 +64,9 @@ ColumnLayout {
         return parts.join(" · ");
     }
 
-    // Adopting a pad seeds the path from THAT PAD's own current setting, never
-    // from the previously adopted one: a slot already running Direct stays
-    // Direct, and "standard" is only the default a pad that has never been set
-    // up arrives with. (It used to hard-code "standard" on the theory that
-    // Direct must be a deliberate answer — but the user's earlier answer for
-    // this same pad IS the deliberate one, and silently downgrading it made the
-    // wizard's own Review page disagree with the Home row it was editing.)
+    // The path is seeded from THAT PAD's own current setting, never from the
+    // previously adopted one: a slot already running Direct stays Direct, and
+    // downgrading it silently made Review disagree with the Home row it edits.
     // Bluetooth cannot carry Direct at all, so `usable` still has the last word.
     function adopt(slotId, name, bluetooth, claimable, currentPath, hz, hzLive,
                    motion, touchpad, lightbar) {
@@ -163,8 +151,6 @@ ColumnLayout {
             required property string name
             required property bool bluetooth
             required property bool pathSupported
-            // The pad's CURRENT path preference — what the wizard seeds the
-            // draft from, so re-running setup on a Direct pad keeps Direct.
             required property string desiredPath
             required property bool hasMotion
             required property bool hasTouchpad
@@ -172,7 +158,6 @@ ColumnLayout {
             required property int gamepadHz
             required property bool gamepadHzLive
 
-            // The wizard was opened FOR this pad.
             readonly property bool seedMatch: page.seedSlotId.length > 0
                                               && page.seedSlotId === padRow.slotId
 
@@ -194,8 +179,7 @@ ColumnLayout {
             // properties versus delegate creation), so both orders adopt.
             onSeedMatchChanged: if (padRow.seedMatch) padRow.adoptThis()
 
-            // Pre-answer the question when there is only ever one answer to it:
-            // the first row holds the draft until the seeded row claims it, and
+            // The first row holds the draft until the seeded row claims it, and
             // keeps it when the seeded pad is no longer plugged in.
             Component.onCompleted: {
                 if (padRow.seedMatch
@@ -286,7 +270,6 @@ ColumnLayout {
         Layout.topMargin: Tokens.s2
     }
 
-    // The bottom callout is pinned to the foot of the body.
     Item {
         Layout.fillHeight: true
         Layout.minimumHeight: Tokens.s5

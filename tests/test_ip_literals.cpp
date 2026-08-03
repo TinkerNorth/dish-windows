@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// NetworkUtilsTest (private-IP slice, PURE) — isPrivateHostLiteral. Port of the
-// dish-android NetworkUtilsTest assertions for IpLiterals.isPrivateHostLiteral:
-// RFC-1918 / link-local / loopback / unique-local literals are private; public
-// addresses, near-misses, and hostnames are not. Landed once in core/net so 2a
-// (discovery vetting) and 2b (public-IP connect refusal) share the rule.
 
 #include "core/net/IpLiterals.h"
 
@@ -39,10 +33,6 @@ TEST_CASE("isPrivateHostLiteral rejects public literals and hostnames", "[iplit]
     CHECK_FALSE(isPrivateHostLiteral("1.2.3"));       // too few octets
 }
 
-// Windows-specific extension: a few more IPv6 edges the parser must handle. The
-// classifier looks only at the high bytes, so a v4-mapped address (::ffff:x) is
-// NOT private regardless of the embedded v4 — it isn't in fc00::/7, fe80::/10,
-// or ::1 — matching android's byte-range check.
 TEST_CASE("isPrivateHostLiteral handles IPv6 edge forms", "[iplit]") {
     CHECK(isPrivateHostLiteral("fd12:3456:789a::1"));          // fd00::/8 (part of fc00::/7)
     CHECK_FALSE(isPrivateHostLiteral("2001:4860:4860::8888")); // public IPv6

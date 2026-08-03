@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 Dish contributors.
 #
-# Convenience wrapper around CMake + Ninja for local dev. Mirrors
-# dish-linux/scripts/build.sh argument shape so muscle memory transfers.
+# CMake + Ninja wrapper for local dev. It finds the MSVC toolchain, Qt and
+# vcpkg itself, so it runs from any shell, not only a Developer Command Prompt.
 #
 # Usage:
 #   scripts/build.ps1                  # release, no tests
@@ -11,16 +11,7 @@
 #   scripts/build.ps1 debug test       # debug + run ctest after building
 #   scripts/build.ps1 release test     # release + run ctest after building
 #
-# The script auto-finds:
-#   * VS Build Tools / Visual Studio (via vswhere + vcvars64.bat)
-#   * Qt 6  (via $env:CMAKE_PREFIX_PATH set by install-dependencies.bat,
-#            or by scanning C:\Qt\* for the newest msvc install)
-#   * vcpkg (via $env:VCPKG_ROOT set by install-dependencies.bat, or by
-#            falling back to %USERPROFILE%\vcpkg)
-#
-# If you ran install-dependencies.bat the way we document, this script
-# Just Works from any PowerShell / cmd window — you don't need to launch
-# a "Developer Command Prompt for VS 2022" first.
+# It writes into build-release/ or build-debug/ and nothing outside the repo.
 
 [CmdletBinding()]
 param(
@@ -31,16 +22,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# ---------------------------------------------------------------------------
-# Toolchain discovery — make the script self-bootstrapping so the user
-# never has to remember to open a "Developer Command Prompt".
-# ---------------------------------------------------------------------------
-
 function Find-VcvarsBat {
-    # vswhere ships with every VS install >= 2017 and points at the exact
-    # VC tools directory for any flavour (Community / Pro / Enterprise /
-    # BuildTools). Without it we'd have to guess; this is the same lookup
-    # ilammy/msvc-dev-cmd does in CI.
+    # vswhere ships with every VS install >= 2017 and is the only reliable way
+    # to locate any flavour (Community / Pro / Enterprise / BuildTools).
+    # -products * is required or a BuildTools-only box reports nothing.
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path $vswhere)) { return $null }
     $install = & $vswhere -latest -prerelease -products * `
@@ -54,10 +39,8 @@ function Find-VcvarsBat {
 
 function Import-Vcvars {
     param([string]$VcvarsPath)
-    # vcvars64.bat sets ~50 env vars (INCLUDE, LIB, PATH, LIBPATH, etc.) that
-    # the MSVC toolchain needs. The trick is running it in a child cmd.exe
-    # and re-importing every `KEY=VALUE` line into the current PowerShell
-    # process — same idea every CI msvc-setup action uses.
+    # There is no PowerShell equivalent of vcvars64.bat, so run it in a child
+    # cmd.exe and re-import every KEY=VALUE line into this process.
     Write-Output "==> Importing MSVC env via $VcvarsPath"
     $output = cmd.exe /c "`"$VcvarsPath`" >nul && set"
     foreach ($line in $output) {
@@ -68,12 +51,11 @@ function Import-Vcvars {
 }
 
 function Find-QtPrefix {
-    # 1) Explicit override wins.
+    # An explicit CMAKE_PREFIX_PATH wins; otherwise fall back to the layout
+    # install-dependencies.bat produces, newest version first.
     if ($env:CMAKE_PREFIX_PATH -and (Test-Path (Join-Path $env:CMAKE_PREFIX_PATH 'lib/cmake/Qt6'))) {
         return $env:CMAKE_PREFIX_PATH
     }
-    # 2) Scan C:\Qt\<version>\msvc2019_64 (the layout aqtinstall produces
-    #    and what install-dependencies.bat installs). Newest version wins.
     $qtRoot = 'C:\Qt'
     if (-not (Test-Path $qtRoot)) { return $null }
     $candidates = Get-ChildItem $qtRoot -Directory -ErrorAction SilentlyContinue |
@@ -95,8 +77,7 @@ function Find-VcpkgRoot {
     return $null
 }
 
-# Only run vcvars import if cl.exe isn't already on PATH (saves ~3s on
-# warm shells / Developer Command Prompts).
+# Skip the ~3s vcvars import when cl.exe is already on PATH.
 if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
     $vcvars = Find-VcvarsBat
     if (-not $vcvars) {
@@ -109,11 +90,8 @@ $qtPrefix = Find-QtPrefix
 if ($qtPrefix) {
     $env:CMAKE_PREFIX_PATH = $qtPrefix
     Write-Output "==> Qt prefix: $qtPrefix"
-    # Add Qt's bin to PATH so anything that runs from this shell (the
-    # built dish.exe, catch_discover_tests when invoked directly, etc.)
-    # can find Qt6Core.dll / Qt6Network.dll. tests/CMakeLists.txt already
-    # carries the same path through DL_PATHS for ctest, but a direct
-    # `.\build-release\dish.exe` from this shell also benefits.
+    # So a dish.exe launched straight from this shell finds Qt's DLLs. ctest
+    # gets the same path through DL_PATHS in tests/CMakeLists.txt.
     $qtBin = Join-Path $qtPrefix 'bin'
     if (Test-Path $qtBin) {
         if (-not (($env:PATH -split ';') -contains $qtBin)) {
@@ -132,10 +110,6 @@ if ($vcpkgRoot) {
     Write-Warning 'vcpkg not found. Run install-dependencies.bat or set $env:VCPKG_ROOT.'
 }
 
-# ---------------------------------------------------------------------------
-# Configure + build
-# ---------------------------------------------------------------------------
-
 $cmakeBuildType = if ($BuildType -eq 'debug') { 'Debug' } else { 'Release' }
 $buildDir       = "build-$BuildType"
 
@@ -143,13 +117,9 @@ $toolchain = if ($vcpkgRoot) {
     "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake"
 } else { '' }
 
-# Re-configure when the generator output is missing. `build-release/`
-# (or `build-debug/`) gets created the moment CMake starts, even when
-# configure later aborts — testing for the directory's existence isn't
-# enough. `build.ninja` is the actual generator output, so its absence
-# is a reliable "previous configure failed, redo it" signal. CMake's
-# incremental regeneration handles the no-op case in well under a
-# second, so re-checking on every invocation is cheap.
+# Test for build.ninja, not for the directory: CMake creates the directory the
+# moment it starts, so an aborted configure leaves one behind and a directory
+# check would treat that poisoned tree as configured.
 $ninjaFile = Join-Path $buildDir 'build.ninja'
 if (-not (Test-Path $ninjaFile)) {
     Write-Output "==> Configuring ($cmakeBuildType, $buildDir)"
@@ -163,8 +133,7 @@ if (-not (Test-Path $ninjaFile)) {
     if ($toolchain) { $cmakeArgs += $toolchain }
     & cmake @cmakeArgs
     if ($LASTEXITCODE -ne 0) {
-        # Wipe the half-configured directory so the next invocation
-        # starts clean instead of inheriting more poisoned state.
+        # Wipe the half-configured tree so the next run starts clean.
         Remove-Item -Recurse -Force $buildDir -ErrorAction SilentlyContinue
         throw "cmake configure failed"
     }

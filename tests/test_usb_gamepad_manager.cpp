@@ -1,28 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbGamepadManagerTest (ADAPT, 7). Re-derivation of dish-android source/usb/
-// UsbGamepadManagerTest.kt against the Windows raw-HID claim driver with a FAKE
-// gateway (no real USB/HID IO). The android test mocks the Android USB layer to
-// drive a real open/claim/attach outcome into a DirectClaimFailure; here the
-// FakeGateway returns a programmed ClaimResult so the SAME classification +
-// auto-Direct gating is exercised through the public path-choice entry points:
-//
-//   * open rejected            -> Busy, drops back to Standard, markDirectFailed.
-//   * permission denied        -> PermissionDenied.
-//   * claim interface rejected -> Busy (framework not stolen).
-//   * read-loop bring-up fails  -> waits for the framework as InitFailed (stolen).
-//   * successful claim         -> Direct, a synthetic is registered.
-//   * a recorded failure suppresses auto-Direct on a verified model (no claim).
-//   * a verified model with no recorded failure auto-claims Direct (claim runs).
-//
-// Plus the departed-device sweep (the Windows unplug signal is reconcile()'s
-// presence diff, android's detach broadcast folded into the rescan; debounced
-// to 2 consecutive misses so a flaky single scan can't tear down a live claim):
-//   * a Direct pad missing 2 scans is erased + its claim released.
-//   * one missed scan is a blip: nothing is torn down, and a sighting resets it.
-//   * a Routed pad that stops enumerating is forgotten with no release.
-//   * a replug after the sweep re-tracks fresh and re-evaluates auto-Direct.
+// The raw-HID claim driver over a fake gateway (no USB/HID IO). Windows has no
+// device-detach broadcast, so an unplug is reconcile()'s presence diff, debounced
+// to 2 consecutive misses so one flaky scan cannot tear down a live claim.
 
 #include "source/usb/UsbGamepadManager.h"
 
@@ -62,9 +43,6 @@ UsbDeviceInfo padDevice() {
     return d;
 }
 
-// A programmable gateway: enumerate() returns the seeded device(s), claim()
-// returns the seeded outcome (and records that a claim was attempted), and the
-// fast-lane verdict is settable per test.
 class FakeGateway : public UsbDeviceGateway {
   public:
     std::vector<UsbDeviceInfo> devices{padDevice()};
@@ -72,7 +50,7 @@ class FakeGateway : public UsbDeviceGateway {
     bool fastLane = false;
     int claimCalls = 0;
     int nextSyntheticId = -1000;
-    std::vector<int> released; // releaseClaim calls, in order.
+    std::vector<int> released;
 
     std::vector<UsbDeviceInfo> enumerate() override { return devices; }
     ClaimResult claim(const UsbDeviceInfo& /*d*/,
@@ -88,7 +66,6 @@ class FakeGateway : public UsbDeviceGateway {
     std::int64_t completionCount(int /*syntheticId*/) const override { return 0; }
 };
 
-// Records the side-effect observer calls (markFailure, syntheticAdded, ...).
 struct RecordingObserver : UsbDirectObserver {
     std::vector<DirectClaimFailure> failures;
     std::vector<int> syntheticsAdded;
@@ -167,7 +144,6 @@ TEST_CASE("claim interface rejected reports Busy", "[usb-manager]") {
 TEST_CASE("read-loop bring-up failure after claim waits for the framework as InitFailed",
           "[usb-manager]") {
     FakeGateway gw;
-    // The interface was stolen (claimed) but the read loop never came up.
     gw.nextClaim = ClaimResult::fail(DirectClaimFailure::InitFailed, /*frameworkStolen=*/true);
     UsbPathPreferenceRepository repo(makeSharedSettings());
     UsbPathPreferenceStore prefs(&repo);
@@ -202,11 +178,9 @@ TEST_CASE("successful claim reaches Direct and registers a synthetic", "[usb-man
 
 TEST_CASE("controllersChanged fires on a held-synthetic transition (Direct->AwaitingFramework)",
           "[usb-manager]") {
-    // The regression guard for the UI-never-updated bug: a Direct->Standard pick
-    // parks the controller in AwaitingFramework but KEEPS the synthetic (no
-    // syntheticRemoved), so the granular callbacks fire nothing. The single
-    // controllersChanged signal must still fire so the slot list rebuilds + the
-    // AwaitingFramework settle runs.
+    // A Direct->Standard pick parks the controller in AwaitingFramework but KEEPS
+    // the synthetic, so no granular callback fires. controllersChanged is the only
+    // signal that can rebuild the slot list and run the AwaitingFramework settle.
     FakeGateway gw;
     gw.nextClaim = ClaimResult::success(-1000);
     UsbPathPreferenceRepository repo(makeSharedSettings());
@@ -221,7 +195,7 @@ TEST_CASE("controllersChanged fires on a held-synthetic transition (Direct->Awai
         REQUIRE(c->phase == UsbPhase::Direct);
     }
     const int afterDirect = obs.controllersChangedCount;
-    REQUIRE(afterDirect > 0); // the claim transition notified
+    REQUIRE(afterDirect > 0);
 
     m.setPathChoice(kVid, kPid, PathChoice::Standard);
     {
@@ -229,15 +203,12 @@ TEST_CASE("controllersChanged fires on a held-synthetic transition (Direct->Awai
         REQUIRE(c.has_value());
         CHECK(c->phase == UsbPhase::AwaitingFramework); // synthetic held, not removed
     }
-    // The held-synthetic transition still notified — the old syntheticRemoved-only
-    // path would have left this equal to afterDirect.
     CHECK(obs.controllersChangedCount > afterDirect);
 }
 
 TEST_CASE("a recorded failure suppresses auto-Direct on a verified model", "[usb-manager]") {
     FakeGateway gw;
     gw.fastLane = true;
-    // A first auto-claim that fails records the prior failure (Busy, not stolen).
     gw.nextClaim = ClaimResult::fail(DirectClaimFailure::Busy, /*frameworkStolen=*/false);
     UsbPathPreferenceRepository repo(makeSharedSettings());
     UsbPathPreferenceStore prefs(&repo);
@@ -251,10 +222,8 @@ TEST_CASE("a recorded failure suppresses auto-Direct on a verified model", "[usb
         CHECK(c->desired == PathChoice::Standard); // rolled back after the failure.
     }
 
-    // A subsequent reconcile (e.g. re-foreground) must NOT auto-claim again: the
-    // recorded failure gates auto-Direct, so resolvePath settles Standard.
     m.reconcile();
-    CHECK(gw.claimCalls == 1); // no second claim attempt.
+    CHECK(gw.claimCalls == 1);
     const auto c = m.controllerFor(kVid, kPid);
     REQUIRE(c.has_value());
     CHECK(c->desired == PathChoice::Standard);
@@ -270,16 +239,10 @@ TEST_CASE("a verified model with no recorded failure auto-claims Direct", "[usb-
 
     m.reconcile();
 
-    // The auto path attempted the claim (the gateway's claim was reached) instead
-    // of settling Standard without trying.
     CHECK(gw.claimCalls == 1);
 }
 
 TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-manager]") {
-    // The stale-card regression: with no detach broadcast on Windows, a claimed
-    // pad used to survive its own unplug forever (nothing ever emitted
-    // UsbUnplugged). The reconcile sweep must erase it, release the claim, and
-    // notify so the slot list drops the card — after the 2-miss debounce.
     FakeGateway gw;
     gw.nextClaim = ClaimResult::success(-1000);
     UsbPathPreferenceRepository repo(makeSharedSettings());
@@ -295,7 +258,7 @@ TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-mana
     }
 
     gw.devices.clear(); // physical unplug: the pad stops enumerating.
-    m.reconcile();      // miss #1: debounced, nothing torn down yet.
+    m.reconcile();      // miss #1: debounced.
     REQUIRE(m.controllerFor(kVid, kPid).has_value());
     CHECK(gw.released.empty());
     const int beforeSweep = obs.controllersChangedCount;
@@ -316,10 +279,9 @@ TEST_CASE("unplugging a Direct pad erases it and releases the claim", "[usb-mana
 }
 
 TEST_CASE("one missed scan is a blip, not an unplug", "[usb-manager]") {
-    // A live claim must survive a single flaky enumeration pass (Bluetooth link
-    // parking, a transient exclusive open elsewhere) — a false unplug here would
-    // release + re-claim a working pad in a visible loop. A sighting between
-    // misses resets the debounce counter entirely.
+    // A flaky enumeration pass (Bluetooth link parking, a transient exclusive
+    // open elsewhere) would otherwise release and re-claim a working pad in a
+    // visible loop.
     FakeGateway gw;
     gw.nextClaim = ClaimResult::success(-1000);
     UsbPathPreferenceRepository repo(makeSharedSettings());
@@ -361,17 +323,15 @@ TEST_CASE("unplugging a Routed pad forgets it without a release", "[usb-manager]
     m.reconcile(); // miss #2: swept.
 
     CHECK_FALSE(m.controllerFor(kVid, kPid).has_value());
-    CHECK(gw.released.empty()); // no synthetic was ever held.
+    CHECK(gw.released.empty());
     CHECK(obs.syntheticsRemoved.empty());
 }
 
 TEST_CASE("a replug after the sweep re-tracks fresh and re-evaluates auto-Direct",
           "[usb-manager]") {
-    // onUsbGone clears the recorded prior failure. With the model back on Auto
-    // (no stored pick — the failed claim itself rolled the stored pick to
-    // Standard via SetPref, so the user's clearChoice models returning it to
-    // Auto), a fresh plug-in of a verified model must try Direct again instead
-    // of inheriting the stale failure from before the unplug.
+    // onUsbGone clears the recorded prior failure, so a fresh plug-in must not
+    // inherit a failure from before the unplug. clearChoice stands in for the
+    // user putting the model back on Auto after the failed claim stored Standard.
     FakeGateway gw;
     gw.fastLane = true;
     gw.nextClaim = ClaimResult::fail(DirectClaimFailure::Busy, /*frameworkStolen=*/false);
@@ -403,12 +363,11 @@ TEST_CASE("a replug after the sweep re-tracks fresh and re-evaluates auto-Direct
 
 namespace {
 
-// A gateway that drives a single decoded report through the onReport callback on
-// claim, so the manager's publish path (INPUT + MOTION + TOUCHPAD into the real
-// GamepadInputProcessor) can be asserted with no real HID IO.
+// Drives one decoded report through the onReport callback on claim, so the
+// manager's publish path can be asserted with no real HID IO.
 class ReportingGateway : public UsbDeviceGateway {
   public:
-    UsbReport report; // the report claim() will emit.
+    UsbReport report;
     int syntheticId = -1000;
 
     std::vector<UsbDeviceInfo> enumerate() override { return {padDevice()}; }
@@ -450,7 +409,7 @@ TEST_CASE("a claimed report publishes INPUT through the processor on the claim p
 
     m.tryDirectMode(kVid, kPid);
 
-    // The synthetic slot id the read loop publishes under is the model vpKey string.
+    // The read loop publishes under the model vpKey string, not the synthetic id.
     const std::string expectId = std::to_string((kVid << 16) | (kPid & 0xFFFF));
     CHECK(gotId == expectId);
     CHECK(gotButtons == dish::input::GamepadInputProcessor::Buttons::kA);

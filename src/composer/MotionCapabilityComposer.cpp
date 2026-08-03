@@ -15,8 +15,6 @@ const MotionConnection* findConnection(const MotionConnectionList& connections,
     return nullptr;
 }
 
-// True iff the slot is bound to a live satellite connection (motion only flows
-// on a Connected satellite link).
 bool carriesMotion(const std::string& slotId, const MotionBindings& bindings,
                    const MotionConnectionList& connections) {
     const auto it = bindings.find(slotId);
@@ -26,11 +24,9 @@ bool carriesMotion(const std::string& slotId, const MotionBindings& bindings,
     return conn->isSatellite && conn->connected;
 }
 
-// True iff the host has a motion sink for the slot's controller type. The
-// satellite sinks motion only for PlayStation- and DualSense-typed slots (both
-// ride the DS4 report set); an unknown binding, a non-satellite connection, or an
-// unknown type all default to true (no false warning) — the limiting case is an
-// explicitly Xbox- (or Switch Pro-) typed satellite slot.
+// The satellite sinks motion only for PlayStation- and DualSense-typed slots
+// (both ride the DS4 report set). Everything unresolved defaults to true, so an
+// unknown type never draws a warning it can't justify.
 bool hostSinkForType(const std::string& slotId, const MotionBindings& bindings,
                      const MotionConnectionList& connections) {
     const auto it = bindings.find(slotId);
@@ -45,8 +41,7 @@ bool hostSinkForType(const std::string& slotId, const MotionBindings& bindings,
            type == static_cast<int>(proto::kControllerTypeDualSense);
 }
 
-// The satellite backend status observed for the slot's bound connection, keyed
-// on (connectionId, slotId). Null when unbound or no observation has landed.
+// Null when unbound, or when no observation has landed yet.
 std::optional<source::SatelliteMotionBackendStatus>
 satelliteStatus(const std::string& slotId, const MotionBindings& bindings,
                 const source::SatelliteMotionBackendStatusMap& backend) {
