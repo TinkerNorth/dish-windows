@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbReportParsersTest — per-model HID input-report decode vectors for the
-// Windows USB-direct path (core/input/UsbReportParsers.h). Each case feeds a
-// KNOWN report byte vector (synthetic, built from the documented layout the
-// decoder mirrors from dish-android usb_parsers.cpp) and asserts the decoded
-// XUSB buttons / sticks / triggers / IMU / touchpad. No hardware, no IO.
-//
-// The button/stick/trigger offsets are the load-bearing part and match android's
-// usb_parsers.cpp byte-for-byte; the DS4/DualSense IMU + touchpad offsets are the
-// public hid-playstation layout (NEEDS-REAL-PAD sign/scale check, flagged in the
-// header) — the tests pin the OFFSETS + the present/absent gating, not a
-// hardware-true magnitude.
+// Each case feeds a synthetic report byte vector built from the documented
+// layout. The DS4/DualSense IMU + touchpad offsets come from the public
+// hid-playstation layout and have not been checked against a real pad, so these
+// pin the OFFSETS and the present/absent gating, not a hardware-true magnitude.
 
 #include "core/input/UsbReportParsers.h"
 
@@ -35,8 +28,6 @@ ParsedReport decode(HidParser p, const std::vector<std::uint8_t>& buf) {
 
 } // namespace
 
-// ── parser selection ──────────────────────────────────────────────────────────
-
 TEST_CASE("parserForDevice picks the right family by VID PID", "[usb-parsers]") {
     CHECK(parserForDevice(0x054C, 0x0CE6) == HidParser::DualSense);    // DualSense
     CHECK(parserForDevice(0x054C, 0x0DF2) == HidParser::DualSense);    // DualSense Edge
@@ -59,19 +50,17 @@ TEST_CASE("parser capability predicates agree with the families", "[usb-parsers]
     CHECK_FALSE(parserHasTouchpad(HidParser::GenericHid));
 }
 
-// ── DualShock 4 (report 0x01) ──────────────────────────────────────────────────
-
 TEST_CASE("DualShock4 decodes Cross to XUSB A and centers neutral sticks", "[usb-parsers][ds4]") {
     std::vector<std::uint8_t> r(10, 0);
     r[0] = 0x01;
-    r[1] = 128;  // LX center
-    r[2] = 128;  // LY center
-    r[3] = 128;  // RX center
-    r[4] = 128;  // RY center
-    r[5] = 0x20; // Cross -> XUSB_A; hat low nibble 0 would be N, but 0x20 low nibble = 0.
-    // Low nibble of 0x20 is 0 => hat octant 0 (Up). Use 0x28 to also exercise hat
-    // below; here keep a pure face-button check by masking hat to neutral (0x08).
-    r[5] = static_cast<std::uint8_t>(0x20 | 0x08); // Cross + hat nibble 8 (neutral).
+    r[1] = 128; // LX center
+    r[2] = 128; // LY center
+    r[3] = 128; // RX center
+    r[4] = 128; // RY center
+    r[5] = 0x20;
+    // Byte 5 low nibble is the hat octant, so it must be 8 (neutral) for a pure
+    // face-button check; 0 would read as Up.
+    r[5] = static_cast<std::uint8_t>(0x20 | 0x08); // Cross + hat neutral.
     const auto out = decode(HidParser::DualShock4, r);
     CHECK((out.wButtons & layout::kXusbA) != 0);
     CHECK((out.wButtons & layout::kXusbDpadUp) == 0);
@@ -134,7 +123,7 @@ TEST_CASE("DualShock4 a short report has no IMU or touchpad", "[usb-parsers][ds4
     r[1] = r[2] = r[3] = r[4] = 128;
     r[5] = 0x08;
     const auto out = decode(HidParser::DualShock4, r);
-    CHECK(out.wButtons != 0xDEAD); // decoded ok
+    CHECK(out.wButtons != 0xDEAD);
     CHECK_FALSE(out.motionValid);
     CHECK_FALSE(out.touchpadValid);
 }
@@ -170,10 +159,8 @@ TEST_CASE("DualShock4 rejects a wrong report id", "[usb-parsers][ds4]") {
     std::vector<std::uint8_t> r(10, 0);
     r[0] = 0x11; // not 0x01
     const auto out = decode(HidParser::DualShock4, r);
-    CHECK(out.wButtons == 0xDEAD); // false return
+    CHECK(out.wButtons == 0xDEAD);
 }
-
-// ── DualSense (report 0x01) ─────────────────────────────────────────────────────
 
 TEST_CASE("DualSense decodes Cross to XUSB A with shifted trigger and button bytes",
           "[usb-parsers][dualsense]") {
@@ -232,8 +219,6 @@ TEST_CASE("DualSense a full report carries IMU and touchpad", "[usb-parsers][dua
     CHECK_FALSE(out.finger1Active);
 }
 
-// ── Switch Pro (report 0x30) ────────────────────────────────────────────────────
-
 TEST_CASE("SwitchPro maps face buttons by physical position and digital triggers",
           "[usb-parsers][switch]") {
     std::vector<std::uint8_t> r(25, 0);
@@ -246,7 +231,7 @@ TEST_CASE("SwitchPro maps face buttons by physical position and digital triggers
     r[5] = 0x02 | 0x80;
     // sticks centered (2048 packed): LX=2048 -> buf6=0x00, buf7 low nibble=0x08
     r[6] = 0x00;
-    r[7] = 0x80; // ly high nibble | lx high nibble -> ly low=8<<? keep near center
+    r[7] = 0x80; // ly and lx share this byte's nibbles
     r[8] = 0x08;
     r[9] = 0x00;
     r[10] = 0x80;
@@ -282,8 +267,6 @@ TEST_CASE("SwitchPro rejects a short report", "[usb-parsers][switch]") {
     CHECK(out.wButtons == 0xDEAD);
 }
 
-// ── Generic HID / 8BitDo ────────────────────────────────────────────────────────
-
 TEST_CASE("GenericHid decodes axes hat face and shoulder buttons", "[usb-parsers][generic]") {
     std::vector<std::uint8_t> r(7, 0);
     r[0] = 128;                                           // LX center
@@ -317,14 +300,11 @@ TEST_CASE("GenericHid rejects a too-short report", "[usb-parsers][generic]") {
     CHECK(out.wButtons == 0xDEAD);
 }
 
-// ── scalar helpers ──────────────────────────────────────────────────────────────
-
 TEST_CASE("scaleU8Centered centers and inverts", "[usb-parsers][scale]") {
     CHECK(scaleU8Centered(128, false) == 0);
     CHECK(scaleU8Centered(128, true) == 0);
     CHECK(scaleU8Centered(255, false) > 32000);
     CHECK(scaleU8Centered(0, false) < -32000);
-    // Inverted sense flips the sign.
     CHECK(scaleU8Centered(0, true) > 32000);
     CHECK(scaleU8Centered(255, true) < -32000);
 }

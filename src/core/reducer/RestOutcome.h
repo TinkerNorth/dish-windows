@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pure, Qt-free classifiers that turn an HTTP status + the protocol-relevant
-// body fields into a decision the session FSM acts on. Free functions only so
-// the rules unit-test without sockets or Qt (the android pattern). These encode
-// the contract's error model (§Error model, §hmacProof) once, in one place.
+// Turns an HTTP status plus the protocol-relevant body fields into a decision the
+// session FSM acts on. The single encoding of the contract's error model.
 
 #pragma once
 
@@ -13,14 +11,13 @@
 
 namespace dish::reducer {
 
-// What a REST exchange means to the caller, independent of which route it was.
 enum class RestVerdict {
     Ok,              // 2xx with the fields we need
-    Unauthorized,    // 401 NOT_PAIRED|BAD_PROOF — TERMINAL: drop key, re-pair
-    VersionMismatch, // 409 — TERMINAL: client/server protocol skew
-    ShuttingDown,    // 503 — retryable later
-    Unreachable,     // transport failure / empty body (status 0) — retryable
-    ServerError,     // any other non-2xx with a body — usually retryable
+    Unauthorized,    // 401 NOT_PAIRED|BAD_PROOF; terminal, drop key and re-pair
+    VersionMismatch, // 409; terminal, client/server protocol skew
+    ShuttingDown,    // 503
+    Unreachable,     // transport failure or empty body
+    ServerError,     // any other non-2xx with a body
 };
 
 inline bool restVerdictTerminal(RestVerdict v) {
@@ -32,19 +29,14 @@ inline bool restVerdictRetryable(RestVerdict v) {
            v == RestVerdict::ServerError;
 }
 
-// The decoded shape every REST reply carries through this layer: the HTTP
-// status, whether the body parsed at all, and the optional `code` (401 cause).
-// A status of 0 means the transport never produced a response (our gateway's
-// synthesised-failure sentinel, matching android's HttpReply(status=0)).
+// A status of 0 is the gateway's sentinel for "the transport never produced a
+// response".
 struct RestReply {
     int status = 0;
     bool bodyParsed = false;
     std::string code; // NOT_PAIRED | BAD_PROOF on a 401, else empty
 };
 
-// Classify a generic authenticated REST reply (PUT/GET/DELETE session/
-// controller). `code` is consulted on 401 so a NOT_PAIRED and a BAD_PROOF both
-// surface as Unauthorized (both terminal — contract §hmacProof).
 inline RestVerdict classifyRest(const RestReply& r) {
     if (r.status == 0 || !r.bodyParsed) { return RestVerdict::Unreachable; }
     if (r.status >= 200 && r.status <= 299) { return RestVerdict::Ok; }
@@ -55,18 +47,17 @@ inline RestVerdict classifyRest(const RestReply& r) {
 }
 
 // ── Pairing classification ──────────────────────────────────────────────────
-// POST /api/pair always answers 200 on the PIN paths; the dish classifies on
-// the body's ok/pending fields, not the HTTP status. A 409 is a protocol skew.
+// POST /api/pair always answers 200 on the PIN paths, so the dish classifies on
+// the body's ok/pending fields rather than the HTTP status.
 
 enum class PairVerdict {
-    Success,         // ok && sharedKey present — adopt the key, open the session
-    Pending,         // Path B: {ok:false, pending:true} — poll /api/pair/status
-    AuthRequired,    // reachable but no key (first-time pair / forgot us) — PIN
-    VersionMismatch, // 409 — client/server protocol skew
-    Unreachable,     // transport failure / empty body
+    Success,         // ok with a sharedKey: adopt it and open the session
+    Pending,         // Path B {ok:false, pending:true}: poll /api/pair/status
+    AuthRequired,    // reachable but no key: first-time pair, or it forgot us
+    VersionMismatch, // 409
+    Unreachable,     // transport failure or empty body
 };
 
-// The protocol-relevant fields of a parsed POST /api/pair reply.
 struct PairReply {
     int status = 0;
     bool bodyParsed = false;
@@ -80,18 +71,16 @@ inline PairVerdict classifyPair(const PairReply& r) {
     if (r.status == 0 || !r.bodyParsed) { return PairVerdict::Unreachable; }
     if (r.ok && r.hasSharedKey) { return PairVerdict::Success; }
     if (r.pending) { return PairVerdict::Pending; }
-    // Reachable, parsed, but no usable key: a server that says ok=true with no
-    // key falls here too (caching an empty key would break every reconnect).
+    // A server answering ok=true with no key lands here too: caching an empty key
+    // would break every subsequent reconnect.
     return PairVerdict::AuthRequired;
 }
 
-// ── Path-B approval-status classification (GET /api/pair/status) ─────────────
-// {"ok":true,"status":"approved","sharedKey":...} exactly once, else
-// {"ok":false,"status":"pending"|"none"}. There is NO wire "denied" anymore:
-// an operator deny ERASES the pending row server-side, so the client polls
-// straight to "none" — which is terminal exactly when a "pending" was seen
-// first (before that, "none" tolerates the POST→first-poll race). The string
-// is still mapped defensively for any pre-change satellite.
+// ── Path-B approval status (GET /api/pair/status) ────────────────────────────
+// There is no wire "denied": an operator deny erases the pending row server-side,
+// so the client polls straight to "none". That is terminal exactly when a
+// "pending" was seen first; before that, "none" tolerates the POST-to-first-poll
+// race. "denied" is still mapped for satellites predating the change.
 enum class ApprovalVerdict { Approved, Pending, Declined, Unreachable };
 
 struct ApprovalReply {
@@ -101,16 +90,15 @@ struct ApprovalReply {
     bool hasSharedKey = false;
 };
 
-// `sawPending`: has any poll in THIS attempt observed "pending"? The caller
-// tracks it (pure state travels in, the rule stays a function).
+// `sawPending` is whether any poll in THIS attempt observed "pending"; the caller
+// tracks it so this stays a function.
 inline ApprovalVerdict classifyApproval(const ApprovalReply& r, bool sawPending = false) {
     if (r.status == 0 || !r.bodyParsed) { return ApprovalVerdict::Unreachable; }
     if (r.statusStr == "approved" && r.hasSharedKey) { return ApprovalVerdict::Approved; }
     if (r.statusStr == "denied") { return ApprovalVerdict::Declined; }
-    // A "none" AFTER a pending means the operator's deny erased the row —
-    // terminal for this attempt; keep polling would burn the whole budget.
+    // A "none" after a pending means the deny erased the row. Terminal for this
+    // attempt; polling on would burn the whole budget.
     if (r.statusStr == "none" && sawPending) { return ApprovalVerdict::Declined; }
-    // "pending" / early "none" / anything transient → keep waiting.
     return ApprovalVerdict::Pending;
 }
 

@@ -1,29 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// GamepadButtonLayouts — the pure, Qt-free XUSB <-> HID button/hat bit map (the
-// controller wire contract). Port of dish-android core/input/GamepadButtonLayouts.kt
-// 1:1: xusbToHid / hidToXusb / hidButtonsOf / hidHatOf, all packed into a single
-// `int` (NOT a struct/pair) so there is zero per-report allocation on the
-// <=250 Hz hot path. No dependencies at all — header-only, free functions.
-//
-//   * xusbToHid(wButtons): XInput wButtons word -> packed HID (low 16 bits =
-//     HID button word, bits 16..19 = HID hat octant 0..8).
-//   * hidButtonsOf(packed) / hidHatOf(packed): unpack the two fields.
-//   * hidToXusb(hidButtons, hat): the inverse map back to an XInput wButtons word.
-//
-// dpad bit combos fold to the 8 hat octants (the conflicting diagonals resolve
-// in a fixed precedence); unknown XUSB bits (e.g. 0x0800) are dropped; 0 is the
-// identity; xusbToHid then hidToXusb reproduces every canonical bit. The exact
-// HID button/hat constants match the satellite/android HID report layout
-// (BTN_A=0x0001 .. BTN_HOME=0x0400, HAT_NONE=0 / HAT_N=1 .. HAT_NW=8).
+// The XUSB <-> HID button/hat bit map. The result is packed into one `int` (low
+// 16 bits = HID button word, bits 16..19 = hat octant) rather than a struct, to
+// keep the <=250 Hz forwarding path allocation-free. The constants below are the
+// satellite/Android HID report layout and must not drift from it. Unknown XUSB
+// bits are dropped, so xusbToHid then hidToXusb round-trips every canonical bit.
 
 #pragma once
 
 namespace dish::input::layout {
 
-// XInput (XUSB) wButtons bits — identical to the android XUSB_* constants and to
-// GamepadInputProcessor::Buttons.
+// XInput (XUSB) wButtons bits.
 inline constexpr int kXusbDpadUp = 0x0001;
 inline constexpr int kXusbDpadDown = 0x0002;
 inline constexpr int kXusbDpadLeft = 0x0004;
@@ -42,7 +30,7 @@ inline constexpr int kXusbY = 0x8000;
 
 inline constexpr int kXusbDpadMask = 0x000F;
 
-// HID report button bits (the controller-wire layout the BT/USB report packs).
+// HID report button bits.
 inline constexpr int kHidA = 0x0001;
 inline constexpr int kHidB = 0x0002;
 inline constexpr int kHidX = 0x0004;
@@ -55,7 +43,7 @@ inline constexpr int kHidLs = 0x0100;
 inline constexpr int kHidRs = 0x0200;
 inline constexpr int kHidHome = 0x0400;
 
-// HID hat octants. Neutral is 0; the 8 directions run clockwise from N=1.
+// Hat octants run clockwise from N=1; 0 is neutral.
 inline constexpr int kHatNeutral = 0;
 inline constexpr int kHatN = 1;
 inline constexpr int kHatNe = 2;
@@ -66,10 +54,9 @@ inline constexpr int kHatSw = 6;
 inline constexpr int kHatW = 7;
 inline constexpr int kHatNw = 8;
 
-// Fold a 4-bit dpad mask (up/down/left/right) to a single hat octant. Diagonals
-// take precedence over the cardinals (so up+right reads NE, not N); the
-// physically-impossible opposing pair (up+down or left+right) resolves to the
-// remaining axis or, if fully opposed, neutral — matching the android order.
+// Diagonals take precedence over cardinals, and a physically impossible opposing
+// pair falls through to the remaining axis or neutral. The test order is the
+// contract: it must match the other clients so the same combo folds identically.
 inline int dpadBitsToHat(int dpadBits) {
     const bool up = (dpadBits & kXusbDpadUp) != 0;
     const bool down = (dpadBits & kXusbDpadDown) != 0;
@@ -86,7 +73,6 @@ inline int dpadBitsToHat(int dpadBits) {
     return kHatNeutral;
 }
 
-// Inverse of dpadBitsToHat: a hat octant back to its (1..2) dpad bits.
 inline int hatToDpadBits(int hat) {
     switch (hat) {
     case kHatN:
@@ -110,9 +96,6 @@ inline int hatToDpadBits(int hat) {
     }
 }
 
-// Pack an XInput wButtons word into the HID layout. Low 16 bits hold the HID
-// button word; bits 16..19 hold the hat octant. No allocation (a plain int)
-// because this runs once per forwarded report on the hot path.
 inline int xusbToHid(int wButtons) {
     const int hat = dpadBitsToHat(wButtons & kXusbDpadMask);
     int hid = 0;
@@ -130,13 +113,10 @@ inline int xusbToHid(int wButtons) {
     return (hat << 16) | (hid & 0xFFFF);
 }
 
-// Extract the HID button word from a packed value.
 inline int hidButtonsOf(int packed) { return packed & 0xFFFF; }
 
-// Extract the HID hat octant (0..8) from a packed value.
 inline int hidHatOf(int packed) { return (packed >> 16) & 0xF; }
 
-// Inverse map: a HID button word + hat octant back to an XInput wButtons word.
 inline int hidToXusb(int hidButtons, int hat) {
     int w = hatToDpadBits(hat);
     if ((hidButtons & kHidStart) != 0) { w |= kXusbStart; }

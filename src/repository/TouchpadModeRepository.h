@@ -1,30 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// TouchpadModeRepository — the durable per-satellite touchpad-mode pick store.
+// TouchpadModeRepository — durable per-satellite touchpad-routing picks
+// ("off" | "ds4" | "mouse", held as the wire strings so they round-trip with no
+// mapping shim), stored as ONE JSON array under "touchpad_mode_preferences".
+// Wrap in TouchpadModeStore for reactive reads.
 //
-// Persists, per satellite id, which touchpad routing the user picked for that
-// satellite ("off" | "ds4" | "mouse" — the wire strings, kept as strings so
-// they round-trip without a mapping shim). Stored as ONE JSON array under the
-// "touchpad_mode_preferences" key of a dedicated QSettings store (mirrors
-// dish-android TouchpadModeRepository.kt, which keeps a kotlinx-serialization
-// list under a "preferences" key in its own "touchpad_mode_preferences"
-// SharedPreferences). Dumb synchronous storage: one std::mutex guards each
-// read-modify-write; no Observables inside (wrap in TouchpadModeStore for
-// reactive reads). Header-only.
-//
-// Invariants the android tests pin and this preserves:
-//   * get() on a satellite that was NEVER written returns std::nullopt — NOT a
-//     default mode. The layers above turn absence into the pair-time default,
-//     so the repo must stay honest about "never picked" vs "explicitly off".
-//   * put() of an UNKNOWN mode is rejected at the door (a no-op that never
-//     disturbs an existing valid pick), so a typo never persists a value the
-//     satellite cannot route.
-//   * Corrupt persisted JSON falls back to an EMPTY list rather than crashing —
-//     losing picks beats bricking app startup on a garbled blob.
-//
-// A KeyedRepository<QString, TouchpadModePreference> whose keyOf() is the
-// entry's satelliteId; it instantiates Wave 0's RepositoryContract.
+// Invariants:
+//   * get() on a satellite NEVER written returns std::nullopt, not a default
+//     mode. The layers above collapse absence to the pair-time default, so the
+//     repo has to stay honest about "never picked" vs "explicitly off".
+//   * put() of an UNKNOWN mode is rejected at the door and leaves an existing
+//     valid pick alone, so a typo never persists a mode the satellite cannot
+//     route.
+//   * Corrupt JSON falls back to an EMPTY list — losing picks beats bricking
+//     startup on a garbled blob.
 
 #pragma once
 
@@ -45,7 +35,6 @@
 
 namespace dish::repository {
 
-// One persisted per-satellite touchpad-mode pick.
 struct TouchpadModePreference {
     QString satelliteId;
     QString mode;
@@ -56,20 +45,16 @@ struct TouchpadModePreference {
     bool operator!=(const TouchpadModePreference& o) const { return !(*this == o); }
 };
 
-// Storage key, declared locally for now — consolidation into SettingsKeys.h
-// happens in a later pass so this port does not touch the shared namespace
-// registry. One QSettings key holds the whole list; each element is
-// {k:<storageKey>, sat:<value.satelliteId>, mode:<value.mode>}. The storage
-// key is kept independent of the value's own satelliteId so put(key, value)/
-// get(key) round-trip the value verbatim even when they differ — the Map<K,V>
-// faithfulness the RepositoryContract pins. In normal use key ==
-// value.satelliteId, so the persisted `k` and `sat` coincide.
+// One key holds the whole list; each element is {k:<storageKey>,
+// sat:<value.satelliteId>, mode:<value.mode>}. The storage key is kept
+// independent of the value's own satelliteId so put(key, value)/get(key)
+// round-trip verbatim even when they differ — the Map<K,V> faithfulness
+// RepositoryContract pins.
 inline constexpr const char* kTouchpadModeListKey = "touchpad_mode_preferences";
 
 class TouchpadModeRepository : public arch::KeyedRepository<QString, TouchpadModePreference> {
   public:
-    // `settings` lets tests inject an in-memory-style store; production passes a
-    // QSettings under the app org. nullptr -> the default HKCU store.
+    // nullptr -> the default HKCU store; tests inject their own.
     explicit TouchpadModeRepository(std::shared_ptr<QSettings> settings = nullptr)
         : settings_(settings ? std::move(settings)
                              : std::make_shared<QSettings>(QStringLiteral("Dish"),
@@ -94,13 +79,11 @@ class TouchpadModeRepository : public arch::KeyedRepository<QString, TouchpadMod
 
     void put(const QString& satelliteId, const TouchpadModePreference& value) override {
         // Reject unknown modes so a typo never persists a value the satellite
-        // cannot route (mirrors android's put-door validation).
+        // cannot route.
         if (!reducer::isValidTouchpadModeName(value.mode.toStdString())) { return; }
         std::lock_guard<std::mutex> lock(mutex_);
         auto rows = readRows();
-        // Storage key authoritative: replace the row under this key in place
-        // (the list never grows on a repeat put for the same key); store the
-        // value verbatim under it.
+        // Replace in place so the list never grows on a repeat put for one key.
         rows.erase(std::remove_if(rows.begin(), rows.end(),
                                   [&](const Row& r) { return r.key == satelliteId; }),
                    rows.end());
@@ -122,26 +105,23 @@ class TouchpadModeRepository : public arch::KeyedRepository<QString, TouchpadMod
         settings_->remove(QLatin1String(kTouchpadModeListKey));
     }
 
-    // Pull up the KeyedRepository value-overloads hidden by the get/put/remove
-    // declarations above.
+    // Un-hide the KeyedRepository value-overloads the declarations above shadow.
     using arch::KeyedRepository<QString, TouchpadModePreference>::put;
     using arch::KeyedRepository<QString, TouchpadModePreference>::removeValue;
 
   private:
-    // One persisted (storageKey -> value) row.
     struct Row {
         QString key;
         TouchpadModePreference value;
     };
 
-    // Read/write the whole row list. Both assume mutex_ is held.
+    // Both assume mutex_ is held.
     std::vector<Row> readRows() const {
         const auto raw = settings_->value(QLatin1String(kTouchpadModeListKey)).toByteArray();
         if (raw.isEmpty()) { return {}; }
         QJsonParseError err{};
         const auto doc = QJsonDocument::fromJson(raw, &err);
-        // Corrupt blob -> empty (don't crash on garbled prefs); a non-array
-        // shape is treated the same way.
+        // Corrupt or non-array blob -> empty; garbled prefs must not crash.
         if (err.error != QJsonParseError::NoError || !doc.isArray()) { return {}; }
 
         std::vector<Row> out;

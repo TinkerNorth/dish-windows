@@ -1,17 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The custom title bar (V1 Fluent, 44px). It is NOT a separate surface — it has
-// no background of its own, so the app bleeds into it (Mica or the themed
-// solid). Left: the rail hamburger (its 48px cell width == the collapsed rail,
-// so the icon column reads as one continuous strip), then the Dish mark +
-// wordmark. Right: minimize / maximize / close. The whole strip is draggable
-// via startSystemMove(); the caption + maximize-button rects are pushed to the
-// C++ chrome filter (ChromeBridge) so the native hit-test can drive Snap
-// Layouts over the maximize button and let the strip act as caption.
+// The custom title bar. NOT a separate surface: it has no background of its
+// own, so the app bleeds into it. The hamburger cell is exactly the collapsed
+// rail width, so the icon column reads as one continuous strip. Its rects go to
+// the C++ chrome filter, which drives the native hit-test (drag, Snap Layouts).
 
-// Bound: the inline CaptionButton component binds `bar.height` (an outer id),
-// which qmllint only resolves under bound component behavior.
+// Bound: the inline CaptionButton component binds `bar.height`, an outer id.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -23,14 +18,12 @@ Item {
     id: bar
     height: Tokens.titleBarHeight
 
-    // The window we control (set by Main.qml). Used for drag + min/max/close.
     required property var window
 
-    // Publish geometry to C++ whenever the bar or its buttons move or resize.
-    // The rects are window-local logical px; C++ scales by DPR. The hamburger
-    // + minimize + close rects are CLIENT CARVE-OUTS — without them the whole
+    // Rects are window-local logical px; C++ scales by DPR. The hamburger,
+    // minimize and close rects are CLIENT CARVE-OUTS: without them the whole
     // strip native-resolves to HTCAPTION and a press starts a system drag, so
-    // those buttons never receive a click (the launch-day symptom).
+    // those buttons never receive a click.
     function publishRects() {
         ChromeBridge.setCaptionRect(Qt.rect(bar.x, bar.y, bar.width, bar.height));
         var p = maximizeButton.mapToItem(null, 0, 0);
@@ -49,9 +42,8 @@ Item {
     onHeightChanged: publishRects()
     Component.onCompleted: publishRects()
 
-    // Drag-to-move. We start a native move on press anywhere on the empty strip;
-    // the hamburger + caption buttons sit above this via z-order and consume
-    // their own presses, so clicking a button doesn't move the window.
+    // The hamburger and caption buttons sit above this in z and consume their
+    // own presses, so clicking one doesn't start a window move.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
@@ -66,7 +58,6 @@ Item {
             bar.window.showMaximized();
     }
 
-    // Left: the rail hamburger + the mark + wordmark.
     Row {
         anchors.left: parent.left
         anchors.top: parent.top
@@ -86,6 +77,7 @@ Item {
             // Canvas 2D parses a stringified colour as #RRGGBBAA, so only an
             // OPAQUE Theme role may be handed to it this way — every role used
             // in this file (onSurface, onPrimary) is opaque by construction.
+            // Anything else must go through Qt.rgba() (kit rule C5).
             contentItem: Canvas {
                 id: hamburgerCanvas
                 onPaint: {
@@ -108,10 +100,7 @@ Item {
                 }
             }
 
-            // Declared, not attached: the ATTACHED ToolTip resolves its delegate
-            // through QtQuick.Controls, which this file does not import, so it
-            // logs "Component is not ready" and never appears. Kit.DishToolTip
-            // is the themed one — a bare ToolTip paints Basic's system palette.
+            // Declared, never attached — see DishToolTip in QML_UI_KIT.md.
             Kit.DishToolTip {
                 id: hamburgerTip
                 visible: hamburger.hovered
@@ -144,7 +133,6 @@ Item {
         }
     }
 
-    // Right: caption buttons. Above the drag MouseArea in z so they take presses.
     Row {
         id: captionButtons
         anchors.right: parent.right
@@ -157,11 +145,10 @@ Item {
             width: Tokens.captionButtonWidth
             height: bar.height
             property color hoverColor: Theme.primaryHover
-            // Hover this button cannot feel for itself. Only the maximize button
-            // needs it (it is non-client — see below), but the fill has to be
-            // ONE expression or the three buttons would light differently.
+            // Hover this button cannot feel for itself. Only maximize needs it
+            // (it is non-client, see below), but the fill has to be ONE
+            // expression or the three buttons would light differently.
             property bool nativeHovered: false
-            // The glyph tone; close swaps to the on-accent ink on its red hover.
             readonly property color glyphColor: Theme.onSurface
             background: Rectangle {
                 color: (cb.hovered || cb.nativeHovered) ? cb.hoverColor : "transparent"
@@ -195,17 +182,14 @@ Item {
             onXChanged: bar.publishRects()
             onWidthChanged: bar.publishRects()
 
-            // This button is NON-CLIENT: the chrome filter answers HTMAXBUTTON
-            // over it so Win11 opens the Snap Layouts flyout, and Quick is never
-            // told about a non-client pointer. Its own `hovered` is therefore
-            // always false — the fill comes from the native tracker instead, or
-            // this would be the one caption button that never responds.
+            // NON-CLIENT: the chrome filter answers HTMAXBUTTON over it so Win11
+            // opens the Snap Layouts flyout, and Quick is never told about a
+            // non-client pointer. Its own `hovered` is therefore always false —
+            // without the native tracker this button would never light.
             nativeHovered: ChromeBridge.maximizeHovered
 
-            // Maximise AND restore are the same button, so the glyph is the only
-            // signal that the click landed: one square windowed, the offset pair
-            // when zoomed (ds caption rule "minimise / maximise / restore /
-            // close"). Canvas doesn't rebind, so the flip requests a repaint.
+            // Maximise and restore are the same button, so the glyph is the only
+            // signal the click landed. Canvas doesn't rebind: repaint on flip.
             readonly property bool zoomed: bar.window.visibility === Window.Maximized
             onZoomedChanged: maximizeCanvas.requestPaint()
 
@@ -234,12 +218,11 @@ Item {
                     function onPaletteChanged() { maximizeCanvas.requestPaint(); }
                 }
             }
-            // The real press is run in C++: FramelessWindowChrome takes the
-            // WM_NCLBUTTONDOWN/UP pair over HTMAXBUTTON and posts SC_MAXIMIZE /
-            // SC_RESTORE itself, because DefWindowProc only tracks caption
-            // buttons on a window that HAS a caption. Nothing reaches this
-            // handler today; it stays as the client-path fallback (and is what
-            // keyboard activation of the button would use).
+            // The real press runs in C++: FramelessWindowChrome takes the
+            // WM_NCLBUTTONDOWN/UP pair and posts SC_MAXIMIZE / SC_RESTORE
+            // itself, because DefWindowProc only tracks caption buttons on a
+            // window that HAS a caption. Nothing reaches this handler today; it
+            // is the client-path fallback and what keyboard activation uses.
             onClicked: bar.toggleMaximize()
         }
 
@@ -251,8 +234,7 @@ Item {
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.reset();
-                    // On-accent ink over the red hover fill (the ds cap-close
-                    // rule); themed otherwise.
+                    // On-accent ink over the red hover fill; themed otherwise.
                     ctx.strokeStyle = closeButton.hovered ? String(Theme.onPrimary)
                                                           : String(closeButton.glyphColor);
                     ctx.lineWidth = 1;

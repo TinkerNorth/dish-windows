@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// DiscoveryGatewayTest (PURE) — the two-path merge + source tagging + pinId
-// fallback. Port of dish-android core/net/DiscoveryGatewayTest. The merge
-// de-dupes by stable key (machineId else ip:udpPort): broadcast-only -> Broadcast,
-// mdns-only -> Mdns, both -> Both; result sorted by name. pinId returns the
-// explicit satellite id unless empty, then the ip. Also re-pins the
-// discovery-source label mapping the old test_mdns_discovery owned.
+// The merge de-dupes by stable key: machineId, else ip:udpPort.
 
 #include "Models/Models.h"
 #include "source/connection/DiscoveryGateway.h"
@@ -53,7 +48,6 @@ TEST_CASE("mergeDiscovered keeps distinct servers from each path", "[discgw]") {
     const auto m = DiscoveryGateway::mergeDiscovered({server("Alpha", "10.0.0.1")},
                                                      {server("Bravo", "10.0.0.2")});
     REQUIRE(m.size() == 2);
-    // Alpha (broadcast) sorts first, Bravo (mdns) second.
     CHECK(m[0].name == QStringLiteral("Alpha"));
     CHECK(m[0].source == DiscoverySource::Broadcast);
     CHECK(m[1].name == QStringLiteral("Bravo"));
@@ -96,7 +90,6 @@ TEST_CASE("pinId uses the explicit satellite id when present", "[discgw]") {
         QStringLiteral("satellite:mid:abc"));
 }
 
-// Windows extension: machineId collapses two address-keyed rows into one Both.
 TEST_CASE("mergeDiscovered collapses one machineId heard on both paths", "[discgw]") {
     DiscoveredServer b = server("Box", "10.0.0.5", 9876);
     b.machineId = QStringLiteral("m1");

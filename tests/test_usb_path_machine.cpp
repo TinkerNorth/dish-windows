@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbPathMachineTest (PURE, 28). 1:1 port of dish-android source/usb/
-// UsbPathMachineTest.kt — the total (phase x event) path FSM. Pins the exact
-// next-phase, the carried fields, and the EXACT ordered effect list each
-// transition emits, plus totality (no pair throws; a surviving controller keeps
-// a name). The reducer is platform-independent; this is the single biggest
-// PURE-but-previously-unmirrored block of the USB-direct slice.
+// The effect lists are asserted as ORDERED vectors: the coordinator runs them in
+// sequence, so a reordering is a behaviour change.
 
 #include "core/reducer/UsbPathMachine.h"
 
@@ -18,8 +14,6 @@ namespace fx = dish::reducer::effect;
 
 namespace {
 
-// Builder mirroring the android test's `controller(...)` helper (Xbox VID/PID,
-// name "Pad").
 UsbController controller(UsbPhase phase, std::optional<int> frameworkId = std::nullopt,
                          std::optional<int> syntheticId = std::nullopt, bool hasPermission = false,
                          PathChoice desired = PathChoice::Standard, bool userInitiated = false,
@@ -41,8 +35,6 @@ UsbController controller(UsbPhase phase, std::optional<int> frameworkId = std::n
 }
 
 } // namespace
-
-// ── Routed ───────────────────────────────────────────────────────────────────
 
 TEST_CASE("routed + choose direct when permitted starts a held claim", "[usb-fsm]") {
     const auto r = reduce(controller(UsbPhase::Routed, 7, std::nullopt, true),
@@ -106,8 +98,6 @@ TEST_CASE("routed + framework down waits for re-enumeration", "[usb-fsm]") {
     CHECK(r.effects == expected);
 }
 
-// ── Claiming ─────────────────────────────────────────────────────────────────
-
 TEST_CASE("claiming + success becomes direct and clears any failure", "[usb-fsm]") {
     const auto r =
         reduce(controller(UsbPhase::Claiming, std::nullopt, std::nullopt, true, PathChoice::Direct,
@@ -158,8 +148,6 @@ TEST_CASE("claiming + init failure that stole the interface waits for the framew
     CHECK(r.effects == expected);
 }
 
-// ── Direct ───────────────────────────────────────────────────────────────────
-
 TEST_CASE("direct + choose standard releases and waits, keeping the placeholder", "[usb-fsm]") {
     const auto r = reduce(controller(UsbPhase::Direct, std::nullopt, -1000),
                           ev::Choose{PathChoice::Standard, true});
@@ -170,8 +158,6 @@ TEST_CASE("direct + choose standard releases and waits, keeping the placeholder"
     const std::vector<UsbEffect> expected{fx::Release{}, fx::StartTimeout{}};
     CHECK(r.effects == expected);
 }
-
-// ── AwaitingFramework ────────────────────────────────────────────────────────
 
 TEST_CASE("awaiting from release + framework up returns to standard silently", "[usb-fsm]") {
     const auto r = reduce(controller(UsbPhase::AwaitingFramework, std::nullopt, -1000, false,
@@ -239,8 +225,6 @@ TEST_CASE("awaiting from claim-fail + timeout needs replug", "[usb-fsm]") {
     CHECK(r.effects == expected);
 }
 
-// ── RestoreStuck ─────────────────────────────────────────────────────────────
-
 TEST_CASE("restore stuck + choose direct re-claims the known-good path", "[usb-fsm]") {
     const auto r = reduce(controller(UsbPhase::RestoreStuck, std::nullopt, -1000),
                           ev::Choose{PathChoice::Direct, true});
@@ -304,8 +288,6 @@ TEST_CASE("unplug from restore stuck removes the synthetic and ends the hold", "
     CHECK(r.effects == expected);
 }
 
-// ── NeedsReplug ──────────────────────────────────────────────────────────────
-
 TEST_CASE("needs replug + framework up returns to standard and clears the failure", "[usb-fsm]") {
     const auto r = reduce(controller(UsbPhase::NeedsReplug, std::nullopt, std::nullopt, false,
                                      PathChoice::Standard, false, std::string("c"),
@@ -317,8 +299,6 @@ TEST_CASE("needs replug + framework up returns to standard and clears the failur
     const std::vector<UsbEffect> expected{fx::BindFramework{12}, fx::ClearFailure{}};
     CHECK(r.effects == expected);
 }
-
-// ── Unplug from any phase ────────────────────────────────────────────────────
 
 TEST_CASE("unplug removes the controller and cleans up a synthetic", "[usb-fsm]") {
     const auto r = reduce(controller(UsbPhase::Direct, std::nullopt, -1000), ev::UsbUnplugged{});
@@ -340,8 +320,6 @@ TEST_CASE("unplug from routed just forgets it", "[usb-fsm]") {
     CHECK_FALSE(r.next.has_value());
     CHECK(r.effects.empty());
 }
-
-// ── Totality + a fresh-claim invariant ───────────────────────────────────────
 
 TEST_CASE("reduce is total over every phase and event", "[usb-fsm]") {
     const std::vector<UsbEvent> events{ev::FrameworkUp{1},
@@ -380,24 +358,19 @@ TEST_CASE("start claim clears a stale failure on the controller", "[usb-fsm]") {
     CHECK_FALSE(r.next->failure.has_value());
 }
 
-// ── The Windows level-triggered settle predicate ─────────────────────────────
-// shouldSettleAwaitingFramework drives the coordinator's synthetic FrameworkUp
-// when a controller is parked awaiting a framework device that is already present
-// (the SDL twin never left the device list across a Direct claim on Windows). The
-// settle event itself is plain FrameworkUp, exercised by the AwaitingFramework
-// cases above; here we pin the gate that decides whether to emit it.
+// On Windows the SDL twin never leaves the device list across a Direct claim, so
+// nothing re-emits FrameworkUp. shouldSettleAwaitingFramework is the level-
+// triggered gate the coordinator uses to synthesize one.
 
 TEST_CASE("settle predicate fires only when awaiting AND the framework is present", "[usb-fsm]") {
-    // The bug case: parked in AwaitingFramework with the framework device present.
     CHECK(shouldSettleAwaitingFramework(UsbPhase::AwaitingFramework, /*present=*/true));
-    // Genuinely-gone device: not present -> do NOT settle, so Timeout->RestoreStuck
-    // stays reachable instead of a spurious FrameworkUp.
+    // A genuinely-gone device must NOT settle, so Timeout->RestoreStuck stays
+    // reachable instead of a spurious FrameworkUp.
     CHECK_FALSE(shouldSettleAwaitingFramework(UsbPhase::AwaitingFramework, /*present=*/false));
 }
 
 TEST_CASE("settle predicate is idempotent for non-awaiting phases", "[usb-fsm]") {
-    // A controller already settled to Routed (or in any non-awaiting phase) must
-    // not re-fire even with the framework present, so the queued settle terminates.
+    // Nothing re-fires with the framework present, so the queued settle terminates.
     for (const UsbPhase phase : {UsbPhase::Routed, UsbPhase::Claiming, UsbPhase::Direct,
                                  UsbPhase::RestoreStuck, UsbPhase::NeedsReplug}) {
         CHECK_FALSE(shouldSettleAwaitingFramework(phase, /*present=*/true));
@@ -406,9 +379,6 @@ TEST_CASE("settle predicate is idempotent for non-awaiting phases", "[usb-fsm]")
 
 TEST_CASE("settle-then-reduce drives AwaitingFramework to Routed with the standard effects",
           "[usb-fsm]") {
-    // The full settle: predicate says yes, then the FrameworkUp the coordinator
-    // emits lands the controller on Standard, dropping the synthetic. This is the
-    // exact resolution of the Direct->Standard stuck bug.
     const auto c = controller(UsbPhase::AwaitingFramework, std::nullopt, -1000, false,
                               PathChoice::Standard, false, std::string("c"));
     REQUIRE(shouldSettleAwaitingFramework(c.phase, /*present=*/true));
@@ -423,9 +393,8 @@ TEST_CASE("settle-then-reduce drives AwaitingFramework to Routed with the standa
 
 TEST_CASE("a truly-gone device keeps the timeout path: awaiting + timeout -> restore stuck",
           "[usb-fsm]") {
-    // Mirrors the regression guard: with the device absent the predicate returns
-    // false (tested above), so no FrameworkUp is synthesized and the timer is what
-    // fires — landing in RestoreStuck (synthetic held), NOT Routed.
+    // No FrameworkUp is synthesized, so the timer is what fires: RestoreStuck
+    // (synthetic held), not Routed.
     const auto c = controller(UsbPhase::AwaitingFramework, std::nullopt, -1000);
     REQUIRE_FALSE(shouldSettleAwaitingFramework(c.phase, /*present=*/false));
     const auto r = reduce(c, ev::Timeout{});

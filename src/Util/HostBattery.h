@@ -7,21 +7,12 @@
 
 namespace dish::util {
 
-// Host-machine battery fallback for the MSG_BATTERY (0x000B) stream.
+// Host-machine battery fallback for MSG_BATTERY, used when the pad is wired or
+// SDL cannot read its level (the controller's own reading is meaningless then).
 //
-// SDLGamepadBridge reports the *controller's* own battery whenever the pad
-// exposes a usable percentage (a wireless DualSense / Switch Pro at LOW /
-// MEDIUM / FULL). When the pad is wired (USB) or SDL can't read a level, the
-// controller's battery is meaningless — the player wants to know the *host*
-// machine's charge instead. readHostBattery() supplies that fallback: on a
-// laptop it returns the system battery percentage + charging state; on a
-// desktop (no internal battery) it returns 100 % / WIRED so the satellite
-// shows a full charge.
-//
-// The (level, status) pair is the same shape SDLGamepadBridge's
-// powerLevelToWire produces and feeds straight into MSG_BATTERY. `level` is
-// 0..100 percent or kBatteryLevelUnknown (0xFF); `status` is one of the
-// kBatteryStatus* constants — the satellite/src/core/types.h mirrors.
+// Wire shape: `level` is 0..100 percent or kBatteryLevelUnknown (0xFF),
+// `status` one of the kBatteryStatus* constants. Both must match
+// satellite/src/core/types.h.
 struct BatteryReading {
     std::uint8_t level;
     std::uint8_t status;
@@ -34,13 +25,11 @@ inline constexpr std::uint8_t kBatteryStatusCharging = 2;
 inline constexpr std::uint8_t kBatteryStatusFull = 3;
 inline constexpr std::uint8_t kBatteryStatusWired = 4;
 
-// The handful of SYSTEM_POWER_STATUS fields the mapping below needs, lifted
-// into a plain struct so the (raw inputs → wire) logic is unit-testable
-// without a live Win32 call. Field names + value semantics mirror the Win32
-// SYSTEM_POWER_STATUS documentation exactly:
-//   * acLineStatus     — 0 offline, 1 online, 255 unknown.
-//   * batteryFlag      — bitfield: 1 high, 2 low, 4 critical, 8 charging,
-//                        128 "no system battery", 255 unknown.
+// SYSTEM_POWER_STATUS lifted into a plain struct so the mapping is testable
+// without a live Win32 call. Value semantics are Win32's:
+//   * acLineStatus       — 0 offline, 1 online, 255 unknown.
+//   * batteryFlag        — bits: 1 high, 2 low, 4 critical, 8 charging,
+//                          128 "no system battery", 255 unknown.
 //   * batteryLifePercent — 0..100, or 255 when unknown.
 struct SystemPowerSnapshot {
     std::uint8_t acLineStatus = 255;
@@ -48,20 +37,10 @@ struct SystemPowerSnapshot {
     std::uint8_t batteryLifePercent = 255;
 };
 
-// Pure mapping: SystemPowerSnapshot → BatteryReading. No Win32 dependency, so
-// unit tests can pin every branch. Rules:
-//   * batteryFlag == 128 ("no system battery", i.e. a desktop) → 100 / WIRED.
-//   * batteryLifePercent == 255 (unknown) → level kept as 0xFF.
-//   * AC online + charging bit (batteryFlag & 8) → CHARGING.
-//   * AC online + level at/near 100 %        → FULL.
-//   * otherwise                               → DISCHARGING.
 BatteryReading hostBatteryFromSnapshot(const SystemPowerSnapshot& snap);
 
-// Query the host machine's battery via GetSystemPowerStatus and run the
-// reading through hostBatteryFromSnapshot. On a desktop this returns
-// {100, WIRED}; on a laptop the live percentage + charging state. If the
-// Win32 call fails outright, falls back to {100, WIRED} — the same value a
-// battery-less host would report, so the satellite still sees a sane sample.
+// GetSystemPowerStatus + the mapping above. A failed Win32 call falls back to
+// the battery-less-host value so MSG_BATTERY still carries a sane sample.
 BatteryReading readHostBattery();
 
 } // namespace dish::util

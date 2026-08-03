@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// RememberedSatelliteRepositoryTest (ADAPT) + RepositoryContract. Port of
-// dish-android repository/RememberedSatelliteRepositoryTest: round-trip by id,
-// durability across a fresh repo over the same store, and corrupt-JSON falling
-// back to an empty list without crashing (a garbled blob must not brick
-// discovery).
 
 #include "repository/RememberedSatelliteRepository.h"
 
@@ -69,7 +63,7 @@ TEST_CASE("corrupt JSON falls back to empty without crashing", "[rem]") {
 
 TEST_CASE("a non-array JSON blob also falls back to empty", "[rem]") {
     auto store = makeSharedSettings();
-    store->setValue(QLatin1String(keys::kSatelliteListKey), "{\"id\":\"x\"}"); // object, not array
+    store->setValue(QLatin1String(keys::kSatelliteListKey), "{\"id\":\"x\"}");
     RememberedSatelliteRepository repo(store);
     CHECK(repo.all().empty());
 }

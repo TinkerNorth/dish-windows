@@ -71,3 +71,8 @@ lcov.info
 # Local logs / scratch
 *.log
 .scratch/
+
+# Per-developer tool state. The shared `.claude/settings.json` is meant to be
+# committed; `settings.local.json` is the machine-local override and is the
+# file that carries personal paths and permission grants.
+.claude/settings.local.json

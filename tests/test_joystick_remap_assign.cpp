@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Coverage for the PURE capture→assignment layer in JoystickMapping.{h,cpp}: the
-// withAssignment reducer (one capture result → a new JoystickRemap), the
-// withInvert toggle, and the capture-threshold predicates the bridge gates its
-// rawJoystickInput emit behind. All SDL-free / live-manager-free — the bridge is
-// never constructed here (it inits SDL and hangs in a unit test). We assert the
-// remap MUTATION directly, then cross-check it through mapJoystick so a routed
-// source actually drives the corresponding output.
+// The SDL bridge is never constructed here: it initialises SDL and hangs in a
+// unit test. Each case asserts the remap mutation, then cross-checks it through
+// mapJoystick so a routed source really drives the matching output.
 
 #include "Input/JoystickMapping.h"
 
@@ -37,7 +33,7 @@ namespace {
 int kindOf(CaptureKind k) { return static_cast<int>(k); }
 int btn(const JoystickRemap& r, RemapButton b) { return r.buttons[static_cast<int>(b)]; }
 
-// A snapshot over caller-owned arrays (the arrays must outlive every read).
+// The caller-owned arrays must outlive every read of the snapshot.
 JoystickSnapshot makeSnap(std::int16_t* axes, int axisCount, bool* buttons, int buttonCount,
                           std::uint8_t* hats, int hatCount) {
     JoystickSnapshot s{};
@@ -56,10 +52,9 @@ TEST_CASE("withAssignment routes a face button to its raw source", "[remap][assi
     JoystickRemap r = withAssignment(JoystickRemap{}, RemapTarget::A, kindOf(CaptureKind::Button),
                                      /*index=*/9);
     REQUIRE(btn(r, RemapButton::A) == 9);
-    // Untouched buttons keep their default routing.
+    // 1 is B's default source: an untouched target keeps its routing.
     REQUIRE(btn(r, RemapButton::B) == 1);
 
-    // Cross-check through the mapper: raw button 9 now drives the A bit.
     std::array<bool, 12> buttons{};
     buttons[9] = true;
     auto snap = makeSnap(nullptr, 0, buttons.data(), static_cast<int>(buttons.size()), nullptr, 0);
@@ -89,7 +84,6 @@ TEST_CASE("withAssignment routes a stick axis and clears the right-stick adaptiv
     JoystickRemap r = withAssignment(JoystickRemap{}, RemapTarget::LeftStickX,
                                      kindOf(CaptureKind::Axis), /*index=*/4);
     REQUIRE(r.leftStickX == 4);
-    // Left-stick assignment does NOT touch the right-stick adaptive fallback.
     REQUIRE(r.useAdaptiveRightStick == true);
 
     JoystickRemap rr =
@@ -105,22 +99,19 @@ TEST_CASE("withAssignment routes a stick axis and clears the right-stick adaptiv
 }
 
 TEST_CASE("withAssignment tags a trigger source by capture kind", "[remap][assign]") {
-    // Axis-kind → analogue trigger axis.
     JoystickRemap a =
         withAssignment(JoystickRemap{}, RemapTarget::LeftTrigger, kindOf(CaptureKind::Axis), 5);
     REQUIRE(a.leftTrigger.kind == TriggerSourceKind::Axis);
     REQUIRE(a.leftTrigger.index == 5);
     REQUIRE(a.useAdaptiveTriggers == false);
 
-    // Button-kind → digital (full-scale-on-press) trigger.
+    // A button-kind trigger is digital: full scale while pressed.
     JoystickRemap b =
         withAssignment(JoystickRemap{}, RemapTarget::RightTrigger, kindOf(CaptureKind::Button), 8);
     REQUIRE(b.rightTrigger.kind == TriggerSourceKind::Button);
     REQUIRE(b.rightTrigger.index == 8);
     REQUIRE(b.useAdaptiveTriggers == false);
 
-    // Cross-check the button-kind trigger through the mapper: button 8 down →
-    // right trigger full-scale. 6 axes so the non-adaptive path is taken anyway.
     std::array<std::int16_t, 6> axes{};
     std::array<bool, 12> buttons{};
     buttons[8] = true;
@@ -131,7 +122,8 @@ TEST_CASE("withAssignment tags a trigger source by capture kind", "[remap][assig
 }
 
 TEST_CASE("withAssignment dpad via hat vs via button", "[remap][assign]") {
-    // Hat-kind capture: dpad reads the hat index, button override cleared.
+    // A hat-kind capture points the dpad at a hat index and clears any button
+    // override, which is why DpadUp reads back as -1.
     JoystickRemap viaHat =
         withAssignment(JoystickRemap{}, RemapTarget::DpadUp, kindOf(CaptureKind::Hat), /*index=*/0);
     REQUIRE(viaHat.hatIndex == 0);
@@ -142,11 +134,10 @@ TEST_CASE("withAssignment dpad via hat vs via button", "[remap][assign]") {
     const auto hatSt = mapJoystick(hatSnap, viaHat);
     REQUIRE((hatSt.wButtons & B::kDpadUp) != 0);
 
-    // Button-kind capture: dpad-down routed to a raw button instead.
     JoystickRemap viaBtn =
         withAssignment(JoystickRemap{}, RemapTarget::DpadDown, kindOf(CaptureKind::Button), 11);
     REQUIRE(btn(viaBtn, RemapButton::DpadDown) == 11);
-    // The hat still drives the OTHER directions (default hatIndex 0 unchanged).
+    // The hat still drives the other directions.
     REQUIRE(viaBtn.hatIndex == 0);
 
     std::array<bool, 12> buttons{};
@@ -170,12 +161,9 @@ TEST_CASE("withInvert toggles each Y-invert flag", "[remap][assign]") {
     REQUIRE(offR.invertRightY == false);
     REQUIRE(offR.invertLeftY == true);
 
-    // Re-enabling is idempotent / total.
     JoystickRemap onAgain = withInvert(offL, InvertTarget::LeftY, true);
     REQUIRE(onAgain.invertLeftY == true);
 
-    // Cross-check the flag through the mapper: invertLeftY=false passes SDL Y
-    // through verbatim (no negation).
     std::array<std::int16_t, 2> axes{0, 1000};
     auto snap = makeSnap(axes.data(), 2, nullptr, 0, nullptr, 0);
     REQUIRE(mapJoystick(snap, base).ly == -1000); // default: inverted
@@ -183,11 +171,9 @@ TEST_CASE("withInvert toggles each Y-invert flag", "[remap][assign]") {
 }
 
 TEST_CASE("captureAxisPasses gates a deliberate move and rejects jitter", "[remap][capture]") {
-    // Idle / small jitter is rejected.
     REQUIRE_FALSE(captureAxisPasses(0));
     REQUIRE_FALSE(captureAxisPasses(3000));
     REQUIRE_FALSE(captureAxisPasses(-3000));
-    // A deliberate full-ish deflection passes, in either direction.
     REQUIRE(captureAxisPasses(20000));
     REQUIRE(captureAxisPasses(-20000));
     REQUIRE(captureAxisPasses(32767));
@@ -196,9 +182,7 @@ TEST_CASE("captureAxisPasses gates a deliberate move and rejects jitter", "[rema
 
 TEST_CASE("button and hat captures pass on a real press / non-centered direction",
           "[remap][capture]") {
-    // A button-down is always deliberate.
     REQUIRE(captureButtonPasses());
-    // A hat passes only on a non-centered direction.
     REQUIRE_FALSE(captureHatPasses(hat::kCentered));
     REQUIRE(captureHatPasses(hat::kUp));
     REQUIRE(captureHatPasses(hat::kLeft));

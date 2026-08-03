@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Observable<S> — the C++ analogue of Kotlin's StateFlow<S> used by
-// dish-android. A value holder that always has a current value and notifies
-// subscribers when it changes (distinct-until-changed via operator==).
-//
-// Deliberately Qt-free (callback-list core, no QObject/moc): the architecture
-// kernel is pure C++17 so core/ logic and its tests never depend on Qt. A thin
-// QObject adapter for widget binding can be added in ui/ later if needed.
-//
-// See architecture/README.md and migration-plan/analysis/android-architecture.md.
+// Observable<S>: hot value holder, distinct-until-changed via operator==.
+// See architecture/README.md.
 
 #pragma once
 
@@ -33,9 +26,7 @@ template <class S> class Observable {
     };
 
   public:
-    // RAII unsubscribe handle. Move-only. Safe whether it outlives or
-    // predeceases the Observable — it holds only a weak reference to the
-    // shared state.
+    // Safe whether it outlives or predeceases the Observable: weak ref only.
     class Subscription {
       public:
         Subscription() = default;
@@ -83,13 +74,11 @@ template <class S> class Observable {
     Observable& operator=(Observable&&) noexcept = default;
     ~Observable() = default;
 
-    // Current value (copied under the lock).
     S value() const {
         std::lock_guard<std::mutex> lock(impl_->mutex);
         return impl_->value;
     }
 
-    // Set a new value; notifies subscribers only if it differs (== compare).
     // Subscribers are invoked outside the lock so a callback may re-enter.
     void set(S next) {
         std::vector<std::function<void(const S&)>> toNotify;
@@ -105,13 +94,10 @@ template <class S> class Observable {
         for (const auto& callback : toNotify) { callback(snapshot); }
     }
 
-    // Read-modify-write convenience: set(reducer(current)). The reducer runs
-    // outside the lock.
+    // The reducer runs outside the lock.
     void update(const std::function<S(const S&)>& reducer) { set(reducer(value())); }
 
-    // Logically const: subscribing does not change the observed value, so a
-    // Controller holding a `const Observable<S>&` can still subscribe.
-    // emitCurrent=true mirrors StateFlow replaying the latest to new collectors.
+    // const so a Controller holding a `const Observable<S>&` can still subscribe.
     Subscription subscribe(std::function<void(const S&)> callback, bool emitCurrent = true) const {
         std::uint64_t token = 0;
         S snapshot;

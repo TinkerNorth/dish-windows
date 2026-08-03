@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbPathMachineEdgeCasesTest (PURE, 8). 1:1 port of dish-android source/usb/
-// UsbPathMachineEdgeCasesTest.kt — characterization of the intentionally-inert
-// transitions and the two documented FSM observations: the persistence-rollback
-// asymmetry (a non-stolen claim failure still persists Standard, like the
-// permission-denied path) and the dead-reason Dropped on the NeedsReplug
-// timeout. These pin the current contract so a future change is a visible diff.
+// Characterization of the intentionally-inert transitions plus two oddities kept
+// on purpose: a non-stolen claim failure still persists Standard, and the
+// NeedsReplug timeout overwrites the reason with Dropped. Pinned so that
+// changing either is a visible diff.
 
 #include "core/reducer/UsbPathMachine.h"
 
@@ -49,9 +47,8 @@ TEST_CASE("needs replug plus choose direct records the desire but emits no recov
     REQUIRE(r.next.has_value());
     CHECK(r.next->phase == UsbPhase::NeedsReplug);
     CHECK(r.next->desired == PathChoice::Direct);
-    // The live toggle on a NeedsReplug card produces no Reclaim/RequestPermission:
-    // only a physical replug (FrameworkUp) recovers. Contrast RestoreStuck +
-    // Choose(Direct), which emits Reclaim.
+    // Only a physical replug (FrameworkUp) recovers, so the toggle emits no
+    // Reclaim, unlike RestoreStuck + Choose(Direct).
     CHECK(r.effects.empty());
 }
 
@@ -87,8 +84,6 @@ TEST_CASE("direct plus framework down is ignored", "[usb-fsm-edge]") {
     CHECK(r.effects.empty());
 }
 
-// ── Persistence-rollback asymmetry ───────────────────────────────────────────
-
 TEST_CASE("a non-stolen claim failure settles on Standard and persists Standard",
           "[usb-fsm-edge]") {
     const auto r = reduce(
@@ -106,8 +101,6 @@ TEST_CASE("by contrast the permission-denied fallback does persist Standard", "[
                ev::PermissionDenied{});
     CHECK(contains(r.effects, UsbEffect{fx::SetPref{PathChoice::Standard}}));
 }
-
-// ── Dead failure reason (Dropped) ────────────────────────────────────────────
 
 TEST_CASE("the timeout into NeedsReplug marks the reason as Dropped", "[usb-fsm-edge]") {
     const auto r = reduce(controller(UsbPhase::AwaitingFramework, std::nullopt, std::nullopt,

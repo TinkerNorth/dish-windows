@@ -24,8 +24,6 @@ namespace dish::net {
 
 namespace {
 
-// Stable translation context for the user-visible fallback text classify()
-// produces when the server didn't return an error reason of its own.
 constexpr const char* kTrContext = "dish::net::PairingClient";
 
 constexpr int kTimeoutMs = 5000;
@@ -34,16 +32,12 @@ models::PairResponse makeError(const char* msg) {
     models::PairResponse r;
     r.ok = false;
     r.error = QString::fromLatin1(msg);
-    // Synthesized network-error responses are unreachable by construction — we
-    // never made it far enough to receive a JSON body. fromJson flips this to
-    // true on the success path. httpStatus stays 0 (no HTTP response).
+    // Unreachable by construction: no JSON body ever arrived, so httpStatus also
+    // stays 0. fromJson flips this on the success path.
     r.reachable = false;
     return r;
 }
 
-// One blocking HTTPS exchange. `method` is POST/GET/DELETE; `body` empty = no
-// body. Returns (status, body, reachable). Drives a nested QEventLoop so the
-// public API stays blocking from a QtConcurrent worker thread.
 struct BlockingReply {
     int status = 0;
     QByteArray body;
@@ -59,10 +53,10 @@ BlockingReply blockingRequest(const QString& url, const QByteArray& method, cons
     if (!deviceId.isEmpty()) { req.setRawHeader("X-Device-Id", deviceId.toUtf8()); }
     if (!hmacProof.isEmpty()) { req.setRawHeader("X-Hmac-Proof", hmacProof.toUtf8()); }
 
-    // Qt's own chain verification stays off (self-signed cert by design); the
-    // REAL gate is the TOFU pin check on the `encrypted` edge below, same as
-    // the HTTPClient path. The manager is stack-local so it (and the reply)
-    // belong to this worker thread; the nested event loop pumps its signals.
+    // Qt chain verification stays off because the cert is self-signed by design;
+    // the real gate is the TOFU pin check on the `encrypted` edge below. The
+    // manager is stack-local so it and the reply belong to this worker thread,
+    // and the nested event loop pumps their signals.
     QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
     tls.setPeerVerifyMode(QSslSocket::VerifyNone);
     req.setSslConfiguration(tls);
@@ -75,9 +69,9 @@ BlockingReply blockingRequest(const QString& url, const QByteArray& method, cons
                                           : nam.sendCustomRequest(req, method, body);
     QObject::connect(reply, &QNetworkReply::sslErrors, reply,
                      [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
-    // TOFU: inspect the peer cert the moment the handshake completes — before
-    // the request body (the PIN / the proof) transits. A pin mismatch aborts;
-    // the exchange then reads unreachable and pairing fails safe.
+    // TOFU: inspect the peer cert the moment the handshake completes, before the
+    // PIN or the proof transits. A mismatch aborts, which reads back as
+    // unreachable, so pairing fails safe.
     const QString host = parsed.host();
     QObject::connect(reply, &QNetworkReply::encrypted, reply, [reply, host, &pinVerify] {
         if (!pinVerify) { return; }
@@ -189,8 +183,7 @@ models::PairResponse PairingClient::pairStatus(const QString& ip, int port,
 }
 
 PairingClient::PinVerifier& PairingClient::pinVerifier() {
-    // Function-local static: the manager sets it once at construction (worker
-    // threads only READ it afterwards), and tests can swap/clear it.
+    // Set once at manager construction; worker threads only read it afterwards.
     static PinVerifier verifier;
     return verifier;
 }

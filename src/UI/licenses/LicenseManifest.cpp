@@ -13,8 +13,7 @@ namespace dish::ui {
 
 namespace {
 
-// A trimmed-non-empty string field -> optional. Mirrors android's nullable
-// String? where a present-but-blank value behaves like absent for display.
+// A present-but-blank value behaves like absent for display.
 std::optional<QString> optString(const QJsonObject& obj, const char* key) {
     const QJsonValue v = obj.value(QLatin1String(key));
     if (!v.isString()) { return std::nullopt; }
@@ -46,7 +45,6 @@ LicenseEntry parseLicenseEntry(const QJsonObject& obj) {
     return entry;
 }
 
-// True iff the optional holds a non-blank (after-trim) string.
 bool nonBlank(const std::optional<QString>& s) { return s.has_value() && !s->trimmed().isEmpty(); }
 
 } // namespace
@@ -55,7 +53,6 @@ LicenseManifest parseLicenseManifest(const QByteArray& json) {
     LicenseManifest manifest;
     QJsonParseError err{};
     const QJsonDocument doc = QJsonDocument::fromJson(json, &err);
-    // Malformed / empty / non-object -> empty manifest (graceful, no crash).
     if (err.error != QJsonParseError::NoError || !doc.isObject()) { return manifest; }
     const QJsonObject root = doc.object();
     manifest.generatedBy = optString(root, "generatedBy");

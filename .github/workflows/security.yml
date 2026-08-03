@@ -1,9 +1,6 @@
 name: Security
 
-# PR-time security gates for dish-windows. Pulls the shared jobs from
-# this repo's local copy of `_security.yml` (action-pin lint, allowlist-
-# expiry, OSV-Scanner, dependency-review, gitleaks). CodeQL lives in
-# codeql.yml because it has its own matrix.
+# CodeQL is not here: it needs its own matrix, so it lives in codeql.yml.
 
 on:
   push:
@@ -17,19 +14,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Must be a superset of the permissions _security.yml declares, or the call
+# fails. See the block in that file.
 permissions:
   contents: read
   pull-requests: read
-  security-events: write
 
 jobs:
   shared:
     uses: ./.github/workflows/_security.yml
     with:
-      # dish-linux uses Qt6 + SDL2 from system packages and no vendored
-      # source trees, so OSV-Scanner has nothing C++ specific to chew
-      # on. Scan the worktree for any package manifests OSV recognises
-      # (Gradle wrappers, CMake fetch declarations, etc.).
+      # Whole worktree: there is no vendored source, so OSV only has the
+      # manifests it can recognise (vcpkg.json, CMake fetch declarations).
       osv_scan_paths: |
         .
       gitleaks_enabled: true

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pure mapping from a SESSION_CLOSE (0x000F) reason byte to the session FSM's
-// follow-up action (contract §Session-close notify). Mirrors dish-android's
-// SatelliteConnectionManager.handleServerClose. Free function, Qt-free.
+// Maps a SESSION_CLOSE (0x000F) reason byte to the session FSM's follow-up
+// action. See satellite/docs/contract.md, Session-close notify.
 
 #pragma once
 
@@ -14,11 +13,10 @@
 
 namespace dish::reducer {
 
-// What the session machine does after an authenticated close-notify.
 enum class CloseAction {
-    DropKeyRePair, // unpaired: trust revoked — drop the stored key, surface re-pair, STOP retrying
-    StayDown,      // replaced: a newer PUT already owns the session — do nothing further
-    RetryBackoff,  // shutdown / kicked: transient — reconnect on the exponential backoff curve
+    DropKeyRePair, // trust revoked: drop the key, surface re-pair, stop retrying
+    StayDown,      // a newer PUT already owns the session
+    RetryBackoff,  // transient: reconnect on the backoff curve
 };
 
 inline CloseAction closeActionForReason(std::uint8_t reason) {
@@ -34,7 +32,7 @@ inline CloseAction closeActionForReason(std::uint8_t reason) {
     }
 }
 
-// Lowercase wire name for a close reason (diagnostics/UI cue; protocol constant).
+// Protocol constants, never localized.
 inline std::string_view closeReasonName(std::uint8_t reason) {
     switch (reason) {
     case proto::kCloseReasonShutdown:

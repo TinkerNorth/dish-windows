@@ -11,9 +11,8 @@ namespace dish::net {
 
 namespace {
 
-// Base capability word every descriptor advertises: analog triggers + rumble.
-// CAP_MOTION / CAP_LIGHTBAR are per-controller (only pads with the matching
-// hardware) and folded in from the slot's capabilities.
+// What every descriptor advertises. CAP_MOTION and CAP_LIGHTBAR are folded in
+// per-controller instead, from the slot's own hardware.
 constexpr std::uint16_t kBaseCaps =
     SatelliteClient::kCapAnalogTriggers | SatelliteClient::kCapRumble;
 
@@ -75,14 +74,13 @@ void WifiConnection::teardownClient() {
     connectionId_.reset();
     lastAppliedEpoch_ = -1;
     mouseControlGranted_ = false;
-    // The latency readout is session-scoped — zero it so the row can't show a
-    // stale figure across a reconnect. Every teardown path emits changed()
-    // right after, so no separate telemetryChanged is needed.
+    // Session-scoped, so a reconnect must not show the old figure. Every teardown
+    // path emits changed() right after, so no telemetryChanged is needed.
     latencyOneWayMs_ = 0.0;
     latencySamples_ = 0;
     rekeyRequested_ = false;
-    // A dropped session leaves no virtual pads applied — clear the registered
-    // flags so streams gate off until the next PUT re-applies them.
+    // A dropped session leaves no virtual pads applied, so streams must gate off
+    // until the next PUT re-applies them.
     for (auto& [slotId, b] : slots_) { b.registered = false; }
 }
 
@@ -106,12 +104,10 @@ void WifiConnection::markConnected(const std::shared_ptr<SatelliteClient>& clien
 
     if (rumbleHandler_) { client->setRumbleHandler(rumbleHandler_); }
     if (lightbarHandler_) { client->setLightbarHandler(lightbarHandler_); }
-    // Rumble/lightbar fire on the receive thread (they only hand off to the SDL
-    // bridge via its own queue). Close-notify and the enriched-ack reconcile,
-    // however, drive the session FSM + REST — so they are NOT receive-thread
-    // callbacks; the main-thread alive-poll below reads the client's
-    // thread-safe atomics instead. Mirrors dish-android's aliveJob (it polls
-    // getSessionCloseReason / getServerEpoch rather than taking a push).
+    // Rumble and lightbar may fire on the receive thread because they only hand
+    // off to the SDL bridge's own queue. Close-notify and the ack reconcile drive
+    // the session FSM and REST, so they are polled by the main-thread alive timer
+    // off the client's atomics rather than pushed from that thread.
     client->startReceiveLoop();
     client->startHeartbeat();
 
@@ -129,9 +125,7 @@ void WifiConnection::markConnected(const std::shared_ptr<SatelliteClient>& clien
 void WifiConnection::onAliveTick() {
     const auto c = clientRef_.get();
     if (!c) { return; }
-    // Refresh the latency readout each tick, rounded to the 0.1 ms display
-    // precision so sub-jitter median moves don't re-emit. telemetryChanged
-    // (not changed) keeps the 1 Hz tick off the rebuild cascade.
+    // Rounded to the display precision so sub-jitter median moves do not re-emit.
     const auto latency = c->latencySnapshot();
     const double rounded = latency.samples > 0 ? std::lround(latency.oneWayMs * 10.0) / 10.0 : 0.0;
     if (rounded != latencyOneWayMs_ || latency.samples != latencySamples_) {
@@ -139,8 +133,8 @@ void WifiConnection::onAliveTick() {
         latencySamples_ = latency.samples;
         emit telemetryChanged();
     }
-    // An authenticated close-notify is terminal NOW: the session is already
-    // gone server-side, so don't wait out the heartbeat death window.
+    // Terminal immediately: the session is already gone server-side, so there is
+    // nothing to wait out.
     const std::int32_t closeReason = c->sessionCloseReason();
     if (closeReason >= 0) {
         const auto cb = onClose_;
@@ -152,25 +146,20 @@ void WifiConnection::onAliveTick() {
         if (cb) { cb(); }
         return;
     }
-    // Alive but faltering: two consecutive missed acks is the contract's
-    // "not responding" display threshold — the chip reads "Unstable" for the
-    // ~6 s before the death threshold instead of a confident "Online", and
-    // recovers to Live the moment an ack lands. Only flips between the two
-    // steady states; Linking/Stale keep their own owners.
+    // Flips only between the two steady states; Linking and Stale keep their own
+    // owners. Recovers to Live the moment an ack lands.
     const bool faltering = c->missedAcks() >= SatelliteClient::kHeartbeatMissNotResponding;
     const SessionState steady = faltering ? SessionState::Faltering : SessionState::Live;
     if ((state_ == SessionState::Live || state_ == SessionState::Faltering) && state_ != steady) {
         state_ = steady;
         emit changed();
     }
-    // Alive: nudge the reconcile (the manager re-checks epoch/bitmap drift
-    // against applied and only does the GET-then-rePUT when it actually
-    // diverged).
+    // A nudge only: the manager does the GET-then-rePUT solely when epoch or
+    // bitmap actually diverged.
     const auto cb = onReconcile_;
     if (cb) { cb(); }
-    // Proactive re-key before the send counter can exhaust (contract §Crypto:
-    // re-PUT past 0xF0000000). A session that exhausts anyway goes silent in
-    // SatelliteClient and heals via the death-retry re-PUT.
+    // Re-key ahead of counter exhaustion. A session that exhausts anyway goes
+    // silent in SatelliteClient and heals via the death-retry re-PUT.
     if (reducer::counterNeedsRepush(c->sendCounter())) {
         if (!rekeyRequested_ && onRekey_) {
             rekeyRequested_ = true;
@@ -212,7 +201,6 @@ void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool 
         boundSlotId_ = slotId;
         if (state_ == SessionState::Live) { emit slotChanged(slotId); }
     } else {
-        // Re-declare: the WHOLE descriptor in one shot.
         const bool changed =
             it->second.controllerType != controllerType || it->second.hasLightbar != hasLightbar ||
             it->second.hasMotion != hasMotion || it->second.touchpadMode != touchpadMode;
@@ -236,8 +224,7 @@ void WifiConnection::detachSlot(const QString& slotId) {
     const SlotBinding removed = it->second;
     slots_.erase(it);
     if (boundSlotId_.has_value() && *boundSlotId_ == slotId) { boundSlotId_.reset(); }
-    // Removing a registered slot while live → DELETE the controller (the
-    // session lives on; zero-controller sessions are valid).
+    // The session itself lives on; a zero-controller session is valid.
     if (state_ == SessionState::Live && removed.registered) {
         emit slotRemoved(removed.controllerIndex);
     }
@@ -280,9 +267,9 @@ void WifiConnection::applyResults(const QList<models::ControllerApplyDto>& resul
         const auto it = byIdx.find(b.controllerIndex);
         if (it == byIdx.end()) { continue; }
         const auto& r = *it->second;
-        // A failed replug keeps the PREVIOUS pad alive (appliedType reports it);
-        // streams keep flowing rather than killing a working pad over a type the
-        // driver couldn't switch.
+        // A failed replug keeps the previous pad alive, so streams keep flowing
+        // rather than killing a working pad over a type the driver could not
+        // switch to.
         b.registered = r.slotIsLive();
         if (!r.ok()) { failures.append(r); }
     }
@@ -314,16 +301,16 @@ bool WifiConnection::matchesAppliedView(const models::SessionViewDto& view) cons
     for (const auto& c : view.controllers) {
         reducer::AppliedSlot a{static_cast<std::uint8_t>(c.ctrlIdx),
                                static_cast<std::uint8_t>(c.appliedType), c.active, std::nullopt};
-        // An empty mode string means the server predates reporting it — the
-        // comparison then skips the mode arm rather than forcing a re-PUT.
+        // An empty mode string means the server does not report it; skip the mode
+        // arm rather than forcing a pointless re-PUT.
         if (!c.touchpadMode.isEmpty()) {
             a.touchpadMode = proto::touchpadModeFromName(c.touchpadMode.toStdString());
         }
         applied.push_back(a);
     }
-    // The host-feature grant is applied state too: a slot toggled to mouse
-    // mid-session leaves wants≠granted (the grant is only computed at session
-    // PUT), so the converge re-PUT is what heals it.
+    // The grant is applied state too. Since the server computes it only at
+    // session PUT, a slot toggled to mouse mid-session leaves wants != granted,
+    // and the converge re-PUT is what heals it.
     const bool mouseMatch = view.mouseControl.granted == wantsMouseControl();
     return reducer::appliedMatchesDesired(desired, applied, mouseMatch);
 }

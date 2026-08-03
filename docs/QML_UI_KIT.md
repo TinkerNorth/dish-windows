@@ -1,480 +1,354 @@
-# QML UI Kit (frozen — A2)
+# QML UI kit
 
-This is the FROZEN UI-kit + shell contract the Qt Quick page agents build
-against. Together with `docs/QML_CONTRACT.md` (the `App` model surface) it is the
-ONLY surface a page agent codes to. Do not re-read the C++ or invent new styling;
-if a component you need is missing, flag it.
+The component library and the shell conventions the Qt Quick UI is built from.
+Together with [`QML_CONTRACT.md`](QML_CONTRACT.md), which covers the `App` model
+surface, this is the whole surface a page is written against.
 
-All of this lives in the `Dish.Chrome` QML module (one import). Colors come from
-the `Theme` singleton (`import Dish.Chrome`) documented in A0 — never hard-code a
-hex. Controls are the **Basic** style; every kit control is custom-painted from
-`Theme` tokens. Do NOT import Material / Universal / FluentWinUI3.
+Everything here lives in the `Dish.Chrome` QML module, one import. Colours come
+from the `Theme` singleton and metrics from `Tokens`, both in that module. The
+palette values themselves are in [`Theme.cpp`](../src/UI/Theme.cpp), which is
+what `test_theme_contrast` computes WCAG ratios over.
 
 ## Conventions
 
-- **Style:** `QtQuick.Controls.Basic`. Import it in every file that uses Controls.
-- **Mica:** the window is frameless and (on Win11) its background is transparent
-  so the OS Mica backdrop shows through. **Never paint an opaque full-area
-  background.** Page roots are transparent; only `Kit.Card` (and dialogs) paint a
-  `Theme.surface` panel. If you add a background, justify why with a comment.
-- **Imports:** kit components live in `src/qml/kit/`. From a page in
-  `src/qml/pages/` import them as:
-  ```qml
-  import "../kit" as Kit
-  ```
-  Then use `Kit.Card`, `Kit.KitButton`, etc. (Files at `src/qml/` root use
-  `import "kit" as Kit`.)
-- **Theme access:** `import Dish.Chrome` then `Theme.primary`, `Theme.surface`,
-  `Theme.onSurface`, `Theme.muted`, `Theme.outline`, `Theme.success`,
-  `Theme.warning`, `Theme.error`, `Theme.background`, `Theme.surfaceDim`.
-- **qmllint note:** the module declares `DEPENDENCIES QtQuick`
-  (CMakeLists.txt), so `Theme.*`'s `QColor` properties resolve statically and
-  `unresolved-type` is a real error again — keep QML warning-clean
-  (`missing-property`/`unused-imports`/`unresolved-type` all gate CI). The one
-  remaining accepted limitation is `unqualified` on `App`: it is a runtime
-  context property (see QML_CONTRACT.md), invisible to static analysis until
-  it moves to a compiled singleton, so CI downgrades only that category.
+**Style.** `QtQuick.Controls.Basic`, imported in every file that uses Controls.
+Every kit control is custom-painted from `Theme` tokens. Do not import Material,
+Universal or FluentWinUI3.
 
----
+**Imports.** Kit components live in `src/qml/kit/`. From a page in
+`src/qml/pages/`:
 
-## 0. Library rules
+```qml
+import "../kit" as Kit
+```
 
-Eight rules, each closing a hole a design system dies through. They are review-
-blocking, not advisory.
+Then `Kit.Card`, `Kit.DishButton`, and so on. Files at the `src/qml/` root use
+`import "kit" as Kit`.
+
+**Surfaces.** The window paints `Theme.background`, the themed solid, in both
+appearances. `Kit.Page` roots are transparent, and only `Kit.Card` and the
+dialogs paint a `Theme.surface` panel on top. A page that paints its own opaque
+full-area background is fighting the layering; if you add one, say why in a
+comment.
+
+**Tokens, never literals.** No hex colours and no raw pixel values outside
+`src/qml/kit/`. `scripts/qml-lint-literals.ps1` gates this in CI, and it skips
+that one directory and nothing else. The kit is the layer that turns tokens into
+pixels, and a token defined in terms of itself is not a token.
+
+**qmllint.** The module declares `DEPENDENCIES QtQuick`, so `Theme`'s `QColor`
+properties resolve statically and `unresolved-type` is a real error again. Keep
+QML warning-clean: `missing-property`, `unused-imports` and `unresolved-type`
+all gate CI. The one accepted downgrade is `unqualified`, because `App` is a
+runtime context property the linter cannot see; see
+[`QML_CONTRACT.md`](QML_CONTRACT.md).
+
+## Library rules
+
+Each of these closes a hole a design system dies through. They are
+review-blocking, not advisory.
 
 | # | Rule |
 |---|---|
-| C1 | **A page may not declare an inline `component`.** If two files would draw it, it is a kit component; if one file draws it and it has a variant, it is *still* a kit component. `HomePage.qml`'s private `WireLine` is the cautionary tale — it was promoted. |
+| C1 | **A page may not declare an inline `component`.** If two files would draw it, it is a kit component. If one file draws it and it has a variant, it is *still* a kit component. |
 | C2 | **A kit component owns its own state machine.** Pages never set `opacity` to express disabled, never paint a hover wash, never draw a focus ring. |
-| C3 | **A kit component never reads the domain.** No `App.*`, no model roles, no `AppViewModel`. It takes primitives and emits signals. `CapabilityTable` takes the rows `App.capabilityForCandidate()` returns **as data** — the caller passes them in. |
-| C4 | **One name per colour.** No aliasing layer. `Theme.primaryHover` **is** the 12 % accent wash; there is no second name for it. |
-| C5 | **No component may stringify a `Theme` colour.** `String(Theme.outline)` yields `#AARRGGBB`, which Canvas 2D parses as `#RRGGBBAA` — silently wrong channels. Always `Qt.rgba(c.r, c.g, c.b, c.a)`. |
+| C3 | **A kit component never reads the domain.** No `App.*`, no model roles, no `AppViewModel`. It takes primitives and emits signals. `CapabilityTable` takes the rows `App.capabilityForCandidate()` returns **as data**; the caller passes them in. |
+| C4 | **One name per colour.** No aliasing layer. `Theme.primaryHover` **is** the 12 % accent wash, and there is no second name for it. |
+| C5 | **No component may stringify a `Theme` colour.** `String(Theme.outline)` yields `#AARRGGBB`, which Canvas 2D parses as `#RRGGBBAA`: silently wrong channels. Always `Qt.rgba(c.r, c.g, c.b, c.a)`. |
 | C6 | **Every state a component can be in appears in `KitGallery.qml`.** A state that is not in the gallery is not shipped. |
-| C7 | **Two components may not draw the same thing.** Check the inventory before adding one. Adding a second pill style is review-blocking — the "as DualSense" pill and the Verified / Best-fit / Layout-guessed badges are all `CapabilityChip`. |
-| C8 | **Glyphs are never re-coloured by state.** `BrandGlyph` re-tints by **palette** (`Theme.glyph`); state colour lives in the dot and the chip. |
+| C7 | **Two components may not draw the same thing.** Check the inventory before adding one. A second pill style is review-blocking: the "as DualSense" pill and the Verified, Best-fit and Layout-guessed badges are all `CapabilityChip`. |
+| C8 | **Glyphs are never recoloured by state.** `BrandGlyph` retints by **palette** (`Theme.glyph`); state colour lives in the dot and the chip. |
 
-Two more that bind every file:
+Two more bind every file.
 
-- **Disabled vs unavailable are different mechanisms.** A dead *control* is
-  `enabled: false` + `Tokens.disabledOpacity` + `Theme.disabledFg`, and that is
-  legal **only** on an `AbstractButton`. Unavailable *information* gets **no
-  opacity at all** — full-opacity `Theme.mutedStrong` plus the outlined absent
-  chip. Never multiply an already-muted colour by an opacity.
-- **Focus is global.** Every focusable control: `focusPolicy: Qt.StrongFocus`, a
-  1 px solid `Theme.primary` border **and** a 2 px `Theme.focusRing` ring outside
-  it, on `visualFocus` only.
+**Disabled and unavailable are different mechanisms.** A dead *control* is
+`enabled: false` plus `Tokens.disabledOpacity` plus `Theme.disabledFg`, and that
+is legal only on an `AbstractButton`. Unavailable *information* gets no opacity
+at all: full-opacity `Theme.mutedStrong` plus the outlined absent chip. Never
+multiply an already-muted colour by an opacity.
 
----
+**Focus is global.** Every focusable control gets `focusPolicy: Qt.StrongFocus`,
+a 1 px solid `Theme.primary` border, and a 2 px `Theme.focusRing` ring outside
+it, on `visualFocus` only.
 
-## 1. Component inventory (`src/qml/kit/` — 38 components)
+**Amber is the problem colour, never the working one.** `Theme.warning` is spent
+on stale, Needs pairing, unverified and claim failures. Anything merely in
+flight (a scan running, a hot but still empty wizard slot) is `Theme.primary`:
+nothing is wrong while the app is looking, and an amber spent on "working" stops
+meaning anything.
 
-Raw literals are legal **only** here: the kit is the layer that turns tokens into
-pixels, and a token defined in terms of itself is not a token.
-`scripts/qml-lint-literals.ps1` skips this directory and nothing else.
+## Component inventory
 
-### 1.1 Primitives
+38 files in `src/qml/kit/`.
+
+### Primitives
 
 | Component | Base | Key API |
 |---|---|---|
-| `DishButton` | `Button` | `variant: Primary \| Outline \| Destructive`, `size: Normal \| Small`. **The one button type** — new code uses this. |
-| `KitButton` | `DishButton` | Alias for `variant: Primary`. Kept so 40+ call sites keep working. |
+| `DishButton` | `Button` | `variant: Primary \| Outline \| Destructive` (default `Outline`), `size: Normal \| Small`. The one button type; new code uses this. |
+| `KitButton` | `DishButton` | Alias for `variant: Primary`, kept so existing call sites keep working. |
 | `OutlineButton` | `DishButton` | Alias for `variant: Outline`. |
-| `RowButton` | `AbstractButton` | A full-width, focusable, keyboard-activatable list row. Donation rails and licence rows are these, never cursor-pointer divs. |
-| `ComboButton` | `AbstractButton` | The drop-down trigger. |
-| `SegmentedControl` | `Control` | Two or more segments; thumb radius is derived, never literal. **Disabled drops the accent thumb** for a neutral `Theme.surface` chip with a hairline — `disabledFg` on a saturated accent at `disabledOpacity` is unreadable, and a dead control still has to report which segment is selected. |
-| `LabeledSwitch` | `Item` | `label`, `description`, `checked`, `toggled(bool)`. |
-| `RadioMark` | `Item` | The selection mark used inside `SelectRow` / `OptionCard`. |
-| `SliderRow` | `Item` | `committed(int)` **and** `moved(int)` — push live on `moved`, persist on `committed`. |
-| `KitTextField` | `TextField` | Plus `hasError` / `errorText`: an 11 px `Theme.error` message beneath the field, and `Accessible.description`. |
-| `StatusDot` | `Rectangle` | `token` → `"success"`/`"warning"`/`"muted"`/`"primary"`. 10 px with a 1 px darker ring. **Never drawn without its chip.** |
-| `CapabilityChip` | `Item` | `text`, `tone ∈ Present \| Absent \| Low \| Ok \| Warn \| Neutral`. **Always renders** — an absent capability is drawn, never hidden. |
-| `Eyebrow` | `Label` | The mono, tracked, uppercase micro-label. |
-| `SectionHeader` | `Label` | `label` — natural case in, uppercase out (`font.capitalization`, never an uppercase string). |
-| `BrandGlyph` | `Item` | `glyph`, `glyphForToken(token)`, `tinted`, `accessibleName`. Palette-tinted per C8. **Never references a `*-animated` name** — those files contain no `<animate>` and Qt runs no SMIL. |
-| `LiveStat` | `Item` | `live`, `rateText(hz, measured)`, `latencyText(ms, samples)`. **The only formatter for a rate in the app.** `~` means derived or estimated; a sub-millisecond latency reads `"<1 ms"`, never `"~0.0 ms"` (mirrors `reducer::formatLatencyMs`, which is what the models render). |
-| `DishProgressBar` | `Item` | Track `Theme.surfaceDim`, height fixed at 3, no caller-settable height. Static filled track under `Tokens.reducedMotion`. |
-| `LoadingSpinner` | `Item` | The apply-overlay step spinner's source of truth, and the type-catalog loader. |
+| `RowButton` | `AbstractButton` | `title`, `subtitle`. A full-width, focusable, keyboard-activatable list row. Donation rails and license rows are these, never cursor-pointer divs. |
+| `ComboButton` | `AbstractButton` | `options`, `value`, `picked(string)`. The drop-down trigger. |
+| `SegmentedControl` | `Control` | `options`, `value`, `small`, `busy`, `picked(string)`. Disabled drops the accent thumb for a neutral `Theme.surface` chip with a hairline: `disabledFg` on a saturated accent at `disabledOpacity` is unreadable, and a dead control still has to report which segment is selected. |
+| `LabeledSwitch` | `RowLayout` | `label`, `description`, `checked`, `toggled(bool)`. |
+| `RadioMark` | `Rectangle` | `selected`. The selection mark inside `SelectRow` and `OptionCard`. |
+| `SliderRow` | `ColumnLayout` | `label`, `value`, `maxValue`, `moved(int)` **and** `committed(int)`. Push live on `moved`, persist on `committed`. |
+| `KitTextField` | `TextField` | Plus `hasError` and `errorText`: an error message beneath the field, and an `Accessible.description`. |
+| `StatusDot` | `Rectangle` | `token` → `"success"` / `"warning"` / `"primary"` / `"error"` / `"muted"`. 10 px with a 1 px darker ring: at 8 px flat, success and warning are a coin flip for a low-vision user, and the ring gives the dot an edge independent of its fill. Never drawn without its chip. |
+| `CapabilityChip` | `Rectangle` | `text`, `tone ∈ Present \| Absent \| Low \| Ok \| Warn \| Neutral`. Always renders: an absent capability is drawn, never hidden. |
+| `Eyebrow` | `Text` | `mutedTone`. The mono, tracked, uppercase micro-label. |
+| `SectionHeader` | `Row` | `label` (natural case in, uppercase out via `font.capitalization`, never an uppercase string) and an optional `glyph`. |
+| `BrandGlyph` | `Image` | `glyph`, `glyphForToken(token)`, `tinted`, `accessibleName`. Palette-tinted per C8. |
+| `LiveStat` | `Text` | `live`, `rateText(hz, measured)`, `latencyText(ms, samples)`. **The only rate and latency formatter in the app.** `~` means derived or estimated; a sub-millisecond latency reads `"<1 ms"`, never `"~0.0 ms"`, mirroring `reducer::formatLatencyMs`, which is what the models render. |
+| `DishProgressBar` | `Rectangle` | `indeterminate`, `value`. Track `Theme.surfaceDim`, height fixed at 3, no caller-settable height. Static filled track under `Tokens.reducedMotion`. |
+| `LoadingSpinner` | `ColumnLayout` | `text`, `running`. The apply-overlay step spinner and the type-catalog loader. |
 
-### 1.2 Containers and surfaces
+### Containers and surfaces
 
 | Component | Base | Key API |
 |---|---|---|
-| `Card` | `Control` | Plus `filled` (false ⇒ transparent fill, hairline kept) and `dense` (tighter vertical padding). The one deliberately opaque element — content reads against a panel, not bare Mica. |
-| `ActionCard` | `AbstractButton` | `title`, `subtitle`, `showPlus`, plus `placeholder` (dashed `Theme.outline` border, no wash, no hover, no focus — an ActionCard that is not an action). |
-| `Page` | `Page` | Transparent background, one page-level `ScrollView`. `scrollable: false` when the page owns its own layout (the wizard). |
-| `Callout` | `Item` | `tone ∈ Info \| Warning \| Error`, `text`, optional leading `glyph`, trailing action slot. |
-| `EmptyState` | `Item` | Every list has one. |
-| `ErrorBanner` | `Item` | Plus `detail` — an error is a diagnosis **and** a next step. The inline unsteady-link banner and the catalog-retry row. |
+| `Card` | `Control` | `filled` (false gives a transparent fill and keeps the hairline) and `dense` (tighter vertical padding). The one deliberately opaque element: content reads against a panel. |
+| `ActionCard` | `AbstractButton` | `title`, `subtitle`, `showPlus`, `placeholder` (dashed `Theme.outline` border, no wash, no hover, no focus: an ActionCard that is not an action). |
+| `Page` | `Page` | Transparent background, `padding: Tokens.pagePadding`, one page-level `ScrollView` over a default `Column`. Set `scrollable: false` when the page owns its own layout and pins its own regions, which the wizard does. |
+| `Callout` | `Control` | `tone ∈ Info \| Warning \| Error`, `text`, optional leading `glyph`, trailing action slot. |
+| `EmptyState` | `ColumnLayout` | `title`, `body`, `glyph`, `showAction`, `actionText`, `actionRequested()`. Every list has one. |
+| `ErrorBanner` | `Rectangle` | `text`, `detail`, `tone ∈ Error \| Warning`, `showRetry`, `retryText`, `retryRequested()`. An error is a diagnosis **and** a next step, which is what `detail` is for. |
 | `NotificationToastHost` | `Item` | `show(message, severity)`, tones `error \| warning \| success` only. A stray `"info"` maps to `success` and warns. The only elevated surface in the app. |
-| `DishToolTip` | `ToolTip` | The **only** tooltip. A bare `ToolTip` paints Basic's `palette.toolTipBase`/`toolTipText` — Qt's system defaults, which read as an unthemed white slab in both appearances (and as white-on-white over a light card). This one is `Theme.surface` + hairline `Theme.outline` + `radiusButton`, text at `Theme.onSurface`/`Tokens.textSummary`. **Declare it, never attach it**: the attached `ToolTip.text` property resolves its delegate through `QtQuick.Controls` (the style-selecting module) which the pages do not import, so it logs `Component is not ready` and no tip appears. |
-| `SelectRow` | `AbstractButton` | The one selectable radio row (pad picker, host picker, type card, bind destination). Selected = **1 px** `Theme.primary` + `Theme.primaryFill`. |
-| `OptionCard` | `AbstractButton` | The two-up choice card (Standard / Direct), with an optional badge chip. |
+| `DishToolTip` | `ToolTip` | The only tooltip. **Declare it, never attach it**: the attached `ToolTip.text` property resolves its delegate through `QtQuick.Controls`, the style-selecting module, which the pages do not import, so it logs `Component is not ready` and no tip appears. A bare `ToolTip` would paint Basic's `palette.toolTipBase`, an unthemed white slab in both appearances. |
+| `SelectRow` | `AbstractButton` | `selected`, `title`, `subtitle`, `glyph`, `dotToken`, `chipText`, `chipTone`, `picked()`. The one selectable radio row: pad picker, host picker, type card, bind destination. Selected is a 1 px `Theme.primary` border plus `Theme.primaryFill`. |
+| `OptionCard` | `AbstractButton` | `selected`, `title`, `body`, `badgeText`, `badgeTone`. The two-up choice card (Standard against Direct). |
 
-### 1.3 Composites
+### Composites
 
-| Component | Draws |
-|---|---|
-| `WireLine` | The pad→host wire. `live` (solid) / idle (dashed) / `transmitting` (dashes crawling toward the host during an apply). Promoted out of `HomePage.qml`; Home and `WizardBanner` both compose it. |
-| `BindingStrip` | The `BINDING` chip flow + `Edit ›`. Overflows into a real focusable `+N` chip that opens a popup listing the remainder **with their reasons** — never a bare count. |
-| `CapabilityTable` | The four-layer matrix. `rows` come from the caller (C3). `✓` success / `✕` error / `—` `Theme.mutedStrong` for Pending. Every layer chip shows its **true** state; the first failing one is heavier. |
-| `WizardBanner` | The pad slot, wire and host slot, plus the ①②③ stage markers and the stage-3 sub-step dots. `compact` for a short window. |
-| `StepList` | The apply overlay's steps: `done` ✓ / `active` rotating ring / `pending` hollow / `failed` ✕. |
-| `ApplyOverlay` | `ContentDialog` + `StepList` + an optional `Cancel` and slow hint. Two callers: the wizard's Review page and Configure binding. |
-| `ContentDialog` | The dialog shell: `Theme.scrim`, 1 px `Theme.outline`, `Tokens.radiusDialog`, **no shadow**. Does not auto-close on accept. |
-| `ConfirmDialog` | `ContentDialog` + `bodyText` + `bulletLines`. **Reject has default focus.** The discard confirm, Forget host, Forget controller, the keep-awake close confirm. |
-| `BlockerDialog` | The two **terminal** blockers only: `ConnectionLost`, `ControllerUnplugged`. An unsteady link is an inline `ErrorBanner`, not a modal. |
-| `KitGallery` | Every component × every state, with a theme switcher. No runtime entry point — reached only by a developer editing `Main.qml`. The C6 artifact. |
-
-### 1.4 Selected component detail
-
-### `Kit.SectionHeader`
-The monospace, letter-spaced, uppercased section label (mirrors the Widgets
-`sectionHeaderQss`). A `Label` subtype.
-
-| Property | Type | Default | Meaning |
-|---|---|---|---|
-| `label` | string | `""` | Natural-case text; rendered uppercased. |
-
-```qml
-Kit.SectionHeader { label: qsTr("Controllers") }
-```
-
-### `Kit.KitButton`
-The PRIMARY action button — filled, primary-tinted pill, dark on-primary text.
-A `Button` subtype, so all `Button` API (`text`, `enabled`, `onClicked`, …)
-applies. Disabled drops to 0.4 opacity (the design-system rule).
-
-```qml
-Kit.KitButton {
-    text: qsTr("Scan")
-    enabled: !App.isScanning()
-    onClicked: App.startDiscovery()
-}
-```
-
-### `Kit.OutlineButton`
-The SECONDARY / outlined button — transparent fill, themed outline, primary
-text. Use for quieter actions (Forget, Cancel, Manage). Same `Button` API.
-
-```qml
-Kit.OutlineButton { text: qsTr("Forget"); onClicked: App.forgetConnection(connectionId) }
-```
-
-### `Kit.Card`
-The surface container — a rounded, outlined `Theme.surface` panel. A `Control`
-subtype; put a layout inside, `padding` (default 16) insets it. This is the one
-kit element that is deliberately opaque (content reads against a panel, not bare
-Mica).
-
-```qml
-Kit.Card {
-    contentItem: ColumnLayout {
-        spacing: 8
-        Kit.SectionHeader { label: qsTr("Living-Room") }
-        Label { text: qsTr("192.168.1.20 • UDP 47811"); color: Theme.muted }
-    }
-}
-```
-
-### `Kit.StatusDot`
-A status dot that maps a contract dot token to a `Theme` color. Bind a model
-role's `dotColor` straight in. A `Rectangle` subtype (8×8 default).
-
-| Property | Type | Default | Meaning |
-|---|---|---|---|
-| `token` | string | `"muted"` | `"success"`/`"warning"`/`"muted"`/`"primary"`. |
-
-```qml
-Kit.StatusDot { token: dotColor }   // dotColor from SlotListModel / ConnectionListModel
-```
-
-### `Kit.BrandGlyph`
-The v6 brand SVG glyph. An `Image` subtype rendering `qrc:/brand/<glyph>.svg`
-(Qt6::Svg). Set `width`/`height`; pass a bare asset name (no path/extension).
-
-| Property | Type | Default | Meaning |
-|---|---|---|---|
-| `glyph` | string | `"satellite"` | Bare asset name, e.g. `"satellite-connected"`, `"dish-off"`. |
-| `glyphForToken(token)` | function → string | — | Maps a `ConnectionListModel.glyph` token (`"satelliteBase"`/`"satelliteConnected"`/`"satelliteOff"`) to an asset name. |
-
-Available brand assets (the `:/brand/` set): `dish`, `dish-connected`,
-`dish-disabled`, `dish-master`, `dish-off`, `dish-receiving`, `satellite`,
-`satellite-broadcasting`, `satellite-connected`, `satellite-disabled`,
-`satellite-master`, `satellite-off`, `bluetooth`, `bluetooth-connected`,
-`bluetooth-disabled`, `bluetooth-off`, `bluetooth-searching`, `gear`, `pad`.
-
-```qml
-Kit.BrandGlyph {
-    width: Tokens.glyphSm; height: Tokens.glyphSm
-    glyph: glyphForToken(glyph)   // `glyph` here = ConnectionListModel role
-}
-```
-
-> **The six `*-animated.svg` variants are unreachable through `BrandGlyph`.**
-> They contain no `<animate>` elements and Qt runs no SMIL, so they are static
-> files that merely look like states. Express a transient in QML instead — a
-> `DishProgressBar`, or an opacity/rotation animation over the **base** glyph —
-> gated on `Tokens.reducedMotion` and `visible`. The qrc entries stay: deleting
-> them buys nothing and risks a missing-asset regression when the brand set is
-> re-synced from the sibling repos.
->
-> Glyph contrast is solved: `Theme.glyph` is a palette token (dark `#8FCFE3`,
-> light `#2F7E96`), and `BrandGlyph` renders the raw image on dark, routing
-> through a colourisation effect only on light. The baked SVG hex computes to
-> 1.7 : 1 on a white card, which is why the token exists.
-
-### `Kit.LabeledSwitch`
-A settings-row toggle: leading label (+ optional description) on the left, a
-themed `Switch` on the right.
-
-| Property | Type | Default | Meaning |
-|---|---|---|---|
-| `label` | string | `""` | The row title. |
-| `description` | string | `""` | Optional muted sub-text (shown only when set). |
-| `checked` | bool | `false` | Two-way bindable switch state. |
-| `toggled(bool checked)` | signal | — | Fires on user interaction. |
-
-```qml
-Kit.LabeledSwitch {
-    label: qsTr("Send telemetry")
-    description: qsTr("Anonymous input/wire counters.")
-    checked: someStore.enabled
-    onToggled: someStore.setEnabled(checked)
-}
-```
-
-### `Kit.KitTextField`
-The themed single-line input (outlined, primary focus ring). A `TextField`
-subtype — all `TextField` API (`placeholderText`, `maximumLength`, `validator`,
-`inputMethodHints`, `text`) passes through.
-
-```qml
-Kit.KitTextField {
-    id: pinField
-    placeholderText: qsTr("6-digit PIN")
-    maximumLength: 6
-    inputMethodHints: Qt.ImhDigitsOnly
-}
-```
-
----
-
-## 2. Page convention
-
-Pages extend **`Kit.Page`** (a transparent-backgrounded `Page` subtype). Its
-default content is a padded `Column` (spacing 16, padding 24) — just declare
-children; they stack. Set `title` (read by the shell for the breadcrumb).
-
-```qml
-import QtQuick.Controls.Basic
-import "../kit" as Kit
-import Dish.Chrome
-
-Kit.Page {
-    title: qsTr("Controllers")
-
-    Kit.SectionHeader { label: qsTr("Controllers") }
-
-    Kit.Card {
-        // ... page body ...
-    }
-}
-```
-
-The shell loads exactly these three files by path — a page agent REPLACES the
-body of its file, keeps the filename and the `Kit.Page { title: … }` root:
-
-| Destination | File | Model surface |
+| Component | Base | Draws |
 |---|---|---|
-| Controllers | `src/qml/pages/ControllersPage.qml` | `App.slotModel` |
-| Connections | `src/qml/pages/ConnectionsPage.qml` | `App.connectionModel` + `App.discoveredServers()` |
-| Settings | `src/qml/pages/SettingsPage.qml` | (settings stores) |
+| `WireLine` | `Item` | The pad-to-host wire. `live` solid, idle dashed, `transmitting` dashes crawling toward the host during an apply. Home and `WizardBanner` both compose it. |
+| `BindingStrip` | `Item` | The binding chip flow plus Edit. Overflows into a real focusable `+N` chip that opens a popup listing the remainder **with their reasons**, never a bare count. |
+| `CapabilityTable` | `Item` | The four-layer matrix. `rows` come from the caller, per C3. Check for available, cross for unavailable, em dash in `Theme.mutedStrong` for pending. Every layer chip shows its true state and the first failing one is heavier. |
+| `WizardBanner` | `Item` | The pad slot, wire and host slot, plus the stage markers and the stage-3 sub-step dots. `compact` for a short window. |
+| `StepList` | `Column` | The apply overlay's steps: done, active with a rotating ring, pending hollow, failed. |
+| `ApplyOverlay` | `ContentDialog` | `steps`, `cancellable`, `slowHint`, `cancelRequested()`. Two callers: the wizard's Review page and Configure binding. |
+| `ContentDialog` | `Popup` | The dialog shell. See below. |
+| `ConfirmDialog` | `ContentDialog` | Plus `bodyText` and `bulletLines`. **Reject has default focus.** The discard confirm, Forget host, Forget controller, and the keep-awake quit confirm. |
+| `BlockerDialog` | `ContentDialog` | The two **terminal** blockers only: `ConnectionLost` and `ControllerUnplugged`. An unsteady link is an inline `ErrorBanner`, not a modal. |
+| `KitGallery` | `Item` | Every component in every state, with a theme switcher. No runtime entry point; reached by a developer editing `Main.qml`. The C6 artifact. |
 
-> If a page needs real logic, it belongs in a tested C++/store, not QML. Flag it.
+## Dialogs
 
-New page files (detail sub-pages, etc.) MUST be registered in
-`CMakeLists.txt` under `qt_add_qml_module(... QML_FILES ...)`. Page agents:
-**ask the spine agent (A2) to add the file** — parallel page agents do not edit
-CMakeLists.txt.
-
----
-
-## 3. App shell (`src/qml/AppShell.qml`)
-
-`AppShell` is the NavigationView layout: a left rail (Controllers / Connections /
-Settings) + a `StackView` content area with a breadcrumb header. It is loaded by
-`Main.qml` under the title bar and on the Mica surface. Page agents normally do
-NOT touch AppShell — they only fill their page files. Two shell APIs are exposed
-for detail navigation:
-
-- **`shell.pushDetail(url, title)`** — push a detail page onto the content
-  StackView with an explicit breadcrumb title. The Back affordance (shown when
-  the stack has depth > 1) pops it and restores the destination's rail label.
-  Reach the shell from a page via its ancestor; the supported pattern is to have
-  the page expose a signal the shell connects, OR (simpler) push onto the
-  enclosing `StackView.view` directly:
-  ```qml
-  // From inside a page, open a detail view:
-  StackView.view.push(Qt.resolvedUrl("SomeDetailPage.qml"))
-  ```
-  (Use `pushDetail` when you also want the breadcrumb title to change.)
-
-The rail selection resets the content StackView to the chosen destination's root
-(`replace()`), clearing any pushed detail pages.
-
-### 3.1 Rail glyphs — four separable silhouettes, not four file names
-
-Collapsed, the rail is a 48 px icon strip with no labels, so each entry has to be
-identifiable from its picture alone at `Tokens.glyphSm` (16 px). The shipped
-mapping:
-
-| Entry | glyph | why |
-|---|---|---|
-| Home | `dish-connected` | the app's own mark — the whole signal path |
-| Controllers | `pad` | the pads attached to this PC |
-| Connections | `satellite` | the remote hosts |
-| Support Dish | ♥ (`Theme.pulse` text glyph) | the one non-cyan hue, reserved for donations |
-| Settings | `gear` | — |
-
-**Substitution recorded (plan D8 / SCR §12.1).** D8's table gave Controllers
-`dish` while Home kept `dish-connected`. Those are two names for **one
-silhouette**: they differ by a 3-unit dot in a 64-unit viewBox, which is under
-one pixel at 16 px, so the two top rail entries were the same picture the moment
-the labels faded — the exact defect D8 was written to close, one family over.
-The `:/brand/` set held only three separable shapes (the tilted dish ellipse, the
-satellite's wide panel bar, the gear disc) and the rail needs four, so
-`brand/pad.svg` was drawn: the `pad-*` glyph SCR §12.1 asked for, in the same
-64 × 64 / `#8FCFE3` + white-at-55 % language as the rest of the set, default
-state only. It tints through `Theme.glyph` like every other brand asset, so both
-appearances resolve from the palette.
-
-Rule going forward: **no two rail entries may resolve to the same silhouette** —
-a different *state* of the same family (`-connected`, `-receiving`, `-off`) is
-not a different rail glyph.
-
----
-
-## 4. Overlay / ContentDialog convention
-
-Modal tasks (pairing, emulate picker) present as **`Kit.ContentDialog`** — a
-centered, dim-scrim `Popup` painting a `Theme.surface` card with a heading, a
-body slot, and an accept/reject footer. Declare one anywhere in the page tree
-and call `.open()`; a `Popup` reparents to the window overlay layer, so it floats
-above the shell automatically.
+`Kit.ContentDialog` is a centred `Popup` painting a `Theme.surface` card over
+`Theme.scrim`, with a 1 px `Theme.outline` border, `Tokens.radiusDialog`, and no
+shadow. Declare one anywhere in the page tree and call `open()`: a `Popup`
+reparents to the window overlay layer, so it floats above the shell
+automatically.
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
+| `eyebrow` | string | `""` | The micro-label above the heading. |
 | `heading` | string | `""` | Dialog title. |
-| `acceptText` | string | `"OK"` | Primary footer button label. |
-| `rejectText` | string | `"Cancel"` | Outline footer button label. |
-| `acceptEnabled` | bool | `true` | Enable/disable the accept button (e.g. until input valid). |
-| `body` | list<QtObject> (alias) | — | The dialog body: assign the field items (`body: [ ... ]`). Aliases the internal column's `data` list, so the type is statically known to tooling. |
-| `accepted()` | signal | — | Accept clicked. **The dialog does NOT auto-close on accept** — call `close()` yourself after a successful action (keep open on error). |
-| `rejected()` | signal | — | Reject clicked (auto-closes). |
+| `acceptText` | string | `"OK"` | Primary footer button label. Empty hides the button. |
+| `rejectText` | string | `"Cancel"` | Outline footer button label. Empty hides the button. |
+| `acceptEnabled` | bool | `true` | Gate the accept button, for example until input validates. |
+| `destructiveAccept` | bool | `false` | Paint accept as the destructive variant. |
+| `preferredWidth` | int | `430` | Dialog width. |
+| `body` | `list<QtObject>` alias | | The body content: `body: [ ... ]`. Aliased to the internal column's `data`, so the type is statically known to tooling. |
+| `accepted()` | signal | | Accept clicked. **The dialog does not auto-close on accept**; call `close()` yourself after a successful action, and keep it open on error. |
+| `rejected()` | signal | | Reject clicked. Auto-closes. |
 
-Working example — a pairing dialog (uses the `App` pairing surface from
-`QML_CONTRACT.md`):
+```qml
+Kit.ContentDialog {
+    id: pairDialog
+    heading: qsTr("Enter pairing PIN")
+    acceptText: qsTr("Pair")
+    acceptEnabled: pinField.text.length === 6
+
+    body: [
+        Kit.KitTextField {
+            id: pinField
+            placeholderText: qsTr("6-digit PIN")
+            maximumLength: 6
+            inputMethodHints: Qt.ImhDigitsOnly
+        }
+    ]
+
+    onAccepted: App.pairByServerId(serverId, pinField.text)  // closes on success
+    onRejected: pinField.clear()
+}
+```
+
+## Pages
+
+A page extends `Kit.Page`. Its default content is a padded `Column`, so just
+declare children and they stack.
 
 ```qml
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
-import "../kit" as Kit
 import Dish.Chrome
+import "../kit" as Kit
 
 Kit.Page {
-    title: qsTr("Connections")
+    readonly property string headerTitle: qsTr("Controllers")
+    readonly property string headerSub: qsTr("%n connected", "", App.slotCount)
+    readonly property string headerDot: App.slotCount > 0 ? "success" : "muted"
 
-    Kit.KitButton { text: qsTr("Pair…"); onClicked: pairDialog.open() }
-
-    Kit.ContentDialog {
-        id: pairDialog
-        heading: qsTr("Enter pairing PIN")
-        acceptText: qsTr("Pair")
-        acceptEnabled: pinField.text.length === 6
-
-        // Body controls:
-        body: [
-            Kit.KitTextField {
-                id: pinField
-                placeholderText: qsTr("6-digit PIN")
-                maximumLength: 6
-                inputMethodHints: Qt.ImhDigitsOnly
-            }
-        ]
-
-        onAccepted: App.pairWithPin(0, pinField.text)   // close on success below
-        onRejected: pinField.clear()
-    }
-
-    Connections {
-        target: App
-        // Keep the dialog open on error; surface a toast. Close it when pairing
-        // is no longer in flight and no error arrived (page decides the policy).
-        function onErrorMessage(message) { /* show toast; pairDialog stays open */ }
+    Kit.Card {
+        // page body
     }
 }
 ```
 
-For a custom dialog beyond accept/reject, build a `Popup` directly using
-`Theme.surface`/`Theme.outline` + `Kit.Card` styling and the same
-`anchors.centerIn: Overlay.overlay` + `modal: true` recipe.
+The header is drawn by the shell from the page's `headerTitle`, `headerSub` and
+`headerDot`; all three are optional and fall back to the rail label and empty.
+The full page contract, including the leave guard and `shellApi`, is in
+[`QML_CONTRACT.md`](QML_CONTRACT.md).
 
----
+The tree:
 
-## 5. Onboarding convention (first-run, outside the nav shell)
+| Kind | Files |
+|---|---|
+| Destinations | `pages/HomePage.qml` · `ControllersPage.qml` · `ConnectionsPage.qml` · `DonatePage.qml` · `SettingsPage.qml` |
+| Pushed details | `pages/ConfigureBindingPage.qml` · `ControlsRemapPage.qml` · `DeadzoneSettingsPage.qml` · `LicensesPage.qml` |
+| Shared dialog | `pages/PairingDialog.qml` |
+| Setup wizard | `wizard/SetupWizardPage.qml` plus `WizardInputPage` · `WizardDestinationPage` · `WizardTypePage` · `WizardFeelPage` · `WizardReviewPage` |
+| Binding draft | `shared/BindingDraft.qml`, the one draft type; both binding editors instantiate it |
+| Onboarding | `onboarding/OnboardingFlow.qml` · `WelcomeScreen.qml` · `HelpScreen.qml` |
 
-A first-run flow is shown FULL-SCREEN OVER the nav shell, not inside it. `Main.qml`
-hosts a top-level `StackView` (id `appRoot`) below the title bar whose
-`initialItem` is the `AppShell`. The onboarding agent shows its flow by pushing a
-full-screen page onto `appRoot`, and pops it (or replaces back to the shell) when
-done:
+If a page needs real logic, it belongs in a tested C++ store or reducer, not in
+QML.
+
+Every new `.qml` must be listed in `qt_add_qml_module(... QML_FILES ...)` in
+`CMakeLists.txt`, or it will not be in the module at runtime.
+
+## The shell
+
+[`AppShell.qml`](../src/qml/AppShell.qml) is a collapsible left rail plus a
+per-page header over a `StackView`. Collapsed, the rail is a 48 px icon strip
+continuing the title bar's hamburger cell; expanded it is a 236 px labelled
+pane, and the state persists through `App.railCollapsed`.
+
+Overlays are in-scene: dialogs are `Kit.ContentDialog` popups over a scrim, and
+transient errors land in the one `NotificationToastHost` the shell drops. No
+extra OS windows.
+
+Selecting a rail destination **replaces** the content stack, clearing any pushed
+detail pages, so a rail switch is always a fresh root.
+
+### Rail glyphs
+
+Collapsed, each entry has to be identifiable from its picture alone at
+`Tokens.glyphSm`, 16 px.
+
+| Entry | Glyph |
+|---|---|
+| Home | `dish-connected` |
+| Controllers | `pad` |
+| Connections | `satellite` |
+| Support Dish | a heart text glyph in `Theme.pulse` |
+| Settings | `gear` |
+
+**No two rail entries may resolve to the same silhouette.** A different *state*
+of the same family (`-connected`, `-receiving`, `-off`) is not a different rail
+glyph: `dish` and `dish-connected` differ by a 3-unit dot in a 64-unit viewBox,
+which is under one pixel at 16 px. The brand set holds three separable shapes,
+the tilted dish ellipse, the satellite's panel bar and the gear disc, and the
+rail needs four, which is why `brand/pad.svg` exists.
+
+## Brand glyphs
+
+`Kit.BrandGlyph` renders `qrc:/brand/<glyph>.svg` through Qt6::Svg. Set `width`
+and `height` and pass a bare asset name, no path and no extension.
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `glyph` | string | `"satellite"` | Bare asset name, e.g. `"satellite-connected"`. |
+| `tinted` | bool | `true` | Route through the palette colourisation. |
+| `accessibleName` | string | `""` | Announced name; empty means decorative. |
+| `glyphForToken(token)` | function → string | | Maps a model `glyph` token (`"satelliteBase"` / `"satelliteConnected"` / `"satelliteOff"`) to an asset name. |
+
+The `:/brand/` set: `dish`, `dish-connected`, `dish-disabled`, `dish-master`,
+`dish-off`, `dish-receiving`, `satellite`, `satellite-broadcasting`,
+`satellite-connected`, `satellite-disabled`, `satellite-master`,
+`satellite-off`, `bluetooth`, `bluetooth-connected`, `bluetooth-disabled`,
+`bluetooth-off`, `bluetooth-searching`, `gear`, `pad`.
 
 ```qml
-// In Main.qml the host is:
-//   StackView { id: appRoot; initialItem: AppShell {} ; background: null }
-//
-// Show onboarding over the shell (e.g. from a first-run check at startup):
-appRoot.push("onboarding/OnboardingFlow.qml")
-// ... when finished:
-appRoot.pop()        // reveals the AppShell beneath
+Kit.BrandGlyph {
+    width: Tokens.glyphSm; height: Tokens.glyphSm
+    glyph: glyphForToken(glyph)   // `glyph` here is the model role
+}
 ```
 
-The onboarding flow itself is a normal full-bleed item (transparent background so
-Mica shows; use `Kit.Card`/`Kit.KitButton`/`Kit.SectionHeader` for its surfaces).
-It runs ABOVE the title bar's content area but the title bar (drag / Mica /
-caption buttons) stays live, so the window remains movable/closable during
-onboarding. New onboarding QML files must be registered in CMake (ask A2).
+Two things to know:
 
----
+**The `*-animated.svg` variants are unreachable through `BrandGlyph`.** They
+contain no `<animate>` elements and Qt runs no SMIL, so they are static files
+that merely look like states. Express a transient in QML instead: a
+`DishProgressBar`, or an opacity or rotation animation over the **base** glyph,
+gated on `Tokens.reducedMotion` and `visible`. The qrc entries stay, because
+deleting them buys nothing and risks a missing-asset regression when the brand
+set is resynced from the sibling repositories.
 
-## File map
+**Glyph contrast rides `Theme.glyph`,** a palette token. `BrandGlyph` renders
+the raw image on dark and routes through a colourisation effect only on light,
+because the baked SVG hex computes to 1.7:1 on a white card.
 
-```
-src/qml/
-  Main.qml                 (chrome window; hosts appRoot StackView → AppShell)
-  WindowTitleBar.qml
-  AppShell.qml             (nav rail + content StackView + breadcrumb + leave guard)
-  kit/                     (37 components — see §1)
-    DishButton  KitButton  OutlineButton  RowButton  ComboButton
-    SegmentedControl  LabeledSwitch  RadioMark  SliderRow  KitTextField
-    StatusDot  CapabilityChip  Eyebrow  SectionHeader  BrandGlyph
-    LiveStat  DishProgressBar  LoadingSpinner
-    Card  ActionCard  Page  Callout  EmptyState  ErrorBanner
-    NotificationToastHost  SelectRow  OptionCard
-    WireLine  BindingStrip  CapabilityTable  WizardBanner  StepList
-    ApplyOverlay  ContentDialog  ConfirmDialog  BlockerDialog  KitGallery
-  shared/
-    BindingDraft.qml       (the ONE binding draft; two editors instantiate it)
-  wizard/
-    SetupWizardPage.qml    WizardInputPage.qml   WizardDestinationPage.qml
-    WizardTypePage.qml     WizardFeelPage.qml    WizardReviewPage.qml
-  pages/
-    HomePage  ControllersPage  ConnectionsPage  ConfigureBindingPage
-    SettingsPage  DonatePage  LicensesPage  DeadzoneSettingsPage
-    ControlsRemapPage  PairingDialog
-  onboarding/
-    OnboardingFlow  WelcomeScreen  HelpScreen
-```
+## Design tokens
 
-Every new `.qml` must be listed in `qt_add_qml_module(... QML_FILES ...)` or it
-will not be in the module at runtime.
+`Tokens` ([`TokensBridge.h`](../src/qml/chrome/TokensBridge.h)) carries every
+non-colour metric. All values are `CONSTANT` except `reducedMotion`.
+
+| Group | Names |
+|---|---|
+| Type scale (px) | `textDisplay` 26 · `textHero` 21 · `textTitle` 20 · `textStatus` 17 · `textHeading` 16 · `textBase` 13 · `textSummary` 12 · `textMeta` 11 · `textChip` 10 |
+| Type treatment | `sectionLetterSpacing` 1.5 · `monoFamily` · `sansFamily` |
+| Spacing (px) | `s0` 0 · `s1` 2 · `s2` 4 · `s3` 6 · `s4` 8 · `s5` 10 · `s6` 12 · `s7` 14 · `s8` 16 · `s9` 20 · `s10` 24 · `s11` 32 · `pagePadding` 24 |
+| Radii (px) | `radiusBar` 2 · `radiusChip` 5 · `radiusButton` 6 · `radiusCard` 8 · `radiusDialog` 10 |
+| Glyph rungs (px) | `glyphSm` 16 · `glyphMd` 20 · `glyphLg` 28 · `glyphXl` 40 · `glyphHero` 76 |
+| Durations (ms) | `durFast` 120 · `durNormal` 200 · `durBusy` 1100 · `durToast` 4000 |
+| Shell metrics (px) | `titleBarHeight` 44 · `captionButtonWidth` 46 · `railCompact` 48 · `railExpanded` 236 · `navItemHeight` 40 · `hitRow` 44 · `minTouch` 32 · `dotSize` 8 |
+| Breakpoints (px) | `minWindowWidth` 900 · `minWindowHeight` 620 · `narrowBreakpoint` 860 · `stackBreakpoint` 760 · `wideBreakpoint` 980 |
+| Other | `disabledOpacity` 0.55 · `reducedMotion` |
+
+`s0` is **flush**, not "unset": a seam the design draws with a divider or a
+colour change instead of a gap. Naming it makes those sites read as a decision
+and gives the literal scanner something to point at.
+
+`sansFamily` and `monoFamily` are probed explicitly by `ui::FontStacks` rather
+than trusting the platform generic, which can hand back Courier New.
+`test_font_stacks` pins the probe.
+
+`reducedMotion` mirrors the OS "animate controls inside windows" setting,
+inverted, and is the one `NOTIFY` token. When true, indeterminate bars become a
+static filled track, glyph animations stop, and `Behavior` durations go to 0.
+Windows sends no broadcast a Quick app can bind to, so `Main.qml` calls
+`Tokens.refreshMotionPreference()` whenever the window regains activation.
+
+`Theme` ([`ThemeBridge.h`](../src/qml/chrome/ThemeBridge.h)) carries the colour
+roles. All of them `NOTIFY paletteChanged`, so a palette swap re-reads every
+binding.
+
+| Group | Roles |
+|---|---|
+| Surfaces | `background` · `surface` · `surfaceDim` · `outline` · `outlineSubtle` · `scrim` |
+| Content | `onSurface` · `muted` · `mutedStrong` · `disabledFg` · `glyph` |
+| Accent | `primary` · `primaryDark` · `onPrimary` · `primaryHover` (12 %) · `primaryPress` (18 %) · `accentWash24` (24 %) · `primaryFill` · `focusRing` |
+| Status | `success` · `successFill` · `warning` · `warningFill` · `error` · `errorFill` |
+| Donation | `pulse` · `pulseFill` (12 %) · `pulseEdge` (35 %) |
+
+`Theme.alpha(color, 0..1)` re-alphas any token, so a one-off wash never has to
+be spelled as a raw `Qt.rgba` literal in a page.
+
+Four roles are easy to confuse:
+
+- `muted` is secondary text that is present and readable.
+- `mutedStrong` is drawn-but-unavailable **information**, always full opacity.
+- `disabledFg` is the foreground of a dead **control**, used with
+  `Tokens.disabledOpacity`.
+- `glyph` is the brand-glyph tint, retinted by palette and never by state.
+
+Text on any filled accent control is `Theme.onPrimary`, never
+`Theme.background`. That includes the pulse surfaces.
+
+`pulse` is the one hue Dish uses beyond cyan, reserved for the Support Dish
+surface and its rail heart.

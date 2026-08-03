@@ -21,8 +21,8 @@
 #include <unordered_set>
 #include <utility>
 
-// Mirror SDL2's own typedef so we can keep <SDL.h> out of this header.
-// The leading underscore is dictated by SDL's struct tag, not our choice.
+// Mirrors SDL2's typedefs so <SDL.h> stays out of this header. The leading
+// underscores are SDL's struct tags, not our choice.
 extern "C" {
 // NOLINTNEXTLINE(bugprone-reserved-identifier)
 struct _SDL_GameController;
@@ -37,9 +37,8 @@ struct SDL_ControllerTouchpadEvent;
 namespace dish::input {
 
 // Pumps SDL_GameController events on a dedicated thread and forwards each
-// state change to GamepadInputProcessor::publish from that same thread —
-// matching the dish-mac/Android pattern where the report flushes directly out
-// of the input callback for minimum latency.
+// state change to GamepadInputProcessor::publish from that same thread — the
+// report flushes straight out of the input callback, never via a Qt event hop.
 class SDLGamepadBridge : public QObject {
     Q_OBJECT
   public:
@@ -49,117 +48,74 @@ class SDLGamepadBridge : public QObject {
     void start();
     void stop();
 
-    // List of currently-attached devices in (deviceId, displayName) form.
-    // `motionCapable` mirrors membership of motionCapable_ — true iff SDL
-    // reported a gyro and/or accelerometer for the device. The UI uses it to
-    // show a motion-capability indicator per controller.
-    //
-    // `hasLightbar` is true iff SDL_GameControllerHasLED reported an
-    // addressable RGB LED for the device (DualSense / DualShock 4). It drives
-    // the SlotCard lightbar chip and the CAP_LIGHTBAR bit in the slot's REST
-    // descriptor.
-    //
-    // `batteryLevel` / `batteryStatus` carry the most recent battery sample
-    // for the device — the same (level, status) pair pollBatteries() forwards
-    // onto the wire (the controller's own charge for a wireless pad, the host
-    // machine's for a wired/unknown one). They drive the SlotCard battery
-    // chip. `batteryLevel` is 0..100 or 0xFF (unknown); `batteryStatus` is a
-    // kBatteryStatus* constant. 0xFF / 0 until the first poll completes.
+    // A snapshot of one attached device. Every field is classified once at
+    // attach except the battery pair, which pollBatteries() refreshes.
     struct Device {
         QString id;
         QString name;
         bool motionCapable = false;
         bool hasLightbar = false;
+        // 0..100 or 0xFF (unknown); `batteryStatus` is a kBatteryStatus*
+        // constant. 0xFF / 0 until the first poll completes.
         std::uint8_t batteryLevel = 0xFF;
         std::uint8_t batteryStatus = 0;
-        // The pad's USB identity (SDL_GameControllerGetVendor/Product). 0 when SDL
-        // could not report it. Surfaced so AppModel can pair an SDL device with a
-        // USB-direct (raw-HID) twin of the same model for the twin-dedup
-        // arbitration (UsbTwinDedup) — see setSuppressedDeviceIds.
+        // 0 when SDL could not report it. Lets AppModel pair this device with a
+        // USB-direct raw-HID twin of the same model — see setSuppressedDeviceIds.
         int vendorId = 0;
         int productId = 0;
-        // True iff this device is a RAW joystick (openJoysticks_) rather than an
-        // SDL-recognised game controller (openControllers_). Only raw joysticks
-        // decode through the mapJoystick / JoystickRemap path, so only they are
-        // remappable by the "Configure controls" page — a game controller uses
-        // SDL's own mapping and ignores any remap. AppModel stamps it onto the
-        // slot's `remappable` so the page entry shows for exactly these.
+        // Only raw joysticks decode through the mapJoystick / JoystickRemap
+        // path, so only they are remappable; a game controller uses SDL's own
+        // mapping and ignores any remap.
         bool isRawJoystick = false;
-        // True iff SDL reports a readable touchpad on the pad (DS4/DualSense).
-        // Gates the descriptor's touchpadMode resolution — a pad with no touch
-        // source always declares "off".
+        // A pad with no touch source always declares touchpadMode "off".
         bool hasTouchpad = false;
-        // True iff the pad is connected over Bluetooth (classic or BLE),
-        // classified once at attach from SDL's device path via the pure
-        // input::isBluetoothHidDevicePath marker check. Drives the slot's
-        // Bluetooth presentation (glyph + chip) and gates the USB-path stamp in
-        // AppModel::rebuild — a wireless pad has no USB path to switch. False
-        // when SDL reports no path (XInput fallback): the pad then keeps the
-        // wired presentation, which fails safe.
+        // Classified at attach from SDL's device path. Gates the USB-path stamp
+        // in AppModel::rebuild — a wireless pad has no USB path to switch.
+        // False when SDL reports no path (the XInput fallback), which leaves
+        // the wired presentation in place and so fails safe.
         bool bluetooth = false;
     };
     QList<Device> devices() const;
 
-    // ── USB-direct twin-dedup seam (the narrow, documented suppression hook) ──
+    // ── USB-direct twin-dedup seam ───────────────────────────────────────────
     // A pad visible to BOTH SDL/XInput and the raw-HID USB-direct gateway must
-    // stream via exactly one path. When USB-direct claims a pad (FSM phase
-    // Direct), AppModel computes the set of SDL device ids that are twins of an
-    // active synthetic (reducer::suppressedRoutedIds) and installs it here; the
-    // input thread then SKIPS publish()/publishMotion()/publishTouchpad() for any
-    // suppressed device, so its INPUT/MOTION/TOUCHPAD never reach the wire while
-    // USB-direct owns it. On claim-failure / detach the set recomputes without
-    // that id and SDL resumes — a clean fallback. Thread-safe: written from the Qt
-    // main thread, read on the input thread under suppressedMtx_. Empty by default
-    // (no suppression), so the live SDL path for every non-claimed device is
-    // untouched.
+    // stream via exactly one path. AppModel installs the SDL ids that are twins
+    // of an active USB-direct synthetic; the input thread then skips
+    // publish()/publishMotion()/publishTouchpad() for them. On claim-failure or
+    // detach the set recomputes without that id and SDL resumes.
+    //
+    // Written from the Qt main thread, read on the input thread under
+    // suppressedMtx_. Empty by default, so nothing is suppressed until asked.
     void setSuppressedDeviceIds(const std::unordered_set<std::string>& ids);
 
     // ── Per-(vid,pid) raw-joystick REMAP seam ────────────────────────────────
-    // The "Configure controls" page persists a per-model JoystickRemap; AppModel
-    // pushes every saved remap here (on construction, on a store change, and on a
-    // fresh device-add so a re-attached pad with a profile decodes correctly).
-    // rebuildJoystickState looks up the remap for the device's (vid,pid) and maps
-    // under it (default JoystickRemap when none is set). Thread-safe like
-    // setSuppressedDeviceIds: written from the Qt main thread, read on the input
-    // thread under remapMtx_; the hot path copies the small JoystickRemap under
-    // the lock and maps OUTSIDE it. clearJoystickRemap drops a model's override
-    // (the device then decodes under the default layout again).
+    // rebuildJoystickState maps under the remap stored for the device's
+    // (vid,pid), or the default JoystickRemap when none is set. Written from
+    // the Qt main thread, read on the input thread under remapMtx_; the hot
+    // path copies the small remap under the lock and maps OUTSIDE it.
     void setJoystickRemap(int vendorId, int productId, const input::JoystickRemap& remap);
     void clearJoystickRemap(int vendorId, int productId);
 
     // ── Input-capture seam (the "press a button to assign it" mode) ──────────
-    // When ON, the JOY axis/button/hat event cases additionally emit
-    // rawJoystickInput (QueuedConnection to the GUI thread) so the remap page can
-    // detect WHICH raw input the user pressed. An axis only emits when its
-    // magnitude clears the deliberate-press gate (captureAxisPasses); buttons on
-    // press; hats on a non-centered direction. Normal streaming continues during
-    // capture. Costs NOTHING when off — every emit is guarded behind this flag
-    // (a relaxed atomic load, no lock on the hot path).
+    // When ON, the JOY event cases additionally emit rawJoystickInput so the
+    // remap page can tell WHICH raw input the user pressed. Streaming continues
+    // during capture, and the flag costs a relaxed atomic load when off — no
+    // lock is added to the hot path.
     void setJoystickCaptureEnabled(bool enabled);
 
-    // Drive the physical controller's rumble motors — vibration ONLY. As of
-    // Task 1.4 the lightbar is fully decoupled from rumble: this never touches
-    // the LED. `strongMagnitude` and `weakMagnitude` are 16-bit magnitudes
-    // matching XInput's scale so they can flow through the SDL2 API verbatim.
-    // `durationMs == 0` is a "stop" signal — SDL itself treats 0 as "do not
-    // run", so we forward as-is.
+    // Vibration only; never touches the LED. Magnitudes are on XInput's 16-bit
+    // scale so they pass through SDL2 verbatim, and `durationMs == 0` is
+    // forwarded as-is because SDL already reads it as "stop".
     //
-    // Thread-safety: callable from any thread. The SDL call is NOT made here:
-    // the request is pushed onto an internal mutex-guarded command queue and
-    // executed by runLoop() on the SDL thread, where the SDL_GameController*
-    // is resolved fresh — a controller closed in the meantime is simply
-    // skipped, so there is no use-after-close race. Intended to be invoked
-    // from the SatelliteClient receive thread.
+    // Callable from any thread (in practice a SatelliteClient receive thread):
+    // the request is queued and runLoop() makes the SDL call on the SDL thread,
+    // resolving the SDL_GameController* fresh there. A controller closed in the
+    // meantime is skipped, so there is no use-after-close race.
     void applyRumble(const QString& deviceId, std::uint16_t strongMagnitude,
                      std::uint16_t weakMagnitude, std::uint16_t durationMs);
 
-    // Drive the physical controller's LED to the given colour. The sole
-    // lightbar entry point: the dedicated MSG_LIGHTBAR stream routes here.
-    // No-op for pads without an LED.
-    //
-    // Thread-safety: same as applyRumble — the SDL_GameControllerSetLED call
-    // is marshalled onto the SDL thread via the command queue rather than
-    // made on the caller's (receive) thread.
+    // The sole lightbar entry point; a no-op for pads without an LED. Queued
+    // onto the SDL thread exactly like applyRumble.
     void applyLightbar(const QString& deviceId, std::uint8_t r, std::uint8_t g, std::uint8_t b);
 
   signals:
@@ -317,8 +273,6 @@ class SDLGamepadBridge : public QObject {
     };
     std::unordered_map<int, TouchState> touchState_;
 
-    // Cross-thread output-command marshalling (Task 1.4 threading fix).
-    //
     // SDL_GameControllerRumble / SDL_GameControllerSetLED must run on the SDL
     // thread (the one in runLoop) because the SDL thread is also the only
     // thread allowed to SDL_GameControllerClose a controller. applyRumble /

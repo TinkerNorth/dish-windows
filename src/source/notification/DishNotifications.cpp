@@ -20,9 +20,8 @@ int DishNotifications::defaultDurationForSeverity(models::DishNotification::Seve
 }
 
 int DishNotifications::post(models::DishNotification notification) {
-    // Assign the id centrally so callers hand us a literal struct without
-    // threading a counter through every emit site (mirrors android post(): the
-    // ctor is internal, the id is monotonic, the caller gets it back).
+    // Assigned centrally so callers hand us a literal struct without threading a
+    // counter through every emit site.
     const int id = nextId_++;
     notification.id = id;
     if (notification.durationMs == kUseSeverityDefault) {
@@ -38,7 +37,7 @@ int DishNotifications::postError(const QString& message) {
     n.severity = models::DishNotification::Severity::Error;
     n.kind = QStringLiteral("error");
     n.message = message;
-    n.durationMs = kUseSeverityDefault; // resolves to long via the severity map
+    n.durationMs = kUseSeverityDefault;
     return post(std::move(n));
 }
 

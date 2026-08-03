@@ -11,10 +11,8 @@ namespace dish::composer {
 
 namespace {
 
-// The slot id bound to a connection id, or empty. Android collects all bound
-// slots; Windows binds one physical pad per connection-slot pair, so the first
-// match is the row's bound slot. Deterministic: the bindings vector is built
-// sorted by the Coordinator.
+// First match wins: Windows binds one physical pad per connection, and the
+// Coordinator hands the vector over sorted, so this is deterministic.
 std::string boundSlotFor(const std::string& connId, const std::vector<Binding>& bindings) {
     for (const auto& b : bindings) {
         if (b.connectionId == connId) { return b.slotId; }
@@ -36,10 +34,8 @@ std::vector<ConnectionRow> buildConnectionSummaries(
     std::unordered_map<std::string, const RememberedSnapshot*> rememberedById;
     for (const auto& r : remembered) { rememberedById.emplace(r.id, &r); }
 
-    // The id universe is (remembered ∪ live) — a live-but-unremembered session
-    // (mid-pair, before the first PUT remembers it) still gets a row, and a
-    // remembered-but-offline satellite still gets one. Mirrors android
-    // (rememberedById.keys + satMap.keys).
+    // (remembered ∪ live), so a session mid-pair (not yet remembered) and a
+    // remembered-but-offline satellite each still get a row.
     std::set<std::string> ids;
     for (const auto& [id, s] : sessionById) { ids.insert(id); }
     for (const auto& [id, r] : rememberedById) { ids.insert(id); }
@@ -54,9 +50,8 @@ std::vector<ConnectionRow> buildConnectionSummaries(
             rem = it->second;
         }
 
-        // Prefer the live session's server (its address may be fresher than the
-        // remembered row), else the remembered row. If neither names an ip the
-        // row is invalid (a ghost) and is dropped — mirrors the ?: return null.
+        // The live session's address may be fresher than the remembered row's.
+        // With no ip on either the row is a ghost, and is dropped.
         std::string name;
         std::string ip;
         int udpPort = 0;
@@ -86,8 +81,6 @@ std::vector<ConnectionRow> buildConnectionSummaries(
         row.ip = ip;
         row.udpPort = udpPort;
         row.boundSlotId = boundSlotFor(id, bindings);
-        // The latency readout travels only with a live session's snapshot — a
-        // remembered-only row keeps the 0 / 0 default.
         if (conn != nullptr) {
             row.latencyOneWayMs = conn->latencyOneWayMs;
             row.latencySamples = conn->latencySamples;
@@ -98,9 +91,8 @@ std::vector<ConnectionRow> buildConnectionSummaries(
         out.push_back(std::move(row));
     }
 
-    // Stable order so distinct-until-changed never re-emits on map iteration
-    // order alone. Sort by label, then id as a tiebreaker (two boxes can share
-    // a label).
+    // Stable order, so distinct-until-changed never re-emits on iteration order
+    // alone. The id tiebreaks because two boxes can share a label.
     std::sort(out.begin(), out.end(), [](const ConnectionRow& a, const ConnectionRow& b) {
         if (a.label != b.label) { return a.label < b.label; }
         return a.id < b.id;

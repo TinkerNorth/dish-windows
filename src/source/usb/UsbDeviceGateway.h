@@ -1,18 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbDeviceGateway — the IO/native boundary the USB-direct claim driver talks
-// to. This is the seam that lets the pure FSM (core/reducer/UsbPathMachine) and
-// the driver (UsbGamepadManager) be tested against a FAKE device with no real
-// USB/HID IO, while production swaps in the Windows raw-HID gateway
-// (WinHidGateway). It is the C++ analogue of the slice of android's
-// UsbManager + the `core/jni` USB attach/detach surface that UsbGamepadManager
-// drives.
+// The IO boundary the USB-direct claim driver talks to. The seam exists so the
+// FSM and the driver can be tested against a fake device with no real USB or HID
+// IO, while production swaps in WinHidGateway.
 //
-// SoC: this is a Gateway — IO only, no domain state beyond an in-flight claim.
-// The DECISION of when to claim / release / bind lives in the pure reducer; the
-// manager turns world signals into events and executes the reducer's effects
-// through this interface.
+// IO only, no domain state beyond an in-flight claim. The decision of when to
+// claim, release or bind belongs to the pure reducer.
 
 #pragma once
 
@@ -122,8 +116,7 @@ class UsbDeviceGateway {
     virtual void releaseClaim(int syntheticId) = 0;
 
     // Whether the model is a verified "fast-lane" pad worth auto-claiming Direct
-    // (DualSense/DS4/8BitDo families on Windows). Mirrors android
-    // native.isKnownFastLaneModel.
+    // (DualSense/DS4/8BitDo families on Windows).
     virtual bool isKnownFastLaneModel(int vendorId, int productId) const = 0;
 
     // The model's current measured completion count (URB/transfer count) for the

@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// SatelliteSharedKeyRepositoryTest (ADAPT) + RepositoryContract. Port of
-// dish-android repository/SatelliteSharedKeyRepositoryTest: per-id key round-trip,
-// durability, selective remove, all() that ignores co-tenant entries, and a
-// clear() that wipes only this repo's keys while preserving siblings.
 
 #include "repository/SatelliteSharedKeyRepository.h"
 

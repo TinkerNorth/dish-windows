@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// TouchpadModeStore — the reactive StateSource over the per-satellite pick:
-// hydrate-on-construction, persist-AND-republish on setMode, cascade forget,
-// never-picked distinct from "off", and the distinct-until-changed emission
-// discipline (probe-asserted full sequences, the house pattern).
 
 #include "source/store/TouchpadModeStore.h"
 
@@ -47,11 +42,9 @@ TEST_CASE("setMode persists to the repo AND republishes", "[touchpad-mode-store]
 
     store.setMode("sat", "ds4");
     REQUIRE(store.modeFor("sat") == "ds4");
-    // Durable: a fresh repo over the same settings sees the pick.
     TouchpadModeRepository repo2(settings);
     REQUIRE(repo2.get("sat").has_value());
     CHECK(repo2.get("sat")->mode == "ds4");
-    // Reactive: exactly one emission for the one change.
     REQUIRE(probe.count() == baseline + 1);
     CHECK(probe.latest().at("sat") == "ds4");
 }

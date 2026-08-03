@@ -1,31 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// BindingDraft — the in-flight binding, and the ONE place the four-layer
-// capability vocabulary is turned into English.
+// The in-flight binding: the UI's one deliberate piece of domain state, living
+// exactly as long as the page that instantiates it (no persistence — two
+// unbound pads are two independent wizard runs). Both editors instantiate THIS
+// file, which is also why whyFor() lives here: the same pad must never get two
+// different explanations of why its gyro is dead. Nothing here writes.
 //
-// The UI owns no domain state; the binding draft is the single deliberate
-// exception, and it lives exactly as long as the page that owns it (there is
-// no persistence and no replace-confirm — two unbound pads are two independent
-// wizard runs). Both editors instantiate THIS file: the setup wizard and
-// ConfigureBindingPage. That is the "one draft model, two editors" rule, and
-// it is also why whyFor() lives here — the same pad must never get two
-// different explanations of why its gyro is dead.
-//
-// Nothing here writes. Every value is forwarded to App.applyBinding() in one
-// call by whichever page owns the draft.
-//
-// REACTIVITY: a JS function call is not a binding dependency. Every binding
-// that calls capabilityRows() / rowsFor() / annotate() must also read
-// `revision`, which is bumped by every mutator and by the owning page when
-// something the solver reads (the type catalog, the radio) moves.
+// REACTIVITY: a JS call is not a binding dependency. Every binding that calls
+// capabilityRows() / rowsFor() / annotate() must also read `revision`, bumped
+// by every mutator and by the owning page when something the solver reads
+// (the type catalog, the radio) moves.
 
 import QtQml
 
 QtObject {
     id: draft
 
-    // ── The draft ───────────────────────────────────────────────────────────
     property string slotId: ""
     property string hostId: ""
     property string hostKind: "satellite" // "satellite" | "bluetooth"
@@ -35,16 +26,13 @@ QtObject {
     property bool rumbleOn: true
     property int touchpadMode: 0          // 0 off · 1 pad · 2 mouse
 
-    // ── Display context ─────────────────────────────────────────────────────
     // The solver vends tokens only, but every failure line names something.
     property string padName: ""
     property string hostName: ""
     property string typeName: ""
-    // The pad is raw-HID claimable, so "switch to Direct" is actionable advice
-    // rather than a dead end.
+    // Raw-HID claimable, so "switch to Direct" is advice and not a dead end.
     property bool padClaimable: false
-    // The host catalog fetch failed outright — a Pending row is then a retry,
-    // not a wait.
+    // The catalog fetch failed outright — a Pending row is a retry, not a wait.
     property bool catalogFailed: false
 
     // See REACTIVITY above.
@@ -60,10 +48,7 @@ QtObject {
     readonly property bool hasType: draft.hostIsBluetooth || draft.type >= 0
     readonly property bool complete: draft.hasInput && draft.hasDestination && draft.hasType
 
-    // ── The solver ──────────────────────────────────────────────────────────
-
-    // Raw solver rows for an arbitrary candidate type — the type step compares
-    // three of these side by side without committing to any of them.
+    // The type step compares three of these side by side without committing.
     function rowsFor(candidateType) {
         if (draft.slotId.length === 0)
             return [];
@@ -76,9 +61,8 @@ QtObject {
         return draft.rowsFor(draft.type);
     }
 
-    // Adds the two display fields Kit.CapabilityTable expects on every row.
-    // `includeWhy` is false for the wizard's compact three-row table, which has
-    // no room for a reason line under each row.
+    // Adds the display fields Kit.CapabilityTable expects. `includeWhy` is
+    // false for the compact table, which has no room for a reason line.
     function annotate(rows, includeWhy) {
         const out = [];
         for (let i = 0; i < rows.length; ++i) {
@@ -112,8 +96,6 @@ QtObject {
         }
         return true;
     }
-
-    // ── Copy ────────────────────────────────────────────────────────────────
 
     function featureName(feature) {
         switch (feature) {
@@ -198,7 +180,6 @@ QtObject {
         return "";
     }
 
-    // ── Mutation ────────────────────────────────────────────────────────────
     // Sanitise the DRAFT, not the render: a touchpad mode the candidate cannot
     // carry collapses to Off here, or a mode the user saw as Off ships and
     // resurrects later. Runs after every host / type / path change.

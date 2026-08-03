@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Session-key derivation + REST proof-of-key-possession + UDP packet AEAD —
-// byte-for-byte identical to the satellite's net/session_crypto.* so the two
-// ends interoperate (satellite/docs/contract.md §Crypto). Pure: libsodium only,
-// no Qt. The pinned interop vectors are shared with
-// satellite/tests/test_windows_platform.cpp and dish-android's SessionCryptoTest
-// (tests/test_session_crypto.cpp); any drift on any end is a cross-end break.
+// Session-key derivation, REST proof-of-key-possession and UDP packet AEAD.
+// Byte-for-byte identical to the satellite's net/session_crypto.* (see its
+// docs/contract.md, Crypto); the interop vectors in tests/test_session_crypto.cpp
+// are shared with the satellite and Android ends, so any drift breaks all three.
 
 #pragma once
 

@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Help & FAQ — a PUSHED DETAIL PAGE (Settings ▸ Setup & help ▸ Help & FAQ). It
-// is no longer an onboarding step: it declares headerTitle/headerSub for the
-// shell breadcrumb, gets the shell's back chevron for free, and scrolls inside
-// Kit.Page's single page-level scroller. It carries no footer buttons of its
-// own — an unspecified surface behind a Settings row is how one screen gets
-// built three different ways.
-//
-// A scrollable list of section headers, collapsible question/answer rows and
-// external-link buttons (mirrors the Widgets HelpView). Presentation only; the
-// only binding is App.openExternalUrl, which routes a failed launch to a toast.
+// Help & FAQ, a detail page pushed from Settings ▸ Setup & help. Presentation
+// only; the one binding is App.openExternalUrl, which routes a failed launch to
+// a toast.
 
-// ComponentBehavior: Bound — the Repeater delegate's inline Components reference
-// the outer `row`/`screen` ids; binding keeps that access qualified.
+// Bound: the delegate's inline Components reference the outer `row`/`screen` ids.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -32,8 +24,6 @@ Kit.Page {
     readonly property string privacyUrl: "https://dish.tinkernorth.com/privacy/dish-windows/"
     readonly property string githubUrl: "https://github.com/TinkerNorth"
 
-    // The FAQ content. `kind`: "section" = a header row; "faq" = a collapsible
-    // question/answer; "link" = an outline button opening `url`.
     ListModel {
         id: items
         ListElement { kind: "section"; heading: QT_TR_NOOP("CONCEPTS") }
@@ -68,8 +58,8 @@ Kit.Page {
         ListElement { kind: "section"; heading: QT_TR_NOOP("TROUBLESHOOTING") }
         ListElement {
             kind: "faq"
-            heading: QT_TR_NOOP("Dish can’t find any Satellites. What now?")
-            answer: QT_TR_NOOP("Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Tap Scan in Connections to retry.")
+            heading: QT_TR_NOOP("Dish can’t find any satellites. What now?")
+            answer: QT_TR_NOOP("Check that Satellite is running on the host PC (its tray icon should be visible). Confirm both PCs are on the same network. Guest networks and 2.4 GHz vs 5 GHz on the same router count as different. Click Scan in Connections to retry.")
         }
         ListElement {
             kind: "faq"
@@ -104,8 +94,7 @@ Kit.Page {
         ListElement { kind: "link"; heading: QT_TR_NOOP("View source on GitHub"); url: "github" }
     }
 
-    // One content-sized column inside the page scroller — never a second,
-    // nested scroll region. Capped to a readable measure.
+    // One column inside Kit.Page's scroller — never a second, nested scroller.
     Column {
         id: helpBody
         width: Math.min(parent ? parent.width : 640, 640)
@@ -118,13 +107,11 @@ Kit.Page {
                 id: row
                 required property string kind
                 required property string heading
-                // Optional roles (present only for some kinds); default to "".
+                // `var`, not string: these roles are absent for some `kind`s.
                 required property var answer
                 required property var url
 
                 width: helpBody.width
-                // Loader.implicitHeight tracks its loaded Item's implicit size,
-                // so the row sizes to its content.
                 implicitHeight: loader.implicitHeight
 
                 Loader {
@@ -149,7 +136,6 @@ Kit.Page {
                     ColumnLayout {
                         spacing: Tokens.s1
 
-                        // A checkable header that toggles its answer body.
                         Button {
                             id: header
                             Layout.fillWidth: true
@@ -164,9 +150,9 @@ Kit.Page {
                             contentItem: RowLayout {
                                 spacing: Tokens.s3
                                 Text {
-                                    // A rotated guillemet is the disclosure
-                                    // affordance; the solid triangles have no
-                                    // reliable glyph across Windows faces.
+                                    // Rotated guillemet: the solid triangles
+                                    // have no reliable glyph across Windows
+                                    // faces.
                                     text: "›"
                                     font.family: Tokens.sansFamily
                                     font.pixelSize: Tokens.textSummary

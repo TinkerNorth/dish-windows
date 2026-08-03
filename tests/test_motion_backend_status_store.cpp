@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// SatelliteMotionBackendStatusStoreTest (PURE, 13). Port of dish-android
-// source/store/SatelliteMotionBackendStatusStoreTest: the SatelliteMotionBackendStatus
-// flag-byte decode (FLAG_SINK_SUPPORTED_FOR_TYPE / FLAG_BACKEND_OK, reserved
-// upper bits ignored) and the per-(conn,slot) StateSource (round-trip, in-place
-// overwrite, selective vs bulk clear, slotStatusesFor projection). The android
-// "no spurious emission" assert (reference equality of the StateFlow value) is
-// re-expressed here as "a no-op clear() notifies no subscriber" via an
-// Observable subscription counter.
 
 #include "source/store/SatelliteMotionBackendStatusStore.h"
 
@@ -85,10 +76,7 @@ TEST_CASE("clear drops only the named entry", "[motion-backend]") {
 }
 
 TEST_CASE("clear on a missing entry notifies no subscriber", "[motion-backend]") {
-    // The android test pins reference-equality of the StateFlow value to prove a
-    // no-op clear() does NOT re-emit (which would re-trigger every collector).
-    // The C++ Observable is distinct-until-changed, so we assert it directly: a
-    // subscriber wired with emitCurrent=false sees zero notifications.
+    // A no-op clear() must not re-emit: every collector would re-run for nothing.
     SatelliteMotionBackendStatusStore store;
     int notifications = 0;
     auto sub =

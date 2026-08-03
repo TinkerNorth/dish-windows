@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Coverage for the pure physical-pad battery mapping in
-// core/reducer/BatteryRouting.h: physicalBatteryMapping (capacity 0.0-1.0 ->
-// 0-100, NaN/neg -> 0xFF, not-present -> nullopt) and physicalBatteryStatusToWire
-// (platform status -> wire status). Replicates dish-android
-// source/sensor/PhysicalBatteryMappingTest (ADAPT — the not-present arm falls
-// back to the HOST battery on Windows, where android falls back to the phone).
+// kAndroidStatus* are the platform status codes the shared reducer accepts; they
+// are not the wire values, so the map under test is not the identity.
 
 #include "core/reducer/BatteryRouting.h"
 
@@ -30,7 +26,7 @@ using dish::reducer::physicalBatteryStatusToWire;
 
 TEST_CASE("physicalBatteryMapping: pad with no battery present maps to nullopt",
           "[battery][mapping]") {
-    // nullopt signals the caller to use the host fallback (android: the phone).
+    // nullopt tells the caller to fall back to the host battery.
     REQUIRE_FALSE(
         physicalBatteryMapping(/*isPresent=*/false, 0.5f, kAndroidStatusDischarging).has_value());
 }
@@ -78,7 +74,7 @@ TEST_CASE("physicalBatteryMapping: negative capacity reports the unknown-level s
 
 TEST_CASE("physicalBatteryMapping: capacity truncates toward zero (not rounds)",
           "[battery][mapping]") {
-    // 0.849 * 100 = 84.9 -> 84 (toInt truncation, matching Kotlin).
+    // 0.849 * 100 = 84.9 -> 84.
     const auto s = physicalBatteryMapping(true, 0.849f, kAndroidStatusDischarging);
     REQUIRE(s.has_value());
     REQUIRE(s->level == 84U);
@@ -115,13 +111,11 @@ TEST_CASE("physicalBatteryStatusToWire: an out-of-range status falls back to unk
 
 TEST_CASE("physicalBatteryMapping: every mapped sample is accepted by the validator",
           "[battery][mapping]") {
-    // Round-trip: whatever the mapping produces must pass batterySampleValid.
     for (float cap = 0.0f; cap <= 1.0f; cap += 0.05f) {
         const auto s = physicalBatteryMapping(true, cap, kAndroidStatusDischarging);
         REQUIRE(s.has_value());
         REQUIRE(batterySampleValid(*s));
     }
-    // The unknown-level and clamp paths too.
     REQUIRE(batterySampleValid(*physicalBatteryMapping(true, std::nanf(""), kAndroidStatusFull)));
     REQUIRE(batterySampleValid(*physicalBatteryMapping(true, 2.0f, kAndroidStatusCharging)));
 }

@@ -1,0 +1,84 @@
+# Line endings
+#
+# Everything text is stored LF in the repository and checked out native,
+# whatever a clone's core.autocrlf happens to be. The exceptions below pin an
+# eol where the file's consumer, not the platform, decides.
+
+* text=auto
+
+# Git for Windows runs hooks through its bundled bash. A CRLF shebang makes
+# the kernel look for an interpreter literally named `bash\r`, so the hook does
+# not run and the commit sails through ungated. This MUST stay LF.
+.githooks/pre-commit text eol=lf
+
+# Read by interpreters that treat a trailing \r as part of the line.
+*.sh text eol=lf
+*.py text eol=lf
+
+# cmd.exe mis-parses `goto` / `call` labels in an LF-only batch file.
+# PowerShell tolerates LF, but every Windows editor and signer expects CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+
+# Qt Linguist catalogues are rewritten wholesale by lupdate, which emits native
+# line endings — CRLF on Windows. Marking them `text` normalises them to LF in
+# the repository and back to native on checkout, whatever the clone's
+# core.autocrlf happens to be.
+#
+# This is what keeps scripts/check-translations.ps1 honest. That gate re-runs
+# lupdate and fails on any diff, so on a clone with core.autocrlf=false the
+# checkout would hold LF, lupdate would write CRLF, and every line of every
+# catalogue would read as changed the first time anyone ran it. A gate that
+# fires on line endings is a gate people learn to skip.
+translations/*.ts text
+
+# Spelled out so `text=auto` never has to guess.
+*.c    text
+*.cpp  text
+*.h    text
+*.hpp  text
+*.qml  text
+*.qrc  text
+*.rc   text
+*.svg  text
+*.txt  text
+*.md   text
+*.json text
+*.yml  text
+*.yaml text
+*.toml text
+*.cmake text
+CMakeLists.txt text
+
+# Binaries: never normalise, never diff.
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.exe   binary
+*.dll   binary
+*.qm    binary
+
+# GitHub language statistics
+#
+# Linguist maps `.ts` to TypeScript. The six Qt Linguist catalogues are 794 KB
+# of XML, which would make the repository's second-largest "language" one it
+# does not contain. They are lupdate output, so `linguist-generated` also
+# collapses them in pull-request diffs.
+translations/*.ts linguist-generated=true linguist-language=XML
+
+# Bundled Inter is upstream's; the licence corpus is reference text. Neither is
+# this project's code.
+packaging/fonts/**  linguist-vendored=true
+assets/licenses/**  linguist-vendored=true
+LICENSE             linguist-vendored=true
+COPYING.GPL3        linguist-vendored=true

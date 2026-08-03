@@ -2,7 +2,7 @@
 REM ============================================================================
 REM  Install Build Dependencies (Dish Windows)
 REM
-REM  Installs everything needed to build dish.exe and run the unit-test suite.
+REM  Installs everything needed to build dish.exe and run the test suite:
 REM
 REM    [1] Visual Studio 2022 Build Tools (Desktop C++ workload + Win SDK)
 REM    [2] CMake + Ninja
@@ -10,14 +10,14 @@ REM    [3] LLVM (clang-format, clang-tidy)
 REM    [4] Python 3 + aqtinstall + Qt 6.7.3 to C:\Qt
 REM    [5] vcpkg + libsodium + SDL2 to %USERPROFILE%\vcpkg
 REM
-REM  Each step is idempotent — winget skips already-installed packages, and
-REM  the Qt + vcpkg paths short-circuit on existing installs.
+REM  It also sets VCPKG_ROOT and CMAKE_PREFIX_PATH as user environment
+REM  variables at the end, so later shells find Qt and vcpkg.
 REM
 REM  Total: ~12 GB of downloads, ~30-60 min wall-clock on a fresh box.
+REM  Re-running is safe: every step short-circuits on an existing install.
 REM
-REM  Requires: winget (ships with Windows 11; in the Microsoft Store as
-REM  "App Installer" otherwise). Some installers (VS Build Tools in
-REM  particular) will trigger a UAC prompt — approve them when asked.
+REM  Requires winget (ships with Windows 11; otherwise install "App Installer"
+REM  from the Microsoft Store). Expect UAC prompts, VS Build Tools especially.
 REM ============================================================================
 
 setlocal EnableDelayedExpansion
@@ -40,20 +40,15 @@ echo.
 REM ----------------------------------------------------------------------------
 REM [1/5] Visual Studio 2022 Build Tools
 REM
-REM Installs only the VC C++ workload + Win11 SDK so we get cl.exe + the
-REM Windows headers without the full Visual Studio IDE. The --override clause
-REM is the documented way to pass workload/component IDs through winget into
-REM the VS installer; --quiet keeps the VS UI hidden, --norestart suppresses
-REM the reboot prompt (none of the components installed require one, but the
-REM installer asks anyway).
+REM Only the VC C++ workload + Win11 SDK, not the full Visual Studio IDE.
+REM --override is how winget passes component IDs to the VS installer;
+REM --norestart suppresses a reboot prompt none of these components need.
 REM ----------------------------------------------------------------------------
 echo === [1/5] Visual Studio 2022 Build Tools ===
 
-REM Detect any Visual Studio install (Community / Pro / Enterprise /
-REM BuildTools) carrying the VC++ x86/x64 tools workload via vswhere.
-REM vswhere ships with every VS install >= 2017 and is the canonical
-REM lookup — it doesn't depend on the install being at a default path
-REM or on the package having a current "upgrade available" winget status.
+REM vswhere finds any VS flavour (Community / Pro / Enterprise / BuildTools)
+REM wherever it was installed, so an existing VS is reused rather than a second
+REM toolchain installed alongside it. -products * is required to see BuildTools.
 set "VS_INSTALL="
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if exist "%VSWHERE%" (
@@ -67,9 +62,8 @@ if defined VS_INSTALL (
     winget install --id Microsoft.VisualStudio.2022.BuildTools --silent ^
         --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621 --quiet --wait --norestart" ^
         --accept-source-agreements --accept-package-agreements
-    REM winget returns non-zero for many benign outcomes — "already
-    REM installed at latest version" (0x8A150085) being the most common.
-    REM Don't gate on the exit code; re-probe with vswhere instead.
+    REM winget returns non-zero for benign outcomes such as "already installed
+    REM at latest version" (0x8A150085), so re-probe instead of trusting it.
     if exist "%VSWHERE%" (
         for /f "delims=" %%I in ('"%VSWHERE%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul') do set "VS_INSTALL=%%I"
     )
@@ -102,26 +96,18 @@ echo.
 REM ----------------------------------------------------------------------------
 REM [4/5] Python + Qt 6 via aqtinstall
 REM
-REM Qt's official installer at qt.io requires a free account and an interactive
-REM UI. aqtinstall is a Python package that downloads the same artifacts
-REM headlessly into C:\Qt\<version>\<arch>, which is the layout the official
-REM installer produces. We pin %QT_VERSION% so subsequent runs of this script
-REM don't quietly upgrade to a newer Qt that the CI workflow hasn't seen.
+REM Qt's own installer needs an account and a UI; aqtinstall fetches the same
+REM artifacts headlessly into the same C:\Qt\<version>\<arch> layout.
+REM %QT_VERSION% is pinned so a re-run can't quietly move you to a Qt that CI
+REM has never built against.
 REM ----------------------------------------------------------------------------
 echo === [4/5] Python 3 + Qt %QT_VERSION% ===
 
-REM On Windows 11 `where python` resolves to a WindowsApps "App Execution
-REM Alias" stub at %LOCALAPPDATA%\Microsoft\WindowsApps\python.exe that
-REM does NOT run Python — it opens the Microsoft Store. The stub fools
-REM ERRORLEVEL into thinking Python is installed when only the alias is.
-REM
-REM Workaround: use the Python launcher (`py.exe`). The launcher is
-REM installed by the official Python installer (which is what winget
-REM Python.Python.3.12 uses) and is NOT subject to the App Execution
-REM Alias mechanism. If `py -3` doesn't work, we know Python is genuinely
-REM missing, install it, then look in the documented launcher install
-REM locations so we don't depend on the new PATH propagating into this
-REM running script.
+REM On Windows 11 `where python` finds a WindowsApps alias stub that opens the
+REM Microsoft Store instead of running Python, which fools ERRORLEVEL into
+REM reporting Python present. The `py.exe` launcher is not aliased, so probe
+REM with that. The explicit paths below exist because a freshly installed
+REM Python's PATH entry does not reach this already-running batch process.
 set "PY_EXE="
 py -3 --version >nul 2>&1
 if %ERRORLEVEL% equ 0 set "PY_EXE=py"
@@ -129,9 +115,6 @@ if %ERRORLEVEL% equ 0 set "PY_EXE=py"
 if not defined PY_EXE (
     echo [INFO] Installing Python 3.12 via winget ^(the `python` on PATH is the WindowsApps stub^)
     winget install --id Python.Python.3.12 --silent --accept-source-agreements --accept-package-agreements
-    REM Re-probe via py.exe after install. winget Python adds it to PATH
-    REM but the change won't propagate into this batch process; try
-    REM standard install locations directly.
     py -3 --version >nul 2>&1
     if !ERRORLEVEL! equ 0 (
         set "PY_EXE=py"
@@ -140,7 +123,6 @@ if not defined PY_EXE (
     ) else if exist "%ProgramFiles%\Python Launcher\py.exe" (
         set "PY_EXE=%ProgramFiles%\Python Launcher\py.exe"
     ) else if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
-        REM Last-ditch: skip the launcher and point at python.exe directly.
         set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
     )
 )
@@ -157,8 +139,7 @@ if exist "%QT_ROOT%\%QT_VERSION%\msvc2019_64\bin\Qt6Core.dll" (
     echo [OK]  Qt %QT_VERSION% already installed at %QT_ROOT%
 ) else (
     echo [INFO] Installing aqtinstall ^(pip --user^)
-    REM Quote PY_EXE in case it expanded to a path containing spaces
-    REM (e.g. "C:\Program Files\Python Launcher\py.exe").
+    REM Quoted: PY_EXE can expand to a path containing spaces.
     "!PY_EXE!" -3 -m pip install --user --upgrade aqtinstall
     if !ERRORLEVEL! neq 0 (
         echo [FAIL] pip install aqtinstall
@@ -176,10 +157,9 @@ echo.
 REM ----------------------------------------------------------------------------
 REM [5/5] vcpkg + libsodium + SDL2
 REM
-REM Manifest mode: CMakeLists.txt is configured with the vcpkg toolchain
-REM file, and the first cmake configure reads vcpkg.json and builds the
-REM listed deps on-demand. Cloning to %USERPROFILE%\vcpkg matches the
-REM Microsoft-recommended location and is what the README documents.
+REM Manifest mode: nothing is built here. The first cmake configure reads
+REM vcpkg.json through the toolchain file and builds the deps then, which is
+REM why this step only clones and bootstraps.
 REM ----------------------------------------------------------------------------
 echo === [5/5] vcpkg ^(libsodium + SDL2 will build on first cmake configure^) ===
 if not defined VCPKG_ROOT set VCPKG_ROOT=%VCPKG_ROOT_DEFAULT%
@@ -205,8 +185,12 @@ if exist "%VCPKG_ROOT%\vcpkg.exe" (
 echo.
 
 REM ----------------------------------------------------------------------------
-REM Persist VCPKG_ROOT + CMAKE_PREFIX_PATH so subsequent shells pick them up
-REM without having to think. User-scope so we don't require admin.
+REM Persist VCPKG_ROOT + CMAKE_PREFIX_PATH so later shells pick them up.
+REM User scope, so no admin rights are needed and nothing machine-wide changes.
+REM
+REM HEADS UP: both are REPLACED, not appended to. If you already had a
+REM CMAKE_PREFIX_PATH pointing at another Qt or SDK, save it before running
+REM this — it will be overwritten with the Qt installed above.
 REM ----------------------------------------------------------------------------
 echo === Persisting env vars ^(user scope^) ===
 powershell -NoProfile -Command "$root = '%VCPKG_ROOT%'; $cur = [Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'User'); if ($cur -ne $root) { [Environment]::SetEnvironmentVariable('VCPKG_ROOT', $root, 'User'); Write-Host ('[OK]  VCPKG_ROOT -> ' + $root) } else { Write-Host '[OK]  VCPKG_ROOT already set' }"

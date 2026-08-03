@@ -13,12 +13,9 @@ namespace dish::repository {
 
 namespace {
 
-// The persisted shape is a JSON OBJECT mapping the storage key -> the row's JSON.
-// Keying by the storage key (rather than relying on the row's own `id` field)
-// makes this a faithful Map<K,V>: put(key, value) stores `value` verbatim and
-// get(key) returns it, even in the (contract-only) case where the caller passes
-// a value whose own id differs from the key. In normal use keyOf(value) ==
-// value.id == key, so the key and the row's id coincide.
+// Keying by the storage key rather than the row's own `id` is what makes this a
+// faithful Map<K,V>: put(key, value)/get(key) round-trip verbatim even when the
+// value's id differs from the key. RepositoryContract pins that.
 constexpr const char* kSchemaKey = "k"; // entry storage key
 constexpr const char* kSchemaVal = "v"; // entry row object
 
@@ -39,7 +36,7 @@ QMap<QString, models::RememberedWifi> RememberedSatelliteRepository::readEntries
 
     QMap<QString, models::RememberedWifi> entries;
     if (doc.isArray()) {
-        // Legacy / migrated shape: a plain JSON array of rows keyed by row id.
+        // Migrated shape: a plain JSON array of rows keyed by row id.
         for (const auto& v : doc.array()) {
             if (!v.isObject()) { continue; }
             const auto row = models::RememberedWifi::fromJson(v.toObject());
@@ -48,8 +45,8 @@ QMap<QString, models::RememberedWifi> RememberedSatelliteRepository::readEntries
         return entries;
     }
     if (doc.isObject()) {
-        // Current shape: an array of {k, v} pairs under a wrapper, preserving the
-        // storage key independently of the row's id.
+        // Current shape: {k, v} pairs under a wrapper, preserving the storage key
+        // independently of the row's id.
         for (const auto& e : doc.object().value(QLatin1String("entries")).toArray()) {
             const auto eo = e.toObject();
             const QString key = eo.value(QLatin1String(kSchemaKey)).toString();

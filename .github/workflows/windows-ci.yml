@@ -1,13 +1,5 @@
 name: Windows CI
 
-# Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
-#   actions/checkout         @ v6.0.2  → de0fac2e4500dabe0009e67214ff5f5447ce83dd
-#   actions/setup-python     @ v6.2.0  → a309ff8b426b58ec0e2a45f0f869d46889d02405
-#   actions/upload-artifact  @ v7.0.1  → 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-#   ilammy/msvc-dev-cmd       @ v1.13.0 → 0b201ec74fa43914dc39ae48a89fd1d8cb592756
-#   jurplel/install-qt-action @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
-#   lukka/run-vcpkg           @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
-
 on:
   push:
     branches: [main]
@@ -18,6 +10,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only. Nothing here writes to the repo; the artifact upload goes through
+# the Actions API, not the contents scope. Declared explicitly so the token
+# does not inherit whatever the repository's default workflow permission is.
+permissions:
+  contents: read
+
 jobs:
   ci:
     name: Build, test, lint, format
@@ -25,12 +23,10 @@ jobs:
     timeout-minutes: 60
 
     env:
-      # vcpkg manifest mode: lukka/run-vcpkg will read vcpkg.json and install
-      # libsodium + SDL2. Pin the vcpkg commit so dependency versions are
-      # reproducible across CI runs. 6f29f12... is the 2025.01.13 release tag.
+      # vcpkg 2025.01.13. Pinned so dependency versions are reproducible;
+      # must match builtin-baseline in vcpkg.json.
       VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-      # Force vcpkg to use the x64-windows triplet (Qt is dynamic on Windows
-      # by default, so keep ABI consistent).
+      # Qt ships dynamic on Windows; match it or the ABI diverges.
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
 
@@ -66,9 +62,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Match dish-linux / dish-mac / dish-android pin: Ubuntu's clang-format
-      # 18 disagrees with brew's 22.x on braced-init lists, so we pull the
-      # matching wheel from PyPI to keep all four repos in sync.
+      # Version-pinned from PyPI, not the runner image: clang-format 18 and
+      # 22.x disagree on braced-init lists, so an unpinned check flaps.
       - name: Install clang-format (pinned 22.1.4)
         run: pipx install clang-format==22.1.4
 
@@ -81,44 +76,35 @@ jobs:
       - name: Configure (Debug, tests)
         shell: pwsh
         run: |
-          # The Qt Quick chrome is THE app now (the Widgets UI is gone), so the
-          # default configure compiles the Dish.Chrome module + tests together.
-          # CMAKE_EXPORT_COMPILE_COMMANDS is requested explicitly (the top-level
-          # CMakeLists also forces it on) because the clang-tidy step below
-          # lints against THIS tree's compile_commands.json — see that step.
+          # CMAKE_EXPORT_COMPILE_COMMANDS is explicit because the clang-tidy
+          # step below lints against this tree's compile_commands.json.
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Debug `
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
             -DDISH_BUILD_TESTS=ON `
+            -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
-      # `--parallel 4` matches the windows-2022 runner's 4 vCPUs. Ninja's
-      # default is cores+2, which oversubscribes a 4-vCPU box and only adds
-      # scheduler churn (and MSVC peak memory) for no wall-clock gain.
+      # 4 = the windows-2022 runner's vCPU count. Ninja's cores+2 default
+      # oversubscribes it and raises MSVC peak memory for no wall-clock gain.
       - name: Build
         run: cmake --build build --parallel 4
 
-      # NOTE: `ctest --parallel` is test concurrency, not compile concurrency —
-      # ctest already defaults to the processor count (not cores+2), so it is
-      # not oversubscribed and is deliberately left unbounded here.
+      # ctest --parallel defaults to the processor count, so it is left
+      # unbounded on purpose — this is test, not compile, concurrency.
       - name: Run tests
         working-directory: build
         run: ctest --output-on-failure --parallel
 
-      # Lint the Qt Quick sources. Runs after the Debug build because the
-      # Dish.Chrome module's qmldir/qmltypes are generated into build/ by
-      # qt_add_qml_module — importing pages resolve against them (-I build).
-      # Every category gates, with ONE documented downgrade:
-      #   * unqualified — `App`, a runtime context property the linter cannot
-      #     see (QML_CONTRACT.md documents it as the accepted limitation until
-      #     App becomes a compiled singleton).
-      # unresolved-type needs no exception: the module declares
-      # DEPENDENCIES QtQuick, so Theme's QColor properties resolve statically.
+      # Must run after Build: qt_add_qml_module generates the Dish.Chrome
+      # qmldir/qmltypes into build/, which importing pages resolve against.
+      # Every category gates except `unqualified`, downgraded to info because
+      # `App` is a runtime context property the linter cannot see.
       - name: qmllint (QML static analysis)
         shell: pwsh
         run: |
-          # git's * crosses directory levels, so this catches the top-level
-          # Main/AppShell/WindowTitleBar too ('src/qml/**/*.qml' would not).
+          # git's * crosses directory levels; 'src/qml/**/*.qml' would miss
+          # the top-level Main/AppShell/WindowTitleBar.
           $files = git ls-files 'src/qml/*.qml'
           & "$env:QT_ROOT_DIR/bin/qmllint.exe" `
             -I build `
@@ -126,43 +112,30 @@ jobs:
             --unqualified info `
             $files
 
-      # qmllint checks that a QML file RESOLVES; this checks that it followed the
-      # design system. A page that writes `#4FE3FF` or `radius: 8` still renders,
-      # it just silently stops tracking the palette and the scale. src/qml/kit/**
-      # is exempt (it is the layer that turns tokens into pixels); the greenfield
-      # wizard/ and shared/ dirs are errors, everything else warns.
+      # qmllint checks a QML file RESOLVES; this checks it used the design
+      # tokens. A hard-coded `#4FE3FF` or `radius: 8` still renders, it just
+      # stops tracking the palette — no other gate would catch it.
       - name: QML literal scanner
         shell: pwsh
         run: ./scripts/qml-lint-literals.ps1 -Mode error
 
-      # Lints against the SAME Debug tree the `Build` step already produced.
-      # This used to configure + compile a second `build-tidy` Debug tree just
-      # to obtain compile_commands.json and the generated mocs — ~5.9 min of a
-      # ~35 min run (2.3 min configure + 3.6 min compile) spent rebuilding a
-      # tree we already had. That tidy tree differed from the Debug tree in
-      # exactly two flags, and neither affects what gets linted:
-      #   * DISH_BUILD_TESTS — gates only `add_subdirectory(tests)` and adds no
-      #     compile definitions; nothing under src/ has an `#if` on a test
-      #     macro. The loop below only feeds `src/*.cpp`, so the extra tests/
-      #     entries in the Debug compile_commands.json are simply unused.
-      #   * CMAKE_EXPORT_COMPILE_COMMANDS — now set on the Debug configure.
-      # The Quick chrome always builds (there is no DISH_QML toggle any more;
-      # qt_add_qml_module + Qt6::Qml are unconditional), so the src/qml TUs in
-      # the Debug database carry real Qt6::Qml include dirs. `Build` runs
-      # before this step, so the generated mocs clang-tidy needs already exist.
+      # A stale .ts is not a compile error, so nothing else catches a string
+      # added without a catalogue entry.
+      - name: Translation catalogues in sync
+        shell: pwsh
+        run: ./scripts/check-translations.ps1
+
+      # Must run after Build: reuses that tree's compile_commands.json and
+      # needs the generated mocs to exist.
       - name: clang-tidy
         shell: pwsh
         run: |
-          # Only run clang-tidy on .cpp files. Headers are analyzed
-          # transitively via HeaderFilterRegex in .clang-tidy. Passing
-          # .h files directly trips clang-diagnostic-pragma-once-outside-header
-          # because the header has no enclosing translation unit.
-          # --extra-arg-before=-Wno-unused-command-line-argument silences
-          # clang's complaints about MSVC-style flags (/Zc:preprocessor,
-          # /utf-8 etc.) that CMake puts into compile_commands.json when
-          # the configure step picks up MSVC cl.exe on PATH; clang-tidy
-          # uses the GNU-style clang driver and would otherwise treat
-          # them as fatal under the project's -Werror equivalent.
+          # .cpp only — headers are covered transitively via HeaderFilterRegex,
+          # and passing a .h directly trips
+          # clang-diagnostic-pragma-once-outside-header.
+          # -Wno-unused-command-line-argument: compile_commands.json carries
+          # MSVC-style flags (/Zc:preprocessor, /utf-8) that the GNU-style
+          # clang driver would otherwise reject.
           $files = git ls-files 'src/*.cpp' | Where-Object { $_ -notlike 'src/UI/*' }
           foreach ($f in $files) {
             clang-tidy -p build --quiet `
@@ -176,6 +149,7 @@ jobs:
           cmake -S . -B build-release -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DDISH_BUILD_TESTS=OFF `
+            -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build release binary
@@ -186,13 +160,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item build-release/dish.exe artifact/
-          # windeployqt copies every required Qt DLL + plugins next to the exe.
-          # --qmldir walks our QML sources so the Quick modules the app imports
-          # (QtQuick, Controls Basic, Layouts, Effects, Window) ship too — the
-          # frameless Quick chrome is the ONLY UI, so a QML-less artifact would
-          # open to a white window. jurplel/install-qt-action v4 sets
-          # QT_ROOT_DIR (the install root) but not Qt6_DIR, so resolve
-          # windeployqt directly under QT_ROOT_DIR/bin.
+          # --qmldir is required: the Quick chrome is the only UI, so an
+          # artifact without the QML modules opens to a white window.
+          # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.
           & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir src/qml artifact/dish.exe
 
       - name: Upload release artifact

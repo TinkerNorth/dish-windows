@@ -1,29 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Segmented single-choice control (design FSeg / the slot card's FPathSeg):
-// options in a recessed pill, the selected one filled with the accent. `small`
-// is the dense slot-card variant. Emits picked(option) — the caller applies the
-// change and the selected state streams back through `value`, so the control
-// never holds its own truth.
+// Emits picked(option); the caller applies the change and streams the selection
+// back through `value`, so the control never holds its own truth. ←/→ MOVE the
+// selection: a control with one value has no gap between focused and chosen.
 //
-// Keyboard: the frame takes focus and ←/→ MOVE THE SELECTION (they do not merely
-// move focus — a segmented control has one value, so focus and selection are the
-// same thing). The frame carries the focus ring.
-//
-// The thumb radius is DERIVED (radiusButton - framePad), not the hand-drawn 3/4
-// the mocks used.
-//
-// DISABLED: the whole control fades to `disabledOpacity`, so the thumb must not
-// stay the ACCENT — `onPrimary` was picked to read on a saturated cyan fill at
-// full strength, and at 0.55 over the page it is neither. A dead control still
-// has to report which segment is selected (the Feel page's Touchpad row is
-// "Off, and here is why"), so the thumb becomes a neutral raised surface with a
-// hairline and the label takes `disabledFg` — the same treatment every other
-// dead control in the kit uses, legible in both appearances.
+// Disabled drops the accent thumb for a neutral surface + hairline. The whole
+// control is at disabledOpacity there, where `onPrimary` (tuned to read on a
+// saturated fill) reads as neither, and a dead control still has to report
+// which segment is selected.
 
 // Bound: the Repeater delegate references the outer `control` id alongside its
-// `required` model props — static resolution needs bound component behavior.
+// `required` model props.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -41,7 +29,6 @@ Control {
 
     signal picked(string option)
 
-    // The recessed frame insets its segments by 2px (dense) / 3px.
     readonly property int framePad: control.small ? 2 : 3
     readonly property bool interactive: control.enabled && !control.busy
 
@@ -55,8 +42,8 @@ Control {
     Keys.onLeftPressed: control.stepSelection(-1)
     Keys.onRightPressed: control.stepSelection(1)
 
-    // Move the selection one segment; clamped, never wrapping (a wrap would let
-    // a held arrow key cycle a destructive path choice).
+    // Clamped, never wrapping: a wrap would let a held arrow key cycle a
+    // destructive path choice.
     function stepSelection(delta) {
         if (!control.interactive)
             return;
@@ -99,7 +86,6 @@ Control {
 
                 width: label.implicitWidth + (control.small ? 18 : 32)
                 height: label.implicitHeight + (control.small ? 5 : 10)
-                // Derived, not drawn: the thumb sits inside the frame's inset.
                 radius: Tokens.radiusButton - control.framePad
                 color: !segment.selected ? "transparent"
                      : control.enabled ? Theme.primary

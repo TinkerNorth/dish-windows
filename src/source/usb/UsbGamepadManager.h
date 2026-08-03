@@ -1,37 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbGamepadManager — the Windows USB-direct claim driver. Port of dish-android
-// source/usb/UsbGamepadManager.kt (the imperative coordinator around the pure
-// UsbPathMachine FSM).
+// The Windows USB-direct claim driver: the imperative coordinator that executes
+// the effects the pure UsbPathMachine FSM decides. This is the only place that
+// performs USB IO.
 //
-// World signals (USB attach/detach, framework presence, the user's path pick,
-// claim results, transition timeouts) become UsbEvents; `reduce` (the pure FSM
-// in core/reducer/UsbPathMachine) decides the next state and the effect list;
-// this class executes those effects against the real subsystems — the raw-HID
-// claim Gateway (UsbDeviceGateway), the input pipeline (GamepadInputProcessor),
-// and the UI/registry observer. It is the ONLY USB-IO place, mirroring android.
+// XInput hides Xbox-class pads from raw HID, so an Xbox 360/One/Series pad bound
+// to XInput does not appear to a raw-HID enumerator at all. This path therefore
+// serves HID pads (DualSense, DualShock 4, 8BitDo) and Xbox pads stay on
+// SDL/XInput. A model that fails to claim falls back to the SDL path, so
+// USB-direct is strictly additive and never a regression.
 //
-// ── The Windows platform reality (why this benefits fewer pads than android) ──
-// On android, USB-direct claims the device to read raw HID reports, bypassing
-// the framework input-rate cap and framework deadzones. On Windows, SDL/XInput
-// already reads pads at full rate, so USB-direct is an ALTERNATIVE input source
-// whose benefit is narrower. Crucially: **XInput hides Xbox-class pads from raw
-// HID** — an Xbox 360/One/Series pad bound to XInput simply does not appear to a
-// raw-HID/WinUSB enumerator. So this path mainly serves HID pads (DualSense /
-// DualShock 4 / 8BitDo); Xbox pads stay on SDL/XInput. The Gateway's enumerate()
-// excludes XInput-claimed pads, and a model that fails to claim (Busy/etc.)
-// falls back to the SDL/XInput "framework" path via the FSM's Routed phase —
-// USB-direct is strictly additive and opt-in/auto-selected, never a regression
-// to the SDL path.
-//
-// ── Hot-path discipline (this is the one Wave-2 slice on the input hot path) ──
-// The Gateway's read loop is plain C++ on its own thread and feeds decoded
-// reports straight into GamepadInputProcessor::publish — the SAME publish path
-// the SDL bridge uses — with NO per-report allocation (the HID->XUSB button map
-// is the packed-int GamepadButtonLayouts math) and NO Qt signals on the per-
-// report path. The FSM decision is a pure function run off the report path; all
-// FSM mutation is serialized through applyEvent so events apply in order.
+// Hot-path discipline: the Gateway read loop feeds decoded reports straight into
+// GamepadInputProcessor::publish, the same entry point the SDL bridge uses, with
+// no Qt signals on the per-report path. All FSM mutation is serialized through
+// applyEvent so events apply in order.
 
 #pragma once
 
@@ -110,8 +93,7 @@ class UsbGamepadManager {
     // The sweep is debounced: a pad must miss kDepartedScanThreshold consecutive
     // scans before it reads as unplugged, so a single-pass enumeration hiccup
     // (Bluetooth link parking, a momentary open elsewhere) can never tear down a
-    // live claim. Safe to call repeatedly (the 1 s poll). Mirrors android
-    // reconcileForeground + its USB detach receiver folded into one pass.
+    // live claim. Safe to call repeatedly (the 1 s poll).
     void reconcile();
 
     // The user explicitly picks Direct for a model (the Settings toggle / card
@@ -119,13 +101,13 @@ class UsbGamepadManager {
     void tryDirectMode(int vendorId, int productId);
 
     // The user explicitly picks `choice` for a model. Persists + drives a
-    // user-initiated Choose. Mirrors android setPathChoice.
+    // user-initiated Choose.
     void setPathChoice(int vendorId, int productId, reducer::PathChoice choice);
 
     // The user picks Auto: drop the stored override and drive a user-initiated
     // Choose with the freshly RE-RESOLVED path (the resolution policy now decides
     // with no stored pick — a fast-lane model returns to Direct, everything else
-    // to Standard). Mirrors android clearChoice.
+    // to Standard).
     void clearChoice(int vendorId, int productId);
 
     // ── World-signal entry points (the driver turns these into events) ────────

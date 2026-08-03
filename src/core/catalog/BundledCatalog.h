@@ -1,22 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// BundledCatalog — the OFFLINE per-slug capability sets for the controller
-// types this client ships art/translations for. Port of dish-android
-// composer/BundledCatalog: the fallback when no server catalog has ever been
-// fetched, and the single feature source LegacyCatalogTranslator rebuilds a
-// recognized legacy catalog from — so neither path re-lists feature slugs ad
-// hoc. Unknown slugs return nullopt so a richer REMOTE type is never masked by
-// a stale bundled guess.
-//
-// Android's sets carry its Feature enum incl. GAMEPAD/MOUSE/KEYBOARD, which
-// have NO catalog slug (they are intrinsic / host-injected, so only the host
-// layer gates them and android filters them out wherever catalog slugs are
-// built). Windows has no Feature model yet (A2's Capability.h), so this
-// exposes exactly the CATALOG-slug subset — the keys a CatalogTypeDto.features
-// map carries. That DTO vocabulary is also why Qt containers appear under
-// core/: QString slugs / QStringList sets ARE the data being produced
-// (core/catalog uses Qt only where the DTOs force it).
+// Offline per-slug capability sets for the controller types this client ships
+// art and translations for: the fallback before any server catalog is fetched,
+// and the feature source LegacyCatalogTranslator rebuilds legacy catalogs from.
+// Unknown slugs return nullopt so a richer remote type is never masked by a stale
+// bundled guess. Qt containers appear here because the CatalogTypeDto vocabulary
+// is the data being produced; core/catalog uses Qt only where the DTOs force it.
 
 #pragma once
 
@@ -42,18 +32,15 @@ inline const QString kFeatureMotion = QStringLiteral("motion");
 inline const QString kFeatureLightbar = QStringLiteral("lightbar");
 inline const QString kFeatureTouchpad = QStringLiteral("touchpad");
 
-// The per-type feature slugs this client has code for — the `known` whitelist
-// reducer::isFeatureOffered gates on, owned here so every caller passes the
-// same protocol-1 vocabulary instead of re-listing it.
+// The `known` whitelist reducer::isFeatureOffered gates on, owned here so every
+// caller passes the same vocabulary instead of re-listing it.
 inline QStringList knownFeatureSlugs() {
     return {kFeatureRumble, kFeatureAnalogTriggers, kFeatureMotion, kFeatureLightbar,
             kFeatureTouchpad};
 }
 
-// The supported catalog features of one bundled type. Every emulated pad
-// carries analog triggers and a rumble motor in the bundled view; the richer
-// pads add their extras. Deterministic order (triggers, rumble, extras) so the
-// list is ==-comparable in tests and downstream snapshots.
+// Order is fixed (triggers, rumble, extras) so the list is ==-comparable in tests
+// and downstream snapshots.
 inline std::optional<QStringList> typeFeatureSlugs(const QString& slug) {
     const QStringList base{kFeatureAnalogTriggers, kFeatureRumble};
     if (slug == kSlugXbox360) { return base; }
@@ -64,10 +51,8 @@ inline std::optional<QStringList> typeFeatureSlugs(const QString& slug) {
     return std::nullopt;
 }
 
-// Wire-id flavor for callers that only hold a descriptor `type`. An id outside
-// the bundled range degrades to the xbox360 set (the least-capable baseline —
-// mirrors android typeCapabilitiesById's else arm) rather than claiming
-// features an unknown type may not have.
+// An id outside the bundled range degrades to the xbox360 set, the least-capable
+// baseline, rather than claiming features an unknown type may not have.
 inline QStringList typeFeatureSlugsById(int typeId) {
     switch (typeId) {
     case proto::kControllerTypePlayStation:

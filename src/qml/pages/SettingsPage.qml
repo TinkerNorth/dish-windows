@@ -1,22 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Settings destination (SCR §7.4). A single scrolling column that reflows to
-// two above Tokens.wideBreakpoint — never a hard grid with hidden overflow
-// (D46 / SCR §12.24e). LEFT: Setup & help (the wizard entry + Help & FAQ),
-// Appearance (theme segmented control), Forwarded features (light-bar combo +
-// footnote). RIGHT: Controller tuning (deadzones detail), Diagnostics (crash
-// reporting), About (licenses / donate entries + the mono version line). The
-// page renders no local title — the shell header shows `headerTitle`.
-//
-// "Setup & help" opens the v3 setup wizard (D36): the setup-guide dialog is
-// deleted, so there is no second explainer to keep in sync.
-//
-// Bound to the real `App` surface: App.themeMode / App.setThemeMode,
-// App.lightbarFollowGame / App.setLightbarFollowGame, App.crashReportingEnabled
-// / App.setCrashReportingEnabled, App.appVersion (docs/QML_CONTRACT.md §1b/§7).
+// The Settings destination: one scrolling column that reflows to two above
+// Tokens.wideBreakpoint. The page renders no local title — the shell header
+// shows `headerTitle`.
 
-// Bind outer-component ids (settingsPage) into nested handlers/delegates.
+// Bound: nested handlers/delegates reference the outer `settingsPage` id.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -29,24 +18,19 @@ Kit.Page {
     id: settingsPage
     title: qsTr("Settings")
 
-    // Shell header contract (AppShell): title only, no sub line (SCR §7.4).
     readonly property string headerTitle: qsTr("Settings")
 
-    // Chip order == App.themeMode values (0=Light 1=Dark 2=System, §1b).
+    // Order is load-bearing: an option's index IS its App.themeMode value.
     readonly property var themeOptions: [qsTr("Light"), qsTr("Dark"), qsTr("System")]
-    // Light-bar combo options (§7.1: true = "Follow game", false = "Off").
     readonly property string lightbarOn: qsTr("Follow game")
     readonly property string lightbarOff: qsTr("Off")
 
-    // The shell facade vended by the content StackView (AppShell `shellApi`).
-    // Held var-typed so the dynamic property resolves at runtime.
+    // var-typed: `shellApi` is a dynamic property, resolved at runtime.
     readonly property var shellView: StackView.view
     readonly property var shellApi: settingsPage.shellView ? settingsPage.shellView.shellApi : null
 
-    // Push a detail sub-page. The URL is resolved HERE (against this page's
-    // location) because the shell's own Qt.resolvedUrl resolves against
-    // AppShell.qml — which would miss ../onboarding/. shellApi.pushDetail also
-    // records the breadcrumb fallback title; a bare push is the fallback.
+    // Resolve the URL HERE: the shell's own Qt.resolvedUrl resolves against
+    // AppShell.qml, which would miss ../onboarding/.
     function pushDetail(file, title) {
         if (!settingsPage.shellView) {
             return;
@@ -60,20 +44,16 @@ Kit.Page {
 
     GridLayout {
         width: parent ? parent.width : implicitWidth
-        // One column until the content pane is genuinely wide; the design's
-        // two-column board only reads above ~980 px (D46).
         columns: settingsPage.width < Tokens.wideBreakpoint ? 1 : 2
         columnSpacing: Tokens.pagePadding
         rowSpacing: Tokens.pagePadding
 
-        // ── LEFT column ──────────────────────────────────────────────────────
         ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
             Layout.alignment: Qt.AlignTop
             spacing: Tokens.s8
 
-            // Setup & help
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
@@ -84,7 +64,6 @@ Kit.Page {
                     Layout.fillWidth: true
                     title: qsTr("Set up Dish")
                     subtitle: qsTr("Walk through input, destination and binding. Re-run any time.")
-                    // Always lands on Home first, then pushes the wizard (D1).
                     onClicked: if (settingsPage.shellApi) settingsPage.shellApi.openSetupWizard("")
                 }
                 Kit.RowButton {
@@ -96,7 +75,6 @@ Kit.Page {
                 }
             }
 
-            // Appearance
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
@@ -106,8 +84,8 @@ Kit.Page {
                 Kit.Card {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
-                        // Flush: the rows below carry their own top margins, so
-                        // a layout gap would double-space the label stack.
+                        // Flush: the rows carry their own top margins, so a
+                        // layout gap would double-space the label stack.
                         spacing: Tokens.s0
 
                         Label {
@@ -128,15 +106,12 @@ Kit.Page {
                             Layout.topMargin: Tokens.s5
                             options: settingsPage.themeOptions
                             value: settingsPage.themeOptions[App.themeMode]
-                            // setThemeMode persists + republishes (ThemePreferenceStore)
-                            // and re-themes the live app + native chrome (§1b).
                             onPicked: (option) => App.setThemeMode(settingsPage.themeOptions.indexOf(option))
                         }
                     }
                 }
             }
 
-            // Forwarded features
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
@@ -187,14 +162,12 @@ Kit.Page {
             }
         }
 
-        // ── RIGHT column ─────────────────────────────────────────────────────
         ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredWidth: 1
             Layout.alignment: Qt.AlignTop
             spacing: Tokens.s8
 
-            // Controller tuning
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
@@ -210,7 +183,6 @@ Kit.Page {
                 }
             }
 
-            // Diagnostics
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
@@ -220,16 +192,14 @@ Kit.Page {
                 Kit.Card {
                     Layout.fillWidth: true
                     contentItem: Kit.LabeledSwitch {
-                        label: qsTr("Crash reporting")
+                        label: qsTr("Share crash reports")
                         description: qsTr("Anonymous crash reports help fix bugs. Opt out any time.")
                         checked: App.crashReportingEnabled
-                        // Forwards to CrashReportingStore::setEnabled (opt-out, default on).
                         onToggled: (checked) => App.setCrashReportingEnabled(checked)
                     }
                 }
             }
 
-            // About
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Tokens.s4

@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The DISH_QML alternative to constructing MainWindow: load the Qt Quick
-// Main.qml, attach the native frameless chrome, apply Mica, and run. Kept out of
-// main.cpp so main.cpp's core init (crash handler, Winsock, libsodium) stays
-// untouched and the QML headers don't leak into the Widgets build.
+// Loads Main.qml, attaches the native frameless chrome, applies Mica and runs.
+// Kept out of main.cpp so the QML headers stay clear of its core init (crash
+// handler, Winsock, libsodium).
 
 #pragma once
 
@@ -14,10 +13,8 @@ class AppModel;
 
 namespace dish::qml {
 
-// Construct the QML window + chrome and return the app exec() code. `model` is
-// the already-started AppModel; it is NOT yet exposed to QML at this migration
-// step (the stub screen needs no model), but it is threaded through so the
-// wiring point is obvious for the next step.
+// Returns the exec() code. `model` must already be started, and must outlive
+// the engine — the AppViewModel wrapping it is a context property.
 int runQmlApp(dish::AppModel& model);
 
 } // namespace dish::qml

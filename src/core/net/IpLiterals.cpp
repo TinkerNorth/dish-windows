@@ -16,8 +16,8 @@ bool isDigit(char c) { return c >= '0' && c <= '9'; }
 
 bool isHexDigit(char c) { return isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
 
-// Split `s` on `delim` into all parts, keeping empties (Kotlin String.split
-// semantics: "a::b".split(':') == ["a","","b"], trailing/leading empties kept).
+// Keeps empties: the IPv6 grammar below relies on "a::b" splitting to
+// ["a","","b"] rather than collapsing.
 std::vector<std::string> split(const std::string& s, char delim) {
     std::vector<std::string> out;
     std::string cur;
@@ -33,8 +33,6 @@ std::vector<std::string> split(const std::string& s, char delim) {
     return out;
 }
 
-// Parse a dotted-quad into 4 octets, or nullopt. Each part: non-empty, ≤3
-// chars, all digits, value ≤255.
 std::optional<std::array<int, 4>> parseIpv4(const std::string& host) {
     const auto parts = split(host, '.');
     if (parts.size() != 4) { return std::nullopt; }
@@ -62,13 +60,11 @@ bool isPrivateIpv4(const std::array<int, 4>& o) {
     return false;
 }
 
-// Parse an IPv6 literal into 16 bytes, handling one "::" compression and an
-// optional embedded IPv4 in the final 32 bits. Rejects "%zone". Returns nullopt
-// on any malformed input. Faithful port of IpLiterals.kt's parseIpv6.
+// Handles one "::" compression and an optional embedded IPv4 in the final 32
+// bits. Zone ids are rejected rather than stripped.
 std::optional<std::array<std::uint8_t, 16>> parseIpv6(const std::string& host) {
     if (host.find('%') != std::string::npos) { return std::nullopt; } // zone id unsupported
 
-    // Split on "::" into at most a head and a tail. More than one "::" is invalid.
     std::string head;
     std::string tail;
     bool hasCompression = false;
@@ -84,8 +80,7 @@ std::optional<std::array<std::uint8_t, 16>> parseIpv6(const std::string& host) {
         }
     }
 
-    // groupsOf: parse a colon-separated list of hextets (the last may be an
-    // embedded IPv4). Returns the 16-bit groups, or nullopt on malformed input.
+    // A colon-separated list of hextets; the last may be an embedded IPv4.
     const auto groupsOf = [](const std::string& part,
                              bool allowEmbeddedV4) -> std::optional<std::vector<std::uint16_t>> {
         std::vector<std::uint16_t> groups;
@@ -142,7 +137,7 @@ std::optional<std::array<std::uint8_t, 16>> parseIpv6(const std::string& host) {
 }
 
 bool isPrivateIpv6(const std::array<std::uint8_t, 16>& b) {
-    // ::1 loopback — bytes 0..14 zero, byte 15 == 1.
+    // ::1 loopback
     bool allZeroToFourteen = true;
     for (std::size_t i = 0; i < 15; ++i) {
         if (b[i] != 0) {
@@ -159,7 +154,7 @@ bool isPrivateIpv6(const std::array<std::uint8_t, 16>& b) {
 } // namespace
 
 bool isPrivateHostLiteral(const std::string& host) {
-    // Strip surrounding [...] (IPv6 URL-authority form, e.g. "[fe80::1]").
+    // Strip the IPv6 URL-authority brackets, e.g. "[fe80::1]".
     std::string h = host;
     if (h.size() >= 2 && h.front() == '[' && h.back() == ']') { h = h.substr(1, h.size() - 2); }
     if (const auto v4 = parseIpv4(h)) { return isPrivateIpv4(*v4); }

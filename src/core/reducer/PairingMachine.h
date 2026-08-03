@@ -1,40 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// PairingMachine — the explicit FORWARD (user-types-a-PIN, Path A) pairing
-// lifecycle FSM. Pure, Qt-free, and exhaustively testable, mirroring the shape
-// of UsbPathMachine.h: a total reducer `(state, event) -> state`, events as a
-// std::variant, every (phase x event) pair defined and never throwing.
-//
-// The gap this closes: forward pairing today (WifiConnectionManager::pairWithPin
-// / pairAndConnect) has NO observable lifecycle. In-flight is a polled QSet,
-// "success" is inferred from an online-count rising edge, and every distinct
-// failure reason — wrong PIN, protocol skew, unreachable, declined — collapses
-// into ONE transient errorMessage() toast. Reverse pairing already has a proper
-// phase enum (see ReversePairing.h); this gives forward pairing the same
-// first-class, retained, typed lifecycle.
-//
-// Decision boundary (what is and isn't here):
-//   * This reducer CONSUMES the existing pure pairing classifier
-//     `classifyPair` from RestOutcome.h — it does NOT invent a new one. The
-//     manager feeds each POST /api/pair reply's already-classified `PairVerdict`
-//     in as a ReplyClassified event; the table below is the single place that
-//     decides what each verdict MEANS for the forward lifecycle. Today that
-//     decision is duplicated across three std::visit blocks in
-//     WifiConnectionManager.cpp; this unifies it.
-//   * Success is NOT inferred from a key adoption alone. A classified `Success`
-//     means "the key was adopted and the session is opening" — it keeps us in
-//     Submitting. Only an explicit SessionConfirmedLive event (the session
-//     actually reached Connected) drives Succeeded. This deliberately kills the
-//     online-count rising-edge heuristic: the lifecycle reports success exactly
-//     when the session is live, not a beat early.
-//   * No IO and no effects: unlike UsbPathMachine the forward-pair coordinator's
-//     side effects (adopt key, openSession, emit toast) are simple and already
-//     live in the manager, so this reducer returns only the next STATE. The
-//     manager reads the phase/failure transition and acts. Keeping it
-//     state-only matches ReversePairing's "decide, don't act" split.
-//
-// Qt-free by construction: std::string / std::optional / std::variant only.
+// Forward pairing (the user types a PIN) as a total (state, event) -> state
+// reducer. Verdicts arrive pre-classified from classifyPair; this file only
+// decides what each one means for the lifecycle. Succeeded is reached ONLY on an
+// explicit SessionConfirmedLive, never inferred from an adopted key, so success
+// is reported when the session is live rather than a beat early.
 
 #pragma once
 
@@ -47,48 +18,26 @@
 
 namespace dish::reducer {
 
-// ── Phase ─────────────────────────────────────────────────────────────────────
-// The forward-pairing lifecycle. Linear on the happy path
-// (Idle -> Submitting -> Succeeded); Failed is a terminal-but-retryable rest
-// stop that retains WHY. Cancel returns to Idle from anywhere.
 enum class PairPhase {
-    Idle,       // nothing in flight; the resting state.
-    Submitting, // a PIN was submitted and we are awaiting the reply / the
-                // session going live. A classified Success stays HERE (key
-                // adopted, session opening) until SessionConfirmedLive.
-    Succeeded,  // the session actually reached Connected. Terminal-success.
-    Failed,     // the submit failed; `failure` says why. Retryable via Submit.
+    Idle,
+    Submitting, // a classified Success stays here until SessionConfirmedLive
+    Succeeded,
+    Failed, // retryable via a fresh Submit
 };
 
-// ── Failure reason ──────────────────────────────────────────────────────────
-// The typed, RETAINED reason a forward submit failed — the value the old single
-// errorMessage() toast threw away. Mapped 1:1 from the failing PairVerdict arms
-// in reducePairing (see the mapping notes there).
 enum class PairFailure {
-    WrongPin,        // reachable, parsed, but no usable key adopted: the PIN was
-                     // wrong / not accepted. Maps from PairVerdict::AuthRequired
-                     // ("reachable but no key" — the contract's name for it).
-    VersionMismatch, // 409: the app and satellite speak different protocol
-                     // versions. Maps from PairVerdict::VersionMismatch.
-    Unreachable,     // transport failure / empty body: the satellite never
-                     // answered. Maps from PairVerdict::Unreachable.
-    Declined,        // the satellite refused the pair (operator denied / device
-                     // rejected). Has no PairVerdict arm of its own on the
-                     // forward POST path — it is surfaced by the manager via a
-                     // dedicated Declined classification it already owns; the
-                     // enum carries it so the forward and reverse vocabularies
-                     // match and a future wiring can map a declined reply to it.
+    WrongPin,        // reachable and parsed, but no usable key adopted
+    VersionMismatch, // 409 protocol skew
+    Unreachable,     // transport failure or an empty body
+    // No PairVerdict arm maps here yet. Carried so the forward and reverse
+    // pairing vocabularies match.
+    Declined,
 };
 
-// ── State ─────────────────────────────────────────────────────────────────────
-// One forward-pairing attempt's state. INVARIANTS the reducer upholds:
-//   * `failure` is populated IFF phase == Failed (cleared on every other phase).
-//   * `pin` is the PIN carried while Submitting; it is cleared on Idle and on
-//     Succeeded, and retained on Failed so a retry/UI can show what was tried.
 struct PairingState {
     PairPhase phase = PairPhase::Idle;
     std::optional<PairFailure> failure; // set iff phase == Failed
-    std::string pin;                    // carried while Submitting / Failed
+    std::string pin;                    // retained on Failed so a retry can show it
 
     bool operator==(const PairingState& o) const {
         return phase == o.phase && failure == o.failure && pin == o.pin;
@@ -116,8 +65,7 @@ struct ReplyClassified {
     bool operator!=(const ReplyClassified& o) const { return !(*this == o); }
 };
 
-// The session actually reached Connected (live). The ONLY event that drives
-// Succeeded — replaces the old online-count rising-edge inference.
+// The session actually reached Connected. The only event that drives Succeeded.
 struct SessionConfirmedLive {
     bool operator==(const SessionConfirmedLive&) const { return true; }
     bool operator!=(const SessionConfirmedLive&) const { return false; }

@@ -1,24 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Connections destination — the inventory of HOSTS (design v3 "S10 ·
-// Connections"): manage the link, report the bindings riding on it. FOUND above
-// REMEMBERED, mirroring Controllers row for row. There is no path into a
-// binding editor from here: a host carries up to four slots, so no row maps to
-// one binding and the CARRYING manifest is read-only — never a link.
-//
-// Two v3 rules shape the content. The dot never travels alone: every dot is
-// paired with its localized chip and both read the model's tokens, never a
-// literal. And forgetting a host drops every binding on it, so the confirm NAMES
-// the pads it will drop — a confirm that says "some bindings will be lost" is
-// not a confirm.
-//
-// All behavior forwards to App (QML_CONTRACT.md A2); this file holds zero
-// business logic.
+// The Connections destination — the inventory of HOSTS: manage the link, report
+// the bindings riding on it. There is no path into a binding editor from here:
+// a host carries up to four slots, so no row maps to one binding and the
+// CARRYING manifest is read-only, never a link.
 
-// Bound so delegates reference the outer `page` id and their `required` model
-// props statically. `App` stays unqualified: a runtime context property the
-// linter cannot resolve (the accepted limitation every page notes).
+// Bound: delegates reference the outer `page` id and their `required` model
+// props statically.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -31,11 +20,14 @@ Kit.Page {
     id: page
     title: qsTr("Connections")
 
-    // ---- Shell header contract (rendered by AppShell, not by this body).
+    // Rendered by AppShell, not by this body.
     readonly property string headerTitle: qsTr("Connections")
+    // Two independent counts can't both be %n in one message, so each half is
+    // its own counted message.
     readonly property string headerSub: App.connectionCount === 0
-        ? qsTr("%1 found · nothing remembered yet").arg(App.foundCount)
-        : qsTr("%1 online · %2 remembered").arg(App.onlineCount).arg(App.connectionCount)
+        ? qsTr("%n found · nothing paired yet", "", App.foundCount)
+        : qsTr("%n online", "", App.onlineCount) + " · "
+          + qsTr("%n paired", "", App.connectionCount)
     readonly property string headerDot: App.connectionCount === 0 ? "muted"
                                         : App.onlineCount > 0 ? "success" : "warning"
 
@@ -84,7 +76,7 @@ Kit.Page {
             Kit.LiveStat {
                 live: App.scanning
                 text: App.scanning ? qsTr("scanning…")
-                                   : qsTr("%1 found").arg(App.foundCount)
+                                   : qsTr("%n found", "", App.foundCount)
             }
             // ONE control. Discovery here is a bounded ~4 s sweep with no
             // cancel seam, so there is no scan to stop — the verb reports the
@@ -108,7 +100,7 @@ Kit.Page {
         Kit.EmptyState {
             visible: App.foundCount === 0 && App.scanning
             glyph: "satellite-broadcasting"
-            title: qsTr("Looking for Satellites")
+            title: qsTr("Looking for satellites")
             body: qsTr("Scanning your network over mDNS and UDP broadcast. Hosts appear here as they answer.")
             showAction: false
             Layout.fillWidth: true
@@ -119,7 +111,7 @@ Kit.Page {
         Kit.EmptyState {
             visible: App.foundCount === 0 && !App.scanning
             glyph: "satellite-off"
-            title: qsTr("No Satellites found")
+            title: qsTr("No satellites found")
             body: qsTr("A PC shows up here once the free Satellite app is running on it and both machines are on the same network.")
             showAction: false
             Layout.fillWidth: true
@@ -217,16 +209,16 @@ Kit.Page {
             Layout.topMargin: Tokens.s5
             spacing: Tokens.s4
 
-            Kit.SectionHeader { glyph: "satellite"; label: qsTr("Remembered") }
+            Kit.SectionHeader { glyph: "satellite"; label: qsTr("Paired") }
             Item { Layout.fillWidth: true }
-            Kit.LiveStat { text: qsTr("%1 remembered").arg(App.connectionCount) }
+            Kit.LiveStat { text: qsTr("%n paired", "", App.connectionCount) }
         }
 
         Kit.EmptyState {
             visible: App.connectionCount === 0
             glyph: "satellite-off"
-            title: qsTr("Nothing remembered yet")
-            body: qsTr("No remembered satellites yet — pair one and it is saved here.")
+            title: qsTr("Nothing paired yet")
+            body: qsTr("Pair a satellite and Dish saves it here for next time.")
             showAction: false
             Layout.fillWidth: true
             Layout.topMargin: Tokens.s5
@@ -248,7 +240,7 @@ Kit.Page {
                 id: host
                 width: ListView.view ? ListView.view.width : implicitWidth
 
-                // ConnectionListModel roles (QML_CONTRACT.md §3).
+                // ConnectionListModel roles, see docs/QML_CONTRACT.md.
                 required property string connectionId
                 required property string label
                 required property string ip
@@ -390,7 +382,7 @@ Kit.Page {
                         }
                         Kit.DishButton {
                             visible: !host.liveLink && !host.needsPairing
-                            text: host.connecting ? qsTr("Connecting…") : qsTr("Reconnect")
+                            text: host.connecting ? qsTr("Connecting…") : qsTr("Connect")
                             variant: Kit.DishButton.Outline
                             enabled: !host.connecting
                             onClicked: App.reconnectConnection(host.connectionId)
@@ -497,12 +489,12 @@ Kit.Page {
             spacing: Tokens.s9
 
             Kit.LiveStat {
-                text: qsTr("%1 online · %2 bindings")
-                          .arg(App.onlineCount).arg(App.boundSlotCount)
+                text: qsTr("%n online", "", App.onlineCount) + " · "
+                      + qsTr("%n bindings", "", App.boundSlotCount)
             }
             Item { Layout.fillWidth: true }
             Kit.LiveStat {
-                text: qsTr("%1 remembered").arg(App.connectionCount)
+                text: qsTr("%n paired", "", App.connectionCount)
             }
         }
     }
@@ -522,12 +514,11 @@ Kit.Page {
         forgetConfirm.open();
     }
 
-    // "2 bindings ride on it and will be dropped:" — explicit singular/plural
-    // pairs (no %n): the app ships English fallback catalogs and an
-    // untranslated %n would render its "(s)" literally.
+    // "2 bindings ride on it and will be dropped:". %n so the verb agrees in
+    // languages that inflect it — English alternates rides/ride, and Bosnian
+    // needs a third form again at 2-4.
     function bindingsDroppedText(n) {
-        return n === 1 ? qsTr("1 binding rides on it and will be dropped:")
-                       : qsTr("%1 bindings ride on it and will be dropped:").arg(n);
+        return qsTr("%n bindings ride on it and will be dropped:", "", n);
     }
 
     // The pads riding `connectionId`, by name — what a Forget will drop.
@@ -572,7 +563,7 @@ Kit.Page {
         case "ready":        return qsTr("Ready");
         case "connecting":   return qsTr("Connecting…");
         case "online":       return qsTr("Online");
-        case "unstable":     return qsTr("Unstable");
+        case "unstable":     return qsTr("Unsteady");
         default:             return token;
         }
     }

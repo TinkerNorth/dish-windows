@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Locks the pure picker-visibility mapper: which connections a slot's picker
-// offers (live-available unbound shown; the slot's bound connection kept as a
-// holdover even when offline) and the catalog forward-compat rule (unknown type
-// slug still offered, unknown feature slug not offered). Replicates dish-android
-// ui/main/ConnectionsVisibleInPickerTest (28) + PickerFromMainUiStateTest (14),
-// adapted to the Windows models::ConnectionSummary (single boundSlotId, no
-// virtual slot). PickerFromMainUiState on Android is just
-// connectionsVisibleInPicker(state.connections, slot.boundConnectionId), so the
-// two files exercise the same function; the spec/holdover/order cases below
-// cover both. Pure, no Qt widgets.
+// A slot's picker offers the live unbound connections plus its own bound one,
+// which is held over even while offline.
 
 #include "Models/Models.h"
 #include "core/reducer/PickerVisibility.h"
@@ -60,8 +52,6 @@ const std::optional<QString> kUnbound = std::nullopt;
 
 } // namespace
 
-// ── isAvailableForPicker predicate ───────────────────────────────────────────
-
 TEST_CASE("picker: Connected counts as available", "[picker]") {
     REQUIRE(isAvailableForPicker(LinkState::Connected));
 }
@@ -97,8 +87,6 @@ TEST_CASE("picker: every LinkState resolves through the predicate without throwi
     }
     SUCCEED();
 }
-
-// ── connectionsVisibleInPicker ───────────────────────────────────────────────
 
 TEST_CASE("picker: empty input returns empty regardless of bind state", "[picker]") {
     REQUIRE(connectionsVisibleInPicker({}, kUnbound).isEmpty());
@@ -214,7 +202,6 @@ TEST_CASE("picker: idempotent - running it twice on its own output is stable", "
 
 TEST_CASE("picker: bound id of empty string matches nothing", "[picker]") {
     const auto saved = summary("s:1", LinkState::Saved);
-    // An explicit empty-string bound id is present-but-never-equal to a real id.
     REQUIRE(connectionsVisibleInPicker({saved}, std::optional<QString>("")).isEmpty());
 }
 
@@ -223,11 +210,9 @@ TEST_CASE("picker: cross product of state and bind status matches the spec table
                        LinkState::Connecting, LinkState::Connected, LinkState::Unstable}) {
         const auto c = summary("s:probe", state);
 
-        // bound + any state -> always visible.
         REQUIRE(ids(connectionsVisibleInPicker({c}, std::optional<QString>("s:probe"))) ==
                 QList<QString>{"s:probe"});
 
-        // unbound + state -> follows availability.
         const auto whenUnbound = connectionsVisibleInPicker({c}, kUnbound);
         if (isAvailableForPicker(state)) {
             REQUIRE(ids(whenUnbound) == QList<QString>{"s:probe"});
@@ -236,8 +221,6 @@ TEST_CASE("picker: cross product of state and bind status matches the spec table
         }
     }
 }
-
-// ── PickerFromMainUiState analog: per-slot, bound-ness is per-slot ───────────
 
 TEST_CASE("picker: only live connections populate the picker for an unbound slot", "[picker]") {
     const auto live = summary("s:1", LinkState::Connected);
@@ -255,7 +238,6 @@ TEST_CASE("picker: remembered-but-offline satellites are hidden from an unbound 
 TEST_CASE("picker: two slots bound to two live connections each see both", "[picker]") {
     const auto a = summary("s:a", LinkState::Connected);
     const auto b = summary("s:b", LinkState::Connected);
-    // Both live, so either bound viewpoint sees both.
     REQUIRE(ids(connectionsVisibleInPicker({a, b}, std::optional<QString>("s:a"))) ==
             QList<QString>({"s:a", "s:b"}));
     REQUIRE(ids(connectionsVisibleInPicker({a, b}, std::optional<QString>("s:b"))) ==
@@ -266,8 +248,6 @@ TEST_CASE("picker: two slots bound to two live connections each see both", "[pic
 TEST_CASE("picker: slot A keeps offline holdover, slot B does not (per-slot bind)", "[picker]") {
     const auto sat1Off = summary("s:1", LinkState::Saved);
     const auto sat2On = summary("s:2", LinkState::Connected);
-    // p1 bound to the offline s:1 keeps it; p2 (unbound) and the virtual-analog
-    // (unbound) only see the live s:2.
     REQUIRE(ids(connectionsVisibleInPicker({sat1Off, sat2On}, std::optional<QString>("s:1"))) ==
             QList<QString>({"s:1", "s:2"}));
     REQUIRE(ids(connectionsVisibleInPicker({sat1Off, sat2On}, kUnbound)) == QList<QString>{"s:2"});
@@ -284,8 +264,6 @@ TEST_CASE("picker: crowded - one online, one connecting, one stale-held, one off
     REQUIRE(ids(picker) == QList<QString>({"s:1", "s:3"}));
 }
 
-// ── Catalog forward-compat (the cache-relevant offer rules) ──────────────────
-
 TEST_CASE("picker: a known controller type is offerable", "[picker][catalog]") {
     CatalogTypeDto t;
     t.id = 0;
@@ -299,7 +277,7 @@ TEST_CASE("picker: an unknown-slug type newer than the app still renders (offera
     CatalogTypeDto t;
     t.id = 7;
     t.slug = "hyperpad";
-    t.name = "HyperPad 9000"; // server-provided strings
+    t.name = "HyperPad 9000";
     REQUIRE(isTypeOfferable(t));
 }
 
@@ -337,8 +315,6 @@ TEST_CASE("picker: a known but unsupported feature is not offered", "[picker][ca
     REQUIRE_FALSE(isFeatureOffered(t, "motion", known));
 }
 
-// ── seedControllerType (the picker's default/seed selection) ─────────────────
-
 TEST_CASE("seed: defaults to the catalog's first offered type (id 0)", "[picker][catalog]") {
     CatalogDto c;
     c.controllerTypes.push_back(typeRow(0, "Xbox 360 Controller"));
@@ -371,7 +347,7 @@ TEST_CASE("seed: the override still wins with no catalog cached", "[picker][cata
 TEST_CASE("seed: skips a nameless first row - the default is the first OFFERABLE type",
           "[picker][catalog]") {
     CatalogDto c;
-    CatalogTypeDto ghost; // no name/shortName -> not offerable, so not the picker's first row
+    CatalogTypeDto ghost;
     ghost.id = 9;
     ghost.slug = "ghost";
     c.controllerTypes.push_back(ghost);

@@ -1,26 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The setup wizard — the ONE way a binding is created. A pushed page on Home's
-// content stack, never a dialog: it writes real state, so it needs room and it
-// must survive a mis-click.
-//
-// Three named stages (Input · Destination · Binding) over five pages, and the
-// banner is the progress indicator: the Pad -> This PC -> Satellite diagram
-// fills in as answers land, so the last step hands over a banner that is
-// already exactly the row Home will show.
-//
-// Layout law (a Qt window resizes; the design's frames did not): the banner and
-// the footer are PINNED outside a scrolling body, so the primary action is
-// reachable at the 900x620 minimum and the body scrolls instead of clipping.
-//
-// One control is named Back. The header chevron is suppressed (suppressBack);
-// the footer's `‹ Back` steps one PAGE and is never destructive; Cancel, Esc
-// and the window X pop through the discard confirm.
-//
-// Nothing here writes. Pages 1-4 call no setter — every answer lands in the
-// draft and travels with the single App.applyBinding() call the Review page
-// makes.
+// The setup wizard — the ONE way a binding is created; a pushed page on Home's
+// content stack, never a dialog. Layout law: the banner and the footer are
+// PINNED outside a scrolling body, so the primary action stays reachable at the
+// 900x620 minimum. Review's single App.applyBinding() carries every answer.
 
 // Bound: the host-row watcher's delegate reads the outer `wizard` id.
 pragma ComponentBehavior: Bound
@@ -55,8 +39,8 @@ Kit.Page {
     // "changed", not "written": page 3 really does talk to the host (it reads
     // its type catalog). The wire is what has not been sent.
     readonly property string headerSub: qsTr("Nothing is changed until the last step")
-    // Driven by step state. A dot that is primary on all eight frames is
-    // decoration, and trains the user to ignore the header.
+    // A dot that is primary on every frame is decoration, and trains the user to
+    // ignore the header.
     readonly property string headerDot: wizard.applied ? "success"
                                       : (wizard.draft.hasInput && wizard.draft.hasDestination)
                                         ? "primary" : "muted"
@@ -82,9 +66,8 @@ Kit.Page {
     readonly property int subStep: wizard.step >= 2 ? wizard.step - 2 : 0
 
     // Resolved by call, not by a property binding: onStepChanged fires BEFORE a
-    // binding that depends on `step` is re-evaluated, so reading `activePage`
-    // from the handler yields the page we just left — and the step we just
-    // entered never gets its activated().
+    // binding on `step` re-evaluates, so reading `activePage` from the handler
+    // yields the page we just left and the entered step never gets activated().
     function pageForStep(n) {
         return n === 0 ? inputPage
              : n === 1 ? destinationPage
@@ -99,8 +82,6 @@ Kit.Page {
     // review card read one snapshot instead of re-walking the slot model.
     property var padInfo: null
 
-    // The pad vanished from the slot model (re-resolved by (vid,pid), so a
-    // Direct claim swapping in a synthetic twin is NOT a disappearance).
     property bool padMissing: false
     // The chosen host has been live at least once this run, and is live now.
     // A host that was never live is not "lost" — it is simply not connected.
@@ -115,7 +96,6 @@ Kit.Page {
     // discard confirm is up.
     property var pendingLeave: null
 
-    // The Connection step's 4s explanation threshold (WIZ 14.3-K).
     readonly property int slowHintAfterMs: 4000
 
     // ── The draft — one model, and it lives exactly as long as this page ────
@@ -127,9 +107,8 @@ Kit.Page {
     }
     readonly property BindingDraft draft: bindingDraft
 
-    // Bumped on every AppModel state move so the invokable-backed readouts
-    // (slot accounting, pad presence) re-evaluate: a Q_INVOKABLE call is not a
-    // binding dependency.
+    // Bumped on every AppModel state move so the invokable-backed readouts (slot
+    // accounting, pad presence) re-evaluate: a call is not a binding dependency.
     property int accounting: 0
 
     // ── Footer copy ─────────────────────────────────────────────────────────
@@ -174,17 +153,13 @@ Kit.Page {
     }
 
     // Never a slot NUMBER before bindSlot allocates one. `accounting` is read
-    // so the caller's binding re-runs when a slot is bound elsewhere. Explicit
-    // singular / plural pairs (no %n): the app ships English fallback catalogs
-    // and an untranslated %n renders its "(s)" literally.
+    // so the caller's binding re-runs when a slot is bound elsewhere.
     function hostSubText() {
         const free = wizard.accounting >= 0
                    ? App.hostSlotCapacity() - App.hostBoundSlotCount(wizard.draft.hostId) : 0;
         if (free <= 0)
             return qsTr("satellite · 0 slots free");
-        if (free === 1)
-            return qsTr("satellite · 1 slot free");
-        return qsTr("satellite · %1 slots free").arg(free);
+        return qsTr("satellite · %n slots free", "", free);
     }
 
     readonly property var padSlot: !wizard.draft.hasInput
@@ -203,10 +178,9 @@ Kit.Page {
                "empty": true, "hot": false, "tone": "accent" })
           : destinationPage.hostCount > 0
             // Seeking is not a problem: amber is reserved for "wrong".
-            ? ({ "title": destinationPage.hostCount === 1 ? qsTr("1 found")
-                          : qsTr("%1 found").arg(destinationPage.hostCount),
+            ? ({ "title": qsTr("%n found", "", destinationPage.hostCount),
                  "sub": qsTr("pick one"), "empty": true, "hot": true, "tone": "accent" })
-            : ({ "title": qsTr("Searching…"), "sub": qsTr("0 found"),
+            : ({ "title": qsTr("Searching…"), "sub": qsTr("%n found", "", 0),
                  "empty": true, "hot": true, "tone": "accent" })
 
     readonly property string wireLabel: {
@@ -305,7 +279,7 @@ Kit.Page {
             wizard.notify(qsTr("Direct wasn’t available — %1 is bound over Standard.")
                             .arg(wizard.draft.padName), "warning");
         }
-        wizard.notify(qsTr("Controller bound · %1 is ready on %2.")
+        wizard.notify(qsTr("Controller bound — %1 is live on %2.")
                         .arg(wizard.draft.padName).arg(wizard.draft.hostName), "success");
         wizard.leaveNow();
     }
@@ -330,12 +304,10 @@ Kit.Page {
     }
 
     Component.onCompleted: {
-        // The waiting step names the two commonest reasons a first run sees
-        // nothing, and one of them is the radio.
+        // Page 1's waiting state names the radio as a reason nothing appeared.
         App.refreshBluetoothState();
-        // Page 1 is pre-answered (its picker adopts the seeded row, which is
-        // the only place the pad's name and claimability are known), so the
-        // wizard opens on page 2. Back still returns to page 1.
+        // Page 1 is pre-answered by its picker (the only place the pad's name and
+        // claimability are known), so the wizard opens on page 2.
         if (wizard.seedSlotId.length > 0)
             wizard.step = 1;
     }

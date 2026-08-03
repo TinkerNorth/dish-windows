@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// UsbPollRateTest (PURE, 20). 1:1 port of dish-android source/usb/
-// UsbPollRateTest.kt. computeUsbPollRateHz: full-speed (maxPacket <= 64) =
-// 1000/epInterval; high-speed (>= 65) = 8000/2^(epInterval-1) with the exponent
-// clamped so an absurd interval can't overflow the shift; interval <= 0 -> 0.
-// measuredPollRateHz: floor(deltaCount/deltaMs * 1000), 0 on idle / zero-window
-// / negative-window / counter-reset. Platform-independent USB spec math.
+// The USB spec math behind the expected values. computeUsbPollRateHz: full-speed
+// (maxPacket <= 64) = 1000/epInterval; high-speed (>= 65) = 8000/2^(epInterval-1),
+// exponent clamped so an absurd interval cannot overflow the shift.
+// measuredPollRateHz: floor(deltaCount/deltaMs * 1000).
 
 #include "core/reducer/UsbPollRate.h"
 

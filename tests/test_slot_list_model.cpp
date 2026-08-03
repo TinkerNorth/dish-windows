@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// SlotListModel — the QAbstractListModel adapter that lets a QML ListView
-// delegate reproduce the Widgets SlotCard. These tests pin the ADAPTER's
-// contract: roleNames coverage, row-count tracking, data() per role (mirroring
-// SlotCard's rendered fields + the shared SlotLiveStats mapper), and the
-// minimal change signals (rowsInserted/rowsRemoved on a count delta,
-// dataChanged on an in-place patch). No QML rendering is exercised — only the
-// mapping/signalling. The model is driven directly by a hand-built MainUiState
-// slot list (the same value the AppModel already computes), since the adapter's
-// input IS that slice; it owns no store of its own.
 
 #include "Models/Models.h"
 #include "composer/ConnectionsComposer.h"
@@ -29,9 +19,7 @@ namespace m = dish::models;
 
 namespace {
 
-// A tiny QSignalSpy stand-in — DishTests links Catch2, not Qt6::Test, so we
-// count rows-changed signals with a plain lambda connect and record the row
-// span of the last insert/remove. Mirrors what we'd assert with QSignalSpy.
+// QSignalSpy stand-in: DishTests links Catch2, not Qt6::Test.
 struct RowSpy {
     int inserts = 0;
     int removes = 0;
@@ -58,8 +46,7 @@ struct RowSpy {
     }
 };
 
-// A bound, motion+lightbar, USB-direct pad with measured rates — exercises the
-// "everything on" arm of every role.
+// The "everything on" arm: bound, motion + lightbar, USB-direct, rates measured.
 m::ControllerSlot richSlot() {
     m::ControllerSlot s;
     s.id = QStringLiteral("slot-1");
@@ -82,8 +69,7 @@ m::ControllerSlot richSlot() {
     return s;
 }
 
-// A minimal, unbound, no-motion SDL pad with no measured rates — the "all off"
-// arm: chips hidden, battery unknown, dot muted.
+// The "all off" arm: unbound, no caps, no measured rates.
 m::ControllerSlot plainSlot(const QString& id = QStringLiteral("slot-0")) {
     m::ControllerSlot s;
     s.id = id;
@@ -100,8 +86,7 @@ QVariant roleOf(const SlotListModel& model, int row, int role) {
 TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel][roles]") {
     SlotListModel model;
     const auto names = model.roleNames();
-    // One entry per declared role (Id..VerifiedModel). If a role is added
-    // without a name, this count drifts and the test flags it.
+    // One entry per declared role: a role added without a name drifts this count.
     REQUIRE(names.size() == 38);
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
     REQUIRE(names.value(SlotListModel::NameRole) == QByteArray("name"));
@@ -125,7 +110,6 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     REQUIRE(names.value(SlotListModel::SatLatencySamplesRole) == QByteArray("satLatencySamples"));
     REQUIRE(names.value(SlotListModel::HasTouchpadRole) == QByteArray("hasTouchpad"));
     REQUIRE(names.value(SlotListModel::VerifiedModelRole) == QByteArray("verifiedModel"));
-    // No duplicate role names (each maps a distinct delegate property).
     QSet<QByteArray> unique;
     for (const auto& n : names) { unique.insert(n); }
     REQUIRE(unique.size() == names.size());
@@ -152,7 +136,6 @@ TEST_CASE("SlotListModel: data maps a bound rich pad's roles", "[slotmodel][data
     REQUIRE(roleOf(model, 0, SlotListModel::BoundConnectionIdRole).toString() == "conn-1");
     REQUIRE(roleOf(model, 0, SlotListModel::BoundLabelRole).toString() == "Living Room");
     REQUIRE(roleOf(model, 0, SlotListModel::LiveRole).toBool());
-    // Connected -> success dot (mirrors SlotCard).
     REQUIRE(roleOf(model, 0, SlotListModel::DotColorRole).toString() == "success");
     REQUIRE(roleOf(model, 0, SlotListModel::UsbDirectRole).toBool());
 
@@ -162,7 +145,7 @@ TEST_CASE("SlotListModel: data maps a bound rich pad's roles", "[slotmodel][data
     REQUIRE(roleOf(model, 0, SlotListModel::BatteryStatusRole).toInt() == 1);
     REQUIRE(roleOf(model, 0, SlotListModel::BatteryKnownRole).toBool());
 
-    // USB-direct + a live gamepadHz -> Live chip shown at the live value.
+    // USB-direct plus a live gamepadHz is the only combination that reads Live.
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzRole).toInt() == 250);
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzLiveRole).toBool());
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzShownRole).toBool());
@@ -180,23 +163,20 @@ TEST_CASE("SlotListModel: data maps an unbound plain pad's off-state roles", "[s
     REQUIRE(roleOf(model, 0, SlotListModel::BoundConnectionIdRole).toString().isEmpty());
     REQUIRE(roleOf(model, 0, SlotListModel::BoundLabelRole).toString().isEmpty());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::LiveRole).toBool());
-    // Unbound -> muted dot.
     REQUIRE(roleOf(model, 0, SlotListModel::DotColorRole).toString() == "muted");
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::HasMotionRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::HasLightbarRole).toBool());
-    // 0xFF level -> battery chip not known/shown.
+    // 0xFF is the "battery unknown" level, so the chip stays hidden.
     REQUIRE(roleOf(model, 0, SlotListModel::BatteryLevelRole).toInt() == 255);
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::BatteryKnownRole).toBool());
-    // No measurements -> every rate chip hidden.
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::GamepadHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::MotionHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::PollHzShownRole).toBool());
 }
 
 TEST_CASE("SlotListModel: hasTouchpad reflects the pad's touch surface", "[slotmodel][data]") {
-    // The Input layer of the capability solver gates BOTH the Touchpad row and
-    // the Mouse row on this, so a pad without a touch surface can never be
-    // offered mouse routing.
+    // The capability solver gates both the Touchpad and the Mouse row on this,
+    // so a pad without a touch surface can never be offered mouse routing.
     SlotListModel model;
     model.setState({plainSlot()});
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::HasTouchpadRole).toBool());
@@ -209,7 +189,7 @@ TEST_CASE("SlotListModel: hasTouchpad reflects the pad's touch surface", "[slotm
 
 TEST_CASE("SlotListModel: verifiedModel reflects the known-layout flag", "[slotmodel][data]") {
     // Drives the Direct option card's "Layout guessed" chip: false means the
-    // raw-HID fast lane would be guessing this model's report layout.
+    // raw-HID fast lane would be guessing this pad's report layout.
     SlotListModel model;
     model.setState({plainSlot()});
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::VerifiedModelRole).toBool());
@@ -222,8 +202,8 @@ TEST_CASE("SlotListModel: verifiedModel reflects the known-layout flag", "[slotm
 
 TEST_CASE("SlotListModel: remappable defaults off and reflects the slot flag",
           "[slotmodel][data]") {
-    // Only a raw-joystick-backed SDL slot is remappable; a default slot (synthetic
-    // / game controller / virtual) is not, so the page entry stays hidden for it.
+    // Only a raw-joystick-backed SDL slot is remappable, so the page entry stays
+    // hidden for a synthetic / game-controller / virtual slot.
     SlotListModel model;
     model.setState({plainSlot()});
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::RemappableRole).toBool());
@@ -235,9 +215,8 @@ TEST_CASE("SlotListModel: remappable defaults off and reflects the slot flag",
 }
 
 TEST_CASE("SlotListModel: bluetooth defaults off and reflects the slot flag", "[slotmodel][data]") {
-    // Only a pad the bridge classified as Bluetooth-attached reads true; the
-    // default (wired / synthetic / unknown-path) slot keeps the wired
-    // presentation — glyph family and transport chip stay satellite/USB.
+    // Only a pad the bridge classified as Bluetooth-attached reads true; every
+    // other slot keeps the wired glyph family and transport chip.
     SlotListModel model;
     model.setState({plainSlot()});
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::BluetoothRole).toBool());
@@ -263,15 +242,13 @@ TEST_CASE("SlotListModel: a non-direct pad reports its gamepad rate as a hidden-
     SlotListModel model;
     auto s = plainSlot();
     s.usbDirect = false;
-    s.liveRates.gamepadHz = 120;   // live value present but NOT direct
-    s.liveRates.gamepadPeakHz = 0; // no peak
+    s.liveRates.gamepadHz = 120;
+    s.liveRates.gamepadPeakHz = 0;
     model.setState({s});
-    // Not direct + no peak -> hidden (mirrors gamepadRateChip).
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::GamepadHzShownRole).toBool());
 
     s.liveRates.gamepadPeakHz = 144;
     model.setState({s});
-    // Peak present -> shown as a peak (not live).
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzShownRole).toBool());
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::GamepadHzLiveRole).toBool());
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzRole).toInt() == 144);
@@ -287,7 +264,6 @@ TEST_CASE("SlotListModel: appending a slot emits rowsInserted only for the delta
 
     REQUIRE(spy.inserts == 1);
     REQUIRE(spy.removes == 0);
-    // [first, last] == [1, 1] — only the new tail row.
     REQUIRE(spy.firstRow == 1);
     REQUIRE(spy.lastRow == 1);
     REQUIRE(model.rowCount() == 2);
@@ -316,39 +292,34 @@ TEST_CASE("SlotListModel: a same-count telemetry tick emits dataChanged, not a r
     RowSpy spy(&model);
 
     auto s = richSlot();
-    s.liveRates.gamepadHz = 500; // a Hz moved; same slot count
+    s.liveRates.gamepadHz = 500; // a Hz moved, same slot count
     model.setState({s});
 
     REQUIRE(spy.inserts == 0);
     REQUIRE(spy.removes == 0);
     REQUIRE(spy.changes == 1);
-    // The patched value is visible on re-read.
     REQUIRE(roleOf(model, 0, SlotListModel::GamepadHzRole).toInt() == 500);
 }
 
 TEST_CASE("SlotListModel: countChanged fires on a row-count delta, not a same-count patch",
           "[slotmodel][signals]") {
-    // The reactive `count` property (the page's empty-state + bind gates read it)
-    // must re-emit only when the slot count actually moves — a quiet telemetry
-    // tick (same count, new Hz) must NOT, or QML re-evaluates the gates needlessly.
+    // The page's empty-state and bind gates read `count`, so a quiet telemetry
+    // tick must not re-emit it or QML re-evaluates those gates for nothing.
     SlotListModel model;
     model.setState({richSlot()});
 
     int countEmissions = 0;
     QObject::connect(&model, &SlotListModel::countChanged, [&countEmissions] { ++countEmissions; });
 
-    // Same count, a Hz moved -> dataChanged only, no countChanged.
     auto s = richSlot();
     s.liveRates.gamepadHz = 500;
     model.setState({s});
     REQUIRE(countEmissions == 0);
 
-    // Slot added -> countChanged.
     model.setState({s, plainSlot(QStringLiteral("b"))});
     REQUIRE(countEmissions == 1);
     REQUIRE(model.count() == 2);
 
-    // Slot removed -> countChanged again.
     model.setState({s});
     REQUIRE(countEmissions == 2);
     REQUIRE(model.count() == 1);
@@ -363,7 +334,7 @@ TEST_CASE("SlotListModel: out-of-range index returns an invalid variant", "[slot
 namespace r = dish::reducer;
 
 TEST_CASE("SlotListModel: path roles default to the inert unsupported state", "[slotmodel][path]") {
-    // A plain slot carries no USB path entry -> the control is hidden and the
+    // A plain slot carries no USB path entry, so the control is hidden and the
     // tokens read their defaults.
     SlotListModel model;
     model.setState({plainSlot()});
@@ -385,7 +356,6 @@ TEST_CASE("SlotListModel: a supported Direct slot exposes the path roles as toke
     REQUIRE(roleOf(model, 0, SlotListModel::PathSupportedRole).toBool());
     REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "direct");
     REQUIRE(roleOf(model, 0, SlotListModel::DesiredPathRole).toString() == "direct");
-    // Direct (not Claiming) -> no in-flight spinner.
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::ClaimInProgressRole).toBool());
 }
 
@@ -422,12 +392,9 @@ TEST_CASE(
     REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "restoreStuck");
 }
 
-// ── Bound-satellite join (the Home signal-path right cell) ───────────────────
-
 namespace {
 
-// A connected connection row for the join, carrying the render keys + latency
-// exactly as the ConnectionsComposer derives them.
+// Carries the render keys and latency exactly as ConnectionsComposer derives them.
 dish::composer::ConnectionRow connectedRow(const std::string& id = "conn-1") {
     dish::composer::ConnectionRow row;
     row.id = id;
@@ -456,7 +423,7 @@ TEST_CASE("SlotListModel: a bound slot joins its connection row's render tokens"
     REQUIRE(roleOf(model, 0, SlotListModel::SatChipRole).toString() == "online");
     REQUIRE(roleOf(model, 0, SlotListModel::SatDotColorRole).toString() == "success");
     REQUIRE(roleOf(model, 0, SlotListModel::SatGlyphRole).toString() == "satelliteConnected");
-    // Same formatter + samples gate as ConnectionListModel — the Home wire
+    // Same formatter and samples gate as ConnectionListModel, so the Home wire
     // label and the Connections row can never disagree.
     REQUIRE(roleOf(model, 0, SlotListModel::SatLatencyTextRole).toString() ==
             QString::fromStdString(dish::reducer::formatLatencyMs(3.4)));
@@ -480,8 +447,8 @@ TEST_CASE("SlotListModel: an unbound slot's join roles are the inert empties",
 
 TEST_CASE("SlotListModel: a binding whose row has vanished degrades to the empties",
           "[slotmodel][satjoin]") {
-    // A forget can drop the row while the slot still carries the (stale)
-    // binding for a beat — the Home cell must render the ghost, not garbage.
+    // A forget can drop the row while the slot still carries the stale binding
+    // for a beat, and the Home cell has to render the ghost, not garbage.
     SlotListModel model;
     model.setState({richSlot()}); // bound to "conn-1"
     model.setConnectionRows({connectedRow("conn-OTHER")});
@@ -516,7 +483,6 @@ TEST_CASE("SlotListModel: setConnectionRows patches in place - no reset, no coun
     REQUIRE(spy.removes == 0);
     REQUIRE(spy.changes == 1);
     REQUIRE(countEmissions == 0);
-    // The joined value is visible on re-read (the ~1 Hz latency tick path).
     REQUIRE(roleOf(model, 0, SlotListModel::SatLatencySamplesRole).toInt() == 64);
 }
 

@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Repository<K,V> / KeyedRepository<K,V> — the C++ analogue of dish-android's
-// architecture/interfaces/Repository. Dumb, synchronous, thread-safe storage:
-// no Observables, events, or scope inside. For reactive reads, wrap a
-// repository in a StateSource. Every concrete repository is exercised by the
-// RepositoryContract test fixture (tests/RepositoryContract.h) — the 8 standard
-// property tests every implementation must pass.
+// Repository<K,V>: dumb, synchronous, thread-safe keyed storage.
+// See architecture/README.md.
 
 #pragma once
 

@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// MotionCapabilityComposerTest (ANDROID -> re-derived, 29). Re-derivation of
-// dish-android composer/MotionCapabilityComposerTest against the Windows
-// composer + connection shape. The 6 pure MotionCapability tests (effective /
-// toCapBits ladder) port verbatim; the 23 composer tests are re-expressed using
-// the kernel Composer (eager + distinct + recompute) read through ComposerProbe,
-// with the android virtual slot replaced by a physical device slot (Windows is
-// physical-controllers-only). The derivation rules are identical: per slot,
-// hasGyro from the device, carriesOnConnection iff bound to a live satellite,
-// userEnabled from the motion map (default on), hostHasSinkForType iff the
-// satellite slot is PlayStation-typed, and the satellite backend status keyed on
-// (connectionId, slotId). toCapBits = CAP_MOTION iff hasGyro && userEnabled.
 
 #include "composer/MotionCapabilityComposer.h"
 #include "source/store/SatelliteMotionBackendStatusStore.h"
@@ -45,8 +33,6 @@ using dish::test::ComposerProbe;
 
 namespace {
 
-// A representative physical slot id (stands in for android's VIRTUAL_SLOT_ID,
-// which Windows does not have — every slot here is a physical device).
 const std::string kSlot = "9";
 
 MotionConnection satellite(const std::string& id, bool connected = true,
@@ -58,7 +44,6 @@ MotionDevice device(const std::string& slotId, bool hasGyro) {
     return MotionDevice{slotId, hasGyro};
 }
 
-// Read the latest derived capability for a slot off the probe's last snapshot.
 std::optional<MotionCapability> latestFor(const ComposerProbe<MotionCapabilityMap>& probe,
                                           const std::string& slotId) {
     const auto& map = probe.latest();
@@ -68,8 +53,6 @@ std::optional<MotionCapability> latestFor(const ComposerProbe<MotionCapabilityMa
 }
 
 } // namespace
-
-// ── Pure MotionCapability ladder (6) ─────────────────────────────────────────
 
 TEST_CASE("effective requires every axis true", "[motion-cap]") {
     CHECK(MotionCapability{true, true, true, true, std::nullopt}.effective());
@@ -100,13 +83,11 @@ TEST_CASE("toCapBits is zero on hardware without a gyro, even if enabled", "[mot
 
 TEST_CASE("toCapBits and effective are unaffected by the satellite backend status",
           "[motion-cap]") {
-    // dish honesty is independent of receiver health; local listener gating too.
+    // What the dish can emit does not depend on the receiver's health.
     const MotionCapability cap{true, true, true, true, SatelliteMotionBackendStatus{true, false}};
     CHECK(cap.toCapBits() == static_cast<int>(dish::proto::kCapMotion));
     CHECK(cap.effective());
 }
-
-// ── Composer: gyro source + presence (5) ─────────────────────────────────────
 
 TEST_CASE("a device with no binding is present with carriesOnConnection false", "[motion-cap]") {
     Observable<MotionDeviceList> devices{{device(kSlot, false)}};
@@ -152,7 +133,7 @@ TEST_CASE("carriesOnConnection is true when bound to a Connected satellite", "[m
 TEST_CASE("carriesOnConnection is false on a non-satellite binding", "[motion-cap]") {
     Observable<MotionDeviceList> devices{{device(kSlot, true)}};
     Observable<MotionBindings> bindings{{{kSlot, "bt-A"}}};
-    // A Bluetooth-HID-style connection: isSatellite=false.
+    // The second field is isSatellite: a Bluetooth-HID-style connection.
     Observable<MotionConnectionList> conns{{MotionConnection{"bt-A", false, true, {}}}};
     Observable<MotionEnabledMap> enabled{{}};
     Observable<SatelliteMotionBackendStatusMap> backend{{}};
@@ -173,8 +154,6 @@ TEST_CASE("carriesOnConnection is false while still Connecting", "[motion-cap]")
 
     CHECK(latestFor(probe, kSlot)->carriesOnConnection == false);
 }
-
-// ── Composer: device add/remove + reactivity (3) ─────────────────────────────
 
 TEST_CASE("a physical slot drops from the map when the device leaves the registry",
           "[motion-cap]") {
@@ -224,8 +203,6 @@ TEST_CASE("capabilityFor returns the latest derived value, Off for an unknown sl
     CHECK(composer.capabilityFor("ghost-slot") == MotionCapability::off());
 }
 
-// ── Composer: userEnabled (3) ────────────────────────────────────────────────
-
 TEST_CASE("userEnabled defaults to true for an unwritten slot", "[motion-cap]") {
     Observable<MotionDeviceList> devices{{device(kSlot, true)}};
     Observable<MotionBindings> bindings{{}};
@@ -263,8 +240,6 @@ TEST_CASE("toCapBits is zero on a slot the user has disabled, even with a gyro",
 
     CHECK(latestFor(probe, kSlot)->toCapBits() == 0);
 }
-
-// ── Composer: hostHasSinkForType (7) ─────────────────────────────────────────
 
 TEST_CASE("hostHasSinkForType is true for a PlayStation-typed satellite slot", "[motion-cap]") {
     Observable<MotionDeviceList> devices{{device(kSlot, true)}};

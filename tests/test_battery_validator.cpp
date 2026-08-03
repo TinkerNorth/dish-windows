@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Coverage for the pure battery validator in core/reducer/BatteryRouting.h:
-// batterySampleValid (level in [0,100] u {0xFF}, status in [0,4]). Replicates
-// dish-android source/sensor/BatteryValidatorTest (PURE). The android validator
-// also forwards every sample (no coalescing) on a 30 s heartbeat; on Windows
-// that forward-every-sample behaviour lives in SDLGamepadBridge::pollBatteries
-// (already pinned by the host-battery path), so this file pins the explicit
-// range/status validation android has that windows only implicitly forwarded.
+// batterySampleValid: level in [0,100] u {0xFF}, status in [0,4].
 
 #include "core/reducer/BatteryRouting.h"
 
@@ -41,7 +35,7 @@ TEST_CASE("battery validator rejects a bogus level above 100 (but not 0xFF)",
     REQUIRE_FALSE(batterySampleValid(BatterySample{101, kBatteryStatusDischarging}));
     REQUIRE_FALSE(batterySampleValid(BatterySample{200, kBatteryStatusDischarging}));
     REQUIRE_FALSE(batterySampleValid(BatterySample{254, kBatteryStatusDischarging}));
-    // 0xFF (255) is the documented exception and stays valid.
+    // 0xFF is the unknown-level sentinel, not an out-of-range level.
     REQUIRE(batterySampleValid(BatterySample{0xFF, kBatteryStatusDischarging}));
 }
 

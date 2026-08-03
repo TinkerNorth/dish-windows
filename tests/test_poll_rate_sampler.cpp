@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// PollRateSamplerTest (ADAPT, 6). Port of dish-android source/usb/
-// PollRateSamplerTest.kt. Android mocks the JNI URB counter and a registry; here
-// the pure sampler is clock- and count-injected (it returns rate updates rather
-// than writing a registry), so the fake is a count source + an applied-rate map.
-// Pins: Hz from the URB-count delta over the window, first-sample-only-snapshots,
-// idle -> 0 (not a frozen reading), counter-reset -> 0 (never negative), detach
-// finality (a removed device is not resurrected by a later sample), and
-// re-attach-fresh (the same id after detach restarts from a fresh snapshot).
 
 #include "core/reducer/PollRateSampler.h"
 
@@ -24,9 +15,7 @@ namespace {
 
 constexpr int kDeviceId = -1000;
 
-// A tiny stand-in for the registry: the device's current applied poll rate, set
-// only when the sampler emits an update for it. nullopt == "device not present"
-// (the detach case).
+// Stand-in registry. rateOf() == nullopt means the device is detached, not idle.
 struct FakeRegistry {
     std::map<int, int> rates; // present device -> last applied rate.
     std::map<int, std::int64_t> counts;
@@ -44,7 +33,6 @@ struct FakeRegistry {
     }
 };
 
-// Run one sample tick and fold the returned updates back into the registry.
 void sampleAll(PollRateSampler& sampler, FakeRegistry& reg, std::int64_t nowMs) {
     const auto updates =
         sampler.sampleAll(nowMs, reg.presentIds(), [&](int id) { return reg.counts[id]; });
@@ -85,7 +73,6 @@ TEST_CASE("an idle controller whose count stops moving reports zero rather than 
     reg.counts[kDeviceId] = 500;
     sampleAll(sampler, reg, 1500);
     CHECK(reg.rateOf(kDeviceId) == 1000);
-    // No new completions in the next window -> 0, not the frozen 1000.
     sampleAll(sampler, reg, 2000);
     CHECK(reg.rateOf(kDeviceId) == 0);
 }

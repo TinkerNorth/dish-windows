@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The app-opened apply sheet: a ContentDialog wrapping a StepList, with an
-// optional escape. Two callers — the wizard's Review page and Configure
-// binding — so the copy, the width and the dismiss rules live here once.
-//
-// It is deliberately NOT dismissable by default: the 8s REST round-trip is
-// short enough not to need one. `cancellable` is raised only while the
+// Not dismissable by default. The caller raises `cancellable` only while the
 // Connection step is active, where a Direct claim can sit for 20s waiting on
-// Windows to release the device; aborting that falls back to Standard, which
-// is a warning, not a failure. `slowHint` carries the 4s explanation.
-//
-// The caller owns the steps and the outcome: this sheet never closes itself on
-// success, and never posts a toast.
+// Windows to release the device; aborting that falls back to Standard.
+// The caller owns the steps and the outcome — this sheet never self-closes.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -24,9 +16,7 @@ ContentDialog {
 
     // -> StepList.steps: [{ label, meta, state }]
     property var steps: []
-    // True only while the step that can be aborted is the active one.
     property bool cancellable: false
-    // Shown under the steps once the active step has outstayed its budget.
     property string slowHint: ""
 
     signal cancelRequested()
@@ -35,8 +25,7 @@ ContentDialog {
     heading: qsTr("Applying binding…")
     preferredWidth: 430
 
-    // A report, not a question: there is no accept. The reject slot becomes
-    // the escape, and only while the caller says the step can be aborted.
+    // A report, not a question: no accept. Reject doubles as the escape.
     acceptText: ""
     rejectText: overlay.cancellable ? qsTr("Cancel") : ""
     closePolicy: overlay.cancellable ? Popup.CloseOnEscape : Popup.NoAutoClose

@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pins the wake EFFECT half: WakeStateController subscribes a WakeState
-// Observable and drives the DisplaySleepInhibitor, with an idempotent start(), a
-// deliberate stop() that releases, an onStarting re-arm, and the 0<->positive
-// no-thrash contract. Replicates dish-android composer/WakeStateControllerTest
-// (18 cases; the wifi-lock arm is dropped — phone-only). Uses the fake inhibitor
-// + a ControllerProbe; never flips the real SetThreadExecutionState flag.
+// Driven through a fake inhibitor, so the real SetThreadExecutionState flag is
+// never flipped for the test process.
 
 #include "Util/DisplaySleepInhibitor.h"
 #include "architecture/Observable.h"
@@ -28,9 +24,8 @@ using dish::util::DisplaySleepInhibitor;
 
 namespace {
 
-// Fake inhibitor recording the acquire/release lifecycle (idempotent like the
-// production SetThreadExecutionStateInhibitor). Mirrors the fake the old
-// test_screen_wake_controller used.
+// Idempotent acquire/release, like the production
+// SetThreadExecutionStateInhibitor.
 class FakeInhibitor : public DisplaySleepInhibitor {
   public:
     void acquire(const QString& reason) override {
@@ -64,8 +59,6 @@ WakeState idle() { return WakeState{false, 0}; }
 
 } // namespace
 
-// ── start() applies the current value immediately ─────────────────────────────
-
 TEST_CASE("WakeStateController: start while already inhibiting acquires at once", "[wake]") {
     Observable<WakeState> ws(inhibit(1));
     FakeInhibitor fake;
@@ -86,18 +79,14 @@ TEST_CASE("WakeStateController: start while idle does not acquire", "[wake]") {
     REQUIRE_FALSE(fake.isHeld());
 }
 
-// ── start() is idempotent ─────────────────────────────────────────────────────
-
 TEST_CASE("WakeStateController: a second start does not re-acquire", "[wake]") {
     Observable<WakeState> ws(inhibit(1));
     FakeInhibitor fake;
     WakeStateController c(ws, &fake);
     c.start();
-    c.start(); // idempotent
+    c.start();
     REQUIRE(fake.acquires() == 1);
 }
-
-// ── 0 -> positive acquires, positive -> 0 releases ────────────────────────────
 
 TEST_CASE("WakeStateController: idle then a stream acquires", "[wake]") {
     Observable<WakeState> ws(idle());
@@ -119,8 +108,6 @@ TEST_CASE("WakeStateController: streaming then idle releases", "[wake]") {
     REQUIRE(fake.releases() == 1);
     REQUIRE_FALSE(fake.isHeld());
 }
-
-// ── No-thrash: count changes that keep inhibit true don't re-acquire ──────────
 
 TEST_CASE("WakeStateController: a count change while inhibiting does not re-acquire", "[wake]") {
     Observable<WakeState> ws(idle());
@@ -147,8 +134,6 @@ TEST_CASE("WakeStateController: re-acquires after a drop to idle", "[wake]") {
     REQUIRE(fake.isHeld());
 }
 
-// ── stop() is a deliberate teardown that releases ─────────────────────────────
-
 TEST_CASE("WakeStateController: stop releases the held inhibitor", "[wake]") {
     Observable<WakeState> ws(inhibit(1));
     FakeInhibitor fake;
@@ -170,20 +155,16 @@ TEST_CASE("WakeStateController: stop while idle is a quiet no-op on the inhibito
     REQUIRE(fake.releases() == 0);
 }
 
-// ── Post-stop emissions are ignored ───────────────────────────────────────────
-
 TEST_CASE("WakeStateController: emissions after stop do not acquire", "[wake]") {
     Observable<WakeState> ws(idle());
     FakeInhibitor fake;
     WakeStateController c(ws, &fake);
     c.start();
     c.stop();
-    ws.set(inhibit(1)); // arrives after teardown
+    ws.set(inhibit(1));
     REQUIRE(fake.acquires() == 0);
     REQUIRE_FALSE(fake.isHeld());
 }
-
-// ── Restart re-arms and re-subscribes ─────────────────────────────────────────
 
 TEST_CASE("WakeStateController: restart after stop re-applies the current value", "[wake]") {
     Observable<WakeState> ws(inhibit(1));
@@ -192,7 +173,7 @@ TEST_CASE("WakeStateController: restart after stop re-applies the current value"
     c.start();
     c.stop();
     REQUIRE_FALSE(fake.isHeld());
-    c.start(); // onStarting re-arms; applies current (still inhibiting)
+    c.start(); // onStarting re-arms and re-applies the current value
     REQUIRE(fake.isHeld());
     REQUIRE(fake.acquires() == 2);
 }
@@ -210,8 +191,6 @@ TEST_CASE("WakeStateController: after restart, transitions actuate again", "[wak
     REQUIRE_FALSE(fake.isHeld());
 }
 
-// ── isInhibiting accessor ─────────────────────────────────────────────────────
-
 TEST_CASE("WakeStateController: isInhibiting reflects the inhibitor state", "[wake]") {
     Observable<WakeState> ws(idle());
     FakeInhibitor fake;
@@ -224,8 +203,6 @@ TEST_CASE("WakeStateController: isInhibiting reflects the inhibitor state", "[wa
     REQUIRE_FALSE(c.isInhibiting());
 }
 
-// ── ControllerProbe drives start/stop ─────────────────────────────────────────
-
 TEST_CASE("WakeStateController: ControllerProbe start/stop drives the effect", "[wake]") {
     Observable<WakeState> ws(inhibit(1));
     FakeInhibitor fake;
@@ -237,8 +214,6 @@ TEST_CASE("WakeStateController: ControllerProbe start/stop drives the effect", "
     REQUIRE_FALSE(fake.isHeld());
 }
 
-// ── Null inhibitor tolerance (headless / stripped build) ──────────────────────
-
 TEST_CASE("WakeStateController: tolerates a null inhibitor", "[wake]") {
     Observable<WakeState> ws(idle());
     WakeStateController c(ws, nullptr);
@@ -248,8 +223,6 @@ TEST_CASE("WakeStateController: tolerates a null inhibitor", "[wake]") {
     c.stop();
     REQUIRE_FALSE(c.isInhibiting()); // null inhibitor is never "held"
 }
-
-// ── Integration: through the composer (count -> WakeState -> inhibitor) ────────
 
 TEST_CASE("WakeStateController: end-to-end via the composer acquires on first stream", "[wake]") {
     Observable<int> count(0);
@@ -264,7 +237,7 @@ TEST_CASE("WakeStateController: end-to-end via the composer acquires on first st
     REQUIRE(fake.isHeld());
     REQUIRE(fake.acquires() == 1);
 
-    count.set(2); // no thrash
+    count.set(2);
     REQUIRE(fake.acquires() == 1);
 
     count.set(0);
@@ -279,7 +252,7 @@ TEST_CASE("WakeStateController: end-to-end keep-screen-on override holds at zero
     FakeInhibitor fake;
     WakeStateController c(composer.state(), &fake);
     c.start();
-    keepOn.set(1); // override alone holds the screen awake
+    keepOn.set(1);
     REQUIRE(fake.isHeld());
     keepOn.set(0);
     REQUIRE_FALSE(fake.isHeld());

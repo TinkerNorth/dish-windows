@@ -11,7 +11,7 @@ namespace dish::net {
 
 namespace {
 
-// ASCII lowercase one hex nibble's worth of a char (no locale dependence).
+// ASCII-only: fingerprint comparison must not depend on the locale.
 char lowerAscii(char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; }
 
 bool equalsIgnoreCaseAscii(const std::string& a, const std::string& b) {
@@ -32,8 +32,6 @@ TofuVerdict tofuVerdict(const std::optional<std::string>& stored, const std::str
 
 std::string sha256FingerprintHex(const std::uint8_t* bytes, std::size_t len) {
     std::array<unsigned char, crypto_hash_sha256_BYTES> digest{};
-    // sodium_init() is idempotent; deriveSessionKey / pairing paths call it too,
-    // but a fingerprint may be computed before any of those on first contact.
     crypto_hash_sha256(digest.data(), bytes, static_cast<unsigned long long>(len));
 
     static constexpr char kHex[] = "0123456789abcdef";

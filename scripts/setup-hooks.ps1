@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 Dish contributors.
 #
-# Point this repo's git hooks at the tracked .githooks/ directory so the
-# pre-commit lint/format checks run for every contributor after a single
-# one-time setup. Idempotent — safe to re-run.
+# Sets core.hooksPath to the tracked .githooks/ directory. Repo-local, no
+# machine-wide state. Idempotent, safe to re-run.
 
 $ErrorActionPreference = 'Stop'
 
@@ -16,8 +15,8 @@ if (-not (Test-Path '.git')) {
 }
 
 git config core.hooksPath .githooks
-# Windows ignores executable bits; Git for Windows runs the hook via the
-# shebang. Nothing to chmod here.
+# No chmod needed: Windows ignores the executable bit and Git for Windows
+# runs the hook through its shebang.
 
 Write-Host "✓ core.hooksPath → .githooks"
 Write-Host ""

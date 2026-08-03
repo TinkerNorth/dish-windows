@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Navigation row card (design FRowBtn): title + sub-line + trailing chevron on
-// a surface card. The Settings rows, the Support Dish donation rails and the
-// licence list. The whole row is the click target.
-//
-// It is a real AbstractButton, not a Rectangle with a MouseArea: the design's
-// mocks drew these as cursor-pointer divs, which a keyboard user cannot reach
-// and Narrator does not announce. Rows are Tokens.hitRow tall, because a row
-// that is itself clickable is the one place the 44px token has a job.
+// The full-width list row; the whole row is the click target. A real
+// AbstractButton, not a Rectangle with a MouseArea, so a keyboard user can
+// reach it and Narrator announces it.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -58,7 +53,6 @@ AbstractButton {
             }
         }
 
-        // The global focus ring: 2px outside the border, on visualFocus only.
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2

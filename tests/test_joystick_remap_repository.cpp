@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// JoystickRemapStore + RepositoryContract. The per-VID:PID raw-joystick remap
-// the "Configure controls" page edits, persisted under the dedicated
-// "joystick_remaps" QSettings key (disjoint from "usb_path_choices"). Exercises
-// the per-(vid,pid) round-trip, durability across re-construction, the
-// unchanged-write short-circuit (no Observable re-emit), namespace isolation
-// from the USB-path store, and the corrupt / forward-incompatible blob
-// fallbacks. The backing JoystickRemapRepository also satisfies the
-// RepositoryContract. Pure + the QSettings seam — no SDL, no live manager.
+// Per-VID:PID raw-joystick remaps live under their own "joystick_remaps"
+// QSettings key, deliberately disjoint from "usb_path_choices"; the two stores
+// co-tenant one prefs file and must never read each other's blobs.
 
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/UsbPathPreferenceStore.h"
@@ -41,9 +36,8 @@ namespace {
 constexpr int kVidXbox = 0x045E, kPidXbox = 0x028E;
 constexpr int kVidDs4 = 0x054C, kPidDs4 = 0x05C4;
 
-// A non-default remap that varies by `seed` so distinct seeds produce distinct
-// values (the contract's "replacing the same key overwrites" section needs
-// value(key(0)) != value(key(1))).
+// Varies by seed because the contract's overwrite section needs
+// value(key(0)) != value(key(1)).
 JoystickRemap makeRemap(int seed) {
     JoystickRemap r{};
     r.leftStickX = seed % 4;
@@ -64,8 +58,7 @@ TEST_CASE("JoystickRemapRepository satisfies the contract", "[repository][joyrem
         [&] { return std::make_unique<JoystickRemapRepository>(makeSharedSettings()); },
         [](int i) { return QStringLiteral("%1:0001").arg(i, 4, 16, QLatin1Char('0')); },
         [](const QString& k) {
-            // Derive a stable seed from the key so value(key) is deterministic
-            // and distinct keys map to distinct remaps.
+            // A seed derived from the key keeps value(key) deterministic.
             const int seed = k.left(4).toInt(nullptr, 16);
             return JoystickRemapEntry{k, makeRemap(seed)};
         });
@@ -80,7 +73,7 @@ TEST_CASE("setRemap then remapFor round-trips per vid and pid", "[joyremap]") {
 
     REQUIRE(store.remapFor(kVidXbox, kPidXbox).has_value());
     CHECK(*store.remapFor(kVidXbox, kPidXbox) == remap);
-    // An unrelated pad is unaffected — nullopt means "use the default layout".
+    // nullopt is not "no remap stored" to the caller, it means "default layout".
     CHECK_FALSE(store.remapFor(kVidDs4, kPidDs4).has_value());
 }
 
@@ -100,8 +93,6 @@ TEST_CASE("remaps survive into a fresh store over the same prefs", "[joyremap]")
 }
 
 TEST_CASE("a full custom remap survives a reopen field-for-field", "[joyremap]") {
-    // Exercise every serialized field (not just the makeRemap subset) so the
-    // JSON round-trip is pinned exhaustively.
     auto settings = makeSharedSettings();
     JoystickRemap r{};
     r.leftStickX = 5;
@@ -167,9 +158,8 @@ TEST_CASE("a corrupt remaps blob falls back to an empty map without crashing", "
 
 TEST_CASE("a partially-garbled entry falls back to the default remap", "[joyremap]") {
     auto settings = makeSharedSettings();
-    // A newer/garbled entry: an object whose fields are mostly absent or the
-    // wrong type. forward-compat → each unknown field reads the default, so the
-    // decoded remap equals a default JoystickRemap (the key is still surfaced).
+    // Forward-compat rule: an absent or wrong-typed field reads its default, and
+    // the key still surfaces rather than being dropped.
     settings->setValue(QLatin1String(JoystickRemapRepository::kRemapsKey),
                        QByteArray(R"({"045e:028e":{"lsx":"notanumber","unknown":42}})"));
 
@@ -183,8 +173,6 @@ TEST_CASE("a partially-garbled entry falls back to the default remap", "[joyrema
 
 TEST_CASE("a non-object entry value decodes to the default remap", "[joyremap]") {
     auto settings = makeSharedSettings();
-    // A bare string where an object is expected (e.g. a far-future shape) → the
-    // key is preserved with the default remap, never dropped or crashed.
     settings->setValue(QLatin1String(JoystickRemapRepository::kRemapsKey),
                        QByteArray(R"({"045e:028e":"future"})"));
 
@@ -196,12 +184,9 @@ TEST_CASE("a non-object entry value decodes to the default remap", "[joyremap]")
     CHECK(*got == JoystickRemap{});
 }
 
-// ── Namespace isolation: the two vid:pid stores must NOT read each other ──────
-
 TEST_CASE("a remap never reads back from usb_path_choices and vice versa", "[joyremap]") {
     auto settings = makeSharedSettings(); // ONE shared prefs co-tenanted by both
 
-    // Write a remap and a path choice for the SAME pad over the SAME settings.
     JoystickRemapRepository remapRepo(settings);
     JoystickRemapStore remapStore(&remapRepo);
     remapStore.setRemap(kVidXbox, kPidXbox, makeRemap(3));
@@ -210,15 +195,12 @@ TEST_CASE("a remap never reads back from usb_path_choices and vice versa", "[joy
     UsbPathPreferenceStore pathStore(&pathRepo);
     pathStore.setChoice(kVidXbox, kPidXbox, PathChoice::Direct);
 
-    // Each store sees ONLY its own namespace's data.
     CHECK(remapStore.remapFor(kVidXbox, kPidXbox).has_value());
     CHECK(pathStore.choiceFor(kVidXbox, kPidXbox).has_value());
 
-    // The keys are genuinely disjoint QSettings keys.
     CHECK(QString::fromLatin1(JoystickRemapRepository::kRemapsKey) !=
           QString::fromLatin1(UsbPathPreferenceRepository::kChoicesKey));
 
-    // Seeding the OTHER store's key with junk does not perturb this store.
     auto settings2 = makeSharedSettings();
     settings2->setValue(QLatin1String(UsbPathPreferenceRepository::kChoicesKey),
                         QByteArray(R"({"045e:028e":"direct"})"));
@@ -226,7 +208,6 @@ TEST_CASE("a remap never reads back from usb_path_choices and vice versa", "[joy
     JoystickRemapStore onlyPathStore(&onlyPathSeeded);
     CHECK_FALSE(onlyPathStore.remapFor(kVidXbox, kPidXbox).has_value());
 
-    // And a remap blob does not surface as a path choice.
     auto settings3 = makeSharedSettings();
     JoystickRemapRepository seedRemap(settings3);
     JoystickRemapStore seedRemapStore(&seedRemap);

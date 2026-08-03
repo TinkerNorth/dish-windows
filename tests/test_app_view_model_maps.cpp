@@ -1,20 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// QML migration (A-ext) — the AppViewModel settings/about/deadzone/license
-// EXPOSURE layer. The AppViewModel itself is a thin forwarder over the already-
-// tested stores (it adds no behaviour), so what is worth pinning is the MAPPING
-// it re-projects: the theme-mode int<->enum contract (the QML chip speaks 0/1/2),
-// the deadzone row folding (durable override + default seed + per-device motion
-// toggle), and the license-row projection (the same display rules the Widgets
-// view uses). These pure helpers (qml/AppSettingsMaps) are exercised directly
-// against the real stores over isolated in-memory QSettings — the same seam the
-// sibling store tests use — so no heavyweight AppModel / Qt Quick is needed.
-//
-// The store round-trips (themeMode get/set, crash toggle, onboarding gate +
-// markWelcomeCompleted) are checked THROUGH the int maps so the forwarding the
-// AppViewModel does (setThemeMode -> themeModeFromInt -> store->setMode, etc.) is
-// covered end-to-end at the value level.
+// AppViewModel is a thin forwarder over already-tested stores, so what is pinned
+// here is the mapping layer it re-projects (qml/AppSettingsMaps) plus the store
+// round-trips driven THROUGH those maps.
 
 #include "qml/AppSettingsMaps.h"
 
@@ -58,8 +47,7 @@ using dish::test::makeSharedSettings;
 
 namespace {
 
-// A fresh, unique, file-backed QSettings (never the real HKCU registry) — the
-// scalar-preference stores take ownership of a std::unique_ptr<QSettings>.
+// A unique temp INI, never the real HKCU registry.
 std::unique_ptr<QSettings> uniqueIniSettings(const char* tag) {
     const QString path = QDir::tempPath() + QStringLiteral("/dish-%1-").arg(tag) +
                          QUuid::createUuid().toString(QUuid::WithoutBraces) +
@@ -68,8 +56,6 @@ std::unique_ptr<QSettings> uniqueIniSettings(const char* tag) {
 }
 
 } // namespace
-
-// ── Theme-mode int <-> enum (the QML segmented control's 0/1/2 contract) ─────
 
 TEST_CASE("themeMode int contract is Light=0 Dark=1 System=2", "[appvm][theme]") {
     REQUIRE(themeModeToInt(ThemeMode::Light) == 0);
@@ -93,12 +79,10 @@ TEST_CASE("themeModeFromInt is lenient -- out-of-range falls back to System", "[
 }
 
 TEST_CASE("themeMode get/set round-trips through the store via the int maps", "[appvm][theme]") {
-    // The exact path AppViewModel::setThemeMode/themeMode take: int -> enum ->
-    // store->setMode, and store->mode -> enum -> int.
     ThemePreferenceStore store(uniqueIniSettings("theme"));
     REQUIRE(themeModeToInt(store.mode()) == 2); // fresh store defaults to System
 
-    store.setMode(themeModeFromInt(1)); // "Dark" from the chip
+    store.setMode(themeModeFromInt(1)); // "Dark"
     REQUIRE(store.mode() == ThemeMode::Dark);
     REQUIRE(themeModeToInt(store.mode()) == 1);
 
@@ -106,19 +90,15 @@ TEST_CASE("themeMode get/set round-trips through the store via the int maps", "[
     REQUIRE(themeModeToInt(store.mode()) == 0);
 }
 
-// ── Crash-reporting toggle forwarding ────────────────────────────────────────
-
 TEST_CASE("crash-reporting toggle forwards through the store", "[appvm][crash]") {
     CrashReportingStore store(uniqueIniSettings("crash"));
-    REQUIRE(store.enabled() == true); // opt-out default-ON (D4)
+    REQUIRE(store.enabled() == true); // opt-out: default ON
 
-    store.setEnabled(false); // the AppViewModel setter forwards verbatim
+    store.setEnabled(false);
     REQUIRE(store.enabled() == false);
     store.setEnabled(true);
     REQUIRE(store.enabled() == true);
 }
-
-// ── Deadzone row mapping + set forwarding ────────────────────────────────────
 
 TEST_CASE("deadzoneRowFor seeds the default profile for an unset device", "[appvm][deadzone]") {
     DeadzoneRepository repo(makeSharedSettings());
@@ -142,7 +122,6 @@ TEST_CASE("deadzoneRowFor reflects a stored override + a disabled motion toggle"
     MotionPreferenceRepository motionRepo(makeSharedSettings());
     MotionEnabledStore motion(&motionRepo);
 
-    // Drive the exact mutations AppViewModel::setDeadzones / setMotionEnabled do.
     repo.setDeadzones(QStringLiteral("pad-1"), {5000, 40});
     motion.setEnabled(std::string("pad-1"), false);
 
@@ -164,8 +143,6 @@ TEST_CASE("deadzone/motion are keyed by device id and stay independent", "[appvm
     const auto a = deadzoneRowFor(QStringLiteral("a"), QString(), true, &repo, &motion);
     const auto b = deadzoneRowFor(QStringLiteral("b"), QString(), true, &repo, &motion);
 
-    // a carries its override but a default-ON motion; b carries the default
-    // deadzone but the explicit motion-off.
     CHECK(a.value(QStringLiteral("stickFlat")).toInt() == 1111);
     CHECK(a.value(QStringLiteral("forwardMotion")).toBool() == true);
     CHECK(b.value(QStringLiteral("stickFlat")).toInt() == kDefaultDeadzoneStickFlat);
@@ -180,8 +157,6 @@ TEST_CASE("deadzoneRowFor tolerates null stores (pure defaults)", "[appvm][deadz
     CHECK(row.value(QStringLiteral("forwardMotion")).toBool() ==
           MotionEnabledStore::kDefaultEnabled);
 }
-
-// ── License rows ─────────────────────────────────────────────────────────────
 
 TEST_CASE("licenseRows maps a manifest to {name,version,license,url}", "[appvm][licenses]") {
     const auto manifest = dish::ui::parseLicenseManifest(QByteArray(R"({
@@ -202,8 +177,7 @@ TEST_CASE("licenseRows maps a manifest to {name,version,license,url}", "[appvm][
     // Click-url precedence: licenses[0].url wins over the entry url.
     CHECK(first.value(QStringLiteral("url")).toString() == QStringLiteral("https://l/lgpl"));
 
-    // The second entry has no name -> falls back to group:artifact; no license
-    // block -> an empty license label, and no url -> empty.
+    // No name -> the display name falls back to group:artifact.
     const auto second = rows.at(1).toMap();
     CHECK(second.value(QStringLiteral("name")).toString() == QStringLiteral("io.lib:thing"));
     CHECK(second.value(QStringLiteral("license")).toString().isEmpty());
@@ -211,26 +185,21 @@ TEST_CASE("licenseRows maps a manifest to {name,version,license,url}", "[appvm][
 }
 
 TEST_CASE("licenseRows drops an unnamed entry", "[appvm][licenses]") {
-    // No name, no group, no artifact -> displayName empty -> the row is hidden,
-    // mirroring the adapter rule.
     const auto manifest = dish::ui::parseLicenseManifest(QByteArray(R"({
         "libraries":[ {"version":"9"} ]
     })"));
     CHECK(licenseRows(manifest).isEmpty());
 }
 
-// ── Onboarding gate + markWelcomeCompleted forwarding ────────────────────────
-
 TEST_CASE("onboardingNeeded reflects the store and clears on markWelcomeCompleted",
           "[appvm][onboarding]") {
     OnboardingPreferenceStore store(uniqueIniSettings("onb"));
-    // onboardingNeeded == !welcomeCompleted(); a fresh store needs onboarding.
+    // onboardingNeeded is !welcomeCompleted().
     REQUIRE(store.welcomeCompleted() == false);
 
-    store.markWelcomeCompleted(); // the AppViewModel command forwards verbatim
+    store.markWelcomeCompleted();
     REQUIRE(store.welcomeCompleted() == true);
 
-    // Idempotent: a second mark stays completed.
     store.markWelcomeCompleted();
     REQUIRE(store.welcomeCompleted() == true);
 }

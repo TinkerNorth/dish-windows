@@ -1,412 +1,471 @@
-# dish-windows — Architecture Guide
+# Architecture
 
-This is the decision document for how dish-windows is structured: the layers, the
-patterns, and — above all — **how state flows**. It is the Windows analogue of
-the dish-android architecture guide. Read it before adding a feature; it tells you
-which primitive to reach for and where the code goes so that the **core stays
-swappable from the UI** and **every state (loading, error, empty, success) is
-captured and bindable**.
+A map of the codebase aimed at people working in it. It says which primitive to
+reach for, where the code goes, and what the layering rules are.
 
-> TL;DR — Data flows **one way**: a *source of truth* owns state → *pure
-> reducers/composers* derive from it → the *UI binds* and renders it → the *UI
-> emits intents* (commands) back to the source. The UI never owns domain state and
-> the core never imports Qt Quick. If you find yourself reaching for a `bool busy`
-> or a fire-and-forget toast to represent the result of an async operation, stop:
-> that is an [`AsyncState<T>`](#async-state) or a [reducer FSM](#reducer-fsm).
+Related documents: [`QML_CONTRACT.md`](QML_CONTRACT.md) is the exposure surface
+the Qt Quick UI binds against, [`QML_UI_KIT.md`](QML_UI_KIT.md) is the component
+kit and design tokens, and [`../src/architecture/README.md`](../src/architecture/README.md)
+documents the kernel primitives themselves.
 
----
+Data flows one way. A source of truth owns state, pure reducers and composers
+derive from it, the UI binds and renders it, and the UI sends commands back to
+the source. The UI never owns domain state, and the core never imports Qt Quick.
 
-## 1. The prime directive: core ⟂ UI
+## The prime directive: core is independent of the UI
 
-The app is split so that **you could delete `src/qml/` and write a completely
-different front-end (a CLI, a tray applet, a different toolkit) without touching a
-single file under `src/core/`, `src/source/`, `src/repository/`, or
-`src/composer/`.** That is the test for every change. Concretely:
+The app is split so that you could delete `src/qml/` and write a different
+front-end (a CLI, a tray applet, another toolkit) without touching a file under
+`src/core/`, `src/source/`, `src/repository/`, or `src/composer/`. That is the
+test for every change.
 
-- **Core layers are Qt-Quick-free and mostly Qt-free.** `src/core/` is *fully*
-  Qt-free (it compiles and unit-tests on the host with no Qt/SDL/sodium). The
-  source/repository/composer layers may use `QObject`/`QString`/`QSettings` for IO
-  and value types, but they **never** import a QML type, a widget, or `tr()` on a
-  user-facing string — localization happens at the UI edge (we carry *render keys*
-  and *reason codes as data*, not pre-localized text).
-- **The UI is a projection.** `src/qml/` (and the legacy `src/UI/` Widgets path)
-  are thin adapters: they map already-derived state onto bindings and forward user
-  intents verbatim. They hold *view* state (which page is open, which row is
-  expanded) but never *domain* state.
+- **Core layers are Qt-Quick-free and mostly Qt-free.** `src/core/` is fully
+  Qt-free: it compiles and unit-tests on the host with no Qt, SDL, or sodium.
+  The source, repository, and composer layers may use `QObject`, `QString`, and
+  `QSettings` for IO and value types, but they never import a QML type or call
+  `tr()` on a user-facing string. Localization happens at the UI edge, so those
+  layers carry render keys and reason codes as data rather than pre-localized
+  text.
+- **The UI is a projection.** `src/qml/` is a thin adapter: it maps
+  already-derived state onto bindings and forwards user intents verbatim. It
+  holds view state (which page is open, which row is expanded) but never domain
+  state.
 
 ```
-        ┌─────────────────────────────────────────────────────────────┐
-        │  UI  (src/qml, src/UI)   — projection + intents, swappable    │
-        │     binds state ▲                         │ emits commands     │
-        └─────────────────┼─────────────────────────┼───────────────────┘
-                          │                         ▼
-        ┌─────────────────┴─────────────────────────────────────────────┐
-        │  composer/   Composers (pure derive) · Controllers (effects)   │
-        │              · Coordinators (imperative command surface)       │
-        └─────────────────┬─────────────────────────┬───────────────────┘
+        ┌───────────────────────────────────────────────────────────────┐
+        │  qml/       projection + intents, swappable                    │
+        │             binds state ▲              │ emits commands        │
+        └───────────────────┼──────────────────────┼────────────────────┘
+                            │                      ▼
+        ┌───────────────────┴──────────────────────────────────────────┐
+        │  composer/  Composers (pure derive) · Controllers (effects)   │
+        │             · Coordinators (imperative command surface)       │
+        └───────────────────┬──────────────────────┬───────────────────┘
               reads Observables                  drives
-        ┌─────────────────┴───────────┐ ┌───────────┴───────────────────┐
-        │  source/  StateSources +     │ │  repository/  durable storage  │
-        │           Gateways (IO edge) │ │  (QSettings, dumb + sync)       │
-        └─────────────────┬───────────┘ └────────────────────────────────┘
-                          │ uses
-        ┌─────────────────┴─────────────────────────────────────────────┐
-        │  core/   PURE: reducers (FSMs + mappers), models, AsyncState,   │
-        │          wire/crypto, input math.   No Qt. Host-testable.       │
-        └─────────────────┬─────────────────────────────────────────────┘
-                          │ built on
-        ┌─────────────────┴─────────────────────────────────────────────┐
-        │  architecture/  the UDF kernel: Observable · StateSource ·      │
-        │                 Composer/Combiner · Controller · Repository     │
-        └─────────────────────────────────────────────────────────────────┘
+        ┌───────────────────┴──────────┐ ┌────────┴────────────────────┐
+        │  source/  StateSources +      │ │  repository/  durable       │
+        │           Gateways (IO edge)  │ │  storage (QSettings)        │
+        └───────────────────┬──────────┘ └─────────────────────────────┘
+                            │ uses
+        ┌───────────────────┴──────────────────────────────────────────┐
+        │  core/      PURE: reducers (FSMs + mappers), models,          │
+        │             AsyncState, wire/crypto, input math. No Qt.       │
+        └───────────────────┬──────────────────────────────────────────┘
+                            │ built on
+        ┌───────────────────┴──────────────────────────────────────────┐
+        │  architecture/  the kernel: Observable · StateSource ·         │
+        │                 Composer/Combiner · Controller · Repository    │
+        └──────────────────────────────────────────────────────────────┘
 ```
 
-**Dependency rule:** arrows point *up*. A lower layer never includes a higher one.
+**Dependency rule:** arrows point up. A lower layer never includes a higher one.
 `core/` knows nothing of `source/`; `source/` knows nothing of `composer/`;
-nothing below `qml/` knows `qml/` exists. The composition root
-([`AppModel`](../src/AppModel.h)) is the *only* place allowed to wire concrete
-instances of every layer together.
+nothing below `qml/` knows `qml/` exists. [`AppModel`](../src/AppModel.h) is the
+composition root and the only place allowed to wire concrete instances of every
+layer together.
 
----
-
-## 2. The folder map (where things live)
+## The folder map
 
 | Folder | Role | May depend on | Qt? |
 |---|---|---|---|
-| `src/architecture/` | The UDF kernel (generic primitives) | nothing | **No** |
-| `src/core/` | Pure domain: reducers/FSMs, mappers, models, `AsyncState`, crypto, input math | `architecture/` | **No** |
-| `src/source/` | `StateSource`s (owned reactive state) + Gateways (native IO boundary) | `core/`, `repository/` | yes (IO) |
-| `src/repository/` | Durable keyed storage (QSettings), dumb + synchronous | `core/` | yes (QSettings) |
-| `src/composer/` | `Composer`s (pure derive), `Controller`s (side effects), Coordinators (command services) | `core/`, `source/`, `repository/` | yes (QObject) |
-| `src/qml/` | QML bridge: `AppViewModel` facade + role models + chrome | everything | yes (Quick) |
-| `src/UI/` | The design-token palette (`Theme`) + the font-family probes (`FontStacks`) + crash handling. No widgets remain (see [§9](#legacy)) | `core/` | yes (Gui) |
-| `src/Input/`, `src/Network/` | Older capitalized homes for the SDL bridge / socket layer (IO; being folded into the layer model over time) | `core/` | yes |
+| `src/architecture/` | The kernel primitives | nothing | **No** |
+| `src/core/` | Pure domain: reducers and FSMs (`reducer/`), models (`model/`), the type catalog (`catalog/`), input math (`input/`), wire framing and session crypto (`wire/`), certificate trust-on-first-use pinning and address literals (`net/`), plus `AsyncState` | `architecture/` | **No** |
+| `src/source/` | `StateSource`s (owned reactive state) and Gateways (native IO boundary) | `core/`, `repository/` | yes (IO) |
+| `src/repository/` | Durable keyed storage over QSettings, dumb and synchronous | `core/` | yes (QSettings) |
+| `src/composer/` | Composers (pure derive), Controllers (side effects), Coordinators (command services) | `core/`, `source/`, `repository/` | yes (QObject) |
+| `src/qml/` | QML bridge: the `AppViewModel` facade, role models, chrome singletons, and the `.qml` tree | everything | yes (Quick) |
+| `src/Models/` | Shared value types (`models::ControllerSlot`, `DiscoveredServer`, notifications) | `core/` | yes (QString) |
+| `src/Util/` | Leaf helpers with no domain state: endian, hex, host battery, display-sleep inhibitor, locale install | nothing | mixed |
+| `src/UI/` | The design-token palette (`Theme`), the font-family probes (`FontStacks`), crash handling, the `SlotLiveStats` mapper, `common/ExternalLink`, `licenses/LicenseManifest` | `core/` | yes (Gui) |
+| `src/Input/` | The SDL bridge, the input processor, joystick mapping, the output command queue | `core/` | yes |
+| `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingClient` | `core/` | yes |
 
-When you add code, the folder is the contract: *if it has no Qt and makes a
-decision, it belongs in `core/`.* If it owns a socket/timer/cache, it is a
-`source/` `StateSource` or a Gateway. If it persists, it is a `repository/`. If it
-purely derives one value from others, it is a `composer/` Composer. If it performs
-a side effect off a state, it is a `composer/` Controller.
+`src/Input/` and `src/Network/` predate the layer model and keep their
+capitalized names. New IO belongs in `src/source/` as a `StateSource` or a
+Gateway.
 
----
+When you add code, the folder is the contract. If it has no Qt and makes a
+decision, it belongs in `core/`. If it owns a socket, timer, or cache, it is a
+`source/` `StateSource` or a Gateway. If it persists, it is a `repository/`. If
+it purely derives one value from others, it is a `composer/` Composer. If it
+performs a side effect off a state, it is a `composer/` Controller.
 
-## 3. The kernel primitives — pick the right one
+## The kernel primitives
 
-All five live in [`src/architecture/`](../src/architecture/README.md) and are pure
-header-only C++17 (the C++ ports of dish-android's `StateFlow` /
-`AbstractStateSource` / `AbstractComposer` / `AbstractController` / `Repository`).
+Five header-only C++17 primitives in [`src/architecture/`](../src/architecture/README.md),
+ported from the `StateFlow` / `AbstractStateSource` / `AbstractComposer` /
+`AbstractController` / `Repository` set in
+[dish-android](https://github.com/TinkerNorth/dish-android).
 
-| You have… | Use | Notes |
-|---|---|---|
-| a value that changes over time, observed by others | `Observable<S>` | hot, always has a value, **distinct-until-changed** via `operator==`; `subscribe()` replays the latest; RAII `Subscription` |
-| state owned from a socket / timer / cache / setting | `StateSource<S>` | expose `state()` read-only; mutate via protected `setState` |
-| one value **purely derived** from other Observables | `Composer<Out, Ins...>` | one pure `transform`, no IO/events; recomputes eagerly on any upstream change |
-| a side effect driven by a state | `Controller<S>` | implement `apply()`; `start()` is idempotent; choose `stop()` teardown |
-| durable keyed storage | `Repository<K,V>` | dumb, synchronous, thread-safe; wrap in a Source for reactive reads; passes `RepositoryContract` |
+| You have… | Use |
+|---|---|
+| a value that changes over time, observed by others | `Observable<S>` |
+| state owned from a socket, timer, cache, or setting | `StateSource<S>` |
+| one value purely derived from other Observables | `Composer<Out, Ins...>` / `Combiner` |
+| a side effect driven by a state | `Controller<S>` |
+| durable keyed storage | `Repository<K,V>` |
 
-Conventions that are *classes you write per feature*, not base classes:
+The kernel README covers their semantics (distinct-until-changed, subscription
+lifetime, teardown policy, the repository property tests). Three more
+conventions are classes you write per feature rather than base classes:
 
-- **Reducer / Mapper** — a pure free function in `core/` for a `(state,event) →
-  result` decision or a domain→UI shape. The unit of testability. See
-  [§5](#reducer-fsm).
-- **Coordinator** — a plain `QObject` service for imperative cross-cutting commands
-  over several sources; it **re-exposes a child's `Observable` by reference, never
-  mirrors it** (see [`ConnectionCoordinator`](../src/composer/ConnectionCoordinator.h)).
-- **Gateway** — an IO/native boundary with **no domain state** (e.g.
-  [`WinHidGateway`](../src/source/usb/WinHidGateway.h), `MdnsDiscovery`).
+- **Reducer / Mapper.** A pure free function in `core/` for a
+  `(state, event) -> result` decision or a domain-to-UI shape. This is the unit
+  of testability.
+- **Coordinator.** A plain `QObject` service for imperative cross-cutting
+  commands over several sources. It re-exposes a child's `Observable` by
+  reference and never mirrors it, because a mirror is a second writer. See
+  [`ConnectionCoordinator`](../src/composer/ConnectionCoordinator.h).
+- **Gateway.** An IO or native boundary with no domain state, for example
+  [`WinHidGateway`](../src/source/usb/WinHidGateway.h) or
+  [`MdnsDiscovery`](../src/source/connection/MdnsDiscovery.h).
 
----
+## <a name="async-state"></a>Capturing async state: `AsyncState<T>`
 
-## 4. <a name="async-state"></a>The state-capture doctrine, part 1: `AsyncState<T>`
+Every asynchronous operation has four states, and the UI must be able to bind
+all four. A `bool busy`, a `QSet<id> inFlight`, or an `std::optional<T>` that
+silently drops failures cannot tell *empty* from *still loading*, and cannot say
+why something failed.
 
-**Every asynchronous operation has four states, and the UI must be able to bind
-all four.** Before, the app modelled them inconsistently — a `bool busy`, a
-`QSet<id> inFlight`, an `std::optional<T>` that silently dropped failures, a
-one-shot `errorMessage()` toast. The result: the UI could not show a spinner,
-could not say *why* something failed, and could not tell *empty* from *still
-loading*.
-
-[`core/AsyncState.h`](../src/core/AsyncState.h) is the canonical container:
+[`core/AsyncState.h`](../src/core/AsyncState.h) is the container:
 
 ```cpp
 template <class T, class E = std::string>
 struct AsyncState {
     AsyncPhase phase;            // Idle | Loading | Success | Error
     std::optional<T> data;       // last good value, RETAINED across refresh/error
-    std::optional<E> error;      // populated iff Error — a typed reason, not a string
-    bool stale;                  // data carried from a prior success (revalidating / served-on-error)
+    std::optional<E> error;      // populated iff Error: a typed reason, not a string
+    bool stale;                  // data carried from a prior success
 };
 ```
 
-with pure transitions: `asyncIdle()`, `toLoading(prev)`, `toLoadingFresh()`,
-`toSuccess(prev, value)`, `toRevalidated(prev)` (HTTP 304), `toError(prev,
-reason)`. It is `==`-comparable so it drops straight into an
+Transitions are pure: `asyncIdle()`, `toLoading(prev)`, `toLoadingFresh()`,
+`toSuccess(prev, value)`, `toRevalidated(prev)` (HTTP 304), and
+`toError(prev, reason)`. It is `==`-comparable, so it drops straight into an
 `Observable<AsyncState<T>>` and gets distinct-until-changed for free.
 
-**Two properties make it the right tool:**
+Two properties make it the right tool:
 
-1. **Stale-while-revalidate is built in.** `toLoading`/`toError` *keep* the prior
-   `data` and flag it `stale`. A refresh shows a spinner *over* the last-known
-   content; a failed refresh shows that content *with* an error chip — never a
-   blank screen.
-2. **Failure carries a typed reason.** `E` defaults to `std::string` but you should
-   prefer an enum (`CatalogError`, `PairFailure`), so the UI localizes a *code*,
-   matching the "render keys, not strings" rule.
+1. **Stale-while-revalidate is built in.** `toLoading` and `toError` keep the
+   prior `data` and flag it `stale`. A refresh shows a spinner over the
+   last-known content; a failed refresh shows that content with an error chip,
+   never a blank screen.
+2. **Failure carries a typed reason.** `E` defaults to `std::string`, but prefer
+   an enum (`CatalogError`, `PairFailure`) so the UI localizes a code, matching
+   the render-keys-not-strings rule.
 
-**Exemplar:** the catalog fetch. [`SatelliteCatalogRepository`](../src/source/http/SatelliteCatalogRepository.h)
-now delivers `AsyncState<CatalogDto, CatalogError>`: a fresh 200 → `Success`, a 304
-→ `Success(stale)`, an unreachable/5xx/malformed reply → `Error(reason)` **still
-carrying the cached catalog**. [`AppModel::refreshCatalogForSlot`](../src/AppModel.cpp)
-flips it to `Loading` before the GET and stores the terminal state, so the Emulate
-picker binds a spinner / a typed error / an empty-vs-content distinction instead of
-the old "the fetch silently returned nothing".
+The worked example is the catalog fetch.
+[`SatelliteCatalogRepository`](../src/source/http/SatelliteCatalogRepository.h)
+delivers `AsyncState<CatalogDto, CatalogError>`: a fresh 200 becomes `Success`,
+a 304 becomes `Success(stale)`, and an unreachable, 5xx, or malformed reply
+becomes `Error(reason)` still carrying the cached catalog.
+[`AppModel::refreshCatalogForSlot`](../src/AppModel.cpp) flips it to `Loading`
+before the GET and stores the terminal state, so the Emulate picker binds a
+spinner, a typed error, and an empty-versus-content distinction. `AppViewModel`
+projects that as `emulateLoading` / `emulateError` / `emulateStale`.
 
-**When to use `AsyncState<T>`:** a request/response with a clear in-flight →
-terminal shape — catalog fetch, discovery scan, a one-shot connect attempt, a
-forward-pairing submit. **When *not* to:** a multi-state domain lifecycle with more
-than four states or domain-specific terminals (a live session that goes
-Linking→Live→Faltering→Stale→Reconnecting). That is a reducer FSM, below.
+**Use `AsyncState<T>`** for a request and response with a clear in-flight to
+terminal shape: a catalog fetch, a discovery scan, a one-shot connect attempt, a
+forward-pairing submit. **Do not use it** for a multi-state domain lifecycle
+with more than four states or domain-specific terminals (a live session that
+goes Linking, Live, Faltering, Stale, Reconnecting). That is a reducer FSM.
 
----
+## <a name="reducer-fsm"></a>Capturing lifecycles: the reducer FSM
 
-## 5. <a name="reducer-fsm"></a>The state-capture doctrine, part 2: the reducer FSM
-
-For a lifecycle richer than Idle/Loading/Success/Error, model it as a **pure,
-total reducer FSM** — the pattern the USB input-path switching uses, and the bar
-every stateful subsystem is held to.
-
-**The gold standard:** [`core/reducer/UsbPathMachine.h`](../src/core/reducer/UsbPathMachine.h).
+For a lifecycle richer than Idle/Loading/Success/Error, model it as a pure,
+total reducer FSM. The reference implementation is
+[`core/reducer/UsbPathMachine.h`](../src/core/reducer/UsbPathMachine.h), which
+drives USB input-path switching.
 
 The shape:
 
 ```cpp
-// state + event  →  next state + effects (as DATA, not performed here)
+// state + event  ->  next state + effects (as DATA, not performed here)
 struct Reduction { std::optional<UsbController> next; std::vector<UsbEffect> effects; };
 Reduction reduce(const UsbController& c, const UsbEvent& event);
 ```
 
 The rules that make it robust:
 
-1. **Pure & total.** `reduce` performs no IO and is defined for *every* (phase ×
-   event) pair — a weird/failed transition can never silently drop state the way
-   scattered imperative `if`s could. It is `std::variant` events in, `std::variant`
-   effects out.
-2. **Effects are returned as data.** `reduce` decides *what* should happen
-   (`Claim`, `Release`, `Notify{reason}`, `MarkRestoreStuck`); the **coordinator**
-   ([`UsbGamepadManager`](../src/source/usb/UsbGamepadManager.h)) turns world signals
-   into events, runs `reduce`, and *executes* the effects against real subsystems.
-   Decisions are testable without hardware; IO lives in one place.
-3. **One unidirectional notify.** After *every* state-changing event the coordinator
-   fires a single "state moved" signal; the UI rebuilds from the fresh snapshot.
-   (This is the literal fix in commit `f8b9f4b`: granular per-effect callbacks
-   missed held-synthetic phase changes, so the slot list never rebuilt. One signal
-   off the FSM cured a whole class of "stuck toggle" bugs.)
-4. **Loading & error are *derived state*, not events.** "Switching" is a pure
-   predicate over the phase (`slotPathSwitching` → the `claimInProgress` role);
-   failure is a phase (`RestoreStuck`/`NeedsReplug`) + a reason (`DirectClaimFailure`)
-   carried *on the controller* and stamped onto the slot. The transient "what just
-   happened" banner (`UsbNotice`) is the *only* thing routed to a toast.
+1. **Pure and total.** `reduce` performs no IO and is defined for every
+   (phase × event) pair, so a weird or failed transition can never silently drop
+   state the way scattered imperative branches can. Events go in as a
+   `std::variant`; effects come out as one.
+2. **Effects are returned as data.** `reduce` decides what should happen
+   (`Claim`, `Release`, `Notify{reason}`, `MarkRestoreStuck`). The coordinator,
+   [`UsbGamepadManager`](../src/source/usb/UsbGamepadManager.h), turns world
+   signals into events, runs `reduce`, and executes the effects against real
+   subsystems. Decisions are testable without hardware, and IO lives in one
+   place.
+3. **One unidirectional notify.** After every state-changing event the
+   coordinator fires a single "state moved" signal and the UI rebuilds from the
+   fresh snapshot. Granular per-effect callbacks are the alternative, and they
+   miss transitions that produce no effect (a held-synthetic phase change), so
+   the list never rebuilds and a toggle appears stuck.
+4. **Loading and error are derived state, not events.** "Switching" is a pure
+   predicate over the phase (`slotPathSwitching`, surfaced as the
+   `claimInProgress` role). Failure is a phase (`RestoreStuck`, `NeedsReplug`)
+   plus a reason (`DirectClaimFailure`) carried on the controller and stamped
+   onto the slot. Only the transient "what just happened" banner (`UsbNotice`)
+   is routed to a toast.
 5. **Exhaustively unit-tested.** One assertion per (phase × event); see
-   `test_usb_path_machine.cpp` (+ edge cases). Because `reduce` is pure, the whole
-   decision space is pinned with zero mocks.
+   `tests/test_usb_path_machine.cpp` and `test_usb_path_machine_edge_cases.cpp`.
+   Because `reduce` is pure, the whole decision space is pinned with no mocks.
 
-The same pattern is now applied to **forward pairing**
-([`core/reducer/PairingMachine.h`](../src/core/reducer/PairingMachine.h)):
-`Idle → Submitting → Succeeded | Failed(reason)`, consuming the existing pure
-`classifyPair` verdict, with `Succeeded` reached *only* on a real
-`SessionConfirmedLive` event (killing the old "infer success from a rising online
-count" heuristic).
+Machines that follow this pattern and are wired into the running app:
 
-### AsyncState vs FSM — how to choose
+| Machine | Coordinator |
+|---|---|
+| [`UsbPathMachine`](../src/core/reducer/UsbPathMachine.h) | `UsbGamepadManager` |
+| [`ApplyBindingMachine`](../src/core/reducer/ApplyBindingMachine.h) | `AppViewModel::applyBinding` |
+| [`BindingPresence`](../src/core/reducer/BindingPresence.h) | `AppModel::rebuild` |
+| [`CapabilitySolver`](../src/core/reducer/CapabilitySolver.h) | `AppViewModel::capabilityForCandidate` |
+
+Three more exist as pure, tested specifications with no live coordinator yet;
+see [Not yet implemented](#not-yet-implemented).
+
+### Choosing between them
 
 | | `AsyncState<T>` | Reducer FSM |
 |---|---|---|
-| Shape | request → in-flight → one terminal | many domain states + transitions |
-| States | exactly Idle/Loading/Success/Error | bespoke (e.g. Routed/Claiming/Direct/AwaitingFramework/…) |
+| Shape | request, in-flight, one terminal | many domain states and transitions |
+| States | exactly Idle/Loading/Success/Error | bespoke (Routed/Claiming/Direct/AwaitingFramework/…) |
 | Effects | the caller performs them inline | returned as data, executed by a coordinator |
-| Examples | catalog fetch, discovery scan, connect attempt | USB path switch, pairing, **(planned)** satellite session |
+| Examples | catalog fetch, discovery scan, connect attempt | USB path switch, binding apply, binding presence |
 
----
+## Unidirectional flow: the rules
 
-## 6. Unidirectional flow — the rules
-
-1. **One owner per piece of state.** It lives in exactly one `StateSource`/FSM and
-   is exposed read-only. Nobody else stores a copy. (A Coordinator
-   *re-exposes* `composer.state()` by reference; it does not mirror it — mirroring
-   is a two-writer race.)
-2. **Derive, don't mutate.** Downstream values are produced by a pure `Composer`
-   from upstream Observables, recomputed on change. Do **not** hand-patch a derived
-   field in place from an event handler.
-3. **Effects as data, executed at the edge.** A reducer returns *what* to do; a
-   coordinator/Controller does it. Keeps decisions pure and IO in one place.
-4. **One notify, then rebuild.** State change → single signal → UI rebuilds from
+1. **One owner per piece of state.** It lives in exactly one `StateSource` or
+   FSM and is exposed read-only. Nobody else stores a copy. A Coordinator
+   re-exposes `composer.state()` by reference; it does not mirror it, because
+   mirroring is a two-writer race.
+2. **Derive, do not mutate.** Downstream values are produced by a pure
+   `Composer` from upstream Observables and recomputed on change. Do not
+   hand-patch a derived field in place from an event handler.
+3. **Effects as data, executed at the edge.** A reducer returns what to do; a
+   coordinator or Controller does it.
+4. **One notify, then rebuild.** State change, single signal, UI rebuilds from
    the snapshot. No granular per-field back-channels that can miss a transition.
-5. **Distinct-until-changed everywhere.** Every state value is `==`-comparable so a
-   no-op emit is suppressed (no UI thrash). This is why `AsyncState`, every
-   composer row, and every FSM state implement `operator==`.
+5. **Distinct-until-changed everywhere.** Every state value is `==`-comparable
+   so a no-op emit is suppressed. This is why `AsyncState`, every composer row,
+   and every FSM state implement `operator==`.
 6. **Commands flow the other way, explicitly.** The UI calls an intent
-   (`bindSlot`, `pairByServerId`, `setSlotPath`); that turns into an event/effect;
-   the resulting state flows back out. The UI never writes state directly.
+   (`bindSlot`, `pairByServerId`, `setSlotPath`); that becomes an event or
+   effect; the resulting state flows back out. The UI never writes state
+   directly.
 
----
+## <a name="ui-contract"></a>The UI binding contract: bind all the states
 
-## 7. <a name="ui-contract"></a>The UI binding contract: bind *all* the states
-
-A screen that can load, fail, or be empty **must render all four**. The reusable
-kit pieces (in [`src/qml/kit/`](../src/qml/kit/)) exist so every page does this the
-same way:
+A screen that can load, fail, or be empty must render all four. The kit
+components in [`src/qml/kit/`](../src/qml/kit/) exist so every page does this
+the same way.
 
 | State | Kit component | Source |
 |---|---|---|
-| Loading / in-flight | `LoadingSpinner` | `AsyncState.isLoading()` / a `*InProgress` role |
-| Error / failure | `ErrorBanner` (message + optional Retry) | `AsyncState.isError()` + typed reason → localized string |
-| Empty | `EmptyState` (title + body + optional action) | `Success && data.empty()` |
-| Success / content | the real content | `AsyncState.data` |
-| Transient event | `NotificationToastHost` (one host at the shell) | `App.errorMessage` and other one-shots |
+| Loading / in-flight | `LoadingSpinner`, `DishProgressBar` | `AsyncState::isLoading()` or a `*InProgress` role |
+| Error / failure | `ErrorBanner` (message, detail, optional Retry) | `AsyncState::isError()` plus a typed reason localized in QML |
+| Empty | `EmptyState` (title, body, optional action) | `Success && data.empty()` |
+| Success / content | the real content | `AsyncState::data` |
+| Transient event | `NotificationToastHost`, one host at the shell | `App.errorMessage` and other one-shots |
 
 Doctrine for QML pages:
 
 - **Never represent a result as the absence of content.** "No rows" must
-  distinguish *loading* (spinner) from *empty* (EmptyState) from *failed*
-  (ErrorBanner) — bind the phase, not just the list length.
+  distinguish loading (spinner) from empty (`EmptyState`) from failed
+  (`ErrorBanner`). Bind the phase, not just the list length.
 - **One toast host, at the shell.** `NotificationToastHost` is dropped once in
-  `AppShell`/`Main.qml` and listens to `App.errorMessage`; every transient failure
-  (connect, external-link open, USB notice) surfaces through it. Pages do not
-  hand-roll their own toasts.
-- **Bind reactive properties, not polling getters.** Expose a `Q_PROPERTY` with a
-  `NOTIFY` (folded off the owning Observable/signal); do not make QML call a
+  `AppShell.qml` and listens to `App.errorMessage`. Pages raise a transient
+  notice through `shellApi.toast(message, severity)` rather than dropping a
+  second host into their own tree.
+- **Bind reactive properties, not polling getters.** Expose a `Q_PROPERTY` with
+  a `NOTIFY` folded off the owning Observable or signal. Do not make QML call a
   point-in-time `isFooInFlight()` and hope a broad signal re-evaluates it.
-- **The exemplar:** [`ControllersPage.qml`](../src/qml/pages/ControllersPage.qml) +
-  [`SlotListModel`](../src/qml/SlotListModel.h) — `claimInProgress` drives the
-  spinner + disabled toggle, the phase drives the error note. Match it.
+- **Worked example:** [`ControllersPage.qml`](../src/qml/pages/ControllersPage.qml)
+  with [`SlotListModel`](../src/qml/SlotListModel.h). The `claimInProgress` role
+  drives the spinner and the disabled toggle; the phase drives the error note.
 
-`AppViewModel` is the seam: it maps the C++ state onto `Q_PROPERTY`/role models and
-forwards intents verbatim. It must stay **thin** — no derivation, no edge-detection,
-no domain logic. (Derivation that creeps in here belongs in a `core/` mapper or a
-`composer/` Composer so both UIs share it and can't drift.)
+[`AppViewModel`](../src/qml/AppViewModel.h) is the seam: it maps C++ state onto
+`Q_PROPERTY` and role models and forwards intents verbatim. It stays thin, with
+no derivation, no edge detection, and no domain logic. Derivation that creeps in
+here belongs in a `core/` mapper or a `composer/` Composer, where it is
+unit-testable without the Quick stack.
 
----
+## Threading and the hot path
 
-## 8. Threading & the hot path (the deliberate exception)
+The kernel notifies on the thread that called `set`. When binding from a
+background thread, marshal to the GUI loop with `Qt::QueuedConnection` or
+`QMetaObject::invokeMethod`.
 
-The UDF kernel notifies on the thread that called `set`; when binding from a
-background thread, marshal to the GUI loop (`Qt::QueuedConnection` /
-`QMetaObject::invokeMethod`).
+The threads in the app:
 
-**The input hot path is intentionally NOT routed through the kernel.** The
-`input → decode → encode → sendto` path (the SDL bridge / USB read loop →
-`GamepadInputProcessor::publish` → the per-slot sender) is plain, allocation-free
-C++ with the routing tables in [`AppModel`](../src/AppModel.h)
-(`routing_`/`motionRouting_`/…) as the single mutex-guarded cross-thread seam. Do
-not add Observables, `tr()`, or QML to it. Everything *around* the hot path —
-device hotplug, capability, capture mode, path switching — **is** modelled state.
+| Thread | Owner | What runs on it |
+|---|---|---|
+| GUI | `QGuiApplication` | Everything in `qml/`, `composer/`, the stores, `AppModel::rebuild` |
+| SDL input | [`SDLGamepadBridge`](../src/Input/SDLGamepadBridge.h) | The SDL event pump, `GamepadInputProcessor::publish`, and the `sendto` that follows it |
+| USB direct | `UsbGamepadManager` per claimed device | Raw-HID URB reads, feeding the same publish path |
+| Heartbeat | [`SatelliteClient`](../src/Network/SatelliteClient.h) | Per-session keepalive sends and ping arming |
+| Receive | `SatelliteClient` | Ack decode, RTT sampling, rumble and lightbar callbacks, close-notify |
 
----
+**The input hot path is intentionally not routed through the kernel.** The
+input, decode, encode, `sendto` path is plain C++ with no queue, no Qt event
+hop and no cross-thread signal. It is not allocation-free: `sendEncrypted`
+still heap-allocates its inner frame per report
+([`SatelliteClient.cpp`](../src/Network/SatelliteClient.cpp)), which is worth
+removing since the payload never exceeds 17 bytes. Its
+cross-thread seams are explicit and narrow:
 
-## 9. <a name="legacy"></a>One front-end: the Qt Quick flows app
+- `AppModel`'s `routing_` and `motionRouting_` tables (per-slot senders), guarded
+  by `routingMtx_` ([`AppModel.h`](../src/AppModel.h)).
+- The bridge's `suppressedMtx_` (which device ids USB-direct has taken over) and
+  `remapMtx_` (the per-`(vid,pid)` joystick remap), each on its own mutex so a
+  GUI-thread write never contends with the per-report read.
+- [`OutputCommandQueue`](../src/Input/OutputCommandQueue.h). Rumble and lightbar
+  arrive on the receive thread but every `SDL_GameController*` is resolved and
+  used only on the SDL thread, so the request is queued and drained by
+  `runLoop()`.
 
-The Qt Quick app (`src/qml/`, entry `runQmlApp`, `QGuiApplication`) is THE app.
-The parallel Widgets UI served as the migration's reference and fallback until
-the flows redesign reached feature+UX parity, then was deleted for the release
-(no `DISH_QML` option remains — Quick always builds, Widgets never links).
+Do not add Observables, `tr()`, or QML to that path. Everything around it
+(device hotplug, capability, capture mode, path switching) is modelled state and
+goes through the kernel.
 
-What survives under `src/UI/` is shared non-view infrastructure only: the
-`Theme` palettes (pure QColor data + the OS appearance reader — the widget
-QSS layer died with the Widgets tree), `CrashHandler`, the `SlotLiveStats`
-mapper, `common/ExternalLink` (now a bare QDesktopServices edge; toast routing
-happens in QML via `App.errorMessage`), and `licenses/LicenseManifest`. The
-prime directive's proof burden moved to the tests: the view model + role
-models live in `dish_core` and stay fully unit-testable without Quick.
+## One front-end
 
----
+The Qt Quick app is the app: `src/qml/`, entry point `runQmlApp`, hosted by
+`QGuiApplication`. There is no build option to select a front-end and no widget
+tree anywhere in the binary.
 
-## 10. How to add a feature (the recipe)
+`src/UI/` keeps its name but holds only shared non-view infrastructure: the
+`Theme` palettes (plain `QColor` data plus the OS appearance reader),
+`FontStacks`, `CrashHandler`, the `SlotLiveStats` mapper,
+`common/ExternalLink`, and `licenses/LicenseManifest`. None of it draws.
 
-1. **Name the state.** What changes over time? Is it a request (→ `AsyncState<T>`)
-   or a lifecycle (→ a reducer FSM in `core/reducer/`)? Define the value type with
-   `operator==` and the *reasons/render-keys as data*.
-2. **Write the pure core first.** The reducer/mapper + its exhaustive test. No Qt.
-   It must be green before any wiring exists.
-3. **Own it in a `source/`** `StateSource` (or a Coordinator for cross-cutting
-   commands). Feed world signals in; expose `state()` out.
-4. **Derive UI shape in a `composer/`** Composer if more than one upstream
-   contributes. Side effects → a `Controller`.
-5. **Project it in `AppViewModel`** as a reactive `Q_PROPERTY` + `NOTIFY`, and add
-   the intent invokables. Keep it thin.
-6. **Bind all states in QML** using the kit (`LoadingSpinner`/`ErrorBanner`/
-   `EmptyState`/toast). No result-as-absence.
-7. **Wire it once in `AppModel`** (the only composition root).
+The view model and both role models live in the `dish_core` library rather than
+in the Quick target, which is what keeps them unit-testable without standing up
+a QML engine.
 
----
+## How to add a feature
 
-## 11. <a name="roadmap"></a>Hardening roadmap (decisions, ready to execute)
+1. **Name the state.** What changes over time? Is it a request (use
+   `AsyncState<T>`) or a lifecycle (use a reducer FSM in `core/reducer/`)?
+   Define the value type with `operator==`, and reasons and render keys as data.
+2. **Write the pure core first.** The reducer or mapper plus its exhaustive
+   test. No Qt. It must be green before any wiring exists.
+3. **Own it in a `source/` `StateSource`**, or a Coordinator for cross-cutting
+   commands. Feed world signals in; expose `state()` out.
+4. **Derive UI shape in a `composer/` Composer** if more than one upstream
+   contributes. Side effects become a `Controller`.
+5. **Project it in `AppViewModel`** as a reactive `Q_PROPERTY` with a `NOTIFY`,
+   plus the intent invokables. Keep it thin, and record it in
+   [`QML_CONTRACT.md`](QML_CONTRACT.md).
+6. **Bind all states in QML** using the kit. No result-as-absence.
+7. **Wire it once in `AppModel`**, the only composition root.
 
-These are the audited next steps, each with the chosen pattern, so future features
-land on the hardened shape rather than re-litigating it.
+## <a name="not-yet-implemented"></a>Known limitations and not yet implemented
 
-| # | Concern | Decision | Status |
-|---|---|---|---|
-| R1 | **Async-state primitive** | Introduce `core/AsyncState.h` | **Done** |
-| R2 | **Catalog fetch** | Repo emits `AsyncState<CatalogDto, CatalogError>` (no dropped failures, stale-on-error) | **Done** |
-| R3 | **USB transient banners** | Route `UsbNotice` → `errorMessage` toast (persistent USB error already on the slot) | **Done** |
-| R4 | **Forward pairing** | Pure `PairingMachine` FSM (Idle/Submitting/Succeeded/Failed(reason)); success on `SessionConfirmedLive` only | **Done (core); wiring into `WifiConnectionManager` pending)** |
-| R5 | **QML state kit** | `LoadingSpinner`/`ErrorBanner`/`EmptyState`/`NotificationToastHost`; global toast host at the shell | **Done** |
-| R6 | **Discovery scan** | Empty result is now STATE (the page renders an empty-state for `discoveredServers.length === 0`), not a redundant transient toast — the "No servers found" toast was removed; `scanning` + the (maybe-empty) list are the bound state | **Done** |
-| R7 | **Satellite session lifecycle** | Pure `SatelliteSessionMachine` FSM (Discovered/Pairing/Linking/Live/**Faltering**/Reconnecting/Stale/Failed(reason)) modelled on `UsbPathMachine`; `WifiConnectionManager` becomes the coordinator. Fixes the dead `Faltering` state, invisible reconnect/backoff, and uncaptured failure reason. | **Done (core FSM + exhaustive tests); live wiring into `WifiConnectionManager` is the device-tested follow-up** |
-| R8 | **Reconnect/backoff as state** | `retryAttempt` + `nextRetryAtMs` modelled on the session FSM so the UI can show "Reconnecting (n)…" | **Done (in the R7 FSM); surfaced when R7 is wired** |
-| R9 | **`MainUiState` as a Composer** | A top-level `MainUiStateComposer` derives `MainUiState` from upstream Observables (slots, connections, pairing, USB), replacing the hand-mutated `state_` + two-writer `onInputRatesChanged` patch. Carries per-flow `AsyncState`, not one `busy` bool. | Planned |
-| R10 | **Wire `MotionCapabilityComposer`** | It exists + is tested but is dead code; feed it the device-list Observable and consume in R9. | Planned |
-| R11 | **`DeviceListSource`** | Replace the SDL `devices()` getter + content-free `devicesChanged()` with a `StateSource<vector<DeviceSnapshot>>` (distinct-until-changed kills the battery-poll rebuild storm; closes the cross-thread TOCTOU). | Planned |
-| R12 | **Extract from `AppModel`** | Move the USB framework-presence driving → `UsbDirectCoordinator`; catalog/Emulate → `EmulateCoordinator`; remap/deadzone/rumble push → `Controller`s. Leaves `AppModel` a pure composition root + hot-path seam. | Planned |
-| R13 | **Capture mode as state** | Pure `CaptureMode` reducer (Idle/Capturing(slot,target)) — single-owner of the "press to assign" lifecycle, reusing the bridge's capture-threshold predicates; replaces the split bridge-bool + `QString capturingSlotId_`. | **Done (core FSM + tests); live wiring into AppViewModel/bridge is the follow-up** |
-| R14 | **Drop racy invokables** | Removed the `connectByIndex`/`pairWithPin(int)` index-based commands (QML is fully on the de-raced `*ByServerId` variants). | **Done** |
-| R15 | **Capability vocabulary as a reducer** | Pure `CapabilitySolver` (`core/reducer/`) owns `available = controller ∩ transport ∩ type ∩ host`, the four verdicts (`Available`/`Unavailable`/`Off`/`Pending`) and the first-failing-layer rule. The wizard's type table and Configure binding's matrix both render its output, so they cannot drift. | **Done (pure + tested); QML renders it via `App.capabilityForCandidate`)** |
-| R16 | **Apply as a sequencer** | Pure `ApplyBindingMachine` (`core/reducer/`) drives the two-step apply overlay and the 20 s / 8 s budgets. Encodes the two rules the UI kept getting wrong: a timed-out Direct claim is a **fallback**, not a failure, and Cancel is accepted **only** during the claim. `AppViewModel` owns the timers and projects the phase as strings. | **Done (pure + tested); wired in `AppViewModel::applyBinding`)** |
-| R17 | **A binding is a declaration, not a preference** | **It must not outlive its physical pad.** `ConnectionHub::bind` installs a desired descriptor and *every* session PUT re-sends the whole desired set, so a binding left behind by an unplugged controller made the satellite plug a virtual pad for hardware that does not exist. Pure `BindingPresence` (`core/reducer/`) gates the table against the slots the app currently shows: pad present → keep, pad moved to its twin id (USB-direct claim/release) → **migrate** so a path switch never tears down a live stream, pad gone → **unbind**, which DELETEs the controller on the live session now instead of at the reaper timeout. `AppModel::applyBindingPresence` applies it at the end of `rebuild()` behind a re-entrancy guard and raises the one-shot "Controller disconnected — unbound from …" toast, because a binding that vanishes unexplained reads as lost work. | **Done (pure + tested); wired in `AppModel::rebuild`)** |
+Each entry names the decided shape, so a future change lands on it rather than
+re-litigating it.
 
-### Recorded follow-ups (deliberate v3 deferrals)
+**Pure specifications with no live coordinator.** These are exhaustively unit
+tested and describe the target behaviour, but nothing feeds them events yet.
+Wiring them rewrites the live UDP session loop and the SDL input threading,
+which the unit suite cannot exercise (no socket, no satellite, no controller in
+CI), so each needs a device-in-the-loop test pass.
 
-| # | Concern | Why deferred | What it needs |
-|---|---|---|---|
-| F1 | **Windows High Contrast** | It needs a **third palette** plus a system-colour bridge (`SPI_GETHIGHCONTRAST` + the `SysColor` set), and it is not a v3 screen. Shipping a half-HC pass — some surfaces honouring system colours, some not — is worse than none, because a HC user cannot tell which surfaces to trust. | A `ThemePalette` sourced from `GetSysColor`, an `Appearance::HighContrast` arm, and a pass over every place the kit derives a wash from the accent (HC forbids alpha washes entirely). |
-| F2 | **Toast `Undo`** | `NotificationToastHost` is a **queue with no per-toast action channel**. Adding one is a shared-surface change with exactly one caller (Unbind), so the cost lands on every toast in the app to serve one. Unbind ships confirm-free with a `Binding removed` success toast instead. | An action slot on `models::DishNotification` + the queue, and a callback lifetime story for a toast that outlives the page that raised it. |
-| F3 | **Per-binding rumble** | No `RumbleEnabledStore` exists; rumble rides the descriptor caps. `App.rumbleEnabledFor` / `setRumbleEnabled` are honest stubs (`true` / no-op) and the Feel row still renders — the capability verdict for it is real, so hiding the row would hide true information. | A store mirroring `MotionEnabledStore`, keyed per binding, read by the descriptor assembly in `ConnectionHub::bind`. |
-| F4 | **A positive bind-accepted edge** | `ConnectionHub::bind` applies the binding locally and the satellite answers asynchronously; only the FAILURE is typed (`slotRegistrationFailed`). The apply sequencer therefore reads success as "the binding held and the session is live" on a 250 ms tick, inside an 8 s budget. A slow satellite can still reject after the overlay closed — the existing rollback toast covers it. | A per-controller applied/accepted signal out of `WifiConnectionManager`'s controller PUT, fed to `ApplyBindingMachine` as `BindAccepted`. |
-| F5 | **The SDL half of the emulation-type ladder** | `reducer::seedControllerType` matches a catalog `emulates` hint on **either** the pad's USB `vid:pid` **or** an SDL type slug (`ps4`/`ps5`/`switchpro`/`xbox360`…). `AppModel::currentTypeForConnection` can now answer the USB half (R17's presence oracle resolves the pad behind a slot), but `SDLGamepadBridge::Device` carries no type slug at all, so the slug half is always empty. A pad whose `vid:pid` is absent from the catalog's hint list still degrades to the catalog's **first offered type** — correct-by-fallback, not correct-by-identity. | `SDL_GameControllerGetType` → slug on the bridge's `Device`, threaded through `currentTypeForConnection` as the second key. Nothing else changes: the reducer already takes both. |
+- [`SatelliteSessionMachine`](../src/core/reducer/SatelliteSessionMachine.h):
+  Discovered, Pairing, Linking, Live, Faltering, Reconnecting, Stale,
+  Failed(reason), modelled on `UsbPathMachine`, with `retryAttempt` and
+  `nextRetryAtMs` on the state so the UI can show "Reconnecting (n)". It exists
+  because `WifiConnectionManager` currently has a `Faltering` state nothing
+  reaches, invisible reconnect backoff, and no captured failure reason.
+  `WifiConnectionManager` is meant to become its coordinator.
+- [`PairingMachine`](../src/core/reducer/PairingMachine.h): Idle, Submitting,
+  Succeeded, Failed(reason), consuming the existing pure `classifyPair` verdict.
+  `Succeeded` is reached only on a real `SessionConfirmedLive` event, replacing
+  the "infer success from a rising online count" heuristic.
+- [`CaptureMode`](../src/core/input/CaptureMode.h): Idle and
+  Capturing(slot, target), a single owner for the press-to-assign lifecycle,
+  reusing the bridge's capture-threshold predicates. Today the state is split
+  between an atomic flag on `SDLGamepadBridge` and `AppViewModel`'s
+  `capturingSlotId_`.
 
-**What's a pure spec vs. a live rewrite.** R1–R6, R8, R13(core), R14 are landed and
-unit-tested. The four state machines — `AsyncState`, `PairingMachine`,
-`SatelliteSessionMachine`, `CaptureMode` — are **pure, exhaustively tested specs**
-of the target behaviour. Their **live wiring** (turning `WifiConnectionManager` into
-the session coordinator; making the bridge's capture flag follow `CaptureMode`) plus
-R9/R10/R11/R12 rewrite the live UDP session loop, the SDL input threading, and the
-central `AppModel` — code the unit suite **cannot** exercise (no socket, no
-satellite, no controller in CI). Those must land **incrementally with a
-device-in-the-loop test pass**, conforming to the FSM specs above, not in one blind
-sweep. Sequencing when you do: R9 *additively* (compose `MainUiState` from a composer
-while keeping the existing signal), then wire R7 (feed the manager's existing
-transition points into `SatelliteSessionMachine` and expose its `SessionModel`), then
-the R12 extractions last. **Keep the `routingMtx_` hot-path tables intact throughout.**
+**Composition and ownership.**
 
----
+- `MainUiState` is hand-mutated on `AppModel` and patched in a second place by
+  `onInputRatesChanged`, which is a two-writer arrangement. It should be a
+  top-level Composer over the slot, connection, pairing, and USB Observables,
+  carrying a per-flow `AsyncState` rather than one `busy` bool.
+- [`MotionCapabilityComposer`](../src/composer/MotionCapabilityComposer.h)
+  exists and is tested but nothing consumes it. It needs the device-list
+  Observable fed in.
+- The SDL `devices()` getter plus its content-free `devicesChanged()` signal
+  should be a `StateSource<vector<DeviceSnapshot>>`. Distinct-until-changed
+  would end the battery-poll rebuild storm and close the cross-thread
+  time-of-check/time-of-use gap on the device list.
+- `AppModel` still performs work that belongs in dedicated coordinators: USB
+  framework-presence driving, the catalog and Emulate flow, and the remap,
+  deadzone, and rumble pushes. Extracting them would leave it a pure
+  composition root plus the hot-path seam. Keep the `routingMtx_` tables intact
+  when doing so.
 
-## 12. Testing
+**Product gaps.**
 
-- **Pure core is the contract.** Every reducer/mapper/`AsyncState` transition has a
-  Catch2 test that pins the *full* decision space with no mocks
+- **Windows High Contrast.** Needs a third palette plus a system-colour bridge
+  (`SPI_GETHIGHCONTRAST` and the `SysColor` set), an `Appearance::HighContrast`
+  arm, and a pass over every place the kit derives a wash from the accent, since
+  High Contrast forbids alpha washes. A partial pass is worse than none, because
+  a High Contrast user cannot tell which surfaces to trust.
+- **Toast actions.** `NotificationToastHost` is a queue with no per-toast action
+  channel, so there is no Undo. Adding one needs an action slot on
+  `models::DishNotification` and the queue, plus a callback lifetime story for a
+  toast that outlives the page that raised it.
+- **Per-binding rumble.** No rumble store exists; rumble rides the descriptor
+  caps. `App.rumbleEnabledFor` returns `true` and `App.setRumbleEnabled` is a
+  no-op. The Feel row still renders, because the capability verdict for it is
+  real and hiding the row would hide true information. A fix mirrors
+  `MotionEnabledStore`, keyed per binding, read by the descriptor assembly in
+  `ConnectionHub::bind`.
+- **No positive bind-accepted edge.** `ConnectionHub::bind` applies the binding
+  locally and the satellite answers asynchronously; only the failure is typed
+  (`slotRegistrationFailed`). `ApplyBindingMachine` therefore reads success as
+  "the binding held and the session is live" on a 250 ms tick inside an 8 s
+  budget. A slow satellite can still reject after the overlay closes, which the
+  rollback toast covers. The fix is a per-controller accepted signal out of
+  `WifiConnectionManager`'s controller PUT, fed in as `BindAccepted`.
+- **SDL type slugs are absent from the emulation-type ladder.**
+  `reducer::seedControllerType` matches a catalog `emulates` hint on either the
+  pad's USB `vid:pid` or an SDL type slug (`ps4`, `ps5`, `switchpro`,
+  `xbox360`). `SDLGamepadBridge::Device` carries no type slug, so only the
+  `vid:pid` half ever answers. A pad absent from the catalog's hint list
+  degrades to the catalog's first offered type, which is correct by fallback
+  rather than by identity. The fix is `SDL_GameControllerGetType` to a slug on
+  the bridge's `Device`, threaded into `currentTypeForConnection` as the second
+  key; the reducer already takes both.
+
+## Testing
+
+- **Pure core is the contract.** Every reducer, mapper, and `AsyncState`
+  transition has a Catch2 test that pins the full decision space with no mocks
   (`test_async_state`, `test_usb_path_machine`, `test_pairing_machine`,
-  `test_catalog_repository`, `test_capability_solver`, `test_apply_binding_machine`,
-  …). If logic isn't testable without standing up a live `QObject`/socket/SDL, it
-  is in the wrong layer — move the decision into `core/`.
-- **The design system is tested too.** `test_theme_store` pins palette
-  completeness (every dark role has a light value, and they differ);
-  `test_theme_contrast` computes WCAG 2.1 ratios over the real palette values in
-  **both** palettes, so a token that reads on dark and vanishes on light fails the
-  build rather than a screenshot; `test_font_stacks` pins the family probe that
-  keeps mono off Courier New. `scripts/qml-lint-literals.ps1` keeps the pixel
-  values inside `src/qml/kit/**`.
-- **Probes for the kernel.** `StateSourceProbe`/`ComposerProbe`/`ControllerProbe`
-  capture *emission sequences* (not just final values); `RepositoryContract` runs
-  the 8 property tests every repository must pass.
-- One `DishTests` exe links `dish_core`; `scripts/build.ps1 debug test` builds + runs
-  it. Keep it green at every step.
+  `test_catalog_repository`, `test_capability_solver`,
+  `test_apply_binding_machine`, `test_binding_presence`, `test_capture_mode`,
+  `test_satellite_session_machine`). If logic is not testable without standing
+  up a live `QObject`, socket, or SDL, it is in the wrong layer: move the
+  decision into `core/`.
+- **The design system is tested.** `test_theme_store` pins palette completeness
+  (every dark role has a light value, and they differ). `test_theme_contrast`
+  computes WCAG 2.1 ratios over the real palette values in both palettes, so a
+  token that reads on dark and vanishes on light fails the build rather than a
+  screenshot. `test_font_stacks` pins the family probe that keeps mono off
+  Courier New. `scripts/qml-lint-literals.ps1` keeps raw pixel values inside
+  `src/qml/kit/`.
+- **Translations are tested.** `test_translations` pins locale fallback, the
+  per-language `numerusform` order, and placeholder integrity across every
+  catalogue. `scripts/check-translations.ps1` re-runs `lupdate` in CI and fails
+  on any diff, so a new string cannot land without its catalogue entry.
+- **Probes for the kernel.** `StateSourceProbe`, `ComposerProbe`, and
+  `ControllerProbe` capture emission sequences rather than just final values.
+  `RepositoryContract` runs the property tests every repository must pass.
+- One `DishTests` executable links `dish_core`. `scripts/build.ps1 debug test`
+  builds and runs it. Keep it green at every step.
+</content>
+</invoke>

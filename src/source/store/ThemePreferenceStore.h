@@ -1,22 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ThemePreferenceStore — the theme-mode StateSource (Workstream 3d). Owns the
-// persisted dark/light/system choice and republishes it reactively. Mirrors
-// dish-android source/store/ThemePreferenceStore.kt + its ThemeMode enum.
+// The theme-mode StateSource: owns the persisted dark/light/system choice and
+// republishes it reactively.
 //
-// SoC split (plan §4.3 rule 2): this class only DERIVES the mode (Source). The
-// EFFECT — resolving SYSTEM against the OS preference and re-theming the live
-// QApplication — lives in composer::ThemeController (a kernel Controller). Where
-// android folds both into setMode() + AppCompatDelegate, the port keeps them
-// apart: setMode() persists + republishes; the controller subscribes the
-// Observable and applies the palette, so the persisted value and the rendered
-// palette cannot drift.
+// This class only DERIVES the mode. Resolving System against the OS preference
+// and re-theming the live application is an effect, and lives in
+// composer::ThemeController. Keeping them apart is what stops the persisted
+// value and the rendered palette from drifting.
 //
-// Storage values ("system"|"light"|"dark") and the key ("theme_mode") under the
-// "user_preferences" store are kept verbatim from android — they are a
-// cross-client schema; renaming is a migration. Unknown/empty -> SYSTEM
-// (android's fromStorageValue).
+// The storage values and key are a cross-client schema shared with the other
+// Dish clients, so renaming one is a migration. Unknown or empty resolves to
+// System.
 
 #pragma once
 
@@ -31,7 +26,7 @@ class QSettings;
 namespace dish::source {
 
 // The three appearance modes the picker offers. SYSTEM follows the OS; LIGHT /
-// DARK pin it. Mirrors android ThemeMode { SYSTEM, LIGHT, DARK }.
+// DARK pin it.
 enum class ThemeMode { System, Light, Dark };
 
 // Pure mappings between ThemeMode and its persisted storage token / display

@@ -1,26 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// ApplyBindingMachine — the apply sequencer behind the wizard's Review page and
-// Configure binding's Apply. Both surfaces show the SAME overlay: one step per
-// real async action, because the Connection step alone can sit for 20 s while
-// Windows hands the device over, and a spinner cannot say that.
+// The apply sequencer behind the wizard's Review page and Configure binding's
+// Apply. One step per real async action, because the Connection step alone can
+// sit for 20s while Windows hands the device over and a bare spinner cannot say
+// that. Connection is the USB path switch, skipped when the draft's path already
+// matches; Destination is the REST round-trip that writes the binding.
 //
-//   Connection   the USB path switch (raw-HID claim / release). SKIPPED when the
-//                draft's path already matches the slot's.
-//   Destination  the REST round-trip that writes the binding.
+// A Direct claim that times out is a fallback, not a failure: the pad still
+// streams over Standard, so the run continues and the caller warns rather than
+// erroring. Cancel is accepted only during Connection, where aborting a claim
+// drops safely back to Standard; the REST round-trip cannot be half-applied.
 //
-// Two rules carry most of the meaning:
-//   * A Direct claim that times out is a FALLBACK, not a failure. The pad still
-//     streams over Standard, so the run continues to Binding and the caller
-//     raises a WARNING toast (`directFellBack`), never an error.
-//   * Cancel is accepted ONLY while the Connection step is active. Aborting a
-//     claim drops back to Standard, which is safe; the 8 s REST round-trip is
-//     short enough not to need an escape and cannot be half-applied.
-//
-// Pure, Qt-free, header-only: every phase x event is unit-testable with no
-// timers, no sockets and no satellite. The wall clock lives in AppViewModel,
-// which feeds it as Tick / *TimedOut events.
+// The wall clock lives in AppViewModel and arrives as Tick / *TimedOut events.
 
 #pragma once
 
@@ -39,11 +31,11 @@ struct ApplyState {
     ApplyPhase phase = ApplyPhase::Idle;
     ApplyStepState connection = ApplyStepState::Pending;
     ApplyStepState destination = ApplyStepState::Pending;
-    bool directFellBack = false; // -> WARNING toast, not error
+    bool directFellBack = false; // a warning, not an error
     std::optional<ApplyFailure> failure;
-    int elapsedMsOnStep = 0; // drives the 4 s slow hint
-    // Carried from Start so a settled path can tell "the claim we asked for did
-    // not land" (a fallback) from "we asked to go back to Standard and did".
+    int elapsedMsOnStep = 0; // drives the 4s slow hint
+    // Carried from Start so a settled path can tell a claim that did not land
+    // from a deliberate return to Standard.
     bool wantsDirect = false;
 };
 
@@ -84,8 +76,7 @@ inline bool applyCancellable(const ApplyState& s) { return s.phase == ApplyPhase
 inline ApplyState reduceApply(const ApplyState& s, const ApplyEvent& e) {
     ApplyState next = s;
 
-    // Move onto the Destination step. Shared by the three ways the Connection
-    // step can end: settled, timed out, or skipped outright.
+    // Shared by the three ways Connection can end: settled, timed out, skipped.
     const auto enterBinding = [](ApplyState& st) {
         st.phase = ApplyPhase::Binding;
         st.destination = ApplyStepState::Active;
@@ -97,8 +88,8 @@ inline ApplyState reduceApply(const ApplyState& s, const ApplyEvent& e) {
             using E = std::decay_t<decltype(ev)>;
 
             if constexpr (std::is_same_v<E, apply_event::Start>) {
-                // A Start always restarts the run — a retry after a failure is
-                // the same call, and the draft is still intact.
+                // Start always restarts: a retry after a failure is the same
+                // call, and the draft is still intact.
                 next = ApplyState{};
                 next.wantsDirect = ev.wantsDirect;
                 if (ev.needsPathSwitch) {
@@ -112,8 +103,8 @@ inline ApplyState reduceApply(const ApplyState& s, const ApplyEvent& e) {
             } else if constexpr (std::is_same_v<E, apply_event::PathSettled>) {
                 if (next.phase != ApplyPhase::SwitchingPath) { return next; }
                 next.connection = ApplyStepState::Done;
-                // Asked for Direct and got Standard: the claim lost. Warn, don't
-                // fail — the pad streams either way.
+                // Asked for Direct and got Standard: the claim lost. Warn rather
+                // than fail, since the pad streams either way.
                 next.directFellBack = next.wantsDirect && !ev.direct;
                 enterBinding(next);
                 return next;
@@ -139,13 +130,13 @@ inline ApplyState reduceApply(const ApplyState& s, const ApplyEvent& e) {
                 if (next.phase != ApplyPhase::Binding) { return next; }
                 next.destination = ApplyStepState::Failed;
                 next.phase = ApplyPhase::Failed;
-                // A REST round-trip that never answers IS an unreachable host.
+                // A REST round-trip that never answers is an unreachable host.
                 next.failure = ApplyFailure::HostUnreachable;
                 return next;
             } else if constexpr (std::is_same_v<E, apply_event::SlotVanished>) {
-                // The pad went away mid-apply (a Direct claim retires the
-                // framework slot id). Terminal from any live phase; a run that
-                // already finished keeps its result.
+                // The pad went away mid-apply, as a Direct claim retiring the
+                // framework slot id does. Terminal from any live phase; a run
+                // that already finished keeps its result.
                 if (next.phase == ApplyPhase::Succeeded || next.phase == ApplyPhase::Failed ||
                     next.phase == ApplyPhase::Cancelled) {
                     return next;
@@ -160,7 +151,6 @@ inline ApplyState reduceApply(const ApplyState& s, const ApplyEvent& e) {
                 next.failure = ApplyFailure::SlotGone;
                 return next;
             } else if constexpr (std::is_same_v<E, apply_event::Cancel>) {
-                // Accepted ONLY while the claim is in flight.
                 if (next.phase != ApplyPhase::SwitchingPath) { return next; }
                 next.connection = ApplyStepState::Failed;
                 next.phase = ApplyPhase::Cancelled;

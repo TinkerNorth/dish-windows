@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Ports dish-android core/input/GamepadButtonLayoutsTest.kt 1:1 (44 cases): the
-// XUSB <-> HID button/hat bit map (the controller wire contract), both
-// directions, plus the round-trip identity over every canonical bit. PURE — no
-// Qt, no SDL. The HID/HAT constants here are the android GamepadTouchView.BTN_*
-// / HAT_* values (BTN_A=0x0001 .. BTN_HOME=0x0400, HAT_NONE=0 .. HAT_NW=8),
-// which match the kHid* / kHat* constants under test.
+// The BTN_* / HAT_* literals below are the HID wire values, spelled out here
+// rather than taken from the kHid* / kHat* constants under test.
 
 #include "core/input/GamepadButtonLayouts.h"
 
@@ -16,7 +12,6 @@ namespace layout = dish::input::layout;
 
 namespace {
 
-// The android GamepadTouchView constants the Kotlin test asserts against.
 constexpr int BTN_A = 0x0001;
 constexpr int BTN_B = 0x0002;
 constexpr int BTN_X = 0x0004;
@@ -51,8 +46,6 @@ void assertXusb(int hidButtons, int hat, int expected) {
 
 } // namespace
 
-// ── xusb -> HID button mapping (11) ──────────────────────────────────────────
-
 TEST_CASE("xusb A maps to HID BTN_A", "[input][layout]") { assertHid(0x1000, BTN_A, 0); }
 TEST_CASE("xusb B maps to HID BTN_B", "[input][layout]") { assertHid(0x2000, BTN_B, 0); }
 TEST_CASE("xusb X maps to HID BTN_X", "[input][layout]") { assertHid(0x4000, BTN_X, 0); }
@@ -70,8 +63,6 @@ TEST_CASE("xusb RIGHT_THUMB maps to HID BTN_RS", "[input][layout]") {
     assertHid(0x0080, BTN_RS, 0);
 }
 TEST_CASE("xusb GUIDE maps to HID BTN_HOME", "[input][layout]") { assertHid(0x0400, BTN_HOME, 0); }
-
-// ── xusb dpad -> HID hat octant (9) ──────────────────────────────────────────
 
 TEST_CASE("xusb dpad neutral maps to hat 0", "[input][layout]") { assertHid(0x0000, 0, HAT_NONE); }
 TEST_CASE("xusb dpad up maps to hat N", "[input][layout]") { assertHid(0x0001, 0, HAT_N); }
@@ -91,8 +82,6 @@ TEST_CASE("xusb dpad up+left maps to hat NW", "[input][layout]") {
     assertHid(0x0001 | 0x0004, 0, HAT_NW);
 }
 
-// ── xusb combos / identity / unknown bits (3) ────────────────────────────────
-
 TEST_CASE("xusb with A plus B plus X plus Y sets all four HID face bits", "[input][layout]") {
     const int packed = layout::xusbToHid(0x1000 | 0x2000 | 0x4000 | 0x8000);
     const int expected = BTN_A | BTN_B | BTN_X | BTN_Y;
@@ -110,8 +99,6 @@ TEST_CASE("xusb unknown bits are dropped", "[input][layout]") {
     // 0x0800 is reserved/unused in XUSB.
     REQUIRE(layout::hidButtonsOf(layout::xusbToHid(0x0800)) == 0);
 }
-
-// ── HID -> xusb button mapping (11) ──────────────────────────────────────────
 
 TEST_CASE("HID BTN_A maps to xusb A", "[input][layout]") { assertXusb(BTN_A, 0, 0x1000); }
 TEST_CASE("HID BTN_B maps to xusb B", "[input][layout]") { assertXusb(BTN_B, 0, 0x2000); }
@@ -133,8 +120,6 @@ TEST_CASE("HID BTN_RS maps to xusb RIGHT_THUMB", "[input][layout]") {
 }
 TEST_CASE("HID BTN_HOME maps to xusb GUIDE", "[input][layout]") { assertXusb(BTN_HOME, 0, 0x0400); }
 
-// ── HID hat octant -> xusb dpad (9) ──────────────────────────────────────────
-
 TEST_CASE("HID hat 0 maps to xusb dpad neutral", "[input][layout]") {
     assertXusb(0, HAT_NONE, 0x0000);
 }
@@ -154,8 +139,6 @@ TEST_CASE("HID hat SW maps to xusb dpad down+left", "[input][layout]") {
 TEST_CASE("HID hat NW maps to xusb dpad up+left", "[input][layout]") {
     assertXusb(0, HAT_NW, 0x0001 | 0x0004);
 }
-
-// ── Round-trip identity over every canonical bit (1) ─────────────────────────
 
 TEST_CASE("xusbToHid then hidToXusb is identity for every canonical bit", "[input][layout]") {
     const int xusbBits[] = {0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,

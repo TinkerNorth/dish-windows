@@ -1,29 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Thin wrapper over the v6 brand SVGs embedded in the binary (packaging/dish.qrc
-// → `:/brand/*.svg`, addressed from QML as `qrc:/brand/<name>.svg`). The Qt SVG
-// image plugin (Qt6::Svg, already linked) renders them. Pass a bare glyph name
-// (no path, no extension); for the contract's connection glyph tokens
-// ("satelliteBase"/"satelliteConnected"/"satelliteOff") use `glyphForToken()`.
+// Renders `:/brand/*.svg` by bare name. A glyph re-tints by PALETTE, never by
+// state: the shipped SVGs bake #8FCFE3, so only a palette whose glyph tint
+// differs pays for the colorization pass.
 //
-// COLOUR: a glyph re-tints by PALETTE, never by state — state colour lives in
-// the dot and the chip. The shipped SVGs are hard-coded #8FCFE3, which is right
-// on the dark surface and near-invisible on the light one, so the light palette
-// routes the image through a MultiEffect colorization to Theme.glyph. The dark
-// palette renders the raw Image: full fidelity (the white inset highlights
-// survive), zero effect cost, which is the common case.
-//
-// MOTION: the six `*-animated.svg` files contain no <animate> elements and Qt
-// runs no SMIL — they are static files that look like states. They are
-// unreachable here on purpose: an "-animated" name resolves to its family base
-// and the transient is expressed in QML (DishProgressBar, or an opacity /
-// rotation animation over the base glyph, gated on Tokens.reducedMotion).
-//
-// The root id must NOT be named `glyph`: in QML an id shadows a same-named
-// property in its own component scope, so `"qrc:/brand/" + glyph` would
-// concatenate the Image OBJECT (a garbage URL) and every glyph in the app
-// silently rendered nothing — exactly what happened until this rename.
+// The root id must NOT be named `glyph`: an id shadows a same-named property in
+// its own component scope, so `"qrc:/brand/" + glyph` would concatenate the
+// Image OBJECT and every glyph in the app would silently render nothing.
 
 import QtQuick
 import QtQuick.Effects
@@ -34,27 +18,24 @@ Image {
 
     // Bare brand asset name, e.g. "satellite-connected" (no dir, no ".svg").
     property string glyph: "satellite"
-    // false = decorative / raw: render the shipped cyan untouched.
     property bool tinted: true
-    // Non-empty makes the glyph meaningful: it stops being ignored by
-    // accessibility and announces this name. Decorative glyphs beside a text
-    // label leave it empty.
+    // Empty leaves the glyph decorative and ignored by accessibility.
     property string accessibleName: ""
 
-    // An "-animated" variant falls back to its family base (see MOTION above).
+    // The `*-animated.svg` files hold no <animate> and Qt runs no SMIL, so an
+    // "-animated" name falls back to its family base; express the transient in
+    // QML instead.
     readonly property string asset: root.glyph.indexOf("-animated") >= 0
                                     ? root.glyph.substring(0, root.glyph.indexOf("-"))
                                     : root.glyph
 
-    // The dark palette ships the glyphs' own cyan; only a palette whose glyph
-    // tint differs from it needs the colorization pass. Qt.colorEqual, not
-    // `!==`: a QColor is never strictly equal to a string.
+    // Qt.colorEqual, not `!==`: a QColor is never strictly equal to a string.
     readonly property bool recolour: root.tinted && !Qt.colorEqual(Theme.glyph, "#8fcfe3")
 
-    // An empty glyph (a hidden slot, e.g. SectionHeader/rail items without an
-    // icon) must not attempt a load — "qrc:/brand/.svg" warns on every create.
+    // An empty glyph must not attempt a load — "qrc:/brand/.svg" warns on
+    // every create.
     source: root.asset.length > 0 ? "qrc:/brand/" + root.asset + ".svg" : ""
-    // SVGs render crisp at any raster size if we request the exact target px.
+    // Request the exact target px so the SVG rasterises crisp.
     sourceSize.width: width
     sourceSize.height: height
     fillMode: Image.PreserveAspectFit

@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// The pure touchpad-mode resolve ladder (core/reducer/TouchpadModeResolve.h):
-// android TouchpadRouting.wireMode's ds4 > mouse > off decision plus the
-// DS4-mode catalog gate from CapabilityResolver.typeOffersFeature. Every
-// (pick x padHasTouchpad x typeOffersDs4 x hostMouseControl) arm that matters,
-// the blocked-pick-never-falls-back rule, and the mode-name helpers.
 
 #include "core/reducer/TouchpadModeResolve.h"
 
@@ -27,8 +21,7 @@ TEST_CASE("resolve: ds4 pick with a touch source and an offering type -> ds4",
 
 TEST_CASE("resolve: ds4 pick without a touch source -> off (never mouse)",
           "[touchpad-mode][resolve]") {
-    // A blocked pick declares off rather than falling back to the OTHER
-    // routing — android wireMode's no-crossover rule.
+    // A blocked pick declares off; it never crosses over to the other routing.
     REQUIRE(reducer::resolveTouchpadMode(kDs4, false, true, true) == proto::kTouchpadModeOff);
 }
 
@@ -45,8 +38,6 @@ TEST_CASE("resolve: mouse pick needs a touch source AND the host grant",
 }
 
 TEST_CASE("resolve: mouse never falls back to ds4 when blocked", "[touchpad-mode][resolve]") {
-    // Everything the ds4 rung would need is present, but the PICK was mouse
-    // and the host denies — the answer is off, not a surprise pad render.
     REQUIRE(reducer::resolveTouchpadMode(kMouse, true, true, false) == proto::kTouchpadModeOff);
 }
 
@@ -72,8 +63,8 @@ TEST_CASE("typeOffersDs4Touchpad: unsupported never offers", "[touchpad-mode][ga
 
 TEST_CASE("typeOffersDs4Touchpad: absent modes is a pre-modes catalog (offers)",
           "[touchpad-mode][gate]") {
-    // Back-compat: a supported touchpad feature with no modes array keeps the
-    // prior assumption (pad-capable) rather than gating off.
+    // Back-compat: a catalog with no modes array predates the gate, so a
+    // supported touchpad feature is still assumed pad-capable.
     REQUIRE(reducer::typeOffersDs4Touchpad(true, {}));
 }
 

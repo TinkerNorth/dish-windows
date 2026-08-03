@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// MotionEnabledStoreTest (ADAPT, 7). Port of dish-android source/store/
-// MotionEnabledStoreTest: the in-memory StateSource bridged to the durable
-// MotionPreferenceRepository. Where android mocks the repo with MockK, we use a
-// real repository over an isolated in-memory QSettings (the C++ fake): hydration
-// from the repo on construction, default-on for an unwritten slot, setEnabled
-// persisting to BOTH the repo and the state, opposite-value flips, cascade
-// forget (removes from both layers), per-slot independence, and that an
-// explicitly-disabled slot reads false.
 
 #include "repository/MotionPreferenceRepository.h"
 #include "source/store/MotionEnabledStore.h"
@@ -26,7 +17,6 @@ using dish::test::makeSharedSettings;
 
 namespace {
 
-// A repo pre-seeded with the given preferences over a fresh in-memory store.
 std::unique_ptr<MotionPreferenceRepository>
 seededRepo(std::initializer_list<MotionPreference> prefs) {
     auto repo = std::make_unique<MotionPreferenceRepository>(makeSharedSettings());
@@ -59,10 +49,8 @@ TEST_CASE("setEnabled persists to the repository AND republishes state", "[motio
 
     store.setEnabled("9", false);
 
-    // Persisted...
     REQUIRE(repo->get("9").has_value());
     CHECK(repo->get("9")->enabled == false);
-    // ...and republished.
     CHECK(store.state().value().at("9") == false);
     CHECK_FALSE(store.isEnabled("9"));
 }
@@ -87,10 +75,10 @@ TEST_CASE("forget removes the entry from state AND from the repository", "[motio
     store.forget("9");
 
     CHECK_FALSE(repo->get("9").has_value());
-    // Absent in state -> falls back to the default (on).
+    // Absent from state means the default (on) applies again.
     CHECK(store.isEnabled("9"));
-    // Snapshot once: state().value() returns a fresh copy each call, so find()
-    // and end() must come from the SAME snapshot to be comparable iterators.
+    // state().value() returns a fresh copy per call, so find() and end() must
+    // come from the same snapshot to be comparable iterators.
     const auto snapshot = store.state().value();
     CHECK(snapshot.find("9") == snapshot.end());
 }

@@ -1,31 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Configure binding (SCR §6) — everything about ONE binding, with a live account
-// of what will and will not carry. Pushed from Home ▸ Edit › and Controllers ▸
-// Bound · host ›, always with `slotId` set BEFORE load.
-//
-// Structure: INPUT / DESTINATION / BINDING down the left, the WHAT CARRIES
-// matrix on the right, recomputed on every change. ONE scroll region for the
-// whole two-column block (two side-by-side scrollers make the wheel's target
-// depend on pointer position and Page Down ambiguous); below ~900px of content
-// width the matrix drops underneath the editor at full width rather than
-// squeezing it.
-//
-// This page and the setup wizard are two views of ONE in-flight binding, so they
-// instantiate the SAME shared/BindingDraft.qml — including its whyFor() copy, so
-// the same pad can never get two different explanations of why its gyro is dead.
-//
-// NOTHING here writes until Apply. Every control mutates the draft; App.
-// applyBinding() is the one write, and it is the only call that touches the host.
-//
-// Entry is never gated on hosts existing: a disabled "Bind…" explains nothing, so
-// the page opens and shows the "No hosts found" state instead.
-//
-// Blockers follow the terminal/inline split: a lost host and an unplugged pad are
-// modal because the page really is unusable, but an UNSTEADY link is an inline
-// warning banner — a state that oscillates by definition would raise and dismiss
-// a modal forever and trap the user in it.
+// Configure binding — everything about ONE binding, with a live account of what
+// will and will not carry. Pushed with `slotId` set BEFORE load. This page and the
+// setup wizard are two views of ONE in-flight binding (the same BindingDraft, so a
+// pad can never get two explanations). Nothing writes until Apply.
 
 // Bound: the probe/host/type delegates read the outer ids alongside their
 // required model properties.
@@ -57,7 +36,7 @@ Kit.Page {
     readonly property string linkWord: page.padLive ? qsTr("Streaming")
                                      : page.padBound ? qsTr("Bound") : qsTr("Not bound")
 
-    // ── Leave guard (D25 / §B.7) ────────────────────────────────────────────
+    // ── Leave guard ─────────────────────────────────────────────────────────
     // A rail click REPLACES the content stack, so an edited draft has to get
     // first refusal before it is dropped.
     readonly property bool blocksLeave: page.dirty
@@ -85,9 +64,8 @@ Kit.Page {
     }
 
     // ── Metrics ─────────────────────────────────────────────────────────────
-    // The design's fixed 82px field-label column, and the matrix panel's own
-    // measure. Below the min-window content width the matrix goes full width
-    // underneath the editor instead of shrinking it toward zero.
+    // Below the min-window content width the matrix goes full width underneath
+    // the editor instead of shrinking it toward zero.
     readonly property int labelColumn: 82
     readonly property int matrixWidth: 292
     readonly property int matrixMinWidth: 260
@@ -115,9 +93,9 @@ Kit.Page {
     readonly property string padFailure: page.padRow ? page.padRow.directFailure : ""
     readonly property bool padClaiming: page.padRow ? page.padRow.claimInProgress : false
 
-    // The USB path FSM's inline reasons (SCR §2.3). The Direct control here is
-    // the same control the slot card carries, so it needs the same inline
-    // reason — never a toast, and never a silent revert.
+    // The USB path FSM's reasons. The Direct control here is the same control the
+    // slot card carries, so it gets the same INLINE reason — never a toast, and
+    // never a silent revert.
     readonly property string pathNote: {
         if (page.padFailure === "permissionDenied") {
             return qsTr("Direct access denied — another app owns this device.");
@@ -167,9 +145,8 @@ Kit.Page {
         catalogFailed: page.catalogBroken
     }
 
-    // The snapshot the page opened with. `dirty` is what the leave guard and the
-    // action bar both read; without it a rail click would confirm on a page the
-    // user only looked at.
+    // The snapshot the page opened with; `dirty` is read off it, so a rail click
+    // never confirms on a page the user only looked at.
     // NOT `baseline`: Item declares that anchor line FINAL, and shadowing it
     // makes the whole component fail to create at RUNTIME (the page never opens).
     property var openedWith: null
@@ -208,13 +185,11 @@ Kit.Page {
 
         const boundId = page.padRow.boundConnectionId;
         if (boundId.length > 0) {
-            // The label arrives with the host row; chooseDestination only needs
-            // the id and the kind. Every destination this page can offer is a
-            // Satellite — Windows has no Bluetooth-host source.
+            // The real label arrives later with the host row. Every destination
+            // this page can offer is a Satellite — Windows has no BT-host source.
             draft.chooseDestination(boundId, boundId, "satellite");
-            // The catalog is keyed on the DESTINATION, never on the pad: in bind
-            // mode the pad has no binding, and the slot-keyed read resolves
-            // through one. chooseType wants a name, and typeNameFor reads this.
+            // Keyed on the DESTINATION, never on the pad: in bind mode the pad has
+            // no binding, and the slot-keyed read resolves through one.
             page.refreshCatalog();
             const current = App.emulateCurrentTypeForHost(boundId, page.slotId);
             if (current >= 0) {
@@ -244,8 +219,7 @@ Kit.Page {
         page.types = App.emulateTypesForHost(draft.hostId);
     }
 
-    // Every destination change is a different catalog, so the fetch re-runs and
-    // the offered types are re-read against the new host.
+    // A different destination is a different catalog.
     function refreshCatalog() {
         if (draft.hasDestination && !draft.hostIsBluetooth) {
             App.refreshEmulateForHost(draft.hostId);
@@ -346,8 +320,8 @@ Kit.Page {
     readonly property var getsNames: page.availableNames(["gamepad", "motion", "touchpad", "mouse"])
     readonly property var sendsNames: page.availableNames(["rumble"])
 
-    // The instrument-panel strip under the matrix: what the draft actually
-    // holds, in the wire's own words.
+    // The instrument-panel strip under the matrix: what the draft actually holds,
+    // in the wire's own words.
     readonly property string panelFooter: [
         qsTr("slot %1").arg(page.slotId),
         draft.desiredPath,
@@ -375,7 +349,7 @@ Kit.Page {
         return 0;
     }
 
-    // ── Link vocabulary (SCR §2.1) ──────────────────────────────────────────
+    // ── Link vocabulary ─────────────────────────────────────────────────────
     function chipText(token) {
         switch (token) {
         case "found":
@@ -391,7 +365,7 @@ Kit.Page {
         case "online":
             return qsTr("Online");
         case "unstable":
-            return qsTr("Unstable");
+            return qsTr("Unsteady");
         default:
             return token;
         }
@@ -412,14 +386,13 @@ Kit.Page {
         }
     }
 
-    // Never assert a slot NUMBER before bindSlot allocates one — pre-bind the
-    // host says how much room it has, not which slot the pad will land in.
-    // `boundCount` is only a reactivity token: a function call is not a binding
-    // dependency, so the caller passes the property that moves.
+    // Never assert a slot NUMBER before bindSlot allocates one — pre-bind, the
+    // host says how much room it has, not where the pad lands. `boundCount` is
+    // only a reactivity token: a call is not a binding dependency.
     function hostSubtitle(connectionId, boundCount) {
         const free = App.hostSlotCapacity() - App.hostBoundSlotCount(connectionId);
         if (free > 0) {
-            return qsTr("%1 slots free").arg(free);
+            return qsTr("%n slots free", "", free);
         }
         const displaced = App.displacedSlotName(connectionId);
         return displaced.length > 0
@@ -538,7 +511,7 @@ Kit.Page {
             page.notify(qsTr("Direct wasn’t available — bound on Standard instead."), "warning");
         }
         if (ok) {
-            page.notify(qsTr("Controller bound — %1 is ready on %2.")
+            page.notify(qsTr("Controller bound — %1 is live on %2.")
                           .arg(page.padName).arg(draft.hostName), "success");
             page.snapshot();
             page.popSelf();
@@ -562,9 +535,8 @@ Kit.Page {
     }
 
     // ── Model probes ────────────────────────────────────────────────────────
-    // Invisible: a positioner skips them, and they exist only to republish one
-    // row each. Repeaters (not ListViews) so every row is instantiated — a
-    // virtualised delegate that was never created could not adopt itself.
+    // Repeaters, not ListViews, so every row is instantiated: a virtualised
+    // delegate that was never created could not adopt itself.
     Item {
         visible: false
 
@@ -653,8 +625,6 @@ Kit.Page {
                     contentItem: ColumnLayout {
                         spacing: Tokens.s5
 
-                        // Connection: the transport fact, its rate, and the one
-                        // question this page asks about it.
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Tokens.s4
@@ -698,9 +668,6 @@ Kit.Page {
                             }
                         }
 
-                        // The USB path FSM surfaces here too — the Direct control
-                        // is the same control, so it needs the same inline
-                        // reason, never a silent revert and never a toast.
                         Label {
                             Layout.fillWidth: true
                             visible: page.pathNote.length > 0
@@ -732,8 +699,7 @@ Kit.Page {
                             color: Theme.outlineSubtle
                         }
 
-                        // What the hardware itself reports. An absent capability
-                        // is still drawn, negated and legible.
+                        // An absent capability is still drawn, negated and legible.
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Tokens.s4
@@ -858,11 +824,9 @@ Kit.Page {
                     visible: draft.hostIsBluetooth
                     Layout.fillWidth: true
                     tone: Kit.Callout.Info
-                    text: qsTr("The PC pairs with this box as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
+                    text: qsTr("This PC pairs as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
                 }
 
-                // Gets / Sends back — the same vocabulary as the matrix, read
-                // the other way round.
                 RowLayout {
                     visible: draft.hasDestination
                     Layout.fillWidth: true
@@ -939,7 +903,6 @@ Kit.Page {
                 }
 
                 // ── BINDING ─────────────────────────────────────────────────
-                // The accent section: this is the part that is about to be sent.
                 Kit.SectionHeader {
                     visible: draft.hasDestination
                     label: qsTr("Binding")
@@ -1011,8 +974,7 @@ Kit.Page {
                         onPicked: draft.chooseType(typeOption.modelData.type,
                                                    typeOption.modelData.name)
 
-                        // What the TYPE layer alone offers — accent when the
-                        // type carries it, outlined when it does not.
+                        // What the TYPE layer alone offers.
                         Flow {
                             spacing: Tokens.s2
 
@@ -1151,8 +1113,6 @@ Kit.Page {
                         rows: page.matrixRows
                     }
 
-                    // The instrument-panel strip: what the draft actually holds,
-                    // in the wire's own words.
                     Label {
                         Layout.fillWidth: true
                         Layout.topMargin: Tokens.s2
@@ -1240,8 +1200,7 @@ Kit.Page {
         id: applyOverlay
         steps: page.applySteps
         // Escapable only while the Connection step is live: aborting a Direct
-        // claim falls back to Standard, which is a warning, not a failure. The
-        // REST round-trip is short enough not to need one.
+        // claim falls back to Standard, which is a warning, not a failure.
         cancellable: App.applyCancellable
         slowHint: App.applyCancellable && App.applyElapsedMs >= 4000
                   ? qsTr("Windows can take up to 20 seconds to hand over the device.") : ""

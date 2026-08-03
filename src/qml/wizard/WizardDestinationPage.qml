@@ -2,20 +2,9 @@
 // Copyright (C) 2026 Dish contributors.
 //
 // Wizard page 2 — Destination. Which PC this pad should drive, pairing it if
-// need be.
-//
-// A live scan IS the step, not a dialog over it: the list fills in underneath
-// the reader and the empty result is a full state with the Satellite download
-// and a rescan, never a bare "searching…" line. Continue simply waits.
-//
-// A remembered host appears here as a row WITH ITS CHIP, never as a duplicate
-// FOUND entry (the model's one-spot rule already excludes it from
-// discoveredServers), so the two ends of the list are one list.
-//
-// The auto-advance trap, which is the highest-severity gotcha on this page:
-// pairingSucceeded is a GLOBAL signal — a background reconnect fires it too.
-// The pending host id is stored here and compared before the wizard is allowed
-// to move, or the flow jumps forward to a host the user never picked.
+// need be; the live scan IS the step, not a dialog over it. The trap here:
+// pairingSucceeded is a GLOBAL signal — a background reconnect fires it too — so
+// the pending host id is stored and compared before the wizard may move.
 
 // Bound: the row delegates read the outer `page` id alongside their required
 // model properties.
@@ -60,10 +49,7 @@ ColumnLayout {
     }
 
     // ── Page state ──────────────────────────────────────────────────────────
-    // The rows the user can pick: remembered satellites plus the un-remembered
-    // rest of the scan.
     readonly property int hostCount: App.connectionModel.count + App.discoveredServers.length
-    // Whether the selected row still owes a PIN.
     property bool selectedNeedsPairing: false
     // The host THIS page asked the user to pair. Compared on pairingSucceeded.
     property string pendingHostId: ""
@@ -92,7 +78,7 @@ ColumnLayout {
         case "online":
             return qsTr("Online");
         case "unstable":
-            return qsTr("Unstable");
+            return qsTr("Unsteady");
         }
         return "";
     }
@@ -107,18 +93,14 @@ ColumnLayout {
         return Kit.CapabilityChip.Neutral;
     }
 
-    // Never assert a slot NUMBER before bindSlot allocates one — and when the
-    // host is full, say what picking it costs.
-    // Explicit singular / plural pairs (no %n): the app ships English fallback
-    // catalogs and an untranslated %n renders its "(s)" literally.
+    // Never assert a slot NUMBER before bindSlot allocates one. The zero case is
+    // its own message: it states a consequence rather than counting anything.
     function slotsFreeText(connectionId) {
         const free = page.accounting >= 0
                    ? App.hostSlotCapacity() - App.hostBoundSlotCount(connectionId) : 0;
         if (free <= 0)
             return qsTr("0 slots free — one pad will be unbound");
-        if (free === 1)
-            return qsTr("1 slot free");
-        return qsTr("%1 slots free").arg(free);
+        return qsTr("%n slots free", "", free);
     }
 
     function rowSubText(ip, source, connectionId) {
@@ -191,13 +173,10 @@ ColumnLayout {
             text: qsTr("Scanning your Wi-Fi")
             Layout.fillWidth: true
         }
-        // A live region: the count changes with no user action, so it announces.
-        // It counts the rows the picker OFFERS (remembered ∪ found), which is
-        // what the banner's own "<n> found" says — App.foundCount is the
-        // un-remembered subset and would read 0 beside a listed host.
+        // Counts the rows the picker OFFERS (remembered ∪ found) — App.foundCount
+        // is the un-remembered subset and would read 0 beside a listed host.
         Label {
-            text: page.hostCount === 1 ? qsTr("1 found")
-                                       : qsTr("%1 found").arg(page.hostCount)
+            text: qsTr("%n found", "", page.hostCount)
             color: Theme.mutedStrong
             font.family: Tokens.monoFamily
             font.pixelSize: Tokens.textChip
@@ -314,7 +293,6 @@ ColumnLayout {
         Layout.fillWidth: true
     }
 
-    // The one shared sheet, two callers (here and Connections). It keeps itself
-    // open on a rejection and marks the field inline.
+    // The one shared sheet, two callers (here and Connections).
     Pages.PairingDialog { id: pairSheet }
 }

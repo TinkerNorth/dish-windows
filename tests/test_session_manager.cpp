@@ -1,25 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Manager-FSM decision rules (ADAPT/re-derive of dish-android source/connection/
-// SatelliteConnectionManagerTest, 48). The Windows WifiConnectionManager drives
-// REST through a concrete HTTPClient (no injectable gateway seam), so its full
-// async FSM can't be unit-driven without sockets; this slice (2b) CONSUMES the
-// manager and pins the DECISION RULES it composes — the intent×verdict matrix,
-// the close-notify -> action mapping, the public-IP connect guard, the pairing
-// classification, and the backoff schedule — as pure logic, exactly as
-// android-tests prescribes for framework-bound manager tests ("re-derive the
-// rule in a reducer/mapper"). The classifiers themselves (classifyRest/
-// classifyPair/classifyApproval) and the reconcile/backoff math are pinned in
-// test_rest_control_plane / test_session_reconcile; here we pin the manager-
-// level COMPOSITIONS those tests don't cover.
-//
-// GAP FLAGGED: the android test "connect to a public ip is refused before any
-// socket is opened" requires WifiConnectionManager::connectTo to consult
-// isPrivateHostLiteral before openSocket. The Windows manager does NOT yet wire
-// this guard (the predicate exists in core/net from 2a but is uncalled in the
-// connect path). The RULE is pinned below; wiring it into the manager is a
-// Wave-1/coordination follow-up (see the final report).
+// WifiConnectionManager drives REST through a concrete HTTPClient with no
+// injectable gateway seam, so its async FSM can't be unit-driven without
+// sockets. These re-derive the decision rules it composes as pure logic.
 
 #include "core/net/IpLiterals.h"
 #include "core/reducer/Backoff.h"
@@ -32,21 +16,15 @@
 
 namespace reducer = dish::reducer;
 
-// ── ConnectIntent semantics: which intents are LOUD vs SILENT ────────────────
-// The manager's rule (mirrored from emitErrorIfUserInitiated / scheduleRetry):
-// only UserInitiated surfaces an error toast; only the silent intents
-// (AutoReconnect, RetryAfterDeath) ride the backoff curve. Model the intent as a
-// small predicate pair so the matrix is pinned without standing up the manager.
-
 namespace {
 
 enum class Intent { UserInitiated, AutoReconnect, RetryAfterDeath };
 
-// "Does a failure under this intent surface a toast?" — only a user tap is loud.
+// Only a user tap is loud (the manager's emitErrorIfUserInitiated).
 bool isLoud(Intent i) { return i == Intent::UserInitiated; }
 
-// "Does a transport failure under this intent schedule a silent backoff retry?"
-// — every intent EXCEPT a user tap. (scheduleRetry returns early for UserInitiated.)
+// Every intent except a user tap rides the backoff, since scheduleRetry returns
+// early for UserInitiated.
 bool schedulesRetry(Intent i) { return i != Intent::UserInitiated; }
 
 } // namespace
@@ -64,10 +42,7 @@ TEST_CASE("manager intent: silent intents schedule a backoff retry; a user tap d
     REQUIRE(schedulesRetry(Intent::RetryAfterDeath));
 }
 
-// ── Terminal-401 / 409 are loud-but-no-retry under EVERY intent ──────────────
-// A terminal verdict drops the key / explains the skew and STOPS the curve
-// regardless of intent (onTerminalAuthFailure / VersionMismatch handling). Only
-// the toast is gated on intent.
+// A terminal verdict stops the curve under every intent; only the toast is gated.
 
 TEST_CASE("manager: a terminal verdict never rides the silent retry curve", "[manager][terminal]") {
     REQUIRE(reducer::restVerdictTerminal(reducer::RestVerdict::Unauthorized));
@@ -84,10 +59,9 @@ TEST_CASE("manager: an unreachable/503/5xx verdict is retryable (silent backoff 
     REQUIRE_FALSE(reducer::restVerdictTerminal(reducer::RestVerdict::Unreachable));
 }
 
-// ── Pairing classification at the manager boundary (PairVerdict) ─────────────
-// The manager's pair-then-branch (pairAndConnect) keys on these arms: Success ->
-// store key + openSession; AuthRequired/Pending -> PIN (loud) or Stale (silent);
-// VersionMismatch -> explain; Unreachable -> toast (loud) or Stale (silent).
+// The manager's pairAndConnect branches on these arms: Success -> store key +
+// openSession; AuthRequired/Pending -> PIN or Stale; VersionMismatch -> explain;
+// Unreachable -> toast or Stale, by intent.
 
 namespace {
 reducer::PairReply pairReply(int status, bool parsed, bool ok, bool pending, bool hasKey) {
@@ -108,19 +82,16 @@ TEST_CASE("manager pair: an ok reply with a key is Success (open the session)", 
 
 TEST_CASE("manager pair: empty/unparsed (status 0) is Unreachable, not PairingRequired",
           "[manager][pair]") {
-    // Mirrors "pair returning empty string surfaces server-unreachable not PairingRequired".
     REQUIRE(reducer::classifyPair(pairReply(0, false, false, false, false)) ==
             reducer::PairVerdict::Unreachable);
 }
 
 TEST_CASE("manager pair: ok=false reachable is AuthRequired (PIN territory)", "[manager][pair]") {
-    // Mirrors "pair returning ok=false with reachable server emits PairingRequired".
     REQUIRE(reducer::classifyPair(pairReply(200, true, false, false, false)) ==
             reducer::PairVerdict::AuthRequired);
 }
 
 TEST_CASE("manager pair: a 409 is a protocol mismatch, not the PIN dialog", "[manager][pair]") {
-    // Mirrors "pair 409 surfaces a protocol mismatch instead of the PIN dialog".
     REQUIRE(reducer::classifyPair(pairReply(409, true, false, false, false)) ==
             reducer::PairVerdict::VersionMismatch);
 }
@@ -130,10 +101,6 @@ TEST_CASE("manager pair: ok=true with no key is AuthRequired (never cache an emp
     REQUIRE(reducer::classifyPair(pairReply(200, true, true, false, false)) ==
             reducer::PairVerdict::AuthRequired);
 }
-
-// ── Close-notify reason -> manager action ────────────────────────────────────
-// handleServerClose maps the reason byte onto an action: unpaired -> drop key +
-// stale + stop; replaced -> stay down; shutdown/kicked -> backoff retry.
 
 TEST_CASE("manager close: unpaired drops the key and stops retrying", "[manager][close]") {
     REQUIRE(reducer::closeActionForReason(dish::proto::kCloseReasonUnpaired) ==
@@ -152,21 +119,15 @@ TEST_CASE("manager close: shutdown and kicked reconnect on the backoff curve", "
             reducer::CloseAction::RetryBackoff);
 }
 
-// ── Public-IP connect guard (the RULE; wiring flagged as a gap above) ────────
-
 TEST_CASE("manager guard: a public ip target is refused (private-literal rule)",
           "[manager][guard]") {
-    // 8.8.8.8 is public -> a connect must be refused before opening a socket.
+    // connectTo consults this before any socket work; a satellite only ever
+    // legitimately lives on the LAN.
     REQUIRE_FALSE(dish::net::isPrivateHostLiteral("8.8.8.8"));
-    // A LAN target (the only thing a satellite legitimately lives at) is allowed.
     REQUIRE(dish::net::isPrivateHostLiteral("10.0.0.5"));
     REQUIRE(dish::net::isPrivateHostLiteral("192.168.1.20"));
     REQUIRE(dish::net::isPrivateHostLiteral("172.16.0.9"));
 }
-
-// ── Silent-retry backoff schedule (the curve the retry intents ride) ─────────
-// Pinned in full in test_session_reconcile; the manager-relevant assertion is
-// that the FIRST silent retry is ~1 s and the curve is bounded.
 
 TEST_CASE("manager backoff: first silent retry is 1s, the curve is bounded at 60s",
           "[manager][backoff]") {

@@ -1,26 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// LegacyCatalogTranslator — owns every catalog-version→canonical mapping so
-// the rest of the app stays version-agnostic. Port of dish-android
-// repository/LegacyCatalogTranslator. A current-or-newer catalog passes
-// through untouched; a legacy one (older schema, or the field absent → parsed
-// as 1) is REPLACED with this client's own known representation of that
-// version, per the contract's "a client MAY substitute its own known
-// representation for a recognized legacy version". The legacy body's
-// controllerTypes are NOT trusted — only its version is read; locale, server
-// version, host features and the transport metadata (etag/status/reachable)
-// pass through. Applied at the repository boundary (200 fill AND stale-serve)
-// so the cache and every caller see the normalized shape — a pure, instant
-// substitution, never a loader.
-//
-// Windows deviation from the android port: the substituted rows carry
-// canonical display strings. Android renders legacy rows from ViewModel-owned
-// bundled labels, but the windows projection (isTypeOfferable/offerableTypes)
-// drops nameless rows, so a nameless substitution would blank the picker for
-// a legacy satellite. The slugs are `known`, so the UI still swaps in bundled
-// translations over these English fallbacks. Qt types throughout because the
-// CatalogDto vocabulary forces them (core/catalog rule).
+// Every catalog-version to canonical mapping, so the rest of the app stays
+// version-agnostic. The contract allows a client to substitute its own known
+// representation for a recognized legacy version, so a legacy body's
+// controllerTypes are not trusted: only its version is read, and everything else
+// (locale, server version, host features, etag/status/reachable) passes through.
+// Applied at the repository boundary on both 200-fill and stale-serve so cache
+// and callers see one normalized shape. The substituted rows carry display
+// strings because the offerable-type projection drops nameless rows, which would
+// otherwise blank the picker for a legacy satellite; the slugs are `known`, so
+// the UI still swaps bundled translations over these English fallbacks.
 
 #pragma once
 
@@ -34,13 +24,11 @@
 
 namespace dish::catalog {
 
-// The catalog SCHEMA version this client is written against (contract v2: up
-// to four types per backend + per-type emulates). Bump ONLY together with a
+// The schema version this client is written against. Bump only together with a
 // new legacy*() representation of the version being left behind.
 inline constexpr int kCatalogVersionCurrent = 2;
 
-// v1 is the sole legacy schema: xbox360 + ds4 (ds4 touchpad in "ds4" mode),
-// no emulates / dualsense / switchpro.
+// v1 is the sole legacy schema: xbox360 + ds4 only, no emulates.
 inline constexpr int kCatalogVersionLegacyV1 = 1;
 
 namespace detail {
@@ -55,8 +43,8 @@ inline QHash<QString, models::CatalogFeatureDto> legacyFeatures(const QString& s
         models::CatalogFeatureDto feature;
         feature.supported = true;
         if (featureSlug == kFeatureTouchpad) {
-            // Touchpad is the DS4 pad mode: the resolver gates it on the
-            // "ds4" mode slug, so the substitution must advertise it.
+            // The resolver gates the touchpad on the "ds4" mode slug, so the
+            // substitution has to advertise it.
             const auto ds4 = proto::touchpadModeName(proto::kTouchpadModeDs4);
             feature.modes =
                 QStringList{QString::fromUtf8(ds4.data(), static_cast<qsizetype>(ds4.size()))};
@@ -91,12 +79,9 @@ inline models::CatalogDto legacyV1(const models::CatalogDto& fetched) {
 
 } // namespace detail
 
-// The version dispatch. Deliberately >= (not per-version cases): a
-// NEWER-than-current catalog is additive within protocolVersion 1, so it must
-// pass through for forward-compat — substitution is only for versions old
-// enough that this client knows them better than the wire body. Idempotent: a
-// substituted v1 re-normalizes to the same value, so re-applying on
-// stale-serve is safe by construction.
+// Deliberately >= rather than per-version cases: a newer-than-current catalog is
+// additive within protocolVersion 1 and must pass through for forward-compat.
+// Idempotent, so re-applying on stale-serve is safe by construction.
 inline models::CatalogDto normalizeCatalog(const models::CatalogDto& fetched) {
     if (fetched.catalogVersion >= kCatalogVersionCurrent) { return fetched; }
     return detail::legacyV1(fetched);

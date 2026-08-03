@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
-//
-// Coverage for the pure battery routing reducer in core/reducer/BatteryRouting.h:
-// resolveBattery (lowest-pick of pad vs host; a wired pad always wires the host;
-// 0xFF loses to a known level; unknown sentinel when neither side reads).
-// Replicates dish-android source/sensor/BatteryRoutingTest (ADAPT) with the
-// PHONE arm replaced by the HOST/laptop battery — the place dish-windows is
-// ahead of android and must STAY ahead. `padWired` is the windows analogue of
-// android's Transport.Usb (a wired pad has no usable own battery).
 
 #include "core/reducer/BatteryRouting.h"
 
@@ -47,8 +39,7 @@ TEST_CASE("wireless pad without its own battery displays nothing and wires the h
 }
 
 TEST_CASE("wired pad with a battery displays the device but wires the host", "[battery][routing]") {
-    // A wired pad's own reading is shown, but the host charge goes on the wire
-    // (a wired pad has no meaningful own charge — android: USB transport).
+    // A wired pad has no meaningful own charge, so the host charge rides the wire.
     const auto r = resolveBattery(/*padWired=*/true, /*pad=*/sample(20, kBatteryStatusWired),
                                   /*host=*/sample(80, kBatteryStatusCharging));
     REQUIRE(r.display.has_value());
@@ -72,7 +63,6 @@ TEST_CASE("wireless pad higher than the host displays the device but wires the h
 }
 
 TEST_CASE("wireless level tie wires the device sample", "[battery][routing]") {
-    // Equal levels pick the device (deterministic, no tie-breaking).
     const auto r = resolveBattery(/*padWired=*/false, /*pad=*/sample(50, kBatteryStatusDischarging),
                                   /*host=*/sample(50, kBatteryStatusCharging));
     REQUIRE(r.wire == sample(50, kBatteryStatusDischarging));
@@ -116,8 +106,6 @@ TEST_CASE("unreadable host battery without a device battery wires the unknown se
 
 TEST_CASE("wire sample carries the status of whichever side won the lowest pick",
           "[battery][routing]") {
-    // The host wins the level, so its status (Charging) rides the wire — the
-    // status is not forced to a default.
     const auto r = resolveBattery(/*padWired=*/false, /*pad=*/sample(70, kBatteryStatusDischarging),
                                   /*host=*/sample(25, kBatteryStatusCharging));
     REQUIRE(r.wire.level == 25U);

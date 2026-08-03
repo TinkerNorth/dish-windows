@@ -1,31 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Labeled percentage slider (design FSlider): label + mono % readout ABOVE a
-// thin recessed track with an accent fill and a round handle.
+// A ColumnLayout, NOT a Column: this row goes inside a GridLayout cell, and a
+// positioner skips any child whose width is 0, which latches the whole
+// component at 0x0 with every child unpositioned at y == 0.
 //
-// LAYOUT, not a positioner. This row is instantiated inside a GridLayout cell
-// (Dead zones & motion), and a plain Column there is a trap: the Column's
-// implicit size comes from its children, the children sized themselves from
-// `parent.width`, and a positioner SKIPS any child whose width is 0. One pass
-// with a zero width latches the whole component at 0x0 with every child left
-// unpositioned at y == 0 — the label and the % readout end up underneath the
-// track, which paints last. A ColumnLayout reports honest size hints without
-// its children having to measure themselves against it, so the rows stack.
-//
-// The Slider's own box must CONTAIN the knob: a replaced background/handle
-// contributes nothing to a Control's implicit size, so both carry implicit
-// sizes and the 2px top/bottom padding keeps the 12->14px handle (and its
-// focus ring) off the label above.
-//
-// TWO signals, because a dead-zone drag has two different consumers:
-//   moved(value)     — every step of the gesture. Push this into the LIVE
-//                      processor so the pad responds under the user's thumb.
-//   committed(value) — release (or the end of a keyboard adjustment). PERSIST
-//                      here only; a drag emits a value per pixel and each one
-//                      would otherwise be a repository write.
-// Keyboard adjustment commits on key release, so ←/→ persists exactly like a
-// drag does.
+// Two signals, two consumers: push `moved` into the live processor so the pad
+// responds under the user's thumb, and persist only on `committed` — a drag
+// emits a value per pixel, each of which would otherwise be a repository write.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -48,8 +30,6 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        // The readout must never be pushed onto the label: the name elides,
-        // the number never does.
         spacing: Tokens.s4
 
         Text {
@@ -64,9 +44,8 @@ ColumnLayout {
         Text {
             id: pctText
             Layout.alignment: Qt.AlignBaseline
-            // Always the slider's own value: a drag or an arrow key breaks the
-            // inbound binding, and the readout must follow the handle, not the
-            // last value the page happened to push back.
+            // The slider's own value, not `control.value`: a drag breaks the
+            // inbound binding, and the readout must follow the handle.
             text: Math.round(slider.value) + "%"
             font.family: Tokens.monoFamily
             font.pixelSize: Tokens.textMeta
@@ -85,8 +64,8 @@ ColumnLayout {
         hoverEnabled: true
         opacity: slider.enabled ? 1.0 : Tokens.disabledOpacity
 
-        // The track runs the full column width (the design's grid cell), so no
-        // horizontal padding; the vertical padding is the knob's growth room.
+        // No horizontal padding: the track takes the cell. The vertical padding
+        // is the knob's growth room.
         padding: 0
         topPadding: Tokens.s1
         bottomPadding: Tokens.s1
@@ -98,8 +77,8 @@ ColumnLayout {
         onPressedChanged: if (!slider.pressed) control.committed(Math.round(slider.value))
 
         // Qt's Slider handles the arrow / page / home / end keys itself and
-        // emits moved(); it has no notion of a gesture ending, so the commit is
-        // hung off the key release.
+        // emits moved(), but has no notion of a gesture ending, so the commit
+        // hangs off the key release.
         Keys.onReleased: event => {
             if (event.key === Qt.Key_Left || event.key === Qt.Key_Right
                     || event.key === Qt.Key_Up || event.key === Qt.Key_Down
@@ -111,9 +90,9 @@ ColumnLayout {
         background: Rectangle {
             x: slider.leftPadding
             y: slider.topPadding + slider.availableHeight / 2 - height / 2
-            // implicitHeight is what the Control measures itself by; height is
-            // what it draws at. No implicit WIDTH on purpose: the track has no
-            // natural measure, it takes the cell (Layout.fillWidth above).
+            // A replaced background contributes nothing to the Control's
+            // implicit size, so it must carry its own. No implicit WIDTH: the
+            // track has no natural measure, it takes the cell.
             implicitHeight: 4
             width: slider.availableWidth
             height: 4
@@ -134,8 +113,6 @@ ColumnLayout {
             id: grip
             x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - grip.width)
             y: slider.topPadding + slider.availableHeight / 2 - grip.height / 2
-            // The handle grows under the pointer so a 12px target reads as a
-            // grab affordance before the drag starts.
             implicitWidth: 12
             implicitHeight: 12
             width: (slider.pressed || slider.hovered || slider.visualFocus) ? 14 : 12
@@ -152,7 +129,6 @@ ColumnLayout {
                 color: slider.enabled ? Theme.primary : Theme.disabledFg
             }
 
-            // The global focus ring: 2px outside the handle, on visualFocus only.
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -2

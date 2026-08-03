@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Pure decision core for host-initiated (reverse) Path-B pairing: the
-// next-poll-action rule (Approve/Decline/KeepPolling/TimeOut over every
-// classifyApproval verdict × elapsed-vs-deadline reading) and the 4-digit PIN
-// shape helpers. SOCKET-FREE and CLOCK-FREE by construction — the live
-// WifiConnectionManager poll methods open real Winsock work the test process
-// would have to join, so the loop's branching is extracted into
-// reducer::nextReversePairingAction and exhausted here instead. classifyApproval
-// itself is already covered in test_rest_control_plane.cpp; this builds on it.
+// Socket-free and clock-free by construction: the live WifiConnectionManager
+// poll methods open real Winsock work the test process would have to join, so
+// the loop's branching lives in reducer::nextReversePairingAction instead.
 
 #include "core/reducer/ReversePairing.h"
 #include "core/reducer/RestOutcome.h"
@@ -25,17 +20,14 @@ using reducer::nextReversePairingAction;
 using reducer::ReversePairingAction;
 
 namespace {
-// A representative two-minute budget; the exact value is irrelevant to the rule.
+// The exact budget is irrelevant to the rule.
 constexpr std::int64_t kDeadline = 120'000;
 } // namespace
-
-// ── Terminal verdicts ignore the clock ──────────────────────────────────────
 
 TEST_CASE("nextReversePairingAction: Approved -> Approve regardless of elapsed",
           "[reverse][action]") {
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Approved, 0, kDeadline) ==
             ReversePairingAction::Approve);
-    // Even past the deadline, an approval lands as Approve (it is terminal).
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Approved, kDeadline + 5000, kDeadline) ==
             ReversePairingAction::Approve);
 }
@@ -47,8 +39,6 @@ TEST_CASE("nextReversePairingAction: Declined -> Decline regardless of elapsed",
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Declined, kDeadline + 5000, kDeadline) ==
             ReversePairingAction::Decline);
 }
-
-// ── Waiting verdicts keep polling while inside the budget ───────────────────
 
 TEST_CASE("nextReversePairingAction: Pending under the deadline keeps polling",
           "[reverse][action]") {
@@ -67,8 +57,6 @@ TEST_CASE("nextReversePairingAction: Unreachable under the deadline keeps pollin
             ReversePairingAction::KeepPolling);
 }
 
-// ── Deadline boundary (inclusive) ───────────────────────────────────────────
-
 TEST_CASE("nextReversePairingAction: elapsed == deadline times out (inclusive boundary)",
           "[reverse][action]") {
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Pending, kDeadline, kDeadline) ==
@@ -86,19 +74,16 @@ TEST_CASE("nextReversePairingAction: elapsed past the deadline times out", "[rev
 
 TEST_CASE("nextReversePairingAction: a non-positive deadline times out on the first wait",
           "[reverse][action]") {
-    // A zero/negative budget can never keep polling for a waiting verdict.
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Pending, 0, 0) ==
             ReversePairingAction::TimeOut);
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Unreachable, 0, -1) ==
             ReversePairingAction::TimeOut);
-    // ...but a terminal verdict still resolves even with no budget.
+    // A terminal verdict still resolves with no budget.
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Approved, 0, 0) ==
             ReversePairingAction::Approve);
     REQUIRE(nextReversePairingAction(ApprovalVerdict::Declined, 0, 0) ==
             ReversePairingAction::Decline);
 }
-
-// ── End-to-end: classifyApproval feeds nextReversePairingAction ─────────────
 
 TEST_CASE("the status-reply verdict drives the poll action end-to-end", "[reverse][action]") {
     auto action = [](const char* statusStr, bool hasKey, std::int64_t elapsed) {
@@ -110,15 +95,13 @@ TEST_CASE("the status-reply verdict drives the poll action end-to-end", "[revers
         return nextReversePairingAction(reducer::classifyApproval(ar), elapsed, kDeadline);
     };
     REQUIRE(action("approved", true, 5000) == ReversePairingAction::Approve);
-    // "approved" with no key degrades to Pending upstream → keep polling, not Approve.
+    // "approved" with no key degrades to Pending upstream.
     REQUIRE(action("approved", false, 5000) == ReversePairingAction::KeepPolling);
     REQUIRE(action("denied", false, 5000) == ReversePairingAction::Decline);
     REQUIRE(action("pending", false, 5000) == ReversePairingAction::KeepPolling);
     REQUIRE(action("none", false, 5000) == ReversePairingAction::KeepPolling);
     REQUIRE(action("pending", false, kDeadline) == ReversePairingAction::TimeOut);
 }
-
-// ── 4-digit PIN shape ───────────────────────────────────────────────────────
 
 TEST_CASE("formatReversePin always yields exactly 4 decimal digits", "[reverse][pin]") {
     REQUIRE(reducer::formatReversePin(0) == "0000");
@@ -129,7 +112,6 @@ TEST_CASE("formatReversePin always yields exactly 4 decimal digits", "[reverse][
 }
 
 TEST_CASE("formatReversePin reduces an out-of-range draw modulo 10000", "[reverse][pin]") {
-    // A 32-bit random draw maps onto the 4-digit range; the leading digits drop.
     REQUIRE(reducer::formatReversePin(10000) == "0000");
     REQUIRE(reducer::formatReversePin(10042) == "0042");
     REQUIRE(reducer::formatReversePin(123456) == "3456");
@@ -137,8 +119,6 @@ TEST_CASE("formatReversePin reduces an out-of-range draw modulo 10000", "[revers
 }
 
 TEST_CASE("formatReversePin output always validates as a 4-digit pin", "[reverse][pin]") {
-    // Exhaustive over the entire valid PIN space — every value round-trips to a
-    // string the validator accepts.
     for (std::uint32_t v = 0; v < reducer::kReversePinModulus; ++v) {
         const std::string pin = reducer::formatReversePin(v);
         REQUIRE(pin.size() == 4);
@@ -150,9 +130,9 @@ TEST_CASE("isValidReversePin rejects the wrong length or non-digits", "[reverse]
     REQUIRE(reducer::isValidReversePin("0000"));
     REQUIRE(reducer::isValidReversePin("9182"));
     REQUIRE_FALSE(reducer::isValidReversePin(""));
-    REQUIRE_FALSE(reducer::isValidReversePin("123"));   // too short
-    REQUIRE_FALSE(reducer::isValidReversePin("12345")); // too long
-    REQUIRE_FALSE(reducer::isValidReversePin("12a4"));  // non-digit
-    REQUIRE_FALSE(reducer::isValidReversePin("12 4"));  // space
-    REQUIRE_FALSE(reducer::isValidReversePin("-123"));  // sign
+    REQUIRE_FALSE(reducer::isValidReversePin("123"));
+    REQUIRE_FALSE(reducer::isValidReversePin("12345"));
+    REQUIRE_FALSE(reducer::isValidReversePin("12a4"));
+    REQUIRE_FALSE(reducer::isValidReversePin("12 4"));
+    REQUIRE_FALSE(reducer::isValidReversePin("-123"));
 }

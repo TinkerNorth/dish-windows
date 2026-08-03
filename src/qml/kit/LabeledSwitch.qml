@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// A labeled toggle: a leading text label (+ optional sub-text) on the left and a
-// themed Switch on the right. Use it for Settings rows and the wizard's feel
-// rows. `checked` is two-way bindable; `toggled(checked)` fires on user
-// interaction.
-//
-// DISABLED DIMS THE CONTROL, NEVER THE REASON. Setting `enabled: false` fades
-// only the switch — the label and the description keep full opacity, because
-// "Motion — this pad has no gyro" is exactly the text the user has to read to
-// understand why the control is dead. Nesting a 0.55 row inside a 0.55 chip is
-// how a reason lands at 30 % and stops being information.
+// Disabled dims the CONTROL, never the reason: `enabled: false` fades only the
+// switch, because the description is the text explaining why it is dead.
 
 import QtQuick
 import QtQuick.Controls.Basic
@@ -41,7 +33,6 @@ RowLayout {
         Label {
             text: row.description
             visible: row.description.length > 0
-            // A reason is information: a contrast-tuned colour, not a fade.
             color: Theme.mutedStrong
             font.pixelSize: Tokens.textMeta
             wrapMode: Text.WordWrap
@@ -53,17 +44,16 @@ RowLayout {
         id: sw
 
         // The Basic style folds the indicator's width into the contentItem's
-        // leftPadding, so replacing the contentItem (below) drops it out of the
-        // implicit size and the control collapses to its padding — the track
-        // then paints past the row and is clipped by the card. Size off the
+        // leftPadding, so replacing the contentItem below drops it out of the
+        // implicit size and the control collapses to its padding. Size off the
         // indicator instead.
         implicitWidth: sw.implicitIndicatorWidth + sw.leftPadding + sw.rightPadding
         implicitHeight: sw.implicitIndicatorHeight + sw.topPadding + sw.bottomPadding
 
         focusPolicy: Qt.StrongFocus
         hoverEnabled: true
-        // The 0.55 disabled rule is legal only on an AbstractButton — and this
-        // is the only part of the row that is one.
+        // The disabled-opacity rule is legal only on an AbstractButton, and
+        // this is the only part of the row that is one.
         opacity: sw.enabled ? 1.0 : Tokens.disabledOpacity
 
         Accessible.role: Accessible.CheckBox
@@ -113,7 +103,6 @@ RowLayout {
                 }
             }
 
-            // The global focus ring: 2px outside the track, on visualFocus only.
             Rectangle {
                 anchors.fill: track
                 anchors.margins: -2
