@@ -152,18 +152,83 @@ jobs:
             -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
+      # dish_setup_exe pulls in dish_setup_image (windeployqt + the app-local
+      # CRT) and the pack step, so this one target builds the whole installer.
       - name: Build release binary
-        run: cmake --build build-release --parallel 4 --target Dish
+        run: cmake --build build-release --parallel 4 --target Dish dish_setup_exe
 
       - name: Stage release artifact (exe + Qt runtime DLLs)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item build-release/dish.exe artifact/
+          # windeployqt walks Qt's dependency graph only. dish.exe imports
+          # libsodium.dll and SDL2.dll directly, so without this copy the
+          # artifact ships a dish.exe that cannot start (0xc0000135).
+          Copy-Item build-release/libsodium.dll, build-release/SDL2.dll artifact/
           # --qmldir is required: the Quick chrome is the only UI, so an
           # artifact without the QML modules opens to a white window.
           # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir src/qml artifact/dish.exe
+          #
+          # --no-compiler-runtime, with the CRT staged by hand below: what
+          # windeployqt otherwise deploys is vc_redist.x64.exe, an installer
+          # rather than a runtime, which leaves the artifact unable to start on
+          # any machine that has not already had it run. Same call, and the same
+          # five files, as cmake/DishSetupImage.cmake section 6.
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --no-compiler-runtime --qmldir src/qml artifact/dish.exe
+          # dish.exe imports MSVCP140, VCRUNTIME140 and VCRUNTIME140_1 directly;
+          # Qt6Core adds MSVCP140_1 and MSVCP140_2. VCToolsRedistDir comes from
+          # the MSVC environment step, and its absence is fatal here for the
+          # reason it is fatal in the install image: the alternative is an
+          # artifact that borrows the runner's System32 and dies elsewhere.
+          if (-not $env:VCToolsRedistDir) { throw 'VCToolsRedistDir is not set: the MSVC environment step did not run, and the artifact cannot ship an app-local CRT' }
+          $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
+          foreach ($dll in 'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            if (-not (Test-Path (Join-Path $crt $dll))) { throw "Missing $dll in $crt" }
+            Copy-Item (Join-Path $crt $dll) artifact/
+          }
+          # The app's OWN QML module entry. windeployqt deploys the QT modules
+          # the imports resolve to, and Dish.Chrome is not one of Qt's. dish.exe
+          # carries a compiled-in copy since src/qml/kit/CMakeLists.txt gave the
+          # setup kit's identically-named module a directory scope of its own —
+          # before that the two shared one generated qmldir resource and the kit
+          # won it, so the deployed app died with
+          #   Module "Dish.Chrome" contains no type named "Main"
+          # Staged anyway because Qt searches <exedir>/Dish/Chrome/qmldir before
+          # the compiled-in copy (the precedence that hid the bug in the build
+          # tree), so the file that is there had better be the app's. The asserts
+          # name a regression in that CMake arrangement here rather than leave it
+          # to the smoke test below. Same staging as release.yml and
+          # cmake/DishSetupImage.cmake section 2b.
+          $qmldir = 'build-release/Dish/Chrome/qmldir'
+          if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the staged dish.exe could not resolve its own QML module" }
+          if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }
+          New-Item -ItemType Directory -Force -Path artifact/Dish/Chrome | Out-Null
+          Copy-Item $qmldir artifact/Dish/Chrome/
+
+      # The one gate that runs the deployed app instead of the build tree.
+      # Everything else here — ctest, qmllint, the installer round-trip — passes
+      # against a dish.exe sitting in its build directory, which is precisely
+      # where a missing deployment file cannot be noticed.
+      - name: Portable bundle smoke test (it must start)
+        shell: pwsh
+        run: ./scripts/test-portable-bundle.ps1 -Bundle artifact
+
+      # Installs, upgrades, blocks, applies an update and uninstalls, all
+      # silent and all asserted. Nothing else exercises the engine against a
+      # real disk and a real registry.
+      - name: Installer silent round-trip (no UI)
+        shell: pwsh
+        run: ./scripts/test-installer-roundtrip.ps1 -Setup build-release/dish-setup.exe
+
+      # After the round-trip, so a failed installer never reaches the artifact.
+      # Copied INTO artifact/ rather than listed as a second upload path: a
+      # second path would make upload-artifact preserve both directory names
+      # and push dish.exe down a level, silently changing the layout every
+      # existing consumer of this artifact unpacks.
+      - name: Stage installer beside the portable bundle
+        shell: pwsh
+        run: Copy-Item build-release/dish-setup.exe artifact/
 
       - name: Upload release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

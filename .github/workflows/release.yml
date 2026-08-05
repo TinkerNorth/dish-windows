@@ -99,18 +99,93 @@ jobs:
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
       # only oversubscribes it.
+      # dish_setup_exe pulls in dish_setup_image (windeployqt + the app-local
+      # CRT) and the pack step, so this one target builds the whole installer.
       - name: Build
-        run: cmake --build build --parallel 4 --target Dish
+        run: cmake --build build --parallel 4 --target Dish dish_setup_exe
 
       - name: Bundle Qt runtime DLLs
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dish-windows | Out-Null
           Copy-Item build/dish.exe dish-windows/
+          # windeployqt walks Qt's dependency graph only. dish.exe imports
+          # libsodium.dll and SDL2.dll directly (vcpkg staged them beside the
+          # exe at link time), so without this copy the zip ships a dish.exe
+          # that cannot start: 0xc0000135, no window, no message.
+          Copy-Item build/libsodium.dll, build/SDL2.dll dish-windows/
           # --qmldir is required: the Quick chrome is the only UI, so a bundle
           # without the QML modules opens to a white window.
           # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --qmldir src/qml dish-windows/dish.exe
+          #
+          # --no-compiler-runtime, with the five CRT DLLs staged by hand below:
+          # windeployqt's idea of deploying the VC++ runtime is to drop
+          # vc_redist.x64.exe beside the app, and that is an INSTALLER, not a
+          # runtime. A "portable" zip whose exe only starts once the user has
+          # found and run a 25 MB redist buried inside it is not portable, and
+          # nothing prompts them to — the failure is a silent 0xc0000135.
+          # cmake/DishSetupImage.cmake section 6 makes the same call for the
+          # install image, with the same five files.
+          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --no-compiler-runtime --qmldir src/qml dish-windows/dish.exe
+          # dish.exe imports MSVCP140, VCRUNTIME140 and VCRUNTIME140_1 directly,
+          # and Qt6Core drags MSVCP140_1 and MSVCP140_2 in behind it — all five
+          # confirmed with dumpbin /DEPENDENTS and against the loaded-module list
+          # of the staged app while it ran. Deployed without them the zip works
+          # only on a machine that already has the redistributable installed,
+          # which a fresh Windows does not.
+          #
+          # VCToolsRedistDir comes from the MSVC environment step above. The
+          # install image treats its absence as fatal; so does this, because the
+          # alternative is a bundle that silently borrows System32 on the runner
+          # and dies on the first machine without it.
+          if (-not $env:VCToolsRedistDir) { throw 'VCToolsRedistDir is not set: the MSVC environment step did not run, and the bundle cannot ship an app-local CRT' }
+          $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
+          foreach ($dll in 'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            if (-not (Test-Path (Join-Path $crt $dll))) { throw "Missing $dll in $crt" }
+            Copy-Item (Join-Path $crt $dll) dish-windows/
+          }
+          # The app's OWN QML module entry, which windeployqt cannot know about:
+          # --qmldir scans imports and deploys the QT modules they resolve to,
+          # and Dish.Chrome is not one of Qt's.
+          #
+          # dish.exe does carry its own compiled-in copy now. It did not always:
+          # the app module and the installer's dish_setup_kit declare the SAME
+          # URI, Qt derives the generated resource's name from the URI alone, and
+          # while both calls lived in one CMake scope they shared one
+          # .qt/rcc/qmake_Dish_Chrome.qrc — the second call won it and dish.exe
+          # shipped holding the kit's qmldir, which lists the ~40 kit types and
+          # knows nothing about Main. src/qml/kit/CMakeLists.txt fixed that by
+          # declaring the kit's module from a directory scope of its own.
+          #
+          # This still stages the file, because Qt searches
+          # <exedir>/Dish/Chrome/qmldir BEFORE the compiled-in copy (that
+          # precedence is exactly what let the bug hide in the build tree). A
+          # bundle carrying the module entry its own build generated is right
+          # whichever copy the engine picks; a bundle carrying the WRONG one dies
+          # at startup with
+          #   Module "Dish.Chrome" contains no type named "Main"
+          # It is only the module ENTRY: the `prefer` line inside sends every
+          # type to the compiled-in copy, so no .qml source ships.
+          #
+          # The two asserts are the point. They fail the release, named, if the
+          # CMake arrangement ever regresses to one shared resource, instead of
+          # letting a bundle nobody launched go out.
+          # cmake/DishSetupImage.cmake section 2b stages and checks the same file.
+          $qmldir = 'build/Dish/Chrome/qmldir'
+          if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the bundled dish.exe could not resolve its own QML module" }
+          if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }
+          New-Item -ItemType Directory -Force -Path dish-windows/Dish/Chrome | Out-Null
+          Copy-Item $qmldir dish-windows/Dish/Chrome/
+
+      # Nothing had ever launched the portable bundle. It shipped for two
+      # releases unable to start (the Dish.Chrome qmldir above), which no unit
+      # test, no lint and no installer round-trip can see: they all run against
+      # the build tree, and the build tree is exactly what hides it. This runs
+      # the staged bundle, from a copy somewhere else, and fails the release if
+      # it does not stay up.
+      - name: Portable bundle smoke test (it must start)
+        shell: pwsh
+        run: ./scripts/test-portable-bundle.ps1 -Bundle dish-windows
 
       # LGPLv3 s4(b) requires the licence to travel with the Combined Work, and
       # Qt is linked under it. OFL-1.1 s2 requires the same for the four Inter
@@ -125,6 +200,22 @@ jobs:
           Copy-Item THIRD_PARTY.md     dish-windows/licenses/
           Copy-Item packaging/fonts/Inter-LICENSE.txt dish-windows/licenses/
           Get-ChildItem dish-windows/licenses
+
+      # Beside the zip, not inside it: dish-setup.exe is a release asset in its
+      # own right, and the portable bundle stays exactly what it was.
+      - name: Stage installer
+        shell: pwsh
+        run: Copy-Item build/dish-setup.exe "$PWD/dish-setup.exe"
+
+      # The same assertions windows-ci runs, against the artifact that is about
+      # to be published rather than a rebuild of it. The pack tool and the
+      # staged image stay in build/ (the upgrade leg re-packs the payload as
+      # 99.0.0), so they are named rather than inferred from -Setup's folder.
+      - name: Installer silent round-trip (no UI)
+        shell: pwsh
+        run: |
+          ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe `
+            -PackTool build/dish-payload-pack.exe -Image build/setup-image
 
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
@@ -164,13 +255,51 @@ jobs:
         run: |
           Compress-Archive -Path dish-windows/* -DestinationPath dish-windows.zip -Force
 
+      # Auto-update manifest, fetched by dish.exe from the stable permalink
+      # releases/latest/download/latest.json. Ships with EVERY release; the
+      # asset name never changes. The two version asserts prevent the fatal
+      # drift where the shipped exe self-reports an older version than the
+      # manifest and every client re-applies forever.
+      - name: Emit update manifest (latest.json)
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.inputs.tag || github.ref_name }}'
+          if ($tag -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not vMAJOR.MINOR.PATCH" }
+          $version = $tag.Substring(1)
+          $cm = Get-Content CMakeLists.txt -Raw
+          if ($cm -notmatch 'project\(\s*Dish[\s\r\n]+VERSION[\s]+(\d+\.\d+\.\d+)') { throw 'project VERSION not found' }
+          if ($Matches[1] -ne $version) { throw "Tag $tag but project VERSION is $($Matches[1])" }
+          $exeVersion = (Get-Item dish-windows/dish.exe).VersionInfo.ProductVersion
+          if ($exeVersion -notlike "$version*") { throw "dish.exe reports '$exeVersion' but the tag says '$version' (packaging/dish.rc out of step)" }
+          $minSupported = (Get-Content packaging/update-policy.json -Raw | ConvertFrom-Json).minimumSupportedVersion
+          if ($minSupported -notmatch '^\d+\.\d+\.\d+$') { throw 'update-policy.json minimumSupportedVersion malformed' }
+          $assets = [ordered]@{}
+          foreach ($name in @('dish-setup.exe','dish-windows.zip')) {
+            $f = Get-Item $name
+            $assets[$name] = [ordered]@{
+              url    = "https://github.com/${{ github.repository }}/releases/download/$tag/$name"
+              sha256 = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+              size   = $f.Length
+            }
+          }
+          $m = [ordered]@{
+            schema = 1; product = 'dish-windows'; version = $version; channel = 'stable'
+            publishedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+            minimumSupportedVersion = $minSupported
+            releaseNotesUrl = "https://github.com/${{ github.repository }}/releases/tag/$tag"
+            assets = $assets
+          }
+          $json = ($m | ConvertTo-Json -Depth 4) -replace "`r`n", "`n"
+          [IO.File]::WriteAllText("$PWD/latest.json", $json + "`n", (New-Object Text.UTF8Encoding $false))
+          Get-Content latest.json
+
       # The manifest above is inside the zip, so it cannot attest to the zip.
       # This one covers the artifacts a person actually downloads, and is what
       # the release page's "verify your download" instructions point at.
       - name: Compute release-asset SHA256SUMS
         shell: pwsh
         run: |
-          $lines = Get-ChildItem dish-windows.zip, dish-windows.spdx.json | ForEach-Object {
+          $lines = Get-ChildItem dish-windows.zip, dish-windows.spdx.json, dish-setup.exe, latest.json | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           }
           [IO.File]::WriteAllText("$PWD/SHA256SUMS", ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
@@ -183,6 +312,8 @@ jobs:
           path: |
             dish-windows.zip
             dish-windows.spdx.json
+            dish-setup.exe
+            latest.json
             SHA256SUMS
           retention-days: 30
 
@@ -190,6 +321,11 @@ jobs:
       # workflow_dispatch github.ref is the default branch, not the tag that
       # was built, and action-gh-release would otherwise create a release
       # against the branch ref.
+      #
+      # draft: true is load-bearing. GitHub never points releases/latest at a
+      # draft, so the assets upload while the update permalink still resolves
+      # to the previous release; the flip below is what makes publication
+      # atomic for every client polling latest.json.
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
@@ -197,6 +333,21 @@ jobs:
           files: |
             dish-windows.zip
             dish-windows.spdx.json
+            dish-setup.exe
+            latest.json
             SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: true
+          draft: true
+
+      # Assets upload while the release is a draft (drafts are never 'latest');
+      # flipping afterwards makes the publish atomic for the update permalink.
+      # gh is preinstalled on windows-2022, so this adds no action to pin.
+      - name: Flip release from draft to published
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit '${{ github.event.inputs.tag || github.ref_name }}' --draft=false
+          $draft = gh release view '${{ github.event.inputs.tag || github.ref_name }}' --json isDraft --jq .isDraft
+          if ($draft -ne 'false') { throw 'release is still a draft' }
