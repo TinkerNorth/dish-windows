@@ -124,7 +124,13 @@ in `CMakeLists.txt` or it will not exist at runtime.
 ## Translations
 
 Six catalogues live under `translations/`: English plus Bosnian, German,
-Spanish, French, and Brazilian Portuguese, the same set dish-android ships.
+Spanish, French, and Brazilian Portuguese, the same set dish-android ships. The
+installer wizard shares them; `qt_add_translations` scans the app and the
+installer targets together, and the installer targets are defined in every
+configuration precisely so `update_translations` produces the same output for
+every contributor. The installer engine, the SFX stub and the uninstall helper
+carry no translatable strings at all: they emit typed enums and the QML renders
+them.
 
 **If you add, change, or delete a user-facing string, refresh the catalogues in
 the same commit.** `scripts\check-translations.ps1` re-runs `lupdate` with the
@@ -220,7 +226,9 @@ at the end of this file is the standing backlog.
 5. `scripts/check-translations.ps1`.
 6. `clang-tidy -p build` over `src/**/*.cpp` excluding `src/UI/`, against the
    same Debug tree step 2 produced.
-7. Release configure and build, then `windeployqt` staging and artifact upload.
+7. Release configure and build, `dish_setup_exe`, `windeployqt` staging,
+   `scripts/test-installer-roundtrip.ps1` against the freshly packed
+   installer, and artifact upload.
 
 Security gates:
 
@@ -282,22 +290,65 @@ gitleaks detect --no-banner --redact --source .
 
 ### Checking a release artifact
 
-A GitHub Release carries `dish-windows.zip` (the exe plus the bundled Qt
-runtime, with a `SHA256SUMS` file inside the zip) and `dish-windows.spdx.json`
-(an SPDX SBOM). Nothing is signed yet.
+A GitHub Release carries `dish-setup.exe` (the installer), `dish-windows.zip`
+(the exe plus the bundled Qt runtime, with its own `SHA256SUMS` inside the zip),
+`latest.json` (the update manifest), `SHA256SUMS` over those assets, and
+`dish-windows.spdx.json` (an SPDX SBOM). Nothing is signed yet.
 
 ```powershell
-Expand-Archive .\dish-windows.zip -DestinationPath .\dish-windows
-$expected = Get-Content .\dish-windows\SHA256SUMS |
-    Where-Object { $_ -match 'dish\.exe' } |
-    ForEach-Object { $_.Split()[0] }
-$actual = (Get-FileHash .\dish-windows\dish.exe -Algorithm SHA256).Hash.ToLower()
+$expected = (Get-Content .\SHA256SUMS |
+    Where-Object { $_ -match 'dish-setup\.exe' }).Split()[0]
+$actual = (Get-FileHash .\dish-setup.exe -Algorithm SHA256).Hash.ToLower()
 if ($expected -ne $actual) { throw "checksum mismatch" } else { "ok" }
 ```
 
-`SHA256SUMS` ships inside the zip it describes, so it detects a corrupted
-download and nothing more. [`SECURITY.md`](SECURITY.md) says what that does and
-does not buy you.
+Neither `SHA256SUMS` is signed, so they detect a corrupted download and nothing
+more. [`SECURITY.md`](SECURITY.md) says what that does and does not buy you,
+and describes the update chain's own integrity guarantees.
+
+## Cutting a release
+
+`release.yml` runs on a `v*` tag or a `workflow_dispatch` with a tag input. It
+re-runs the security gates against the tagged commit, builds Release, packs
+`dish-setup.exe`, runs the installer round trip against the artifact it is about
+to publish, emits `latest.json`, computes checksums, uploads everything as a
+**draft**, and only then flips the release to published. The draft step is
+load-bearing: GitHub never points `releases/latest` at a draft, so every client
+polling the update permalink sees the previous release until the flip makes the
+new one visible atomically.
+
+Before you tag:
+
+- **Bump the version in all three places.** `project(Dish VERSION ...)` in
+  `CMakeLists.txt` is the source; `packaging/dish.rc` and `vcpkg.json` are
+  hand-mirrored. `release.yml` now fails the build when the tag, the CMake
+  version, or `dish.exe`'s own `ProductVersion` disagree, so a forgotten
+  `dish.rc` is a red workflow rather than a client that re-applies the same
+  update forever.
+- **Review `packaging/update-policy.json`.** Its `minimumSupportedVersion` is a
+  reviewed release input, not a generated value: it goes into `latest.json`, and
+  every client older than it treats the update as required and ignores a skip.
+  Raise it only for a security fix or a protocol break, in its own commit, and
+  never above the version being released.
+- **Update `CHANGELOG.md`**, and `PRIVACY.md` first if anything about data
+  collection changed.
+
+After the workflow finishes:
+
+- **Confirm the permalink resolves.**
+  `https://github.com/TinkerNorth/dish-windows/releases/latest/download/latest.json`
+  must return the manifest for the release you just published. A 404 there
+  means installed copies stop seeing updates; clients treat it as a transient
+  failure and back off, so it self-heals once the asset appears, but it is
+  invisible from the release page.
+- **Download `dish-setup.exe` and install it by hand** at least once. The manual
+  matrix in [`docs/INSTALLER.md`](docs/INSTALLER.md) section 10 is the list.
+
+The asset names `dish-setup.exe`, `dish-windows.zip` and `latest.json` are a
+permanent API. Shipped clients construct the manifest URL from them and validate
+the download URL against the release-download prefix. Renaming one breaks every
+installed copy in the field, silently, and there is no server-side way to fix
+it.
 
 ## Touching the hot path
 
@@ -356,9 +407,10 @@ Use the issue templates under `.github/ISSUE_TEMPLATE/`. Include:
 None of these are started. They are the standing backlog, and each is a
 self-contained piece of work.
 
-- **MSIX or WiX installer.** Releases ship a portable zip staged by
-  `windeployqt`. There is no installer.
 - **winget manifest.** Nothing is published to `microsoft/winget-pkgs`.
+  `dish-setup.exe` already has the silent switches a manifest needs
+  (`/S`, `/D=<dir>`, and a `QuietUninstallString` in the registry), so this is
+  packaging work rather than installer work.
 - **qWAVE DSCP marking.** The hot-path socket sets `IP_TOS` directly, which
   Windows drops for non-administrator processes. `QOSCreateHandle` from
   `qWAVE.dll` is the supported path and is not wired up.
@@ -367,8 +419,11 @@ self-contained piece of work.
   thread never blocks on the UI thread under load.
 - **Release signing and provenance.** Authenticode signing, cosign keyless
   signatures, SLSA build provenance, and a CycloneDX SBOM alongside the SPDX
-  one are all absent. See the "Known gaps" section of
-  [`SECURITY.md`](SECURITY.md) for what that means for anyone downloading a
-  release.
+  one are all absent. This is the highest-value item on the list now that
+  `dish-setup.exe` ships: unsigned means SmartScreen warns on every manual
+  download, and it means the update chain's only integrity anchor is the
+  SHA-256 in `latest.json`. See the "Known gaps" and "Auto-update trust model"
+  sections of [`SECURITY.md`](SECURITY.md) for what that means for anyone
+  downloading a release.
 - **Screenshots.** `README.md` describes the UI in prose. There are no
   screenshots of the dashboard, the connections page, or the setup wizard.
