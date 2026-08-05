@@ -80,44 +80,31 @@ if(NOT _deploy_result EQUAL 0)
     message(FATAL_ERROR "windeployqt failed on ${_dish_exe_name} (${_deploy_result})")
 endif()
 
-# --- 2b. The app's own QML module entry (Dish.Chrome) -------------------------
-# The app and dish_setup_kit declare the SAME module URI, and Qt derives the
-# generated qmldir resource's name from the URI alone. While both
-# qt_add_qml_module calls lived in one CMake scope they therefore shared one
-# `.qt/rcc/qmake_Dish_Chrome.qrc`: the second call won it, and dish.exe shipped
-# with the kit's qmldir — ~40 kit types, `plugin dish_setup_kitplugin`, no Main
-# — so the installed app died at startup with
-#   Module "Dish.Chrome" contains no type named "Main"
+# --- 2b. NO on-disk Dish.Chrome qmldir in the image --------------------------
+# Deliberately absent, and it must stay absent.
+#
+# The app and dish_setup_kit declare the SAME module URI. While both
+# qt_add_qml_module calls lived in one CMake scope they shared one generated
+# `.qt/rcc/qmake_Dish_Chrome.qrc` (Qt names it after the URI alone), the second
+# call won it, and dish.exe shipped with the kit's qmldir — no Main — so the
+# installed app died with `Module "Dish.Chrome" contains no type named "Main"`
 # while the build tree kept working. src/qml/kit/CMakeLists.txt fixed that at
-# the root by declaring the kit's module from a directory scope of its own, and
-# dish.exe now carries the app's module entry compiled in.
+# the root by giving the kit's module a directory scope of its own. Both
+# binaries now carry their own correct module entry compiled in, and dish.exe
+# starts from an image with no Dish/ directory at all.
 #
-# The file still travels with the image, because Qt searches
-# <exedir>/Dish/Chrome/qmldir BEFORE the compiled-in copy — the very precedence
-# that let the bug hide in the build tree. An image carrying the entry its own
-# build generated is correct whichever copy the engine reaches for; one carrying
-# the kit's is dead on arrival. It is only the module ENTRY: its
-# `prefer :/qt/qml/Dish/Chrome/` line sends every type to the compiled-in copy,
-# so no .qml source ships.
-#
-# The checks below are what make a regression in that CMake arrangement a build
-# failure with a name on it, rather than a dead install.
-get_filename_component(_app_build_dir "${DISH_EXE}" DIRECTORY)
-set(_app_qmldir "${_app_build_dir}/Dish/Chrome/qmldir")
-if(NOT EXISTS "${_app_qmldir}")
-    message(FATAL_ERROR
-        "DishSetupImage.cmake: no Dish.Chrome qmldir at ${_app_qmldir}. Without "
-        "it the installed dish.exe cannot resolve its own QML module.")
-endif()
-file(READ "${_app_qmldir}" _app_qmldir_text)
-# The one thing that must be true of it: it is the APP's module, not the kit's.
-if(NOT _app_qmldir_text MATCHES "(^|\n)Main 1\\.0 ")
-    message(FATAL_ERROR
-        "DishSetupImage.cmake: ${_app_qmldir} does not declare the app's Main "
-        "type, so it is the wrong Dish.Chrome qmldir (the setup kit's?).")
-endif()
-file(MAKE_DIRECTORY "${IMAGE_DIR}/Dish/Chrome")
-configure_file("${_app_qmldir}" "${IMAGE_DIR}/Dish/Chrome/qmldir" COPYONLY)
+# Staging the app's qmldir here as a belt-and-braces measure looks harmless and
+# is not: dish-setup-ui.exe runs FROM this image (and installs itself as
+# uninstall.exe, which runs from the install dir), so Qt finds
+# <exedir>/Dish/Chrome/qmldir on the applicationDirPath import path before the
+# wizard's own compiled-in module — the same precedence that hid the original
+# bug. The app's entry maps the kit to `src/qml/kit/<Name>.qml`, the layout of
+# the app module's resources; the wizard's kit lives at `<Name>.qml`. So the
+# wizard died at startup with
+#   SetupTitleBar.qml: Type Kit.BrandGlyph unavailable
+#   qrc:/qt/qml/Dish/Chrome/src/qml/kit/BrandGlyph.qml: No such file or directory
+# One URI cannot have one on-disk entry serve two resource layouts. Neither
+# binary needs one, so the image ships none.
 
 # --- 3. The wizard binary, unioned into the same runtime ---------------------
 # Expected delta: none. It is run anyway so a setup-only Qt module (a plugin
