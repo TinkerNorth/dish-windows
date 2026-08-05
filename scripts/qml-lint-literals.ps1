@@ -54,7 +54,10 @@ try {
         @{ Name = 'hand-rolled disabled opacity'; Pattern = 'opacity\s*:\s*0\.4' }
     )
 
-    $strictPrefixes = @('src/qml/wizard/', 'src/qml/shared/')
+    # src/qml/setup/ is the installer wizard. It ships to people who have not
+    # installed Dish yet, so it is the one surface where an off-palette colour
+    # is the very first thing anyone sees.
+    $strictPrefixes = @('src/qml/wizard/', 'src/qml/shared/', 'src/qml/setup/')
 
     $errorCount = 0
     $warnCount = 0

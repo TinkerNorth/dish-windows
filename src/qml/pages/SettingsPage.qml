@@ -25,6 +25,56 @@ Kit.Page {
     readonly property string lightbarOn: qsTr("Follow game")
     readonly property string lightbarOff: qsTr("Off")
 
+    // ── Updates ──────────────────────────────────────────────────────────────
+    // One sentence per phase, assembled here rather than in C++ so every word
+    // stays in the qsTr catalogues.
+    readonly property string updateStatusText: {
+        switch (App.updatePhase) {
+        case "disabled":
+            return qsTr("Automatic update checks are off.");
+        case "checking":
+            return qsTr("Checking for updates…");
+        case "available":
+            return qsTr("Dish %1 is available.").arg(App.updateVersion);
+        case "downloading":
+            return qsTr("Downloading Dish %1…").arg(App.updateVersion);
+        case "verifying":
+            return qsTr("Verifying download…");
+        case "ready":
+            return qsTr("Dish %1 is ready to install.").arg(App.updateVersion);
+        case "failed":
+            return settingsPage.updateFailureText;
+        case "upToDate":
+            return qsTr("You're on the latest version.");
+        default:
+            return qsTr("No update information yet.");
+        }
+    }
+
+    // A diagnosis plus what happens next, never a bare error: the retry is
+    // automatic in every case except an apply that gave up.
+    readonly property string updateFailureText: {
+        switch (App.updateErrorToken) {
+        case "offline":
+            return qsTr("You're offline. Dish will retry automatically.");
+        case "applyFailed":
+            return qsTr("The update could not be applied automatically. Download it from the releases page.");
+        case "corrupt":
+            return qsTr("The download didn't verify. Dish will try again.");
+        case "diskFull":
+            return qsTr("There isn't enough disk space for the update. Dish will try again.");
+        default:
+            return qsTr("The update check failed. Dish will retry automatically.");
+        }
+    }
+
+    readonly property string lastCheckText: {
+        const checked = App.updateLastCheck;
+        if (!checked || isNaN(checked.getTime()))
+            return qsTr("never");
+        return Qt.formatDateTime(checked, Locale.ShortFormat);
+    }
+
     // var-typed: `shellApi` is a dynamic property, resolved at runtime.
     readonly property var shellView: StackView.view
     readonly property var shellApi: settingsPage.shellView ? settingsPage.shellView.shellApi : null
@@ -204,8 +254,142 @@ Kit.Page {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
 
+                Kit.SectionHeader { label: qsTr("Updates") }
+
+                Kit.Card {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Tokens.s4
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: settingsPage.updateStatusText
+                            color: Theme.onSurface
+                            font.pixelSize: Tokens.textBase
+                            wrapMode: Text.WordWrap
+                        }
+
+                        // Absolute, never "3 hours ago": a relative time needs a
+                        // counted string, and this line is not worth a plural
+                        // form in six catalogues.
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Dish %1 · last checked %2").arg(App.appVersion)
+                                  .arg(settingsPage.lastCheckText)
+                            color: Theme.muted
+                            font.family: Tokens.monoFamily
+                            font.pixelSize: Tokens.textMeta
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Kit.Callout {
+                            Layout.fillWidth: true
+                            visible: App.updateRequired
+                            tone: Kit.Callout.Warning
+                            text: qsTr("This version is no longer supported. Please update.")
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: App.updatePortable
+                            text: qsTr("You're running the portable version. Get the new zip from the releases page.")
+                            color: Theme.muted
+                            font.pixelSize: Tokens.textMeta
+                            wrapMode: Text.WordWrap
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Tokens.s4
+
+                            Kit.OutlineButton {
+                                size: Kit.DishButton.Small
+                                text: qsTr("Check for updates")
+                                enabled: App.updateChecksEnabled
+                                         && App.updatePhase !== "checking"
+                                onClicked: App.checkForUpdatesNow()
+                            }
+                            Kit.LoadingSpinner {
+                                Layout.alignment: Qt.AlignVCenter
+                                visible: App.updatePhase === "checking"
+                                running: App.updatePhase === "checking"
+                            }
+                            Kit.KitButton {
+                                visible: App.updatePhase === "available" && !App.updateAutoDownload
+                                         && !App.updatePortable
+                                size: Kit.DishButton.Small
+                                text: qsTr("Download update")
+                                onClicked: App.downloadUpdateNow()
+                            }
+                            Kit.KitButton {
+                                visible: App.updatePhase === "ready"
+                                size: Kit.DishButton.Small
+                                text: qsTr("Restart to update")
+                                onClicked: App.restartToApplyUpdate()
+                            }
+                            Kit.OutlineButton {
+                                visible: App.updatePhase === "ready"
+                                         || App.updatePhase === "available"
+                                size: Kit.DishButton.Small
+                                text: App.updatePortable ? qsTr("Open download page")
+                                                         : qsTr("Release notes")
+                                onClicked: App.openReleaseNotes()
+                            }
+                            Item { Layout.fillWidth: true }
+                        }
+                    }
+                }
+
+                Kit.Card {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Tokens.s6
+
+                        Kit.LabeledSwitch {
+                            Layout.fillWidth: true
+                            label: qsTr("Download updates automatically")
+                            description: qsTr("Dish downloads new versions in the background and installs them the next time it starts. Skipped on metered connections.")
+                            enabled: App.updateChecksEnabled
+                            checked: App.updateAutoDownload
+                            onToggled: (checked) => App.setUpdateAutoDownload(checked)
+                        }
+                        Kit.LabeledSwitch {
+                            Layout.fillWidth: true
+                            label: qsTr("Check for updates automatically")
+                            description: qsTr("Dish asks GitHub for the newest release at startup and every few hours. Only a standard web request is sent; see the privacy policy for details.")
+                            checked: App.updateChecksEnabled
+                            onToggled: (checked) => App.setUpdateChecksEnabled(checked)
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Checking connects to github.com and sends no account data.")
+                    color: Theme.muted
+                    font.pixelSize: Tokens.textMeta
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.s4
+
                 Kit.SectionHeader { label: qsTr("About") }
 
+                // Only after this run upgraded the app, and only until the user
+                // reads the notes: a permanent "what's new" row would be noise.
+                Kit.RowButton {
+                    Layout.fillWidth: true
+                    visible: App.updatedFromVersion.length > 0
+                    title: qsTr("What's new in Dish %1").arg(App.appVersion)
+                    subtitle: qsTr("Read the release notes for this version.")
+                    onClicked: {
+                        App.openReleaseNotes();
+                        App.acknowledgeUpdated();
+                    }
+                }
                 Kit.RowButton {
                     Layout.fillWidth: true
                     title: qsTr("Open source licenses")

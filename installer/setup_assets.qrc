@@ -1,0 +1,13 @@
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Dish contributors. -->
+<!-- The installer-only resources: the two licence texts the License page
+     renders offline. Aliased to the same names the PAYLOAD stages into
+     <install>/licenses/, so the page and the installed files agree. Fonts,
+     brand SVGs and licenses.json come from packaging/dish.qrc, which is
+     compiled into DishSetupUi as well. -->
+<RCC>
+    <qresource prefix="/setup">
+        <file alias="LICENSE.LGPL-3.0.txt">../LICENSE</file>
+        <file alias="LICENSE.GPL-3.0.txt">../COPYING.GPL3</file>
+    </qresource>
+</RCC>

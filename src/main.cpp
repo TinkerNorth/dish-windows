@@ -6,6 +6,7 @@
 #include "UI/CrashHandler.h"
 #include "Util/Localization.h"
 #include "qml/QmlEntryPoint.h"
+#include "update/UpdateHandoff.h"
 
 #include <QFont>
 #include <QFontDatabase>
@@ -22,6 +23,19 @@ int main(int argc, char* argv[]) {
     // FIRST, before any other subsystem can fault, so a crash still leaves a
     // minidump behind.
     dish::crash::install();
+
+    // The auto-update boot gate, deliberately here: before Winsock, libsodium
+    // and QGuiApplication, so a staged installer is handed the machine while
+    // this process still owns nothing but a crash handler. A true return means
+    // the installer is running and waiting for this pid, so main must leave
+    // immediately and quietly. Every failure path inside returns false and
+    // continues a completely normal startup.
+    if (dish::update::UpdateHandoff::runStartupHandoff(argc, argv)) { return 0; }
+
+    // Held for the process lifetime. A second instance's boot gate probes this
+    // and declines to hand off, so exactly one instance ever owns an apply.
+    // It is a presence beacon, NOT single-instancing: the second instance runs.
+    const dish::update::RunningInstanceMutex runningInstance;
 
     // Every network call assumes Winsock is up; this RAII guard holds it for
     // the lifetime of `main`.

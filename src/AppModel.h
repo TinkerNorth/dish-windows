@@ -31,9 +31,11 @@
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/TouchpadModeStore.h"
 #include "source/store/ThemePreferenceStore.h"
+#include "source/store/UpdatePreferenceStore.h"
 #include "source/store/UsbPathPreferenceStore.h"
 #include "source/usb/UsbGamepadManager.h"
 #include "source/usb/WinHidGateway.h"
+#include "update/UpdateCoordinator.h"
 #include "Util/DisplaySleepInhibitor.h"
 
 #include <QHash>
@@ -93,6 +95,12 @@ class AppModel : public QObject {
     source::OnboardingPreferenceStore* onboardingStore() { return &onboardingStore_; }
     source::ThemePreferenceStore* themeStore() { return &themeStore_; }
     source::CrashReportingStore* crashStore() { return &crashStore_; }
+
+    // The auto-updater. The store is the reactive preference slice the Settings
+    // page binds to; the coordinator owns the state machine, the timers and the
+    // worker thread, and is started from start().
+    source::UpdatePreferenceStore* updatePreferenceStore() { return &updatePrefs_; }
+    update::UpdateCoordinator* updates() { return &updateCoordinator_; }
 
     repository::DeadzoneRepository* deadzoneRepository() { return &deadzoneRepo_; }
     source::MotionEnabledStore* motionEnabledStore() { return &motionEnabledStore_; }
@@ -274,6 +282,11 @@ class AppModel : public QObject {
     composer::NoopCrashReportingBackend crashBackend_;
     composer::ThemeController themeController_;
     composer::CrashReportingController crashController_;
+
+    // Declaration order matters: the coordinator subscribes to the store's
+    // Observable, so the store must outlive it.
+    source::UpdatePreferenceStore updatePrefs_;
+    update::UpdateCoordinator updateCoordinator_;
 
     MainUiState state_;
 
