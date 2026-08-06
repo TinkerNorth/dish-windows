@@ -22,7 +22,7 @@
 //      gone. A half-finished cleanup therefore leaves an entry in Installed
 //      apps that still points at a working uninstaller, which the user can
 //      simply run again;
-//   5. hand our own temp directory to a detached cmd.exe that waits ~2 s and
+//   5. hand our own temp directory to a windowless cmd.exe that waits ~2 s and
 //      removes it. No MoveFileEx(DELAY_UNTIL_REBOOT) (needs admin, fails
 //      invisibly for a per-user install) and no self-deletion tricks, which
 //      are exactly the pattern AV heuristics are tuned to flag.
@@ -198,7 +198,8 @@ std::wstring ownDirectory() {
 
 // cmd.exe outlives us and removes the directory this exe is running from.
 // `ping -n 3` is the portable two-second sleep that exists on every SKU;
-// timeout.exe needs a console this detached process does not have.
+// timeout.exe reads the console input handle, which a windowless child has no
+// usable one of.
 void scheduleSelfCleanup(const std::wstring& helperDir) {
     if (helperDir.empty()) { return; }
     wchar_t comspec[MAX_PATH];
@@ -216,8 +217,17 @@ void scheduleSelfCleanup(const std::wstring& helperDir) {
     PROCESS_INFORMATION process{};
     std::vector<wchar_t> mutableCommand(command.begin(), command.end());
     mutableCommand.push_back(L'\0');
+    // CREATE_NO_WINDOW alone, never OR-ed with DETACHED_PROCESS: the two do not
+    // combine, and CreateProcessW documents CREATE_NO_WINDOW as ignored when
+    // DETACHED_PROCESS is also set. Passing both therefore asked for exactly
+    // what it was trying to avoid. A detached cmd.exe starts owning no console,
+    // allocates a fresh visible one the moment it touches console I/O, and the
+    // uninstall ends with a black window flashing on screen for two seconds.
+    // CREATE_NO_WINDOW gives it a console that is created hidden instead.
+    // We are /SUBSYSTEM:WINDOWS and hold no console of our own, so there was
+    // never an inherited one for DETACHED_PROCESS to detach from.
     if (CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW | DETACHED_PROCESS, nullptr, L"C:\\", &startup,
+                       CREATE_NO_WINDOW, nullptr, L"C:\\", &startup,
                        &process) != 0) {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
