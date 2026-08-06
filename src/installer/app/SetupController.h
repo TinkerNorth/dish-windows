@@ -101,6 +101,10 @@ class SetupController : public QObject {
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT) // DISH_VERSION
     Q_PROPERTY(Mode mode READ mode CONSTANT)                // basename/flag decided
     Q_PROPERTY(bool isElevated READ isElevated CONSTANT)
+    // Set only on the instance the elevation relaunch spawned: the user already
+    // made every choice in the parent window, so the wizard commits instead of
+    // asking again (spec D6).
+    Q_PROPERTY(bool resumeInstall READ resumeInstall CONSTANT)
     Q_PROPERTY(QString logFilePath READ logFilePath CONSTANT)
     Q_PROPERTY(QStringList availableLanguages READ availableLanguages CONSTANT)
     // ["system","en","bs","de","es","fr","pt_BR"]
@@ -211,6 +215,7 @@ class SetupController : public QObject {
     QString appVersion() const;
     Mode mode() const { return mode_; }
     bool isElevated() const { return isElevated_; }
+    bool resumeInstall() const { return options_.resumeInstall && mode_ == Mode::Install; }
     QString logFilePath() const { return logFilePath_; }
     QStringList availableLanguages() const;
 

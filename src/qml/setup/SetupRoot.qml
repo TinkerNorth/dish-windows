@@ -425,7 +425,18 @@ ApplicationWindow {
         onActivated: root.goBack()
     }
 
-    Component.onCompleted: root.focusStep()
+    // The elevation relaunch carries every choice the first window collected,
+    // so this instance commits instead of asking again: approving the UAC
+    // prompt WAS the confirmation. Landing on step 3 rather than 4 is what lets
+    // the phase mapping above move us to Installing, and it leaves a page the
+    // user can act on if the engine reports a blocker or a cancel.
+    Component.onCompleted: {
+        if (!root.uninstall && Setup.resumeInstall) {
+            root.step = 3;
+            Setup.beginInstall();
+        }
+        root.focusStep();
+    }
 
     // ── Chrome ──────────────────────────────────────────────────────────────
     SetupTitleBar {

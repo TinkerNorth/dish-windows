@@ -848,6 +848,11 @@ void SetupController::beginInstall() {
         relaunch.plan.existingVersion.clear();
         relaunch.plan.existingDir.clear();
         relaunch.elevated = true;
+        // Without this the elevated instance re-opens on Welcome with the
+        // choices merely pre-seeded, and the user has to walk the whole wizard
+        // and press Install a second time to get the install they already
+        // approved at the UAC prompt. It commits straight away instead.
+        relaunch.resumeInstall = true;
         relaunch.purgeUserData = false;
         QString exe = options_.sourceExe;
         if (!exe.isEmpty()) {
