@@ -23,8 +23,11 @@ Kit.Card {
 
     // 1-based current stage; markers below it read done, above it todo.
     property int stage: 1
-    // 0-based sub-position inside the current stage (each stage has 2 pages).
+    // 0-based sub-position inside the current stage.
     property int subStep: 0
+    // How many pages the CURRENT stage holds. Stages are not all the same
+    // length: PACKAGE is a single page, DESTINATION is two.
+    property int subSteps: 2
     // From the install step on the completed markers stop being clickable.
     property bool locked: false
 
@@ -150,16 +153,18 @@ Kit.Card {
             }
         }
 
-        // The sub-step pips: each stage hosts exactly two pages.
+        // The sub-step pips, one per page in the current stage. A single-page
+        // stage draws a single pip rather than a permanently unfilled pair.
         Row {
             spacing: Tokens.s1
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
 
             Accessible.role: Accessible.StaticText
-            Accessible.name: qsTr("Sub-step %1 of 2").arg(stageBar.subStep + 1)
+            Accessible.name: qsTr("Sub-step %1 of %2").arg(stageBar.subStep + 1)
+                                                      .arg(stageBar.subSteps)
 
             Repeater {
-                model: 2
+                model: stageBar.subSteps
 
                 delegate: Rectangle {
                     id: pip

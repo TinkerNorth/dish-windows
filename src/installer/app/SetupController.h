@@ -183,9 +183,6 @@ class SetupController : public QObject {
   public: // invokables
     Q_INVOKABLE QString defaultDirFor(Scope scope) const;
     Q_INVOKABLE QString browseForFolder(); // IFileOpenDialog FOS_PICKFOLDERS; "" on cancel
-    Q_INVOKABLE QVariantList licenseEntries() const;
-    // rows {id, name, version, spdx, text}: "lgpl3" (repo LICENSE), "gpl3"
-    // (COPYING.GPL3), then :/licenses/licenses.json rows incl. miniz, Inter OFL
     Q_INVOKABLE QString languageDisplayName(const QString& code) const;
     Q_INVOKABLE void beginInstall(); // preflight onward; detours to elevation itself
     Q_INVOKABLE void beginUninstall();

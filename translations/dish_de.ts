@@ -2697,33 +2697,6 @@
     </message>
 </context>
 <context>
-    <name>LicensePage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Weiter ›</translation>
-    </message>
-    <message>
-        <source>LGPL-3.0</source>
-        <translation type="unfinished">LGPL-3.0</translation>
-    </message>
-    <message>
-        <source>GPL-3.0</source>
-        <translation type="unfinished">GPL-3.0</translation>
-    </message>
-    <message>
-        <source>Third-party</source>
-        <translation type="unfinished">Drittanbieter</translation>
-    </message>
-    <message>
-        <source>Free software</source>
-        <translation type="unfinished">Freie Software</translation>
-    </message>
-    <message>
-        <source>Dish ships under the LGPL-3.0, with the GPL-3.0 and third-party notices beside it. All of it installs next to the app; nothing here asks for agreement.</source>
-        <translation type="unfinished">Dish wird unter der LGPL-3.0 ausgeliefert, daneben die GPL-3.0 und die Hinweise von Drittanbietern. Alles wird neben der App installiert; hier musst du nichts zustimmen.</translation>
-    </message>
-</context>
-<context>
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
@@ -3239,10 +3212,6 @@
         <translation type="unfinished">Schritt 1 von 3 · Willkommen</translation>
     </message>
     <message>
-        <source>Step 1 of 3 · License</source>
-        <translation type="unfinished">Schritt 1 von 3 · Lizenz</translation>
-    </message>
-    <message>
         <source>Step 2 of 3 · Location</source>
         <translation type="unfinished">Schritt 2 von 3 · Ort</translation>
     </message>
@@ -3370,8 +3339,8 @@
         <translation type="unfinished">Schritt %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 2</source>
-        <translation type="unfinished">Teilschritt %1 von 2</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation type="unfinished">Teilschritt %1 von %2</translation>
     </message>
 </context>
 <context>

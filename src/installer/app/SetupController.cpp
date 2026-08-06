@@ -13,7 +13,6 @@
 #include "installer/Journal.h"
 #include "installer/VersionCompare.h"
 #include "installer/ops/KnownFolders.h"
-#include "UI/licenses/LicenseManifest.h"
 #include "Util/Localization.h"
 
 #include <QCoreApplication>
@@ -204,23 +203,6 @@ bool recordedShortcutLives(ShortcutLocation location, Scope scope,
     }
     if (probe.isEmpty()) { return true; }
     return shortcutOps.exists(probe);
-}
-
-QString readResourceText(const QString& resourcePath) {
-    QFile file(resourcePath);
-    if (!file.open(QIODevice::ReadOnly)) { return QString(); }
-    return QString::fromUtf8(file.readAll());
-}
-
-QVariantMap licenseRow(const QString& id, const QString& name, const QString& version,
-                       const QString& spdx, const QString& text) {
-    QVariantMap row;
-    row.insert(QStringLiteral("id"), id);
-    row.insert(QStringLiteral("name"), name);
-    row.insert(QStringLiteral("version"), version);
-    row.insert(QStringLiteral("spdx"), spdx);
-    row.insert(QStringLiteral("text"), text);
-    return row;
 }
 
 // Apartment COM for the folder picker; S_FALSE / RPC_E_CHANGED_MODE both mean
@@ -731,36 +713,6 @@ QString SetupController::browseForFolder() {
     }
     dialog->Release();
     return picked; // native separators; "" on cancel
-}
-
-QVariantList SetupController::licenseEntries() const {
-    QVariantList rows;
-    // The two texts the payload also installs under licenses/, aliased in
-    // installer/setup_assets.qrc so page and installed files agree.
-    rows.append(licenseRow(QStringLiteral("lgpl3"),
-                           QStringLiteral("GNU Lesser General Public License"),
-                           QStringLiteral("3.0"), QStringLiteral("LGPL-3.0-or-later"),
-                           readResourceText(QStringLiteral(":/setup/LICENSE.LGPL-3.0.txt"))));
-    rows.append(licenseRow(QStringLiteral("gpl3"), QStringLiteral("GNU General Public License"),
-                           QStringLiteral("3.0"), QStringLiteral("GPL-3.0-or-later"),
-                           readResourceText(QStringLiteral(":/setup/LICENSE.GPL-3.0.txt"))));
-
-    // Third-party attribution from the same manifest the app's LicensesPage
-    // renders (miniz and Inter included once the manifest lists them).
-    const dish::ui::LicenseManifest manifest = dish::ui::loadBundledLicenseManifest();
-    for (const dish::ui::LicenseEntry& entry : manifest.libraries) {
-        const QString name = dish::ui::licenseDisplayName(entry);
-        if (name.isEmpty()) { continue; }
-        const QString version = dish::ui::licenseVersionLabel(entry);
-        const QString label = dish::ui::licenseLabel(entry).value_or(QString());
-        // The page already draws a section header (name + version) and the SPDX
-        // line above the body, so the body carries only what they do not say —
-        // repeating them here printed every entry's identity twice.
-        QString text;
-        if (const auto url = dish::ui::licenseClickUrl(entry)) { text = *url; }
-        rows.append(licenseRow(entry.artifact.value_or(name), name, version, label, text));
-    }
-    return rows;
 }
 
 QString SetupController::languageDisplayName(const QString& code) const {

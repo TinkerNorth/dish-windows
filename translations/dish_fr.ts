@@ -2697,33 +2697,6 @@
     </message>
 </context>
 <context>
-    <name>LicensePage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Continuer ›</translation>
-    </message>
-    <message>
-        <source>LGPL-3.0</source>
-        <translation type="unfinished">LGPL-3.0</translation>
-    </message>
-    <message>
-        <source>GPL-3.0</source>
-        <translation type="unfinished">GPL-3.0</translation>
-    </message>
-    <message>
-        <source>Third-party</source>
-        <translation type="unfinished">Tiers</translation>
-    </message>
-    <message>
-        <source>Free software</source>
-        <translation type="unfinished">Logiciel libre</translation>
-    </message>
-    <message>
-        <source>Dish ships under the LGPL-3.0, with the GPL-3.0 and third-party notices beside it. All of it installs next to the app; nothing here asks for agreement.</source>
-        <translation type="unfinished">Dish est distribué sous LGPL-3.0, avec la GPL-3.0 et les mentions des tiers à côté. Tout s&apos;installe à côté de l&apos;application ; rien ici ne demande votre accord.</translation>
-    </message>
-</context>
-<context>
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
@@ -3239,10 +3212,6 @@
         <translation type="unfinished">Étape 1 sur 3 · Bienvenue</translation>
     </message>
     <message>
-        <source>Step 1 of 3 · License</source>
-        <translation type="unfinished">Étape 1 sur 3 · Licence</translation>
-    </message>
-    <message>
         <source>Step 2 of 3 · Location</source>
         <translation type="unfinished">Étape 2 sur 3 · Emplacement</translation>
     </message>
@@ -3370,8 +3339,8 @@
         <translation type="unfinished">Étape %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 2</source>
-        <translation type="unfinished">Sous-étape %1 sur 2</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation type="unfinished">Sous-étape %1 sur %2</translation>
     </message>
 </context>
 <context>

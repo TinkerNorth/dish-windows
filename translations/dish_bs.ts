@@ -2710,33 +2710,6 @@
     </message>
 </context>
 <context>
-    <name>LicensePage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Nastavi ›</translation>
-    </message>
-    <message>
-        <source>LGPL-3.0</source>
-        <translation type="unfinished">LGPL-3.0</translation>
-    </message>
-    <message>
-        <source>GPL-3.0</source>
-        <translation type="unfinished">GPL-3.0</translation>
-    </message>
-    <message>
-        <source>Third-party</source>
-        <translation type="unfinished">Treće strane</translation>
-    </message>
-    <message>
-        <source>Free software</source>
-        <translation type="unfinished">Slobodan softver</translation>
-    </message>
-    <message>
-        <source>Dish ships under the LGPL-3.0, with the GPL-3.0 and third-party notices beside it. All of it installs next to the app; nothing here asks for agreement.</source>
-        <translation type="unfinished">Dish se isporučuje pod LGPL-3.0, uz GPL-3.0 i napomene trećih strana. Sve se instalira pored aplikacije; ovdje se ništa ne traži na prihvatanje.</translation>
-    </message>
-</context>
-<context>
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
@@ -3252,10 +3225,6 @@
         <translation type="unfinished">Korak 1 od 3 · Dobrodošli</translation>
     </message>
     <message>
-        <source>Step 1 of 3 · License</source>
-        <translation type="unfinished">Korak 1 od 3 · Licenca</translation>
-    </message>
-    <message>
         <source>Step 2 of 3 · Location</source>
         <translation type="unfinished">Korak 2 od 3 · Lokacija</translation>
     </message>
@@ -3383,8 +3352,8 @@
         <translation type="unfinished">Korak %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 2</source>
-        <translation type="unfinished">Podkorak %1 od 2</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation type="unfinished">Podkorak %1 od %2</translation>
     </message>
 </context>
 <context>

@@ -44,8 +44,12 @@ ApplicationWindow {
     color: Theme.background
 
     // ── Step state ──────────────────────────────────────────────────────────
-    // Install: 0 Welcome · 1 License · 2 Location · 3 Shortcuts ·
-    // 4 Installing · 5 Done. Uninstall: 0 Confirm · 1 Removing · 2 Removed.
+    // Install: 0 Welcome · 1 Location · 2 Shortcuts · 3 Installing · 4 Done.
+    // Uninstall: 0 Confirm · 1 Removing · 2 Removed.
+    // The licence texts are not a wizard step: the LGPL requires them to
+    // accompany the software, which the installed licenses/ directory and the
+    // app's own Licenses page both do. A page nobody had to agree to was a
+    // click between the user and the install.
     property int step: 0
     property bool hadBlockers: false
     property bool closeApproved: false
@@ -64,10 +68,9 @@ ApplicationWindow {
     readonly property var activePage: root.uninstall
         ? (root.step === 0 ? confirmPage : root.step === 1 ? removingPage : removedPage)
         : (root.step === 0 ? welcomePage
-         : root.step === 1 ? licensePage
-         : root.step === 2 ? locationPage
-         : root.step === 3 ? shortcutsPage
-         : root.step === 4 ? installingPage
+         : root.step === 1 ? locationPage
+         : root.step === 2 ? shortcutsPage
+         : root.step === 3 ? installingPage
          : donePage)
 
     readonly property bool dialogOpen: blockerDialog.visible || cancelConfirm.visible
@@ -81,10 +84,9 @@ ApplicationWindow {
          : root.step === 1 ? qsTr("Step 2 of 2 · Removing")
          : qsTr("Step 2 of 2 · Removed"))
         : (root.step === 0 ? qsTr("Step 1 of 3 · Welcome")
-         : root.step === 1 ? qsTr("Step 1 of 3 · License")
-         : root.step === 2 ? qsTr("Step 2 of 3 · Location")
-         : root.step === 3 ? qsTr("Step 2 of 3 · Shortcuts")
-         : root.step === 4 ? qsTr("Step 3 of 3 · Installing")
+         : root.step === 1 ? qsTr("Step 2 of 3 · Location")
+         : root.step === 2 ? qsTr("Step 2 of 3 · Shortcuts")
+         : root.step === 3 ? qsTr("Step 3 of 3 · Installing")
          : qsTr("Step 3 of 3 · Done"))
 
     readonly property string hintText: {
@@ -103,7 +105,7 @@ ApplicationWindow {
         return qsTr("%1 · %2").arg(root.positionText).arg(advice);
     }
 
-    readonly property bool backEnabled: !root.uninstall && root.step >= 1 && root.step <= 3
+    readonly property bool backEnabled: !root.uninstall && root.step >= 1 && root.step <= 2
                                         && !root.working
 
     readonly property bool cancelEnabled: {
@@ -116,16 +118,16 @@ ApplicationWindow {
                 return root.failedFace; // Close after a removal failure
             return false;
         }
-        if (root.step < 4)
+        if (root.step < 3)
             return true;
-        if (root.step === 4)
+        if (root.step === 3)
             return Setup.phase === Setup.Copying; // commit/finalize are atomic
         return root.failedFace; // Done: nothing left to cancel unless it failed
     }
 
     readonly property string cancelLabel: root.failedFace
                                           && ((root.uninstall && root.step === 1)
-                                              || (!root.uninstall && root.step === 5))
+                                              || (!root.uninstall && root.step === 4))
                                           ? qsTr("Close") : qsTr("Cancel")
 
     // ── The hero rail's readings ────────────────────────────────────────────
@@ -154,7 +156,7 @@ ApplicationWindow {
             // The wire exists; this flow unmakes it.
             return "done";
         }
-        if (root.step === 4) {
+        if (root.step === 3) {
             if (Setup.phase === Setup.Done)
                 return "done";
             if (Setup.phase === Setup.Copying || Setup.phase === Setup.Committing
@@ -163,18 +165,18 @@ ApplicationWindow {
             // Error rule: red never enters the scene; the beam just goes idle.
             return "idle";
         }
-        if (root.step === 5)
+        if (root.step === 4)
             return root.failedFace ? "idle" : "done";
         return "idle";
     }
 
     readonly property string heroDestination: root.uninstall
         ? root.shortDir(Setup.existingDir)
-        : (root.step >= 2 && root.dirAnswered ? root.shortDir(Setup.installDir) : "")
+        : (root.step >= 1 && root.dirAnswered ? root.shortDir(Setup.installDir) : "")
 
     readonly property string heroOnDisk: root.uninstall
         ? Setup.requiredText
-        : (root.step >= 2 && root.dirAnswered ? Setup.requiredText : "")
+        : (root.step >= 1 && root.dirAnswered ? Setup.requiredText : "")
 
     // ── Navigation ──────────────────────────────────────────────────────────
     function goTo(n) {
@@ -208,7 +210,7 @@ ApplicationWindow {
         // advance (Shortcuts hands the commit to us; Done finishes).
         if (typeof page.primaryActivated === "function" && page.primaryActivated() === false)
             return;
-        if (!root.uninstall && root.step < 3)
+        if (!root.uninstall && root.step < 2)
             root.goTo(root.step + 1);
     }
 
@@ -226,12 +228,12 @@ ApplicationWindow {
             Setup.quitSetup();
             return;
         }
-        if (root.step === 4) {
+        if (root.step === 3) {
             if (Setup.phase === Setup.Copying && !cancelConfirm.visible)
                 cancelConfirm.open();
             return;
         }
-        if (root.step === 5) {
+        if (root.step === 4) {
             if (root.failedFace)
                 Setup.quitSetup();
             return;
@@ -286,7 +288,7 @@ ApplicationWindow {
             footer.primaryButton.forceActiveFocus(Qt.TabFocusReason);
             return;
         }
-        if (!root.uninstall && root.step === 4) {
+        if (!root.uninstall && root.step === 3) {
             footer.cancelButton.forceActiveFocus(Qt.TabFocusReason);
             return;
         }
@@ -312,11 +314,11 @@ ApplicationWindow {
         id: settleTimer
         interval: 2 * Tokens.durNormal
         repeat: false
-        onTriggered: root.goTo(5)
+        onTriggered: root.goTo(4)
 
         function arm() {
             if (Tokens.reducedMotion)
-                root.goTo(5);
+                root.goTo(4);
             else
                 settleTimer.restart();
         }
@@ -340,8 +342,8 @@ ApplicationWindow {
             if (root.uninstall) {
                 if (running && root.step === 0)
                     root.goTo(1);
-            } else if (running && root.step === 3) {
-                root.goTo(4);
+            } else if (running && root.step === 2) {
+                root.goTo(3);
             }
         }
 
@@ -361,12 +363,12 @@ ApplicationWindow {
             }
             if (error === Setup.Cancelled) {
                 // Rollback already ran: everything is intact, resume choosing.
-                root.goTo(3);
+                root.goTo(2);
                 return;
             }
             if (error === Setup.NeedElevation)
                 return; // surfaced as the Shortcuts page's ErrorBanner
-            root.goTo(5); // the Done page's failure face
+            root.goTo(4); // the Done page's failure face
         }
 
         function onUninstallFinished(ok, error) {
@@ -393,7 +395,7 @@ ApplicationWindow {
     onClosing: function (close) {
         if (root.closeApproved)
             return;
-        if (!root.uninstall && root.step === 4) {
+        if (!root.uninstall && root.step === 3) {
             close.accepted = false;
             if (Setup.phase === Setup.Copying && !cancelConfirm.visible)
                 cancelConfirm.open();
@@ -403,7 +405,7 @@ ApplicationWindow {
             close.accepted = false; // removal is not resumable
             return;
         }
-        if (!root.uninstall && root.step === 5 && !root.failedFace) {
+        if (!root.uninstall && root.step === 4 && !root.failedFace) {
             close.accepted = false;
             root.closeApproved = true;
             Setup.finishOnly();
@@ -427,12 +429,12 @@ ApplicationWindow {
 
     // The elevation relaunch carries every choice the first window collected,
     // so this instance commits instead of asking again: approving the UAC
-    // prompt WAS the confirmation. Landing on step 3 rather than 4 is what lets
-    // the phase mapping above move us to Installing, and it leaves a page the
+    // prompt WAS the confirmation. Landing on Shortcuts rather than Installing
+    // is what lets the phase mapping above move us on, and it leaves a page the
     // user can act on if the engine reports a blocker or a cancel.
     Component.onCompleted: {
         if (!root.uninstall && Setup.resumeInstall) {
-            root.step = 3;
+            root.step = 2;
             Setup.beginInstall();
         }
         root.focusStep();
@@ -481,14 +483,18 @@ ApplicationWindow {
                 // A three-marker bar over a one-question flow is decoration:
                 // the uninstaller carries its place in the footer instead.
                 visible: !root.uninstall
-                stage: root.step <= 1 ? 1 : root.step <= 3 ? 2 : 3
-                subStep: root.step % 2
-                locked: root.step >= 4
+                // PACKAGE is one page now (Welcome), DESTINATION is still two
+                // (Location, Shortcuts), so the pip count travels with the
+                // stage instead of being assumed.
+                stage: root.step <= 0 ? 1 : root.step <= 2 ? 2 : 3
+                subStep: root.step === 2 ? 1 : 0
+                subSteps: root.step === 0 ? 1 : 2
+                locked: root.step >= 3
                 Layout.fillWidth: true
 
                 onStageClicked: function (stage) {
-                    const target = stage === 1 ? 0 : 2;
-                    if (root.step < 4 && target < root.step)
+                    const target = stage === 1 ? 0 : 1;
+                    if (root.step < 3 && target < root.step)
                         root.goTo(target);
                 }
             }
@@ -514,21 +520,15 @@ ApplicationWindow {
                         width: stepHost.width
                         height: stepHost.height
                     }
-                    LicensePage {
-                        id: licensePage
-                        visible: !root.uninstall && root.step === 1
-                        width: stepHost.width
-                        height: stepHost.height
-                    }
                     LocationPage {
                         id: locationPage
-                        visible: !root.uninstall && root.step === 2
+                        visible: !root.uninstall && root.step === 1
                         width: stepHost.width
                         height: stepHost.height
                     }
                     ShortcutsPage {
                         id: shortcutsPage
-                        visible: !root.uninstall && root.step === 3
+                        visible: !root.uninstall && root.step === 2
                         width: stepHost.width
                         height: stepHost.height
 
@@ -543,20 +543,20 @@ ApplicationWindow {
                     }
                     InstallingPage {
                         id: installingPage
-                        visible: !root.uninstall && root.step === 4
+                        visible: !root.uninstall && root.step === 3
                         width: stepHost.width
                         height: stepHost.height
                         hadBlockers: root.hadBlockers
                     }
                     DonePage {
                         id: donePage
-                        visible: !root.uninstall && root.step === 5
+                        visible: !root.uninstall && root.step === 4
                         width: stepHost.width
                         height: stepHost.height
 
                         onRetryRequested: {
                             Setup.retry();
-                            root.goTo(3);
+                            root.goTo(2);
                         }
                         onFinishRequested: {
                             root.closeApproved = true;

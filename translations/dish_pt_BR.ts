@@ -2697,33 +2697,6 @@
     </message>
 </context>
 <context>
-    <name>LicensePage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Continuar ›</translation>
-    </message>
-    <message>
-        <source>LGPL-3.0</source>
-        <translation type="unfinished">LGPL-3.0</translation>
-    </message>
-    <message>
-        <source>GPL-3.0</source>
-        <translation type="unfinished">GPL-3.0</translation>
-    </message>
-    <message>
-        <source>Third-party</source>
-        <translation type="unfinished">Terceiros</translation>
-    </message>
-    <message>
-        <source>Free software</source>
-        <translation type="unfinished">Software livre</translation>
-    </message>
-    <message>
-        <source>Dish ships under the LGPL-3.0, with the GPL-3.0 and third-party notices beside it. All of it installs next to the app; nothing here asks for agreement.</source>
-        <translation type="unfinished">O Dish é distribuído sob a LGPL-3.0, com a GPL-3.0 e os avisos de terceiros ao lado. Tudo é instalado junto do app; nada aqui pede sua concordância.</translation>
-    </message>
-</context>
-<context>
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
@@ -3239,10 +3212,6 @@
         <translation type="unfinished">Etapa 1 de 3 · Boas-vindas</translation>
     </message>
     <message>
-        <source>Step 1 of 3 · License</source>
-        <translation type="unfinished">Etapa 1 de 3 · Licença</translation>
-    </message>
-    <message>
         <source>Step 2 of 3 · Location</source>
         <translation type="unfinished">Etapa 2 de 3 · Local</translation>
     </message>
@@ -3370,8 +3339,8 @@
         <translation type="unfinished">Etapa %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 2</source>
-        <translation type="unfinished">Subetapa %1 de 2</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation type="unfinished">Subetapa %1 de %2</translation>
     </message>
 </context>
 <context>

@@ -2697,33 +2697,6 @@
     </message>
 </context>
 <context>
-    <name>LicensePage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>LGPL-3.0</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>GPL-3.0</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Third-party</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Free software</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dish ships under the LGPL-3.0, with the GPL-3.0 and third-party notices beside it. All of it installs next to the app; nothing here asks for agreement.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
@@ -3239,10 +3212,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Step 1 of 3 · License</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Step 2 of 3 · Location</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3370,7 +3339,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Sub-step %1 of 2</source>
+        <source>Sub-step %1 of %2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

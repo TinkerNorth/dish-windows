@@ -136,8 +136,6 @@ qt_add_executable(DishSetupUi WIN32
     # Fonts, brand SVGs, licenses.json and dish.ico. The same .qrc AUTORCC
     # compiles into dish.exe: two independent AUTORCC runs, one file.
     ${CMAKE_SOURCE_DIR}/packaging/dish.qrc
-    # The two licence texts the License page renders offline.
-    ${CMAKE_SOURCE_DIR}/installer/setup_assets.qrc
     ${CMAKE_CURRENT_BINARY_DIR}/setup-ui.rc
     ${DISH_SETUP_MANIFEST})
 set_target_properties(DishSetupUi PROPERTIES
@@ -158,7 +156,6 @@ qt_add_qml_module(DishSetupUi
         src/qml/setup/SetupStageBar.qml
         src/qml/setup/SetupFooter.qml
         src/qml/setup/WelcomePage.qml
-        src/qml/setup/LicensePage.qml
         src/qml/setup/LocationPage.qml
         src/qml/setup/ShortcutsPage.qml
         src/qml/setup/InstallingPage.qml
