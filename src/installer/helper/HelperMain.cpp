@@ -226,9 +226,8 @@ void scheduleSelfCleanup(const std::wstring& helperDir) {
     // CREATE_NO_WINDOW gives it a console that is created hidden instead.
     // We are /SUBSYSTEM:WINDOWS and hold no console of our own, so there was
     // never an inherited one for DETACHED_PROCESS to detach from.
-    if (CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW, nullptr, L"C:\\", &startup,
-                       &process) != 0) {
+    if (CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                       nullptr, L"C:\\", &startup, &process) != 0) {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
     } else {
