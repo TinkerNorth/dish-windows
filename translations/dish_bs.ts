@@ -218,53 +218,6 @@
     </message>
 </context>
 <context>
-    <name>BlockerCloseDialog</name>
-    <message>
-        <source>In the way</source>
-        <translation type="unfinished">Smetnja</translation>
-    </message>
-    <message>
-        <source>Dish is running</source>
-        <translation type="unfinished">Dish je pokrenut</translation>
-    </message>
-    <message>
-        <source>Force close</source>
-        <translation type="unfinished">Prisilno zatvori</translation>
-    </message>
-    <message>
-        <source>Close Dish and continue</source>
-        <translation type="unfinished">Zatvori Dish i nastavi</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n running Dish window(s) must close before Setup continues.</source>
-        <translation type="unfinished">
-            <numerusform>%n pokrenuti prozor Disha mora se zatvoriti prije nego što se instalacija nastavi.</numerusform>
-            <numerusform>%n pokrenuta prozora Disha moraju se zatvoriti prije nego što se instalacija nastavi.</numerusform>
-            <numerusform>%n pokrenutih prozora Disha mora se zatvoriti prije nego što se instalacija nastavi.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Dish didn’t close. Save anything in flight, close it yourself, then try again.</source>
-        <translation type="unfinished">Dish se nije zatvorio. Sačuvajte što je u toku, zatvorite ga sami, pa pokušajte ponovo.</translation>
-    </message>
-    <message>
-        <source>Close it to continue — files it holds open can’t be removed.</source>
-        <translation type="unfinished">Zatvorite ga da nastavite — datoteke koje drži otvorenima ne mogu se ukloniti.</translation>
-    </message>
-    <message>
-        <source>Close it to continue — replacing files under a running app breaks it.</source>
-        <translation type="unfinished">Zatvorite ga da nastavite — zamjena datoteka ispod pokrenute aplikacije je kvari.</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation type="unfinished">Pokušaj ponovo</translation>
-    </message>
-</context>
-<context>
     <name>BlockerDialog</name>
     <message>
         <source>Connection lost</source>
@@ -289,6 +242,53 @@
     <message>
         <source>Holding the binding so you can reconnect. Re-plug to keep configuring, or close this screen.</source>
         <translation>Povezivanje se zadržava da se možete ponovo povezati. Ponovo priključite da nastavite podešavanje ili zatvorite ovaj ekran.</translation>
+    </message>
+</context>
+<context>
+    <name>BlockerFace</name>
+    <message>
+        <source>In the way</source>
+        <translation type="unfinished">Smetnja</translation>
+    </message>
+    <message>
+        <source>Dish is running</source>
+        <translation type="unfinished">Dish je pokrenut</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n running Dish window(s) must close before Setup continues.</source>
+        <translation type="unfinished">
+            <numerusform>%n pokrenuti prozor Disha mora se zatvoriti prije nego što se instalacija nastavi.</numerusform>
+            <numerusform>%n pokrenuta prozora Disha moraju se zatvoriti prije nego što se instalacija nastavi.</numerusform>
+            <numerusform>%n pokrenutih prozora Disha mora se zatvoriti prije nego što se instalacija nastavi.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Dish didn’t close. Save anything in flight, close it yourself, then try again.</source>
+        <translation type="unfinished">Dish se nije zatvorio. Sačuvajte što je u toku, zatvorite ga sami, pa pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>Close it to continue — files it holds open can’t be removed.</source>
+        <translation type="unfinished">Zatvorite ga da nastavite — datoteke koje drži otvorenima ne mogu se ukloniti.</translation>
+    </message>
+    <message>
+        <source>Close it to continue — replacing files under a running app breaks it.</source>
+        <translation type="unfinished">Zatvorite ga da nastavite — zamjena datoteka ispod pokrenute aplikacije je kvari.</translation>
+    </message>
+    <message>
+        <source>Force close</source>
+        <translation type="unfinished">Prisilno zatvori</translation>
+    </message>
+    <message>
+        <source>Close Dish and continue</source>
+        <translation type="unfinished">Zatvori Dish i nastavi</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation type="unfinished">Pokušaj ponovo</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Otkaži</translation>
     </message>
 </context>
 <context>
@@ -1500,38 +1500,87 @@
     </message>
 </context>
 <context>
-    <name>DonePage</name>
+    <name>DoneFace</name>
+    <message>
+        <source>Installed</source>
+        <translation type="unfinished">Instalirano</translation>
+    </message>
+    <message>
+        <source>Open Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finish without opening</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove any time from Installed apps</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ElevationFace</name>
+    <message>
+        <source>Windows didn’t approve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removing Dish for everyone on this PC needs administrator approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Installing for everyone on this PC needs administrator approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Try again</source>
         <translation type="unfinished">Pokušaj ponovo</translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation type="unfinished">Završi</translation>
+        <source>Install for just me instead</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Start Menu</source>
-        <translation type="unfinished">Start meni</translation>
+        <source>Cancel</source>
+        <translation type="unfinished">Otkaži</translation>
+    </message>
+</context>
+<context>
+    <name>ErrorBanner</name>
+    <message>
+        <source>Retry</source>
+        <translation>Pokušaj ponovo</translation>
+    </message>
+</context>
+<context>
+    <name>FailedFace</name>
+    <message>
+        <source>Something went wrong — see the log for details.</source>
+        <translation type="unfinished">Nešto je pošlo po zlu — detalje potražite u zapisniku.</translation>
     </message>
     <message>
-        <source>Desktop</source>
-        <translation type="unfinished">Radna površina</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="unfinished">ništa</translation>
+        <source>Couldn’t remove %1 — is it open somewhere?</source>
+        <translation type="unfinished">Nije moguće ukloniti %1 — je li negdje otvoren?</translation>
     </message>
     <message>
         <source>Couldn’t write to %1 — is another installer running?</source>
         <translation type="unfinished">Nije moguće pisati u %1 — radi li drugi instalacijski program?</translation>
     </message>
     <message>
-        <source>Something went wrong — see the log for details.</source>
-        <translation type="unfinished">Nešto je pošlo po zlu — detalje potražite u zapisniku.</translation>
+        <source>Couldn’t unregister the install from Windows.</source>
+        <translation type="unfinished">Nije moguće odjaviti instalaciju iz Windowsa.</translation>
     </message>
     <message>
         <source>Couldn’t register the install with Windows.</source>
         <translation type="unfinished">Nije moguće registrovati instalaciju u Windowsu.</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Radna površina</translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Start meni</translation>
     </message>
     <message>
         <source>Couldn’t create the %1 shortcut.</source>
@@ -1546,67 +1595,40 @@
         <translation type="unfinished">Dish je još uvijek pokrenut — zatvorite ga i pokušajte ponovo.</translation>
     </message>
     <message>
-        <source>Windows didn’t approve the install. Try again, or go back and pick Just me.</source>
-        <translation type="unfinished">Windows nije odobrio instalaciju. Pokušajte ponovo ili se vratite i odaberite „Samo ja“.</translation>
-    </message>
-    <message>
         <source>This installer’s files are damaged. Download it again, then retry.</source>
         <translation type="unfinished">Datoteke ovog instalacijskog programa su oštećene. Preuzmite ga ponovo, pa pokušajte opet.</translation>
+    </message>
+    <message>
+        <source>Some files could not be removed — see the log.</source>
+        <translation type="unfinished">Neke datoteke nije bilo moguće ukloniti — pogledajte zapisnik.</translation>
     </message>
     <message>
         <source>The install failed and some files could not be removed — see the log.</source>
         <translation type="unfinished">Instalacija nije uspjela i neke datoteke nije bilo moguće ukloniti — pogledajte zapisnik.</translation>
     </message>
     <message>
+        <source>Not removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Not installed</source>
         <translation type="unfinished">Nije instalirano</translation>
     </message>
     <message>
-        <source>Installed</source>
-        <translation type="unfinished">Instalirano</translation>
+        <source>Changes were undone; this PC is as it was.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The install did not finish.</source>
-        <translation type="unfinished">Instalacija nije dovršena.</translation>
+        <source>Close</source>
+        <translation type="unfinished">Zatvori</translation>
     </message>
     <message>
-        <source>Dish %1 is ready on this PC.</source>
-        <translation type="unfinished">Dish %1 je spreman na ovom PC-u.</translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished">Folder</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Prečice</translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished">Veličina</translation>
-    </message>
-    <message>
-        <source>Start Dish now</source>
-        <translation type="unfinished">Pokreni Dish sada</translation>
-    </message>
-    <message>
-        <source>Opens straight into first-run setup.</source>
-        <translation type="unfinished">Otvara se odmah u početnom podešavanju.</translation>
+        <source>Try again</source>
+        <translation type="unfinished">Pokušaj ponovo</translation>
     </message>
     <message>
         <source>Open log</source>
         <translation type="unfinished">Otvori zapisnik</translation>
-    </message>
-    <message>
-        <source>Remove it any time from Windows Settings ▸ Installed apps.</source>
-        <translation type="unfinished">Uklonite ga bilo kada iz Windows podešavanja ▸ Instalirane aplikacije.</translation>
-    </message>
-</context>
-<context>
-    <name>ErrorBanner</name>
-    <message>
-        <source>Retry</source>
-        <translation>Pokušaj ponovo</translation>
     </message>
 </context>
 <context>
@@ -2061,65 +2083,6 @@
         <source>Pad</source>
         <comment>the controller column of the wire diagram</comment>
         <translation>Kontroler</translation>
-    </message>
-</context>
-<context>
-    <name>InstallingPage</name>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished">Instaliraj</translation>
-    </message>
-    <message>
-        <source>Stop the running app</source>
-        <translation type="unfinished">Zaustavi pokrenutu aplikaciju</translation>
-    </message>
-    <message>
-        <source>waiting</source>
-        <translation type="unfinished">čekanje</translation>
-    </message>
-    <message>
-        <source>Copy files</source>
-        <translation type="unfinished">Kopiraj datoteke</translation>
-    </message>
-    <message>
-        <source>start menu</source>
-        <translation type="unfinished">start meni</translation>
-    </message>
-    <message>
-        <source>desktop</source>
-        <translation type="unfinished">radna površina</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Prečice</translation>
-    </message>
-    <message>
-        <source>Register with Windows</source>
-        <translation type="unfinished">Registruj u Windowsu</translation>
-    </message>
-    <message>
-        <source>installed apps</source>
-        <translation type="unfinished">instalirane aplikacije</translation>
-    </message>
-    <message>
-        <source>Installing…</source>
-        <translation type="unfinished">Instaliranje…</translation>
-    </message>
-    <message>
-        <source>Copying Dish into %1.</source>
-        <translation type="unfinished">Kopiranje Disha u %1.</translation>
-    </message>
-    <message>
-        <source>Install progress</source>
-        <translation type="unfinished">Napredak instalacije</translation>
-    </message>
-    <message>
-        <source>file %1 of %2</source>
-        <translation type="unfinished">datoteka %1 od %2</translation>
-    </message>
-    <message>
-        <source>Undoing changes…</source>
-        <translation type="unfinished">Poništavanje izmjena…</translation>
     </message>
 </context>
 <context>
@@ -2733,81 +2696,6 @@
     </message>
 </context>
 <context>
-    <name>LocationPage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Nastavi ›</translation>
-    </message>
-    <message>
-        <source>Where should it live?</source>
-        <translation type="unfinished">Gdje da ga smjestimo?</translation>
-    </message>
-    <message>
-        <source>One folder holds the app and its runtime. Your settings live in your user profile either way.</source>
-        <translation type="unfinished">Jedan folder sadrži aplikaciju i njeno izvršno okruženje. Vaša podešavanja u oba slučaja stoje u vašem korisničkom profilu.</translation>
-    </message>
-    <message>
-        <source>Install for</source>
-        <translation type="unfinished">Instaliraj za</translation>
-    </message>
-    <message>
-        <source>Just me</source>
-        <translation type="unfinished">Samo ja</translation>
-    </message>
-    <message>
-        <source>Recommended</source>
-        <translation type="unfinished">Preporučeno</translation>
-    </message>
-    <message>
-        <source>No administrator prompt. Installs under your user folder.</source>
-        <translation type="unfinished">Bez upita administratora. Instalira se u vaš korisnički folder.</translation>
-    </message>
-    <message>
-        <source>Everyone on this PC</source>
-        <translation type="unfinished">Svi na ovom PC-u</translation>
-    </message>
-    <message>
-        <source>Asks for administrator approval and installs under Program Files.</source>
-        <translation type="unfinished">Traži odobrenje administratora i instalira se u Program Files.</translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished">Folder</translation>
-    </message>
-    <message>
-        <source>That folder can’t be used — check the path.</source>
-        <translation type="unfinished">Taj folder se ne može koristiti — provjerite putanju.</translation>
-    </message>
-    <message>
-        <source>Not enough free space on this drive.</source>
-        <translation type="unfinished">Nema dovoljno slobodnog prostora na ovom disku.</translation>
-    </message>
-    <message>
-        <source>Browse…</source>
-        <translation type="unfinished">Pregledaj…</translation>
-    </message>
-    <message>
-        <source>Needs %1 · %2 free</source>
-        <translation type="unfinished">Treba %1 · slobodno %2</translation>
-    </message>
-    <message>
-        <source>Dish %1 is already installed here. Continuing upgrades it in place — your settings and pairings stay.</source>
-        <translation type="unfinished">Dish %1 je već instaliran ovdje. Nastavak ga nadograđuje na mjestu — vaša podešavanja i uparivanja ostaju.</translation>
-    </message>
-    <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished">Ovaj PC ima Dish %1, noviji od ovog instalacijskog programa (%2). Nastavak ga zamjenjuje starijom verzijom.</translation>
-    </message>
-    <message>
-        <source>That folder already has files in it. Files with matching names will be replaced.</source>
-        <translation type="unfinished">Taj folder već sadrži datoteke. Datoteke s istim imenima bit će zamijenjene.</translation>
-    </message>
-    <message>
-        <source>That folder syncs with OneDrive. Dish runs fine there, but syncing can slow installs and updates.</source>
-        <translation type="unfinished">Taj folder se sinhronizuje s OneDriveom. Dish tamo radi dobro, ali sinhronizacija može usporiti instalacije i ažuriranja.</translation>
-    </message>
-</context>
-<context>
     <name>Main</name>
     <message>
         <source>Dish</source>
@@ -2832,6 +2720,85 @@
     <message>
         <source>Cancel</source>
         <translation type="unfinished">Otkaži</translation>
+    </message>
+</context>
+<context>
+    <name>OptionsFace</name>
+    <message>
+        <source>Same as Windows</source>
+        <translation type="unfinished">Kao Windows</translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Just me</source>
+        <translation type="unfinished">Samo ja</translation>
+    </message>
+    <message>
+        <source>No admin prompt.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Everyone</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Admin approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder</source>
+        <translation type="unfinished">Folder</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation type="unfinished">Pregledaj…</translation>
+    </message>
+    <message>
+        <source>That folder can’t be used — check the path.</source>
+        <translation type="unfinished">Taj folder se ne može koristiti — provjerite putanju.</translation>
+    </message>
+    <message>
+        <source>That folder already has files in it. Files with matching names will be replaced.</source>
+        <translation type="unfinished">Taj folder već sadrži datoteke. Datoteke s istim imenima bit će zamijenjene.</translation>
+    </message>
+    <message>
+        <source>That folder syncs with OneDrive. Dish runs fine there, but syncing can slow installs and updates.</source>
+        <translation type="unfinished">Taj folder se sinhronizuje s OneDriveom. Dish tamo radi dobro, ali sinhronizacija može usporiti instalacije i ažuriranja.</translation>
+    </message>
+    <message>
+        <source>Needs %1 · %2 free</source>
+        <translation type="unfinished">Treba %1 · slobodno %2</translation>
+    </message>
+    <message>
+        <source>Shortcuts</source>
+        <translation type="unfinished">Prečice</translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Start meni</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Radna površina</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation type="unfinished">Jezik</translation>
+    </message>
+    <message>
+        <source>Install Dish</source>
+        <translation type="unfinished">Instaliraj Dish</translation>
+    </message>
+    <message>
+        <source>‹ Back</source>
+        <translation type="unfinished">‹ Natrag</translation>
+    </message>
+    <message>
+        <source>Nothing is copied yet.</source>
+        <translation type="unfinished">Još ništa nije kopirano.</translation>
     </message>
 </context>
 <context>
@@ -2915,6 +2882,122 @@
     <message>
         <source>Pairing PIN, 6 digits</source>
         <translation>PIN za uparivanje, 6 cifara</translation>
+    </message>
+</context>
+<context>
+    <name>ProgressFace</name>
+    <message>
+        <source>Waiting for Windows approval…</source>
+        <translation type="unfinished">Čeka se odobrenje Windowsa…</translation>
+    </message>
+    <message>
+        <source>Undoing changes…</source>
+        <translation type="unfinished">Poništavanje izmjena…</translation>
+    </message>
+    <message>
+        <source>Finishing up…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removing… %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Installing… %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removal progress</source>
+        <translation type="unfinished">Napredak uklanjanja</translation>
+    </message>
+    <message>
+        <source>Install progress</source>
+        <translation type="unfinished">Napredak instalacije</translation>
+    </message>
+    <message>
+        <source>file %1 of %2</source>
+        <translation type="unfinished">datoteka %1 od %2</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Otkaži</translation>
+    </message>
+    <message>
+        <source>Cleans itself up after this window closes</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryFace</name>
+    <message>
+        <source>Recovery</source>
+        <translation type="unfinished">Oporavak</translation>
+    </message>
+    <message>
+        <source>Finish cleaning up?</source>
+        <translation type="unfinished">Dovršiti čišćenje?</translation>
+    </message>
+    <message>
+        <source>A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.</source>
+        <translation type="unfinished">Prethodni pokušaj instalacije je prekinut i ostavio je datoteke za oporavak. Očistite ih prije nastavka.</translation>
+    </message>
+    <message>
+        <source>Clean up</source>
+        <translation type="unfinished">Očisti</translation>
+    </message>
+    <message>
+        <source>Not now</source>
+        <translation type="unfinished">Ne sada</translation>
+    </message>
+</context>
+<context>
+    <name>RemoveFace</name>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Start meni</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Radna površina</translation>
+    </message>
+    <message>
+        <source>Remove Dish %1?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Also remove my settings and pairings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Otkaži</translation>
+    </message>
+    <message>
+        <source>Nothing is removed yet.</source>
+        <translation type="unfinished">Još ništa nije uklonjeno.</translation>
+    </message>
+</context>
+<context>
+    <name>RemovedFace</name>
+    <message>
+        <source>Removed</source>
+        <translation type="unfinished">Uklonjeno</translation>
+    </message>
+    <message>
+        <source>Your settings stayed at %1 — delete that folder too if you want nothing left.</source>
+        <translation type="unfinished">Vaša podešavanja su ostala u %1 — obrišite i taj folder ako ne želite da išta ostane.</translation>
+    </message>
+    <message>
+        <source>Satellite hosts remember this PC until you forget it there.</source>
+        <translation type="unfinished">Satellite domaćini pamte ovaj PC dok ga tamo ne zaboravite.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished">Zatvori</translation>
     </message>
 </context>
 <context>
@@ -3165,104 +3248,10 @@
     </message>
 </context>
 <context>
-    <name>SetupFooter</name>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
-    </message>
-    <message>
-        <source>‹ Back</source>
-        <translation type="unfinished">‹ Natrag</translation>
-    </message>
-</context>
-<context>
-    <name>SetupHeroRail</name>
-    <message>
-        <source>%1 — %2</source>
-        <translation type="unfinished">%1 — %2</translation>
-    </message>
-    <message>
-        <source>—</source>
-        <translation type="unfinished">—</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation type="unfinished">Verzija</translation>
-    </message>
-    <message>
-        <source>Destination</source>
-        <translation type="unfinished">Odredište</translation>
-    </message>
-    <message>
-        <source>On disk</source>
-        <translation type="unfinished">Na disku</translation>
-    </message>
-</context>
-<context>
     <name>SetupRoot</name>
     <message>
         <source>Uninstall Dish</source>
         <translation type="unfinished">Deinstaliraj Dish</translation>
-    </message>
-    <message>
-        <source>Install Dish</source>
-        <translation type="unfinished">Instaliraj Dish</translation>
-    </message>
-    <message>
-        <source>Step 1 of 2 · Remove</source>
-        <translation type="unfinished">Korak 1 od 2 · Ukloni</translation>
-    </message>
-    <message>
-        <source>Step 2 of 2 · Removing</source>
-        <translation type="unfinished">Korak 2 od 2 · Uklanjanje</translation>
-    </message>
-    <message>
-        <source>Step 2 of 2 · Removed</source>
-        <translation type="unfinished">Korak 2 od 2 · Uklonjeno</translation>
-    </message>
-    <message>
-        <source>Step 1 of 3 · Welcome</source>
-        <translation type="unfinished">Korak 1 od 3 · Dobrodošli</translation>
-    </message>
-    <message>
-        <source>Step 2 of 3 · Location</source>
-        <translation type="unfinished">Korak 2 od 3 · Lokacija</translation>
-    </message>
-    <message>
-        <source>Step 2 of 3 · Shortcuts</source>
-        <translation type="unfinished">Korak 2 od 3 · Prečice</translation>
-    </message>
-    <message>
-        <source>Step 3 of 3 · Installing</source>
-        <translation type="unfinished">Korak 3 od 3 · Instaliranje</translation>
-    </message>
-    <message>
-        <source>Step 3 of 3 · Done</source>
-        <translation type="unfinished">Korak 3 od 3 · Gotovo</translation>
-    </message>
-    <message>
-        <source>Waiting for Windows approval…</source>
-        <translation type="unfinished">Čeka se odobrenje Windowsa…</translation>
-    </message>
-    <message>
-        <source>Removing…</source>
-        <translation type="unfinished">Uklanjanje…</translation>
-    </message>
-    <message>
-        <source>Finishing up, this only takes a moment</source>
-        <translation type="unfinished">Završava se, ovo traje samo trenutak</translation>
-    </message>
-    <message>
-        <source>Copying…</source>
-        <translation type="unfinished">Kopiranje…</translation>
-    </message>
-    <message>
-        <source>%1 · %2</source>
-        <translation type="unfinished">%1 · %2</translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation type="unfinished">Zatvori</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -3277,10 +3266,6 @@
         <translation type="unfinished">Dosad kopirane datoteke se uklanjaju, a ovaj PC ostaje kakav je bio.</translation>
     </message>
     <message>
-        <source>Stop</source>
-        <translation type="unfinished">Zaustavi</translation>
-    </message>
-    <message>
         <source>Keep going</source>
         <translation type="unfinished">Nastavi</translation>
     </message>
@@ -3293,67 +3278,24 @@
         <translation type="unfinished">Instalirati stariju verziju?</translation>
     </message>
     <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished">Ovaj PC ima Dish %1, noviji od ovog instalacijskog programa (%2). Nastavak ga zamjenjuje starijom verzijom.</translation>
-    </message>
-    <message>
         <source>Replace it</source>
         <translation type="unfinished">Zamijeni je</translation>
     </message>
     <message>
-        <source>Recovery</source>
-        <translation type="unfinished">Oporavak</translation>
+        <source>Dish Setup</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish cleaning up?</source>
-        <translation type="unfinished">Dovršiti čišćenje?</translation>
+        <source>Continuing replaces Dish %1 with %2.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.</source>
-        <translation type="unfinished">Prethodni pokušaj instalacije je prekinut i ostavio je datoteke za oporavak. Očistite ih prije nastavka.</translation>
+        <source>Keep %1</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Clean up</source>
-        <translation type="unfinished">Očisti</translation>
-    </message>
-    <message>
-        <source>Not now</source>
-        <translation type="unfinished">Ne sada</translation>
-    </message>
-</context>
-<context>
-    <name>SetupStageBar</name>
-    <message>
-        <source>done</source>
-        <translation type="unfinished">završeno</translation>
-    </message>
-    <message>
-        <source>current</source>
-        <translation type="unfinished">trenutni</translation>
-    </message>
-    <message>
-        <source>not started</source>
-        <translation type="unfinished">nije započeto</translation>
-    </message>
-    <message>
-        <source>Package</source>
-        <translation type="unfinished">Paket</translation>
-    </message>
-    <message>
-        <source>Destination</source>
-        <translation type="unfinished">Odredište</translation>
-    </message>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished">Instaliraj</translation>
-    </message>
-    <message>
-        <source>Step %1, %2</source>
-        <translation type="unfinished">Korak %1, %2</translation>
-    </message>
-    <message>
-        <source>Sub-step %1 of %2</source>
-        <translation type="unfinished">Podkorak %1 od %2</translation>
+        <source>Stop and undo</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -3361,14 +3303,6 @@
     <message>
         <source>Minimize</source>
         <translation type="unfinished">Minimiziraj</translation>
-    </message>
-    <message>
-        <source>Restore</source>
-        <translation type="unfinished">Vrati</translation>
-    </message>
-    <message>
-        <source>Maximize</source>
-        <translation type="unfinished">Maksimiziraj</translation>
     </message>
     <message>
         <source>Close</source>
@@ -3559,57 +3493,6 @@
     </message>
 </context>
 <context>
-    <name>ShortcutsPage</name>
-    <message>
-        <source>Windows will ask for approval.</source>
-        <translation type="unfinished">Windows će zatražiti odobrenje.</translation>
-    </message>
-    <message>
-        <source>Nothing is copied yet.</source>
-        <translation type="unfinished">Još ništa nije kopirano.</translation>
-    </message>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished">Instaliraj</translation>
-    </message>
-    <message>
-        <source>Where Dish shows up</source>
-        <translation type="unfinished">Gdje se Dish pojavljuje</translation>
-    </message>
-    <message>
-        <source>Pick the places Dish should appear. Both can be removed later without reinstalling.</source>
-        <translation type="unfinished">Odaberite mjesta na kojima će se Dish pojaviti. Oba se kasnije mogu ukloniti bez ponovne instalacije.</translation>
-    </message>
-    <message>
-        <source>Start Menu</source>
-        <translation type="unfinished">Start meni</translation>
-    </message>
-    <message>
-        <source>Dish in the Start Menu app list.</source>
-        <translation type="unfinished">Dish u spisku aplikacija Start menija.</translation>
-    </message>
-    <message>
-        <source>Desktop</source>
-        <translation type="unfinished">Radna površina</translation>
-    </message>
-    <message>
-        <source>A Dish shortcut on the desktop.</source>
-        <translation type="unfinished">Prečica za Dish na radnoj površini.</translation>
-    </message>
-    <message>
-        <source>Windows didn’t approve the install. Try again, or go back and pick Just me.</source>
-        <translation type="unfinished">Windows nije odobrio instalaciju. Pokušajte ponovo ili se vratite i odaberite „Samo ja“.</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation type="unfinished">Pokušaj ponovo</translation>
-    </message>
-    <message>
-        <source>No service, no autostart, no update agent. Dish runs only when you start it, and Installed apps removes it cleanly.</source>
-        <translation type="unfinished">Bez servisa, bez automatskog pokretanja, bez agenta za ažuriranje. Dish radi samo kada ga vi pokrenete, a Instalirane aplikacije ga uredno uklanjaju.</translation>
-    </message>
-</context>
-<context>
     <name>StepList</name>
     <message>
         <source>done</source>
@@ -3634,163 +3517,6 @@
     <message>
         <source>%1 — %2</source>
         <translation>%1 — %2</translation>
-    </message>
-</context>
-<context>
-    <name>UninstallConfirmPage</name>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished">Ukloni</translation>
-    </message>
-    <message>
-        <source>Start Menu</source>
-        <translation type="unfinished">Start meni</translation>
-    </message>
-    <message>
-        <source>Desktop</source>
-        <translation type="unfinished">Radna površina</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="unfinished">ništa</translation>
-    </message>
-    <message>
-        <source>Remove Dish?</source>
-        <translation type="unfinished">Ukloniti Dish?</translation>
-    </message>
-    <message>
-        <source>Takes Dish %1 off this PC.</source>
-        <translation type="unfinished">Uklanja Dish %1 s ovog PC-a.</translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished">Folder</translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished">Veličina</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Prečice</translation>
-    </message>
-    <message>
-        <source>Also remove my settings</source>
-        <translation type="unfinished">Ukloni i moja podešavanja</translation>
-    </message>
-    <message>
-        <source>Pairings and preferences stored under your user profile.</source>
-        <translation type="unfinished">Uparivanja i postavke pohranjene u vašem korisničkom profilu.</translation>
-    </message>
-    <message>
-        <source>Satellite hosts remember this PC until you forget it there.</source>
-        <translation type="unfinished">Satellite domaćini pamte ovaj PC dok ga tamo ne zaboravite.</translation>
-    </message>
-    <message>
-        <source>Nothing is removed yet.</source>
-        <translation type="unfinished">Još ništa nije uklonjeno.</translation>
-    </message>
-</context>
-<context>
-    <name>UninstallDonePage</name>
-    <message>
-        <source>Close</source>
-        <translation type="unfinished">Zatvori</translation>
-    </message>
-    <message>
-        <source>Removed</source>
-        <translation type="unfinished">Uklonjeno</translation>
-    </message>
-    <message>
-        <source>Dish is off this PC.</source>
-        <translation type="unfinished">Dish više nije na ovom PC-u.</translation>
-    </message>
-    <message>
-        <source>Your settings stayed at %1 — delete that folder too if you want nothing left.</source>
-        <translation type="unfinished">Vaša podešavanja su ostala u %1 — obrišite i taj folder ako ne želite da išta ostane.</translation>
-    </message>
-</context>
-<context>
-    <name>UninstallProgressPage</name>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished">Ukloni</translation>
-    </message>
-    <message>
-        <source>Couldn’t remove %1 — is it open somewhere?</source>
-        <translation type="unfinished">Nije moguće ukloniti %1 — je li negdje otvoren?</translation>
-    </message>
-    <message>
-        <source>Couldn’t unregister the install from Windows.</source>
-        <translation type="unfinished">Nije moguće odjaviti instalaciju iz Windowsa.</translation>
-    </message>
-    <message>
-        <source>Some files could not be removed — see the log.</source>
-        <translation type="unfinished">Neke datoteke nije bilo moguće ukloniti — pogledajte zapisnik.</translation>
-    </message>
-    <message>
-        <source>Something went wrong — see the log for details.</source>
-        <translation type="unfinished">Nešto je pošlo po zlu — detalje potražite u zapisniku.</translation>
-    </message>
-    <message>
-        <source>Stop the running app</source>
-        <translation type="unfinished">Zaustavi pokrenutu aplikaciju</translation>
-    </message>
-    <message>
-        <source>waiting</source>
-        <translation type="unfinished">čekanje</translation>
-    </message>
-    <message>
-        <source>start menu</source>
-        <translation type="unfinished">start meni</translation>
-    </message>
-    <message>
-        <source>desktop</source>
-        <translation type="unfinished">radna površina</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Prečice</translation>
-    </message>
-    <message>
-        <source>Remove files</source>
-        <translation type="unfinished">Ukloni datoteke</translation>
-    </message>
-    <message>
-        <source>Unregister from Windows</source>
-        <translation type="unfinished">Odjavi iz Windowsa</translation>
-    </message>
-    <message>
-        <source>installed apps</source>
-        <translation type="unfinished">instalirane aplikacije</translation>
-    </message>
-    <message>
-        <source>Clean up this uninstaller</source>
-        <translation type="unfinished">Očisti ovaj deinstalacijski program</translation>
-    </message>
-    <message>
-        <source>on exit</source>
-        <translation type="unfinished">pri izlasku</translation>
-    </message>
-    <message>
-        <source>Removing…</source>
-        <translation type="unfinished">Uklanjanje…</translation>
-    </message>
-    <message>
-        <source>Taking Dish out of %1.</source>
-        <translation type="unfinished">Uklanjanje Disha iz %1.</translation>
-    </message>
-    <message>
-        <source>Removal progress</source>
-        <translation type="unfinished">Napredak uklanjanja</translation>
-    </message>
-    <message>
-        <source>file %1 of %2</source>
-        <translation type="unfinished">datoteka %1 od %2</translation>
-    </message>
-    <message>
-        <source>Open log</source>
-        <translation type="unfinished">Otvori zapisnik</translation>
     </message>
 </context>
 <context>
@@ -3872,62 +3598,62 @@
     </message>
 </context>
 <context>
-    <name>WelcomePage</name>
+    <name>WelcomeFace</name>
     <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Nastavi ›</translation>
+        <source>Everyone on this PC</source>
+        <translation type="unfinished">Svi na ovom PC-u</translation>
+    </message>
+    <message>
+        <source>Just me</source>
+        <translation type="unfinished">Samo ja</translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Start meni</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Radna površina</translation>
+    </message>
+    <message>
+        <source>no shortcuts</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Dish %1</source>
         <translation type="unfinished">Dish %1</translation>
     </message>
     <message>
-        <source>Streams a controller plugged into this PC to a Satellite host on your network. This sets up the Windows app.</source>
-        <translation type="unfinished">Prosljeđuje kontroler priključen na ovaj PC domaćinu sa Satelliteom na vašoj mreži. Ovo postavlja Windows aplikaciju.</translation>
+        <source>This PC has Dish %1 — newer than this installer.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Version</source>
-        <translation type="unfinished">Verzija</translation>
+        <source>Dish %1 is on this PC. This updates it in place — your settings and pairings stay.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Publisher</source>
-        <translation type="unfinished">Izdavač</translation>
+        <source>Your controller, on a Satellite host over your LAN.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>License</source>
-        <translation type="unfinished">Licenca</translation>
+        <source>Replace with %1</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>LGPL-3.0-or-later · free software</source>
-        <translation type="unfinished">LGPL-3.0-or-later · slobodan softver</translation>
+        <source>Update Dish</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Needs</source>
-        <translation type="unfinished">Treba</translation>
+        <source>Install Dish</source>
+        <translation type="unfinished">Instaliraj Dish</translation>
     </message>
     <message>
-        <source>%1 on disk</source>
-        <translation type="unfinished">%1 na disku</translation>
+        <source>Options</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Language</source>
-        <translation type="unfinished">Jezik</translation>
-    </message>
-    <message>
-        <source>Dish %1 is already installed here. Continuing upgrades it in place — your settings and pairings stay.</source>
-        <translation type="unfinished">Dish %1 je već instaliran ovdje. Nastavak ga nadograđuje na mjestu — vaša podešavanja i uparivanja ostaju.</translation>
-    </message>
-    <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished">Ovaj PC ima Dish %1, noviji od ovog instalacijskog programa (%2). Nastavak ga zamjenjuje starijom verzijom.</translation>
-    </message>
-    <message>
-        <source>Nothing is copied until the last step. Cancel before that and this PC is left exactly as it was.</source>
-        <translation type="unfinished">Ništa se ne kopira do posljednjeg koraka. Otkažite prije toga i ovaj PC ostaje potpuno isti.</translation>
-    </message>
-    <message>
-        <source>Same as Windows</source>
-        <translation type="unfinished">Kao Windows</translation>
+        <source>Keep %1 — close</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

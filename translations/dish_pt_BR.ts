@@ -217,52 +217,6 @@
     </message>
 </context>
 <context>
-    <name>BlockerCloseDialog</name>
-    <message>
-        <source>In the way</source>
-        <translation type="unfinished">Bloqueio</translation>
-    </message>
-    <message>
-        <source>Dish is running</source>
-        <translation type="unfinished">O Dish está em execução</translation>
-    </message>
-    <message>
-        <source>Force close</source>
-        <translation type="unfinished">Forçar fechamento</translation>
-    </message>
-    <message>
-        <source>Close Dish and continue</source>
-        <translation type="unfinished">Fechar o Dish e continuar</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n running Dish window(s) must close before Setup continues.</source>
-        <translation type="unfinished">
-            <numerusform>%n janela do Dish aberta precisa ser fechada antes que a instalação continue.</numerusform>
-            <numerusform>%n janelas do Dish abertas precisam ser fechadas antes que a instalação continue.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Dish didn’t close. Save anything in flight, close it yourself, then try again.</source>
-        <translation type="unfinished">O Dish não fechou. Salve o que estiver em andamento, feche-o você mesmo e tente de novo.</translation>
-    </message>
-    <message>
-        <source>Close it to continue — files it holds open can’t be removed.</source>
-        <translation type="unfinished">Feche-o para continuar — os arquivos que ele mantém abertos não podem ser removidos.</translation>
-    </message>
-    <message>
-        <source>Close it to continue — replacing files under a running app breaks it.</source>
-        <translation type="unfinished">Feche-o para continuar — trocar arquivos de um app em execução quebra o app.</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation type="unfinished">Tentar novamente</translation>
-    </message>
-</context>
-<context>
     <name>BlockerDialog</name>
     <message>
         <source>Connection lost</source>
@@ -287,6 +241,52 @@
     <message>
         <source>Holding the binding so you can reconnect. Re-plug to keep configuring, or close this screen.</source>
         <translation>Mantendo o vínculo para você reconectar. Conecte novamente para continuar configurando ou feche esta tela.</translation>
+    </message>
+</context>
+<context>
+    <name>BlockerFace</name>
+    <message>
+        <source>In the way</source>
+        <translation type="unfinished">Bloqueio</translation>
+    </message>
+    <message>
+        <source>Dish is running</source>
+        <translation type="unfinished">O Dish está em execução</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n running Dish window(s) must close before Setup continues.</source>
+        <translation type="unfinished">
+            <numerusform>%n janela do Dish aberta precisa ser fechada antes que a instalação continue.</numerusform>
+            <numerusform>%n janelas do Dish abertas precisam ser fechadas antes que a instalação continue.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Dish didn’t close. Save anything in flight, close it yourself, then try again.</source>
+        <translation type="unfinished">O Dish não fechou. Salve o que estiver em andamento, feche-o você mesmo e tente de novo.</translation>
+    </message>
+    <message>
+        <source>Close it to continue — files it holds open can’t be removed.</source>
+        <translation type="unfinished">Feche-o para continuar — os arquivos que ele mantém abertos não podem ser removidos.</translation>
+    </message>
+    <message>
+        <source>Close it to continue — replacing files under a running app breaks it.</source>
+        <translation type="unfinished">Feche-o para continuar — trocar arquivos de um app em execução quebra o app.</translation>
+    </message>
+    <message>
+        <source>Force close</source>
+        <translation type="unfinished">Forçar fechamento</translation>
+    </message>
+    <message>
+        <source>Close Dish and continue</source>
+        <translation type="unfinished">Fechar o Dish e continuar</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation type="unfinished">Tentar novamente</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
     </message>
 </context>
 <context>
@@ -1489,38 +1489,87 @@
     </message>
 </context>
 <context>
-    <name>DonePage</name>
+    <name>DoneFace</name>
+    <message>
+        <source>Installed</source>
+        <translation type="unfinished">Instalado</translation>
+    </message>
+    <message>
+        <source>Open Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finish without opening</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove any time from Installed apps</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ElevationFace</name>
+    <message>
+        <source>Windows didn’t approve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removing Dish for everyone on this PC needs administrator approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Installing for everyone on this PC needs administrator approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Try again</source>
         <translation type="unfinished">Tentar novamente</translation>
     </message>
     <message>
-        <source>Finish</source>
-        <translation type="unfinished">Concluir</translation>
+        <source>Install for just me instead</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Start Menu</source>
-        <translation type="unfinished">Menu Iniciar</translation>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+</context>
+<context>
+    <name>ErrorBanner</name>
+    <message>
+        <source>Retry</source>
+        <translation>Tentar novamente</translation>
+    </message>
+</context>
+<context>
+    <name>FailedFace</name>
+    <message>
+        <source>Something went wrong — see the log for details.</source>
+        <translation type="unfinished">Algo deu errado — veja os detalhes no log.</translation>
     </message>
     <message>
-        <source>Desktop</source>
-        <translation type="unfinished">Área de trabalho</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="unfinished">nenhum</translation>
+        <source>Couldn’t remove %1 — is it open somewhere?</source>
+        <translation type="unfinished">Não foi possível remover %1 — ele está aberto em algum lugar?</translation>
     </message>
     <message>
         <source>Couldn’t write to %1 — is another installer running?</source>
         <translation type="unfinished">Não foi possível gravar em %1 — há outro instalador em execução?</translation>
     </message>
     <message>
-        <source>Something went wrong — see the log for details.</source>
-        <translation type="unfinished">Algo deu errado — veja os detalhes no log.</translation>
+        <source>Couldn’t unregister the install from Windows.</source>
+        <translation type="unfinished">Não foi possível cancelar o registro da instalação no Windows.</translation>
     </message>
     <message>
         <source>Couldn’t register the install with Windows.</source>
         <translation type="unfinished">Não foi possível registrar a instalação no Windows.</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Área de trabalho</translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Menu Iniciar</translation>
     </message>
     <message>
         <source>Couldn’t create the %1 shortcut.</source>
@@ -1535,67 +1584,40 @@
         <translation type="unfinished">O Dish ainda está em execução — feche-o e tente de novo.</translation>
     </message>
     <message>
-        <source>Windows didn’t approve the install. Try again, or go back and pick Just me.</source>
-        <translation type="unfinished">O Windows não aprovou a instalação. Tente de novo, ou volte e escolha &quot;Somente eu&quot;.</translation>
-    </message>
-    <message>
         <source>This installer’s files are damaged. Download it again, then retry.</source>
         <translation type="unfinished">Os arquivos deste instalador estão danificados. Baixe-o de novo e tente outra vez.</translation>
+    </message>
+    <message>
+        <source>Some files could not be removed — see the log.</source>
+        <translation type="unfinished">Alguns arquivos não puderam ser removidos — veja o log.</translation>
     </message>
     <message>
         <source>The install failed and some files could not be removed — see the log.</source>
         <translation type="unfinished">A instalação falhou e alguns arquivos não puderam ser removidos — veja o log.</translation>
     </message>
     <message>
+        <source>Not removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Not installed</source>
         <translation type="unfinished">Não instalado</translation>
     </message>
     <message>
-        <source>Installed</source>
-        <translation type="unfinished">Instalado</translation>
+        <source>Changes were undone; this PC is as it was.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The install did not finish.</source>
-        <translation type="unfinished">A instalação não foi concluída.</translation>
+        <source>Close</source>
+        <translation type="unfinished">Fechar</translation>
     </message>
     <message>
-        <source>Dish %1 is ready on this PC.</source>
-        <translation type="unfinished">O Dish %1 está pronto neste PC.</translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished">Pasta</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Atalhos</translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished">Tamanho</translation>
-    </message>
-    <message>
-        <source>Start Dish now</source>
-        <translation type="unfinished">Iniciar o Dish agora</translation>
-    </message>
-    <message>
-        <source>Opens straight into first-run setup.</source>
-        <translation type="unfinished">Abre direto na configuração inicial.</translation>
+        <source>Try again</source>
+        <translation type="unfinished">Tentar novamente</translation>
     </message>
     <message>
         <source>Open log</source>
         <translation type="unfinished">Abrir log</translation>
-    </message>
-    <message>
-        <source>Remove it any time from Windows Settings ▸ Installed apps.</source>
-        <translation type="unfinished">Remova quando quiser em Configurações do Windows ▸ Aplicativos instalados.</translation>
-    </message>
-</context>
-<context>
-    <name>ErrorBanner</name>
-    <message>
-        <source>Retry</source>
-        <translation>Tentar novamente</translation>
     </message>
 </context>
 <context>
@@ -2048,65 +2070,6 @@
         <source>Pad</source>
         <comment>the controller column of the wire diagram</comment>
         <translation>Controle</translation>
-    </message>
-</context>
-<context>
-    <name>InstallingPage</name>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished">Instalar</translation>
-    </message>
-    <message>
-        <source>Stop the running app</source>
-        <translation type="unfinished">Parar o app em execução</translation>
-    </message>
-    <message>
-        <source>waiting</source>
-        <translation type="unfinished">aguardando</translation>
-    </message>
-    <message>
-        <source>Copy files</source>
-        <translation type="unfinished">Copiar arquivos</translation>
-    </message>
-    <message>
-        <source>start menu</source>
-        <translation type="unfinished">menu iniciar</translation>
-    </message>
-    <message>
-        <source>desktop</source>
-        <translation type="unfinished">área de trabalho</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Atalhos</translation>
-    </message>
-    <message>
-        <source>Register with Windows</source>
-        <translation type="unfinished">Registrar no Windows</translation>
-    </message>
-    <message>
-        <source>installed apps</source>
-        <translation type="unfinished">aplicativos instalados</translation>
-    </message>
-    <message>
-        <source>Installing…</source>
-        <translation type="unfinished">Instalando…</translation>
-    </message>
-    <message>
-        <source>Copying Dish into %1.</source>
-        <translation type="unfinished">Copiando o Dish para %1.</translation>
-    </message>
-    <message>
-        <source>Install progress</source>
-        <translation type="unfinished">Progresso da instalação</translation>
-    </message>
-    <message>
-        <source>file %1 of %2</source>
-        <translation type="unfinished">arquivo %1 de %2</translation>
-    </message>
-    <message>
-        <source>Undoing changes…</source>
-        <translation type="unfinished">Desfazendo as alterações…</translation>
     </message>
 </context>
 <context>
@@ -2720,81 +2683,6 @@
     </message>
 </context>
 <context>
-    <name>LocationPage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Continuar ›</translation>
-    </message>
-    <message>
-        <source>Where should it live?</source>
-        <translation type="unfinished">Onde ele deve ficar?</translation>
-    </message>
-    <message>
-        <source>One folder holds the app and its runtime. Your settings live in your user profile either way.</source>
-        <translation type="unfinished">Uma pasta guarda o app e seu ambiente de execução. Suas configurações ficam no seu perfil de usuário de qualquer forma.</translation>
-    </message>
-    <message>
-        <source>Install for</source>
-        <translation type="unfinished">Instalar para</translation>
-    </message>
-    <message>
-        <source>Just me</source>
-        <translation type="unfinished">Somente eu</translation>
-    </message>
-    <message>
-        <source>Recommended</source>
-        <translation type="unfinished">Recomendado</translation>
-    </message>
-    <message>
-        <source>No administrator prompt. Installs under your user folder.</source>
-        <translation type="unfinished">Sem aviso de administrador. Instala na sua pasta de usuário.</translation>
-    </message>
-    <message>
-        <source>Everyone on this PC</source>
-        <translation type="unfinished">Todos neste PC</translation>
-    </message>
-    <message>
-        <source>Asks for administrator approval and installs under Program Files.</source>
-        <translation type="unfinished">Pede aprovação de administrador e instala em Program Files.</translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished">Pasta</translation>
-    </message>
-    <message>
-        <source>That folder can’t be used — check the path.</source>
-        <translation type="unfinished">Essa pasta não pode ser usada — verifique o caminho.</translation>
-    </message>
-    <message>
-        <source>Not enough free space on this drive.</source>
-        <translation type="unfinished">Espaço livre insuficiente nesta unidade.</translation>
-    </message>
-    <message>
-        <source>Browse…</source>
-        <translation type="unfinished">Procurar…</translation>
-    </message>
-    <message>
-        <source>Needs %1 · %2 free</source>
-        <translation type="unfinished">Precisa de %1 · %2 livres</translation>
-    </message>
-    <message>
-        <source>Dish %1 is already installed here. Continuing upgrades it in place — your settings and pairings stay.</source>
-        <translation type="unfinished">O Dish %1 já está instalado aqui. Continuar atualiza no mesmo lugar — suas configurações e pareamentos permanecem.</translation>
-    </message>
-    <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished">Este PC tem o Dish %1, mais novo que este instalador (%2). Continuar substitui pela versão mais antiga.</translation>
-    </message>
-    <message>
-        <source>That folder already has files in it. Files with matching names will be replaced.</source>
-        <translation type="unfinished">Essa pasta já tem arquivos. Arquivos com o mesmo nome serão substituídos.</translation>
-    </message>
-    <message>
-        <source>That folder syncs with OneDrive. Dish runs fine there, but syncing can slow installs and updates.</source>
-        <translation type="unfinished">Essa pasta sincroniza com o OneDrive. O Dish funciona bem lá, mas a sincronização pode deixar instalações e atualizações mais lentas.</translation>
-    </message>
-</context>
-<context>
     <name>Main</name>
     <message>
         <source>Dish</source>
@@ -2819,6 +2707,85 @@
     <message>
         <source>Cancel</source>
         <translation type="unfinished">Cancelar</translation>
+    </message>
+</context>
+<context>
+    <name>OptionsFace</name>
+    <message>
+        <source>Same as Windows</source>
+        <translation type="unfinished">Igual ao Windows</translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Just me</source>
+        <translation type="unfinished">Somente eu</translation>
+    </message>
+    <message>
+        <source>No admin prompt.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Everyone</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Admin approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder</source>
+        <translation type="unfinished">Pasta</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation type="unfinished">Procurar…</translation>
+    </message>
+    <message>
+        <source>That folder can’t be used — check the path.</source>
+        <translation type="unfinished">Essa pasta não pode ser usada — verifique o caminho.</translation>
+    </message>
+    <message>
+        <source>That folder already has files in it. Files with matching names will be replaced.</source>
+        <translation type="unfinished">Essa pasta já tem arquivos. Arquivos com o mesmo nome serão substituídos.</translation>
+    </message>
+    <message>
+        <source>That folder syncs with OneDrive. Dish runs fine there, but syncing can slow installs and updates.</source>
+        <translation type="unfinished">Essa pasta sincroniza com o OneDrive. O Dish funciona bem lá, mas a sincronização pode deixar instalações e atualizações mais lentas.</translation>
+    </message>
+    <message>
+        <source>Needs %1 · %2 free</source>
+        <translation type="unfinished">Precisa de %1 · %2 livres</translation>
+    </message>
+    <message>
+        <source>Shortcuts</source>
+        <translation type="unfinished">Atalhos</translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Menu Iniciar</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Área de trabalho</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation type="unfinished">Idioma</translation>
+    </message>
+    <message>
+        <source>Install Dish</source>
+        <translation type="unfinished">Instalar o Dish</translation>
+    </message>
+    <message>
+        <source>‹ Back</source>
+        <translation type="unfinished">‹ Voltar</translation>
+    </message>
+    <message>
+        <source>Nothing is copied yet.</source>
+        <translation type="unfinished">Nada foi copiado ainda.</translation>
     </message>
 </context>
 <context>
@@ -2902,6 +2869,122 @@
     <message>
         <source>Pairing PIN, 6 digits</source>
         <translation>PIN de pareamento, 6 dígitos</translation>
+    </message>
+</context>
+<context>
+    <name>ProgressFace</name>
+    <message>
+        <source>Waiting for Windows approval…</source>
+        <translation type="unfinished">Aguardando a aprovação do Windows…</translation>
+    </message>
+    <message>
+        <source>Undoing changes…</source>
+        <translation type="unfinished">Desfazendo as alterações…</translation>
+    </message>
+    <message>
+        <source>Finishing up…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removing… %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Installing… %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removal progress</source>
+        <translation type="unfinished">Progresso da remoção</translation>
+    </message>
+    <message>
+        <source>Install progress</source>
+        <translation type="unfinished">Progresso da instalação</translation>
+    </message>
+    <message>
+        <source>file %1 of %2</source>
+        <translation type="unfinished">arquivo %1 de %2</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message>
+        <source>Cleans itself up after this window closes</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryFace</name>
+    <message>
+        <source>Recovery</source>
+        <translation type="unfinished">Recuperação</translation>
+    </message>
+    <message>
+        <source>Finish cleaning up?</source>
+        <translation type="unfinished">Concluir a limpeza?</translation>
+    </message>
+    <message>
+        <source>A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.</source>
+        <translation type="unfinished">Uma tentativa anterior de instalação foi interrompida e deixou arquivos de recuperação. Limpe-os antes de continuar.</translation>
+    </message>
+    <message>
+        <source>Clean up</source>
+        <translation type="unfinished">Limpar</translation>
+    </message>
+    <message>
+        <source>Not now</source>
+        <translation type="unfinished">Agora não</translation>
+    </message>
+</context>
+<context>
+    <name>RemoveFace</name>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Menu Iniciar</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Área de trabalho</translation>
+    </message>
+    <message>
+        <source>Remove Dish %1?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Also remove my settings and pairings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message>
+        <source>Nothing is removed yet.</source>
+        <translation type="unfinished">Nada foi removido ainda.</translation>
+    </message>
+</context>
+<context>
+    <name>RemovedFace</name>
+    <message>
+        <source>Removed</source>
+        <translation type="unfinished">Removido</translation>
+    </message>
+    <message>
+        <source>Your settings stayed at %1 — delete that folder too if you want nothing left.</source>
+        <translation type="unfinished">Suas configurações ficaram em %1 — apague também essa pasta se não quiser deixar nada.</translation>
+    </message>
+    <message>
+        <source>Satellite hosts remember this PC until you forget it there.</source>
+        <translation type="unfinished">Os anfitriões Satellite lembram deste PC até você esquecê-lo lá.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished">Fechar</translation>
     </message>
 </context>
 <context>
@@ -3152,104 +3235,10 @@
     </message>
 </context>
 <context>
-    <name>SetupFooter</name>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
-    </message>
-    <message>
-        <source>‹ Back</source>
-        <translation type="unfinished">‹ Voltar</translation>
-    </message>
-</context>
-<context>
-    <name>SetupHeroRail</name>
-    <message>
-        <source>%1 — %2</source>
-        <translation type="unfinished">%1 — %2</translation>
-    </message>
-    <message>
-        <source>—</source>
-        <translation type="unfinished">—</translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation type="unfinished">Versão</translation>
-    </message>
-    <message>
-        <source>Destination</source>
-        <translation type="unfinished">Destino</translation>
-    </message>
-    <message>
-        <source>On disk</source>
-        <translation type="unfinished">Em disco</translation>
-    </message>
-</context>
-<context>
     <name>SetupRoot</name>
     <message>
         <source>Uninstall Dish</source>
         <translation type="unfinished">Desinstalar o Dish</translation>
-    </message>
-    <message>
-        <source>Install Dish</source>
-        <translation type="unfinished">Instalar o Dish</translation>
-    </message>
-    <message>
-        <source>Step 1 of 2 · Remove</source>
-        <translation type="unfinished">Etapa 1 de 2 · Remover</translation>
-    </message>
-    <message>
-        <source>Step 2 of 2 · Removing</source>
-        <translation type="unfinished">Etapa 2 de 2 · Removendo</translation>
-    </message>
-    <message>
-        <source>Step 2 of 2 · Removed</source>
-        <translation type="unfinished">Etapa 2 de 2 · Removido</translation>
-    </message>
-    <message>
-        <source>Step 1 of 3 · Welcome</source>
-        <translation type="unfinished">Etapa 1 de 3 · Boas-vindas</translation>
-    </message>
-    <message>
-        <source>Step 2 of 3 · Location</source>
-        <translation type="unfinished">Etapa 2 de 3 · Local</translation>
-    </message>
-    <message>
-        <source>Step 2 of 3 · Shortcuts</source>
-        <translation type="unfinished">Etapa 2 de 3 · Atalhos</translation>
-    </message>
-    <message>
-        <source>Step 3 of 3 · Installing</source>
-        <translation type="unfinished">Etapa 3 de 3 · Instalando</translation>
-    </message>
-    <message>
-        <source>Step 3 of 3 · Done</source>
-        <translation type="unfinished">Etapa 3 de 3 · Concluído</translation>
-    </message>
-    <message>
-        <source>Waiting for Windows approval…</source>
-        <translation type="unfinished">Aguardando a aprovação do Windows…</translation>
-    </message>
-    <message>
-        <source>Removing…</source>
-        <translation type="unfinished">Removendo…</translation>
-    </message>
-    <message>
-        <source>Finishing up, this only takes a moment</source>
-        <translation type="unfinished">Finalizando, isso leva só um instante</translation>
-    </message>
-    <message>
-        <source>Copying…</source>
-        <translation type="unfinished">Copiando…</translation>
-    </message>
-    <message>
-        <source>%1 · %2</source>
-        <translation type="unfinished">%1 · %2</translation>
-    </message>
-    <message>
-        <source>Close</source>
-        <translation type="unfinished">Fechar</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -3264,10 +3253,6 @@
         <translation type="unfinished">Os arquivos copiados até agora são removidos e este PC fica como estava.</translation>
     </message>
     <message>
-        <source>Stop</source>
-        <translation type="unfinished">Parar</translation>
-    </message>
-    <message>
         <source>Keep going</source>
         <translation type="unfinished">Continuar</translation>
     </message>
@@ -3280,67 +3265,24 @@
         <translation type="unfinished">Instalar uma versão anterior?</translation>
     </message>
     <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished">Este PC tem o Dish %1, mais novo que este instalador (%2). Continuar substitui pela versão mais antiga.</translation>
-    </message>
-    <message>
         <source>Replace it</source>
         <translation type="unfinished">Substituir</translation>
     </message>
     <message>
-        <source>Recovery</source>
-        <translation type="unfinished">Recuperação</translation>
+        <source>Dish Setup</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish cleaning up?</source>
-        <translation type="unfinished">Concluir a limpeza?</translation>
+        <source>Continuing replaces Dish %1 with %2.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.</source>
-        <translation type="unfinished">Uma tentativa anterior de instalação foi interrompida e deixou arquivos de recuperação. Limpe-os antes de continuar.</translation>
+        <source>Keep %1</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Clean up</source>
-        <translation type="unfinished">Limpar</translation>
-    </message>
-    <message>
-        <source>Not now</source>
-        <translation type="unfinished">Agora não</translation>
-    </message>
-</context>
-<context>
-    <name>SetupStageBar</name>
-    <message>
-        <source>done</source>
-        <translation type="unfinished">concluído</translation>
-    </message>
-    <message>
-        <source>current</source>
-        <translation type="unfinished">atual</translation>
-    </message>
-    <message>
-        <source>not started</source>
-        <translation type="unfinished">não iniciado</translation>
-    </message>
-    <message>
-        <source>Package</source>
-        <translation type="unfinished">Pacote</translation>
-    </message>
-    <message>
-        <source>Destination</source>
-        <translation type="unfinished">Destino</translation>
-    </message>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished">Instalar</translation>
-    </message>
-    <message>
-        <source>Step %1, %2</source>
-        <translation type="unfinished">Etapa %1, %2</translation>
-    </message>
-    <message>
-        <source>Sub-step %1 of %2</source>
-        <translation type="unfinished">Subetapa %1 de %2</translation>
+        <source>Stop and undo</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -3348,14 +3290,6 @@
     <message>
         <source>Minimize</source>
         <translation type="unfinished">Minimizar</translation>
-    </message>
-    <message>
-        <source>Restore</source>
-        <translation type="unfinished">Restaurar</translation>
-    </message>
-    <message>
-        <source>Maximize</source>
-        <translation type="unfinished">Maximizar</translation>
     </message>
     <message>
         <source>Close</source>
@@ -3544,57 +3478,6 @@
     </message>
 </context>
 <context>
-    <name>ShortcutsPage</name>
-    <message>
-        <source>Windows will ask for approval.</source>
-        <translation type="unfinished">O Windows vai pedir aprovação.</translation>
-    </message>
-    <message>
-        <source>Nothing is copied yet.</source>
-        <translation type="unfinished">Nada foi copiado ainda.</translation>
-    </message>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished">Instalar</translation>
-    </message>
-    <message>
-        <source>Where Dish shows up</source>
-        <translation type="unfinished">Onde o Dish aparece</translation>
-    </message>
-    <message>
-        <source>Pick the places Dish should appear. Both can be removed later without reinstalling.</source>
-        <translation type="unfinished">Escolha onde o Dish deve aparecer. Os dois podem ser removidos depois sem reinstalar.</translation>
-    </message>
-    <message>
-        <source>Start Menu</source>
-        <translation type="unfinished">Menu Iniciar</translation>
-    </message>
-    <message>
-        <source>Dish in the Start Menu app list.</source>
-        <translation type="unfinished">O Dish na lista de aplicativos do menu Iniciar.</translation>
-    </message>
-    <message>
-        <source>Desktop</source>
-        <translation type="unfinished">Área de trabalho</translation>
-    </message>
-    <message>
-        <source>A Dish shortcut on the desktop.</source>
-        <translation type="unfinished">Um atalho do Dish na área de trabalho.</translation>
-    </message>
-    <message>
-        <source>Windows didn’t approve the install. Try again, or go back and pick Just me.</source>
-        <translation type="unfinished">O Windows não aprovou a instalação. Tente de novo, ou volte e escolha &quot;Somente eu&quot;.</translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation type="unfinished">Tentar novamente</translation>
-    </message>
-    <message>
-        <source>No service, no autostart, no update agent. Dish runs only when you start it, and Installed apps removes it cleanly.</source>
-        <translation type="unfinished">Sem serviço, sem inicialização automática, sem agente de atualização. O Dish roda só quando você o inicia, e Aplicativos instalados o remove por completo.</translation>
-    </message>
-</context>
-<context>
     <name>StepList</name>
     <message>
         <source>done</source>
@@ -3619,163 +3502,6 @@
     <message>
         <source>%1 — %2</source>
         <translation>%1 — %2</translation>
-    </message>
-</context>
-<context>
-    <name>UninstallConfirmPage</name>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished">Remover</translation>
-    </message>
-    <message>
-        <source>Start Menu</source>
-        <translation type="unfinished">Menu Iniciar</translation>
-    </message>
-    <message>
-        <source>Desktop</source>
-        <translation type="unfinished">Área de trabalho</translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="unfinished">nenhum</translation>
-    </message>
-    <message>
-        <source>Remove Dish?</source>
-        <translation type="unfinished">Remover o Dish?</translation>
-    </message>
-    <message>
-        <source>Takes Dish %1 off this PC.</source>
-        <translation type="unfinished">Tira o Dish %1 deste PC.</translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished">Pasta</translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished">Tamanho</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Atalhos</translation>
-    </message>
-    <message>
-        <source>Also remove my settings</source>
-        <translation type="unfinished">Remover também minhas configurações</translation>
-    </message>
-    <message>
-        <source>Pairings and preferences stored under your user profile.</source>
-        <translation type="unfinished">Pareamentos e preferências guardados no seu perfil de usuário.</translation>
-    </message>
-    <message>
-        <source>Satellite hosts remember this PC until you forget it there.</source>
-        <translation type="unfinished">Os anfitriões Satellite lembram deste PC até você esquecê-lo lá.</translation>
-    </message>
-    <message>
-        <source>Nothing is removed yet.</source>
-        <translation type="unfinished">Nada foi removido ainda.</translation>
-    </message>
-</context>
-<context>
-    <name>UninstallDonePage</name>
-    <message>
-        <source>Close</source>
-        <translation type="unfinished">Fechar</translation>
-    </message>
-    <message>
-        <source>Removed</source>
-        <translation type="unfinished">Removido</translation>
-    </message>
-    <message>
-        <source>Dish is off this PC.</source>
-        <translation type="unfinished">O Dish não está mais neste PC.</translation>
-    </message>
-    <message>
-        <source>Your settings stayed at %1 — delete that folder too if you want nothing left.</source>
-        <translation type="unfinished">Suas configurações ficaram em %1 — apague também essa pasta se não quiser deixar nada.</translation>
-    </message>
-</context>
-<context>
-    <name>UninstallProgressPage</name>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished">Remover</translation>
-    </message>
-    <message>
-        <source>Couldn’t remove %1 — is it open somewhere?</source>
-        <translation type="unfinished">Não foi possível remover %1 — ele está aberto em algum lugar?</translation>
-    </message>
-    <message>
-        <source>Couldn’t unregister the install from Windows.</source>
-        <translation type="unfinished">Não foi possível cancelar o registro da instalação no Windows.</translation>
-    </message>
-    <message>
-        <source>Some files could not be removed — see the log.</source>
-        <translation type="unfinished">Alguns arquivos não puderam ser removidos — veja o log.</translation>
-    </message>
-    <message>
-        <source>Something went wrong — see the log for details.</source>
-        <translation type="unfinished">Algo deu errado — veja os detalhes no log.</translation>
-    </message>
-    <message>
-        <source>Stop the running app</source>
-        <translation type="unfinished">Parar o app em execução</translation>
-    </message>
-    <message>
-        <source>waiting</source>
-        <translation type="unfinished">aguardando</translation>
-    </message>
-    <message>
-        <source>start menu</source>
-        <translation type="unfinished">menu iniciar</translation>
-    </message>
-    <message>
-        <source>desktop</source>
-        <translation type="unfinished">área de trabalho</translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished">Atalhos</translation>
-    </message>
-    <message>
-        <source>Remove files</source>
-        <translation type="unfinished">Remover arquivos</translation>
-    </message>
-    <message>
-        <source>Unregister from Windows</source>
-        <translation type="unfinished">Cancelar o registro no Windows</translation>
-    </message>
-    <message>
-        <source>installed apps</source>
-        <translation type="unfinished">aplicativos instalados</translation>
-    </message>
-    <message>
-        <source>Clean up this uninstaller</source>
-        <translation type="unfinished">Limpar este desinstalador</translation>
-    </message>
-    <message>
-        <source>on exit</source>
-        <translation type="unfinished">ao sair</translation>
-    </message>
-    <message>
-        <source>Removing…</source>
-        <translation type="unfinished">Removendo…</translation>
-    </message>
-    <message>
-        <source>Taking Dish out of %1.</source>
-        <translation type="unfinished">Removendo o Dish de %1.</translation>
-    </message>
-    <message>
-        <source>Removal progress</source>
-        <translation type="unfinished">Progresso da remoção</translation>
-    </message>
-    <message>
-        <source>file %1 of %2</source>
-        <translation type="unfinished">arquivo %1 de %2</translation>
-    </message>
-    <message>
-        <source>Open log</source>
-        <translation type="unfinished">Abrir log</translation>
     </message>
 </context>
 <context>
@@ -3857,62 +3583,62 @@
     </message>
 </context>
 <context>
-    <name>WelcomePage</name>
+    <name>WelcomeFace</name>
     <message>
-        <source>Continue ›</source>
-        <translation type="unfinished">Continuar ›</translation>
+        <source>Everyone on this PC</source>
+        <translation type="unfinished">Todos neste PC</translation>
+    </message>
+    <message>
+        <source>Just me</source>
+        <translation type="unfinished">Somente eu</translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished">Menu Iniciar</translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished">Área de trabalho</translation>
+    </message>
+    <message>
+        <source>no shortcuts</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Dish %1</source>
         <translation type="unfinished">Dish %1</translation>
     </message>
     <message>
-        <source>Streams a controller plugged into this PC to a Satellite host on your network. This sets up the Windows app.</source>
-        <translation type="unfinished">Transmite um controle conectado a este PC para um anfitrião Satellite na sua rede. Isto configura o app do Windows.</translation>
+        <source>This PC has Dish %1 — newer than this installer.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Version</source>
-        <translation type="unfinished">Versão</translation>
+        <source>Dish %1 is on this PC. This updates it in place — your settings and pairings stay.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Publisher</source>
-        <translation type="unfinished">Editor</translation>
+        <source>Your controller, on a Satellite host over your LAN.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>License</source>
-        <translation type="unfinished">Licença</translation>
+        <source>Replace with %1</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>LGPL-3.0-or-later · free software</source>
-        <translation type="unfinished">LGPL-3.0-or-later · software livre</translation>
+        <source>Update Dish</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Needs</source>
-        <translation type="unfinished">Precisa de</translation>
+        <source>Install Dish</source>
+        <translation type="unfinished">Instalar o Dish</translation>
     </message>
     <message>
-        <source>%1 on disk</source>
-        <translation type="unfinished">%1 em disco</translation>
+        <source>Options</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Language</source>
-        <translation type="unfinished">Idioma</translation>
-    </message>
-    <message>
-        <source>Dish %1 is already installed here. Continuing upgrades it in place — your settings and pairings stay.</source>
-        <translation type="unfinished">O Dish %1 já está instalado aqui. Continuar atualiza no mesmo lugar — suas configurações e pareamentos permanecem.</translation>
-    </message>
-    <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished">Este PC tem o Dish %1, mais novo que este instalador (%2). Continuar substitui pela versão mais antiga.</translation>
-    </message>
-    <message>
-        <source>Nothing is copied until the last step. Cancel before that and this PC is left exactly as it was.</source>
-        <translation type="unfinished">Nada é copiado até a última etapa. Cancele antes disso e este PC fica exatamente como estava.</translation>
-    </message>
-    <message>
-        <source>Same as Windows</source>
-        <translation type="unfinished">Igual ao Windows</translation>
+        <source>Keep %1 — close</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

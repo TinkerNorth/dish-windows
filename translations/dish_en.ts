@@ -217,52 +217,6 @@
     </message>
 </context>
 <context>
-    <name>BlockerCloseDialog</name>
-    <message>
-        <source>In the way</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dish is running</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Force close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Close Dish and continue</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <source>%n running Dish window(s) must close before Setup continues.</source>
-        <translation>
-            <numerusform>%n running Dish window must close before Setup continues.</numerusform>
-            <numerusform>%n running Dish windows must close before Setup continues.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Dish didn’t close. Save anything in flight, close it yourself, then try again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Close it to continue — files it holds open can’t be removed.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Close it to continue — replacing files under a running app breaks it.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>BlockerDialog</name>
     <message>
         <source>Connection lost</source>
@@ -286,6 +240,52 @@
     </message>
     <message>
         <source>Holding the binding so you can reconnect. Re-plug to keep configuring, or close this screen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BlockerFace</name>
+    <message>
+        <source>In the way</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dish is running</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <source>%n running Dish window(s) must close before Setup continues.</source>
+        <translation type="unfinished">
+            <numerusform>%n running Dish window must close before Setup continues.</numerusform>
+            <numerusform>%n running Dish windows must close before Setup continues.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Dish didn’t close. Save anything in flight, close it yourself, then try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close it to continue — files it holds open can’t be removed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close it to continue — replacing files under a running app breaks it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Force close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close Dish and continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1489,25 +1489,66 @@
     </message>
 </context>
 <context>
-    <name>DonePage</name>
+    <name>DoneFace</name>
+    <message>
+        <source>Installed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finish without opening</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove any time from Installed apps</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ElevationFace</name>
+    <message>
+        <source>Windows didn’t approve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removing Dish for everyone on this PC needs administrator approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Installing for everyone on this PC needs administrator approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Try again</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish</source>
+        <source>Install for just me instead</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Start Menu</source>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ErrorBanner</name>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>FailedFace</name>
+    <message>
+        <source>Something went wrong — see the log for details.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Desktop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>none</source>
+        <source>Couldn’t remove %1 — is it open somewhere?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1515,11 +1556,19 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Something went wrong — see the log for details.</source>
+        <source>Couldn’t unregister the install from Windows.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Couldn’t register the install with Windows.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1535,11 +1584,11 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Windows didn’t approve the install. Try again, or go back and pick Just me.</source>
+        <source>This installer’s files are damaged. Download it again, then retry.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>This installer’s files are damaged. Download it again, then retry.</source>
+        <source>Some files could not be removed — see the log.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1547,54 +1596,27 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Not removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Not installed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Installed</source>
+        <source>Changes were undone; this PC is as it was.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>The install did not finish.</source>
+        <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Dish %1 is ready on this PC.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start Dish now</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Opens straight into first-run setup.</source>
+        <source>Try again</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Open log</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove it any time from Windows Settings ▸ Installed apps.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>ErrorBanner</name>
-    <message>
-        <source>Retry</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2047,65 +2069,6 @@
     <message>
         <source>Pad</source>
         <comment>the controller column of the wire diagram</comment>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>InstallingPage</name>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stop the running app</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>waiting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Copy files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>start menu</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>desktop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Register with Windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>installed apps</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Installing…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Copying Dish into %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Install progress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>file %1 of %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Undoing changes…</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2720,81 +2683,6 @@
     </message>
 </context>
 <context>
-    <name>LocationPage</name>
-    <message>
-        <source>Continue ›</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Where should it live?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>One folder holds the app and its runtime. Your settings live in your user profile either way.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Install for</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Just me</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Recommended</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No administrator prompt. Installs under your user folder.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Everyone on this PC</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Asks for administrator approval and installs under Program Files.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>That folder can’t be used — check the path.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Not enough free space on this drive.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Browse…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Needs %1 · %2 free</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dish %1 is already installed here. Continuing upgrades it in place — your settings and pairings stay.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>That folder already has files in it. Files with matching names will be replaced.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>That folder syncs with OneDrive. Dish runs fine there, but syncing can slow installs and updates.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>Main</name>
     <message>
         <source>Dish</source>
@@ -2818,6 +2706,85 @@
     </message>
     <message>
         <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>OptionsFace</name>
+    <message>
+        <source>Same as Windows</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Just me</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No admin prompt.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Everyone</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Admin approval.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>That folder can’t be used — check the path.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>That folder already has files in it. Files with matching names will be replaced.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>That folder syncs with OneDrive. Dish runs fine there, but syncing can slow installs and updates.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Needs %1 · %2 free</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shortcuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>‹ Back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nothing is copied yet.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2901,6 +2868,122 @@
     </message>
     <message>
         <source>~2 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ProgressFace</name>
+    <message>
+        <source>Waiting for Windows approval…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Undoing changes…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finishing up…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removing… %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Installing… %1%</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Removal progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>file %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cleans itself up after this window closes</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RecoveryFace</name>
+    <message>
+        <source>Recovery</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Finish cleaning up?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clean up</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Not now</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RemoveFace</name>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Dish %1?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Also remove my settings and pairings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove Dish</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nothing is removed yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>RemovedFace</name>
+    <message>
+        <source>Removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Your settings stayed at %1 — delete that folder too if you want nothing left.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Satellite hosts remember this PC until you forget it there.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3152,103 +3235,9 @@
     </message>
 </context>
 <context>
-    <name>SetupFooter</name>
-    <message>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>‹ Back</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>SetupHeroRail</name>
-    <message>
-        <source>%1 — %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>—</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Version</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Destination</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>On disk</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>SetupRoot</name>
     <message>
         <source>Uninstall Dish</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Install Dish</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 1 of 2 · Remove</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 2 of 2 · Removing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 2 of 2 · Removed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 1 of 3 · Welcome</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 2 of 3 · Location</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 2 of 3 · Shortcuts</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 3 of 3 · Installing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step 3 of 3 · Done</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Waiting for Windows approval…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Removing…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Finishing up, this only takes a moment</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Copying…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 · %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Close</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3264,10 +3253,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Stop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Keep going</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3280,66 +3265,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Replace it</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Recovery</source>
+        <source>Dish Setup</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Finish cleaning up?</source>
+        <source>Continuing replaces Dish %1 with %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.</source>
+        <source>Keep %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Clean up</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Not now</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>SetupStageBar</name>
-    <message>
-        <source>done</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>current</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>not started</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Package</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Destination</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Step %1, %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sub-step %1 of %2</source>
+        <source>Stop and undo</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3347,14 +3289,6 @@
     <name>SetupTitleBar</name>
     <message>
         <source>Minimize</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Restore</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Maximize</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3544,57 +3478,6 @@
     </message>
 </context>
 <context>
-    <name>ShortcutsPage</name>
-    <message>
-        <source>Windows will ask for approval.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Nothing is copied yet.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Install</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Where Dish shows up</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Pick the places Dish should appear. Both can be removed later without reinstalling.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start Menu</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dish in the Start Menu app list.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Desktop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>A Dish shortcut on the desktop.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Windows didn’t approve the install. Try again, or go back and pick Just me.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Try again</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No service, no autostart, no update agent. Dish runs only when you start it, and Installed apps removes it cleanly.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>StepList</name>
     <message>
         <source>done</source>
@@ -3618,163 +3501,6 @@
     </message>
     <message>
         <source>%1 — %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>UninstallConfirmPage</name>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start Menu</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Desktop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>none</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove Dish?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Takes Dish %1 off this PC.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Also remove my settings</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Pairings and preferences stored under your user profile.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Satellite hosts remember this PC until you forget it there.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Nothing is removed yet.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>UninstallDonePage</name>
-    <message>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Removed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dish is off this PC.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Your settings stayed at %1 — delete that folder too if you want nothing left.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>UninstallProgressPage</name>
-    <message>
-        <source>Remove</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Couldn’t remove %1 — is it open somewhere?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Couldn’t unregister the install from Windows.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Some files could not be removed — see the log.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Something went wrong — see the log for details.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Stop the running app</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>waiting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>start menu</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>desktop</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shortcuts</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Remove files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Unregister from Windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>installed apps</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Clean up this uninstaller</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>on exit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Removing…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Taking Dish out of %1.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Removal progress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>file %1 of %2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open log</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -3857,9 +3583,25 @@
     </message>
 </context>
 <context>
-    <name>WelcomePage</name>
+    <name>WelcomeFace</name>
     <message>
-        <source>Continue ›</source>
+        <source>Everyone on this PC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Just me</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start Menu</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Desktop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>no shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -3867,51 +3609,35 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Streams a controller plugged into this PC to a Satellite host on your network. This sets up the Windows app.</source>
+        <source>This PC has Dish %1 — newer than this installer.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Version</source>
+        <source>Dish %1 is on this PC. This updates it in place — your settings and pairings stay.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Publisher</source>
+        <source>Your controller, on a Satellite host over your LAN.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>License</source>
+        <source>Replace with %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>LGPL-3.0-or-later · free software</source>
+        <source>Update Dish</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Needs</source>
+        <source>Install Dish</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>%1 on disk</source>
+        <source>Options</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Language</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Dish %1 is already installed here. Continuing upgrades it in place — your settings and pairings stay.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Nothing is copied until the last step. Cancel before that and this PC is left exactly as it was.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Same as Windows</source>
+        <source>Keep %1 — close</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
