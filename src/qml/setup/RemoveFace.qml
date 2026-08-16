@@ -65,11 +65,11 @@ Item {
                 spacing: Tokens.s5
 
                 Kit.AppMark {
-                    width: 56
-                    height: 56
+                    // Layout-managed: size via the preferred pair, never
+                    // bare width/height.
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: width
-                    Layout.preferredHeight: height
+                    Layout.preferredWidth: 56
+                    Layout.preferredHeight: 56
                 }
                 Label {
                     id: heading

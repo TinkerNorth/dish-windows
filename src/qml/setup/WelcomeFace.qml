@@ -67,11 +67,11 @@ Item {
                 spacing: Tokens.s6
 
                 Kit.AppMark {
-                    width: 72
-                    height: 72
+                    // Layout-managed: the layout owns width/height, so the
+                    // mark's size is stated as the preferred pair.
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: width
-                    Layout.preferredHeight: height
+                    Layout.preferredWidth: 72
+                    Layout.preferredHeight: 72
                 }
 
                 Label {
