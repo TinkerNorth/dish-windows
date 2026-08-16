@@ -51,7 +51,7 @@ jobs:
       contents: write
 
     env:
-      VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
+      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
 

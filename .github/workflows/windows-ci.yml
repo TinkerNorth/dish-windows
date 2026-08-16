@@ -23,9 +23,12 @@ jobs:
     timeout-minutes: 60
 
     env:
-      # vcpkg 2025.01.13. Pinned so dependency versions are reproducible;
-      # must match builtin-baseline in vcpkg.json.
-      VCPKG_COMMITID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
+      # vcpkg 2026.07.29. Pinned so dependency versions are reproducible;
+      # must match builtin-baseline in vcpkg.json. Keep this pin young: msys2
+      # purges superseded packages from its mirrors, so a stale pin's
+      # from-source libsodium build starts 404ing once the binary cache
+      # evicts (that took the 2025.01.13 pin down in Aug 2026).
+      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       # Qt ships dynamic on Windows; match it or the ABI diverges.
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
