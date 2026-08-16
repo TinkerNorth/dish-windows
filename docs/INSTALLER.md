@@ -124,8 +124,8 @@ shell32 comctl32 advapi32` and nothing else.
 
 The wizard runs against the Qt and CRT DLLs sitting beside it in the extracted
 image, which is also the image that gets installed. Nothing is copied out of
-`%TEMP%` into the install directory until the user commits on the Shortcuts
-page.
+`%TEMP%` into the install directory until the user presses the install verb on
+the welcome (or Options) face.
 
 ---
 
@@ -572,8 +572,8 @@ ctest --test-dir build-debug -R translations
 ```
 
 Counted strings use `%n`, never a hand-written pair. The design has exactly one
-of them (the running-app dialog body), and it ships both English forms and all
-three Bosnian forms. Everything else that counts uses `file %1 of %2`, and
+of them (the running-app face's counted line), and it ships both English forms
+and all three Bosnian forms. Everything else that counts uses `file %1 of %2`, and
 every size goes through `QLocale::formattedDataSize`.
 
 ---
@@ -586,13 +586,13 @@ that need a human, and they belong in the pre-release checklist.
 | Check | What good looks like |
 |---|---|
 | SmartScreen walkthrough | More info, Run anyway, install completes |
-| UAC declined on machine scope | Returns to the Location page with a callout, nothing written |
+| UAC declined on machine scope | The "Windows didn't approve" face offers Try again / just-me / Cancel, nothing written |
 | Cancel mid-copy | Rollback completes, a prior install is still launchable |
 | Power-loss recovery | Kill the process mid-copy, relaunch, accept the cleanup prompt |
 | Non-ASCII account name | Install and uninstall both clean under a Cyrillic or CJK profile |
 | Per-monitor DPI | 100 / 125 / 150 / 200 percent, including a mixed-DPI multi-monitor drag |
-| Themes | Dark and light screenshots of every page |
-| Languages | All six on the Welcome page, switched with the language selector |
+| Themes | Dark and light screenshots of every face |
+| Languages | All six on the Options face, switched with the language selector |
 | HDD cold start | The stub marquee covers extraction; no unresponsive window |
 | Update pill | idle, available, downloading, ready, in both themes |
 | Restart now during a transfer | The keep-awake confirm wins; cancelling it cancels the restart |
