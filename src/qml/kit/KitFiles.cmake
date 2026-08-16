@@ -25,10 +25,16 @@ set(DISH_KIT_QML_FILES
     src/qml/kit/SectionHeader.qml
     src/qml/kit/KitButton.qml
     src/qml/kit/OutlineButton.qml
+    # The installer's text-only action; kit member because a link row is a
+    # design idiom, not an installer detail.
+    src/qml/kit/LinkButton.qml
     src/qml/kit/Card.qml
     src/qml/kit/StatusDot.qml
     src/qml/kit/BrandGlyph.qml
+    # The app identity mark (dish-logo) with the busy pulse.
+    src/qml/kit/AppMark.qml
     src/qml/kit/LabeledSwitch.qml
+    src/qml/kit/CheckRow.qml
     src/qml/kit/KitTextField.qml
     src/qml/kit/Page.qml
     src/qml/kit/ContentDialog.qml
@@ -49,6 +55,7 @@ set(DISH_KIT_QML_FILES
     src/qml/kit/Callout.qml
     src/qml/kit/SelectRow.qml
     src/qml/kit/OptionCard.qml
+    src/qml/kit/RadioTile.qml
     src/qml/kit/ActionCard.qml
     # The shared loading/error/empty states every page binds. See
     # ARCHITECTURE.md §7 "bind all the states".

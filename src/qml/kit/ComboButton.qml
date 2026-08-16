@@ -19,6 +19,9 @@ AbstractButton {
 
     property var options: []
     property string value: ""
+    // Hosts that own window-level Esc need to stand down while the menu has
+    // the keyboard.
+    readonly property alias menuOpen: menu.visible
 
     signal picked(string option)
 
