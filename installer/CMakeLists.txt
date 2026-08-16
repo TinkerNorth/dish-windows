@@ -152,18 +152,17 @@ qt_add_qml_module(DishSetupUi
     QML_FILES
         src/qml/setup/SetupRoot.qml
         src/qml/setup/SetupTitleBar.qml
-        src/qml/setup/SetupHeroRail.qml
-        src/qml/setup/SetupStageBar.qml
-        src/qml/setup/SetupFooter.qml
-        src/qml/setup/WelcomePage.qml
-        src/qml/setup/LocationPage.qml
-        src/qml/setup/ShortcutsPage.qml
-        src/qml/setup/InstallingPage.qml
-        src/qml/setup/DonePage.qml
-        src/qml/setup/UninstallConfirmPage.qml
-        src/qml/setup/UninstallProgressPage.qml
-        src/qml/setup/UninstallDonePage.qml
-        src/qml/setup/BlockerCloseDialog.qml)
+        src/qml/setup/WelcomeFace.qml
+        src/qml/setup/OptionsFace.qml
+        src/qml/setup/ConfirmFace.qml
+        src/qml/setup/RecoveryFace.qml
+        src/qml/setup/BlockerFace.qml
+        src/qml/setup/ProgressFace.qml
+        src/qml/setup/ElevationFace.qml
+        src/qml/setup/DoneFace.qml
+        src/qml/setup/FailedFace.qml
+        src/qml/setup/RemoveFace.qml
+        src/qml/setup/RemovedFace.qml)
 
 # qmltyperegistrar's generated .cpp includes SetupController.h by BASENAME,
 # the same reason the Dish target puts src/qml/chrome on its include path.

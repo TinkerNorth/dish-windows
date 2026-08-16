@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The installer's custom title bar: WindowTitleBar with the hamburger cell
-// removed (there is no rail to collapse) and zero App coupling. Its rects go
-// to ChromeBridge, which drives the native hit-test (caption drag, Snap
-// Layouts over maximize, client carve-outs for minimize/close). Unlike the
-// app's bar the glyphs are composed from Rectangles, not Canvas: src/qml/setup
-// is a literal-scanner STRICT directory and Canvas drawing is a kit-only
-// privilege.
+// The installer's custom title bar: WindowTitleBar reduced to what a fixed
+// one-screen window needs — the app mark, the title, minimize and close.
+// There is no maximize cell and no rect is published for one, so the chrome
+// filter never answers HTMAXBUTTON and Snap Layouts stays out of a window
+// that cannot resize. Its rects go to ChromeBridge, which drives the native
+// hit-test (caption drag, client carve-outs for minimize/close). Glyphs are
+// composed from Rectangles, not Canvas: src/qml/setup is a literal-scanner
+// STRICT directory and Canvas drawing is a kit-only privilege.
 
 // Bound: the inline CaptionButton component binds `bar.height`, an outer id.
 pragma ComponentBehavior: Bound
@@ -27,12 +28,9 @@ Item {
     // Rects are window-local logical px; C++ scales by DPR. Minimize and close
     // are CLIENT CARVE-OUTS: without them the whole strip native-resolves to
     // HTCAPTION and a press starts a system drag, so those buttons never
-    // receive a click. No left client rect: there is no hamburger here.
+    // receive a click.
     function publishRects() {
         ChromeBridge.setCaptionRect(Qt.rect(bar.x, bar.y, bar.width, bar.height));
-        var p = maximizeButton.mapToItem(null, 0, 0);
-        ChromeBridge.setMaximizeButtonRect(
-            Qt.rect(p.x, p.y, maximizeButton.width, maximizeButton.height));
         var m = minimizeButton.mapToItem(null, 0, 0);
         ChromeBridge.setMinimizeButtonRect(
             Qt.rect(m.x, m.y, minimizeButton.width, minimizeButton.height));
@@ -44,20 +42,13 @@ Item {
     onHeightChanged: bar.publishRects()
     Component.onCompleted: bar.publishRects()
 
-    function toggleMaximize() {
-        if (bar.window.visibility === Window.Maximized)
-            bar.window.showNormal();
-        else
-            bar.window.showMaximized();
-    }
-
     // The caption buttons sit above this in z and consume their own presses,
-    // so clicking one doesn't start a window move.
+    // so clicking one doesn't start a window move. No double-click handler:
+    // a fixed window has no maximize to toggle.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         onPressed: bar.window.startSystemMove()
-        onDoubleClicked: bar.toggleMaximize()
     }
 
     Row {
@@ -68,8 +59,7 @@ Item {
         spacing: Tokens.s4
         z: 1
 
-        Kit.BrandGlyph {
-            glyph: "dish"
+        Kit.AppMark {
             width: Tokens.glyphSm
             height: Tokens.glyphSm
             anchors.verticalCenter: parent.verticalCenter
@@ -95,13 +85,9 @@ Item {
             width: Tokens.captionButtonWidth
             height: bar.height
             property color hoverColor: Theme.primaryHover
-            // Hover this button cannot feel for itself. Only maximize needs it
-            // (non-client, see below), but the fill has to be ONE expression
-            // or the three buttons would light differently.
-            property bool nativeHovered: false
             readonly property color glyphColor: Theme.onSurface
             background: Rectangle {
-                color: (cb.hovered || cb.nativeHovered) ? cb.hoverColor : "transparent"
+                color: cb.hovered ? cb.hoverColor : "transparent"
             }
         }
 
@@ -118,72 +104,6 @@ Item {
                 }
             }
             onClicked: bar.window.showMinimized()
-        }
-
-        CaptionButton {
-            id: maximizeButton
-            onXChanged: bar.publishRects()
-            onWidthChanged: bar.publishRects()
-
-            // NON-CLIENT: the chrome filter answers HTMAXBUTTON over it so
-            // Win11 opens the Snap Layouts flyout, and Quick is never told
-            // about a non-client pointer. Its own `hovered` is therefore
-            // always false — without the native tracker it would never light.
-            nativeHovered: ChromeBridge.maximizeHovered
-
-            readonly property bool zoomed: bar.window.visibility === Window.Maximized
-
-            Accessible.role: Accessible.Button
-            Accessible.name: maximizeButton.zoomed ? qsTr("Restore") : qsTr("Maximize")
-
-            contentItem: Item {
-                // Maximize: one 10px outlined pane. Restore: an 8px front pane
-                // plus the two exposed edges of the one behind it.
-                Rectangle {
-                    visible: !maximizeButton.zoomed
-                    anchors.centerIn: parent
-                    width: 10
-                    height: 10
-                    color: "transparent"
-                    border.width: 1
-                    border.color: maximizeButton.glyphColor
-                }
-                Item {
-                    visible: maximizeButton.zoomed
-                    anchors.centerIn: parent
-                    width: 12
-                    height: 12
-
-                    Rectangle { // back pane, top edge
-                        x: 3
-                        y: 0
-                        width: 9
-                        height: 1
-                        color: maximizeButton.glyphColor
-                    }
-                    Rectangle { // back pane, right edge
-                        x: 11
-                        y: 0
-                        width: 1
-                        height: 9
-                        color: maximizeButton.glyphColor
-                    }
-                    Rectangle { // front pane
-                        x: 0
-                        y: 3
-                        width: 9
-                        height: 9
-                        color: "transparent"
-                        border.width: 1
-                        border.color: maximizeButton.glyphColor
-                    }
-                }
-            }
-            // The real press runs in C++: FramelessWindowChrome takes the
-            // WM_NCLBUTTONDOWN/UP pair and posts SC_MAXIMIZE / SC_RESTORE
-            // itself. Nothing reaches this handler today; it is the
-            // client-path fallback and what keyboard activation uses.
-            onClicked: bar.toggleMaximize()
         }
 
         CaptionButton {

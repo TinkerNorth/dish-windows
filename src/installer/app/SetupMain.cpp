@@ -166,6 +166,18 @@ int runUi(const CliOptions& options, Logger& logger, int argc, char** argv) {
     qmlRegisterSingletonInstance("Dish.Setup", 1, 0, "Setup", &controller);
 
     QQmlApplicationEngine engine;
+    // applicationDirPath is Qt's highest-priority import path, and in the
+    // build tree it holds the APP's Dish/Chrome qmldir, whose `prefer` points
+    // at resources only dish.exe embeds — this binary's kit copy then loses
+    // the race and every new kit type fails to load. Moving the resource root
+    // to the front gives the linked dish_setup_kit the same win it gets in
+    // the installed image, where no filesystem qmldir ships at all. The list
+    // is reordered by hand because addImportPath() does not re-rank a path
+    // the engine already knows.
+    QStringList importPaths = engine.importPathList();
+    importPaths.removeAll(QStringLiteral("qrc:/qt/qml"));
+    importPaths.prepend(QStringLiteral("qrc:/qt/qml"));
+    engine.setImportPathList(importPaths);
     controller.attachRuntime(&engine, &translator);
 
     // QmlEntryPoint.cpp:80-105 pattern, minus Mica: SetupRoot paints a solid

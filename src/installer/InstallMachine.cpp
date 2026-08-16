@@ -290,7 +290,7 @@ Reduction reduceAwaitingElevation(const InstallState& state, const InstallEvent&
         return Reduction{std::move(next), {effect::Finish{ExitCode::Ok}}};
     }
     if (as<event::ElevationDeclined>(event) != nullptr || as<event::EffectFail>(event) != nullptr) {
-        // Declined UAC re-arms the wizard (LocationPage callout via the
+        // Declined UAC re-arms the wizard (the ElevationFace, via the
         // coordinator's elevationDeclined signal); never a prompt loop.
         InstallState next = state;
         next.phase = InstallPhase::Idle;

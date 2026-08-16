@@ -204,7 +204,7 @@ class SetupController : public QObject {
     void progressChanged();
     void blockersChanged();
     void languageChanged();
-    void elevationDeclined(); // LocationPage callout trigger
+    void elevationDeclined(); // ElevationFace trigger
     void installFinished(bool ok, ErrorCode error);
     void uninstallFinished(bool ok, ErrorCode error);
 

@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The installer window: frameless custom chrome exactly like the app
-// (FramelessWindowChrome is installed by SetupMain's objectCreated hook), the
-// 236px hero rail on the left drawing the install AS a transmission, and the
-// content column — stage bar pinned, page body scrolling, footer pinned — on
-// the right. All pages are always instantiated and toggled by `visible`
-// (the SetupWizardPage pattern); this file owns the step state machine, the
-// footer rules, every dialog, and the mapping from engine phases to steps.
-// Silent mode never instantiates any of this: no QML precondition gates
-// engine behavior.
+// The installer window: one fixed 460×420 face-swapper. No pages, no stage
+// bar, no rail, no modal dialogs — the window swaps FACES (welcome, options,
+// confirms, blocker gate, progress, done/failed, and the uninstall trio),
+// each with one full-width verb and a link row. All faces are always
+// instantiated and toggled by `visible` with the standard enter animation;
+// this file owns the face map, the engine-phase reactions, and the keyboard
+// contract: Enter is the active face's verb, Esc is its safe exit. Silent
+// mode never instantiates any of this: no QML precondition gates engine
+// behavior.
 
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import Dish.Chrome
-import Dish.Chrome as Kit
 import Dish.Setup
 
 ApplicationWindow {
@@ -23,40 +21,55 @@ ApplicationWindow {
 
     readonly property bool uninstall: Setup.mode === Setup.Uninstall
 
-    // 760x560 is both the default AND the minimum: the content is all
-    // fill-width, so growth is free — the rail keeps its fixed width and the
-    // content column absorbs the rest. Maximize stays allowed (Snap Layouts).
-    width: 760
-    height: 560
-    minimumWidth: 760
-    minimumHeight: 560
+    // Fixed: installers don't resize. Minimum == maximum keeps the native
+    // frame from ever offering a resize, and the title bar publishes no
+    // maximize rect, so Snap Layouts stays away too.
+    width: 460
+    height: 420
+    minimumWidth: 460
+    minimumHeight: 420
+    maximumWidth: 460
+    maximumHeight: 420
     visible: true
-    title: root.uninstall ? qsTr("Uninstall Dish") : qsTr("Install Dish")
+    title: root.uninstall ? qsTr("Uninstall Dish") : qsTr("Dish Setup")
 
-    // The C++ FramelessWindowChrome filter restores the native snap/resize/
-    // shadow these flags strip; the button HINTS are load-bearing Win32 style
-    // bits (Main.qml documents why).
+    // The C++ FramelessWindowChrome filter restores the native snap/shadow
+    // these flags strip; the button HINTS are load-bearing Win32 style bits
+    // (Main.qml documents why). No maximize hint: the window is fixed.
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint
-           | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
-           | Qt.WindowCloseButtonHint
+           | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
 
     // ALWAYS the themed solid, never a transparent Mica body.
     color: Theme.background
 
-    // ── Step state ──────────────────────────────────────────────────────────
-    // Install: 0 Welcome · 1 Location · 2 Shortcuts · 3 Installing · 4 Done.
-    // Uninstall: 0 Confirm · 1 Removing · 2 Removed.
-    // The licence texts are not a wizard step: the LGPL requires them to
-    // accompany the software, which the installed licenses/ directory and the
-    // app's own Licenses page both do. A page nobody had to agree to was a
-    // click between the user and the install.
-    property int step: 0
-    property bool hadBlockers: false
+    // ── Face state ──────────────────────────────────────────────────────────
+    // Install: welcome → (options) → progress → done/failed, with the
+    // confirm/blocker/elevation/recovery faces on their edges. Uninstall:
+    // remove → progress → removed.
+    property string face: "welcome"
+    // The face whose verb started the run: a cancelled run resumes there.
+    property string commitFace: "welcome"
     property bool closeApproved: false
 
-    readonly property bool failedFace: Setup.phase === Setup.Failed
+    readonly property var faceItems: ({
+        "welcome": welcomeFace,
+        "options": optionsFace,
+        "confirmDowngrade": downgradeFace,
+        "recovery": recoveryFace,
+        "blocker": blockerFace,
+        "progress": progressFace,
+        "confirmCancel": cancelFace,
+        "elevation": elevationFace,
+        "done": doneFace,
+        "failed": failedFace,
+        "remove": removeFace,
+        "removed": removedFace
+    })
+    // `var`, not `Item`: faces expose `verbButton` by convention, which a
+    // QQuickItem-typed property would hide from the dynamic lookups below.
+    readonly property var activeFace: root.faceItems[root.face] || null
 
-    // Engine work in flight: the footer freezes, Back stands down.
+    // Engine work in flight: no verb may start a second run under it.
     readonly property bool working: Setup.phase === Setup.Preflight
                                     || Setup.phase === Setup.AwaitingBlockers
                                     || Setup.phase === Setup.AwaitingElevation
@@ -65,194 +78,126 @@ ApplicationWindow {
                                     || Setup.phase === Setup.Finalizing
                                     || Setup.phase === Setup.RollingBack
 
-    readonly property var activePage: root.uninstall
-        ? (root.step === 0 ? confirmPage : root.step === 1 ? removingPage : removedPage)
-        : (root.step === 0 ? welcomePage
-         : root.step === 1 ? locationPage
-         : root.step === 2 ? shortcutsPage
-         : root.step === 3 ? installingPage
-         : donePage)
-
-    readonly property bool dialogOpen: blockerDialog.visible || cancelConfirm.visible
-                                       || downgradeConfirm.visible || staleConfirm.visible
-
-    // ── Footer copy ─────────────────────────────────────────────────────────
-    // Positions are translated WHOLE, never composed: word order varies by
-    // language.
-    readonly property string positionText: root.uninstall
-        ? (root.step === 0 ? qsTr("Step 1 of 2 · Remove")
-         : root.step === 1 ? qsTr("Step 2 of 2 · Removing")
-         : qsTr("Step 2 of 2 · Removed"))
-        : (root.step === 0 ? qsTr("Step 1 of 3 · Welcome")
-         : root.step === 1 ? qsTr("Step 2 of 3 · Location")
-         : root.step === 2 ? qsTr("Step 2 of 3 · Shortcuts")
-         : root.step === 3 ? qsTr("Step 3 of 3 · Installing")
-         : qsTr("Step 3 of 3 · Done"))
-
-    readonly property string hintText: {
-        if (Setup.phase === Setup.AwaitingElevation)
-            return qsTr("Waiting for Windows approval…");
-        if (Setup.phase === Setup.Committing || Setup.phase === Setup.Finalizing
-            || Setup.phase === Setup.RollingBack) {
-            return root.uninstall ? qsTr("Removing…")
-                                  : qsTr("Finishing up, this only takes a moment");
-        }
-        if (Setup.phase === Setup.Copying)
-            return root.uninstall ? qsTr("Removing…") : qsTr("Copying…");
-        const advice = root.activePage && root.activePage.hint ? root.activePage.hint : "";
-        if (advice.length === 0)
-            return root.positionText;
-        return qsTr("%1 · %2").arg(root.positionText).arg(advice);
-    }
-
-    readonly property bool backEnabled: !root.uninstall && root.step >= 1 && root.step <= 2
-                                        && !root.working
-
-    readonly property bool cancelEnabled: {
-        if (Setup.phase === Setup.AwaitingElevation)
-            return false;
-        if (root.uninstall) {
-            if (root.step === 0)
-                return true;
-            if (root.step === 1)
-                return root.failedFace; // Close after a removal failure
-            return false;
-        }
-        if (root.step < 3)
-            return true;
-        if (root.step === 3)
-            return Setup.phase === Setup.Copying; // commit/finalize are atomic
-        return root.failedFace; // Done: nothing left to cancel unless it failed
-    }
-
-    readonly property string cancelLabel: root.failedFace
-                                          && ((root.uninstall && root.step === 1)
-                                              || (!root.uninstall && root.step === 4))
-                                          ? qsTr("Close") : qsTr("Cancel")
-
-    // ── The hero rail's readings ────────────────────────────────────────────
-    function shortDir(path) {
-        if (!path || path.length === 0)
-            return "";
-        const parts = path.split(/[\\/]+/).filter(function (s) { return s.length > 0; });
-        if (parts.length <= 2)
-            return path;
-        return "…\\" + parts[parts.length - 2] + "\\" + parts[parts.length - 1];
-    }
-
-    // Same set LocationPage lets Continue through: a folder that merely has
-    // files in it is an answer, so the rail must not keep saying "—" under a
-    // primary the user can press.
-    readonly property bool dirAnswered: Setup.dirStatus === Setup.DirOk
-                                        || Setup.dirStatus === Setup.DirIsExistingInstall
-                                        || Setup.dirStatus === Setup.DirNotEmpty
-
-    readonly property string heroState: {
-        if (root.uninstall) {
-            if (root.step === 2)
-                return "removed";
-            if (root.step === 1)
-                return root.failedFace ? "idle" : "removing";
-            // The wire exists; this flow unmakes it.
-            return "done";
-        }
-        if (root.step === 3) {
-            if (Setup.phase === Setup.Done)
-                return "done";
-            if (Setup.phase === Setup.Copying || Setup.phase === Setup.Committing
-                || Setup.phase === Setup.Finalizing)
-                return "installing";
-            // Error rule: red never enters the scene; the beam just goes idle.
-            return "idle";
-        }
-        if (root.step === 4)
-            return root.failedFace ? "idle" : "done";
-        return "idle";
-    }
-
-    readonly property string heroDestination: root.uninstall
-        ? root.shortDir(Setup.existingDir)
-        : (root.step >= 1 && root.dirAnswered ? root.shortDir(Setup.installDir) : "")
-
-    readonly property string heroOnDisk: root.uninstall
-        ? Setup.requiredText
-        : (root.step >= 1 && root.dirAnswered ? Setup.requiredText : "")
-
     // ── Navigation ──────────────────────────────────────────────────────────
-    function goTo(n) {
-        if (n === root.step)
+    function setFace(name, forward) {
+        if (name === root.face)
             return;
-        const forward = n > root.step;
-        root.step = n;
-        const page = root.activePage;
-        if (page) {
+        root.face = name;
+        const item = root.activeFace;
+        if (item) {
             // Clean slate first, so a reduced-motion (or interrupted) entry
             // never inherits a stale offset.
-            page.x = 0;
-            page.opacity = 1;
-            if (typeof page.activated === "function")
-                page.activated();
-            root.playEnter(page, forward);
+            item.x = 0;
+            item.opacity = 1;
+            root.playEnter(item, forward !== false);
         }
-        root.focusStep();
+        root.focusFace();
     }
 
-    function goBack() {
-        if (root.backEnabled)
-            root.goTo(root.step - 1);
-    }
-
-    function primaryPressed() {
-        const page = root.activePage;
-        if (!page || !page.canAdvance || root.working)
+    // Focus follows the face: the verb (confirm faces expose their SAFE
+    // primary as the verb), else the face itself so keys still bubble here.
+    function focusFace() {
+        const item = root.activeFace;
+        if (!item)
             return;
-        // A page that handles its own primary returns false and does not
-        // advance (Shortcuts hands the commit to us; Done finishes).
-        if (typeof page.primaryActivated === "function" && page.primaryActivated() === false)
-            return;
-        if (!root.uninstall && root.step < 2)
-            root.goTo(root.step + 1);
+        const target = item.verbButton;
+        if (target && target.visible && target.enabled)
+            target.forceActiveFocus(Qt.TabFocusReason);
+        else
+            item.forceActiveFocus(Qt.TabFocusReason);
     }
 
-    function cancelPressed() {
+    // Enter anywhere on a face is its verb — reached only when the focused
+    // control didn't consume Return itself (buttons and links do).
+    function verbPressed() {
+        const item = root.activeFace;
+        if (!item)
+            return;
+        const target = item.verbButton;
+        if (target && target.visible && target.enabled)
+            target.clicked();
+    }
+
+    // Esc is the face's safe exit; work that cannot stop refuses it.
+    function escapePressed() {
         if (root.uninstall) {
-            if (root.step === 1) {
-                if (root.failedFace)
-                    Setup.quitSetup();
-                return; // removal is not resumable — no mid-removal cancel
-            }
-            if (root.working) {
+            if (root.face === "blocker") {
                 Setup.cancel();
                 return;
             }
-            Setup.quitSetup();
+            if (root.face === "elevation") {
+                root.setFace("remove", false);
+                return;
+            }
+            if (root.face === "progress")
+                return; // removal is not resumable
+            Setup.quitSetup(); // remove, removed, failed: nothing left to stop
             return;
         }
-        if (root.step === 3) {
-            if (Setup.phase === Setup.Copying && !cancelConfirm.visible)
-                cancelConfirm.open();
+        switch (root.face) {
+        case "options":
+        case "confirmDowngrade":
+            root.setFace("welcome", false);
             return;
-        }
-        if (root.step === 4) {
-            if (root.failedFace)
-                Setup.quitSetup();
+        case "recovery":
+            root.setFace("welcome");
             return;
-        }
-        if (root.working) {
+        case "blocker":
+            // A dismissed gate is a cancel, never a silent hang.
             Setup.cancel();
             return;
+        case "progress":
+            if (Setup.phase === Setup.Copying)
+                root.setFace("confirmCancel");
+            return; // elevation wait and the atomic tail refuse it
+        case "confirmCancel":
+            root.setFace("progress", false);
+            return;
+        case "elevation":
+            root.setFace(root.commitFace, false);
+            return;
+        case "done":
+            root.finishWithoutOpening();
+            return;
+        default:
+            Setup.quitSetup(); // welcome, failed: nothing (new) is on disk
         }
-        // Steps that have written nothing quit without ceremony.
-        Setup.quitSetup();
     }
 
-    // M1: only the incoming side animates — the outgoing page hides
-    // instantly, so there is no two-page overlap to manage.
-    function playEnter(page, forward) {
-        if (Tokens.reducedMotion || !page)
+    function commitInstall(from) {
+        if (root.working)
+            return;
+        root.commitFace = from;
+        Setup.beginInstall();
+    }
+
+    function commitUninstall() {
+        if (root.working)
+            return;
+        Setup.beginUninstall();
+    }
+
+    function retryInstall() {
+        if (root.working)
+            return;
+        // Re-arms to Idle, then re-runs with the same choices — no page
+        // detour, exactly what the failed face's sentence promised.
+        Setup.retry();
+        Setup.beginInstall();
+    }
+
+    function finishWithoutOpening() {
+        root.closeApproved = true;
+        Setup.finishOnly();
+    }
+
+    // M1: only the incoming side animates — the outgoing face hides
+    // instantly, so there is no two-face overlap to manage.
+    function playEnter(item, forward) {
+        if (Tokens.reducedMotion || !item)
             return;
         enterAnim.stop();
-        enterAnim.target = page;
+        enterAnim.target = item;
         enterAnim.fromX = forward ? Tokens.s5 : -Tokens.s5;
         enterAnim.start();
     }
@@ -281,44 +226,17 @@ ApplicationWindow {
         }
     }
 
-    // Focus follows the step (visual spec §13): Welcome lands on the primary,
-    // Installing on Cancel, every other page on its first interactive control.
-    function focusStep() {
-        if (!root.uninstall && root.step === 0) {
-            footer.primaryButton.forceActiveFocus(Qt.TabFocusReason);
-            return;
-        }
-        if (!root.uninstall && root.step === 3) {
-            footer.cancelButton.forceActiveFocus(Qt.TabFocusReason);
-            return;
-        }
-        const page = root.activePage;
-        if (page && typeof page.focusFirst === "function" && page.focusFirst())
-            return;
-        if (page) {
-            const it = page.nextItemInFocusChain(true);
-            let walk = it;
-            while (walk && walk !== page)
-                walk = walk.parent;
-            if (walk === page && it) {
-                it.forceActiveFocus(Qt.TabFocusReason);
-                return;
-            }
-        }
-        footer.primaryButton.forceActiveFocus(Qt.TabFocusReason);
-    }
-
-    // M9: one clean settle — loops stop, the beam reads solid — then advance.
-    // Under reduced motion the moment is skipped entirely.
+    // M9: one clean settle — the pulse stops, the mark rests — then the done
+    // face. Under reduced motion the moment is skipped entirely.
     Timer {
         id: settleTimer
         interval: 2 * Tokens.durNormal
         repeat: false
-        onTriggered: root.goTo(4)
+        onTriggered: root.setFace("done")
 
         function arm() {
             if (Tokens.reducedMotion)
-                root.goTo(4);
+                root.setFace("done");
             else
                 settleTimer.restart();
         }
@@ -331,29 +249,34 @@ ApplicationWindow {
         function onPhaseChanged() {
             const ph = Setup.phase;
             if (ph === Setup.AwaitingBlockers) {
-                root.hadBlockers = true;
-                if (!blockerDialog.visible)
-                    blockerDialog.open();
-            } else if (blockerDialog.visible) {
-                blockerDialog.close();
+                root.setFace("blocker");
+                return;
             }
-            const running = ph === Setup.Copying || ph === Setup.Committing
-                          || ph === Setup.Finalizing || ph === Setup.RollingBack;
-            if (root.uninstall) {
-                if (running && root.step === 0)
-                    root.goTo(1);
-            } else if (running && root.step === 2) {
-                root.goTo(3);
+            if (ph === Setup.AwaitingElevation) {
+                root.setFace("progress");
+                return;
+            }
+            if (ph === Setup.Copying) {
+                // The cancel confirm rides ON TOP of a live copy; don't yank
+                // it away while the question is still valid.
+                if (root.face !== "confirmCancel")
+                    root.setFace("progress");
+                return;
+            }
+            if (ph === Setup.Committing || ph === Setup.Finalizing
+                || ph === Setup.RollingBack) {
+                // The cancel window has closed; an open confirm has expired.
+                root.setFace("progress");
             }
         }
 
         function onProbeChanged() {
-            if (Setup.staleJournalFound && !staleConfirm.visible)
-                staleConfirm.open();
+            if (root.face === "recovery" && !Setup.staleJournalFound)
+                root.setFace("welcome");
         }
 
         function onElevationDeclined() {
-            shortcutsPage.showElevationDeclined();
+            root.setFace("elevation");
         }
 
         function onInstallFinished(ok, error) {
@@ -362,23 +285,26 @@ ApplicationWindow {
                 return;
             }
             if (error === Setup.Cancelled) {
-                // Rollback already ran: everything is intact, resume choosing.
-                root.goTo(2);
+                // Rollback already ran: everything is intact, resume choosing
+                // on the face the run was committed from.
+                root.setFace(root.commitFace, false);
                 return;
             }
             if (error === Setup.NeedElevation)
-                return; // surfaced as the Shortcuts page's ErrorBanner
-            root.goTo(4); // the Done page's failure face
+                return; // the elevation face, via onElevationDeclined
+            root.setFace("failed");
         }
 
         function onUninstallFinished(ok, error) {
             if (ok) {
-                root.goTo(2);
+                root.setFace("removed");
                 return;
             }
-            if (error === Setup.Cancelled)
-                root.goTo(0);
-            // other failures surface on the removing page itself
+            if (error === Setup.Cancelled) {
+                root.setFace("remove", false);
+                return;
+            }
+            root.setFace("failed");
         }
     }
 
@@ -389,55 +315,74 @@ ApplicationWindow {
             Tokens.refreshMotionPreference();
     }
 
-    // Closing is an intent: pages that wrote nothing quit silently, work in
-    // flight routes through the cancel confirm, the commit window cannot be
-    // interrupted, and Done treats close as Finish-without-launch.
+    // Closing is an intent: faces that wrote nothing quit silently, a live
+    // copy routes through the cancel confirm, the atomic tail cannot be
+    // interrupted, and Done treats close as finish-without-opening.
     onClosing: function (close) {
         if (root.closeApproved)
             return;
-        if (!root.uninstall && root.step === 3) {
-            close.accepted = false;
-            if (Setup.phase === Setup.Copying && !cancelConfirm.visible)
-                cancelConfirm.open();
+        if (root.face === "progress" || root.face === "confirmCancel") {
+            if (root.uninstall) {
+                close.accepted = false; // removal is not resumable
+                return;
+            }
+            if (Setup.phase === Setup.Copying) {
+                close.accepted = false;
+                if (root.face !== "confirmCancel")
+                    root.setFace("confirmCancel");
+                return;
+            }
+            if (Setup.phase === Setup.Committing || Setup.phase === Setup.Finalizing
+                || Setup.phase === Setup.RollingBack) {
+                close.accepted = false; // atomic
+                return;
+            }
+            // AwaitingElevation: closing declines the whole run — just go.
             return;
         }
-        if (root.uninstall && root.step === 1 && !root.failedFace) {
-            close.accepted = false; // removal is not resumable
+        if (root.face === "blocker") {
+            // A dismissed gate is a cancel. Before anything is on disk the
+            // window may go with it; a mid-run gate stays to show the undo.
+            Setup.cancel();
+            close.accepted = Setup.bytesCopied === 0;
             return;
         }
-        if (!root.uninstall && root.step === 4 && !root.failedFace) {
+        if (root.face === "done") {
             close.accepted = false;
-            root.closeApproved = true;
-            Setup.finishOnly();
+            root.finishWithoutOpening();
             return;
         }
         // Everything else: nothing (new) is on disk — just go.
     }
 
-    // Esc = Cancel (through the confirm where destructive); Alt+Left = Back.
-    // Both stand down while a dialog owns the keyboard.
+    // Esc = the safe exit, everywhere. Stand down while the language menu
+    // owns the keyboard, so Esc closes it instead of navigating underneath.
     Shortcut {
         sequence: "Esc"
-        enabled: !root.dialogOpen
-        onActivated: root.cancelPressed()
+        enabled: !optionsFace.popupOpen
+        onActivated: root.escapePressed()
     }
     Shortcut {
         sequence: "Alt+Left"
-        enabled: !root.dialogOpen
-        onActivated: root.goBack()
+        enabled: root.face === "options"
+        onActivated: root.setFace("welcome", false)
     }
 
     // The elevation relaunch carries every choice the first window collected,
     // so this instance commits instead of asking again: approving the UAC
-    // prompt WAS the confirmation. Landing on Shortcuts rather than Installing
-    // is what lets the phase mapping above move us on, and it leaves a page the
-    // user can act on if the engine reports a blocker or a cancel.
+    // prompt WAS the confirmation.
     Component.onCompleted: {
-        if (!root.uninstall && Setup.resumeInstall) {
-            root.step = 2;
+        if (root.uninstall) {
+            root.face = "remove";
+        } else if (Setup.resumeInstall) {
+            root.face = "progress";
             Setup.beginInstall();
+        } else if (Setup.staleJournalFound) {
+            // The probe ran in the controller's constructor, before this
+            // window existed — ask now, not on a signal that already fired.
+            root.face = "recovery";
         }
-        root.focusStep();
+        root.focusFace();
     }
 
     // ── Chrome ──────────────────────────────────────────────────────────────
@@ -450,213 +395,135 @@ ApplicationWindow {
         anchors.top: parent.top
     }
 
-    SetupHeroRail {
-        id: heroRail
+    // ── The faces ───────────────────────────────────────────────────────────
+    Item {
+        id: faceHost
         anchors.left: parent.left
-        anchors.top: titleBar.bottom
-        anchors.bottom: parent.bottom
-        width: Tokens.railExpanded
-        sceneState: root.heroState
-        versionText: Setup.appVersion
-        destinationText: root.heroDestination
-        onDiskText: root.heroOnDisk
-        // Only reachable at extreme text scale; facts move, they never vanish.
-        compact: root.height < root.minimumHeight * 0.8
-    }
-
-    // ── Content column ──────────────────────────────────────────────────────
-    Kit.Page {
-        id: content
-        scrollable: false
-        anchors.left: heroRail.right
         anchors.right: parent.right
         anchors.top: titleBar.bottom
         anchors.bottom: parent.bottom
+        anchors.margins: Tokens.pagePadding
+        anchors.topMargin: Tokens.s6
 
-        ColumnLayout {
-            width: parent.width
-            height: parent.height
-            spacing: Tokens.s6
+        // The Enter fallback: fires only when the focused control didn't
+        // consume Return itself (a check row, the face root).
+        Keys.onReturnPressed: root.verbPressed()
+        Keys.onEnterPressed: root.verbPressed()
 
-            SetupStageBar {
-                id: stageBar
-                // A three-marker bar over a one-question flow is decoration:
-                // the uninstaller carries its place in the footer instead.
-                visible: !root.uninstall
-                // PACKAGE is one page now (Welcome), DESTINATION is still two
-                // (Location, Shortcuts), so the pip count travels with the
-                // stage instead of being assumed.
-                stage: root.step <= 0 ? 1 : root.step <= 2 ? 2 : 3
-                subStep: root.step === 2 ? 1 : 0
-                subSteps: root.step === 0 ? 1 : 2
-                locked: root.step >= 3
-                Layout.fillWidth: true
+        WelcomeFace {
+            id: welcomeFace
+            visible: !root.uninstall && root.face === "welcome"
+            width: faceHost.width
+            height: faceHost.height
 
-                onStageClicked: function (stage) {
-                    const target = stage === 1 ? 0 : 1;
-                    if (root.step < 3 && target < root.step)
-                        root.goTo(target);
-                }
-            }
-
-            ScrollView {
-                id: bodyScroll
-                clip: true
-                contentWidth: availableWidth
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                Item {
-                    id: stepHost
-                    width: bodyScroll.availableWidth
-                    // The viewport, unless the step outgrows it — then it
-                    // scrolls (200% text scale).
-                    height: Math.max(bodyScroll.availableHeight,
-                                     root.activePage ? root.activePage.implicitHeight : 0)
-
-                    WelcomePage {
-                        id: welcomePage
-                        visible: !root.uninstall && root.step === 0
-                        width: stepHost.width
-                        height: stepHost.height
-                    }
-                    LocationPage {
-                        id: locationPage
-                        visible: !root.uninstall && root.step === 1
-                        width: stepHost.width
-                        height: stepHost.height
-                    }
-                    ShortcutsPage {
-                        id: shortcutsPage
-                        visible: !root.uninstall && root.step === 2
-                        width: stepHost.width
-                        height: stepHost.height
-
-                        onInstallRequested: {
-                            // An older-over-newer install is destructive:
-                            // explicit confirm first, silent never gets here.
-                            if (Setup.isDowngrade)
-                                downgradeConfirm.open();
-                            else
-                                Setup.beginInstall();
-                        }
-                    }
-                    InstallingPage {
-                        id: installingPage
-                        visible: !root.uninstall && root.step === 3
-                        width: stepHost.width
-                        height: stepHost.height
-                        hadBlockers: root.hadBlockers
-                    }
-                    DonePage {
-                        id: donePage
-                        visible: !root.uninstall && root.step === 4
-                        width: stepHost.width
-                        height: stepHost.height
-
-                        onRetryRequested: {
-                            Setup.retry();
-                            root.goTo(2);
-                        }
-                        onFinishRequested: {
-                            root.closeApproved = true;
-                            if (Setup.wantLaunch)
-                                Setup.finishAndLaunch();
-                            else
-                                Setup.finishOnly();
-                        }
-                    }
-
-                    UninstallConfirmPage {
-                        id: confirmPage
-                        visible: root.uninstall && root.step === 0
-                        width: stepHost.width
-                        height: stepHost.height
-
-                        onRemoveRequested: Setup.beginUninstall()
-                    }
-                    UninstallProgressPage {
-                        id: removingPage
-                        visible: root.uninstall && root.step === 1
-                        width: stepHost.width
-                        height: stepHost.height
-                        hadBlockers: root.hadBlockers
-                    }
-                    UninstallDonePage {
-                        id: removedPage
-                        visible: root.uninstall && root.step === 2
-                        width: stepHost.width
-                        height: stepHost.height
-                    }
-                }
-            }
-
-            SetupFooter {
-                id: footer
-                Layout.fillWidth: true
-                backEnabled: root.backEnabled
-                cancelEnabled: root.cancelEnabled
-                cancelText: root.cancelLabel
-                hintText: root.hintText
-                primaryLabel: root.activePage ? root.activePage.primaryLabel : ""
-                primaryEnabled: root.activePage
-                                ? root.activePage.canAdvance && !root.working : false
-                primaryDestructive: root.uninstall && root.step === 0
-
-                onBackClicked: root.goBack()
-                onCancelClicked: root.cancelPressed()
-                onPrimaryClicked: root.primaryPressed()
-            }
+            onInstallRequested: root.commitInstall("welcome")
+            onDowngradeRequested: root.setFace("confirmDowngrade")
+            onOptionsRequested: root.setFace("options")
         }
-    }
+        OptionsFace {
+            id: optionsFace
+            visible: !root.uninstall && root.face === "options"
+            width: faceHost.width
+            height: faceHost.height
 
-    // ── Dialogs (centred over the WHOLE window, rail included) ──────────────
-    BlockerCloseDialog {
-        id: blockerDialog
-        uninstallMode: root.uninstall
-    }
-
-    Kit.ConfirmDialog {
-        id: cancelConfirm
-        eyebrow: qsTr("Cancel")
-        heading: qsTr("Stop installing?")
-        bodyText: qsTr("Files copied so far are removed, and this PC is left as it was.")
-        acceptText: qsTr("Stop")
-        rejectText: qsTr("Keep going")
-        destructiveAccept: true
-
-        onAccepted: {
-            cancelConfirm.close();
-            Setup.cancel();
+            onInstallRequested: root.commitInstall("options")
+            onBackRequested: root.setFace("welcome", false)
         }
-    }
+        ConfirmFace {
+            id: downgradeFace
+            visible: root.face === "confirmDowngrade"
+            width: faceHost.width
+            height: faceHost.height
+            eyebrowText: qsTr("Downgrade")
+            heading: qsTr("Install an older version?")
+            sentence: qsTr("Continuing replaces Dish %1 with %2.").arg(Setup.existingVersion).arg(Setup.appVersion)
+            safeText: qsTr("Keep %1").arg(Setup.existingVersion)
+            destructiveText: qsTr("Replace it")
 
-    Kit.ConfirmDialog {
-        id: downgradeConfirm
-        eyebrow: qsTr("Downgrade")
-        heading: qsTr("Install an older version?")
-        bodyText: qsTr("This PC has Dish %1, newer than this installer (%2). Continuing replaces it with the older version.").arg(Setup.existingVersion).arg(Setup.appVersion)
-        acceptText: qsTr("Replace it")
-        rejectText: qsTr("Cancel")
-        destructiveAccept: true
-
-        onAccepted: {
-            downgradeConfirm.close();
-            Setup.beginInstall();
+            onSafeChosen: root.setFace("welcome", false)
+            onDestructiveChosen: root.commitInstall("welcome")
         }
-    }
+        RecoveryFace {
+            id: recoveryFace
+            visible: root.face === "recovery"
+            width: faceHost.width
+            height: faceHost.height
 
-    Kit.ConfirmDialog {
-        id: staleConfirm
-        eyebrow: qsTr("Recovery")
-        heading: qsTr("Finish cleaning up?")
-        bodyText: qsTr("A previous setup attempt was interrupted and left recovery files behind. Clean them up before continuing.")
-        acceptText: qsTr("Clean up")
-        rejectText: qsTr("Not now")
+            onSkipRequested: root.setFace("welcome")
+        }
+        BlockerFace {
+            id: blockerFace
+            visible: root.face === "blocker"
+            width: faceHost.width
+            height: faceHost.height
+            uninstallMode: root.uninstall
 
-        onAccepted: {
-            staleConfirm.close();
-            Setup.cleanStaleJournal();
+            onCancelRequested: Setup.cancel()
+        }
+        ProgressFace {
+            id: progressFace
+            visible: root.face === "progress"
+            width: faceHost.width
+            height: faceHost.height
+            uninstallMode: root.uninstall
+
+            onCancelRequested: root.setFace("confirmCancel")
+        }
+        ConfirmFace {
+            id: cancelFace
+            visible: root.face === "confirmCancel"
+            width: faceHost.width
+            height: faceHost.height
+            eyebrowText: qsTr("Cancel")
+            heading: qsTr("Stop installing?")
+            sentence: qsTr("Files copied so far are removed, and this PC is left as it was.")
+            safeText: qsTr("Keep going")
+            destructiveText: qsTr("Stop and undo")
+
+            onSafeChosen: root.setFace("progress", false)
+            // The copy continues underneath until this lands; the rollback
+            // then swaps the progress face back in via the phase change.
+            onDestructiveChosen: Setup.cancel()
+        }
+        ElevationFace {
+            id: elevationFace
+            visible: root.face === "elevation"
+            width: faceHost.width
+            height: faceHost.height
+            uninstallMode: root.uninstall
+
+            onCancelRequested: root.setFace(root.uninstall ? "remove" : root.commitFace, false)
+        }
+        DoneFace {
+            id: doneFace
+            visible: !root.uninstall && root.face === "done"
+            width: faceHost.width
+            height: faceHost.height
+
+            onFinishRequested: root.finishWithoutOpening()
+        }
+        FailedFace {
+            id: failedFace
+            visible: root.face === "failed"
+            width: faceHost.width
+            height: faceHost.height
+            uninstallMode: root.uninstall
+
+            onRetryRequested: root.retryInstall()
+        }
+        RemoveFace {
+            id: removeFace
+            visible: root.uninstall && root.face === "remove"
+            width: faceHost.width
+            height: faceHost.height
+
+            onRemoveRequested: root.commitUninstall()
+        }
+        RemovedFace {
+            id: removedFace
+            visible: root.uninstall && root.face === "removed"
+            width: faceHost.width
+            height: faceHost.height
         }
     }
 }
