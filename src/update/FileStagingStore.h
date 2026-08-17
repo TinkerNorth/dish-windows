@@ -14,8 +14,7 @@
 //     ready\<version>\manifest.json           the latest.json that described them
 //     ready\<version>\ready.marker            written LAST; its presence IS the commit
 //     ready\<version>\apply-attempts.json     app-written before each spawn
-//     ready\<version>\apply-result.txt        installer-written token file
-//     ready\<version>\apply.log               installer-written log
+//     ready\<version>\apply.log               installer-written log (/LOG=)
 //
 // Because the marker is written last (tmp + FlushFileBuffers + rename), a crash
 // anywhere in the promote leaves a tree that reads as not-ready and is swept.
@@ -37,7 +36,6 @@ inline constexpr const char* kSetupExeName = "dish-setup.exe";
 inline constexpr const char* kReadyMarkerName = "ready.marker";
 inline constexpr const char* kManifestSnapshotName = "manifest.json";
 inline constexpr const char* kApplyAttemptsName = "apply-attempts.json";
-inline constexpr const char* kApplyResultName = "apply-result.txt";
 inline constexpr const char* kApplyLogName = "apply.log";
 
 // %LOCALAPPDATA%\Dish\updates with forward slashes, built from the environment

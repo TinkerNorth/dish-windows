@@ -7,10 +7,10 @@ used only to build and test it. It also states what someone redistributing the
 binaries has to do.
 
 Two artifacts ship: `dish-windows.zip`, the portable bundle, and
-`dish-setup.exe`, the installer. The installer carries everything the zip does
-plus the installer's own binaries, the Visual C++ runtime, and the licence
-texts. Where a component reaches a user through only one of the two, the table
-below says which.
+`dish-setup.exe`, the installer (Inno Setup, compiled from `installer.iss`).
+Both carry the same install image: the app, its runtime DLLs, the Visual C++
+runtime, and the licence texts. Where a component reaches a user through only
+one of the two, the table below says which.
 
 The app has an in-app version of this list at Settings, Licenses, rendered from
 [`assets/licenses/licenses.json`](assets/licenses/licenses.json). That manifest
@@ -27,7 +27,6 @@ today.
 | [Qt 6](#2-qt-6) | 6.7.3 (CI and release); CMake requires >= 6.7 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
 | [SDL2](#sdl2) | 2.32.10#1 (vcpkg baseline `9e593bb1`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
 | [libsodium](#libsodium) | 1.0.22#1 (vcpkg baseline `9e593bb1`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
-| [miniz](#miniz) | 3.0.2 | `MIT` | Vendored source, statically linked into `dish-setup.exe`, `dish-payload-pack` and `DishTests`. Never linked into `dish.exe`. | Ship the copyright and permission notice. See section 3. |
 | [Inter](#4-inter) | 4.001 | `OFL-1.1` | Four `.ttf` faces embedded in `dish.exe` as Qt resources under `:/fonts/`. | Ship the license text with every copy. See section 4. |
 | [Catch2](#5-catch2) | 3.5.4 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
 | [Visual C++ runtime](#visual-c-runtime) | 14.4x (`Microsoft.VC143.CRT`) | Proprietary, Microsoft | Five DLLs staged app-local, in the installer payload and in the release zip alike. | Microsoft Visual Studio redistributable terms |
@@ -141,8 +140,7 @@ SDL2 and libsodium are declared in [`vcpkg.json`](vcpkg.json) and resolved
 against the pinned `builtin-baseline`
 `9e593bb18ea69cc5095e012465dcd675a822ed0d` (vcpkg 2026.07.29), which is the same
 commit the CI workflow pins. Both are built as DLLs on the `x64-windows` triplet
-and both are dynamically linked. miniz is not a vcpkg dependency; it is
-vendored, and it belongs to the installer rather than to the app.
+and both are dynamically linked.
 
 ### SDL2
 
@@ -200,66 +198,6 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### miniz
-
-miniz 3.0.2. SPDX `MIT`. Upstream:
-<https://github.com/richgel999/miniz>.
-
-**Vendored, not resolved by vcpkg.** The two amalgamation files sit verbatim in
-[`third_party/miniz/`](third_party/miniz) with their upstream `LICENSE` and a
-[`README.dish.md`](third_party/miniz/README.dish.md) recording the release URL,
-the SHA-256 of every vendored file, the exact API surface the installer depends
-on, and the update procedure. The reason it is vendored rather than a manifest
-dependency is the SFX stub: the stub is a static-CRT (`/MT`) binary so it runs
-on a machine with no Visual C++ runtime installed, the project's `x64-windows`
-triplet is `/MD`, and vcpkg manifest mode cannot mix triplets per dependency.
-
-It provides ZIP reading, ZIP writing and CRC-32. `dish-payload-pack` uses it to
-write `payload.zip` at DEFLATE level 9; the stub inside `dish-setup.exe` uses it
-to extract that zip, which is also where the per-entry CRC-32 verification comes
-from. It is compiled per consuming target, so the `/MT` copy in the stub and the
-`/MD` copy in the pack tool and the test binary never meet. **It is not linked
-into `dish.exe`**, and it is therefore absent from the portable zip.
-
-The files are never patched. Compile-flag relaxations live in the consuming
-CMake targets, and `third_party/` sits outside the `src/` globs, so
-clang-format, clang-tidy and the repository lint gates leave it alone by design.
-osv-scanner cannot see vendored source; that is an accepted and documented risk,
-narrowed by the fact that miniz only ever parses an archive this project's own
-build produced, only after the stub's whole-payload CRC-32 gate has passed, and
-with every entry name re-validated before extraction.
-
-```
-Copyright 2013-2014 RAD Game Tools and Valve Software
-Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
-
-All Rights Reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-```
-
-Because miniz is statically linked into `dish-setup.exe`, the MIT notice has to
-travel with the installer. It does: `THIRD_PARTY.md` is one of the four licence
-texts staged into `licenses/` inside the payload and installed next to
-`dish.exe`.
-
----
 
 ## 4. Inter
 
@@ -419,11 +357,9 @@ license and carry no third-party attribution.
 
 [`assets/licenses/licenses.json`](assets/licenses/licenses.json) is the manifest
 the in-app Licenses screen renders, parsed by `src/UI/licenses/LicenseManifest.*`.
-The installer's Third-party licence tab renders the same file, so an entry
-missing there is missing in two places. It is hand-authored, not generated, so
-it can drift. It currently lists Qt 6, SDL2, libsodium, miniz, Catch2 and Inter,
-which is the same set of open-source components as this file, with the same
-licenses. The Microsoft components in section 6 are deliberately absent from the
+It is hand-authored, not generated, so it can drift. It currently lists Qt 6,
+SDL2, libsodium, Catch2 and Inter, which is the same set of open-source
+components as this file, with the same licenses. The Microsoft components in section 6 are deliberately absent from the
 manifest: their terms are Microsoft's and there is no license text to render.
 One further difference is worth knowing about:
 

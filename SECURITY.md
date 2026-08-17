@@ -152,10 +152,10 @@ against the tagged commit before it builds anything.
 
 A GitHub Release for a `v*` tag carries five files:
 
-- `dish-setup.exe`: the installer. A static-CRT Win32 stub with a standard ZIP
-  of the whole install image appended to it and a 32-byte trailer at EOF
-  carrying the magic, the format version, and a CRC-32 over the ZIP bytes. The
-  format is documented in [`docs/INSTALLER.md`](docs/INSTALLER.md).
+- `dish-setup.exe`: the installer, compiled by Inno Setup from
+  [`installer.iss`](installer.iss). A single self-extracting exe carrying the
+  whole install image; behaviour and command line are documented in
+  [`docs/INSTALLER.md`](docs/INSTALLER.md).
 - `dish-windows.zip`: `dish.exe`, the Qt runtime DLLs and QML modules staged by
   `windeployqt`, and a `SHA256SUMS` text file listing every other file in the
   bundle.
@@ -216,17 +216,17 @@ makes the identity of the host irrelevant.
 `dish-setup.exe`. The download is hashed while it streams, re-hashed in full off
 disk before it is promoted out of the staging directory, and hashed a third time
 at the next boot immediately before the handoff. A mismatch at any of the three
-points discards the file. Inside the installer, the trailer CRC-32 is checked
-before extraction and every installed file is verified against the payload
-manifest's own SHA-256 during the copy.
+points discards the file. Inside the installer, Inno Setup's own per-file CRC
+checks reject a corrupted payload during extraction.
 
-**Downgrade protection, at both ends.** The app stages an update only when the
-manifest version is strictly greater than the running version, and re-evaluates
-that at boot against the version of the exe actually on disk, so an update that
-was overtaken by a manual install is discarded rather than applied. The
-installer independently refuses a payload whose version is not strictly greater
-than the installed one, and refuses to run at all if `--expect-version` does not
-match the payload it carries. No downgrade override is ever passed on this path.
+**Downgrade protection.** All of it lives in the app, deliberately ahead of the
+spawn: an update is staged only when the manifest version is strictly greater
+than the running version, the boot gate re-evaluates that against the version
+of the exe actually on disk (so an update overtaken by a manual install is
+discarded rather than applied), and the janitor deletes any stage at or below
+the running version. The installer itself does not version-gate: running an
+older `dish-setup.exe` by hand is an explicit user action and installs what it
+carries.
 
 **Yank.** Deleting a release un-stages it: any successful check whose version is
 less than or equal to a staged version discards that stage. The window in which
@@ -252,7 +252,8 @@ default.
 
 **Turning it off.** *Check for updates automatically* in Settings stops every
 update-related request. The portable zip has no updater at all: it detects the
-absence of `uninstall.exe` beside it and downgrades to notify-only.
+absence of an Inno Setup uninstaller (`unins*.exe`) beside it and downgrades to
+notify-only.
 
 ## Known gaps
 

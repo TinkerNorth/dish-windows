@@ -92,9 +92,9 @@ automatically* stops every update-related network request when off, and
 notification. What the check sends is spelled out in
 [`PRIVACY.md`](PRIVACY.md) section 2.4.
 
-[`docs/INSTALLER.md`](docs/INSTALLER.md) documents the payload format, the
-command line and exit codes for scripted installs, the staging layout, and the
-apply handoff.
+[`docs/INSTALLER.md`](docs/INSTALLER.md) documents the Inno Setup script, the
+silent command line for scripted installs, the staging layout, and the apply
+handoff.
 
 ## Build from source
 
@@ -145,8 +145,11 @@ src/Input/        SDL bridge, XUSB packing, output command queue
 src/Network/      Winsock UDP session, REST client, pairing, connection pool
 src/UI/           Theme palettes, font probes, crash handler, license manifest
 src/update/       Update check, download, staging store, boot handoff
-src/installer/    dish-setup.exe: SFX stub, install and uninstall reducers, pack tool
 ```
+
+`dish-setup.exe` itself is not built from this tree: it is compiled by Inno
+Setup from [`installer.iss`](installer.iss), whose payload is the install
+image `cmake/DishSetupImage.cmake` stages.
 
 The input hot path is the deliberate exception and is not routed through that
 kernel. An SDL controller event runs `GamepadInputProcessor` and then

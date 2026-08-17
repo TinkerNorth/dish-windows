@@ -39,15 +39,6 @@ bool hasNoHandoffFlag(int argc, char** argv) {
     return false;
 }
 
-// One argument, quoted only when it needs to be. The installer's own CLI
-// accepts either form; quoting paths unconditionally keeps spaces safe.
-void appendQuoted(QString& commandLine, const QString& value) {
-    commandLine += QLatin1Char(' ');
-    commandLine += QLatin1Char('"');
-    commandLine += QDir::toNativeSeparators(value);
-    commandLine += QLatin1Char('"');
-}
-
 } // namespace
 
 RunningInstanceMutex::RunningInstanceMutex() {
@@ -162,9 +153,23 @@ void UpdateHandoff::quarantine(const StagedUpdate& staged) {
     settings.sync();
 }
 
-bool UpdateHandoff::spawnStagedApply(const StagedUpdate& staged, unsigned long pidToWaitOn) {
-    const QString targetExe = runningExecutablePath();
-    if (targetExe.isEmpty() || staged.exePath.isEmpty()) { return false; }
+QString UpdateHandoff::applyArguments(const StagedUpdate& staged) {
+    // Inno Setup's silent switch set. /NORESTART is about WINDOWS restarts
+    // (never wanted here); the app relaunch is /OTA's [Code] duty inside
+    // installer.iss: new exe on success, old exe with kNoHandoffFlag on
+    // failure. Scope and directory come from Inno's own previous-install
+    // record, so nothing re-supplies them. /LOG lands beside the stage, which
+    // is where PRIVACY.md says the last apply log lives.
+    QString arguments = QStringLiteral("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /OTA /LOG=");
+    arguments += QLatin1Char('"');
+    arguments +=
+        QDir::toNativeSeparators(staged.dir + QLatin1Char('/') + QLatin1String(kApplyLogName));
+    arguments += QLatin1Char('"');
+    return arguments;
+}
+
+bool UpdateHandoff::spawnStagedApply(const StagedUpdate& staged) {
+    if (staged.exePath.isEmpty()) { return false; }
 
     FileStagingStore store;
     const QString workingDir = store.root();
@@ -174,14 +179,8 @@ bool UpdateHandoff::spawnStagedApply(const StagedUpdate& staged, unsigned long p
     commandLine += QLatin1Char('"');
     commandLine += QDir::toNativeSeparators(staged.exePath);
     commandLine += QLatin1Char('"');
-    commandLine += QStringLiteral(" --update-apply --waitpid ");
-    commandLine += QString::number(pidToWaitOn);
-    commandLine += QStringLiteral(" --target-exe");
-    appendQuoted(commandLine, targetExe);
-    commandLine += QStringLiteral(" --expect-version ");
-    commandLine += staged.version;
-    commandLine += QStringLiteral(" --log");
-    appendQuoted(commandLine, staged.dir + QLatin1Char('/') + QLatin1String(kApplyLogName));
+    commandLine += QLatin1Char(' ');
+    commandLine += applyArguments(staged);
 
     std::wstring mutableCommandLine = commandLine.toStdWString();
     const std::wstring nativeCwd = QDir::toNativeSeparators(workingDir).toStdWString();
@@ -217,7 +216,7 @@ bool UpdateHandoff::runStartupHandoff(int argc, char** argv) {
         return false;
     }
 
-    if (!spawnStagedApply(*staged, ::GetCurrentProcessId())) {
+    if (!spawnStagedApply(*staged)) {
         // The installer never started, so this boot costs an attempt and the
         // app carries on normally; the next boot retries or quarantines.
         return false;

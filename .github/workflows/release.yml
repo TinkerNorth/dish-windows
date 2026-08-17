@@ -99,10 +99,10 @@ jobs:
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
       # only oversubscribes it.
-      # dish_setup_exe pulls in dish_setup_image (windeployqt + the app-local
-      # CRT) and the pack step, so this one target builds the whole installer.
+      # dish_setup_image stages the install image (windeployqt + the app-local
+      # CRT + licences) that the Inno Setup step below ships verbatim.
       - name: Build
-        run: cmake --build build --parallel 4 --target Dish dish_setup_exe
+        run: cmake --build build --parallel 4 --target Dish dish_setup_image
 
       - name: Bundle Qt runtime DLLs
         shell: pwsh
@@ -201,21 +201,28 @@ jobs:
           Copy-Item packaging/fonts/Inter-LICENSE.txt dish-windows/licenses/
           Get-ChildItem dish-windows/licenses
 
-      # Beside the zip, not inside it: dish-setup.exe is a release asset in its
-      # own right, and the portable bundle stays exactly what it was.
-      - name: Stage installer
-        shell: pwsh
-        run: Copy-Item build/dish-setup.exe "$PWD/dish-setup.exe"
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress --yes
 
-      # The same assertions windows-ci runs, against the artifact that is about
-      # to be published rather than a rebuild of it. The pack tool and the
-      # staged image stay in build/ (the upgrade leg re-packs the payload as
-      # 99.0.0), so they are named rather than inferred from -Setup's folder.
-      - name: Installer silent round-trip (no UI)
+      # Beside the zip, not inside it: dish-setup.exe is a release asset in its
+      # own right, and the portable bundle stays exactly what it was. The
+      # version is stamped from the tag via /D, so the setup exe, the payload
+      # and latest.json agree; the earlier version asserts already proved the
+      # tag matches project(Dish VERSION ...) and the built dish.exe.
+      - name: Compile installer (Inno Setup)
         shell: pwsh
         run: |
-          ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe `
-            -PackTool build/dish-payload-pack.exe -Image build/setup-image
+          $tag = '${{ github.event.inputs.tag || github.ref_name }}'
+          $num = ($tag -replace '^v','') -replace '[-+].*$',''
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build\setup-image" installer.iss
+          if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
+          Copy-Item dist/dish-setup.exe "$PWD/dish-setup.exe"
+
+      # The same assertions windows-ci runs, against the artifact that is about
+      # to be published rather than a rebuild of it.
+      - name: Installer silent round-trip (no UI)
+        shell: pwsh
+        run: ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe
 
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0

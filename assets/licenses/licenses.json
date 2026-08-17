@@ -41,19 +41,6 @@
       ]
     },
     {
-      "group": "com.richgel999",
-      "artifact": "miniz",
-      "version": "3.0.2",
-      "name": "miniz",
-      "url": "https://github.com/richgel999/miniz",
-      "licenses": [
-        {
-          "name": "MIT License",
-          "url": "https://opensource.org/license/mit"
-        }
-      ]
-    },
-    {
       "group": "org.catchorg",
       "artifact": "Catch2",
       "version": "3.5.4",

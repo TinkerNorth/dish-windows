@@ -155,10 +155,10 @@ jobs:
             -DDISH_REQUIRE_TRANSLATIONS=ON `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
-      # dish_setup_exe pulls in dish_setup_image (windeployqt + the app-local
-      # CRT) and the pack step, so this one target builds the whole installer.
+      # dish_setup_image stages the install image (windeployqt + the app-local
+      # CRT + licences); installer.iss ships it verbatim in the iscc step below.
       - name: Build release binary
-        run: cmake --build build-release --parallel 4 --target Dish dish_setup_exe
+        run: cmake --build build-release --parallel 4 --target Dish dish_setup_image
 
       - name: Stage release artifact (exe + Qt runtime DLLs)
         shell: pwsh
@@ -217,12 +217,27 @@ jobs:
         shell: pwsh
         run: ./scripts/test-portable-bundle.ps1 -Bundle artifact
 
-      # Installs, upgrades, blocks, applies an update and uninstalls, all
-      # silent and all asserted. Nothing else exercises the engine against a
-      # real disk and a real registry.
+      # Compiling the .iss on every PR is what catches a broken installer
+      # before a release does. Same recipe as release.yml and satellite.
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress --yes
+
+      - name: Compile installer (Inno Setup)
+        shell: pwsh
+        run: |
+          # The version comes from the same project(Dish VERSION ...) line
+          # release.yml asserts the tag against.
+          $cm = Get-Content CMakeLists.txt -Raw
+          if ($cm -notmatch 'project\(\s*Dish[\s\r\n]+VERSION[\s]+(\d+\.\d+\.\d+)') { throw 'project VERSION not found in CMakeLists.txt' }
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$($Matches[1])" "/DImageDir=build-release\setup-image" installer.iss
+          if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
+
+      # Installs, repairs and uninstalls the compiled installer, all silent and
+      # all asserted against a real disk and a real HKCU — including the
+      # unins*.exe sibling the app's installed-vs-portable probe looks for.
       - name: Installer silent round-trip (no UI)
         shell: pwsh
-        run: ./scripts/test-installer-roundtrip.ps1 -Setup build-release/dish-setup.exe
+        run: ./scripts/test-installer-roundtrip.ps1 -Setup dist/dish-setup.exe
 
       # After the round-trip, so a failed installer never reaches the artifact.
       # Copied INTO artifact/ rather than listed as a second upload path: a
@@ -231,7 +246,7 @@ jobs:
       # existing consumer of this artifact unpacks.
       - name: Stage installer beside the portable bundle
         shell: pwsh
-        run: Copy-Item build-release/dish-setup.exe artifact/
+        run: Copy-Item dist/dish-setup.exe artifact/
 
       - name: Upload release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

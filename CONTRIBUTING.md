@@ -128,13 +128,10 @@ in `CMakeLists.txt` or it will not exist at runtime.
 ## Translations
 
 Six catalogues live under `translations/`: English plus Bosnian, German,
-Spanish, French, and Brazilian Portuguese, the same set dish-android ships. The
-installer wizard shares them; `qt_add_translations` scans the app and the
-installer targets together, and the installer targets are defined in every
-configuration precisely so `update_translations` produces the same output for
-every contributor. The installer engine, the SFX stub and the uninstall helper
-carry no translatable strings at all: they emit typed enums and the QML renders
-them.
+Spanish, French, and Brazilian Portuguese, the same set dish-android ships.
+They cover the app only; the installer's wizard text comes from Inno Setup's
+own translated `.isl` catalogues (five of the six — Bosnian has no official
+`.isl` yet and is an open follow-up).
 
 **If you add, change, or delete a user-facing string, refresh the catalogues in
 the same commit.** `scripts\check-translations.ps1` re-runs `lupdate` with the
@@ -230,9 +227,9 @@ at the end of this file is the standing backlog.
 5. `scripts/check-translations.ps1`.
 6. `clang-tidy -p build` over `src/**/*.cpp` excluding `src/UI/`, against the
    same Debug tree step 2 produced.
-7. Release configure and build, `dish_setup_exe`, `windeployqt` staging,
-   `scripts/test-installer-roundtrip.ps1` against the freshly packed
-   installer, and artifact upload.
+7. Release configure and build, `dish_setup_image` staging, an Inno Setup
+   compile of `installer.iss`, `scripts/test-installer-roundtrip.ps1` against
+   the freshly compiled installer, and artifact upload.
 
 `version-consistency.yml` runs only when a version-carrying file moves
 (`CMakeLists.txt`, `packaging/dish.rc`, `vcpkg.json`, or the workflow pins): it
@@ -320,9 +317,10 @@ and describes the update chain's own integrity guarantees.
 ## Cutting a release
 
 `release.yml` runs on a `v*` tag or a `workflow_dispatch` with a tag input. It
-re-runs the security gates against the tagged commit, builds Release, packs
-`dish-setup.exe`, runs the installer round trip against the artifact it is about
-to publish, emits `latest.json`, computes checksums, uploads everything as a
+re-runs the security gates against the tagged commit, builds Release, compiles
+`dish-setup.exe` with Inno Setup, runs the installer round trip against the
+artifact it is about to publish, emits `latest.json`, computes checksums,
+uploads everything as a
 **draft**, and only then flips the release to published. The draft step is
 load-bearing: GitHub never points `releases/latest` at a draft, so every client
 polling the update permalink sees the previous release until the flip makes the
@@ -354,7 +352,7 @@ After the workflow finishes:
   failure and back off, so it self-heals once the asset appears, but it is
   invisible from the release page.
 - **Download `dish-setup.exe` and install it by hand** at least once. The manual
-  matrix in [`docs/INSTALLER.md`](docs/INSTALLER.md) section 10 is the list.
+  matrix at the end of [`docs/INSTALLER.md`](docs/INSTALLER.md) is the list.
 
 The asset names `dish-setup.exe`, `dish-windows.zip` and `latest.json` are a
 permanent API. Shipped clients construct the manifest URL from them and validate
