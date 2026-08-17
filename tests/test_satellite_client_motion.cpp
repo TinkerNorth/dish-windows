@@ -147,6 +147,21 @@ TEST_CASE("withMotionCapability is idempotent when the bit is already set", "[mo
     REQUIRE(SatelliteClient::withMotionCapability(base, false) == base);
 }
 
+TEST_CASE("withRumbleCapability sets bit 0x0002 iff the slot's path can rumble", "[caps]") {
+    const std::uint16_t base = SatelliteClient::kCapAnalogTriggers;
+    REQUIRE(base == 0x0001);
+    SECTION("SDL probe says the motors are drivable -> CAP_RUMBLE is OR-ed in") {
+        const std::uint16_t caps = SatelliteClient::withRumbleCapability(base, true);
+        REQUIRE(caps == 0x0003);
+        REQUIRE((caps & SatelliteClient::kCapRumble) != 0);
+    }
+    SECTION("a USB-direct claim (no output write path) -> word is unchanged") {
+        const std::uint16_t caps = SatelliteClient::withRumbleCapability(base, false);
+        REQUIRE(caps == 0x0001);
+        REQUIRE((caps & SatelliteClient::kCapRumble) == 0);
+    }
+}
+
 TEST_CASE("withMotionCapability and withLightbarCapability compose independently",
           "[motion][caps]") {
     // registerController folds both bits, so they must be orthogonal.

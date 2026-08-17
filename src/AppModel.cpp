@@ -6,6 +6,7 @@
 #include "LightbarRouting.h"
 #include "composer/StreamingSlotCount.h"
 #include "core/input/UsbReportParsers.h"
+#include "core/reducer/CatalogPrewarm.h"
 #include "core/reducer/PickerVisibility.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/SlotPathFields.h"
@@ -146,27 +147,31 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
         }
     });
 
-    // So bind() can advertise CAP_LIGHTBAR. The slot id IS the SDL bridge
-    // device id, so the lookup is a scan of bridge devices.
+    // So bind() can advertise CAP_LIGHTBAR. slotHardware answers for both a
+    // framework slot (the SDL probe) and a synthetic one (the parser family) —
+    // a Direct claim has no drivable lightbar, and slotHardware says so.
     hub_->setLightbarCapabilityFn([this](const QString& slotId) {
-        for (const auto& d : bridge_->devices()) {
-            if (d.id == slotId) { return d.hasLightbar; }
-        }
-        return false;
+        const SlotHardware hw = slotHardware(slotId);
+        return hw.hasLightbar && !hw.usbDirect;
     });
 
     // CAP_MOTION is sent iff the pad HAS a gyro and the user left motion
     // enabled, so an Xbox pad never advertises it. Same rule as
-    // MotionCapability::toCapBits.
+    // MotionCapability::toCapBits. A synthetic slot reads the parser family, so
+    // a Direct-claimed DualSense/DS4/Switch Pro advertises the IMU its decoder
+    // streams (a bridge-only scan used to miss it, and the satellite dropped
+    // every MOTION packet a Direct pad sent).
     hub_->setMotionCapabilityFn([this](const QString& slotId) {
-        bool hasGyro = false;
-        for (const auto& d : bridge_->devices()) {
-            if (d.id == slotId) {
-                hasGyro = d.motionCapable;
-                break;
-            }
-        }
-        return hasGyro && motionEnabledStore_.isEnabled(slotId.toStdString());
+        return slotHardware(slotId).hasMotion &&
+               motionEnabledStore_.isEnabled(slotId.toStdString());
+    });
+
+    // CAP_RUMBLE follows the active path's real actuator: the SDL probe for a
+    // Standard slot, never a USB-direct claim (no output write path exists), so
+    // the satellite only offers rumble where it actually fires.
+    hub_->setRumbleCapabilityFn([this](const QString& slotId) {
+        const SlotHardware hw = slotHardware(slotId);
+        return hw.hasRumble && !hw.usbDirect;
     });
 
     // The user's Emulate override wins over the SDL hardware classification;
@@ -180,13 +185,10 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
     // "mouse" and hostMouseControl reads false. Answering "off" here would make
     // the satellite discard every MSG_TOUCHPAD the forward path sends.
     hub_->setTouchpadModeFn([this](const QString& slotId) -> std::uint8_t {
-        bool hasTouchpad = false;
-        for (const auto& d : bridge_->devices()) {
-            if (d.id == slotId) {
-                hasTouchpad = d.hasTouchpad;
-                break;
-            }
-        }
+        // slotHardware covers the synthetic ids too: a Direct-claimed DS4 /
+        // DualSense decodes the touch block itself, so its descriptor must
+        // declare the render mode or the satellite discards the forward.
+        const bool hasTouchpad = slotHardware(slotId).hasTouchpad;
         if (!hasTouchpad) { return proto::kTouchpadModeOff; }
         const auto connId = hub_->boundConnection(slotId);
         const std::string pick =
@@ -621,6 +623,7 @@ void AppModel::rebuild() {
         s.capabilities.hasMotion = d.motionCapable;
         s.capabilities.hasLightbar = d.hasLightbar;
         s.capabilities.hasTouchpad = d.hasTouchpad;
+        s.capabilities.hasRumble = d.hasRumble;
         // Only meaningful on the Direct path, and a Bluetooth pad has none.
         s.verifiedModel = !d.bluetooth && usbGateway_ != nullptr &&
                           usbGateway_->isKnownFastLaneModel(d.vendorId, d.productId);
@@ -647,13 +650,16 @@ void AppModel::rebuild() {
         models::ControllerSlot s;
         s.id = QString::fromStdString(std::to_string(key));
         s.name = QString::fromStdString(c.name);
-        s.capabilities.hasMotion = input::usbparse::parserHasImu(
-            input::usbparse::parserForDevice(c.vendorId, c.productId));
+        const auto parser = input::usbparse::parserForDevice(c.vendorId, c.productId);
+        s.capabilities.hasMotion = input::usbparse::parserHasImu(parser);
         s.capabilities.hasLightbar = false;
         // The raw-HID decoder reads the DS4 / DualSense touch block directly, so
         // a claimed pad of that family keeps the touchpad its SDL twin had.
-        s.capabilities.hasTouchpad = input::usbparse::parserHasTouchpad(
-            input::usbparse::parserForDevice(c.vendorId, c.productId));
+        s.capabilities.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
+        // The pad's motors, not the path's actuator: the wire fold drops rumble
+        // for a Direct claim, but the capability table's input layer still says
+        // the hardware exists so the refusal lands on the Link row.
+        s.capabilities.hasRumble = input::usbparse::parserHasRumble(parser);
         s.verifiedModel =
             usbGateway_ != nullptr && usbGateway_->isKnownFastLaneModel(c.vendorId, c.productId);
         s.usbDirect = true;
@@ -661,6 +667,26 @@ void AppModel::rebuild() {
         // A synthetic IS a USB-direct controller, so it is always
         // path-supported; the mapper reads phase/desired/failure off its own
         // entry, keyed by vid/pid, which round-trips to this key.
+        stampSlotPath(s, c.vendorId, c.productId, controllers);
+        presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
+        next.append(s);
+    }
+
+    // A tracked model whose stand-alone identity is not a gamepad (the Steam
+    // Controller emulates a keyboard and mouse) never gets an SDL row and has
+    // no synthetic until a claim succeeds — without a card of its own there
+    // would be nothing to pick Direct from. Same id as its future synthetic, so
+    // the binding and type choice survive the claim.
+    for (const auto& [key, c] : controllers) {
+        if (c.frameworkExpected || c.phase == reducer::UsbPhase::Direct) { continue; }
+        models::ControllerSlot s;
+        s.id = QString::fromStdString(std::to_string(key));
+        s.name = QString::fromStdString(c.name);
+        const auto parser = input::usbparse::parserForDevice(c.vendorId, c.productId);
+        s.capabilities.hasMotion = input::usbparse::parserHasImu(parser);
+        s.capabilities.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
+        s.capabilities.hasRumble = input::usbparse::parserHasRumble(parser);
+        s.capabilities.hasLightbar = false;
         stampSlotPath(s, c.vendorId, c.productId, controllers);
         presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
         next.append(s);
@@ -747,6 +773,10 @@ void AppModel::rebuild() {
 
     emit stateChanged();
 
+    // Rides the same rebuild the Live transition triggered; the reducer's edge
+    // guard makes the steady state free.
+    prewarmCatalogs();
+
     // Last, because it can bind/unbind and therefore re-enter this function.
     applyBindingPresence();
 }
@@ -768,6 +798,32 @@ std::optional<std::pair<int, int>> AppModel::boundPadIdentity(const QString& slo
     const std::optional<std::pair<int, int>> packed = reducer::parseSyntheticSlotId(id);
     if (reducer::isPadIdentity(packed)) { return packed; }
     return std::nullopt;
+}
+
+AppModel::SlotHardware AppModel::slotHardware(const QString& slotId) const {
+    SlotHardware hw;
+    // A synthetic id packs its own (vid, pid); the parser family is the
+    // hardware truth for what the claim decodes. Checked first because it needs
+    // no lock and a synthetic id can never collide with an "sdl:N" id.
+    const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+    if (vp.has_value() && reducer::isPadIdentity(vp)) {
+        const auto parser = input::usbparse::parserForDevice(vp->first, vp->second);
+        hw.usbDirect = true;
+        hw.hasMotion = input::usbparse::parserHasImu(parser);
+        hw.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
+        hw.hasRumble = input::usbparse::parserHasRumble(parser);
+        hw.hasLightbar = false;
+        return hw;
+    }
+    for (const auto& d : bridge_->devices()) {
+        if (d.id != slotId) { continue; }
+        hw.hasMotion = d.motionCapable;
+        hw.hasLightbar = d.hasLightbar;
+        hw.hasTouchpad = d.hasTouchpad;
+        hw.hasRumble = d.hasRumble;
+        return hw;
+    }
+    return hw;
 }
 
 void AppModel::applyBindingPresence() {
@@ -969,6 +1025,31 @@ void AppModel::refreshCatalogForConnection(const QString& connId) {
                                 }
                                 emit catalogStateChanged();
                             });
+}
+
+void AppModel::prewarmCatalogs() {
+    std::vector<reducer::CatalogLink> links;
+    const auto conns = wifi_->connections();
+    links.reserve(static_cast<std::size_t>(conns.size()));
+    for (auto* conn : conns) {
+        links.emplace_back(conn->server().id(), conn->state() == net::SessionState::Live);
+    }
+    const auto targets = reducer::catalogPrewarmTargets(links, prewarmedCatalogs_);
+    if (targets.empty()) { return; }
+    const QString acceptLanguage = QLocale().bcp47Name();
+    for (const auto& satId : targets) {
+        auto* conn = wifi_->get(satId);
+        if (conn == nullptr) { continue; }
+        // Unlike refreshCatalogForConnection this never touches catalogState_:
+        // a background warm must not flip the picker into Loading. The snapshot
+        // still updates so an already-open picker sees fresh types.
+        catalogRepo_.catalogFor(
+            conn->server(), satId, acceptLanguage, [this](const source::CatalogState& state) {
+                if (state.hasData()) {
+                    catalogSnapshot_.set(composer::CatalogSnapshot{*state.data});
+                }
+            });
+    }
 }
 
 } // namespace dish

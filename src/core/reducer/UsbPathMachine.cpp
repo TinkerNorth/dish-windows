@@ -83,7 +83,7 @@ Reduction reduceClaiming(const UsbController& c, const UsbEvent& event) {
         return Reduction{std::move(n), {effect::EndHold{}, effect::ClearFailure{}}};
     }
     if (const auto* failed = as<event::ClaimFailed>(event)) {
-        if (failed->frameworkStolen) {
+        if (failed->frameworkStolen && c.frameworkExpected) {
             // The claim detached the kernel HID driver, so wait for the framework
             // device to come back before settling on Standard.
             UsbController n = c;
@@ -92,9 +92,10 @@ Reduction reduceClaiming(const UsbController& c, const UsbEvent& event) {
             n.failure = failed->reason;
             return Reduction{std::move(n), {effect::StartTimeout{}}};
         }
-        // The interface was never stolen, so the framework slot is still live.
-        // Persist Standard as well, or the failed pick is silently re-attempted
-        // on every reconnect.
+        // Either the interface was never stolen (the framework slot is still
+        // live), or this model never re-enumerates as a framework gamepad, so
+        // there is nothing to wait for. Persist Standard as well, or the failed
+        // pick is silently re-attempted on every reconnect.
         UsbController n = c;
         n.phase = UsbPhase::Routed;
         n.desired = PathChoice::Standard;
@@ -123,6 +124,26 @@ Reduction reduceClaiming(const UsbController& c, const UsbEvent& event) {
 Reduction reduceDirect(const UsbController& c, const UsbEvent& event) {
     if (const auto* ch = as<event::Choose>(event)) {
         if (ch->choice == PathChoice::Standard) {
+            if (!c.frameworkExpected) {
+                // No framework gamepad follows this release, so there is nothing
+                // to wait for: the device-side restore in Release is the whole
+                // hand-back.
+                UsbController n = c;
+                n.phase = UsbPhase::Routed;
+                n.desired = PathChoice::Standard;
+                n.frameworkId.reset();
+                n.syntheticId.reset();
+                n.userInitiated = ch->userInitiated;
+                n.failure.reset();
+                std::vector<UsbEffect> fx;
+                fx.push_back(effect::Release{});
+                if (c.syntheticId.has_value()) {
+                    fx.push_back(effect::RemoveSynthetic{*c.syntheticId});
+                }
+                fx.push_back(effect::SetPref{PathChoice::Standard});
+                fx.push_back(effect::ClearFailure{});
+                return Reduction{std::move(n), std::move(fx)};
+            }
             // Keep the synthetic as a held placeholder while the framework device
             // comes back; if it never does, RestoreStuck lets the user choose.
             UsbController n = c;

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The installer's custom title bar: WindowTitleBar reduced to what a fixed
+// The installer's custom title bar: WindowTitleBar reduced to what the
 // one-screen window needs — the app mark, the title, minimize and close.
 // There is no maximize cell and no rect is published for one, so the chrome
 // filter never answers HTMAXBUTTON and Snap Layouts stays out of a window
-// that cannot resize. Its rects go to ChromeBridge, which drives the native
-// hit-test (caption drag, client carve-outs for minimize/close). Glyphs are
-// composed from Rectangles, not Canvas: src/qml/setup is a literal-scanner
-// STRICT directory and Canvas drawing is a kit-only privilege.
+// that only edge-resizes. Its rects go to ChromeBridge, which drives the
+// native hit-test (caption drag, resize borders, client carve-outs for
+// minimize/close). Glyphs are composed from Rectangles, not Canvas:
+// src/qml/setup is a literal-scanner STRICT directory and Canvas drawing is
+// a kit-only privilege.
 
 // Bound: the inline CaptionButton component binds `bar.height`, an outer id.
 pragma ComponentBehavior: Bound
@@ -44,7 +45,7 @@ Item {
 
     // The caption buttons sit above this in z and consume their own presses,
     // so clicking one doesn't start a window move. No double-click handler:
-    // a fixed window has no maximize to toggle.
+    // the window has no maximize to toggle.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton

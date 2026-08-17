@@ -69,6 +69,9 @@ class SDLGamepadBridge : public QObject {
         bool isRawJoystick = false;
         // A pad with no touch source always declares touchpadMode "off".
         bool hasTouchpad = false;
+        // Whether SDL can actually drive this pad's motors (the probe, not the
+        // model DB) — what CAP_RUMBLE advertises for a Standard-path slot.
+        bool hasRumble = false;
         // Classified at attach from SDL's device path. Gates the USB-path stamp
         // in AppModel::rebuild — a wireless pad has no USB path to switch.
         // False when SDL reports no path (the XInput fallback), which leaves
@@ -189,6 +192,10 @@ class SDLGamepadBridge : public QObject {
     // Instance ids whose pad exposes a readable touchpad (SDL
     // GetNumTouchpads > 0). Same lifecycle / locking as motionCapable_.
     std::unordered_set<int> touchpadCapable_;
+    // Instance ids whose motors SDL can drive (SDL HasRumble — the probe is
+    // authoritative for the Standard path). Same lifecycle / locking as
+    // motionCapable_.
+    std::unordered_set<int> rumbleCapable_;
     // Instance ids attached over Bluetooth (classified once at attach from the
     // SDL device path). Surfaced through devices() as Device::bluetooth. Same
     // lifecycle / locking as motionCapable_.

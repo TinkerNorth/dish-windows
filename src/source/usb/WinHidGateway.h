@@ -59,6 +59,12 @@ class WinHidGateway : public UsbDeviceGateway {
     std::int64_t completionCount(int syntheticId) const override;
 
   private:
+    // The HidP-driven field map for GENERIC-HID pads, built once at claim time
+    // from the device's preparsed data (Windows never exposes the raw report
+    // descriptor, so HidP_Get*Caps stands in for parsing it). Defined in the
+    // .cpp so the Windows HID SDK types stay out of this header.
+    struct HidPDecode;
+
     // One claimed device's read loop + handle.
     struct Claimed {
         std::string path;       // the HID device interface path.
@@ -70,11 +76,19 @@ class WinHidGateway : public UsbDeviceGateway {
         int vendorId = 0;
         int productId = 0;
         // The per-model decoder family chosen from VID:PID at claim time, and the
-        // expand-only stick auto-range state it mutates per report (Switch Pro).
-        // Both are read-loop-thread-only (no lock needed): the reader is the sole
-        // owner once started, and joined before the Claimed is destroyed.
+        // expand-only stick auto-range state it mutates per report (Switch Pro,
+        // Steam Controller held stick). Both are read-loop-thread-only (no lock
+        // needed): the reader is the sole owner once started, and joined before
+        // the Claimed is destroyed.
         input::usbparse::HidParser parser = input::usbparse::HidParser::None;
         input::usbparse::StickAutoRangeState sticks;
+        // GENERIC-HID only: the caps-derived decode map (read-loop-thread-only).
+        std::unique_ptr<HidPDecode> hidp;
+        // Feature-report buffer length from HIDP_CAPS, for the Steam Controller
+        // config sequences (id byte included).
+        int featureReportLen = 0;
+
+        ~Claimed();
     };
 
     void readLoop(Claimed* c);

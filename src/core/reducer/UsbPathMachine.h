@@ -51,13 +51,18 @@ struct UsbController {
     // Remembered between the failure and the Standard re-settle, so the
     // re-enumerated framework card can still show the cause.
     std::optional<DirectClaimFailure> failure;
+    // False for models whose stand-alone identity is not a gamepad (the Steam
+    // Controller emulates a keyboard and mouse): a release then has no
+    // framework device to wait for, so the FSM settles straight back to Routed
+    // instead of timing out into a false RestoreStuck.
+    bool frameworkExpected = true;
 
     bool operator==(const UsbController& o) const {
         return vendorId == o.vendorId && productId == o.productId && name == o.name &&
                phase == o.phase && usbPresent == o.usbPresent && frameworkId == o.frameworkId &&
                syntheticId == o.syntheticId && hasPermission == o.hasPermission &&
                desired == o.desired && userInitiated == o.userInitiated && connId == o.connId &&
-               type == o.type && failure == o.failure;
+               type == o.type && failure == o.failure && frameworkExpected == o.frameworkExpected;
     }
     bool operator!=(const UsbController& o) const { return !(*this == o); }
 };

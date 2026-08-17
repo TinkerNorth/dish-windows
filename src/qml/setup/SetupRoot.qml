@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The installer window: one fixed 460×420 face-swapper. No pages, no stage
-// bar, no rail, no modal dialogs — the window swaps FACES (welcome, options,
+// The installer window: one 460×420 face-swapper (resizable above that by
+// edge drag, never maximized). No pages, no stage bar, no rail, no modal
+// dialogs — the window swaps FACES (welcome, options,
 // confirms, blocker gate, progress, done/failed, and the uninstall trio),
 // each with one full-width verb and a link row. All faces are always
 // instantiated and toggled by `visible` with the standard enter animation;
@@ -21,15 +22,15 @@ ApplicationWindow {
 
     readonly property bool uninstall: Setup.mode === Setup.Uninstall
 
-    // Fixed: installers don't resize. Minimum == maximum keeps the native
-    // frame from ever offering a resize, and the title bar publishes no
-    // maximize rect, so Snap Layouts stays away too.
+    // 460×420 is the design size and the floor; the window resizes above it
+    // by edge drag (the chrome filter answers the resize borders, faces track
+    // faceHost). No maximize: the title bar publishes no maximize rect and no
+    // maximize hint is set, so Snap Layouts stays away and a caption
+    // double-click stays inert.
     width: 460
     height: 420
     minimumWidth: 460
     minimumHeight: 420
-    maximumWidth: 460
-    maximumHeight: 420
     visible: true
     title: root.uninstall ? qsTr("Uninstall Dish") : qsTr("Dish Setup")
 

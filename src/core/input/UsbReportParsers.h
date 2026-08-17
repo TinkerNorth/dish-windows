@@ -31,6 +31,38 @@ enum class HidParser : std::uint8_t {
     DualSense,
     SwitchProUsb,
     GenericHid,
+    SteamController,
+};
+
+// Which direction a Steam Controller config sequence runs. Quiet is sent at
+// attach; Restore must run on every exit path or the pad stays mute as a
+// desktop mouse after we hand it back.
+enum class SteamConfig : std::uint8_t {
+    Quiet = 0,
+    Restore = 1,
+};
+
+// Wireless dongle connect/disconnect events that arrive on the same endpoint as
+// input reports. They never decode as state, so without them a departed pad
+// would keep its last published input latched and a returning pad (fresh boot,
+// settings gone) would stream without its quiet-mode init.
+enum class WirelessEvent : std::uint8_t {
+    None = 0,
+    Connect = 1,
+    Disconnect = 2,
+};
+
+enum class ButtonOrder : std::uint8_t {
+    Western = 0,
+    Switch = 1,
+};
+
+struct KnownHidModel {
+    int vid;
+    int pid;
+    const char* name;
+    HidParser parser;
+    ButtonOrder order = ButtonOrder::Western;
 };
 
 // Expand-only stick auto-range for the Switch Pro: raw 12-bit ADC, asymmetric
@@ -46,6 +78,10 @@ struct StickAutoRangeState {
     AxisAutoRange ly;
     AxisAutoRange rx;
     AxisAutoRange ry;
+    // Steam Controller stick, held across the frames where the shared left axes
+    // carry pad data.
+    std::int16_t steamStickX = 0;
+    std::int16_t steamStickY = 0;
 };
 
 // Normalised to the XUSB axis/trigger scale.
@@ -424,6 +460,213 @@ inline bool decodeGenericHid(const std::uint8_t* buf, std::size_t len, ParsedRep
     return true;
 }
 
+// ── Steam Controller ────────────────────────────────────────────────────────
+// The 64-byte vendor-interface packets, quiet/restore config sequences and the
+// dongle's wireless events mirror dish-android's hardware-validated port of the
+// Linux hid-steam / SDL drivers, byte for byte.
+
+inline constexpr std::uint32_t kSteamRightBumper = 0x000004;
+inline constexpr std::uint32_t kSteamLeftBumper = 0x000008;
+inline constexpr std::uint32_t kSteamNorth = 0x000010;
+inline constexpr std::uint32_t kSteamEast = 0x000020;
+inline constexpr std::uint32_t kSteamWest = 0x000040;
+inline constexpr std::uint32_t kSteamSouth = 0x000080;
+inline constexpr std::uint32_t kSteamDpadUp = 0x000100;
+inline constexpr std::uint32_t kSteamDpadRight = 0x000200;
+inline constexpr std::uint32_t kSteamDpadLeft = 0x000400;
+inline constexpr std::uint32_t kSteamDpadDown = 0x000800;
+inline constexpr std::uint32_t kSteamMenu = 0x001000;
+inline constexpr std::uint32_t kSteamGuide = 0x002000;
+inline constexpr std::uint32_t kSteamEscape = 0x004000;
+inline constexpr std::uint32_t kSteamLeftPadClicked = 0x020000;
+inline constexpr std::uint32_t kSteamRightPadClicked = 0x040000;
+inline constexpr std::uint32_t kSteamLeftPadFinger = 0x080000;
+inline constexpr std::uint32_t kSteamRightPadFinger = 0x100000;
+inline constexpr std::uint32_t kSteamStickButton = 0x400000;
+inline constexpr std::uint32_t kSteamLeftPadAndStick = 0x800000;
+
+inline constexpr std::size_t kSteamStateLen = 48;
+inline constexpr std::uint8_t kSteamStateType = 0x01;
+inline constexpr std::uint8_t kSteamWirelessType = 0x03;
+inline constexpr std::uint8_t kSteamWirelessDisconnect = 0x01;
+inline constexpr std::uint8_t kSteamWirelessConnect = 0x02;
+inline constexpr std::int32_t kSteamTriggerMaxAnalog = 26000;
+// 15 degrees in Q16; the pads sit rotated on the shell and SDL applies the same
+// correction.
+inline constexpr std::int32_t kSteamPadCos = 63303;
+inline constexpr std::int32_t kSteamPadSin = 16962;
+
+inline std::int16_t steamClampI16(std::int64_t v) {
+    if (v > 32767) { return 32767; }
+    if (v < -32768) { return -32768; }
+    return static_cast<std::int16_t>(v);
+}
+
+// Valve's 26000 full scale, so the throw saturates before the raw rail.
+inline std::uint8_t steamTriggerToWire(std::uint8_t raw) {
+    std::int32_t v = (static_cast<std::int32_t>(raw) << 7) | raw;
+    if (v > kSteamTriggerMaxAnalog) { v = kSteamTriggerMaxAnalog; }
+    return static_cast<std::uint8_t>((v * 255) / kSteamTriggerMaxAnalog);
+}
+
+// SDL adds a further +1000 to each axis while a finger is down. That is
+// harmless for a touch surface but would park a stick off centre, so it is
+// deliberately not carried over.
+inline void steamRotatePad(std::int32_t x, std::int32_t y, std::int16_t& outX, std::int16_t& outY) {
+    outX = steamClampI16((static_cast<std::int64_t>(kSteamPadCos) * x -
+                          static_cast<std::int64_t>(kSteamPadSin) * y) /
+                         65536);
+    outY = steamClampI16((static_cast<std::int64_t>(kSteamPadSin) * x +
+                          static_cast<std::int64_t>(kSteamPadCos) * y) /
+                         65536);
+}
+
+// Steam reports gyro over +-2000 deg/s and accel over +-2g; the wire wants
+// deg/s / 2000 and g / 4.
+inline std::int16_t steamGyroToWire(std::int32_t raw) {
+    return steamClampI16(static_cast<std::int64_t>(raw) * 32767 / 32768);
+}
+
+inline std::int16_t steamAccelToWire(std::int32_t raw) {
+    return steamClampI16(static_cast<std::int64_t>(raw) * 32767 / 65536);
+}
+
+inline bool decodeSteamController(const std::uint8_t* buf, std::size_t len, ParsedReport& s,
+                                  StickAutoRangeState& st) {
+    if (len < kSteamStateLen) { return false; }
+    if (buf[0] != 0x01 || buf[1] != 0x00) { return false; }
+    if (buf[2] != kSteamStateType) { return false; }
+
+    const std::uint32_t btn = static_cast<std::uint32_t>(buf[8]) |
+                              (static_cast<std::uint32_t>(buf[9]) << 8) |
+                              (static_cast<std::uint32_t>(buf[10]) << 16);
+
+    std::uint16_t b = 0;
+    if (btn & kSteamSouth) { b |= layout::kXusbA; }
+    if (btn & kSteamEast) { b |= layout::kXusbB; }
+    if (btn & kSteamWest) { b |= layout::kXusbX; }
+    if (btn & kSteamNorth) { b |= layout::kXusbY; }
+    if (btn & kSteamLeftBumper) { b |= layout::kXusbLeftShoulder; }
+    if (btn & kSteamRightBumper) { b |= layout::kXusbRightShoulder; }
+    if (btn & kSteamMenu) { b |= layout::kXusbBack; }
+    if (btn & kSteamEscape) { b |= layout::kXusbStart; }
+    if (btn & kSteamGuide) { b |= layout::kXusbGuide; }
+    if (btn & kSteamDpadUp) { b |= layout::kXusbDpadUp; }
+    if (btn & kSteamDpadDown) { b |= layout::kXusbDpadDown; }
+    if (btn & kSteamDpadLeft) { b |= layout::kXusbDpadLeft; }
+    if (btn & kSteamDpadRight) { b |= layout::kXusbDpadRight; }
+    if (btn & kSteamRightPadClicked) { b |= layout::kXusbRightThumb; }
+
+    s.lt = steamTriggerToWire(buf[11]);
+    s.rt = steamTriggerToWire(buf[12]);
+
+    // One pair of axes carries either the stick or the left pad. The
+    // finger-down bit says which; the interleave bit means pad frames alternate
+    // with stick frames worth holding on to.
+    const bool padOnLeft = (btn & kSteamLeftPadFinger) != 0;
+    const bool interleaved = (btn & kSteamLeftPadAndStick) != 0;
+    if (!padOnLeft) {
+        st.steamStickX = rdLe16(buf, 16);
+        st.steamStickY = rdLe16(buf, 18);
+        // With no live pad the firmware reports a stick click as a left-pad
+        // click.
+        if (!interleaved && (btn & kSteamLeftPadClicked)) { b |= layout::kXusbLeftThumb; }
+    } else if (!interleaved) {
+        st.steamStickX = 0;
+        st.steamStickY = 0;
+    }
+    if (btn & kSteamStickButton) { b |= layout::kXusbLeftThumb; }
+    s.wButtons = b;
+    s.lx = st.steamStickX;
+    s.ly = st.steamStickY;
+
+    if (btn & kSteamRightPadFinger) {
+        steamRotatePad(rdLe16(buf, 20), rdLe16(buf, 22), s.rx, s.ry);
+    } else {
+        s.rx = 0;
+        s.ry = 0;
+    }
+
+    const std::int16_t ax = rdLe16(buf, 28);
+    const std::int16_t ay = rdLe16(buf, 30);
+    const std::int16_t az = rdLe16(buf, 32);
+    const std::int16_t gx = rdLe16(buf, 34);
+    const std::int16_t gy = rdLe16(buf, 36);
+    const std::int16_t gz = rdLe16(buf, 38);
+    // An all-zero block means the IMU setting never took; publishing it would
+    // stream a dead sensor.
+    if ((ax | ay | az | gx | gy | gz) != 0) {
+        s.gyroX = steamGyroToWire(gx);
+        s.gyroY = steamGyroToWire(gz);
+        s.gyroZ = steamGyroToWire(gy);
+        s.accelX = steamAccelToWire(ax);
+        s.accelY = steamAccelToWire(az);
+        s.accelZ = steamAccelToWire(-static_cast<std::int32_t>(ay));
+        s.motionValid = true;
+    }
+    return true;
+}
+
+// Pure: writes the index-th Steam Controller feature report for a config
+// direction into out, returns its length or 0 when there are no more. Payload
+// only; the caller frames it as a feature report.
+inline std::size_t buildSteamConfigPacket(SteamConfig stage, int index, std::uint8_t* out,
+                                          std::size_t outCap) {
+    // Framing is {message id, payload length, payload}. Message ids and the
+    // choice of the shortest working sequence follow the Linux hid-steam driver.
+    static constexpr std::uint8_t kClearMappings[] = {0x81, 0x00};
+    // Left and right trackpad mode = none (kills mouse emulation), IMU mode =
+    // raw accel | raw gyro.
+    static constexpr std::uint8_t kQuietSettings[] = {0x87, 0x09, 0x07, 0x07, 0x00, 0x08,
+                                                      0x07, 0x00, 0x30, 0x18, 0x00};
+    static constexpr std::uint8_t kDefaultMappings[] = {0x85, 0x00};
+    static constexpr std::uint8_t kDefaultSettings[] = {0x8E, 0x00};
+    // Loading the defaults does not by itself hand the right pad back as a
+    // mouse: SDL follows it with an explicit right trackpad mode = absolute
+    // mouse, and leaving that out is the one way this teardown could still
+    // return a pad its owner cannot use.
+    static constexpr std::uint8_t kRestoreMouse[] = {0x87, 0x03, 0x08, 0x00, 0x00};
+
+    struct Pkt {
+        const std::uint8_t* data;
+        std::size_t len;
+    };
+    static constexpr Pkt kQuietSeq[] = {{kClearMappings, sizeof(kClearMappings)},
+                                        {kQuietSettings, sizeof(kQuietSettings)}};
+    static constexpr Pkt kRestoreSeq[] = {{kDefaultMappings, sizeof(kDefaultMappings)},
+                                          {kDefaultSettings, sizeof(kDefaultSettings)},
+                                          {kRestoreMouse, sizeof(kRestoreMouse)}};
+
+    const bool quiet = stage == SteamConfig::Quiet;
+    const Pkt* seqArr = quiet ? kQuietSeq : kRestoreSeq;
+    const int seqLen = quiet ? static_cast<int>(sizeof(kQuietSeq) / sizeof(kQuietSeq[0]))
+                             : static_cast<int>(sizeof(kRestoreSeq) / sizeof(kRestoreSeq[0]));
+    if (index < 0 || index >= seqLen) { return 0; }
+    const std::size_t len = seqArr[index].len;
+    if (len > outCap) { return 0; }
+    for (std::size_t i = 0; i < len; i++) { out[i] = seqArr[index].data[i]; }
+    return len;
+}
+
+// Pure: classifies a report as a wireless connect/disconnect event for families
+// that interleave them with input (the Steam Controller dongle). None for every
+// other parser and packet. Event framing and the one-byte payload values follow
+// the Linux hid-steam driver (steam_raw_event, ID_CONTROLLER_WIRELESS).
+inline WirelessEvent checkWirelessEvent(HidParser p, const std::uint8_t* buf, std::size_t len) {
+    if (p != HidParser::SteamController) { return WirelessEvent::None; }
+    if (len < 5) { return WirelessEvent::None; }
+    if (buf[0] != 0x01 || buf[1] != 0x00) { return WirelessEvent::None; }
+    if (buf[2] != kSteamWirelessType || buf[3] != 0x01) { return WirelessEvent::None; }
+    switch (buf[4]) {
+    case kSteamWirelessDisconnect:
+        return WirelessEvent::Disconnect;
+    case kSteamWirelessConnect:
+        return WirelessEvent::Connect;
+    default:
+        return WirelessEvent::None;
+    }
+}
+
 // False leaves `out` untouched: the family is None, or the report was too short
 // or carried the wrong id.
 inline bool decodeReport(HidParser parser, const std::uint8_t* buf, std::size_t len,
@@ -437,10 +680,40 @@ inline bool decodeReport(HidParser parser, const std::uint8_t* buf, std::size_t 
         return decodeSwitchProUsb(buf, len, out, sticks);
     case HidParser::GenericHid:
         return decodeGenericHid(buf, len, out, sticks);
+    case HidParser::SteamController:
+        return decodeSteamController(buf, len, out, sticks);
     case HidParser::None:
         return false;
     }
     return false;
+}
+
+// Models the vendor heuristic below cannot place, imported from dish-android's
+// hardware-validated catalog. The PDP wired Switch pads declare their buttons
+// in the Switch usage order (0x0186 Afterglow Wireless is excluded on purpose:
+// its USB port is charge-only and it speaks the Switch Pro protocol, so the
+// wired Switch-order remap would be wrong for it). None of these rows is on the
+// verified fast lane, so nothing here auto-claims.
+inline constexpr KnownHidModel kKnownModels[] = {
+    {0x0E6F, 0x0180, "PDP Faceoff Wired Pro Controller (Switch)", HidParser::GenericHid,
+     ButtonOrder::Switch},
+    {0x0E6F, 0x0181, "PDP Faceoff Deluxe Wired Pro Controller (Switch)", HidParser::GenericHid,
+     ButtonOrder::Switch},
+    {0x0E6F, 0x0184, "PDP Faceoff Deluxe+ Audio Controller (Switch)", HidParser::GenericHid,
+     ButtonOrder::Switch},
+    {0x0E6F, 0x0185, "PDP Wired Fight Pad Pro (Switch)", HidParser::GenericHid,
+     ButtonOrder::Switch},
+    {0x0E6F, 0x0187, "PDP Rock Candy Wired Controller (Switch)", HidParser::GenericHid,
+     ButtonOrder::Switch},
+    {0x28DE, 0x1102, "Valve Steam Controller", HidParser::SteamController},
+    {0x28DE, 0x1142, "Valve Steam Controller (dongle)", HidParser::SteamController},
+};
+
+inline const KnownHidModel* lookupKnownModel(int vendorId, int productId) {
+    for (const auto& m : kKnownModels) {
+        if (m.vid == vendorId && m.pid == productId) { return &m; }
+    }
+    return nullptr;
 }
 
 // Every non-DualSense Sony pad is assumed to speak the DS4 layout.
@@ -449,6 +722,7 @@ inline HidParser parserForDevice(int vendorId, int productId) {
     constexpr int kVidNintendo = 0x057E;
     constexpr int kPidDualSense = 0x0CE6;
     constexpr int kPidDualSenseEdge = 0x0DF2;
+    if (const KnownHidModel* m = lookupKnownModel(vendorId, productId)) { return m->parser; }
     if (vendorId == kVidSony) {
         if (productId == kPidDualSense || productId == kPidDualSenseEdge) {
             return HidParser::DualSense;
@@ -459,13 +733,35 @@ inline HidParser parserForDevice(int vendorId, int productId) {
     return HidParser::GenericHid;
 }
 
+inline ButtonOrder buttonOrderForDevice(int vendorId, int productId) {
+    const KnownHidModel* m = lookupKnownModel(vendorId, productId);
+    return m != nullptr ? m->order : ButtonOrder::Western;
+}
+
+// Whether releasing this model back to Standard produces an SDL/XInput device.
+// False for the Steam Controller, whose stand-alone identity is a keyboard and
+// mouse: a release that waited for a framework gamepad would always time out
+// into a false "restore stuck".
+inline bool modelExpectsFrameworkGamepad(int vendorId, int productId) {
+    const KnownHidModel* m = lookupKnownModel(vendorId, productId);
+    return m == nullptr || m->parser != HidParser::SteamController;
+}
+
 inline bool parserHasImu(HidParser parser) {
     return parser == HidParser::DualShock4 || parser == HidParser::DualSense ||
-           parser == HidParser::SwitchProUsb;
+           parser == HidParser::SwitchProUsb || parser == HidParser::SteamController;
 }
 
 inline bool parserHasTouchpad(HidParser parser) {
     return parser == HidParser::DualShock4 || parser == HidParser::DualSense;
+}
+
+// Whether the pad itself carries rumble motors this path could ever drive. The
+// Steam Controller has no rumble motors, only trackpad voice coils driven by
+// pulse trains; its simple-rumble command is Steam Deck firmware only.
+inline bool parserHasRumble(HidParser parser) {
+    return parser == HidParser::DualShock4 || parser == HidParser::DualSense ||
+           parser == HidParser::SwitchProUsb;
 }
 
 } // namespace dish::input::usbparse

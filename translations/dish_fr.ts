@@ -166,14 +166,6 @@
         <translation>%1 n&apos;a pas de %2.</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation>Le Mode standard ne peut pas le transmettre — passez la connexion en Direct.</translation>
-    </message>
-    <message>
-        <source>Direct mode needs a USB connection; over Bluetooth this can’t be carried.</source>
-        <translation>Le Mode direct nécessite une connexion USB ; en Bluetooth, cela ne peut pas être transmis.</translation>
-    </message>
-    <message>
         <source>%1 doesn’t carry %2.</source>
         <translation>%1 ne transmet pas de %2.</translation>
     </message>
@@ -188,6 +180,10 @@
     <message>
         <source>%1 doesn’t advertise %2.</source>
         <translation>%1 ne déclare pas de %2.</translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
+        <translation>Le Mode direct ne peut pas le piloter — passez la connexion en Standard.</translation>
     </message>
 </context>
 <context>
@@ -586,10 +582,6 @@
         <translation>Non reconnue. Le Mode direct devine la disposition de cette manette, donc certaines entrées peuvent être mal lues. Vous pouvez revenir à tout moment.</translation>
     </message>
     <message>
-        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path — gyro, touchpad and lightbar can’t be carried.</source>
-        <translation>Le Mode direct nécessite une connexion USB. En Bluetooth, cette manette passe par la voie Standard — le gyro, le pavé tactile et la barre lumineuse ne peuvent pas être transmis.</translation>
-    </message>
-    <message>
         <source>Functions</source>
         <translation>Fonctions</translation>
     </message>
@@ -748,6 +740,14 @@
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windows peut mettre jusqu&apos;à 20 secondes pour céder le périphérique.</translation>
+    </message>
+    <message>
+        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.</source>
+        <translation>Le Mode direct nécessite une connexion USB. En Bluetooth, cette manette passe par la voie Standard.</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Sans vibration</translation>
     </message>
 </context>
 <context>
@@ -2123,10 +2123,6 @@
         <translation type="unfinished">Gyro</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation>Le Mode standard ne peut pas le transmettre — passez la connexion en Direct.</translation>
-    </message>
-    <message>
         <source>Rumble</source>
         <translation>Vibration</translation>
     </message>
@@ -2657,6 +2653,10 @@
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windows peut mettre jusqu&apos;à 20 secondes pour céder le périphérique.</translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
+        <translation>Le Mode direct ne peut pas le piloter — passez la connexion en Standard.</translation>
     </message>
 </context>
 <context>
@@ -4067,6 +4067,10 @@
     <message>
         <source>Nothing appearing? A pad Windows itself doesn’t list won’t reach Dish either — check Windows’ own Devices first.</source>
         <translation>Rien n&apos;apparaît ? Une manette que Windows lui-même ne liste pas n&apos;atteindra pas Dish non plus — vérifiez d&apos;abord les Appareils de Windows.</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Sans vibration</translation>
     </message>
 </context>
 <context>

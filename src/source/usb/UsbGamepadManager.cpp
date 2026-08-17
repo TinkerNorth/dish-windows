@@ -5,6 +5,7 @@
 
 #include "source/store/UsbPathPreferenceStore.h"
 
+#include "core/input/UsbReportParsers.h"
 #include "core/reducer/UsbPollRate.h"
 
 #include "Input/GamepadInputProcessor.h"
@@ -92,6 +93,8 @@ void UsbGamepadManager::ensureTracked(const UsbDeviceInfo& device) {
             // android's UsbManager grant), so a present pad is always claimable.
             c.hasPermission = true;
             c.desired = resolvePath(device.vendorId, device.productId);
+            c.frameworkExpected =
+                input::usbparse::modelExpectsFrameworkGamepad(device.vendorId, device.productId);
             controllers_.emplace(key, std::move(c));
             isNew = true;
         }
