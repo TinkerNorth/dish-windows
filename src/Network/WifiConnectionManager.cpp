@@ -20,6 +20,7 @@
 #include <QCoreApplication>
 #include <QHostInfo>
 #include <QSet>
+#include <QSignalBlocker>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
 #include <QtGlobal>
@@ -109,7 +110,27 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* pa
 }
 
 WifiConnectionManager::~WifiConnectionManager() {
-    for (auto* c : connections_) { c->markDisconnected(); }
+    // This loop exists to tear down live sessions, not to announce anything —
+    // and by the time it runs there is nobody left who can safely listen.
+    //
+    // The manager is a QObject CHILD of AppModel, so it is deleted from
+    // ~QObject's deleteChildren(), which is after every AppModel member has
+    // already been destroyed — ConnectionStore among them. markDisconnected()
+    // emits WifiConnection::changed, the manager relays it as poolChanged, and
+    // ConnectionHub::rebuild() then reads through the store's freed
+    // unique_ptr<RememberedSatelliteRepository>. That was an access violation on
+    // every single exit (0xC0000005, crash.dmp written by the handler, so it
+    // looked like a clean quit from outside).
+    //
+    // Blocking the source signal is the fix that does not depend on which
+    // collaborator happens to die first. ~WifiConnection blocks for itself too,
+    // which is what covers the connections this loop cannot see: forget() takes
+    // one out of the map and leaves it on deleteLater, still a child of this
+    // manager and still destroyed from the same deleteChildren() pass.
+    for (auto* c : connections_) {
+        const QSignalBlocker block(c);
+        c->markDisconnected();
+    }
 }
 
 void WifiConnectionManager::startDiscovery() {

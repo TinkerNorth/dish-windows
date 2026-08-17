@@ -182,3 +182,65 @@ TEST_CASE("empty carves change nothing (defaults are inert)", "[hittest][carve]"
     CHECK(hitTest(make(24, 20)) == HitRegion::Caption);
     CHECK(hitTest(make(570, 20)) == HitRegion::Caption);
 }
+
+// The update pill is the FIRST child of the caption-button row (left of
+// minimize) and it is a QML control: a click has to reach Qt, so its rect
+// resolves Client like the other carve-outs. It is published EMPTY whenever no
+// update exists, which is what makes a build that never sees one provably
+// identical to a build without the pill.
+
+namespace {
+HitTestInput makeWithPill(int x, int y, bool maximized = false) {
+    HitTestInput in = make(x, y, maximized);
+    in.leftClient = Rect{0, 0, 48, 40};    // hamburger cell
+    in.updatePill = Rect{520, 0, 554, 40}; // 0.75 * caption button width
+    in.minimizeButton = Rect{554, 0, 600, 40};
+    in.closeButton = Rect{646, 0, 692, 40};
+    return in;
+}
+} // namespace
+
+TEST_CASE("update pill resolves Client, not Caption", "[hittest][carve][update]") {
+    CHECK(hitTest(makeWithPill(537, 20)) == HitRegion::Client);
+}
+
+TEST_CASE("update pill carve is half-open like every other rect", "[hittest][carve][update]") {
+    CHECK(hitTest(makeWithPill(519, 20)) == HitRegion::Caption); // last caption px before it
+    CHECK(hitTest(makeWithPill(520, 20)) == HitRegion::Client);  // first pill px
+    CHECK(hitTest(makeWithPill(553, 20)) == HitRegion::Client);  // last pill px
+    CHECK(hitTest(makeWithPill(554, 20)) == HitRegion::Client);  // minimize starts here
+    CHECK(hitTest(makeWithPill(537, 39)) == HitRegion::Client);  // last pill row
+    CHECK(hitTest(makeWithPill(537, 40)) == HitRegion::Client);  // below the caption strip
+}
+
+TEST_CASE("an empty update-pill rect carves nothing", "[hittest][carve][update]") {
+    // The hidden state: the same coordinates drag the window again.
+    HitTestInput hidden = makeWithPill(537, 20);
+    hidden.updatePill = Rect{};
+    CHECK(hitTest(hidden) == HitRegion::Caption);
+}
+
+TEST_CASE("the strip on either side of the pill still drags", "[hittest][carve][update]") {
+    CHECK(hitTest(makeWithPill(300, 20)) == HitRegion::Caption); // wordmark area
+    CHECK(hitTest(makeWithPill(510, 20)) == HitRegion::Caption); // just left of the pill
+}
+
+TEST_CASE("the resize frame still beats the pill at the very top", "[hittest][carve][update]") {
+    // The 8px top band overlaps the pill's first rows, and the frame has to win
+    // so the window stays resizable from the top edge.
+    CHECK(hitTest(makeWithPill(537, 4)) == HitRegion::Top);
+}
+
+TEST_CASE("the pill keeps carving on a maximized window", "[hittest][carve][update]") {
+    // No resize frame when maximized, so the pill owns its rows outright.
+    CHECK(hitTest(makeWithPill(537, 4, /*maximized=*/true)) == HitRegion::Client);
+    CHECK(hitTest(makeWithPill(537, 20, true)) == HitRegion::Client);
+}
+
+TEST_CASE("maximize still wins if a pill rect ever overlapped it", "[hittest][carve][update]") {
+    // Defensive ordering pin: HTMAXBUTTON is the only way Win11 shows the Snap
+    // Layouts flyout, so it is checked before any client carve-out.
+    HitTestInput overlapping = makeWithPill(620, 20);
+    overlapping.updatePill = Rect{600, 0, 646, 40};
+    CHECK(hitTest(overlapping) == HitRegion::MaximizeButton);
+}

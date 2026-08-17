@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Copyright (C) 2026 Dish contributors.
+//
+// VERSIONINFO for uninstall-helper.exe, the tiny janitor that outlives
+// uninstall.exe to delete the working set and the ARP key. No icon: it never
+// shows a window, and an icon-bearing stray process in %TEMP% looks more like
+// something to worry about, not less. The version block is what makes it
+// identifiable in Task Manager and in an AV submission.
+//
+// configure_file'd from PROJECT_VERSION by installer/CMakeLists.txt.
+
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+    FILEVERSION    @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+    PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+    FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+    FILEFLAGS      0
+    FILEOS         VOS_NT_WINDOWS32
+    FILETYPE       VFT_APP
+    FILESUBTYPE    0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "TinkerNorth"
+            VALUE "FileDescription",  "Dish uninstall helper"
+            VALUE "FileVersion",      "@PROJECT_VERSION@"
+            VALUE "InternalName",     "uninstall-helper"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Dish contributors. LGPL-3.0-or-later."
+            VALUE "OriginalFilename", "uninstall-helper.exe"
+            VALUE "ProductName",      "Dish"
+            VALUE "ProductVersion",   "@PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END

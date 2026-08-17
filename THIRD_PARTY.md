@@ -2,8 +2,15 @@
 
 Dish for Windows is licensed [LGPL-3.0-or-later](LICENSE). This file lists every
 third-party component that is linked into `dish.exe`, shipped beside it in the
-release zip, embedded in it as a resource, or used only to build and test it. It
-also states what someone redistributing the binary has to do.
+release zip or inside `dish-setup.exe`, embedded in either as a resource, or
+used only to build and test it. It also states what someone redistributing the
+binaries has to do.
+
+Two artifacts ship: `dish-windows.zip`, the portable bundle, and
+`dish-setup.exe`, the installer. The installer carries everything the zip does
+plus the installer's own binaries, the Visual C++ runtime, and the licence
+texts. Where a component reaches a user through only one of the two, the table
+below says which.
 
 The app has an in-app version of this list at Settings, Licenses, rendered from
 [`assets/licenses/licenses.json`](assets/licenses/licenses.json). That manifest
@@ -18,11 +25,13 @@ today.
 | Component | Version | SPDX | How it reaches the user | Attribution obligation |
 |---|---|---|---|---|
 | [Qt 6](#2-qt-6) | 6.7.3 (CI and release); CMake requires >= 6.7 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
-| [SDL2](#sdl2) | 2.30.11 (vcpkg baseline `6f29f12e`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip. | Keep the notice, do not claim authorship |
-| [libsodium](#libsodium) | 1.0.20#3 (vcpkg baseline `6f29f12e`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip. | Keep the copyright and permission notice |
+| [SDL2](#sdl2) | 2.30.11 (vcpkg baseline `6f29f12e`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
+| [libsodium](#libsodium) | 1.0.20#3 (vcpkg baseline `6f29f12e`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
+| [miniz](#miniz) | 3.0.2 | `MIT` | Vendored source, statically linked into `dish-setup.exe`, `dish-payload-pack` and `DishTests`. Never linked into `dish.exe`. | Ship the copyright and permission notice. See section 3. |
 | [Inter](#4-inter) | 4.001 | `OFL-1.1` | Four `.ttf` faces embedded in `dish.exe` as Qt resources under `:/fonts/`. | Ship the license text with every copy. See section 4. |
 | [Catch2](#5-catch2) | 3.5.4 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
-| [Windows SDK shader binaries](#windows-sdk-shader-binaries) | `dxcompiler.dll` 1.6.2112.16, `dxil.dll` 101.6.2112.13 | Proprietary, Microsoft | Copied into the release zip by `windeployqt` from the installed Windows SDK. | Microsoft Windows SDK redistribution terms |
+| [Visual C++ runtime](#visual-c-runtime) | 14.4x (`Microsoft.VC143.CRT`) | Proprietary, Microsoft | Five DLLs staged app-local, in the installer payload and in the release zip alike. | Microsoft Visual Studio redistributable terms |
+| [Windows SDK shader binaries](#windows-sdk-shader-binaries) | `dxcompiler.dll` 1.6.2112.16, `dxil.dll` 101.6.2112.13 | Proprietary, Microsoft | Copied into the release zip and the installer payload by `windeployqt` from the installed Windows SDK. | Microsoft Windows SDK redistribution terms |
 | [Windows system libraries](#windows-system-libraries) | OS | Proprietary, Microsoft | Import libraries only. Nothing is redistributed. | None |
 
 Two further items are reuse of published facts rather than of code, and are
@@ -126,12 +135,14 @@ obligations on redistribution.
 
 ---
 
-## 3. Runtime libraries from vcpkg
+## 3. Bundled runtime libraries
 
-Both are declared in [`vcpkg.json`](vcpkg.json) and resolved against the pinned
-`builtin-baseline` `6f29f12e82a8293156836ad81cc9bf5af41fe836` (vcpkg 2025.01.13),
-which is the same commit the CI workflow pins. Both are built as DLLs on the
-`x64-windows` triplet and both are dynamically linked.
+SDL2 and libsodium are declared in [`vcpkg.json`](vcpkg.json) and resolved
+against the pinned `builtin-baseline`
+`6f29f12e82a8293156836ad81cc9bf5af41fe836` (vcpkg 2025.01.13), which is the same
+commit the CI workflow pins. Both are built as DLLs on the `x64-windows` triplet
+and both are dynamically linked. miniz is not a vcpkg dependency; it is
+vendored, and it belongs to the installer rather than to the app.
 
 ### SDL2
 
@@ -188,6 +199,65 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
+
+### miniz
+
+miniz 3.0.2. SPDX `MIT`. Upstream:
+<https://github.com/richgel999/miniz>.
+
+**Vendored, not resolved by vcpkg.** The two amalgamation files sit verbatim in
+[`third_party/miniz/`](third_party/miniz) with their upstream `LICENSE` and a
+[`README.dish.md`](third_party/miniz/README.dish.md) recording the release URL,
+the SHA-256 of every vendored file, the exact API surface the installer depends
+on, and the update procedure. The reason it is vendored rather than a manifest
+dependency is the SFX stub: the stub is a static-CRT (`/MT`) binary so it runs
+on a machine with no Visual C++ runtime installed, the project's `x64-windows`
+triplet is `/MD`, and vcpkg manifest mode cannot mix triplets per dependency.
+
+It provides ZIP reading, ZIP writing and CRC-32. `dish-payload-pack` uses it to
+write `payload.zip` at DEFLATE level 9; the stub inside `dish-setup.exe` uses it
+to extract that zip, which is also where the per-entry CRC-32 verification comes
+from. It is compiled per consuming target, so the `/MT` copy in the stub and the
+`/MD` copy in the pack tool and the test binary never meet. **It is not linked
+into `dish.exe`**, and it is therefore absent from the portable zip.
+
+The files are never patched. Compile-flag relaxations live in the consuming
+CMake targets, and `third_party/` sits outside the `src/` globs, so
+clang-format, clang-tidy and the repository lint gates leave it alone by design.
+osv-scanner cannot see vendored source; that is an accepted and documented risk,
+narrowed by the fact that miniz only ever parses an archive this project's own
+build produced, only after the stub's whole-payload CRC-32 gate has passed, and
+with every entry name re-validated before extraction.
+
+```
+Copyright 2013-2014 RAD Game Tools and Valve Software
+Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
+
+All Rights Reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+Because miniz is statically linked into `dish-setup.exe`, the MIT notice has to
+travel with the installer. It does: `THIRD_PARTY.md` is one of the four licence
+texts staged into `licenses/` inside the payload and installed next to
+`dish.exe`.
 
 ---
 
@@ -256,13 +326,45 @@ Windows SDK license terms, and `dxil.dll` is proprietary. Redistribution is
 permitted by the Windows SDK's redistributable list, and it is governed by
 Microsoft's terms, not by any license in this file.
 
-### MSVC runtime
+### Visual C++ runtime
 
 `dish.exe` is built with MSVC and links the Visual C++ runtime dynamically. The
-runtime is not vendored in this repository. The dev build passes
+runtime is not vendored in this repository, and the dev build passes
 `--no-compiler-runtime` to `windeployqt`, so a locally built tree does not stage
-it. Redistributing the Visual C++ runtime is governed by Microsoft's
-redistributable terms.
+it.
+
+**Both shipped artifacts stage it app-local.** "Runs on a machine where nothing
+is installed" is a hard requirement for `dish-setup.exe`, and it is the whole
+claim the portable zip makes. `windeployqt --compiler-runtime` answers neither:
+it copies `vc_redist.exe` for the user to find and run, which is not the same
+thing as a runtime, and a zip that needs an installer run first is not portable.
+`cmake/DishSetupImage.cmake` for the install image, and the bundling steps in
+`.github/workflows/release.yml` and `.github/workflows/windows-ci.yml` for the
+zip, therefore copy the same five DLLs out of
+`$env:VCToolsRedistDir/x64/Microsoft.VC143.CRT` next to `dish.exe`:
+
+```
+msvcp140.dll  msvcp140_1.dll  msvcp140_2.dll  vcruntime140.dll  vcruntime140_1.dll
+```
+
+App-local deployment of these files is explicitly permitted by the Visual Studio
+redistributable terms, and it is what keeps the install to one directory with no
+machine-wide side effects. The version is whatever the build machine's toolset
+ships; the staging script and both workflow steps hard-error when
+`VCToolsRedistDir` is unset rather than producing an artifact that cannot start.
+
+The two vcpkg runtimes travel in the same directory for the same reason:
+`libsodium.dll` and `SDL2.dll` are staged beside the CRT DLLs, before
+`windeployqt` runs, because `windeployqt` only knows about Qt's own
+dependencies.
+
+The SFX stub itself is the exception that makes all of this work: it is built
+`/MT`, with the CRT linked statically, precisely so the one binary that must run
+before anything is installed depends on nothing but `kernel32`, `user32`,
+`shell32`, `comctl32` and `advapi32`.
+
+Redistributing the Visual C++ runtime, in any form, is governed by Microsoft's
+redistributable terms, not by any license in this file.
 
 ### Windows system libraries
 
@@ -317,9 +419,13 @@ license and carry no third-party attribution.
 
 [`assets/licenses/licenses.json`](assets/licenses/licenses.json) is the manifest
 the in-app Licenses screen renders, parsed by `src/UI/licenses/LicenseManifest.*`.
-It is hand-authored, not generated, so it can drift. It currently lists Qt 6,
-SDL2, libsodium, Catch2 and Inter, which is the same component set as this file,
-with the same licenses. Three differences are worth knowing about:
+The installer's Third-party licence tab renders the same file, so an entry
+missing there is missing in two places. It is hand-authored, not generated, so
+it can drift. It currently lists Qt 6, SDL2, libsodium, miniz, Catch2 and Inter,
+which is the same set of open-source components as this file, with the same
+licenses. The Microsoft components in section 6 are deliberately absent from the
+manifest: their terms are Microsoft's and there is no license text to render.
+Three further differences are worth knowing about:
 
 - The manifest gives SDL2 as `2.30`, where the pinned vcpkg baseline resolves to
   `2.30.11`.
@@ -329,7 +435,8 @@ with the same licenses. Three differences are worth knowing about:
   Showing it to a user is harmless but inaccurate.
 
 When a dependency is added, changed or dropped, update
-[`vcpkg.json`](vcpkg.json), the manifest, and this file together.
+[`vcpkg.json`](vcpkg.json) (or `third_party/<name>/README.dish.md` for a
+vendored one), the manifest, and this file together.
 
 ---
 

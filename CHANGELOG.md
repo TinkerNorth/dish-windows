@@ -15,7 +15,8 @@ The binary currently declares version `0.1.0`. That number has one source,
 becomes the `DISH_VERSION` compile definition the in-app About surface reads. It
 is mirrored by hand in `packaging/dish.rc` (the Windows version-info resource
 Explorer and Task Manager show) and in [`vcpkg.json`](vcpkg.json). Keep all three
-in step when it changes.
+in step when it changes; `release.yml` now enforces it, failing the tag build
+when the tag, the CMake version and `dish.exe`'s own `ProductVersion` disagree.
 
 Cross-repo coordination: changes to the wire protocol or the pairing flow that
 need matching updates in `satellite`, `dish-android`, `dish-linux` or `dish-mac`
@@ -70,9 +71,34 @@ release.
   idle.
 - **Frameless Win32 window chrome** with Mica, snap hit-testing, and light, dark
   and system themes.
+- **`dish-setup.exe`, a single-file installer.** A static-CRT Win32 stub with
+  the whole install image appended as a standard ZIP and a 32-byte trailer at
+  EOF, so `7z x dish-setup.exe` recovers everything without Dish tooling. The
+  wizard is the app's own Qt Quick design system, running from `%TEMP%` against
+  the runtime it is about to install. Per-user by default with no administrator
+  prompt, all-users on request, both scopes recorded in a manifest that travels
+  with the install. Upgrades stage and commit so the previous version stays
+  launchable until the last moment, every mutation is journaled and reversed on
+  failure, and the uninstaller hands its own removal to a small helper so the
+  Add/Remove Programs entry outlives a cleanup that antivirus blocks. The full
+  silent command line, the exit-code table and the payload format are in
+  [`docs/INSTALLER.md`](docs/INSTALLER.md); a CI round trip installs, repairs,
+  upgrades, applies an update and uninstalls on every pull request.
+- **Auto-update.** An installed copy asks GitHub for `latest.json` 15 seconds
+  after launch and every four hours, downloads the next `dish-setup.exe` in the
+  background, verifies it against the manifest's SHA-256 three times (streaming,
+  off disk after the download, and again at the next boot), and applies it at
+  the next start or immediately from a Restart to update button. Downgrades are
+  refused at both ends, a withdrawn release un-stages itself on the next check,
+  a failing update is abandoned after two attempts, and the old version is
+  relaunched if an apply fails, so the user is never left with no app. No
+  service, no scheduled task, and nothing runs while Dish is closed. Two
+  switches in Settings, Updates control it; the portable zip detects itself and
+  only notifies. See [`SECURITY.md`](SECURITY.md) for the trust model.
 - **Six UI languages**: English, Bosnian, German, Spanish, French and Brazilian
-  Portuguese. English is a real catalogue rather than the untranslated fallback,
-  so `%n` plural forms are correct in every language including Bosnian's three.
+  Portuguese, covering the installer wizard as well as the app. English is a
+  real catalogue rather than the untranslated fallback, so `%n` plural forms are
+  correct in every language including Bosnian's three.
 - **Crash diagnostics written locally.** A Win32 unhandled-exception filter
   writes `crash.dmp` and a symbolized `crash.log` to `%LOCALAPPDATA%\Dish\`.
   Nothing is uploaded. See [`PRIVACY.md`](PRIVACY.md) section 3.
@@ -84,13 +110,21 @@ release.
 - **CI gates** on every pull request: `clang-format` pinned to 22.1.4, a Debug
   build, the full `ctest` suite, `qmllint`, a QML design-token literal scanner, a
   translation-catalogue freshness check, `clang-tidy`, and a Release build whose
-  artifact is staged with `windeployqt`.
+  artifact is staged with `windeployqt` and whose installer is exercised by the
+  silent install, upgrade, update-apply and uninstall round trip.
 - [`PRIVACY.md`](PRIVACY.md), [`SECURITY.md`](SECURITY.md),
   [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) and
   [`CONTRIBUTING.md`](CONTRIBUTING.md) for the public release.
 
 ### Notes
 
+- **Privacy policy change.** The update check is the first thing this client
+  sends off your own network, so [`PRIVACY.md`](PRIVACY.md) gained a section 2.4
+  describing exactly what the request carries (your IP as GitHub sees it and a
+  `Dish/<version> (Windows; x64)` user agent, and nothing else), when it fires,
+  and how to turn it off. Section 2.1 gained the seven registry values behind
+  the two switches, the `%LOCALAPPDATA%\Dish\updates\` cache, and the
+  installer's own footprint. The effective date moved to 2026-08-04.
 - The *Share crash reports* setting exists and persists, but it is wired to a
   no-op backend. No crash report is transmitted anywhere. This is stated in full
   in [`PRIVACY.md`](PRIVACY.md) section 3, and it will be called out here before
@@ -102,6 +136,9 @@ release.
   Those paths are verified by hand. `docs/ARCHITECTURE.md` section 11 tracks what
   is landed against what is specified and tested but not yet wired.
 - Release artifacts are not signed and carry no build provenance. The gaps are
-  listed in [`SECURITY.md`](SECURITY.md).
+  listed in [`SECURITY.md`](SECURITY.md). In practice this means SmartScreen
+  warns the first time a freshly downloaded `dish-setup.exe` is run, and the
+  SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
+  path has.
 
 [Unreleased]: https://github.com/TinkerNorth/dish-windows/commits/main

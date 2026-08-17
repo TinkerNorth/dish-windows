@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 project(Dish
     VERSION 0.1.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
-    LANGUAGES CXX)
+    # C is for the vendored miniz amalgamation (third_party/miniz/miniz.c),
+    # compiled per-target into the installer stub, the pack tool and DishTests.
+    LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +28,14 @@ option(DISH_ENABLE_LTO      "Enable LTO/IPO for Release builds"  ON)
 # is not acceptable.
 option(DISH_REQUIRE_TRANSLATIONS
        "Fail configuration if the Qt Linguist tools are missing"  OFF)
+
+# The installer stub and the uninstall helper must run on a machine with
+# nothing installed, so they link the static CRT while everything else keeps
+# the DLL one. That is a per-target choice, which only exists under CMP0091
+# NEW. cmake_minimum_required(3.21) already implies NEW; stated explicitly
+# because a future policy-version bump elsewhere must not silently move the
+# runtime library selection back into CMAKE_CXX_FLAGS.
+cmake_policy(SET CMP0091 NEW)
 
 if(DISH_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
     include(CheckIPOSupported)
@@ -102,6 +112,12 @@ set(DISH_CORE_SOURCES
     src/core/net/Tofu.cpp
     src/core/net/IpLiterals.h
     src/core/net/IpLiterals.cpp
+    # Auto-update: the release manifest grammar and the one version comparison
+    # the updater is allowed to use.
+    src/core/update/UpdateVersion.h
+    src/core/update/UpdateVersion.cpp
+    src/core/update/UpdateManifest.h
+    src/core/update/UpdateManifest.cpp
     src/core/reducer/RestOutcome.h
     src/core/reducer/Backoff.h
     src/core/reducer/Reconcile.h
@@ -128,6 +144,8 @@ set(DISH_CORE_SOURCES
     src/core/reducer/CapabilitySolver.h
     src/core/reducer/CapabilitySolver.cpp
     src/core/reducer/ApplyBindingMachine.h
+    src/core/reducer/UpdateMachine.h
+    src/core/reducer/UpdateMachine.cpp
     src/core/input/GamepadButtonLayouts.h
     src/core/input/Deadzones.h
     src/core/input/PhysicalMotionSource.h
@@ -194,6 +212,9 @@ set(DISH_CORE_SOURCES
     src/source/store/ThemePreferenceStore.cpp
     src/source/store/CrashReportingStore.h
     src/source/store/CrashReportingStore.cpp
+    # Windows-shell-only prefs, so the default QSettings() hive
+    # (HKCU\Software\TinkerNorth\Dish) rather than the cross-client one.
+    src/source/store/UpdatePreferenceStore.h
     # XInput hides Xbox pads from raw HID, so this path serves DualSense/DS4/
     # 8BitDo and Xbox pads fall back to SDL/XInput.
     src/source/usb/UsbDeviceGateway.h
@@ -211,6 +232,18 @@ set(DISH_CORE_SOURCES
     # "no adapter" copy rather than claiming Bluetooth is off.
     src/source/system/BluetoothRadioProbe.h
     src/source/system/BluetoothRadioProbe.cpp
+    # Auto-update runtime: gateways, staging store, coordinator and the boot
+    # handoff. In dish_core (not the exe) because main.cpp's boot gate runs
+    # before the composition root and the tests link this library, not the exe.
+    src/update/UpdatePorts.h
+    src/update/HttpGateways.h
+    src/update/HttpGateways.cpp
+    src/update/FileStagingStore.h
+    src/update/FileStagingStore.cpp
+    src/update/UpdateCoordinator.h
+    src/update/UpdateCoordinator.cpp
+    src/update/UpdateHandoff.h
+    src/update/UpdateHandoff.cpp
     src/repository/SettingsKeys.h
     src/repository/RememberedWifiEq.h
     src/repository/SatellitePinRepository.h
@@ -339,6 +372,11 @@ target_sources(Dish PRIVATE
     src/qml/chrome/TokensBridge.h
     src/qml/chrome/TokensBridge.cpp)
 
+# DISH_KIT_QML_FILES / DISH_KIT_QML_FILES_SHARED. The installer's second copy
+# of the kit (installer/CMakeLists.txt, dish_setup_kit) reads the same lists,
+# so a component added in one module cannot go missing from the other.
+include(src/qml/kit/KitFiles.cmake)
+
 qt_add_qml_module(Dish
     URI Dish.Chrome
     VERSION 1.0
@@ -349,51 +387,9 @@ qt_add_qml_module(Dish
         src/qml/Main.qml
         src/qml/WindowTitleBar.qml
         src/qml/AppShell.qml
-        src/qml/kit/SectionHeader.qml
-        src/qml/kit/KitButton.qml
-        src/qml/kit/OutlineButton.qml
-        src/qml/kit/Card.qml
-        src/qml/kit/StatusDot.qml
-        src/qml/kit/BrandGlyph.qml
-        src/qml/kit/LabeledSwitch.qml
-        src/qml/kit/KitTextField.qml
-        src/qml/kit/Page.qml
-        src/qml/kit/ContentDialog.qml
-        src/qml/kit/Eyebrow.qml
-        src/qml/kit/SegmentedControl.qml
-        src/qml/kit/ComboButton.qml
-        src/qml/kit/SliderRow.qml
-        src/qml/kit/RadioMark.qml
-        src/qml/kit/RowButton.qml
-        src/qml/kit/CapabilityChip.qml
-        src/qml/kit/LiveStat.qml
-        src/qml/kit/DishProgressBar.qml
-        # The one button type; KitButton/OutlineButton are aliases over it.
-        src/qml/kit/DishButton.qml
-        # The one themed tooltip. A bare ToolTip resolves Basic's system-palette
-        # delegate, which reads as an unthemed white slab in both appearances.
-        src/qml/kit/DishToolTip.qml
-        src/qml/kit/Callout.qml
-        src/qml/kit/SelectRow.qml
-        src/qml/kit/OptionCard.qml
-        src/qml/kit/ActionCard.qml
-        # The shared loading/error/empty states every page binds. See
-        # ARCHITECTURE.md §7 "bind all the states".
-        src/qml/kit/LoadingSpinner.qml
-        src/qml/kit/ErrorBanner.qml
-        src/qml/kit/EmptyState.qml
-        src/qml/kit/NotificationToastHost.qml
-        src/qml/kit/WireLine.qml
-        src/qml/kit/StepList.qml
-        src/qml/kit/BindingStrip.qml
-        src/qml/kit/CapabilityTable.qml
-        src/qml/kit/WizardBanner.qml
-        src/qml/kit/ConfirmDialog.qml
-        src/qml/kit/ApplyOverlay.qml
-        src/qml/kit/BlockerDialog.qml
-        # The visual-regression gallery. Deliberately has no runtime entry
-        # point: it is reached only by editing Main.qml.
-        src/qml/kit/KitGallery.qml
+        src/qml/UpdatePill.qml
+        src/qml/UpdatePopover.qml
+        ${DISH_KIT_QML_FILES}
         src/qml/shared/BindingDraft.qml
         src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml
@@ -432,14 +428,67 @@ target_link_libraries(Dish PRIVATE
     # Mica/dark mode + the shadow and resize frame.
     dwmapi)
 
+# --- Installer: dish-setup.exe and everything it is made of ---
+# UNCONDITIONAL, with no DISH_BUILD_INSTALLER option (spec D2). Defining the
+# targets in every configure is what makes `update_translations` (a target
+# scan) and scripts/check-translations.ps1 (a src/ directory scan) extract the
+# same string set for every contributor; behind an option they diverge and the
+# catalogues ping-pong. Only the heavy packaging steps (image staging, packing)
+# are custom targets outside ALL.
+#
+# include(), NOT add_subdirectory(), and the reason is Qt's QML tooling rather
+# than taste. The installer's two QML modules are built from files under
+# src/qml/, and qmlcachegen names every generated .cpp after the QML file's
+# path RELATIVE TO THE DECLARING DIRECTORY. From an installer/ scope each one
+# would be "../src/qml/...", which asks Windows for a directory called
+# "dish_setup_kit_.." — a name ending in a dot, which no Windows filesystem
+# will create. Declaring the modules from a directory that is an ANCESTOR of
+# src/qml is the fix, and moving only the two qt_add_qml_module calls up here
+# does not work either: qt6_extract_metatypes emits add_custom_command(OUTPUT)
+# rules that CMake only materialises for consumers in the same directory, so
+# the split silently drops the metatypes step and qmltyperegistrar fails on an
+# empty input. Including the file keeps every installer target in the one
+# file that owns them, evaluated in the scope where the paths work.
+#
+# The ONE exception is dish_setup_kit, added below as a real subdirectory. Its
+# qt_add_qml_module declares the SAME URI as the app's module above, and Qt
+# derives the generated qmldir resource's name from the URI alone while writing
+# it to ${CMAKE_CURRENT_BINARY_DIR}/.qt/rcc/. Two such modules in ONE scope
+# therefore share one .qrc and one qrc_*.cpp: the second call wins the file and
+# the object is linked into both binaries, so dish.exe shipped with the setup
+# kit's qmldir and no Main. src/qml/kit/CMakeLists.txt has the full account.
+# That directory works where installer/ does not, because it is the directory
+# the kit's QML files live in — the relative-path constraint above is satisfied
+# by any ancestor, and the target has to move with its module for the metatypes
+# reason above.
+add_subdirectory(src/qml/kit)
+include(installer/CMakeLists.txt)
+
 # --- i18n: .ts -> .qm at build time, embedded at :/i18n/ ---
 # English is a catalogue like any other, not the untranslated fallback: a %n
 # message has one source string but needs one form per plural category, so
 # without dish_en.qm "1 slots free" ships. Non-plural English messages are left
 # untranslated on purpose and lrelease drops them, so dish_en.qm ends up holding
 # only the forms the source string cannot express.
+#
+# Multi-target form: the wizard and the kit it borrows carry user-facing
+# strings too, and they must land in the SAME six catalogues (spec section 8) —
+# separate .ts files would duplicate every shared word. TARGETS names the two
+# binaries that embed the compiled .qm; SOURCE_TARGETS names everything lupdate
+# scans. Passing SOURCE_TARGETS makes qt_add_translations run IMMEDIATELY
+# instead of deferring to the end of this scope, which is why this call has to
+# stay below add_subdirectory(installer) — the targets must already exist.
+#
+# dish_core is in SOURCE_TARGETS even though it embeds no catalogue of its own:
+# five of its translation units call tr() (AppModel, FeatureSettings,
+# WifiConnectionManager, AppViewModel, ThemePreferenceStore). Omitting it makes
+# this target scan disagree with the DIRECTORY scan in
+# scripts/check-translations.ps1 by 26 strings, so `update_translations` would
+# delete exactly what the CI gate then demands back.
 if(Qt6LinguistTools_FOUND)
-    qt_add_translations(Dish
+    qt_add_translations(
+        TARGETS Dish DishSetupUi
+        SOURCE_TARGETS Dish dish_core DishSetupUi dish_setup_kit
         TS_FILES
             translations/dish_en.ts
             translations/dish_bs.ts

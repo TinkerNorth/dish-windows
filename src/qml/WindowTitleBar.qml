@@ -36,6 +36,15 @@ Item {
         ChromeBridge.setCloseButtonRect(Qt.rect(c.x, c.y, closeButton.width, closeButton.height));
         var g = hamburger.mapToItem(null, 0, 0);
         ChromeBridge.setLeftClientRect(Qt.rect(g.x, g.y, hamburger.width, hamburger.height));
+        // An EMPTY rect while the pill is hidden, which is most of the app's
+        // life: no update means no carve-out at all.
+        if (updatePill.visible) {
+            var u = updatePill.mapToItem(null, 0, 0);
+            ChromeBridge.setUpdatePillRect(
+                Qt.rect(u.x, u.y, updatePill.width, updatePill.height));
+        } else {
+            ChromeBridge.setUpdatePillRect(Qt.rect(0, 0, 0, 0));
+        }
     }
 
     onWidthChanged: publishRects()
@@ -153,6 +162,20 @@ Item {
             background: Rectangle {
                 color: (cb.hovered || cb.nativeHovered) ? cb.hoverColor : "transparent"
             }
+        }
+
+        // FIRST in the row, left of minimize: the pill is app state, not a
+        // window command, so it must not sit inside the min/max/close cluster.
+        // It collapses to zero width whenever there is no update, and every
+        // geometry move re-publishes the carve-out (the Row shifts the caption
+        // buttons along with it).
+        UpdatePill {
+            id: updatePill
+            width: Tokens.captionButtonWidth * 0.75
+            height: bar.height
+            onVisibleChanged: bar.publishRects()
+            onXChanged: bar.publishRects()
+            onWidthChanged: bar.publishRects()
         }
 
         CaptionButton {

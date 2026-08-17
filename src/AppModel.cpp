@@ -54,11 +54,11 @@ AppModel::AppModel(std::unique_ptr<util::DisplaySleepInhibitor> inhibitor, QObje
       inhibitor_(std::move(inhibitor)), wakeComposer_(streamingSlotCount_, shouldKeepScreenOn_),
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
       themeController_(themeStore_.state()), crashController_(crashStore_.state(), &crashBackend_),
-      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
-      motionEnabledStore_(&motionPrefRepo_), joystickRemapStore_(&joystickRemapRepo_),
-      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
-      usbPathStore_(&usbPathRepo_), usbObserver_(this), usbScanTimer_(new QTimer(this)),
-      inputRateTimer_(new QTimer(this)) {
+      updateCoordinator_(&updatePrefs_, this), catalogHttp_(new net::HTTPClient(this)),
+      catalogRepo_(catalogHttp_), motionEnabledStore_(&motionPrefRepo_),
+      joystickRemapStore_(&joystickRemapRepo_), catalogSnapshot_(composer::CatalogSnapshot{}),
+      catalogComposer_(catalogSnapshot_), usbPathStore_(&usbPathRepo_), usbObserver_(this),
+      usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -335,6 +335,9 @@ void AppModel::start() {
     // The first tick only baselines each tracker, so numbers appear from the
     // second tick on.
     inputRateTimer_->start();
+    // Last: the janitor pass and the staged-update scan are disk IO, and the
+    // first check is 15 s out, so nothing here delays the first frame.
+    updateCoordinator_.start();
 }
 
 void AppModel::clearPairingTarget() {

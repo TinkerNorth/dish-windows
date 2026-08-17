@@ -12,13 +12,16 @@
 #include "architecture/Observable.h"
 #include "composer/WakeStateComposer.h"
 #include "core/reducer/ApplyBindingMachine.h"
+#include "core/reducer/UpdateMachine.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
 #include "source/store/UiPreferenceStore.h"
+#include "source/store/UpdatePreferenceStore.h"
 
+#include <QDateTime>
 #include <QObject>
 #include <QSet>
 #include <QString>
@@ -134,6 +137,37 @@ class AppViewModel : public QObject {
     // Only while the Connection step is active: aborting a claim falls back to
     // Standard, but the REST round-trip cannot be cancelled at all.
     Q_PROPERTY(bool applyCancellable READ applyCancellable NOTIFY applyChanged)
+
+    // ── Auto-updater ─────────────────────────────────────────────────────────
+    // Tokens only, never sentences: every word the user reads is composed in
+    // QML so it stays in the qsTr catalogues.
+    // "disabled"|"idle"|"checking"|"upToDate"|"available"|"downloading"|
+    // "verifying"|"ready"|"failed".
+    Q_PROPERTY(QString updatePhase READ updatePhase NOTIFY updateChanged)
+    // The target version, "" when there is nothing to offer.
+    Q_PROPERTY(QString updateVersion READ updateVersion NOTIFY updateChanged)
+    // 0..1, or -1 for indeterminate (verifying, or a length-less download).
+    Q_PROPERTY(double updateProgress READ updateProgress NOTIFY updateChanged)
+    Q_PROPERTY(QString updateReceivedText READ updateReceivedText NOTIFY updateChanged)
+    Q_PROPERTY(QString updateTotalText READ updateTotalText NOTIFY updateChanged)
+    // ""|"offline"|"http"|"manifestInvalid"|"corrupt"|"diskFull"|"io"|
+    // "stalled"|"applyFailed". Empty in every phase but failed.
+    Q_PROPERTY(QString updateErrorToken READ updateErrorToken NOTIFY updateChanged)
+    Q_PROPERTY(QString updateNotesUrl READ updateNotesUrl NOTIFY updateChanged)
+    // The running build is below the manifest's minimumSupportedVersion.
+    Q_PROPERTY(bool updateRequired READ updateRequired NOTIFY updateChanged)
+    // No uninstall.exe sibling: check and notify only, never download or apply.
+    Q_PROPERTY(bool updatePortable READ updatePortable NOTIFY updateChanged)
+    Q_PROPERTY(bool updateMeteredDeferred READ updateMeteredDeferred NOTIFY updateChanged)
+    // Invalid means never checked.
+    Q_PROPERTY(QDateTime updateLastCheck READ updateLastCheck NOTIFY updateChanged)
+    // The one-shot "updated to" moment: the version this run upgraded FROM,
+    // "" once acknowledged.
+    Q_PROPERTY(QString updatedFromVersion READ updatedFromVersion NOTIFY updateChanged)
+    Q_PROPERTY(bool updateChecksEnabled READ updateChecksEnabled WRITE setUpdateChecksEnabled NOTIFY
+                   updatePrefsChanged)
+    Q_PROPERTY(bool updateAutoDownload READ updateAutoDownload WRITE setUpdateAutoDownload NOTIFY
+                   updatePrefsChanged)
 
   public:
     explicit AppViewModel(dish::AppModel* model, QObject* parent = nullptr);
@@ -355,6 +389,36 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void markOnboardingComplete();
     Q_INVOKABLE void openExternalUrl(const QString& url);
 
+    // ── Auto-updater ─────────────────────────────────────────────────────────
+    QString updatePhase() const;
+    QString updateVersion() const;
+    double updateProgress() const;
+    QString updateReceivedText() const;
+    QString updateTotalText() const;
+    QString updateErrorToken() const;
+    QString updateNotesUrl() const;
+    bool updateRequired() const { return update_.required; }
+    bool updatePortable() const { return update_.portable; }
+    bool updateMeteredDeferred() const { return update_.meteredDeferred; }
+    QDateTime updateLastCheck() const;
+    QString updatedFromVersion() const;
+    bool updateChecksEnabled() const { return update_.checksEnabled; }
+    Q_INVOKABLE void setUpdateChecksEnabled(bool enabled);
+    bool updateAutoDownload() const { return update_.autoDownload; }
+    Q_INVOKABLE void setUpdateAutoDownload(bool enabled);
+
+    Q_INVOKABLE void checkForUpdatesNow();
+    Q_INVOKABLE void downloadUpdateNow();
+    // Arms the restart and asks the window to close NORMALLY, so every existing
+    // close guard runs first; the staged installer is spawned from the
+    // aboutToQuit hook, never here.
+    Q_INVOKABLE void restartToApplyUpdate();
+    Q_INVOKABLE void skipUpdate();
+    // Falls back to the releases page when the manifest carried no notes URL,
+    // which is also the portable copy's "Open download page".
+    Q_INVOKABLE void openReleaseNotes();
+    Q_INVOKABLE void acknowledgeUpdated();
+
   signals:
     // Folds AppModel's stateChanged and the coordinator's connectionsChanged.
     void stateChanged();
@@ -401,6 +465,14 @@ class AppViewModel : public QObject {
     // is "wrongPin" | "versionMismatch" | "unreachable" | "pending". The toast
     // fires as well, and that duplication is intended.
     void pairingFailed(const QString& serverId, const QString& reasonToken);
+
+    void updateChanged();
+    void updatePrefsChanged();
+
+    // token is "ready" | "available" | "unsupported" | "updated"; edge-detected
+    // in the coordinator, so it fires once per version per session. Periodic
+    // check FAILURES never reach here: they live in Settings.
+    void updateNotice(const QString& token, const QString& version);
 
   private:
     void onStateChanged();
@@ -484,6 +556,13 @@ class AppViewModel : public QObject {
     arch::Observable<bool>::Subscription crashSub_;
     arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
     arch::Observable<composer::WakeState>::Subscription keepAwakeSub_;
+
+    // The updater's whole surface is this one cached slice, republished by the
+    // coordinator; the prefs subscription only exists so an external write
+    // (the boot gate's quarantine mute) still reaches the toggles.
+    reducer::UpdateStatus update_;
+    arch::Observable<reducer::UpdateStatus>::Subscription updateSub_;
+    arch::Observable<source::UpdatePreferences>::Subscription updatePrefsSub_;
 
     // Shell-only state, so the store lives here rather than on AppModel.
     source::UiPreferenceStore uiPrefs_;

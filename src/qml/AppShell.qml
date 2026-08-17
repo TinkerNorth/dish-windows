@@ -98,6 +98,12 @@ Item {
     readonly property bool backVisible: contentStack.depth > 1
                                         && !(_cur && _cur.suppressBack === true)
 
+    // The Settings rail item carries a dot while an update waits, so a user who
+    // dismissed the popover can still find their way back to it. Only these two
+    // phases: checking is silent and a failure is not a call to action.
+    readonly property bool updateBadgeVisible: App.updatePhase === "available"
+                                               || App.updatePhase === "ready"
+
     // Which half of the shell holds the keyboard, for the F6 pane hop.
     readonly property bool railFocused: railHome.activeFocus || railControllers.activeFocus
                                         || railConnections.activeFocus || railAdd.activeFocus
@@ -245,6 +251,20 @@ Item {
                         Behavior on opacity {
                             NumberAnimation { duration: Tokens.reducedMotion ? 0 : Tokens.durFast }
                         }
+                    }
+                    // Pinned to the glyph cell's top-right corner, so it rides
+                    // both rail widths without a second layout.
+                    Rectangle {
+                        visible: railItem.destIndex === 4 && shell.updateBadgeVisible
+                        width: Tokens.s3
+                        height: Tokens.s3
+                        radius: width / 2
+                        color: App.updateRequired ? Theme.warning : Theme.primary
+                        // The Settings label already names the destination; a
+                        // dot with no word of its own would only add noise.
+                        Accessible.ignored: true
+                        x: (Tokens.railCompact - Tokens.s4) / 2 + Tokens.glyphSm / 2 - width / 2
+                        y: (parent.height - Tokens.glyphSm) / 2 - height / 2
                     }
                 }
             }
@@ -510,5 +530,28 @@ Item {
     Connections {
         target: App
         function onErrorMessage(message) { toastHost.show(message); }
+    }
+
+    // The updater's only interruption. Edge-detected in C++ (once per version
+    // per session) and success/warning only: a periodic check that failed is a
+    // Settings matter, never a toast.
+    Connections {
+        target: App
+        function onUpdateNotice(token, version) {
+            if (token === "ready")
+                toastHost.show(qsTr("Dish %1 is ready · restart when convenient.").arg(version),
+                               "success");
+            else if (token === "available")
+                toastHost.show(qsTr("Update available: Dish %1. See Settings to download.")
+                               .arg(version), "success");
+            else if (token === "unsupported")
+                toastHost.show(qsTr("This version of Dish is no longer supported. Please update."),
+                               "warning");
+            // Deliberately does NOT acknowledge: the notice is already
+            // edge-detected once per session in C++, and Settings keeps a
+            // "what's new" row for the rest of the run off the same value.
+            else if (token === "updated")
+                toastHost.show(qsTr("Updated to Dish %1.").arg(version), "success");
+        }
     }
 }

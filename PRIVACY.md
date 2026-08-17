@@ -1,6 +1,6 @@
 # Dish for Windows: Privacy Policy
 
-**Effective date:** 2026-08-02.
+**Effective date:** 2026-08-04.
 **Hosted copy:** [`https://dish.tinkernorth.com/privacy/dish-windows/`](https://dish.tinkernorth.com/privacy/dish-windows/).
 The hosted copy at that URL is the canonical version; this file mirrors it
 in-repo so the code and the policy ship together. The app links to the hosted
@@ -23,9 +23,12 @@ different behaviour, so do not read one as describing the other.
   network, to your own `satellite` host. It does not stream to any
   TinkerNorth-operated server. TinkerNorth does not operate a server for
   Dish at all.
-- **Nothing is transmitted to the authors or to any third party.** There is
-  no analytics SDK, no telemetry, no advertising identifier, no usage
-  reporting, and no automatic error upload in this client.
+- **Nothing is transmitted to the authors or to any third party**, except an
+  optional update check against GitHub, described in section 2.4, which you
+  can turn off. There is no analytics SDK, no telemetry, no advertising
+  identifier, no usage reporting, and no automatic error upload in this
+  client. The update check asks GitHub for one file and sends no identifier
+  with the request.
 - Crash diagnostics are written **to your own disk only**, under
   `%LOCALAPPDATA%\Dish\`. They are never uploaded. If you want a maintainer
   to see one, you attach it to an issue yourself.
@@ -42,10 +45,12 @@ different behaviour, so do not read one as describing the other.
 ### 2.1 Stays on your PC
 
 Persisted with `QSettings`, which on Windows writes to the current user's
-registry hive. Most of it lands under
-`HKEY_CURRENT_USER\Software\Dish\Dish`; the single window-chrome preference
-`ui_rail_collapsed` lands under `HKEY_CURRENT_USER\Software\TinkerNorth\Dish`
-instead, because it is written through the app's default organisation name.
+registry hive. The cross-client settings schema lands under
+`HKEY_CURRENT_USER\Software\Dish\Dish`. Preferences that only exist on the
+Windows desktop are written through the app's default organisation name and
+land under `HKEY_CURRENT_USER\Software\TinkerNorth\Dish` instead: the
+window-chrome preference `ui_rail_collapsed` and the update settings listed
+after the table.
 
 | Registry value | Holds | Used for |
 |---|---|---|
@@ -65,6 +70,39 @@ instead, because it is written through the app's default organisation name.
 
 Legacy values `wifi_list` and `wifi_shared_key/<id>` from older builds are
 migrated in place on first run so you do not have to re-pair.
+
+These seven values live under
+`HKEY_CURRENT_USER\Software\TinkerNorth\Dish` and cover the update feature
+described in section 2.4. They record your choices and the app's own
+bookkeeping. None of them is transmitted anywhere.
+
+| Registry value | Holds | Used for |
+|---|---|---|
+| `updates_check_enabled` | Boolean, default `true` | The *Check for updates automatically* switch. When off, the app makes no update-related network request at all. |
+| `updates_auto_download` | Boolean, default `true` | The *Download updates automatically* switch. When off, the app checks and tells you, and downloads nothing until you ask. |
+| `updates_skipped_version` | A version string, default empty | The one version you pressed *Skip this version* on, so it stops being offered |
+| `updates_last_check_utc_ms` | Timestamp | Not checking more than once an hour at startup |
+| `updates_handoff_version`, `updates_handoff_attempts` | A version string and a small counter | Internal apply bookkeeping: which staged update is being installed at the next start, and how many times it has been tried, so a broken update is abandoned after two attempts instead of looping |
+| `updates_last_run_version` | A version string | Noticing that the app just updated, so it can say so once |
+
+The app also keeps a folder at `%LOCALAPPDATA%\Dish\updates\`. It holds the
+downloaded `dish-setup.exe`, a copy of the release manifest that described it,
+and the installer's own log from the last apply attempt. Nothing in it is
+personal, nothing in it is sent anywhere, and you can delete the folder at any
+time; the app recreates it only when it downloads an update. The uninstaller
+removes it whether or not you ask for your settings to be purged.
+
+**What the installer writes.** `dish-setup.exe` is a separate program from the
+app, and it touches two more places on your PC. It creates the Add/Remove
+Programs entry
+`HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TinkerNorth.Dish`
+(or the `HKEY_LOCAL_MACHINE` equivalent for an all-users install), holding the
+display name, version, publisher, install location, install date, uninstall
+command and estimated size that Windows shows you in Installed apps. And it
+creates the shortcuts you asked for: `Dish.lnk` in the Start Menu programs
+folder and, if you turned it on, `Dish.lnk` on the desktop. `uninstall.exe`
+removes all three. The full value list is in
+[`docs/INSTALLER.md`](docs/INSTALLER.md) section 4.
 
 The app also **reads** (never writes)
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
@@ -119,14 +157,20 @@ receive on your local network. Granting it affects your LAN only.
 
 ### 2.3 Sent to TinkerNorth or a third party
 
-Nothing.
+Nothing goes to TinkerNorth. There is no TinkerNorth server for this app to
+talk to.
 
-There is no analytics library, no crash-reporting service, no error-tracking
-SDK, no advertising identifier, and no update check in this client. The only
-component in the app that can make an outbound HTTPS request is the satellite
+One thing leaves your network by default, and it goes to GitHub rather than to
+us: the update check described in **section 2.4**. It is a plain HTTPS request
+for a file on the public releases page, it carries no identifier, and you can
+turn it off.
+
+Beyond that there is no analytics library, no crash-reporting service, no
+error-tracking SDK, and no advertising identifier. Apart from the updater, the
+only component in the app that makes an outbound HTTPS request is the satellite
 API client, and it only ever addresses the IP of a satellite you selected.
 
-The only way this app causes a request to a TinkerNorth or third-party
+The other way this app causes a request to a TinkerNorth or third-party
 address is if you click a link, which hands the URL to your default browser
 and is then between you and that site. Those links are:
 
@@ -139,6 +183,44 @@ and is then between you and that site. Those links are:
 
 The app does not embed a browser and does not pass any identifier along with
 these URLs.
+
+### 2.4 Update check (GitHub)
+
+When *Check for updates automatically* is on, which is the default, the app
+sends an HTTPS `GET` to `github.com` for the file `latest.json` attached to the
+newest release of this project. GitHub answers with a redirect to its own
+download CDN, so the request finishes against
+`objects.githubusercontent.com`. The file is about a kilobyte of JSON: a
+version number, a download URL, a size and a SHA-256 checksum.
+
+**When it happens.** About 15 seconds after you launch the app, at most once
+an hour; every four hours while the app stays open; and whenever you press
+*Check for updates* in Settings. Nothing runs while the app is closed. There is
+no service, no scheduled task, and no update agent.
+
+**What the request carries.** Your IP address, as GitHub sees it, which is
+unavoidable for any HTTPS request. A `User-Agent` header of the form
+`Dish/<version> (Windows; x64)`. Nothing else. No device id, no account data,
+no settings, no usage data, no cookies, no query parameters, and no
+conditional-request identifiers. GitHub's own
+[privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)
+governs what GitHub logs about the request.
+
+**Downloading.** With *Download updates automatically* also on, the app then
+fetches `dish-setup.exe` from the same GitHub release, to
+`%LOCALAPPDATA%\Dish\updates\`. That is one more request to the same host, with
+the same headers, and the downloaded file is checked against the SHA-256 in the
+manifest before it is ever run. Metered connections are skipped until you are
+on an unmetered one. With that switch off, the app tells you a new version
+exists and downloads nothing until you ask.
+
+**Turning it off.** *Check for updates automatically* is the master switch. Off
+means the app makes no update-related network request of any kind, arms no
+timer, and creates no network stack for it. The portable zip never downloads or
+applies an update at all; it only tells you one exists.
+
+The registry values behind these switches are in section 2.1, and the
+`%LOCALAPPDATA%\Dish\updates\` folder is described there too.
 
 ---
 
@@ -185,15 +267,20 @@ apps do, so this is the equivalent list of what the app touches.
 | Capability | Why |
 |---|---|
 | Network sockets: UDP multicast, UDP broadcast listen, UDP unicast, TLS over TCP | Discovery, pairing, control plane, gamepad stream. All to your LAN. |
+| HTTPS to `github.com` | The update check and, if enabled, the update download. Section 2.4. Only while *Check for updates automatically* is on. |
 | Game-controller device enumeration and IO | Reading controller input, and writing rumble and light-bar output back to the controller. Raw HID access is used for reading in USB-direct mode. |
 | `SetThreadExecutionState` | Preventing sleep while a controller is actively streaming, so input latency stays low. Released when streaming stops. |
 | `HKEY_CURRENT_USER` registry read and write | Settings and pairing state, as listed in section 2.1. |
-| `%LOCALAPPDATA%\Dish\` file write | Crash dump and crash log only. |
+| `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, and the `updates\` folder described in section 2.1. |
 | Default browser launch | Opening the links listed in section 2.3, only when you click one. |
 
 The app runs as a normal user. It does not request elevation, does not
 install a service or a driver, does not read your files, and does not access
-the microphone, camera, location, contacts, or clipboard.
+the microphone, camera, location, contacts, or clipboard. The one exception to
+elevation is an all-users install: applying an update to an installation under
+`Program Files` needs administrator rights, so the installer asks for them once
+with the standard Windows prompt, and a declined prompt simply leaves the old
+version running. A per-user install, which is the default, never prompts.
 
 ---
 
@@ -205,11 +292,24 @@ the microphone, camera, location, contacts, or clipboard.
 - **Turn off crash file writing.** There is no toggle for this today because
   the files never leave your machine. You can delete `%LOCALAPPDATA%\Dish\`
   whenever you like.
+- **Stop the update check.** Settings, Updates, *Check for updates
+  automatically*. Off means no update-related request leaves your machine, at
+  any time, for any reason. Leaving it on but turning off *Download updates
+  automatically* keeps the check and stops the download.
+- **Delete the update cache.** `%LOCALAPPDATA%\Dish\updates\` can go at any
+  time. The app recreates it only when it downloads an update, and deleting a
+  partly-downloaded update simply makes it start over.
+- **Uninstall.** `uninstall.exe`, or Windows Settings, Installed apps, removes
+  the program files, the two shortcuts, the Add/Remove Programs entry and the
+  update cache. Your settings, pairings and crash files are deliberately left
+  behind so that reinstalling restores your setup; tick *Also remove my
+  settings* (or pass `--purge-user-data` to a silent uninstall) to remove those
+  too.
 - **Wipe everything.** Delete `HKEY_CURRENT_USER\Software\Dish\Dish` and
   `HKEY_CURRENT_USER\Software\TinkerNorth\Dish`, and delete
   `%LOCALAPPDATA%\Dish\`. That removes every remembered server, pairing key,
-  certificate pin, preference, and crash artifact. There is no server-side
-  record to delete, because there is no TinkerNorth server.
+  certificate pin, preference, update setting, and crash artifact. There is no
+  server-side record to delete, because there is no TinkerNorth server.
 - **Verify any of this.** The client is free software under
   [LGPL-3.0-or-later](LICENSE). Every claim above is checkable in this
   repository, and you can build the binary yourself. See

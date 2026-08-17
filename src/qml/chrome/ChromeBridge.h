@@ -51,6 +51,9 @@ class ChromeBridge : public QObject {
     Q_INVOKABLE void setMinimizeButtonRect(const QRect& rect);
     Q_INVOKABLE void setCloseButtonRect(const QRect& rect);
     Q_INVOKABLE void setLeftClientRect(const QRect& rect);
+    // The update pill, published EMPTY whenever it is hidden: no update means
+    // no carve-out, and the caption strip behaves exactly as it always did.
+    Q_INVOKABLE void setUpdatePillRect(const QRect& rect);
 
   signals:
     void micaActiveChanged();
@@ -68,6 +71,7 @@ class ChromeBridge : public QObject {
     QRect m_minimize;
     QRect m_close;
     QRect m_leftClient;
+    QRect m_updatePill;
 };
 
 } // namespace dish::chrome

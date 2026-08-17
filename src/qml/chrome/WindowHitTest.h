@@ -52,7 +52,7 @@ enum class HitRegion {
 // resize frame (you can't resize a maximized window), so the border regions are
 // suppressed and only Caption/MaximizeButton/Client are reported.
 //
-// The three CLIENT CARVE-OUTS are interactive controls living INSIDE the
+// The four CLIENT CARVE-OUTS are interactive controls living INSIDE the
 // caption strip that must receive normal Qt mouse events: without them the
 // native resolver answered HTCAPTION for the whole strip, a press became a
 // system drag at the NATIVE level, and the QML hamburger / minimize / close
@@ -68,6 +68,10 @@ struct HitTestInput {
     Rect minimizeButton; // client carve-out
     Rect closeButton;    // client carve-out
     Rect leftClient;     // client carve-out (the rail hamburger cell)
+    // Client carve-out (the update pill). Published EMPTY whenever no update
+    // exists, so a build that never sees an update is provably identical to
+    // one without the pill at all.
+    Rect updatePill;
     int resizeBorder;
     bool maximized;
 };
@@ -83,8 +87,9 @@ constexpr bool contains(const Rect& r, int x, int y) {
 //   1) Resize corners/edges first (a 1px corner must beat the caption strip that
 //      overlaps it at the very top), UNLESS maximized.
 //   2) The maximize button (so Snap Layouts can trigger) before the caption.
-//   3) The client carve-outs (hamburger / minimize / close) before the caption,
-//      so those controls get real Qt clicks instead of starting a system drag.
+//   3) The client carve-outs (hamburger / update pill / minimize / close) before
+//      the caption, so those controls get real Qt clicks instead of starting a
+//      system drag.
 //   4) The caption strip (draggable).
 //   5) Client otherwise.
 constexpr HitRegion hitTest(const HitTestInput& in) {
@@ -112,7 +117,7 @@ constexpr HitRegion hitTest(const HitTestInput& in) {
     if (contains(in.maximizeButton, x, y)) { return HitRegion::MaximizeButton; }
 
     if (contains(in.minimizeButton, x, y) || contains(in.closeButton, x, y) ||
-        contains(in.leftClient, x, y)) {
+        contains(in.leftClient, x, y) || contains(in.updatePill, x, y)) {
         return HitRegion::Client;
     }
 

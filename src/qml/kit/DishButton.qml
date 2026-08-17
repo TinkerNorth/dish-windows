@@ -12,12 +12,14 @@ Button {
     id: control
 
     enum Variant { Primary, Outline, Destructive }
-    enum Size { Normal, Small }
+    enum Size { Normal, Small, Large }
 
     property int variant: DishButton.Outline
     property int size: DishButton.Normal
 
     readonly property bool compact: control.size === DishButton.Small
+    // The installer's verb: one per face, fill-width at the use site.
+    readonly property bool large: control.size === DishButton.Large
 
     // The label colour, and for the outlined variants the border colour too.
     readonly property color foreground: !control.enabled ? Theme.disabledFg
@@ -28,16 +30,26 @@ Button {
     focusPolicy: Qt.StrongFocus
     hoverEnabled: true
 
-    font.pixelSize: control.compact ? Tokens.textMeta : Tokens.textBase
-    font.weight: Font.Medium
-    implicitHeight: control.compact ? 24 : 30
+    font.pixelSize: control.large ? 15 : control.compact ? Tokens.textMeta : Tokens.textBase
+    font.weight: control.large ? Font.DemiBold : Font.Medium
+    implicitHeight: control.large ? 46 : control.compact ? 24 : 30
     leftPadding: control.compact ? Tokens.s5 : Tokens.s6
     rightPadding: control.compact ? Tokens.s5 : Tokens.s6
+
+    // The corner tracks the height: the 46px verb rounds like a card, not
+    // like a chip.
+    readonly property int cornerRadius: control.large ? Tokens.radiusCard : Tokens.radiusButton
 
     opacity: control.enabled ? 1.0 : Tokens.disabledOpacity
 
     Accessible.role: Accessible.Button
     Accessible.name: control.text
+
+    // Enter activates a focused button (Windows convention; the Basic style
+    // only wires Space). clicked() is emitted directly — there is no
+    // transient press state to animate for a key activation.
+    Keys.onReturnPressed: control.clicked()
+    Keys.onEnterPressed: control.clicked()
 
     contentItem: Text {
         text: control.text
@@ -51,7 +63,7 @@ Button {
     background: Item {
         Rectangle {
             anchors.fill: parent
-            radius: Tokens.radiusButton
+            radius: control.cornerRadius
             // The outlined pair wash over a transparent ground so Mica still
             // reads through a button placed on bare chrome.
             color: control.variant === DishButton.Primary
@@ -80,7 +92,7 @@ Button {
         Rectangle {
             anchors.fill: parent
             anchors.margins: -2
-            radius: Tokens.radiusButton + 2
+            radius: control.cornerRadius + 2
             visible: control.visualFocus
             color: "transparent"
             border.width: 2

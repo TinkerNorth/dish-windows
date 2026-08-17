@@ -13,11 +13,14 @@ Rectangle {
 
     property bool indeterminate: true
     property real value: 0
+    // The installer's hero bar: it stands in for the verb, so it doubles the
+    // hairline height and rounds fully.
+    property bool thick: false
 
     readonly property bool sweeping: bar.indeterminate && !Tokens.reducedMotion
 
-    implicitHeight: 3
-    radius: Tokens.radiusBar
+    implicitHeight: bar.thick ? 6 : 3
+    radius: bar.thick ? height / 2 : Tokens.radiusBar
     color: Theme.surfaceDim
     border.width: 1
     border.color: Theme.outline
@@ -27,7 +30,7 @@ Rectangle {
         visible: !bar.indeterminate
         width: Math.max(0, Math.min(1, bar.value)) * parent.width
         height: parent.height
-        radius: Tokens.radiusBar
+        radius: bar.radius
         color: Theme.primary
 
         Behavior on width {
@@ -40,7 +43,7 @@ Rectangle {
     Rectangle {
         visible: bar.indeterminate && Tokens.reducedMotion
         anchors.fill: parent
-        radius: Tokens.radiusBar
+        radius: bar.radius
         color: Theme.primaryFill
     }
 
@@ -50,7 +53,7 @@ Rectangle {
         visible: bar.sweeping
         width: parent.width * 0.4
         height: parent.height
-        radius: Tokens.radiusBar
+        radius: bar.radius
         color: Theme.primary
 
         XAnimator on x {

@@ -41,6 +41,10 @@
     <file alias="bluetooth-searching.svg">brand/bluetooth-searching.svg</file>
     <file alias="bluetooth-searching-animated.svg">brand/bluetooth-searching-animated.svg</file>
     <file alias="dish.svg">brand/dish.svg</file>
+    <!-- The app MARK (satellite dish in a gear): the identity glyph the
+         installer renders as its single image (Kit.AppMark), distinct from
+         `dish.svg`, the plain dish silhouette the wire vocabulary draws. -->
+    <file alias="dish-logo.svg">brand/dish-logo.svg</file>
     <file alias="dish-connected.svg">brand/dish-connected.svg</file>
     <file alias="dish-disabled.svg">brand/dish-disabled.svg</file>
     <file alias="dish-master.svg">brand/dish-master.svg</file>
