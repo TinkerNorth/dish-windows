@@ -148,6 +148,17 @@ release.
 
 ### Fixed
 
+- **The app no longer exhausts its Window Manager object quota while a
+  controller is attached.** SDL2's RawInput joystick backend leaks roughly
+  200 USER objects per second on Windows 11 whenever any joystick is present;
+  at the process's 10,000-object cap (under a minute in) Qt can no longer
+  create timers or dispatcher windows, and everything that needs the event
+  loop quietly stalls — surfaced as a bind stuck on "sending descriptor".
+  The backend is now disabled (`SDL_HINT_JOYSTICK_RAWINPUT=0`): Xbox pads
+  ride the XInput backend, whose semantics this client already assumes (the
+  practical cost is the classic four-pad XInput ceiling), and everything
+  else rides HIDAPI/DirectInput unchanged. The hint is normal-priority, so
+  the environment variable still overrides it for diagnosis.
 - **Edge-drag resize works on both frameless windows.** Qt's
   `FramelessWindowHint` creates a bare `WS_POPUP` without `WS_THICKFRAME`,
   and DefWindowProc runs the native sizing loop only for windows that carry

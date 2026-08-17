@@ -129,6 +129,16 @@ void SDLGamepadBridge::runLoop() {
     // decoders map by physical position. Without this hint a Switch Pro would
     // disagree with itself across the SDL and Direct paths.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
+    // SDL2's RawInput joystick backend leaks ~200 USER objects per second on
+    // Windows 11 while any joystick is attached, exhausting the process's
+    // 10,000-object quota in under a minute — after which no Qt timer or
+    // window can be created and the app quietly stops working (measured via
+    // GetGuiResources; the leak bisects exactly to SDL_JOYSTICK_RAWINPUT).
+    // Xbox pads fall back to the XInput backend, whose semantics this app
+    // already assumes; everything else rides HIDAPI/DirectInput. SDL_SetHint
+    // is normal priority, so the environment variable still overrides for
+    // diagnosis.
+    SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "0");
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) != 0) {
         running_.store(false);
         return;
