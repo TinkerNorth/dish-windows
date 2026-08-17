@@ -148,6 +148,15 @@ release.
 
 ### Fixed
 
+- **Edge-drag resize works on both frameless windows.** Qt's
+  `FramelessWindowHint` creates a bare `WS_POPUP` without `WS_THICKFRAME`,
+  and DefWindowProc runs the native sizing loop only for windows that carry
+  that style — so the chrome filter answered every edge hit-test with a
+  resize code and the drag then did nothing, on the main window and the
+  installer alike. The filter now stamps `WS_THICKFRAME` at attach (visual
+  no-op: `WM_NCCALCSIZE` still zeroes the frame). The installer window also
+  drops its fixed-size clamp: 460×420 stays the design floor, the faces
+  stretch above it, and it still offers no maximize.
 - **Capabilities now follow the active path, so nothing is advertised where it
   cannot fire** (the dish-android #146 rule, path-resolved for Windows).
   `CAP_RUMBLE` is folded per slot from the SDL probe on the Standard path and
