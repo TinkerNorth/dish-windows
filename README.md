@@ -45,16 +45,58 @@ landed versus what is a tested-but-unwired specification.
 - Holds the display awake while a slot is streaming, releases it on the last
   unbind
 - Light and dark themes, six UI languages
+- A single-file installer, and in-place auto-update that verifies every
+  download against the release manifest's SHA-256 before it runs
 
 ## Install and run
 
-Download `dish-windows.zip` from the Releases page, unzip it anywhere, and run
-`dish.exe`. The zip carries the Qt runtime and QML modules alongside the
-executable, so there is nothing to install and no admin rights are needed.
+You need 64-bit Windows 10 (1809 or newer) or Windows 11, a gamepad, and a
+reachable Satellite server.
+
+**Recommended: `dish-setup.exe`** from the Releases page. It is a single file
+with no prerequisites, installs per-user by default with no administrator
+prompt, and carries the Visual C++ runtime, so it works on a machine where
+nothing has been installed. All-users installs are offered and ask for
+elevation. Removal is a normal Windows Settings, Installed apps entry.
+
+The installer is not code-signed yet, so SmartScreen shows "Windows protected
+your PC" on first run. Choose **More info**, then **Run anyway**. If you would
+rather check the bytes, every release also carries a `SHA256SUMS` asset:
+
+```powershell
+$expected = (Get-Content .\SHA256SUMS |
+    Where-Object { $_ -match 'dish-setup\.exe' }).Split()[0]
+$actual = (Get-FileHash .\dish-setup.exe -Algorithm SHA256).Hash.ToLower()
+if ($expected -ne $actual) { throw 'checksum mismatch' } else { 'ok' }
+```
+
+**Portable: `dish-windows.zip`.** Unzip it anywhere and run `dish.exe`. The zip
+carries the Qt runtime, the QML modules and the Visual C++ runtime alongside the
+executable, so there is nothing to install, no prerequisites and no admin rights
+needed. A portable copy never updates itself.
+
 Settings persist in the Windows registry under `HKEY_CURRENT_USER`; a crash
-writes a minidump and a symbolized `crash.log` to `%LOCALAPPDATA%\Dish`. You
-need 64-bit Windows 10 or Windows 11, a gamepad, and a reachable Satellite
-server.
+writes a minidump and a symbolized `crash.log` to `%LOCALAPPDATA%\Dish`.
+
+### Updates
+
+An installed copy keeps itself current. It asks GitHub for `latest.json` about
+15 seconds after launch and every four hours after that, downloads the next
+`dish-setup.exe` in the background, verifies it against the SHA-256 in the
+manifest, and applies it the next time you start Dish. There is no background
+service and no update agent: nothing runs while Dish is closed. You can also
+press Restart to update in Settings or in the title-bar indicator, and the
+update applies immediately.
+
+Two switches in Settings, Updates control all of it: *Check for updates
+automatically* stops every update-related network request when off, and
+*Download updates automatically* leaves the check on but reduces it to a
+notification. What the check sends is spelled out in
+[`PRIVACY.md`](PRIVACY.md) section 2.4.
+
+[`docs/INSTALLER.md`](docs/INSTALLER.md) documents the payload format, the
+command line and exit codes for scripted installs, the staging layout, and the
+apply handoff.
 
 ## Build from source
 
@@ -104,6 +146,8 @@ src/architecture/ The kernel: Observable, StateSource, Composer, Controller, Rep
 src/Input/        SDL bridge, XUSB packing, output command queue
 src/Network/      Winsock UDP session, REST client, pairing, connection pool
 src/UI/           Theme palettes, font probes, crash handler, license manifest
+src/update/       Update check, download, staging store, boot handoff
+src/installer/    dish-setup.exe: SFX stub, install and uninstall reducers, pack tool
 ```
 
 The input hot path is the deliberate exception and is not routed through that
@@ -121,7 +165,8 @@ the UI binding contract and the hardening roadmap are in
 [`src/architecture/README.md`](src/architecture/README.md), the QML surface in
 [`docs/QML_CONTRACT.md`](docs/QML_CONTRACT.md) and
 [`docs/QML_UI_KIT.md`](docs/QML_UI_KIT.md), the design tokens in
-[`DESIGN.md`](DESIGN.md).
+[`DESIGN.md`](DESIGN.md), and the installer and auto-updater in
+[`docs/INSTALLER.md`](docs/INSTALLER.md).
 
 ## Protocol
 

@@ -5,6 +5,8 @@
 
 #include "core/reducer/Reconcile.h"
 
+#include <QSignalBlocker>
+
 #include <cmath>
 
 namespace dish::net {
@@ -21,7 +23,23 @@ constexpr std::uint16_t kBaseCaps =
 WifiConnection::WifiConnection(QString id, models::DiscoveredServer server, QObject* parent)
     : QObject(parent), id_(std::move(id)), server_(std::move(server)) {}
 
-WifiConnection::~WifiConnection() { markDisconnected(); }
+WifiConnection::~WifiConnection() {
+    // The teardown is what matters here; the announcement never does. Emitting
+    // `changed` from a destructor invites every listener to call straight back
+    // into an object that is already half-gone, and at app exit their own
+    // collaborators may be gone too: ~WifiConnectionManager runs from
+    // ~QObject's deleteChildren, i.e. AFTER every AppModel member — including
+    // the ConnectionStore that ConnectionHub::rebuild() reads through when it
+    // hears poolChanged. That was an access violation on every exit.
+    //
+    // The manager's own teardown loop blocks the signal case by case, but it
+    // only sees the connections still in its map: a forget() has already
+    // `take`n its connection out and left it on deleteLater, and any future
+    // caller could do the same. Blocking here covers the whole class, at the
+    // one place that knows the object is dying.
+    const QSignalBlocker block(this);
+    markDisconnected();
+}
 
 void WifiConnection::updateServer(const models::DiscoveredServer& s) {
     server_ = s;

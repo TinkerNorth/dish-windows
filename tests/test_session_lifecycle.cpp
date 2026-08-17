@@ -287,3 +287,42 @@ TEST_CASE("session: heartbeat cadence is the satellite-confirmed 2000 ms / 5-mis
     REQUIRE(SatelliteClient::kHeartbeatMissMax == 5);
     REQUIRE(SatelliteClient::kHeartbeatMissNotResponding == 2);
 }
+
+TEST_CASE("session: a destroyed connection announces nothing", "[session][teardown]") {
+    // ~WifiConnection tears the client down, and that teardown used to emit
+    // changed(). A listener that acts on a signal from a dying object calls back
+    // into it, and at app exit its own collaborators may already be freed: the
+    // manager relays changed() as poolChanged, ConnectionHub::rebuild() reads
+    // through AppModel's ConnectionStore, and that store is a MEMBER, destroyed
+    // before ~QObject ever gets to the children. Hence: no signal from a
+    // destructor, ever.
+    int changes = 0;
+    int slotChanges = 0;
+    int beforeDelete = 0;
+    {
+        auto* conn = new WifiConnection(server().id(), server());
+        QObject::connect(conn, &WifiConnection::changed, [&changes] { ++changes; });
+        QObject::connect(conn, &WifiConnection::slotChanged, [&slotChanges] { ++slotChanges; });
+        conn->attachSlot(QStringLiteral("slot-A"), proto::kControllerTypeXbox, false, false);
+        // Anything but Idle, so the destructor's markDisconnected() does real
+        // work instead of taking its early return.
+        conn->markConnecting();
+        REQUIRE(conn->state() == dish::net::SessionState::Linking);
+        REQUIRE(changes > 0); // a live object still announces normally
+        beforeDelete = changes;
+        delete conn;
+    }
+    CHECK(changes == beforeDelete);
+    CHECK(slotChanges == 0);
+
+    // ...and the same transition on a LIVE object still announces, so what the
+    // case above pins is the destructor's silence, not a markDisconnected() that
+    // stopped emitting.
+    WifiConnection live(server().id(), server());
+    int liveChanges = 0;
+    QObject::connect(&live, &WifiConnection::changed, [&liveChanges] { ++liveChanges; });
+    live.markConnecting();
+    const int afterConnect = liveChanges;
+    live.markDisconnected();
+    CHECK(liveChanges == afterConnect + 1);
+}

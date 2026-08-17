@@ -37,6 +37,7 @@ void ChromeBridge::setChrome(FramelessWindowChrome* chrome) {
     m_chrome->setMinimizeButtonRect(m_minimize);
     m_chrome->setCloseButtonRect(m_close);
     m_chrome->setLeftClientRect(m_leftClient);
+    m_chrome->setUpdatePillRect(m_updatePill);
 }
 
 void ChromeBridge::setCaptionRect(const QRect& rect) {
@@ -62,6 +63,11 @@ void ChromeBridge::setCloseButtonRect(const QRect& rect) {
 void ChromeBridge::setLeftClientRect(const QRect& rect) {
     m_leftClient = rect;
     if (m_chrome != nullptr) { m_chrome->setLeftClientRect(rect); }
+}
+
+void ChromeBridge::setUpdatePillRect(const QRect& rect) {
+    m_updatePill = rect;
+    if (m_chrome != nullptr) { m_chrome->setUpdatePillRect(rect); }
 }
 
 } // namespace dish::chrome

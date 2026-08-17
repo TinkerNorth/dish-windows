@@ -60,6 +60,8 @@ class FramelessWindowChrome : public QObject, public QAbstractNativeEventFilter 
     void setMinimizeButtonRect(const QRect& rect);
     void setCloseButtonRect(const QRect& rect);
     void setLeftClientRect(const QRect& rect);
+    // Empty whenever the pill is hidden, which is most of a build's life.
+    void setUpdatePillRect(const QRect& rect);
 
   private:
     // Distinct-until-changed, so a stream of WM_NCMOUSEMOVE emits once.
@@ -75,6 +77,7 @@ class FramelessWindowChrome : public QObject, public QAbstractNativeEventFilter 
     QRect m_minimizeButtonRect; // logical px (client carve-out)
     QRect m_closeButtonRect;    // logical px (client carve-out)
     QRect m_leftClientRect;     // logical px (client carve-out, hamburger)
+    QRect m_updatePillRect;     // logical px (client carve-out, update pill)
     bool m_maximizeButtonHovered = false;
     bool m_maximizeButtonPressed = false;
 };

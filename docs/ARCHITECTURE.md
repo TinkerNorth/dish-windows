@@ -5,8 +5,10 @@ reach for, where the code goes, and what the layering rules are.
 
 Related documents: [`QML_CONTRACT.md`](QML_CONTRACT.md) is the exposure surface
 the Qt Quick UI binds against, [`QML_UI_KIT.md`](QML_UI_KIT.md) is the component
-kit and design tokens, and [`../src/architecture/README.md`](../src/architecture/README.md)
-documents the kernel primitives themselves.
+kit and design tokens, [`../src/architecture/README.md`](../src/architecture/README.md)
+documents the kernel primitives themselves, and [`INSTALLER.md`](INSTALLER.md)
+covers `dish-setup.exe` and the auto-updater, which follow the same doctrine
+from outside the app process.
 
 Data flows one way. A source of truth owns state, pure reducers and composers
 derive from it, the UI binds and renders it, and the UI sends commands back to
@@ -79,6 +81,8 @@ layer together.
 | `src/UI/` | The design-token palette (`Theme`), the font-family probes (`FontStacks`), crash handling, the `SlotLiveStats` mapper, `common/ExternalLink`, `licenses/LicenseManifest` | `core/` | yes (Gui) |
 | `src/Input/` | The SDL bridge, the input processor, joystick mapping, the output command queue | `core/` | yes |
 | `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingClient` | `core/` | yes |
+| `src/update/` | The updater's IO edge: the manifest and download gateways (dedicated QNAMs), the staging store, `UpdateCoordinator`, and the pre-`main` boot handoff | `core/`, `source/` | yes |
+| `src/installer/` | `dish-setup.exe`: the Qt-free SFX stub and payload format, the install and uninstall reducers, the Win32 ops seams, the pack tool. Not linked into `dish.exe` | `core/`-shaped, own namespace | mixed |
 
 `src/Input/` and `src/Network/` predate the layer model and keep their
 capitalized names. New IO belongs in `src/source/` as a `StateSource` or a
@@ -220,9 +224,46 @@ Machines that follow this pattern and are wired into the running app:
 | [`ApplyBindingMachine`](../src/core/reducer/ApplyBindingMachine.h) | `AppViewModel::applyBinding` |
 | [`BindingPresence`](../src/core/reducer/BindingPresence.h) | `AppModel::rebuild` |
 | [`CapabilitySolver`](../src/core/reducer/CapabilitySolver.h) | `AppViewModel::capabilityForCandidate` |
+| [`UpdateMachine`](../src/core/reducer/UpdateMachine.h) | `UpdateCoordinator` |
 
 Three more exist as pure, tested specifications with no live coordinator yet;
 see [Not yet implemented](#not-yet-implemented).
+
+`UpdateMachine` is the newest and the most conventional application of the
+pattern: phases Disabled through Ready and Failed, events for every arrival
+from the network, the preferences and the connectivity probe, and effects
+(`FetchManifest`, `StartDownload`, `VerifyAndPromote`, `DiscardStaged`,
+`SweepStaging`, `ScheduleNextCheck`, `Notify`) that `UpdateCoordinator`
+executes against a dedicated `QNetworkAccessManager` on the main thread and a
+worker thread that owns a second one for the payload. Scheduling constants live
+on the machine, not in the coordinator, so the backoff ladder and the yank rule
+are pinned by unit tests rather than observed by waiting.
+
+### Reducers that run outside the app
+
+Two machines follow the same doctrine but never load into `dish.exe`:
+[`InstallMachine`](../src/installer/InstallMachine.h) and
+[`UninstallMachine`](../src/installer/UninstallMachine.h), which drive
+`dish-setup.exe`. They are pure and total over their own phase and event sets,
+they return effects as data, and their coordinators execute those effects
+against abstract `FileOps`, `RegistryOps`, `ShortcutOps` and `ProcessOps` seams
+with Win32 implementations behind them. That is what lets an exhaustive
+`(phase x event)` table pin rollback ordering, ARP-last registration and the
+uninstall helper handoff with no filesystem and no registry in the loop. They
+live under `src/installer/` rather than `src/core/reducer/` because nothing in
+the app may depend on them, but the shape is the same and a change to one should
+read like a change to the other.
+
+The one piece of updater code that is deliberately outside the composition root
+is the **boot handoff**. `runStartupHandoff()` is called from `main()` right
+after the crash handler and before Winsock, libsodium and `QGuiApplication`,
+because its job is to decide whether this process should hand over to a staged
+installer and exit. It therefore predates every kernel primitive: it uses an
+explicitly-constructed `QSettings`, `QFile` and `QCryptographicHash` and nothing
+else, it owns no `Observable`, and it reports its outcome by returning rather
+than by notifying. `AppModel` picks up the aftermath (the attempt counters and
+the "we just updated" edge) once the composition root does exist. Treat it as a
+pre-`main` gate, not as a layer.
 
 ### Choosing between them
 
@@ -305,6 +346,7 @@ The threads in the app:
 | USB direct | `UsbGamepadManager` per claimed device | Raw-HID URB reads, feeding the same publish path |
 | Heartbeat | [`SatelliteClient`](../src/Network/SatelliteClient.h) | Per-session keepalive sends and ping arming |
 | Receive | `SatelliteClient` | Ack decode, RTT sampling, rumble and lightbar callbacks, close-notify |
+| `dish-update` | [`UpdateCoordinator`](../src/update/UpdateCoordinator.h) | The update payload download, its incremental hash, and every staging-directory write. Progress is marshalled back queued and throttled. Nothing here touches the input path. |
 
 **The input hot path is intentionally not routed through the kernel.** The
 input, decode, encode, `sendto` path is plain C++ with no queue, no Qt event
@@ -462,6 +504,17 @@ CI), so each needs a device-in-the-loop test pass.
   per-language `numerusform` order, and placeholder integrity across every
   catalogue. `scripts/check-translations.ps1` re-runs `lupdate` in CI and fails
   on any diff, so a new string cannot land without its catalogue entry.
+- **The installer and the updater are tested the same way.** Test names are
+  prefixed so `ctest -R installer` and `-R update` select them: exhaustive
+  reducer tables for `InstallMachine`, `UninstallMachine` and `UpdateMachine`,
+  the payload pack-and-extract round trip including corrupt CRCs and hostile
+  entry names, the manifest and CLI grammars, the staging store's marker-last
+  commit and janitor rules, and the boot gate's guards one at a time. The Win32
+  seams that cannot be faked usefully (long Unicode paths, detecting a running
+  process) are tested against the real implementations in a temporary tree.
+  End to end, `scripts/test-installer-roundtrip.ps1` installs, repairs,
+  upgrades, applies an update and uninstalls on every pull request. See
+  [`docs/INSTALLER.md`](INSTALLER.md).
 - **Probes for the kernel.** `StateSourceProbe`, `ComposerProbe`, and
   `ControllerProbe` capture emission sequences rather than just final values.
   `RepositoryContract` runs the property tests every repository must pass.

@@ -33,6 +33,7 @@
 #include "UI/Theme.h"
 #include "UI/licenses/LicenseManifest.h"
 
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QGuiApplication>
 #include <QSet>
@@ -40,6 +41,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+#include <QWindow>
 
 #include <map>
 #include <optional>
@@ -217,6 +219,75 @@ QString applyFailureToken(reducer::ApplyFailure f) {
     return {};
 }
 
+// ── Updater vocabulary → QML tokens ──────────────────────────────────────────
+
+QString updatePhaseToken(reducer::UpdatePhase phase) {
+    switch (phase) {
+    case reducer::UpdatePhase::Disabled:
+        return QStringLiteral("disabled");
+    case reducer::UpdatePhase::Idle:
+        return QStringLiteral("idle");
+    case reducer::UpdatePhase::Checking:
+        return QStringLiteral("checking");
+    case reducer::UpdatePhase::UpToDate:
+        return QStringLiteral("upToDate");
+    case reducer::UpdatePhase::Available:
+        return QStringLiteral("available");
+    case reducer::UpdatePhase::Downloading:
+        return QStringLiteral("downloading");
+    case reducer::UpdatePhase::Verifying:
+        return QStringLiteral("verifying");
+    case reducer::UpdatePhase::Ready:
+        return QStringLiteral("ready");
+    case reducer::UpdatePhase::Failed:
+        return QStringLiteral("failed");
+    }
+    return {};
+}
+
+QString updateErrorTokenFor(reducer::UpdateError error) {
+    switch (error) {
+    case reducer::UpdateError::None:
+        return {};
+    case reducer::UpdateError::Offline:
+        return QStringLiteral("offline");
+    case reducer::UpdateError::Http:
+        return QStringLiteral("http");
+    case reducer::UpdateError::ManifestInvalid:
+        return QStringLiteral("manifestInvalid");
+    case reducer::UpdateError::Corrupt:
+        return QStringLiteral("corrupt");
+    case reducer::UpdateError::DiskFull:
+        return QStringLiteral("diskFull");
+    case reducer::UpdateError::Io:
+        return QStringLiteral("io");
+    case reducer::UpdateError::Stalled:
+        return QStringLiteral("stalled");
+    case reducer::UpdateError::ApplyFailed:
+        return QStringLiteral("applyFailed");
+    }
+    return {};
+}
+
+QString updateNoticeToken(reducer::UpdateNotice notice) {
+    switch (notice) {
+    case reducer::UpdateNotice::Ready:
+        return QStringLiteral("ready");
+    case reducer::UpdateNotice::Available:
+        return QStringLiteral("available");
+    case reducer::UpdateNotice::Unsupported:
+        return QStringLiteral("unsupported");
+    case reducer::UpdateNotice::Updated:
+        return QStringLiteral("updated");
+    }
+    return {};
+}
+
+// Where a portable copy is sent, and the fallback when a manifest carried no
+// releaseNotesUrl (the field is advisory and may be dropped by validation).
+constexpr const char* kReleasesPageUrl =
+    "https://github.com/TinkerNorth/dish-windows/releases/latest";
+
 // The satellite's controller board is four pads wide.
 constexpr int kHostSlotCapacity = 4;
 // A raw-HID claim can hold the device for 20 s while Windows releases it; a REST
@@ -262,6 +333,26 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
         },
         false);
     onboardingNeeded_ = !model_->onboardingStore()->welcomeCompleted();
+
+    // The updater publishes ONE slice; every update property reads this cache,
+    // so the whole surface can never disagree with itself mid-frame.
+    // emitCurrent=true: the initial phase already carries a quarantined
+    // ApplyFailed when there is one.
+    updateSub_ = model_->updates()->status().subscribe(
+        [this](const reducer::UpdateStatus& status) {
+            const bool prefsMoved = status.checksEnabled != update_.checksEnabled ||
+                                    status.autoDownload != update_.autoDownload;
+            update_ = status;
+            emit updateChanged();
+            if (prefsMoved) { emit updatePrefsChanged(); }
+        },
+        true);
+    updatePrefsSub_ = model_->updatePreferenceStore()->state().subscribe(
+        [this](const source::UpdatePreferences&) { emit updatePrefsChanged(); }, false);
+    QObject::connect(model_->updates(), &update::UpdateCoordinator::notice, this,
+                     [this](reducer::UpdateNotice notice, const QString& version) {
+                         emit updateNotice(updateNoticeToken(notice), version);
+                     });
 
     // Follow the composer's derived intent, not keepAwakeCount(): that observable
     // is the keep-screen-on override input, which nothing sets, so binding to it
@@ -1242,6 +1333,89 @@ void AppViewModel::openExternalUrl(const QString& url) {
     const bool ok =
         externalOpenSink_ ? externalOpenSink_(url) : QDesktopServices::openUrl(QUrl(url));
     if (!ok) { emit errorMessage(tr("Couldn’t open browser")); }
+}
+
+// ── Auto-updater ────────────────────────────────────────────────────────────
+
+QString AppViewModel::updatePhase() const { return updatePhaseToken(update_.phase); }
+
+QString AppViewModel::updateVersion() const { return update_.availableVersion; }
+
+double AppViewModel::updateProgress() const {
+    switch (update_.phase) {
+    case reducer::UpdatePhase::Downloading:
+        // A length-less body is indeterminate rather than a bar stuck at zero.
+        if (update_.totalBytes == 0) { return -1.0; }
+        return static_cast<double>(update_.receivedBytes) / static_cast<double>(update_.totalBytes);
+    case reducer::UpdatePhase::Verifying:
+        // A 40 MB re-hash has no progress to report; the sweep says "working".
+        return -1.0;
+    case reducer::UpdatePhase::Ready:
+        return 1.0;
+    default:
+        return 0.0;
+    }
+}
+
+QString AppViewModel::updateReceivedText() const {
+    return QLocale().formattedDataSize(static_cast<qint64>(update_.receivedBytes));
+}
+
+QString AppViewModel::updateTotalText() const {
+    return QLocale().formattedDataSize(static_cast<qint64>(update_.totalBytes));
+}
+
+QString AppViewModel::updateErrorToken() const {
+    // The error is recorded for the backoff ladder even when a valid stage keeps
+    // the phase at Ready; only a genuinely failed phase surfaces it.
+    if (update_.phase != reducer::UpdatePhase::Failed) { return {}; }
+    return updateErrorTokenFor(update_.error);
+}
+
+QString AppViewModel::updateNotesUrl() const { return update_.notesUrl; }
+
+QDateTime AppViewModel::updateLastCheck() const { return model_->updates()->lastCheck(); }
+
+QString AppViewModel::updatedFromVersion() const { return model_->updates()->updatedFromVersion(); }
+
+void AppViewModel::setUpdateChecksEnabled(bool enabled) {
+    model_->updatePreferenceStore()->setChecksEnabled(enabled);
+}
+
+void AppViewModel::setUpdateAutoDownload(bool enabled) {
+    model_->updatePreferenceStore()->setAutoDownload(enabled);
+}
+
+void AppViewModel::checkForUpdatesNow() { model_->updates()->checkNow(); }
+
+void AppViewModel::downloadUpdateNow() { model_->updates()->downloadNow(); }
+
+void AppViewModel::restartToApplyUpdate() {
+    model_->updates()->armPendingRestart();
+    // A NORMAL close, from C++ so every entry point (pill popover, Settings)
+    // takes the same path: Main.qml's onClosing runs the keep-awake confirm and
+    // the wizard leave guard first, and the staged installer is spawned from
+    // the coordinator's aboutToQuit hook only if the window actually goes.
+    const QWindowList windows = QGuiApplication::topLevelWindows();
+    for (QWindow* window : windows) {
+        if (window != nullptr && window->isVisible()) {
+            window->close();
+            return;
+        }
+    }
+}
+
+void AppViewModel::skipUpdate() { model_->updates()->skipAvailableVersion(); }
+
+void AppViewModel::openReleaseNotes() {
+    const QString url =
+        update_.notesUrl.isEmpty() ? QString::fromLatin1(kReleasesPageUrl) : update_.notesUrl;
+    openExternalUrl(url);
+}
+
+void AppViewModel::acknowledgeUpdated() {
+    model_->updates()->acknowledgeUpdated();
+    emit updateChanged();
 }
 
 } // namespace dish::qml
