@@ -1658,10 +1658,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from tinkernorth.com/satellite.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>What’s motion and what’s the touchpad?</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1756,6 +1752,10 @@
     <message>
         <source>View source on GitHub</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from dish.tinkernorth.com/downloads/satellite.</source>
+        <translation>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from dish.tinkernorth.com/downloads/satellite.</translation>
     </message>
 </context>
 <context>

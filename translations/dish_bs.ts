@@ -1729,10 +1729,6 @@
         <translation>Kako Dish radi i što pokušati kada ne radi</translation>
     </message>
     <message>
-        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from tinkernorth.com/satellite.</source>
-        <translation>Satellite je mali, besplatan program otvorenog koda koji radi na PC-u domaćinu. Prima unos iz Disha preko Wi-Fija i predstavlja se igrama na tom PC-u kao obični kontroler. Bez programa Satellite igre ne mogu vidjeti vaš kontroler. Instalirajte ga s tinkernorth.com/satellite.</translation>
-    </message>
-    <message>
         <source>What’s motion and what’s the touchpad?</source>
         <translation>Što je pokret, a što dodirna ploča?</translation>
     </message>
@@ -1767,6 +1763,10 @@
     <message>
         <source>Almost nothing. Dish doesn’t send gameplay or controller input anywhere except the host PC on your local network. Anonymous crash reports are on by default and can be turned off (Settings → Diagnostics). See the privacy policy for the full list.</source>
         <translation>Gotovo ništa. Dish ne šalje igru ni unos kontrolera nigdje osim na PC domaćin na vašoj lokalnoj mreži. Anonimni izvještaji o padovima uključeni su po zadanom i mogu se isključiti (Podešavanja → Dijagnostika). Cijeli spisak potražite u politici privatnosti.</translation>
+    </message>
+    <message>
+        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from dish.tinkernorth.com/downloads/satellite.</source>
+        <translation>Satellite je mali, besplatan program otvorenog koda koji radi na PC-u domaćinu. Prima unos iz Disha preko Wi-Fija i predstavlja se igrama na tom PC-u kao obični kontroler. Bez programa Satellite igre ne mogu vidjeti vaš kontroler. Instalirajte ga s dish.tinkernorth.com/downloads/satellite.</translation>
     </message>
 </context>
 <context>

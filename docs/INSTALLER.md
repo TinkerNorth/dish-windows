@@ -515,6 +515,16 @@ registry:
 
 ## 9. Working on this
 
+### Reading the source
+
+Comments across `src/installer/`, `installer/`, `cmake/DishSetupImage.cmake`
+and the packaging manifests cite sections of the form `spec 3.5`, `spec D6` or
+`H7`. Those refer to the working specification the installer was implemented
+against, which is not part of this repository, and the numbering does not map
+onto this document's sections. Read each citation as the label of a named
+invariant: the surrounding comment states the rule in full, and this document
+is the maintained public description of the behaviour.
+
 ### Building
 
 The installer targets are defined in every configuration, with no opt-in

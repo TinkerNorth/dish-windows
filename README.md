@@ -172,7 +172,8 @@ the UI binding contract and the hardening roadmap are in
 
 Ports, byte layouts and JSON shapes match the other Dish clients so all four
 are interchangeable to a satellite. The authoritative contract lives in
-`satellite/docs/contract.md`; the client-side mirror is
+[`satellite/docs/contract.md`](https://github.com/TinkerNorth/satellite/blob/main/docs/contract.md);
+the client-side mirror is
 [`src/core/model/Protocol.h`](src/core/model/Protocol.h).
 
 | | |

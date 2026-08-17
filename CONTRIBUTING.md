@@ -4,6 +4,10 @@ This document covers the conventions that are not obvious from reading the
 code: the style gates, the translation gate, the hot-path rules, and what CI
 enforces.
 
+The [Code of Conduct](CODE_OF_CONDUCT.md) applies in every project space:
+issues, pull requests, and review threads. Reports go to
+`security@tinkernorth.com`, as that file says.
+
 ## Licensing of contributions
 
 Dish is LGPL-3.0-or-later end-to-end (`LICENSE`, `COPYING.GPL3`, source
@@ -230,6 +234,13 @@ at the end of this file is the standing backlog.
    `scripts/test-installer-roundtrip.ps1` against the freshly packed
    installer, and artifact upload.
 
+`version-consistency.yml` runs only when a version-carrying file moves
+(`CMakeLists.txt`, `packaging/dish.rc`, `vcpkg.json`, or the workflow pins): it
+fails the pull request when the three version declarations disagree, or when
+the vcpkg baseline in `vcpkg.json` stops matching the `VCPKG_COMMITID` the
+build workflows pin and the baseline `THIRD_PARTY.md` documents. Blocking, like
+everything above.
+
 Security gates:
 
 - `security.yml`, which calls the reusable `_security.yml`: action-pin lint
@@ -321,10 +332,11 @@ Before you tag:
 
 - **Bump the version in all three places.** `project(Dish VERSION ...)` in
   `CMakeLists.txt` is the source; `packaging/dish.rc` and `vcpkg.json` are
-  hand-mirrored. `release.yml` now fails the build when the tag, the CMake
-  version, or `dish.exe`'s own `ProductVersion` disagree, so a forgotten
-  `dish.rc` is a red workflow rather than a client that re-applies the same
-  update forever.
+  hand-mirrored. `version-consistency.yml` fails any pull request that moves
+  one of the three without the others, and `release.yml` fails the tag build
+  when the tag, the CMake version, or `dish.exe`'s own `ProductVersion`
+  disagree, so a forgotten `dish.rc` is a red workflow rather than a client
+  that re-applies the same update forever.
 - **Review `packaging/update-policy.json`.** Its `minimumSupportedVersion` is a
   reviewed release input, not a generated value: it goes into `latest.json`, and
   every client older than it treats the update as required and ignores a skip.
@@ -384,10 +396,11 @@ server and must produce byte-identical traffic. Protocol 1:
 - Packet layout: `token(4) | counter(4 BE) | ciphertext+tag`.
 - XUSB report: 12 bytes, little-endian.
 
-The authoritative opcode catalogue is `satellite/docs/contract.md`; the
-client-side subset this repo needs is `src/core/model/Protocol.h`. Any change
-here must be coordinated with `dish-android`, `dish-mac`, `dish-linux`, and
-`satellite` in the same release cycle.
+The authoritative opcode catalogue is
+[`satellite/docs/contract.md`](https://github.com/TinkerNorth/satellite/blob/main/docs/contract.md);
+the client-side subset this repo needs is `src/core/model/Protocol.h`. Any
+change here must be coordinated with `dish-android`, `dish-mac`, `dish-linux`,
+and `satellite` in the same release cycle.
 
 ## Reporting bugs
 

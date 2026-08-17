@@ -17,7 +17,7 @@
     {
       "group": "org.libsdl",
       "artifact": "SDL2",
-      "version": "2.30",
+      "version": "2.32.10",
       "name": "Simple DirectMedia Layer (SDL2)",
       "url": "https://www.libsdl.org/",
       "licenses": [
@@ -30,7 +30,7 @@
     {
       "group": "org.libsodium",
       "artifact": "libsodium",
-      "version": "1.0.20",
+      "version": "1.0.22",
       "name": "libsodium",
       "url": "https://libsodium.org/",
       "licenses": [
@@ -69,7 +69,7 @@
     {
       "group": "com.rsms",
       "artifact": "inter",
-      "version": "4.1",
+      "version": "4.001",
       "name": "Inter",
       "url": "https://rsms.me/inter/",
       "licenses": [

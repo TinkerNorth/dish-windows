@@ -35,7 +35,7 @@ Kit.Page {
         ListElement {
             kind: "faq"
             heading: QT_TR_NOOP("What is Satellite?")
-            answer: QT_TR_NOOP("Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from tinkernorth.com/satellite.")
+            answer: QT_TR_NOOP("Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from dish.tinkernorth.com/downloads/satellite.")
         }
         ListElement {
             kind: "faq"

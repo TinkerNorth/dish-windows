@@ -3,8 +3,8 @@
 //
 // Colour tokens, lifted verbatim from dish-android's colors.xml so every client
 // renders identically side-by-side. Both palettes MUST stay in lockstep with the
-// android `values/` and `values-night/` resources; see DESIGN.md for the token
-// <-> hex mapping and BRAND.md for the cross-repo schema.
+// android `values/` and `values-night/` resources; DESIGN.md carries the token
+// <-> hex mapping and the cross-client schema the names come from.
 
 #pragma once
 

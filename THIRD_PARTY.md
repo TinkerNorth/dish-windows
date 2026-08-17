@@ -25,8 +25,8 @@ today.
 | Component | Version | SPDX | How it reaches the user | Attribution obligation |
 |---|---|---|---|---|
 | [Qt 6](#2-qt-6) | 6.7.3 (CI and release); CMake requires >= 6.7 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
-| [SDL2](#sdl2) | 2.30.11 (vcpkg baseline `6f29f12e`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
-| [libsodium](#libsodium) | 1.0.20#3 (vcpkg baseline `6f29f12e`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
+| [SDL2](#sdl2) | 2.32.10#1 (vcpkg baseline `9e593bb1`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
+| [libsodium](#libsodium) | 1.0.22#1 (vcpkg baseline `9e593bb1`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
 | [miniz](#miniz) | 3.0.2 | `MIT` | Vendored source, statically linked into `dish-setup.exe`, `dish-payload-pack` and `DishTests`. Never linked into `dish.exe`. | Ship the copyright and permission notice. See section 3. |
 | [Inter](#4-inter) | 4.001 | `OFL-1.1` | Four `.ttf` faces embedded in `dish.exe` as Qt resources under `:/fonts/`. | Ship the license text with every copy. See section 4. |
 | [Catch2](#5-catch2) | 3.5.4 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
@@ -139,14 +139,14 @@ obligations on redistribution.
 
 SDL2 and libsodium are declared in [`vcpkg.json`](vcpkg.json) and resolved
 against the pinned `builtin-baseline`
-`6f29f12e82a8293156836ad81cc9bf5af41fe836` (vcpkg 2025.01.13), which is the same
+`9e593bb18ea69cc5095e012465dcd675a822ed0d` (vcpkg 2026.07.29), which is the same
 commit the CI workflow pins. Both are built as DLLs on the `x64-windows` triplet
 and both are dynamically linked. miniz is not a vcpkg dependency; it is
 vendored, and it belongs to the installer rather than to the app.
 
 ### SDL2
 
-Simple DirectMedia Layer 2.30.11. SPDX `Zlib`. Upstream:
+Simple DirectMedia Layer 2.32.10 (vcpkg port revision 1). SPDX `Zlib`. Upstream:
 <https://github.com/libsdl-org/SDL>.
 
 Used for controller enumeration, input polling, motion, rumble and light-bar
@@ -155,7 +155,7 @@ path.
 
 ```
 Simple DirectMedia Layer
-Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
+Copyright (C) 1997-2025 Sam Lantinga <slouken@libsdl.org>
 
 This software is provided 'as-is', without any express or implied
 warranty.  In no event will the authors be held liable for any damages
@@ -176,7 +176,7 @@ freely, subject to the following restrictions:
 
 ### libsodium
 
-libsodium 1.0.20 (vcpkg port revision 3). SPDX `ISC`. Upstream:
+libsodium 1.0.22 (vcpkg port revision 1). SPDX `ISC`. Upstream:
 <https://libsodium.org/>.
 
 Used for the pairing key derivation, the HKDF-SHA256 per-session key schedule,
@@ -185,7 +185,7 @@ and the ChaCha20-Poly1305 AEAD on the UDP data plane.
 ```
 ISC License
 
-Copyright (c) 2013-2025 Frank Denis <j at pureftpd dot org>
+Copyright (c) 2013-2026 Frank Denis <j at pureftpd dot org>
 
 Permission to use, copy, modify, and/or distribute this software for any
 purpose with or without fee is hereby granted, provided that the above
@@ -425,12 +425,8 @@ it can drift. It currently lists Qt 6, SDL2, libsodium, miniz, Catch2 and Inter,
 which is the same set of open-source components as this file, with the same
 licenses. The Microsoft components in section 6 are deliberately absent from the
 manifest: their terms are Microsoft's and there is no license text to render.
-Three further differences are worth knowing about:
+One further difference is worth knowing about:
 
-- The manifest gives SDL2 as `2.30`, where the pinned vcpkg baseline resolves to
-  `2.30.11`.
-- The manifest gives Inter as `4.1`, where the shipped `.ttf` name table says
-  `Version 4.001`.
 - The manifest lists Catch2, which is test-only and is not in the shipped binary.
   Showing it to a user is harmless but inaccurate.
 

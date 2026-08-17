@@ -148,6 +148,14 @@ release.
 
 ### Fixed
 
+- **Every in-app pointer at the Satellite download now names the same URL.**
+  The Help FAQ told users to install Satellite from `tinkernorth.com/satellite`,
+  a short form that was never stood up; it now names the
+  `dish.tinkernorth.com/downloads/satellite` address the Welcome screen, the
+  Connections page and the setup wizard already link. The Qt organisation
+  domain both executables declare also moved from `tinkernorth.dev` to
+  `tinkernorth.com` to match every other reference; QSettings on Windows keys
+  the registry path off the organisation *name*, so nothing stored moves.
 - **The app no longer exhausts its Window Manager object quota while a
   controller is attached.** SDL2's RawInput joystick backend leaks roughly
   200 USER objects per second on Windows 11 whenever any joystick is present;
@@ -200,8 +208,10 @@ release.
   `dish-android`.
 - The live session loop, the SDL input threading and the USB claim path cannot be
   exercised in CI, because CI has no socket, no satellite and no controller.
-  Those paths are verified by hand. `docs/ARCHITECTURE.md` section 11 tracks what
-  is landed against what is specified and tested but not yet wired.
+  Those paths are verified by hand. The
+  [Known limitations](docs/ARCHITECTURE.md#not-yet-implemented) section of
+  `docs/ARCHITECTURE.md` tracks what is landed against what is specified and
+  tested but not yet wired.
 - Release artifacts are not signed and carry no build provenance. The gaps are
   listed in [`SECURITY.md`](SECURITY.md). In practice this means SmartScreen
   warns the first time a freshly downloaded `dish-setup.exe` is run, and the

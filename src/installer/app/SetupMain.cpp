@@ -127,7 +127,7 @@ int runUi(const CliOptions& options, Logger& logger, int argc, char** argv) {
     // QSettings identity (it only ever probes; the install record itself lives
     // in .dish-manifest.json, spec D5).
     QCoreApplication::setOrganizationName(QStringLiteral("TinkerNorth"));
-    QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.dev"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.com"));
     QCoreApplication::setApplicationName(QStringLiteral("Dish"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     dish::crash::install();

@@ -1718,10 +1718,6 @@
         <translation>Cómo funciona Dish y qué probar cuando no funciona</translation>
     </message>
     <message>
-        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from tinkernorth.com/satellite.</source>
-        <translation>Satellite es un programa pequeño, gratuito y de código abierto que se ejecuta en el PC anfitrión. Recibe la entrada de Dish por Wi-Fi y se presenta ante los juegos de ese PC como un mando normal. Sin Satellite, los juegos no pueden ver tu mando. Instálalo desde tinkernorth.com/satellite.</translation>
-    </message>
-    <message>
         <source>What’s motion and what’s the touchpad?</source>
         <translation>¿Qué son el movimiento y el panel táctil?</translation>
     </message>
@@ -1756,6 +1752,10 @@
     <message>
         <source>Almost nothing. Dish doesn’t send gameplay or controller input anywhere except the host PC on your local network. Anonymous crash reports are on by default and can be turned off (Settings → Diagnostics). See the privacy policy for the full list.</source>
         <translation>Casi nada. Dish no envía las partidas ni la entrada del mando a ningún sitio salvo al PC anfitrión de tu red local. Los informes de fallos anónimos están activados por defecto y se pueden desactivar (Ajustes → Diagnóstico). Consulta la política de privacidad para ver la lista completa.</translation>
+    </message>
+    <message>
+        <source>Satellite is a small, free, open-source program that runs on the host PC. It receives input from Dish over Wi-Fi and presents itself to that PC’s games as a regular controller. Without Satellite, games can’t see your controller. Install it from dish.tinkernorth.com/downloads/satellite.</source>
+        <translation>Satellite es un programa pequeño, gratuito y de código abierto que se ejecuta en el PC anfitrión. Recibe la entrada de Dish por Wi-Fi y se presenta ante los juegos de ese PC como un mando normal. Sin Satellite, los juegos no pueden ver tu mando. Instálalo desde dish.tinkernorth.com/downloads/satellite.</translation>
     </message>
 </context>
 <context>
