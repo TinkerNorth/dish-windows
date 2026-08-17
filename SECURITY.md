@@ -50,10 +50,10 @@ Out of scope:
 
 ## Supported versions
 
-The project has not cut a `v*` tag yet, so there is no released version to
-support. Once releases begin: the latest minor on `main` is supported, the
-previous minor receives high and critical backports for 90 days, and patch
-releases are issued on demand for the latest minor.
+The latest minor release is supported, the previous minor receives high and
+critical backports for 90 days, and patch releases are issued on demand for the
+latest minor. 1.0.0 is the first release, so as of it there is no previous
+minor to backport to.
 
 Windows 10 and Windows 11 x64 are the supported platforms.
 
@@ -273,9 +273,6 @@ absence of `uninstall.exe` beside it and downgrades to notify-only.
   scanned by Grype or an equivalent.
 - **One SBOM format.** SPDX-JSON only. There is no CycloneDX SBOM.
 - **`SHA256SUMS` is unsigned and in-band.** See above.
-- **No release has shipped.** `release.yml` has never run against a tag, so the
-  pipeline described here is verified by reading it, not by having produced an
-  artifact.
 
 These are tracked in the roadmap section of
 [`CONTRIBUTING.md`](CONTRIBUTING.md). Nothing in this document should be read

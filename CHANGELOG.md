@@ -5,18 +5,14 @@ format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**There are no releases yet.** Nothing has been tagged, so this file has no
-version history to show. Numbered sections begin with the first tagged release;
-until then everything below is under `Unreleased`, and the development history is
-in `git log`.
-
-The binary currently declares version `0.1.0`. That number has one source,
-`project(Dish VERSION 0.1.0)` in [`CMakeLists.txt`](CMakeLists.txt), which
-becomes the `DISH_VERSION` compile definition the in-app About surface reads. It
-is mirrored by hand in `packaging/dish.rc` (the Windows version-info resource
-Explorer and Task Manager show) and in [`vcpkg.json`](vcpkg.json). Keep all three
-in step when it changes; `release.yml` now enforces it, failing the tag build
-when the tag, the CMake version and `dish.exe`'s own `ProductVersion` disagree.
+The version number has one source, `project(Dish VERSION ...)` in
+[`CMakeLists.txt`](CMakeLists.txt), which becomes the `DISH_VERSION` compile
+definition the in-app About surface reads. It is mirrored by hand in
+`packaging/dish.rc` (the Windows version-info resource Explorer and Task
+Manager show) and in [`vcpkg.json`](vcpkg.json). Keep all three in step when it
+changes: `version-consistency.yml` fails a pull request that moves one without
+the others, and `release.yml` fails the tag build when the tag, the CMake
+version and `dish.exe`'s own `ProductVersion` disagree.
 
 Cross-repo coordination: changes to the wire protocol or the pairing flow that
 need matching updates in `satellite`, `dish-android`, `dish-linux` or `dish-mac`
@@ -26,6 +22,10 @@ share a version number.
 ---
 
 ## [Unreleased]
+
+Nothing yet.
+
+## [1.0.0] - 2026-08-17
 
 First public release of the Windows client. It reaches protocol-1 parity with
 the other Dish clients, so a satellite cannot tell them apart. The list below is
@@ -218,4 +218,5 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/commits/main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/v1.0.0...main
+[1.0.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/v1.0.0

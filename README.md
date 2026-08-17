@@ -19,12 +19,10 @@ Physical controllers only. There is no on-screen touch gamepad; that belongs to
 
 ## Status
 
-Pre-release, version 0.1.0. Nothing has been tagged yet, so the install section
-below describes what the release pipeline produces once a `v*` tag is pushed.
-The implementation is at protocol-1 parity with the other clients and the test
-suite is broad, but the live session loop, the SDL input threading and the USB
-claim path cannot be exercised in CI (no socket, no satellite, no controller)
-and are verified by hand.
+Version 1.0.0, the first tagged release, at protocol-1 parity with the other
+clients. The test suite is broad, but the live session loop, the SDL input
+threading and the USB claim path cannot be exercised in CI (no socket, no
+satellite, no controller) and are verified by hand.
 [Known limitations](docs/ARCHITECTURE.md#not-yet-implemented) tracks what is
 landed versus what is a tested-but-unwired specification.
 

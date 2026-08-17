@@ -27,7 +27,7 @@ assignees: ''
 ## Your setup
 
 - **Windows edition and build**: <!-- run `winver`, e.g. Windows 11 Pro 24H2, build 26100.1742 -->
-- **Dish version**: <!-- Settings > About, e.g. 0.1.0 -->
+- **Dish version**: <!-- Settings > About, e.g. 1.0.0 -->
 - **How you installed it**: <!-- release zip, or built from source (give the commit) -->
 - **Satellite version and platform**: <!-- e.g. satellite 0.4.1 on Ubuntu 24.04 / Windows 11 -->
 

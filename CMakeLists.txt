@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(Dish
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
     # C is for the vendored miniz amalgamation (third_party/miniz/miniz.c),
     # compiled per-target into the installer stub, the pack tool and DishTests.
