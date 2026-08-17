@@ -23,7 +23,22 @@ share a version number.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **The installer is now Inno Setup.** `dish-setup.exe` is compiled from
+  [`installer.iss`](installer.iss); the bespoke SFX stub, Qt Quick wizard,
+  install/uninstall engine and pack tool are gone (~30k lines). The defaults
+  survive: per-user with no administrator prompt, all-users on request, Start
+  Menu always, Desktop opt-in, Windows 10 1809+ x64. The asset names and the
+  whole auto-update chain (staging, three-point SHA-256 verification, the
+  two-attempt cap, old-build relaunch on a failed apply) are unchanged. New
+  behaviour: a running Dish is closed and restarted through Restart Manager
+  instead of blocking the install; the silent grammar is Inno's standard
+  switch set; the uninstaller is `unins000.exe` (`uninstall.exe` and
+  `--purge-user-data` are gone, and `PRIVACY.md` documents the manual wipe);
+  the recovery path for a broken download is `innoextract` instead of
+  `7z x`. The installer wizard speaks five of the app's six languages;
+  Bosnian has no official Inno catalogue yet.
 
 ## [1.0.0] - 2026-08-17
 

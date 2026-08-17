@@ -490,14 +490,14 @@ CI), so each needs a device-in-the-loop test pass.
   per-language `numerusform` order, and placeholder integrity across every
   catalogue. `scripts/check-translations.ps1` re-runs `lupdate` in CI and fails
   on any diff, so a new string cannot land without its catalogue entry.
-- **The installer and the updater are tested the same way.** Test names are
-  prefixed so `ctest -R installer` and `-R update` select them: exhaustive
-  reducer tables for `InstallMachine`, `UninstallMachine` and `UpdateMachine`,
-  the payload pack-and-extract round trip including corrupt CRCs and hostile
-  entry names, the manifest and CLI grammars, the staging store's marker-last
-  commit and janitor rules, and the boot gate's guards one at a time. The Win32
-  seams that cannot be faked usefully (long Unicode paths, detecting a running
-  process) are tested against the real implementations in a temporary tree.
+- **The updater is tested the same way.** Test names are prefixed so
+  `ctest -R update` selects them: the exhaustive reducer table for
+  `UpdateMachine`, the manifest grammar, the staging store's marker-last
+  commit and janitor rules, the boot gate's guards one at a time, and the
+  documented Inno switch string the handoff spawns. The installer itself is
+  Inno Setup, so its contract is asserted end to end instead of unit by unit:
+  `scripts/test-installer-roundtrip.ps1` runs install, ARP values, repair and
+  uninstall against a real disk and a real HKCU in both workflows.
   End to end, `scripts/test-installer-roundtrip.ps1` installs, repairs,
   upgrades, applies an update and uninstalls on every pull request. See
   [`docs/INSTALLER.md`](INSTALLER.md).

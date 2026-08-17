@@ -146,31 +146,16 @@ jobs:
           }
           # The app's OWN QML module entry, which windeployqt cannot know about:
           # --qmldir scans imports and deploys the QT modules they resolve to,
-          # and Dish.Chrome is not one of Qt's.
+          # and Dish.Chrome is not one of Qt's. dish.exe carries a compiled-in
+          # copy, but Qt searches <exedir>/Dish/Chrome/qmldir BEFORE it, so the
+          # file that ships had better be the app's own. It is only the module
+          # ENTRY: the `prefer` line inside sends every type to the compiled-in
+          # copy, so no .qml source ships.
           #
-          # dish.exe does carry its own compiled-in copy now. It did not always:
-          # the app module and the installer's dish_setup_kit declare the SAME
-          # URI, Qt derives the generated resource's name from the URI alone, and
-          # while both calls lived in one CMake scope they shared one
-          # .qt/rcc/qmake_Dish_Chrome.qrc — the second call won it and dish.exe
-          # shipped holding the kit's qmldir, which lists the ~40 kit types and
-          # knows nothing about Main. src/qml/kit/CMakeLists.txt fixed that by
-          # declaring the kit's module from a directory scope of its own.
-          #
-          # This still stages the file, because Qt searches
-          # <exedir>/Dish/Chrome/qmldir BEFORE the compiled-in copy (that
-          # precedence is exactly what let the bug hide in the build tree). A
-          # bundle carrying the module entry its own build generated is right
-          # whichever copy the engine picks; a bundle carrying the WRONG one dies
-          # at startup with
-          #   Module "Dish.Chrome" contains no type named "Main"
-          # It is only the module ENTRY: the `prefer` line inside sends every
-          # type to the compiled-in copy, so no .qml source ships.
-          #
-          # The two asserts are the point. They fail the release, named, if the
-          # CMake arrangement ever regresses to one shared resource, instead of
+          # The two asserts fail the release, named, if the build ever stops
+          # generating a qmldir that declares the app's Main type, instead of
           # letting a bundle nobody launched go out.
-          # cmake/DishSetupImage.cmake section 2b stages and checks the same file.
+          # cmake/DishSetupImage.cmake section 3 stages and checks the same file.
           $qmldir = 'build/Dish/Chrome/qmldir'
           if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the bundled dish.exe could not resolve its own QML module" }
           if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }

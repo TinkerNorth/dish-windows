@@ -192,17 +192,11 @@ jobs:
           }
           # The app's OWN QML module entry. windeployqt deploys the QT modules
           # the imports resolve to, and Dish.Chrome is not one of Qt's. dish.exe
-          # carries a compiled-in copy since src/qml/kit/CMakeLists.txt gave the
-          # setup kit's identically-named module a directory scope of its own —
-          # before that the two shared one generated qmldir resource and the kit
-          # won it, so the deployed app died with
-          #   Module "Dish.Chrome" contains no type named "Main"
-          # Staged anyway because Qt searches <exedir>/Dish/Chrome/qmldir before
-          # the compiled-in copy (the precedence that hid the bug in the build
-          # tree), so the file that is there had better be the app's. The asserts
-          # name a regression in that CMake arrangement here rather than leave it
-          # to the smoke test below. Same staging as release.yml and
-          # cmake/DishSetupImage.cmake section 2b.
+          # carries a compiled-in copy, but Qt searches <exedir>/Dish/Chrome/qmldir
+          # BEFORE it, so the file that ships had better be the app's own. The
+          # asserts name a regression here rather than leave it to the smoke
+          # test below. Same staging as release.yml and
+          # cmake/DishSetupImage.cmake section 3.
           $qmldir = 'build-release/Dish/Chrome/qmldir'
           if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the staged dish.exe could not resolve its own QML module" }
           if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }

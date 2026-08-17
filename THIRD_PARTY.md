@@ -367,8 +367,7 @@ One further difference is worth knowing about:
   Showing it to a user is harmless but inaccurate.
 
 When a dependency is added, changed or dropped, update
-[`vcpkg.json`](vcpkg.json) (or `third_party/<name>/README.dish.md` for a
-vendored one), the manifest, and this file together.
+[`vcpkg.json`](vcpkg.json), the manifest, and this file together.
 
 ---
 
