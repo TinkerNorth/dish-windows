@@ -74,6 +74,7 @@ class SlotListModel : public QAbstractListModel {
         SatLatencySamplesRole,
 
         HasTouchpadRole,
+        HasRumbleRole,
         VerifiedModelRole,
     };
     Q_ENUM(Roles)

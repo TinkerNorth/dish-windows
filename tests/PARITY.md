@@ -678,3 +678,33 @@ built app:
   tokens; `BrandGlyph` now maps an empty glyph to an empty source (was
   warning `qrc:/brand/.svg` on every hidden-glyph create).
 - Contract: `docs/QML_CONTRACT.md`, "The bound-satellite join".
+
+---
+
+## Android 2026-07/08 wave (#145–#159) — reviewed 2026-08-17
+
+One row per substantive android PR merged 2026-07-15..2026-08-17, disposition
+against this tree. Dependency bumps skipped. Same reading rules as the
+post-audit ledger.
+
+| ✓ | Android PR | Disposition | Notes |
+|---|---|---|---|
+| [x] | #145 send-counter nonce-reuse guard | already ported | Landed here as #23 (64-bit counter goes silent past 2^32−1, clamped view, proactive re-key at 0xF0000000). The warning/CI-hygiene layer is android-build-specific. |
+| [x] | #146 gate rumble/motion on the active path | **ported (this wave)** | The rule ("a capability shows only where it fires"), re-derived for Windows' inverted actuator reality: SDL (Standard) drives rumble/lightbar and forwards motion/touch, the raw-HID claim (Direct) decodes motion/touch but drives nothing back. `CAP_RUMBLE` folds per-slot (SDL probe on Standard, never on Direct); the bind seams read `slotHardware` so a Direct claim advertises the motion/touchpad it decodes (they used to scan only the SDL list — CAP_MOTION and the touchpad render mode were silently dropped for every synthetic slot); `CapabilitySolver::linkCarries` tells the same per-path truth; the UI rumble chips read the probe. android's `modelFrameworkRumbleUnreliable` (Switch Pro phantom framework vibrator) has no Windows analog: SDL's HIDAPI switch driver actually drives the Pro's rumble. Pinned in test_capability_solver (per-path matrix), test_session_lifecycle (per-slot fold), test_satellite_client_motion (bit 0x0002). |
+| [x] | #147 Android 17 Local Network Protections | SKIP (android-OS) | A runtime-permission model this platform does not have; Windows' firewall consent is OS-owned. |
+| [x] | #149 USB setup recovery (SetupUsbViewModel) | SKIP (architecture) | The dead-ended modal "How should Dish read it?" screen does not exist here: pads auto-appear, the path pick lives on the card, and the FSM's NeedsReplug/RestoreStuck phases + notices already surface retry/replug inline (§2.6). No dead end to fix. |
+| [x] | #150 classify USB-direct by interface descriptor | **HID arm ported (this wave)** | The XInput/GIP arms are unreachable: XUSB hides those pads from raw HID, so no VID:PID allowlist ever gated them here. The HID arm's Windows analog is decode-by-descriptor: GENERIC-HID claims now build a per-device field map from HidP preparsed caps (real usages, logical ranges, button indices) instead of the fixed-offset guess; `UsbHidLayout.h`'s pure parser/decoder is the vector-pinned reference (test_usb_hid_layout, android's fixtures byte-for-byte). The ranked-interface-selection arm maps to per-collection admission (`collectionMatchesParser`): Windows splits interfaces into separate HID collections, so ranking reduces to admitting only the collection the model's parser decodes. |
+| [x] | #151 touch-capable "Needs Direct" nudge | SKIP (reaffirmed) | Premise-invalid on Windows: SDL forwards the DS4/DualSense touchpad on Standard, so there is nothing to nudge toward. |
+| [x] | #152 DualSense + Switch Pro + thin-catalog | already ported + **prewarm closed (this wave)** | Types/thin-catalog landed as #29 + the release addendum. The one open tail — `CatalogPrewarmer` — is now `core/reducer/CatalogPrewarm.h` + `AppModel::prewarmCatalogs()`: warm once per Live stretch, re-armed by a drop, silent (never drives `catalogState_`). Pinned in test_catalog_prewarm. |
+| [x] | #153 Amazon Luna Controller fast lane | SKIP (platform) | The Luna's wired mode is a byte-exact XInput device; on Windows the XUSB driver claims it and SDL serves it as an Xbox 360 pad already. Raw HID never sees it, so there is no table to add it to. |
+| [x] | #154 Steam Controller over USB Direct | **ported (this wave)** | `HidParser::SteamController` (state decode incl. shared stick/pad axes + IMU self-gate), quiet/restore config sequences over HidD feature reports with the capped transient-failure retry, restore on every release path, dongle wireless connect (re-init) / disconnect (neutral publish) events, vendor-collection admission by model, `frameworkExpected=false` FSM arms (release settles to Routed instead of a false RestoreStuck — android's exact branches), and a claimable card for frameworkless models (no SDL twin exists to host the path control; same slot id as the future synthetic so the binding survives the claim). Never fast-laned. Decode/config vectors pinned 1:1 from android's hardware-verified suite (test_usb_report_parsers `[steam]`). android's foreground-service and boot-interface-rank arms are android-plumbing. NOT hardware-verified on Windows — see the PR body's Unverified section. |
+| [x] | #157 fastlane metadata path / bs listing | SKIP (Play CI) | Google Play release plumbing; this repo ships via GitHub Releases + the installer. In-app Bosnian is unaffected on both platforms. |
+| [x] | #158 claim a silent verified pad | SKIP (by construction) | There is no attach probe on Windows: claims open the collection and start the read loop, interrupt reads stay pending until data arrives, and the departed-device sweep is presence-based. An idle event-driven pad claims and holds today, which is the behavior #158 built toward. |
+| [x] | #159 Switch-layout remap for PDP pads | **Direct half ported (this wave)** | `switchOrderButtonBit` + the ZL/ZR trigger fold in the shared layout decoder, `ButtonOrder::Switch` on the five PDP rows in `kKnownModels` (0186 excluded, same reason), wired through the HidP button-index mapping. The Standard half (keycode remap) is SDL's jurisdiction on Windows — `SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS=0` is already pinned so the two paths agree positionally. Truth tables + the Faceoff descriptor fixture + the western-scramble pin ported byte-for-byte (test_usb_hid_layout `[switch-order]`). |
+
+**Still-open android deltas closed by this wave:** catalog prewarm-on-Live;
+`UsbHidLayout.h` wiring (the HidP caps builder + gateway use now exist as
+`WinHidGateway::HidPDecode`); the per-path rumble capability HALF of the
+"per-path rumble + USB-direct OUTPUT write path" item (capability truth is
+done; the output write path itself — rumble/lightbar encoders + gateway
+writes — remains open, and is why Direct still advertises no rumble).

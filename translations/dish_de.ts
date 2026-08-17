@@ -166,14 +166,6 @@
         <translation>%1 verfügt nicht über %2.</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation>Der Standardmodus kann das nicht übertragen — wechsle die Verbindung zu Direkt.</translation>
-    </message>
-    <message>
-        <source>Direct mode needs a USB connection; over Bluetooth this can’t be carried.</source>
-        <translation>Der Direktmodus benötigt eine USB-Verbindung; über Bluetooth kann das nicht übertragen werden.</translation>
-    </message>
-    <message>
         <source>%1 doesn’t carry %2.</source>
         <translation>%1 überträgt %2 nicht.</translation>
     </message>
@@ -188,6 +180,10 @@
     <message>
         <source>%1 doesn’t advertise %2.</source>
         <translation>%1 bietet %2 nicht an.</translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
+        <translation>Der Direktmodus kann das nicht ansteuern — wechsle die Verbindung zu Standard.</translation>
     </message>
 </context>
 <context>
@@ -586,10 +582,6 @@
         <translation>Nicht erkannt. Der Direktmodus errät die Belegung dieses Controllers, daher können einige Eingaben falsch sein. Du kannst jederzeit zurückwechseln.</translation>
     </message>
     <message>
-        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path — gyro, touchpad and lightbar can’t be carried.</source>
-        <translation>Der Direktmodus benötigt eine USB-Verbindung. Über Bluetooth läuft dieses Pad auf dem Standardpfad — Gyro, Touchpad und Lichtleiste können nicht übertragen werden.</translation>
-    </message>
-    <message>
         <source>Functions</source>
         <translation>Funktionen</translation>
     </message>
@@ -748,6 +740,14 @@
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windows kann bis zu 20 Sekunden brauchen, um das Gerät zu übergeben.</translation>
+    </message>
+    <message>
+        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.</source>
+        <translation>Der Direktmodus benötigt eine USB-Verbindung. Über Bluetooth läuft dieses Pad auf dem Standardpfad.</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Keine Vibration</translation>
     </message>
 </context>
 <context>
@@ -2123,10 +2123,6 @@
         <translation type="unfinished">Gyro</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation>Der Standardmodus kann das nicht übertragen — wechsle die Verbindung zu Direkt.</translation>
-    </message>
-    <message>
         <source>Rumble</source>
         <translation>Vibration</translation>
     </message>
@@ -2657,6 +2653,10 @@
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windows kann bis zu 20 Sekunden brauchen, um das Gerät zu übergeben.</translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
+        <translation>Der Direktmodus kann das nicht ansteuern — wechsle die Verbindung zu Standard.</translation>
     </message>
 </context>
 <context>
@@ -4067,6 +4067,10 @@
     <message>
         <source>Nothing appearing? A pad Windows itself doesn’t list won’t reach Dish either — check Windows’ own Devices first.</source>
         <translation>Es erscheint nichts? Ein Pad, das Windows selbst nicht auflistet, erreicht auch Dish nicht — sieh zuerst unter „Geräte“ in Windows nach.</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Keine Vibration</translation>
     </message>
 </context>
 <context>

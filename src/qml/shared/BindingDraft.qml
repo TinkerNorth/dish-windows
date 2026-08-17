@@ -163,9 +163,7 @@ QtObject {
                 return qsTr("No touchpad on this controller to drive a mouse.");
             return qsTr("%1 has no %2.").arg(draft.padName).arg(draft.featureNoun(row.feature));
         case "link":
-            return draft.padClaimable
-                ? qsTr("Standard mode can’t carry it — switch the connection to Direct.")
-                : qsTr("Direct mode needs a USB connection; over Bluetooth this can’t be carried.");
+            return qsTr("Direct mode can’t drive it — switch the connection to Standard.");
         case "type":
             return qsTr("%1 doesn’t carry %2.").arg(draft.typeName)
                                                .arg(draft.featureNoun(row.feature));

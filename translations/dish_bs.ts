@@ -166,14 +166,6 @@
         <translation>%1 nema podršku za %2.</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation>Standardni način ovo ne može prenijeti — prebacite vezu na Brzi.</translation>
-    </message>
-    <message>
-        <source>Direct mode needs a USB connection; over Bluetooth this can’t be carried.</source>
-        <translation>Brzi način zahtijeva USB vezu; preko Bluetootha se ovo ne može prenijeti.</translation>
-    </message>
-    <message>
         <source>%1 doesn’t carry %2.</source>
         <translation>%1 nema kanal za %2.</translation>
     </message>
@@ -188,6 +180,10 @@
     <message>
         <source>%1 doesn’t advertise %2.</source>
         <translation>%1 ne oglašava podršku za %2.</translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
+        <translation>Brzi način ovo ne može pokrenuti — prebacite vezu na Standardni.</translation>
     </message>
 </context>
 <context>
@@ -589,10 +585,6 @@
         <translation>Nije prepoznato. Brzi način pogađa raspored ovog kontrolera, pa neki unosi mogu biti pogrešni. Možete se vratiti u svakom trenutku.</translation>
     </message>
     <message>
-        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path — gyro, touchpad and lightbar can’t be carried.</source>
-        <translation>Brzi način zahtijeva USB vezu. Preko Bluetootha ovaj pad ide Standardnim putem — žiro, dodirna ploča i svjetlosna traka se ne mogu prenijeti.</translation>
-    </message>
-    <message>
         <source>Functions</source>
         <translation>Funkcije</translation>
     </message>
@@ -751,6 +743,14 @@
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windowsu može trebati do 20 sekundi da preda uređaj.</translation>
+    </message>
+    <message>
+        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.</source>
+        <translation>Brzi način zahtijeva USB vezu. Preko Bluetootha ovaj pad ide Standardnim putem.</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Nema vibracije</translation>
     </message>
 </context>
 <context>
@@ -2136,10 +2136,6 @@
         <translation type="unfinished">Žiro</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation>Standardni način ovo ne može prenijeti — prebacite vezu na Brzi.</translation>
-    </message>
-    <message>
         <source>Rumble</source>
         <translation>Vibracija</translation>
     </message>
@@ -2670,6 +2666,10 @@
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windowsu može trebati do 20 sekundi da preda uređaj.</translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
+        <translation>Brzi način ovo ne može pokrenuti — prebacite vezu na Standardni.</translation>
     </message>
 </context>
 <context>
@@ -4084,6 +4084,10 @@
     <message>
         <source>Nothing appearing? A pad Windows itself doesn’t list won’t reach Dish either — check Windows’ own Devices first.</source>
         <translation>Ništa se ne pojavljuje? Pad koji ni sam Windows ne navodi neće stići ni do Disha — prvo provjerite Uređaje u samom Windowsu.</translation>
+    </message>
+    <message>
+        <source>No rumble</source>
+        <translation>Nema vibracije</translation>
     </message>
 </context>
 <context>

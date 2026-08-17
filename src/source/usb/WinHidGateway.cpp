@@ -4,6 +4,7 @@
 #include "source/usb/WinHidGateway.h"
 
 #include "core/input/HidTransport.h"
+#include "core/input/UsbHidLayout.h"
 #include "core/input/UsbReportParsers.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
@@ -24,6 +25,10 @@ namespace {
 constexpr USAGE kUsagePageGenericDesktop = 0x01;
 constexpr USAGE kUsageJoystick = 0x04;
 constexpr USAGE kUsageGamepad = 0x05;
+// The Steam Controller's game interface is vendor-defined HID with no gamepad
+// usages, so Android never enumerates it as a gamepad and neither does this
+// filter; it is admitted by model, not by shape.
+constexpr USAGE kUsagePageVendor = 0xFF00;
 
 // Microsoft's vendor id. Xbox pads are XInput-claimed and won't appear as HID,
 // but a few Microsoft HID peripherals share the VID; we skip MS-VID gamepad
@@ -32,10 +37,20 @@ constexpr int kVidMicrosoft = 0x045E;
 
 // Known HID-class "fast-lane" controller vendor ids worth auto-claiming Direct
 // on Windows: Sony (DualSense/DS4), Nintendo (Switch Pro), 8BitDo. Xbox pads are
-// deliberately absent — they live on XInput, not raw HID.
+// deliberately absent — they live on XInput, not raw HID. Models from the
+// known-model table (PDP Switch pads, the Steam Controller) are reached only
+// through an explicit Direct pick, never auto-claimed: the Steam Controller
+// claim reconfigures a device its owner may be using as a desktop mouse.
 constexpr int kVidSony = 0x054C;
 constexpr int kVidNintendo = 0x057E;
 constexpr int kVid8BitDo = 0x2DC8;
+
+// Feature-report writes retry the way SDL and hid-steam retry EPIPE: the
+// wireless dongle under load fails transiently, not terminally. The budget is
+// capped so even a wholly unresponsive device finishes init and teardown well
+// inside the manager's transition timeout.
+constexpr int kFeatureReportAttempts = 25;
+constexpr DWORD kFeatureReportRetryMs = 20;
 
 std::string wideToUtf8(const wchar_t* w) {
     if (w == nullptr) { return {}; }
@@ -57,7 +72,264 @@ std::string productName(HANDLE h, const std::string& fallbackPath) {
     return fallbackPath;
 }
 
+// Whether this HID collection is the one the model's parser decodes: the
+// vendor-defined game interface for the Steam Controller (its keyboard and
+// mouse collections share the VID:PID), a gamepad/joystick collection for
+// every other family.
+bool collectionMatchesParser(const HIDP_CAPS& caps, input::usbparse::HidParser parser) {
+    if (parser == input::usbparse::HidParser::SteamController) {
+        return caps.UsagePage == kUsagePageVendor;
+    }
+    return caps.UsagePage == kUsagePageGenericDesktop &&
+           (caps.Usage == kUsageGamepad || caps.Usage == kUsageJoystick);
+}
+
+// One Steam Controller config feature report: report id 0 + the packet, padded
+// to the collection's feature length, with the transient-failure retry both
+// reference drivers use.
+bool sendSteamFeature(HANDLE h, int featureLen, const std::uint8_t* data, std::size_t len) {
+    std::array<std::uint8_t, 128> buf{};
+    if (featureLen <= 0 || static_cast<std::size_t>(featureLen) > buf.size() ||
+        len + 1 > static_cast<std::size_t>(featureLen)) {
+        return false;
+    }
+    std::memcpy(buf.data() + 1, data, len);
+    for (int attempt = 0; attempt < kFeatureReportAttempts; attempt++) {
+        if (HidD_SetFeature(h, buf.data(), static_cast<ULONG>(featureLen)) != 0) { return true; }
+        Sleep(kFeatureReportRetryMs);
+    }
+    return false;
+}
+
+// Runs one config direction (quiet at attach, restore at release) to the end.
+// Restore is best-effort: a pad that is gone can no longer be restored, and
+// failing the release over it would strand the claim.
+bool runSteamConfig(HANDLE h, int featureLen, input::usbparse::SteamConfig stage) {
+    std::array<std::uint8_t, 16> pkt{};
+    for (int i = 0;; i++) {
+        const std::size_t n =
+            input::usbparse::buildSteamConfigPacket(stage, i, pkt.data(), pkt.size());
+        if (n == 0) { break; }
+        if (!sendSteamFeature(h, featureLen, pkt.data(), n)) { return false; }
+    }
+    return true;
+}
+
 } // namespace
+
+// The caps-derived field map for GENERIC-HID pads. Windows exposes preparsed
+// data instead of the raw report descriptor, so HidP_GetUsageValue/GetUsages
+// against it replaces the bit-offset walk of core/input/UsbHidLayout.h; the
+// scaling and the button-index mapping stay in that shared pure header so the
+// cross-client decode rules have one home.
+struct WinHidGateway::HidPDecode {
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    bool valid = false;
+
+    struct Axis {
+        bool present = false;
+        USAGE page = 0;
+        USAGE usage = 0;
+        input::usbhid::HidAxis scale;
+    };
+    Axis lx, ly, rx, ry, lt, rt;
+    bool hasHat = false;
+    USAGE hatPage = 0;
+    USAGE hatUsage = 0;
+    std::int32_t hatLogicalMin = 0;
+    std::int32_t hatLogicalMax = 0;
+    bool hasButtons = false;
+    USAGE buttonPage = 0;
+    USAGE buttonUsageMin = 0;
+    bool switchOrderButtons = false;
+
+    ~HidPDecode() {
+        if (preparsed != nullptr) { HidD_FreePreparsedData(preparsed); }
+    }
+
+    // First declaration of an axis wins, mirroring UsbHidLayout::assignUsage.
+    void assign(USAGE page, USAGE usage, const HIDP_VALUE_CAPS& vc) {
+        Axis* slot = nullptr;
+        if (page == 0x01) {
+            switch (usage) {
+            case 0x30:
+                slot = &lx;
+                break;
+            case 0x31:
+                slot = &ly;
+                break;
+            case 0x32:
+                slot = &rx;
+                break;
+            case 0x35:
+                slot = &ry;
+                break;
+            case 0x33:
+                slot = &lt;
+                break;
+            case 0x34:
+                slot = &rt;
+                break;
+            case 0x39:
+                if (!hasHat) {
+                    hasHat = true;
+                    hatPage = page;
+                    hatUsage = usage;
+                    hatLogicalMin = vc.LogicalMin;
+                    hatLogicalMax = vc.LogicalMax;
+                }
+                return;
+            default:
+                return;
+            }
+        } else if (page == 0x02) {
+            if (usage == 0xC5) {
+                slot = &lt;
+            } else if (usage == 0xC4) {
+                slot = &rt;
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+        if (slot->present) { return; }
+        slot->present = true;
+        slot->page = page;
+        slot->usage = usage;
+        slot->scale.present = true;
+        slot->scale.bitSize = static_cast<std::uint8_t>(vc.BitSize);
+        slot->scale.logicalMin = vc.LogicalMin;
+        slot->scale.logicalMax = vc.LogicalMax;
+    }
+
+    void build(int vendorId, int productId) {
+        HIDP_CAPS caps{};
+        if (HidP_GetCaps(preparsed, &caps) != HIDP_STATUS_SUCCESS) { return; }
+
+        std::vector<HIDP_VALUE_CAPS> vcaps(caps.NumberInputValueCaps);
+        USHORT vlen = caps.NumberInputValueCaps;
+        if (vlen > 0 &&
+            HidP_GetValueCaps(HidP_Input, vcaps.data(), &vlen, preparsed) == HIDP_STATUS_SUCCESS) {
+            for (USHORT i = 0; i < vlen; i++) {
+                const auto& vc = vcaps[i];
+                if (vc.IsRange != 0) {
+                    for (USAGE u = vc.Range.UsageMin; u <= vc.Range.UsageMax; u++) {
+                        assign(vc.UsagePage, u, vc);
+                    }
+                } else {
+                    assign(vc.UsagePage, vc.NotRange.Usage, vc);
+                }
+            }
+        }
+
+        std::vector<HIDP_BUTTON_CAPS> bcaps(caps.NumberInputButtonCaps);
+        USHORT blen = caps.NumberInputButtonCaps;
+        if (blen > 0 &&
+            HidP_GetButtonCaps(HidP_Input, bcaps.data(), &blen, preparsed) == HIDP_STATUS_SUCCESS) {
+            for (USHORT i = 0; i < blen; i++) {
+                const auto& bc = bcaps[i];
+                if (bc.UsagePage != 0x09 || hasButtons) { continue; }
+                hasButtons = true;
+                buttonPage = bc.UsagePage;
+                buttonUsageMin = bc.IsRange != 0 ? bc.Range.UsageMin : bc.NotRange.Usage;
+            }
+        }
+
+        switchOrderButtons = input::usbparse::buttonOrderForDevice(vendorId, productId) ==
+                             input::usbparse::ButtonOrder::Switch;
+        // Same validity rule as parseReportDescriptor: something gamepad-like
+        // must exist, else the fixed-offset fallback stays in charge.
+        valid = lx.present || ly.present || hasButtons || hasHat;
+    }
+
+    std::int32_t readValue(const Axis& a, PCHAR report, ULONG len) const {
+        ULONG raw = 0;
+        if (HidP_GetUsageValue(HidP_Input, a.page, 0, a.usage, &raw, preparsed, report, len) !=
+            HIDP_STATUS_SUCCESS) {
+            return 0;
+        }
+        return static_cast<std::int32_t>(raw);
+    }
+
+    bool decode(const std::uint8_t* buf, std::size_t len, input::usbparse::ParsedReport& s) const {
+        if (!valid) { return false; }
+        auto* report = reinterpret_cast<PCHAR>(const_cast<std::uint8_t*>(buf));
+        const auto rlen = static_cast<ULONG>(len);
+
+        using input::usbhid::scaleAxis16;
+        using input::usbhid::scaleTrig8;
+        if (lx.present) {
+            s.lx = scaleAxis16(static_cast<std::uint32_t>(readValue(lx, report, rlen)), lx.scale,
+                               false);
+        }
+        if (ly.present) {
+            s.ly = scaleAxis16(static_cast<std::uint32_t>(readValue(ly, report, rlen)), ly.scale,
+                               true);
+        }
+        if (rx.present) {
+            s.rx = scaleAxis16(static_cast<std::uint32_t>(readValue(rx, report, rlen)), rx.scale,
+                               false);
+        }
+        if (ry.present) {
+            s.ry = scaleAxis16(static_cast<std::uint32_t>(readValue(ry, report, rlen)), ry.scale,
+                               true);
+        }
+        if (lt.present) {
+            s.lt = scaleTrig8(static_cast<std::uint32_t>(readValue(lt, report, rlen)), lt.scale);
+        }
+        if (rt.present) {
+            s.rt = scaleTrig8(static_cast<std::uint32_t>(readValue(rt, report, rlen)), rt.scale);
+        }
+
+        std::uint16_t b = 0;
+        if (hasHat) {
+            ULONG raw = 0;
+            if (HidP_GetUsageValue(HidP_Input, hatPage, 0, hatUsage, &raw, preparsed, report,
+                                   rlen) == HIDP_STATUS_SUCCESS) {
+                const int dir = static_cast<int>(raw) - static_cast<int>(hatLogicalMin);
+                const int range = static_cast<int>(hatLogicalMax) - static_cast<int>(hatLogicalMin);
+                if (dir >= 0 && dir <= range && dir <= 7) {
+                    b = static_cast<std::uint16_t>(b | input::usbhid::dpadBitsForDir(dir));
+                }
+            }
+        }
+        if (hasButtons) {
+            std::array<USAGE, 64> usages{};
+            auto count = static_cast<ULONG>(usages.size());
+            if (HidP_GetUsages(HidP_Input, buttonPage, 0, usages.data(), &count, preparsed, report,
+                               rlen) == HIDP_STATUS_SUCCESS) {
+                bool zl = false;
+                bool zr = false;
+                for (ULONG i = 0; i < count; i++) {
+                    if (usages[i] < buttonUsageMin) { continue; }
+                    const auto idx = static_cast<std::uint8_t>(usages[i] - buttonUsageMin);
+                    if (switchOrderButtons) {
+                        if (idx == 6) {
+                            zl = true;
+                        } else if (idx == 7) {
+                            zr = true;
+                        } else {
+                            b = static_cast<std::uint16_t>(
+                                b | input::usbhid::switchOrderButtonBit(idx));
+                        }
+                    } else {
+                        b = static_cast<std::uint16_t>(b | input::usbhid::layoutButtonBit(idx));
+                    }
+                }
+                if (switchOrderButtons) {
+                    s.lt = zl ? 255 : 0;
+                    s.rt = zr ? 255 : 0;
+                }
+            }
+        }
+        s.wButtons = b;
+        return true;
+    }
+};
+
+// Out of line because HidPDecode is incomplete in the header.
+WinHidGateway::Claimed::~Claimed() = default;
 
 WinHidGateway::WinHidGateway() = default;
 
@@ -131,19 +403,27 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
         attrs.Size = sizeof(attrs);
         PHIDP_PREPARSED_DATA preparsed = nullptr;
         HIDP_CAPS caps{};
-        bool gamepadShaped = false;
+        bool accepted = false;
         UsbDeviceInfo info;
         if (HidD_GetAttributes(h, &attrs) != 0 && HidD_GetPreparsedData(h, &preparsed) != 0) {
             if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
-                gamepadShaped = caps.UsagePage == kUsagePageGenericDesktop &&
-                                (caps.Usage == kUsageGamepad || caps.Usage == kUsageJoystick);
+                // Admission is per model family: the collection the model's
+                // parser actually decodes. For everything without a table row
+                // that stays "gamepad-shaped"; the Steam Controller's game
+                // interface is admitted by model despite its vendor usage page.
+                const auto parser =
+                    input::usbparse::parserForDevice(attrs.VendorID, attrs.ProductID);
+                accepted = collectionMatchesParser(caps, parser);
             }
             HidD_FreePreparsedData(preparsed);
         }
-        if (gamepadShaped) {
+        if (accepted) {
             info.vendorId = attrs.VendorID;
             info.productId = attrs.ProductID;
-            info.name = productName(h, path);
+            // The catalog name is deterministic where one exists (it also names
+            // models whose own product string is generic or empty).
+            const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
+            info.name = model != nullptr ? model->name : productName(h, path);
             info.interfaceNumber = 0;
             // The input report length is our max-packet proxy; bInterval is not
             // exposed by the HID class API, so default it to 1ms (the common
@@ -152,9 +432,8 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
                 caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
             info.endpointInInterval = 1;
             info.hasOutEndpoint = caps.OutputReportByteLength > 0;
-            // DualSense / DS4 (Sony) and the Switch Pro (Nintendo) carry an IMU;
-            // derive it from the per-model decoder family so it tracks the parser
-            // selection rather than a hard-coded VID list.
+            // Derive the IMU from the per-model decoder family so it tracks the
+            // parser selection rather than a hard-coded VID list.
             info.hasImu = input::usbparse::parserHasImu(
                 input::usbparse::parserForDevice(info.vendorId, info.productId));
         }
@@ -162,7 +441,7 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
 
         // Skip Microsoft-VID gamepad collections: Xbox pads belong to XInput, not
         // this raw-HID path, and shouldn't be fought over.
-        if (gamepadShaped && info.vendorId != kVidMicrosoft) { out.push_back(std::move(info)); }
+        if (accepted && info.vendorId != kVidMicrosoft) { out.push_back(std::move(info)); }
     }
 
     SetupDiDestroyDeviceInfoList(devInfo);
@@ -181,7 +460,10 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         return ClaimResult::fail(reducer::DirectClaimFailure::Busy, /*frameworkStolen=*/false);
     }
 
+    const auto parser = input::usbparse::parserForDevice(device.vendorId, device.productId);
     HANDLE opened = INVALID_HANDLE_VALUE;
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    HIDP_CAPS caps{};
     bool sawDevice = false;
     SP_DEVICE_INTERFACE_DATA ifData{};
     ifData.cbSize = sizeof(ifData);
@@ -211,10 +493,25 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         if (HidD_GetAttributes(h, &attrs) != 0 && attrs.VendorID == device.vendorId &&
             attrs.ProductID == device.productId) {
             sawDevice = true;
-            opened = h;
-        } else {
-            CloseHandle(h);
+            // A model can expose several collections under one VID:PID (the
+            // Steam Controller's keyboard and mouse ride beside its game
+            // interface). Only the collection the parser decodes is the claim.
+            PHIDP_PREPARSED_DATA candidate = nullptr;
+            HIDP_CAPS candidateCaps{};
+            bool matches = false;
+            if (HidD_GetPreparsedData(h, &candidate) != 0) {
+                matches = HidP_GetCaps(candidate, &candidateCaps) == HIDP_STATUS_SUCCESS &&
+                          collectionMatchesParser(candidateCaps, parser);
+            }
+            if (matches) {
+                opened = h;
+                preparsed = candidate;
+                caps = candidateCaps;
+                continue;
+            }
+            if (candidate != nullptr) { HidD_FreePreparsedData(candidate); }
         }
+        CloseHandle(h);
     }
     SetupDiDestroyDeviceInfoList(devInfo);
 
@@ -231,6 +528,21 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         return ClaimResult::fail(reason, /*frameworkStolen=*/false);
     }
 
+    // The Steam Controller ships emulating a keyboard and mouse; quiet mode
+    // switches that off and enables the IMU. This is the one family whose init
+    // persistently reconfigures the device, so a failure restores the defaults
+    // before giving up — a partly-applied init must never strand the pad mute.
+    const int featureReportLen = caps.FeatureReportByteLength;
+    if (parser == input::usbparse::HidParser::SteamController) {
+        if (!runSteamConfig(opened, featureReportLen, input::usbparse::SteamConfig::Quiet)) {
+            runSteamConfig(opened, featureReportLen, input::usbparse::SteamConfig::Restore);
+            if (preparsed != nullptr) { HidD_FreePreparsedData(preparsed); }
+            CloseHandle(opened);
+            return ClaimResult::fail(reducer::DirectClaimFailure::InitFailed,
+                                     /*frameworkStolen=*/false);
+        }
+    }
+
     const int syntheticId = nextSyntheticId_.fetch_sub(1);
     auto claim = std::make_unique<Claimed>();
     claim->path = device.name;
@@ -238,7 +550,17 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->onReport = std::move(onReport);
     claim->vendorId = device.vendorId;
     claim->productId = device.productId;
-    claim->parser = input::usbparse::parserForDevice(device.vendorId, device.productId);
+    claim->parser = parser;
+    claim->featureReportLen = featureReportLen;
+    if (parser == input::usbparse::HidParser::GenericHid) {
+        // The caps-derived field map replaces the fixed-offset guess wherever
+        // the collection declares real usages; the guess stays as the fallback.
+        claim->hidp = std::make_unique<HidPDecode>();
+        claim->hidp->preparsed = preparsed;
+        claim->hidp->build(device.vendorId, device.productId);
+        preparsed = nullptr;
+    }
+    if (preparsed != nullptr) { HidD_FreePreparsedData(preparsed); }
     claim->running.store(true);
     Claimed* raw = claim.get();
     {
@@ -258,7 +580,8 @@ void WinHidGateway::readLoop(Claimed* c) {
     // Allocation discipline: the read buffer + the ParsedReport scratch live on
     // this thread's stack and are reused every iteration; the decoder is a pure
     // function over those, mutating the device's stick auto-range state in place.
-    // Nothing on the per-report path heap-allocates.
+    // HidP_GetUsageValue/GetUsages walk preparsed data in user mode — no IO, no
+    // allocation. Nothing on the per-report path heap-allocates.
     //
     // NOTE: the button/stick/trigger byte offsets mirror dish-android's
     // usb_parsers.cpp 1:1 (hardware-validated there). The DS4/DualSense IMU +
@@ -283,13 +606,41 @@ void WinHidGateway::readLoop(Claimed* c) {
         }
         if (read == 0) { continue; }
         c->completions.fetch_add(1);
+
+        const std::uint8_t* data = buf.data();
+        auto len = static_cast<std::size_t>(read);
+        if (c->parser == input::usbparse::HidParser::SteamController) {
+            // The vendor collection is id-less, so Windows prepends a 0x00
+            // report-id byte the wire packet never carried; the decoders expect
+            // the packet as it left the device.
+            if (len > 1 && data[0] == 0x00) {
+                data += 1;
+                len -= 1;
+            }
+            // Dongle connect/disconnect events interleave with input. A
+            // returning pad has rebooted (settings gone), so quiet mode is
+            // re-applied; a departing pad's last input must not stay latched.
+            const auto ev = input::usbparse::checkWirelessEvent(c->parser, data, len);
+            if (ev == input::usbparse::WirelessEvent::Connect) {
+                runSteamConfig(handle, c->featureReportLen, input::usbparse::SteamConfig::Quiet);
+                continue;
+            }
+            if (ev == input::usbparse::WirelessEvent::Disconnect) {
+                if (c->onReport) { c->onReport(UsbReport{}); }
+                continue;
+            }
+        }
+
         // Decode into the XUSB report. A report that doesn't match the family's
         // shape (wrong id / too short) is skipped rather than published as noise.
         input::usbparse::ParsedReport parsed{};
-        if (!input::usbparse::decodeReport(c->parser, buf.data(), static_cast<std::size_t>(read),
-                                           parsed, c->sticks)) {
-            continue;
+        bool decoded = false;
+        if (c->hidp != nullptr && c->hidp->valid) {
+            decoded = c->hidp->decode(data, len, parsed);
+        } else {
+            decoded = input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks);
         }
+        if (!decoded) { continue; }
         UsbReport report{};
         report.wButtons = parsed.wButtons;
         report.lt = parsed.lt;
@@ -333,7 +684,16 @@ void WinHidGateway::releaseClaim(int syntheticId) {
     auto* handle = static_cast<HANDLE>(claim->handle);
     if (handle != nullptr && handle != INVALID_HANDLE_VALUE) { CancelIoEx(handle, nullptr); }
     if (claim->reader.joinable()) { claim->reader.join(); }
-    if (handle != nullptr && handle != INVALID_HANDLE_VALUE) { CloseHandle(handle); }
+    if (handle != nullptr && handle != INVALID_HANDLE_VALUE) {
+        // Quiet mode persists on the device, so every release path restores the
+        // stand-alone keyboard/mouse identity before the handle closes; skipping
+        // it would hand back a controller that no longer works as a desktop
+        // mouse. Best-effort by design — an unplugged pad cannot be written to.
+        if (claim->parser == input::usbparse::HidParser::SteamController) {
+            runSteamConfig(handle, claim->featureReportLen, input::usbparse::SteamConfig::Restore);
+        }
+        CloseHandle(handle);
+    }
 }
 
 std::int64_t WinHidGateway::completionCount(int syntheticId) const {

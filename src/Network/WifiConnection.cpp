@@ -13,10 +13,11 @@ namespace dish::net {
 
 namespace {
 
-// What every descriptor advertises. CAP_MOTION and CAP_LIGHTBAR are folded in
-// per-controller instead, from the slot's own hardware.
-constexpr std::uint16_t kBaseCaps =
-    SatelliteClient::kCapAnalogTriggers | SatelliteClient::kCapRumble;
+// What every descriptor advertises. CAP_RUMBLE, CAP_MOTION and CAP_LIGHTBAR are
+// folded in per-controller instead: rumble from the slot's path-resolved
+// actuator (the SDL probe on Standard, never a USB-direct claim), motion and
+// lightbar from the slot's own hardware.
+constexpr std::uint16_t kBaseCaps = SatelliteClient::kCapAnalogTriggers;
 
 } // namespace
 
@@ -57,7 +58,9 @@ models::ControllerDescriptor WifiConnection::descriptorOf(const SlotBinding& b) 
     d.ctrlIdx = b.controllerIndex;
     d.type = static_cast<std::uint8_t>(b.controllerType);
     d.caps = SatelliteClient::withLightbarCapability(
-        SatelliteClient::withMotionCapability(kBaseCaps, b.hasMotion), b.hasLightbar);
+        SatelliteClient::withMotionCapability(
+            SatelliteClient::withRumbleCapability(kBaseCaps, b.hasRumble), b.hasMotion),
+        b.hasLightbar);
     d.touchpadMode = b.touchpadMode;
     return d;
 }
@@ -205,7 +208,7 @@ void WifiConnection::markStale() {
 }
 
 void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool hasLightbar,
-                                bool hasMotion, std::uint8_t touchpadMode) {
+                                bool hasMotion, bool hasRumble, std::uint8_t touchpadMode) {
     auto it = slots_.find(slotId);
     if (it == slots_.end()) {
         SlotBinding b;
@@ -213,6 +216,7 @@ void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool 
         b.controllerType = controllerType;
         b.hasLightbar = hasLightbar;
         b.hasMotion = hasMotion;
+        b.hasRumble = hasRumble;
         b.touchpadMode = touchpadMode;
         b.registered = false;
         slots_.emplace(slotId, b);
@@ -221,10 +225,12 @@ void WifiConnection::attachSlot(const QString& slotId, int controllerType, bool 
     } else {
         const bool changed =
             it->second.controllerType != controllerType || it->second.hasLightbar != hasLightbar ||
-            it->second.hasMotion != hasMotion || it->second.touchpadMode != touchpadMode;
+            it->second.hasMotion != hasMotion || it->second.hasRumble != hasRumble ||
+            it->second.touchpadMode != touchpadMode;
         it->second.controllerType = controllerType;
         it->second.hasLightbar = hasLightbar;
         it->second.hasMotion = hasMotion;
+        it->second.hasRumble = hasRumble;
         it->second.touchpadMode = touchpadMode;
         if (changed && state_ == SessionState::Live) { emit slotChanged(slotId); }
     }

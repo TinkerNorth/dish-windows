@@ -402,3 +402,63 @@ TEST_CASE("a truly-gone device keeps the timeout path: awaiting + timeout -> res
     CHECK(r.next->phase == UsbPhase::RestoreStuck);
     CHECK(r.next->syntheticId == -1000);
 }
+
+// ── frameworkExpected: models with no framework gamepad identity ─────────────
+// The Steam Controller's stand-alone identity is a keyboard and mouse, so no
+// SDL device ever follows a release; waiting for one would always time out
+// into a false RestoreStuck. Ported from dish-android #154.
+
+TEST_CASE("direct + choose standard on a frameworkless model settles straight to routed",
+          "[usb-fsm]") {
+    auto c = controller(UsbPhase::Direct, std::nullopt, -1000, true, PathChoice::Direct, false,
+                        std::string("c"));
+    c.frameworkExpected = false;
+    const auto r = reduce(c, ev::Choose{PathChoice::Standard, true});
+    REQUIRE(r.next.has_value());
+    CHECK(r.next->phase == UsbPhase::Routed);
+    CHECK(r.next->desired == PathChoice::Standard);
+    CHECK_FALSE(r.next->syntheticId.has_value());
+    CHECK_FALSE(r.next->frameworkId.has_value());
+    CHECK_FALSE(r.next->failure.has_value());
+    const std::vector<UsbEffect> expected{fx::Release{}, fx::RemoveSynthetic{-1000},
+                                          fx::SetPref{PathChoice::Standard}, fx::ClearFailure{}};
+    CHECK(r.effects == expected);
+}
+
+TEST_CASE("direct + choose standard still awaits the framework when one is expected", "[usb-fsm]") {
+    auto c = controller(UsbPhase::Direct, std::nullopt, -1000, true, PathChoice::Direct);
+    REQUIRE(c.frameworkExpected);
+    const auto r = reduce(c, ev::Choose{PathChoice::Standard, true});
+    REQUIRE(r.next.has_value());
+    CHECK(r.next->phase == UsbPhase::AwaitingFramework);
+    const std::vector<UsbEffect> expected{fx::Release{}, fx::StartTimeout{}};
+    CHECK(r.effects == expected);
+}
+
+TEST_CASE("claim-fail with a stolen framework drops to routed when none is expected", "[usb-fsm]") {
+    // frameworkStolen would normally park the model in AwaitingFramework; with
+    // no framework identity to wait for, the failure lands as the ordinary
+    // routed-with-reason outcome instead.
+    auto c =
+        controller(UsbPhase::Claiming, std::nullopt, std::nullopt, true, PathChoice::Direct, true);
+    c.frameworkExpected = false;
+    const auto r = reduce(c, ev::ClaimFailed{DirectClaimFailure::InitFailed, true});
+    REQUIRE(r.next.has_value());
+    CHECK(r.next->phase == UsbPhase::Routed);
+    CHECK(r.next->desired == PathChoice::Standard);
+    CHECK(r.next->failure == DirectClaimFailure::InitFailed);
+    const std::vector<UsbEffect> expected{fx::EndHold{}, fx::SetPref{PathChoice::Standard},
+                                          fx::MarkFailure{DirectClaimFailure::InitFailed},
+                                          fx::Notify{UsbNotice::SwitchToDirectFailed}};
+    CHECK(r.effects == expected);
+}
+
+TEST_CASE("claim-fail with a stolen framework still awaits when one is expected", "[usb-fsm]") {
+    auto c = controller(UsbPhase::Claiming, std::nullopt, std::nullopt, true, PathChoice::Direct);
+    REQUIRE(c.frameworkExpected);
+    const auto r = reduce(c, ev::ClaimFailed{DirectClaimFailure::Busy, true});
+    REQUIRE(r.next.has_value());
+    CHECK(r.next->phase == UsbPhase::AwaitingFramework);
+    const std::vector<UsbEffect> expected{fx::StartTimeout{}};
+    CHECK(r.effects == expected);
+}

@@ -21,13 +21,16 @@ using dish::reducer::solveCapabilities;
 namespace {
 
 // Every layer carries everything; each test then breaks exactly one thing.
+// Standard is the everything-path on Windows (SDL forwards motion, touch,
+// rumble and the lightbar wherever the driver exposes them); Direct is the
+// path with refusals (no output write path), pinned in its own cases below.
 CapabilityInputs everythingCarries() {
     CapabilityInputs in;
     in.padMotion = true;
     in.padTouchpad = true;
     in.padRumble = true;
     in.padLightbar = true;
-    in.linkDirect = true;
+    in.linkDirect = false;
     in.linkUsb = true;
     in.padClaimable = true;
     in.typeResolved = true;
@@ -98,23 +101,68 @@ TEST_CASE("capability solver: a pad with no gyro fails Motion on the Input layer
     REQUIRE(motion.hostOk);
 }
 
-TEST_CASE("capability solver: the Standard link carries only gamepad, triggers and rumble",
+TEST_CASE("capability solver: the Standard link refuses nothing the pad carries",
           "[capability][solver]") {
+    // SDL forwards motion, touch, rumble and the lightbar on Standard; a pad
+    // whose driver lacks one shows it at the Input layer, never the Link.
     auto in = everythingCarries();
     in.linkDirect = false;
     const auto rows = solveCapabilities(in);
-
-    for (const auto f :
-         {CapFeature::Motion, CapFeature::Touchpad, CapFeature::Mouse, CapFeature::Lightbar}) {
-        const auto row = rowFor(rows, f);
-        REQUIRE(row.verdict == CapVerdict::Unavailable);
-        REQUIRE(row.failingLayer == CapLayer::Link);
-        REQUIRE(row.inOk); // the pad has it; the transport is what refuses
-        REQUIRE_FALSE(row.linkOk);
-    }
-    for (const auto f : {CapFeature::Gamepad, CapFeature::Triggers, CapFeature::Rumble}) {
+    for (const auto f : {CapFeature::Gamepad, CapFeature::Triggers, CapFeature::Motion,
+                         CapFeature::Touchpad, CapFeature::Rumble, CapFeature::Lightbar}) {
         REQUIRE(rowFor(rows, f).linkOk);
         REQUIRE(rowFor(rows, f).verdict == CapVerdict::Available);
+    }
+}
+
+TEST_CASE("capability solver: a Direct claim fails rumble and lightbar on the Link layer",
+          "[capability][solver]") {
+    // The dish-android #146 rule, path-resolved for Windows: a capability shows
+    // only where it fires. A raw-HID claim reads everything but drives nothing
+    // back (no output write path), so rumble and the lightbar refuse at Link —
+    // the pad still HAS them, which is why the blame is not Input.
+    auto in = everythingCarries();
+    in.linkDirect = true;
+    const auto rows = solveCapabilities(in);
+
+    for (const auto f : {CapFeature::Rumble, CapFeature::Lightbar}) {
+        const auto row = rowFor(rows, f);
+        REQUIRE(row.verdict == CapVerdict::Unavailable);
+        REQUIRE(row.hasFailingLayer);
+        REQUIRE(row.failingLayer == CapLayer::Link);
+        REQUIRE(row.inOk);
+        REQUIRE_FALSE(row.linkOk);
+    }
+    for (const auto f :
+         {CapFeature::Gamepad, CapFeature::Triggers, CapFeature::Motion, CapFeature::Touchpad}) {
+        REQUIRE(rowFor(rows, f).linkOk);
+        REQUIRE(rowFor(rows, f).verdict == CapVerdict::Available);
+    }
+}
+
+TEST_CASE("capability solver: the per-path rumble matrix", "[capability][solver]") {
+    // The android CapabilityComposer per-path matrix, re-derived: the probe is
+    // authoritative on Standard, the (absent) write path on Direct.
+    auto in = everythingCarries();
+
+    SECTION("pad with motors on Standard -> available") {
+        in.linkDirect = false;
+        REQUIRE(rowFor(solveCapabilities(in), CapFeature::Rumble).verdict == CapVerdict::Available);
+    }
+    SECTION("pad with motors on Direct -> unavailable at Link") {
+        in.linkDirect = true;
+        const auto row = rowFor(solveCapabilities(in), CapFeature::Rumble);
+        REQUIRE(row.verdict == CapVerdict::Unavailable);
+        REQUIRE(row.failingLayer == CapLayer::Link);
+    }
+    SECTION("pad without motors (Steam Controller) -> unavailable at Input on either path") {
+        in.padRumble = false;
+        for (const bool direct : {false, true}) {
+            in.linkDirect = direct;
+            const auto row = rowFor(solveCapabilities(in), CapFeature::Rumble);
+            REQUIRE(row.verdict == CapVerdict::Unavailable);
+            REQUIRE(row.failingLayer == CapLayer::Input);
+        }
     }
 }
 

@@ -96,6 +96,10 @@ class SatelliteClient {
         return static_cast<std::uint16_t>(base | (hasMotion ? kCapMotion : 0));
     }
 
+    static std::uint16_t withRumbleCapability(std::uint16_t base, bool hasRumble) {
+        return static_cast<std::uint16_t>(base | (hasRumble ? kCapRumble : 0));
+    }
+
     // Axes are the satellite's right-handed frame (+X right, +Y up, +Z toward
     // player); SDL already applies the manufacturer rotation for HIDAPI pads, so
     // samples arrive in that frame. Scale: gyro LSB = 2000/32767 deg/s, accel LSB

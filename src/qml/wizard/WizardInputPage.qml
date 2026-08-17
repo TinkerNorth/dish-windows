@@ -155,6 +155,7 @@ ColumnLayout {
             required property bool hasMotion
             required property bool hasTouchpad
             required property bool hasLightbar
+            required property bool hasRumble
             required property int gamepadHz
             required property bool gamepadHzLive
 
@@ -194,8 +195,8 @@ ColumnLayout {
                 spacing: Tokens.s2
 
                 Kit.CapabilityChip {
-                    text: qsTr("Rumble")
-                    tone: Kit.CapabilityChip.Present
+                    text: padRow.hasRumble ? qsTr("Rumble") : qsTr("No rumble")
+                    tone: padRow.hasRumble ? Kit.CapabilityChip.Present : Kit.CapabilityChip.Absent
                 }
                 Kit.CapabilityChip {
                     text: padRow.hasMotion ? qsTr("Gyro") : qsTr("No gyro")
