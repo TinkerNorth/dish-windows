@@ -117,6 +117,7 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
         }
         dev.isRawJoystick = openJoysticks_.count(iid) != 0;
         dev.hasTouchpad = touchpadCapable_.count(iid) != 0;
+        dev.hasRumble = rumbleCapable_.count(iid) != 0;
         dev.bluetooth = bluetoothIids_.count(iid) != 0;
         out.append(dev);
     }
@@ -128,6 +129,16 @@ void SDLGamepadBridge::runLoop() {
     // decoders map by physical position. Without this hint a Switch Pro would
     // disagree with itself across the SDL and Direct paths.
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
+    // SDL2's RawInput joystick backend leaks ~200 USER objects per second on
+    // Windows 11 while any joystick is attached, exhausting the process's
+    // 10,000-object quota in under a minute — after which no Qt timer or
+    // window can be created and the app quietly stops working (measured via
+    // GetGuiResources; the leak bisects exactly to SDL_JOYSTICK_RAWINPUT).
+    // Xbox pads fall back to the XInput backend, whose semantics this app
+    // already assumes; everything else rides HIDAPI/DirectInput. SDL_SetHint
+    // is normal priority, so the environment variable still overrides for
+    // diagnosis.
+    SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "0");
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) != 0) {
         running_.store(false);
         return;
@@ -168,6 +179,7 @@ void SDLGamepadBridge::runLoop() {
             }
             const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
             const bool hasTouchpad = SDL_GameControllerGetNumTouchpads(gc) > 0;
+            const bool hasRumble = SDL_GameControllerHasRumble(gc) == SDL_TRUE;
             const auto type = SDL_GameControllerGetType(gc); // DEVCAPS log only
             // SDL returns 0 when it cannot read the descriptor, which the
             // twin-dedup pairing treats as "no identity".
@@ -188,6 +200,7 @@ void SDLGamepadBridge::runLoop() {
                 if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
                 if (hasLed) { lightbarCapable_.insert(iid); }
                 if (hasTouchpad) { touchpadCapable_.insert(iid); }
+                if (hasRumble) { rumbleCapable_.insert(iid); }
                 if (bluetooth) { bluetoothIids_.insert(iid); }
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
@@ -202,7 +215,7 @@ void SDLGamepadBridge::runLoop() {
                                 << "vid=" << QString::number(vendorId, 16)
                                 << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
                                 << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed
-                                << "bt=" << bluetooth;
+                                << "rumble=" << hasRumble << "bt=" << bluetooth;
             // Pushed from here rather than owned by the processor because the
             // bridge is the only thing that knows when a device shows up.
             processor_->setDeadzones(deviceId.toStdString(),
@@ -228,6 +241,7 @@ void SDLGamepadBridge::runLoop() {
                 motionCapable_.erase(iid);
                 lightbarCapable_.erase(iid);
                 touchpadCapable_.erase(iid);
+                rumbleCapable_.erase(iid);
                 bluetoothIids_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);
@@ -264,11 +278,13 @@ void SDLGamepadBridge::runLoop() {
             const char* devPath = SDL_JoystickPath(js);
             const bool bluetooth =
                 devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
+            const bool hasRumble = SDL_JoystickHasRumble(js) == SDL_TRUE;
             {
                 std::lock_guard<std::mutex> lock(mtx_);
                 openJoysticks_[iid] = js;
                 deviceIds_[iid] = deviceId;
                 deviceNames_[iid] = deviceName;
+                if (hasRumble) { rumbleCapable_.insert(iid); }
                 if (bluetooth) { bluetoothIids_.insert(iid); }
                 usbIdentity_[iid] = {vendorId, productId};
                 lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
@@ -304,6 +320,7 @@ void SDLGamepadBridge::runLoop() {
                     deviceIds_.erase(it);
                 }
                 deviceNames_.erase(iid);
+                rumbleCapable_.erase(iid);
                 bluetoothIids_.erase(iid);
                 usbIdentity_.erase(iid);
                 lastBatteryPoll_.erase(iid);

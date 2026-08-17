@@ -41,6 +41,9 @@ struct HidLayout {
     std::int32_t hatLogicalMax = 0;
     std::uint16_t buttonBitOffset = 0;
     std::uint8_t buttonCount = 0;
+    // Set by the attach path from the model catalog, after parseReportDescriptor
+    // resets the struct; never derived from the descriptor itself.
+    bool switchOrderButtons = false;
 };
 
 inline constexpr std::size_t kMaxUsages = 16;
@@ -122,6 +125,39 @@ inline std::uint16_t layoutButtonBit(std::uint8_t idx) {
     case 9:
         return static_cast<std::uint16_t>(layout::kXusbRightThumb);
     case 10:
+        return static_cast<std::uint16_t>(layout::kXusbGuide);
+    default:
+        return 0;
+    }
+}
+
+// Switch-order HID pads declare buttons in usage row Y B A X L R ZL ZR Minus
+// Plus L3 R3 Home Capture; remap by position to match decodeSwitchProUsb. ZL/ZR
+// (indices 6/7) fold into the triggers in decodeFromLayout instead of mapping
+// here.
+inline std::uint16_t switchOrderButtonBit(std::uint8_t idx) {
+    switch (idx) {
+    case 0:
+        return static_cast<std::uint16_t>(layout::kXusbX);
+    case 1:
+        return static_cast<std::uint16_t>(layout::kXusbA);
+    case 2:
+        return static_cast<std::uint16_t>(layout::kXusbB);
+    case 3:
+        return static_cast<std::uint16_t>(layout::kXusbY);
+    case 4:
+        return static_cast<std::uint16_t>(layout::kXusbLeftShoulder);
+    case 5:
+        return static_cast<std::uint16_t>(layout::kXusbRightShoulder);
+    case 8:
+        return static_cast<std::uint16_t>(layout::kXusbBack);
+    case 9:
+        return static_cast<std::uint16_t>(layout::kXusbStart);
+    case 10:
+        return static_cast<std::uint16_t>(layout::kXusbLeftThumb);
+    case 11:
+        return static_cast<std::uint16_t>(layout::kXusbRightThumb);
+    case 12:
         return static_cast<std::uint16_t>(layout::kXusbGuide);
     default:
         return 0;
@@ -374,9 +410,28 @@ inline bool decodeFromLayout(const std::uint8_t* buf, std::size_t len, StateT& s
             b = static_cast<std::uint16_t>(b | dpadBitsForDir(dir));
         }
     }
-    for (std::uint8_t i = 0; i < L.buttonCount; i++) {
-        if (extractBits(d, dlen, static_cast<std::uint32_t>(L.buttonBitOffset) + i, 1)) {
-            b = static_cast<std::uint16_t>(b | layoutButtonBit(i));
+    if (L.switchOrderButtons) {
+        bool zl = false;
+        bool zr = false;
+        for (std::uint8_t i = 0; i < L.buttonCount; i++) {
+            if (!extractBits(d, dlen, static_cast<std::uint32_t>(L.buttonBitOffset) + i, 1)) {
+                continue;
+            }
+            if (i == 6) {
+                zl = true;
+            } else if (i == 7) {
+                zr = true;
+            } else {
+                b = static_cast<std::uint16_t>(b | switchOrderButtonBit(i));
+            }
+        }
+        s.lt = zl ? 255 : 0;
+        s.rt = zr ? 255 : 0;
+    } else {
+        for (std::uint8_t i = 0; i < L.buttonCount; i++) {
+            if (extractBits(d, dlen, static_cast<std::uint32_t>(L.buttonBitOffset) + i, 1)) {
+                b = static_cast<std::uint16_t>(b | layoutButtonBit(i));
+            }
         }
     }
     s.wButtons = b;

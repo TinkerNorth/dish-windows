@@ -34,6 +34,36 @@ release.
 
 ### Added
 
+- **Steam Controller over USB Direct.** The wired pad (`28DE:1102`) and the
+  wireless dongle (`28DE:1142`) can be claimed on the raw-HID path: quiet-mode
+  feature reports switch off the firmware's stand-alone keyboard/mouse
+  emulation and enable the IMU, the 64-byte vendor state packets decode
+  (sticks, right trackpad as right stick, analog triggers with Valve's 26000
+  full scale, motion), and every release path restores the stand-alone
+  identity so the pad keeps working as a desktop mouse afterwards. Never
+  auto-claimed: the claim reconfigures a device its owner may be using as a
+  mouse, so it is reached only through an explicit Direct pick on the pad's
+  card. Decode and config sequences are mirrored 1:1 from dish-android's
+  hardware-verified port (#154) of the Linux hid-steam / SDL drivers.
+- **PDP wired Switch pads decode correctly in Direct mode.** The five wired
+  models (Faceoff Wired Pro, Faceoff Deluxe, Faceoff Deluxe+ Audio, Wired
+  Fight Pad Pro, Rock Candy — `0E6F:0180/0181/0184/0185/0187`) declare their
+  buttons in the Switch usage order; a positional remap (mirroring
+  dish-android #159 and `decodeSwitchProUsb`) maps them onto the XUSB layout,
+  with ZL/ZR driving the triggers and Capture unmapped. `0E6F:0186` is
+  excluded on purpose (Switch-Pro-protocol pad whose USB port is charge-only).
+- **Descriptor-driven decode for generic HID pads in Direct mode.** A claimed
+  generic pad is now decoded through its own HID field map (HidP preparsed
+  caps: real axis usages, logical ranges, button usage indices) instead of a
+  fixed-offset guess that only fit the canonical packing — the Windows analog
+  of dish-android #150's "classify by descriptor, not an allowlist". The
+  fixed-offset decoder remains only as the fallback when a collection
+  declares nothing usable.
+- **Catalog prewarm on connect.** Each time a satellite link goes Live its
+  type catalog is fetched once in the background (ETag-cached), so the
+  Emulate picker usually resolves instantly instead of showing a loader.
+  Mirrors dish-android's `CatalogPrewarmer` (#152).
+
 - **Satellite discovery and pairing.** mDNS `_satellite._udp.local.` queries with
   a UDP broadcast fallback for older satellites, PIN pairing over HTTPS against
   the satellite's self-signed certificate, and trust-on-first-use certificate
@@ -115,6 +145,43 @@ release.
 - [`PRIVACY.md`](PRIVACY.md), [`SECURITY.md`](SECURITY.md),
   [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) and
   [`CONTRIBUTING.md`](CONTRIBUTING.md) for the public release.
+
+### Fixed
+
+- **The app no longer exhausts its Window Manager object quota while a
+  controller is attached.** SDL2's RawInput joystick backend leaks roughly
+  200 USER objects per second on Windows 11 whenever any joystick is present;
+  at the process's 10,000-object cap (under a minute in) Qt can no longer
+  create timers or dispatcher windows, and everything that needs the event
+  loop quietly stalls — surfaced as a bind stuck on "sending descriptor".
+  The backend is now disabled (`SDL_HINT_JOYSTICK_RAWINPUT=0`): Xbox pads
+  ride the XInput backend, whose semantics this client already assumes (the
+  practical cost is the classic four-pad XInput ceiling), and everything
+  else rides HIDAPI/DirectInput unchanged. The hint is normal-priority, so
+  the environment variable still overrides it for diagnosis.
+- **Edge-drag resize works on both frameless windows.** Qt's
+  `FramelessWindowHint` creates a bare `WS_POPUP` without `WS_THICKFRAME`,
+  and DefWindowProc runs the native sizing loop only for windows that carry
+  that style — so the chrome filter answered every edge hit-test with a
+  resize code and the drag then did nothing, on the main window and the
+  installer alike. The filter now stamps `WS_THICKFRAME` at attach (visual
+  no-op: `WM_NCCALCSIZE` still zeroes the frame). The installer window also
+  drops its fixed-size clamp: 460×420 stays the design floor, the faces
+  stretch above it, and it still offers no maximize.
+- **Capabilities now follow the active path, so nothing is advertised where it
+  cannot fire** (the dish-android #146 rule, path-resolved for Windows).
+  `CAP_RUMBLE` is folded per slot from the SDL probe on the Standard path and
+  is never advertised for a USB-direct claim (which has no output write path
+  yet), so a satellite no longer offers a rumble channel that silently drops.
+  In the other direction, a Direct claim's descriptor now advertises the
+  motion and touchpad its decoder actually streams — the bind seams used to
+  consult only the SDL device list, miss the synthetic slot, and register a
+  Direct DualSense/DS4/Switch Pro with no `CAP_MOTION` and no touchpad
+  render mode, so the satellite discarded every MOTION/TOUCHPAD packet the
+  claim decoded. The wizard/Configure capability matrix tells the same truth:
+  Standard carries everything the pad's driver exposes, Direct refuses rumble
+  and lightbar at the Link layer, and the rumble chip reads the per-pad probe
+  instead of a hardcoded "Present".
 
 ### Notes
 

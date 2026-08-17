@@ -50,7 +50,7 @@ class ConnectionHub : public QObject {
     BatterySender batterySenderForSlot(const QString& slotId) const;
     TouchpadSender touchpadSenderForSlot(const QString& slotId) const;
 
-    // The four seams below let bind() stamp per-device hardware facts onto the
+    // The seams below let bind() stamp per-device hardware facts onto the
     // REST descriptor. AppModel installs them off the SDL bridge's device
     // classification; each is unset in tests and before the bridge exists, and
     // the fallbacks are chosen so an unset resolver understates capability.
@@ -62,6 +62,10 @@ class ConnectionHub : public QObject {
     // Unset means no motion, so CAP_MOTION is not advertised.
     using MotionCapabilityFn = std::function<bool(const QString& slotId)>;
     void setMotionCapabilityFn(MotionCapabilityFn fn) { motionCapabilityFn_ = std::move(fn); }
+
+    // Unset means no rumble, so CAP_RUMBLE is not advertised.
+    using RumbleCapabilityFn = std::function<bool(const QString& slotId)>;
+    void setRumbleCapabilityFn(RumbleCapabilityFn fn) { rumbleCapabilityFn_ = std::move(fn); }
 
     // A proto CONTROLLER_TYPE_*, which is how a DualSense registers as a virtual
     // DS4 rather than an Xbox pad. Unset means CONTROLLER_TYPE_XBOX.
@@ -91,6 +95,7 @@ class ConnectionHub : public QObject {
     QHash<QString, QString> bindings_; // slotId -> connectionId
     LightbarCapabilityFn lightbarCapabilityFn_;
     MotionCapabilityFn motionCapabilityFn_;
+    RumbleCapabilityFn rumbleCapabilityFn_;
     ControllerTypeFn controllerTypeFn_;
     TouchpadModeFn touchpadModeFn_;
 };

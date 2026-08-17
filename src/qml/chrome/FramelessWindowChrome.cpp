@@ -69,7 +69,26 @@ Rect toPhysical(const QRect& logical, qreal dpr) {
 } // namespace
 
 FramelessWindowChrome::FramelessWindowChrome(QWindow* window, QObject* parent)
-    : QObject(parent), m_window(window) {}
+    : QObject(parent), m_window(window) {
+    // DefWindowProc runs the native sizing loop for the HTLEFT..HTBOTTOMRIGHT
+    // answers below only when the window carries WS_THICKFRAME (the sizebox
+    // style). Qt's FramelessWindowHint creates a bare WS_POPUP without it, so
+    // an edge drag was answered with a resize code yet started nothing — on
+    // every window this chrome drives. The bit adds no visuals: WM_NCCALCSIZE
+    // returning 0 keeps the whole surface client area, and a fixed window
+    // (minimum == maximum) stays fixed regardless, because Qt clamps the
+    // track size through WM_GETMINMAXINFO. Both consumers construct this
+    // filter after the platform window exists, so the handle is available.
+    if (HWND hwnd = hwndOf(window)) {
+        const LONG_PTR style = ::GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if ((style & WS_THICKFRAME) == 0) {
+            ::SetWindowLongPtrW(hwnd, GWL_STYLE, style | WS_THICKFRAME);
+            ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                           SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                               SWP_FRAMECHANGED);
+        }
+    }
+}
 
 FramelessWindowChrome::~FramelessWindowChrome() = default;
 

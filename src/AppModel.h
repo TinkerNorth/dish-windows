@@ -47,6 +47,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -244,6 +245,25 @@ class AppModel : public QObject {
     // accounts for the slot — the pad is gone.
     std::optional<std::pair<int, int>> boundPadIdentity(const QString& slotId) const;
 
+    // Per-slot hardware truth read from the source layer that owns the slot:
+    // the parser family for a synthetic (USB-direct) id, the SDL probe for a
+    // framework id. The bind capability seams read through this so a Direct
+    // claim advertises the motion/touchpad it decodes — and never the rumble/
+    // lightbar it cannot drive.
+    struct SlotHardware {
+        bool usbDirect = false;
+        bool hasMotion = false;
+        bool hasLightbar = false;
+        bool hasTouchpad = false;
+        bool hasRumble = false;
+    };
+    SlotHardware slotHardware(const QString& slotId) const;
+
+    // Warm the catalog cache once each time a satellite link goes Live, so the
+    // type picker usually resolves instantly from cache. Silent by design: it
+    // never drives catalogState_, so no UI spinner flickers on reconnects.
+    void prewarmCatalogs();
+
     // Drop a binding whose physical pad vanished — otherwise its descriptor
     // rides every session PUT and the satellite keeps re-plugging a virtual
     // controller that does not exist — and migrate one whose pad merely moved
@@ -358,6 +378,11 @@ class AppModel : public QObject {
     // The VID:PIDs seen on the last syncFrameworkPresence pass, so the next can
     // emit FrameworkUp/Down deltas to the FSM. Main-thread-only.
     QSet<int> lastFrameworkVpKeys_;
+
+    // Satellite ids already catalog-warmed for their current Live stretch;
+    // reducer::catalogPrewarmTargets re-arms an id when its link leaves Live.
+    // Main-thread-only.
+    std::set<QString> prewarmedCatalogs_;
 
     // The presence oracle both the binding-presence gate and the emulation-type
     // seed read. Refilled at the top of every rebuild(), so it is never staler

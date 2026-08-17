@@ -560,6 +560,7 @@ Kit.Page {
                 required property bool hasMotion
                 required property bool hasTouchpad
                 required property bool hasLightbar
+                required property bool hasRumble
                 required property bool verifiedModel
                 required property int gamepadHz
                 required property bool gamepadHzLive
@@ -690,7 +691,7 @@ Kit.Page {
                             visible: page.padRow !== null && !page.padClaimable
                             Layout.fillWidth: true
                             tone: Kit.Callout.Info
-                            text: qsTr("Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path — gyro, touchpad and lightbar can’t be carried.")
+                            text: qsTr("Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.")
                         }
 
                         Rectangle {
@@ -715,8 +716,12 @@ Kit.Page {
                                 spacing: Tokens.s2
 
                                 Kit.CapabilityChip {
-                                    text: qsTr("Rumble")
-                                    tone: Kit.CapabilityChip.Present
+                                    id: rumbleChip
+                                    readonly property bool has: page.padRow
+                                                                ? page.padRow.hasRumble : false
+                                    text: rumbleChip.has ? qsTr("Rumble") : qsTr("No rumble")
+                                    tone: rumbleChip.has ? Kit.CapabilityChip.Present
+                                                         : Kit.CapabilityChip.Absent
                                 }
                                 Kit.CapabilityChip {
                                     id: gyroChip

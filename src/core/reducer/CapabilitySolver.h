@@ -7,8 +7,12 @@
 //     available = input n link n type n host
 //
 //   Input  what the pad itself reports
-//   Link   the USB path: Direct carries everything, Standard carries the gamepad,
-//          its triggers and rumble
+//   Link   the USB path. Standard (SDL) carries everything the pad's driver
+//          exposes — the input layer's per-pad probe is what constrains it.
+//          Direct reads everything the pad sends but drives nothing back yet
+//          (no output write path), so rumble and the lightbar fire only on
+//          Standard. Mirrors dish-android's per-path rule: a capability shows
+//          only where it fires.
 //   Type   the catalog type's features: an Xbox 360 type carries no gyro however
 //          good the pad is
 //   Host   the satellite's hostFeatures. A Bluetooth host is Windows' own gamepad
@@ -34,7 +38,10 @@ enum class CapFeature { Gamepad, Triggers, Motion, Touchpad, Mouse, Rumble, Ligh
 struct CapabilityInputs {
     bool padMotion = false;
     bool padTouchpad = false;
-    bool padRumble = true; // every supported pad has motors today
+    // The pad's motors (the SDL probe for a framework slot, the parser family
+    // for a synthetic). Defaults true so an unknown slot doesn't refuse at the
+    // input layer; the link layer still gates the path.
+    bool padRumble = true;
     bool padLightbar = false;
 
     bool linkDirect = false;   // usb && directCapable && the draft wants Direct
@@ -87,15 +94,15 @@ inline bool inputCarries(const CapabilityInputs& in, CapFeature f) {
 }
 
 inline bool linkCarries(const CapabilityInputs& in, CapFeature f) {
-    if (in.linkDirect) { return true; } // a raw-HID claim carries everything
-    switch (f) {
-    case CapFeature::Gamepad:
-    case CapFeature::Triggers:
-    case CapFeature::Rumble:
-        return true;
-    default:
-        return false;
+    if (in.linkDirect) {
+        // A raw-HID claim reads everything the pad sends but drives nothing
+        // back yet: no output write path exists, so rumble and the lightbar
+        // fire only on the Standard path.
+        return f != CapFeature::Rumble && f != CapFeature::Lightbar;
     }
+    // Standard (SDL) forwards motion, touch, rumble and the lightbar wherever
+    // the pad's driver exposes them; the input layer's probe constrains it.
+    return true;
 }
 
 inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {

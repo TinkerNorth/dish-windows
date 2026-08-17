@@ -98,6 +98,10 @@ class WifiConnection : public QObject {
         std::uint8_t touchpadMode = proto::kTouchpadModeOff;
         bool hasLightbar = false;
         bool hasMotion = false;
+        // Path-resolved at bind: the SDL probe for a Standard slot, false for a
+        // USB-direct claim (no output write path), so the satellite never
+        // offers a rumble channel that cannot fire.
+        bool hasRumble = false;
         bool registered = false;
     };
 
@@ -105,7 +109,7 @@ class WifiConnection : public QObject {
     // default-then-correct phase. While live the manager converges it via a
     // controller PUT; while idle it rides the next session PUT.
     void attachSlot(const QString& slotId, int controllerType, bool hasLightbar, bool hasMotion,
-                    std::uint8_t touchpadMode = proto::kTouchpadModeOff);
+                    bool hasRumble, std::uint8_t touchpadMode = proto::kTouchpadModeOff);
     void detachSlot();
     void detachSlot(const QString& slotId);
 

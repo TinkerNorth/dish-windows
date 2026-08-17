@@ -988,6 +988,7 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
         in.padMotion = slot->capabilities.hasMotion;
         in.padTouchpad = slot->capabilities.hasTouchpad;
         in.padLightbar = slot->capabilities.hasLightbar;
+        in.padRumble = slot->capabilities.hasRumble;
         // A Bluetooth pad has no USB path to claim, so Direct is unreachable
         // rather than merely unselected.
         in.linkUsb = !slot->bluetooth;

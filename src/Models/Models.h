@@ -336,6 +336,11 @@ struct ControllerCapabilities {
     // Gates both the Touchpad and the Mouse rows of the capability solver:
     // mouse is a routing of the touchpad, so a pad without one can't drive it.
     bool hasTouchpad = false;
+    // Whether the pad carries rumble motors at all: the SDL probe for a
+    // Standard slot, the parser family for a USB-direct claim. The wire fold
+    // additionally requires a path that can drive them (CAP_RUMBLE is never
+    // advertised for a Direct claim — no output write path exists yet).
+    bool hasRumble = false;
 
     // For a wireless pad this is the controller's own charge; for a wired or
     // unknown one it is the HOST machine's battery. `batteryLevel` is 0..100 or

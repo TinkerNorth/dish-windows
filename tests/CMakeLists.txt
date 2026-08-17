@@ -116,8 +116,10 @@ set(DISH_TEST_SOURCES
     test_usb_path_preference_store.cpp
     test_usb_gamepad_manager.cpp
     test_usb_report_parsers.cpp
+    test_usb_hid_layout.cpp
     test_usb_twin_dedup.cpp
     test_hid_transport.cpp
+    test_catalog_prewarm.cpp
     test_onboarding_store.cpp
     test_license_manifest.cpp
     test_theme_store.cpp

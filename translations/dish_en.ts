@@ -166,14 +166,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Direct mode needs a USB connection; over Bluetooth this can’t be carried.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>%1 doesn’t carry %2.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -187,6 +179,10 @@
     </message>
     <message>
         <source>%1 doesn’t advertise %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -586,10 +582,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path — gyro, touchpad and lightbar can’t be carried.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Functions</source>
         <translation type="unfinished"></translation>
     </message>
@@ -747,6 +739,14 @@
     </message>
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No rumble</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -2123,10 +2123,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch the connection to Direct.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Rumble</source>
         <translation type="unfinished"></translation>
     </message>
@@ -2656,6 +2652,10 @@
     </message>
     <message>
         <source>Windows can take up to 20 seconds to hand over the device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Direct mode can’t drive it — switch the connection to Standard.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4066,6 +4066,10 @@
     </message>
     <message>
         <source>Nothing appearing? A pad Windows itself doesn’t list won’t reach Dish either — check Windows’ own Devices first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No rumble</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

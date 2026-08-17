@@ -107,6 +107,8 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return s.capabilities.hasLightbar;
     case HasTouchpadRole:
         return s.capabilities.hasTouchpad;
+    case HasRumbleRole:
+        return s.capabilities.hasRumble;
     case VerifiedModelRole:
         return s.verifiedModel;
     case BatteryLevelRole:
@@ -241,6 +243,7 @@ QHash<int, QByteArray> SlotListModel::roleNames() const {
         {SatLatencyTextRole, "satLatencyText"},
         {SatLatencySamplesRole, "satLatencySamples"},
         {HasTouchpadRole, "hasTouchpad"},
+        {HasRumbleRole, "hasRumble"},
         {VerifiedModelRole, "verifiedModel"},
     };
 }
