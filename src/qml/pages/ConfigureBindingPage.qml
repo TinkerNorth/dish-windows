@@ -36,6 +36,12 @@ Kit.Page {
     readonly property string linkWord: page.padLive ? qsTr("Streaming")
                                      : page.padBound ? qsTr("Bound") : qsTr("Not bound")
 
+    // The page owns its own regions; Kit.Page's scroller is not the body's.
+    // The action bar is pinned under a scrolling body (the wizard's layout
+    // law), so Unbind/Cancel/Apply never leave the viewport however long the
+    // host and type lists grow.
+    scrollable: false
+
     // ── Leave guard ─────────────────────────────────────────────────────────
     // A rail click REPLACES the content stack, so an edited draft has to get
     // first refusal before it is dropped.
@@ -576,565 +582,581 @@ Kit.Page {
 
     // ── Body ────────────────────────────────────────────────────────────────
     ColumnLayout {
-        width: parent ? parent.width : implicitWidth
+        width: parent.width
+        height: parent.height
         spacing: Tokens.s6
 
-        // Pinned above the columns, not over them: the page stays fully usable
-        // on an unsteady link, because unstable IS a live link.
-        Kit.ErrorBanner {
-            visible: page.unsteadyShown
+        // ── Scrolling body ──────────────────────────────────────────────────
+        ScrollView {
+            id: bodyScroll
+            clip: true
+            contentWidth: availableWidth
             Layout.fillWidth: true
-            tone: Kit.ErrorBanner.Warning
-            text: qsTr("Unsteady link")
-            detail: qsTr("Still routing, but packets are dropping. Move closer or switch to USB.")
-            showRetry: true
-            retryText: qsTr("Dismiss")
-            onRetryRequested: page.unsteadyDismissed = true
-        }
+            Layout.fillHeight: true
 
-        GridLayout {
-            Layout.fillWidth: true
-            columns: page.stacked ? 1 : 2
-            columnSpacing: Tokens.s8
-            rowSpacing: Tokens.s8
-
-            // ══ EDITOR COLUMN ═══════════════════════════════════════════════
             ColumnLayout {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignTop
+                width: bodyScroll.availableWidth
                 spacing: Tokens.s6
 
-                // ── INPUT ───────────────────────────────────────────────────
-                RowLayout {
+                // In flow above the columns, not over them: the page stays fully
+                // usable on an unsteady link, because unstable IS a live link.
+                Kit.ErrorBanner {
+                    visible: page.unsteadyShown
                     Layout.fillWidth: true
-                    spacing: Tokens.s4
-
-                    Kit.Eyebrow { mutedTone: true; text: qsTr("Input") }
-                    Label {
-                        Layout.fillWidth: true
-                        text: page.padName
-                        color: Theme.mutedStrong
-                        font.family: Tokens.monoFamily
-                        font.pixelSize: Tokens.textMeta
-                        elide: Text.ElideRight
-                    }
+                    tone: Kit.ErrorBanner.Warning
+                    text: qsTr("Unsteady link")
+                    detail: qsTr("Still routing, but packets are dropping. Move closer or switch to USB.")
+                    showRetry: true
+                    retryText: qsTr("Dismiss")
+                    onRetryRequested: page.unsteadyDismissed = true
                 }
 
-                Kit.Card {
+                GridLayout {
                     Layout.fillWidth: true
+                    columns: page.stacked ? 1 : 2
+                    columnSpacing: Tokens.s8
+                    rowSpacing: Tokens.s8
 
-                    contentItem: ColumnLayout {
-                        spacing: Tokens.s5
+                    // ══ EDITOR COLUMN ═══════════════════════════════════════════════
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        spacing: Tokens.s6
 
+                        // ── INPUT ───────────────────────────────────────────────────
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Tokens.s4
 
-                            Kit.Eyebrow {
-                                mutedTone: true
-                                text: qsTr("Connection")
-                                Layout.preferredWidth: page.labelColumn
-                            }
-                            Kit.CapabilityChip {
-                                tone: Kit.CapabilityChip.Neutral
-                                text: page.padBluetooth ? qsTr("Bluetooth") : qsTr("USB")
-                            }
-                            Kit.LiveStat {
-                                id: padRate
-                                live: page.padLive
-                                text: page.padRow
-                                      ? padRate.rateText(page.padRow.gamepadHz,
-                                                         page.padRow.gamepadHzLive)
-                                      : ""
-                                visible: padRate.text.length > 0
-                            }
-                            Item { Layout.fillWidth: true }
-
-                            Kit.SegmentedControl {
-                                visible: page.padClaimable
-                                small: true
-                                busy: page.padClaiming
-                                options: page.pathOptions
-                                value: page.pathOptions[draft.desiredPath === "direct" ? 1 : 0]
-                                onPicked: option => draft.choosePath(
-                                              page.pathOptions.indexOf(option) === 1
-                                              ? "direct" : "standard")
-                            }
-                            // The trust judgement rides the PATH, not the pad:
-                            // the risk it names exists only on Direct.
-                            Kit.CapabilityChip {
-                                visible: page.padClaimable && !page.padVerified
-                                tone: Kit.CapabilityChip.Warn
-                                text: qsTr("Layout guessed")
+                            Kit.Eyebrow { mutedTone: true; text: qsTr("Input") }
+                            Label {
+                                Layout.fillWidth: true
+                                text: page.padName
+                                color: Theme.mutedStrong
+                                font.family: Tokens.monoFamily
+                                font.pixelSize: Tokens.textMeta
+                                elide: Text.ElideRight
                             }
                         }
 
-                        Label {
+                        Kit.Card {
                             Layout.fillWidth: true
-                            visible: page.pathNote.length > 0
-                            text: page.pathNote
-                            color: page.padFailure === "permissionDenied" ? Theme.error
-                                                                          : Theme.warning
-                            font.pixelSize: Tokens.textMeta
-                            wrapMode: Text.WordWrap
+
+                            contentItem: ColumnLayout {
+                                spacing: Tokens.s5
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Tokens.s4
+
+                                    Kit.Eyebrow {
+                                        mutedTone: true
+                                        text: qsTr("Connection")
+                                        Layout.preferredWidth: page.labelColumn
+                                    }
+                                    Kit.CapabilityChip {
+                                        tone: Kit.CapabilityChip.Neutral
+                                        text: page.padBluetooth ? qsTr("Bluetooth") : qsTr("USB")
+                                    }
+                                    Kit.LiveStat {
+                                        id: padRate
+                                        live: page.padLive
+                                        text: page.padRow
+                                              ? padRate.rateText(page.padRow.gamepadHz,
+                                                                 page.padRow.gamepadHzLive)
+                                              : ""
+                                        visible: padRate.text.length > 0
+                                    }
+                                    Item { Layout.fillWidth: true }
+
+                                    Kit.SegmentedControl {
+                                        visible: page.padClaimable
+                                        small: true
+                                        busy: page.padClaiming
+                                        options: page.pathOptions
+                                        value: page.pathOptions[draft.desiredPath === "direct" ? 1 : 0]
+                                        onPicked: option => draft.choosePath(
+                                                      page.pathOptions.indexOf(option) === 1
+                                                      ? "direct" : "standard")
+                                    }
+                                    // The trust judgement rides the PATH, not the pad:
+                                    // the risk it names exists only on Direct.
+                                    Kit.CapabilityChip {
+                                        visible: page.padClaimable && !page.padVerified
+                                        tone: Kit.CapabilityChip.Warn
+                                        text: qsTr("Layout guessed")
+                                    }
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    visible: page.pathNote.length > 0
+                                    text: page.pathNote
+                                    color: page.padFailure === "permissionDenied" ? Theme.error
+                                                                                  : Theme.warning
+                                    font.pixelSize: Tokens.textMeta
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Kit.Callout {
+                                    visible: page.padClaimable && !page.padVerified
+                                             && draft.desiredPath === "direct"
+                                    Layout.fillWidth: true
+                                    tone: Kit.Callout.Warning
+                                    text: qsTr("Not recognised. Direct mode guesses this controller’s layout, so some inputs may read wrong. You can switch back anytime.")
+                                }
+
+                                Kit.Callout {
+                                    visible: page.padRow !== null && !page.padClaimable
+                                    Layout.fillWidth: true
+                                    tone: Kit.Callout.Info
+                                    text: qsTr("Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.")
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 1
+                                    color: Theme.outlineSubtle
+                                }
+
+                                // An absent capability is still drawn, negated and legible.
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Tokens.s4
+
+                                    Kit.Eyebrow {
+                                        mutedTone: true
+                                        text: qsTr("Functions")
+                                        Layout.preferredWidth: page.labelColumn
+                                        Layout.alignment: Qt.AlignTop
+                                    }
+                                    Flow {
+                                        Layout.fillWidth: true
+                                        spacing: Tokens.s2
+
+                                        Kit.CapabilityChip {
+                                            id: rumbleChip
+                                            readonly property bool has: page.padRow
+                                                                        ? page.padRow.hasRumble : false
+                                            text: rumbleChip.has ? qsTr("Rumble") : qsTr("No rumble")
+                                            tone: rumbleChip.has ? Kit.CapabilityChip.Present
+                                                                 : Kit.CapabilityChip.Absent
+                                        }
+                                        Kit.CapabilityChip {
+                                            id: gyroChip
+                                            readonly property bool has: page.padRow
+                                                                        ? page.padRow.hasMotion : false
+                                            text: gyroChip.has ? qsTr("Gyro") : qsTr("No gyro")
+                                            tone: gyroChip.has ? Kit.CapabilityChip.Present
+                                                               : Kit.CapabilityChip.Absent
+                                        }
+                                        Kit.CapabilityChip {
+                                            id: touchpadChip
+                                            readonly property bool has: page.padRow
+                                                                        ? page.padRow.hasTouchpad : false
+                                            text: touchpadChip.has ? qsTr("Touchpad")
+                                                                   : qsTr("No touchpad")
+                                            tone: touchpadChip.has ? Kit.CapabilityChip.Present
+                                                                   : Kit.CapabilityChip.Absent
+                                        }
+                                        Kit.CapabilityChip {
+                                            visible: page.padRow ? page.padRow.hasLightbar : false
+                                            text: qsTr("Lightbar")
+                                            tone: Kit.CapabilityChip.Present
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── DESTINATION ─────────────────────────────────────────────
+                        Kit.Eyebrow {
+                            mutedTone: true
+                            text: qsTr("Destination")
+                            Layout.topMargin: Tokens.s2
+                        }
+
+                        Kit.EmptyState {
+                            visible: page.noHosts
+                            Layout.fillWidth: true
+                            glyph: "satellite-off"
+                            title: qsTr("No hosts found")
+                            body: page.padName.length > 0
+                                  ? qsTr("Scan your network for a Satellite host, or pair one over Bluetooth. Once a host appears, come back to bind %1.").arg(page.padName)
+                                  : qsTr("Scan your network for a Satellite host, or pair one over Bluetooth.")
+                            actionText: qsTr("Manage destinations ›")
+                            showAction: true
+                            onActionRequested: if (page.shellApi) {
+                                page.shellApi.selectDestination(2);
+                            }
+                        }
+
+                        // Every host except one already carrying another pad; this slot's
+                        // own binding is always offered, so an offline host it is
+                        // already bound to can still be re-picked.
+                        Repeater {
+                            model: App.connectionModel
+
+                            delegate: Kit.SelectRow {
+                                id: hostOption
+
+                                // `glyph` is deliberately NOT pulled: SelectRow already
+                                // declares a `glyph` property and a delegate cannot
+                                // redeclare one that exists on its base type.
+                                required property string connectionId
+                                required property string label
+                                required property string ip
+                                required property string linkState
+                                required property string chip
+                                required property string dotColor
+                                required property string boundSlotId
+                                required property bool liveLink
+                                required property string latencyText
+                                required property int latencySamples
+
+                                readonly property bool offerable: hostOption.boundSlotId.length === 0
+                                                                  || hostOption.boundSlotId === page.slotId
+                                readonly property bool chosen: draft.hostId === hostOption.connectionId
+                                // Latency is drawn only on a genuinely live link with
+                                // samples — never "~0 ms".
+                                readonly property bool showLatency: hostOption.latencySamples > 0
+                                    && (hostOption.linkState === "connected"
+                                        || hostOption.chip === "unstable")
+
+                                visible: hostOption.offerable
+                                Layout.fillWidth: true
+
+                                selected: hostOption.chosen
+                                title: hostOption.label
+                                subtitle: hostOption.ip + " · "
+                                          + page.hostSubtitle(hostOption.connectionId, App.boundSlotCount)
+                                          + (hostOption.showLatency ? " · " + hostOption.latencyText : "")
+                                dotToken: hostOption.dotColor
+                                chipText: page.chipText(hostOption.chip)
+                                chipTone: page.chipTone(hostOption.chip)
+
+                                onPicked: draft.chooseDestination(hostOption.connectionId,
+                                                                  hostOption.label, "satellite")
+
+                                onChosenChanged: page.adoptHost(hostOption, hostOption.chosen)
+                                Component.onCompleted: page.adoptHost(hostOption, hostOption.chosen)
+                                Component.onDestruction: page.adoptHost(hostOption, false)
+                            }
                         }
 
                         Kit.Callout {
-                            visible: page.padClaimable && !page.padVerified
-                                     && draft.desiredPath === "direct"
-                            Layout.fillWidth: true
-                            tone: Kit.Callout.Warning
-                            text: qsTr("Not recognised. Direct mode guesses this controller’s layout, so some inputs may read wrong. You can switch back anytime.")
-                        }
-
-                        Kit.Callout {
-                            visible: page.padRow !== null && !page.padClaimable
+                            visible: draft.hostIsBluetooth
                             Layout.fillWidth: true
                             tone: Kit.Callout.Info
-                            text: qsTr("Direct mode needs a USB connection. Over Bluetooth this pad runs on the Standard path.")
+                            text: qsTr("This PC pairs as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
                         }
 
-                        Rectangle {
-                            Layout.fillWidth: true
-                            implicitHeight: 1
-                            color: Theme.outlineSubtle
-                        }
-
-                        // An absent capability is still drawn, negated and legible.
                         RowLayout {
+                            visible: draft.hasDestination
                             Layout.fillWidth: true
                             spacing: Tokens.s4
 
                             Kit.Eyebrow {
                                 mutedTone: true
-                                text: qsTr("Functions")
+                                text: qsTr("Gets")
                                 Layout.preferredWidth: page.labelColumn
                                 Layout.alignment: Qt.AlignTop
                             }
+                            Label {
+                                visible: page.matrixPending
+                                Layout.fillWidth: true
+                                text: qsTr("Waiting on the type…")
+                                color: Theme.mutedStrong
+                                font.pixelSize: Tokens.textMeta
+                                font.italic: true
+                            }
                             Flow {
+                                visible: !page.matrixPending
                                 Layout.fillWidth: true
                                 spacing: Tokens.s2
 
-                                Kit.CapabilityChip {
-                                    id: rumbleChip
-                                    readonly property bool has: page.padRow
-                                                                ? page.padRow.hasRumble : false
-                                    text: rumbleChip.has ? qsTr("Rumble") : qsTr("No rumble")
-                                    tone: rumbleChip.has ? Kit.CapabilityChip.Present
-                                                         : Kit.CapabilityChip.Absent
-                                }
-                                Kit.CapabilityChip {
-                                    id: gyroChip
-                                    readonly property bool has: page.padRow
-                                                                ? page.padRow.hasMotion : false
-                                    text: gyroChip.has ? qsTr("Gyro") : qsTr("No gyro")
-                                    tone: gyroChip.has ? Kit.CapabilityChip.Present
-                                                       : Kit.CapabilityChip.Absent
-                                }
-                                Kit.CapabilityChip {
-                                    id: touchpadChip
-                                    readonly property bool has: page.padRow
-                                                                ? page.padRow.hasTouchpad : false
-                                    text: touchpadChip.has ? qsTr("Touchpad")
-                                                           : qsTr("No touchpad")
-                                    tone: touchpadChip.has ? Kit.CapabilityChip.Present
-                                                           : Kit.CapabilityChip.Absent
-                                }
-                                Kit.CapabilityChip {
-                                    visible: page.padRow ? page.padRow.hasLightbar : false
-                                    text: qsTr("Lightbar")
-                                    tone: Kit.CapabilityChip.Present
+                                Repeater {
+                                    model: page.getsNames
+
+                                    delegate: Kit.CapabilityChip {
+                                        id: getsChip
+                                        required property string modelData
+                                        text: getsChip.modelData
+                                        tone: Kit.CapabilityChip.Present
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-
-                // ── DESTINATION ─────────────────────────────────────────────
-                Kit.Eyebrow {
-                    mutedTone: true
-                    text: qsTr("Destination")
-                    Layout.topMargin: Tokens.s2
-                }
-
-                Kit.EmptyState {
-                    visible: page.noHosts
-                    Layout.fillWidth: true
-                    glyph: "satellite-off"
-                    title: qsTr("No hosts found")
-                    body: page.padName.length > 0
-                          ? qsTr("Scan your network for a Satellite host, or pair one over Bluetooth. Once a host appears, come back to bind %1.").arg(page.padName)
-                          : qsTr("Scan your network for a Satellite host, or pair one over Bluetooth.")
-                    actionText: qsTr("Manage destinations ›")
-                    showAction: true
-                    onActionRequested: if (page.shellApi) {
-                        page.shellApi.selectDestination(2);
-                    }
-                }
-
-                // Every host except one already carrying another pad; this slot's
-                // own binding is always offered, so an offline host it is
-                // already bound to can still be re-picked.
-                Repeater {
-                    model: App.connectionModel
-
-                    delegate: Kit.SelectRow {
-                        id: hostOption
-
-                        // `glyph` is deliberately NOT pulled: SelectRow already
-                        // declares a `glyph` property and a delegate cannot
-                        // redeclare one that exists on its base type.
-                        required property string connectionId
-                        required property string label
-                        required property string ip
-                        required property string linkState
-                        required property string chip
-                        required property string dotColor
-                        required property string boundSlotId
-                        required property bool liveLink
-                        required property string latencyText
-                        required property int latencySamples
-
-                        readonly property bool offerable: hostOption.boundSlotId.length === 0
-                                                          || hostOption.boundSlotId === page.slotId
-                        readonly property bool chosen: draft.hostId === hostOption.connectionId
-                        // Latency is drawn only on a genuinely live link with
-                        // samples — never "~0 ms".
-                        readonly property bool showLatency: hostOption.latencySamples > 0
-                            && (hostOption.linkState === "connected"
-                                || hostOption.chip === "unstable")
-
-                        visible: hostOption.offerable
-                        Layout.fillWidth: true
-
-                        selected: hostOption.chosen
-                        title: hostOption.label
-                        subtitle: hostOption.ip + " · "
-                                  + page.hostSubtitle(hostOption.connectionId, App.boundSlotCount)
-                                  + (hostOption.showLatency ? " · " + hostOption.latencyText : "")
-                        dotToken: hostOption.dotColor
-                        chipText: page.chipText(hostOption.chip)
-                        chipTone: page.chipTone(hostOption.chip)
-
-                        onPicked: draft.chooseDestination(hostOption.connectionId,
-                                                          hostOption.label, "satellite")
-
-                        onChosenChanged: page.adoptHost(hostOption, hostOption.chosen)
-                        Component.onCompleted: page.adoptHost(hostOption, hostOption.chosen)
-                        Component.onDestruction: page.adoptHost(hostOption, false)
-                    }
-                }
-
-                Kit.Callout {
-                    visible: draft.hostIsBluetooth
-                    Layout.fillWidth: true
-                    tone: Kit.Callout.Info
-                    text: qsTr("This PC pairs as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
-                }
-
-                RowLayout {
-                    visible: draft.hasDestination
-                    Layout.fillWidth: true
-                    spacing: Tokens.s4
-
-                    Kit.Eyebrow {
-                        mutedTone: true
-                        text: qsTr("Gets")
-                        Layout.preferredWidth: page.labelColumn
-                        Layout.alignment: Qt.AlignTop
-                    }
-                    Label {
-                        visible: page.matrixPending
-                        Layout.fillWidth: true
-                        text: qsTr("Waiting on the type…")
-                        color: Theme.mutedStrong
-                        font.pixelSize: Tokens.textMeta
-                        font.italic: true
-                    }
-                    Flow {
-                        visible: !page.matrixPending
-                        Layout.fillWidth: true
-                        spacing: Tokens.s2
-
-                        Repeater {
-                            model: page.getsNames
-
-                            delegate: Kit.CapabilityChip {
-                                id: getsChip
-                                required property string modelData
-                                text: getsChip.modelData
-                                tone: Kit.CapabilityChip.Present
-                            }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    visible: draft.hasDestination
-                    Layout.fillWidth: true
-                    spacing: Tokens.s4
-
-                    Kit.Eyebrow {
-                        mutedTone: true
-                        text: qsTr("Sends back")
-                        Layout.preferredWidth: page.labelColumn
-                        Layout.alignment: Qt.AlignTop
-                    }
-                    Label {
-                        visible: page.matrixPending || page.sendsNames.length === 0
-                        Layout.fillWidth: true
-                        text: page.matrixPending ? qsTr("Waiting on the type…")
-                                                 : qsTr("No return channel")
-                        color: Theme.mutedStrong
-                        font.pixelSize: Tokens.textMeta
-                        font.italic: true
-                    }
-                    Flow {
-                        visible: !page.matrixPending && page.sendsNames.length > 0
-                        Layout.fillWidth: true
-                        spacing: Tokens.s2
-
-                        Repeater {
-                            model: page.sendsNames
-
-                            delegate: Kit.CapabilityChip {
-                                id: sendsChip
-                                required property string modelData
-                                text: sendsChip.modelData
-                                tone: Kit.CapabilityChip.Present
-                            }
-                        }
-                    }
-                }
-
-                // ── BINDING ─────────────────────────────────────────────────
-                Kit.SectionHeader {
-                    visible: draft.hasDestination
-                    label: qsTr("Binding")
-                    Layout.topMargin: Tokens.s2
-                }
-
-                Kit.Eyebrow {
-                    visible: draft.hasDestination
-                    mutedTone: true
-                    text: qsTr("Emulate as")
-                }
-
-                // Bluetooth destination: not a question. The HID profile fixes
-                // the type, so the page states it rather than asking.
-                RowLayout {
-                    visible: draft.hasDestination && draft.hostIsBluetooth
-                    Layout.fillWidth: true
-                    spacing: Tokens.s4
-
-                    Kit.CapabilityChip {
-                        tone: Kit.CapabilityChip.Neutral
-                        text: qsTr("Gamepad")
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: qsTr("Fixed by the Bluetooth HID profile.")
-                        color: Theme.mutedStrong
-                        font.pixelSize: Tokens.textMeta
-                        wrapMode: Text.WordWrap
-                    }
-                }
-
-                // Loading: never a guessed default, and never a bare spinner.
-                Kit.LoadingSpinner {
-                    visible: draft.hasDestination && !draft.hostIsBluetooth && page.catalogLoading
-                    Layout.fillWidth: true
-                    running: page.catalogLoading
-                    text: qsTr("Reading the controller catalog from %1…").arg(draft.hostName)
-                }
-
-                // Failed with nothing cached: tap to retry, Apply stays disabled
-                // because draft.hasType is false.
-                Kit.ErrorBanner {
-                    visible: draft.hasDestination && !draft.hostIsBluetooth && page.catalogBroken
-                    Layout.fillWidth: true
-                    text: qsTr("Couldn’t load types.")
-                    detail: App.emulateError
-                    showRetry: true
-                    onRetryRequested: page.refreshCatalog()
-                }
-
-                Repeater {
-                    model: draft.hasDestination && !draft.hostIsBluetooth
-                           && !page.catalogLoading && !page.catalogBroken ? page.types : []
-
-                    delegate: Kit.SelectRow {
-                        id: typeOption
-
-                        required property var modelData
-
-                        readonly property var preview: App.typeFeatureSummary(draft.hostId,
-                                                                              typeOption.modelData.type)
-
-                        Layout.fillWidth: true
-                        selected: draft.type === typeOption.modelData.type
-                        title: typeOption.modelData.name
-                        subtitle: typeOption.modelData.description
-
-                        onPicked: draft.chooseType(typeOption.modelData.type,
-                                                   typeOption.modelData.name)
-
-                        // What the TYPE layer alone offers.
-                        Flow {
-                            spacing: Tokens.s2
-
-                            Repeater {
-                                model: typeOption.preview
-
-                                delegate: Kit.CapabilityChip {
-                                    id: previewChip
-                                    required property var modelData
-
-                                    readonly property bool interesting:
-                                        previewChip.modelData.feature === "motion"
-                                        || previewChip.modelData.feature === "touchpad"
-                                        || previewChip.modelData.feature === "rumble"
-                                        || previewChip.modelData.feature === "lightbar"
-
-                                    visible: previewChip.interesting
-                                    text: draft.featureName(previewChip.modelData.feature)
-                                    tone: previewChip.modelData.supported
-                                          ? Kit.CapabilityChip.Present : Kit.CapabilityChip.Absent
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Tune rows. Each is rendered only when every layer carries the
-                // feature — the matrix beside it names the ones that do not, so
-                // a dead control here would be a second, worse explanation.
-                Kit.Card {
-                    visible: draft.hasDestination
-                             && (page.motionTunable || page.touchpadTunable
-                                 || page.rumbleTunable || page.nothingTunable)
-                    Layout.fillWidth: true
-
-                    contentItem: ColumnLayout {
-                        spacing: Tokens.s5
-
-                        Kit.LabeledSwitch {
-                            visible: page.motionTunable
-                            Layout.fillWidth: true
-                            label: qsTr("Motion")
-                            description: qsTr("Tilt and gyro aiming on the host.")
-                            checked: draft.motionOn
-                            onToggled: checked => draft.setMotion(checked)
-                        }
-
-                        Rectangle {
-                            visible: page.motionTunable && page.touchpadTunable
-                            Layout.fillWidth: true
-                            implicitHeight: 1
-                            color: Theme.outlineSubtle
                         }
 
                         RowLayout {
-                            visible: page.touchpadTunable
+                            visible: draft.hasDestination
                             Layout.fillWidth: true
-                            spacing: Tokens.s5
+                            spacing: Tokens.s4
+
+                            Kit.Eyebrow {
+                                mutedTone: true
+                                text: qsTr("Sends back")
+                                Layout.preferredWidth: page.labelColumn
+                                Layout.alignment: Qt.AlignTop
+                            }
+                            Label {
+                                visible: page.matrixPending || page.sendsNames.length === 0
+                                Layout.fillWidth: true
+                                text: page.matrixPending ? qsTr("Waiting on the type…")
+                                                         : qsTr("No return channel")
+                                color: Theme.mutedStrong
+                                font.pixelSize: Tokens.textMeta
+                                font.italic: true
+                            }
+                            Flow {
+                                visible: !page.matrixPending && page.sendsNames.length > 0
+                                Layout.fillWidth: true
+                                spacing: Tokens.s2
+
+                                Repeater {
+                                    model: page.sendsNames
+
+                                    delegate: Kit.CapabilityChip {
+                                        id: sendsChip
+                                        required property string modelData
+                                        text: sendsChip.modelData
+                                        tone: Kit.CapabilityChip.Present
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── BINDING ─────────────────────────────────────────────────
+                        Kit.SectionHeader {
+                            visible: draft.hasDestination
+                            label: qsTr("Binding")
+                            Layout.topMargin: Tokens.s2
+                        }
+
+                        Kit.Eyebrow {
+                            visible: draft.hasDestination
+                            mutedTone: true
+                            text: qsTr("Emulate as")
+                        }
+
+                        // Bluetooth destination: not a question. The HID profile fixes
+                        // the type, so the page states it rather than asking.
+                        RowLayout {
+                            visible: draft.hasDestination && draft.hostIsBluetooth
+                            Layout.fillWidth: true
+                            spacing: Tokens.s4
+
+                            Kit.CapabilityChip {
+                                tone: Kit.CapabilityChip.Neutral
+                                text: qsTr("Gamepad")
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: qsTr("Fixed by the Bluetooth HID profile.")
+                                color: Theme.mutedStrong
+                                font.pixelSize: Tokens.textMeta
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+
+                        // Loading: never a guessed default, and never a bare spinner.
+                        Kit.LoadingSpinner {
+                            visible: draft.hasDestination && !draft.hostIsBluetooth && page.catalogLoading
+                            Layout.fillWidth: true
+                            running: page.catalogLoading
+                            text: qsTr("Reading the controller catalog from %1…").arg(draft.hostName)
+                        }
+
+                        // Failed with nothing cached: tap to retry, Apply stays disabled
+                        // because draft.hasType is false.
+                        Kit.ErrorBanner {
+                            visible: draft.hasDestination && !draft.hostIsBluetooth && page.catalogBroken
+                            Layout.fillWidth: true
+                            text: qsTr("Couldn’t load types.")
+                            detail: App.emulateError
+                            showRetry: true
+                            onRetryRequested: page.refreshCatalog()
+                        }
+
+                        Repeater {
+                            model: draft.hasDestination && !draft.hostIsBluetooth
+                                   && !page.catalogLoading && !page.catalogBroken ? page.types : []
+
+                            delegate: Kit.SelectRow {
+                                id: typeOption
+
+                                required property var modelData
+
+                                readonly property var preview: App.typeFeatureSummary(draft.hostId,
+                                                                                      typeOption.modelData.type)
+
+                                Layout.fillWidth: true
+                                selected: draft.type === typeOption.modelData.type
+                                title: typeOption.modelData.name
+                                subtitle: typeOption.modelData.description
+
+                                onPicked: draft.chooseType(typeOption.modelData.type,
+                                                           typeOption.modelData.name)
+
+                                // What the TYPE layer alone offers.
+                                Flow {
+                                    spacing: Tokens.s2
+
+                                    Repeater {
+                                        model: typeOption.preview
+
+                                        delegate: Kit.CapabilityChip {
+                                            id: previewChip
+                                            required property var modelData
+
+                                            readonly property bool interesting:
+                                                previewChip.modelData.feature === "motion"
+                                                || previewChip.modelData.feature === "touchpad"
+                                                || previewChip.modelData.feature === "rumble"
+                                                || previewChip.modelData.feature === "lightbar"
+
+                                            visible: previewChip.interesting
+                                            text: draft.featureName(previewChip.modelData.feature)
+                                            tone: previewChip.modelData.supported
+                                                  ? Kit.CapabilityChip.Present : Kit.CapabilityChip.Absent
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Tune rows. Each is rendered only when every layer carries the
+                        // feature — the matrix beside it names the ones that do not, so
+                        // a dead control here would be a second, worse explanation.
+                        Kit.Card {
+                            visible: draft.hasDestination
+                                     && (page.motionTunable || page.touchpadTunable
+                                         || page.rumbleTunable || page.nothingTunable)
+                            Layout.fillWidth: true
+
+                            contentItem: ColumnLayout {
+                                spacing: Tokens.s5
+
+                                Kit.LabeledSwitch {
+                                    visible: page.motionTunable
+                                    Layout.fillWidth: true
+                                    label: qsTr("Motion")
+                                    description: qsTr("Tilt and gyro aiming on the host.")
+                                    checked: draft.motionOn
+                                    onToggled: checked => draft.setMotion(checked)
+                                }
+
+                                Rectangle {
+                                    visible: page.motionTunable && page.touchpadTunable
+                                    Layout.fillWidth: true
+                                    implicitHeight: 1
+                                    color: Theme.outlineSubtle
+                                }
+
+                                RowLayout {
+                                    visible: page.touchpadTunable
+                                    Layout.fillWidth: true
+                                    spacing: Tokens.s5
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: qsTr("Touchpad")
+                                        color: Theme.onSurface
+                                        font.pixelSize: Tokens.textBase
+                                    }
+                                    Kit.SegmentedControl {
+                                        small: true
+                                        options: page.touchpadOptions
+                                        value: page.touchpadOptions[draft.touchpadMode]
+                                        onPicked: option => draft.setTouchpad(
+                                                      page.touchpadOptions.indexOf(option))
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: page.touchpadTunable && page.rumbleTunable
+                                    Layout.fillWidth: true
+                                    implicitHeight: 1
+                                    color: Theme.outlineSubtle
+                                }
+
+                                Kit.LabeledSwitch {
+                                    visible: page.rumbleTunable
+                                    Layout.fillWidth: true
+                                    label: qsTr("Rumble")
+                                    description: qsTr("Feedback from the host drives the pad’s motors.")
+                                    checked: draft.rumbleOn
+                                    onToggled: checked => draft.setRumble(checked)
+                                }
+
+                                Label {
+                                    visible: page.nothingTunable
+                                    Layout.fillWidth: true
+                                    text: qsTr("Nothing to tune for this combination — see why on the right. The pad is ready to bind.")
+                                    color: Theme.mutedStrong
+                                    font.pixelSize: Tokens.textMeta
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+
+                    // ══ WHAT CARRIES ════════════════════════════════════════════════
+                    // Seven rows at most: it never needs a scroller of its own, and the
+                    // page's single scroll region owns all overflow.
+                    Kit.Card {
+                        Layout.alignment: Qt.AlignTop
+                        Layout.fillWidth: page.stacked
+                        Layout.minimumWidth: page.matrixMinWidth
+                        Layout.preferredWidth: page.matrixWidth
+
+                        contentItem: ColumnLayout {
+                            spacing: Tokens.s4
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Tokens.s4
+
+                                Kit.Eyebrow {
+                                    Layout.fillWidth: true
+                                    text: qsTr("What carries")
+                                }
+                                Label {
+                                    text: page.matrixPending
+                                          ? qsTr("pending")
+                                          : qsTr("%1/%2 live").arg(page.carriedCount)
+                                                              .arg(page.matrixRows.length)
+                                    color: Theme.mutedStrong
+                                    font.family: Tokens.monoFamily
+                                    font.pixelSize: Tokens.textChip
+                                }
+                            }
+
+                            Kit.CapabilityTable {
+                                Layout.fillWidth: true
+                                rows: page.matrixRows
+                            }
 
                             Label {
                                 Layout.fillWidth: true
-                                text: qsTr("Touchpad")
-                                color: Theme.onSurface
-                                font.pixelSize: Tokens.textBase
-                            }
-                            Kit.SegmentedControl {
-                                small: true
-                                options: page.touchpadOptions
-                                value: page.touchpadOptions[draft.touchpadMode]
-                                onPicked: option => draft.setTouchpad(
-                                              page.touchpadOptions.indexOf(option))
+                                Layout.topMargin: Tokens.s2
+                                text: page.panelFooter
+                                color: Theme.mutedStrong
+                                font.family: Tokens.monoFamily
+                                font.pixelSize: Tokens.textChip
+                                wrapMode: Text.WordWrap
                             }
                         }
-
-                        Rectangle {
-                            visible: page.touchpadTunable && page.rumbleTunable
-                            Layout.fillWidth: true
-                            implicitHeight: 1
-                            color: Theme.outlineSubtle
-                        }
-
-                        Kit.LabeledSwitch {
-                            visible: page.rumbleTunable
-                            Layout.fillWidth: true
-                            label: qsTr("Rumble")
-                            description: qsTr("Feedback from the host drives the pad’s motors.")
-                            checked: draft.rumbleOn
-                            onToggled: checked => draft.setRumble(checked)
-                        }
-
-                        Label {
-                            visible: page.nothingTunable
-                            Layout.fillWidth: true
-                            text: qsTr("Nothing to tune for this combination — see why on the right. The pad is ready to bind.")
-                            color: Theme.mutedStrong
-                            font.pixelSize: Tokens.textMeta
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-            }
-
-            // ══ WHAT CARRIES ════════════════════════════════════════════════
-            // Seven rows at most: it never needs a scroller of its own, and the
-            // page's single scroll region owns all overflow.
-            Kit.Card {
-                Layout.alignment: Qt.AlignTop
-                Layout.fillWidth: page.stacked
-                Layout.minimumWidth: page.matrixMinWidth
-                Layout.preferredWidth: page.matrixWidth
-
-                contentItem: ColumnLayout {
-                    spacing: Tokens.s4
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Tokens.s4
-
-                        Kit.Eyebrow {
-                            Layout.fillWidth: true
-                            text: qsTr("What carries")
-                        }
-                        Label {
-                            text: page.matrixPending
-                                  ? qsTr("pending")
-                                  : qsTr("%1/%2 live").arg(page.carriedCount)
-                                                      .arg(page.matrixRows.length)
-                            color: Theme.mutedStrong
-                            font.family: Tokens.monoFamily
-                            font.pixelSize: Tokens.textChip
-                        }
-                    }
-
-                    Kit.CapabilityTable {
-                        Layout.fillWidth: true
-                        rows: page.matrixRows
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Tokens.s2
-                        text: page.panelFooter
-                        color: Theme.mutedStrong
-                        font.family: Tokens.monoFamily
-                        font.pixelSize: Tokens.textChip
-                        wrapMode: Text.WordWrap
                     }
                 }
             }
         }
 
         // ══ ACTION BAR ══════════════════════════════════════════════════════
+        // Pinned outside the scroller, divider included; the shell header is
+        // fixed above, so only the body between them ever moves.
         Rectangle {
             Layout.fillWidth: true
-            Layout.topMargin: Tokens.s3
             implicitHeight: 1
             color: Theme.outline
         }
