@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The app identity mark (satellite dish in a gear) — the installer's single
-// image, 16px in the title bar and 56–72px as a face mark. `busy` runs the
-// one sanctioned brand transient (WireLine's opacity pulse) to say work is in
-// flight without composing a scene.
+// The app identity mark (satellite dish in a gear) — the window icon's
+// identity as a glyph: 16px in the title bar, and the same asset marks Home
+// in the rail. `busy` runs the one sanctioned brand transient (WireLine's
+// opacity pulse) to say work is in flight without composing a scene.
 
 import QtQuick
 import Dish.Chrome

@@ -26,7 +26,7 @@ Item {
     // unnavigable, and the rule is about the picture, not the file name (see
     // "Rail glyphs" in docs/QML_UI_KIT.md).
     readonly property var destinations: [
-        { key: "home",        label: qsTr("Home"),         glyph: "dish-connected", heart: false, source: "pages/HomePage.qml" },
+        { key: "home",        label: qsTr("Home"),         glyph: "dish-logo",      heart: false, source: "pages/HomePage.qml" },
         { key: "controllers", label: qsTr("Controllers"),  glyph: "pad",            heart: false, source: "pages/ControllersPage.qml" },
         { key: "connections", label: qsTr("Connections"),  glyph: "satellite",      heart: false, source: "pages/ConnectionsPage.qml" },
         { key: "support",     label: qsTr("Support Dish"), glyph: "",               heart: true,  source: "pages/DonatePage.qml" },

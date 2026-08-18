@@ -126,8 +126,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Tokens.s4
 
-            Kit.BrandGlyph {
-                glyph: "dish"
+            Kit.AppMark {
                 width: Tokens.glyphSm
                 height: Tokens.glyphSm
                 anchors.verticalCenter: parent.verticalCenter
