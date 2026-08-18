@@ -10,9 +10,10 @@
 // Two pieces of process state are borrowed and put back by the fixture: the
 // QSettings location (redirected to an INI under a temp directory, because the
 // coordinator's bookkeeping keys live in the same hive as the user's real
-// preferences) and, when the build tree has none, an `uninstall.exe` next to
-// the test binary — the portable/managed probe is a filesystem check, and a
-// portable copy is notify-only by design.
+// preferences) and, when the build tree has none, an `unins000.exe` next to
+// the test binary — the portable/managed probe is a filesystem check for an
+// Inno Setup uninstaller sibling, and a portable copy is notify-only by
+// design.
 //
 // The cases that drive a check deliberately do NOT call start(): start() also
 // asks QNetworkInformation for reachability, and a developer machine behind a
@@ -100,9 +101,9 @@ UpdateManifest manifest(const QString& version, const QString& minimum = QString
     m.publishedAt = QStringLiteral("2026-08-03T14:21:07Z");
     m.minimumSupportedVersion = minimum;
     m.releaseNotesUrl =
-        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/v") + version;
+        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/") + version;
     m.setupAsset.url =
-        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/v") +
+        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/") +
         version + QStringLiteral("/dish-setup.exe");
     m.setupAsset.sha256 = kSha;
     m.setupAsset.size = 41943040;
@@ -271,7 +272,7 @@ class Fixture {
         QCoreApplication::setOrganizationName(QStringLiteral("DishTests"));
         QCoreApplication::setApplicationName(QStringLiteral("UpdateCoordinator"));
 
-        markerPath_ = QCoreApplication::applicationDirPath() + QStringLiteral("/uninstall.exe");
+        markerPath_ = QCoreApplication::applicationDirPath() + QStringLiteral("/unins000.exe");
         if (!QFileInfo::exists(markerPath_)) {
             QFile marker(markerPath_);
             if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) {

@@ -23,13 +23,8 @@
 #include "update/UpdateHandoff.h"
 
 #include "core/reducer/UpdateMachine.h"
-#include "installer/CliOptions.h"
-#include "installer/Logger.h"
-#include "installer/UpdateApply.h"
 #include "source/store/UpdatePreferenceStore.h"
 #include "update/FileStagingStore.h"
-
-#include "installer/FakeOps.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -47,15 +42,12 @@
 #include <QThread>
 #include <QVariant>
 
-#include <variant>
-
 // Pulls windows.h, so it stays last: no Win32 macro may reach the Qt headers.
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
 
-using dish::installer::CliOptions;
 using dish::reducer::kMaxApplyAttemptsPerVersion;
 using dish::source::kKeyUpdatesHandoffAttempts;
 using dish::source::kKeyUpdatesHandoffVersion;
@@ -496,8 +488,8 @@ TEST_CASE("update handoff: the gate records the attempt and hands the boot over"
 
     char arg0[] = "dish.exe";
     char* argv[] = {arg0, nullptr};
-    // True means main returns 0 immediately and lets the installer wait for
-    // this pid to exit.
+    // True means main returns 0 immediately; the installer's /OTA mode waits
+    // for this process's Running mutex to clear before touching files.
     CHECK(UpdateHandoff::runStartupHandoff(1, argv));
 
     // Recorded and SYNCED before the spawn, so a crash between the two still
@@ -523,117 +515,34 @@ TEST_CASE("update handoff: a spawn that cannot start leaves startup alone", "[up
 
     // False is the whole contract: the caller logs it and carries on with a
     // completely normal startup.
-    CHECK_FALSE(UpdateHandoff::spawnStagedApply(missing, 4242));
+    CHECK_FALSE(UpdateHandoff::spawnStagedApply(missing));
 
     StagedUpdate empty;
-    CHECK_FALSE(UpdateHandoff::spawnStagedApply(empty, 4242));
+    CHECK_FALSE(UpdateHandoff::spawnStagedApply(empty));
 }
 
-TEST_CASE("update handoff: the spawn argv is exactly what the installer's grammar accepts",
+TEST_CASE("update handoff: the spawn arguments are exactly the documented Inno switches",
           "[update][handoff]") {
-    // The producing half is UpdateHandoff::spawnStagedApply (a CreateProcessW
-    // command line, not observable from here); this pins the CONSUMING half —
-    // the installer parses that documented shape into the update-apply mode
-    // with every field intact. A change on either side breaks this case.
-    const QStringList argv{
-        QStringLiteral("--update-apply"),
-        QStringLiteral("--waitpid"),
-        QStringLiteral("4242"),
-        QStringLiteral("--target-exe"),
-        QStringLiteral("C:\\Program Files\\Dish\\dish.exe"),
-        QStringLiteral("--expect-version"),
-        QStringLiteral("9.9.9"),
-        QStringLiteral("--log"),
-        QStringLiteral("C:\\Users\\u\\AppData\\Local\\Dish\\updates\\ready\\9.9.9\\apply.log"),
-    };
-    const auto result = CliOptions::parse(argv, QStringLiteral("dish-setup"));
-    REQUIRE(std::holds_alternative<CliOptions>(result));
-    const CliOptions options = std::get<CliOptions>(result);
-    CHECK(options.mode == CliOptions::Mode::UpdateApply);
-    CHECK(options.waitPid == 4242u);
-    CHECK(options.targetExe == QStringLiteral("C:/Program Files/Dish/dish.exe"));
-    CHECK(options.expectVersion == QStringLiteral("9.9.9"));
-    CHECK(options.logPath.endsWith(QStringLiteral("/ready/9.9.9/apply.log")));
-    // The app never passes a downgrade override, and relaunch is the default
-    // (CI is the only caller that adds --no-relaunch).
-    CHECK_FALSE(options.plan.allowDowngrade);
-    CHECK(options.relaunch);
-    CHECK(options.isSilent());
-}
+    // The consuming half is Inno Setup itself, so what this pins is the
+    // PRODUCED shape against docs/INSTALLER.md: the full silent switch set,
+    // /OTA (installer.iss [Code] waits on the app's mutex and owns the
+    // relaunch duty), and /LOG aimed INTO the stage directory so the log
+    // lands where PRIVACY.md says it does. Order matters only for the
+    // reader; Inno accepts any, but a stable string is a testable string.
+    StagedUpdate staged;
+    staged.version = QStringLiteral("9.9.9");
+    staged.dir = QStringLiteral("C:/Users/u/AppData/Local/Dish/updates/ready/9.9.9");
+    staged.exePath = staged.dir + QStringLiteral("/dish-setup.exe");
 
-// ── The busy exit, which happens BEFORE UpdateApply::run ────────────────────
-// dish.exe's boot gate has already returned 0 by the time the staged installer
-// starts, so an exit that neither applies nor relaunches leaves the machine with
-// no Dish at all: the user clicked the icon and nothing happened. The
-// single-instance gate (a wizard or an uninstaller holding
-// Local\TinkerNorth.DishSetup) is the one exit on that side of conclude().
-
-namespace {
-
-dish::installer::CliOptions busyOptions() {
-    const QStringList argv{
-        QStringLiteral("--update-apply"),
-        QStringLiteral("--waitpid"),
-        QStringLiteral("4242"),
-        QStringLiteral("--target-exe"),
-        QStringLiteral("C:\\App\\dish.exe"),
-        QStringLiteral("--expect-version"),
-        QStringLiteral("9.9.9"),
-    };
-    const auto result = CliOptions::parse(argv, QStringLiteral("dish-setup"));
-    REQUIRE(std::holds_alternative<CliOptions>(result));
-    return std::get<CliOptions>(result);
-}
-
-} // namespace
-
-TEST_CASE("update handoff: a busy setup mutex still puts the old build back", "[update][handoff]") {
-    dish::test::FakeFileOps files;
-    dish::test::FakeProcessOps procs;
-    dish::installer::Logger logger;
-    files.addFile(QStringLiteral("C:/App/dish.exe"), 1);
-
-    CHECK(dish::installer::relaunchTargetAfterBusy(busyOptions(), files, procs, logger));
-    CHECK(procs.lastExe() == QStringLiteral("C:/App/dish.exe"));
-    // Exactly the loop breaker: without it the restarted app's boot gate would
-    // hand off straight back into the installer that is still busy.
-    CHECK(procs.lastArgv() == QStringList{QStringLiteral("--no-update-handoff")});
-    CHECK(procs.lastCwd() == QStringLiteral("C:/App"));
-    // De-elevated, like every other relaunch: the app must not inherit the
-    // installer's token.
-    CHECK(procs.lastDeElevate());
-}
-
-TEST_CASE("update handoff: the busy relaunch respects --no-relaunch and a missing target",
-          "[update][handoff]") {
-    dish::installer::Logger logger;
-    {
-        // CI's --no-relaunch runs mean "leave the machine alone"; honour it here
-        // exactly as conclude() does.
-        dish::test::FakeFileOps files;
-        dish::test::FakeProcessOps procs;
-        files.addFile(QStringLiteral("C:/App/dish.exe"), 1);
-        CliOptions options = busyOptions();
-        options.relaunch = false;
-        CHECK_FALSE(dish::installer::relaunchTargetAfterBusy(options, files, procs, logger));
-        CHECK(procs.calls().isEmpty());
-    }
-    {
-        // A --target-exe that is not there any more: nothing to start, and no
-        // invented default path.
-        dish::test::FakeFileOps files;
-        dish::test::FakeProcessOps procs;
-        CHECK_FALSE(dish::installer::relaunchTargetAfterBusy(busyOptions(), files, procs, logger));
-        CHECK(procs.calls().isEmpty());
-    }
-    {
-        // Not an update-apply run: a busy wizard has an app to leave alone.
-        dish::test::FakeFileOps files;
-        dish::test::FakeProcessOps procs;
-        files.addFile(QStringLiteral("C:/App/dish.exe"), 1);
-        CliOptions options = busyOptions();
-        options.mode = CliOptions::Mode::SilentInstall;
-        CHECK_FALSE(dish::installer::relaunchTargetAfterBusy(options, files, procs, logger));
-        CHECK(procs.calls().isEmpty());
-    }
+    const QString arguments = UpdateHandoff::applyArguments(staged);
+    CHECK(arguments ==
+          QStringLiteral("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /OTA "
+                         "/LOG=\"C:\\Users\\u\\AppData\\Local\\Dish\\updates\\ready\\9.9.9\\"
+                         "apply.log\""));
+    // No scope or directory switch, ever: Inno's previous-install record
+    // (keyed by the AppId in installer.iss) is the authority, and re-supplying
+    // either could fork a machine-scope install into a per-user one.
+    CHECK_FALSE(arguments.contains(QStringLiteral("/DIR"), Qt::CaseInsensitive));
+    CHECK_FALSE(arguments.contains(QStringLiteral("/CURRENTUSER"), Qt::CaseInsensitive));
+    CHECK_FALSE(arguments.contains(QStringLiteral("/ALLUSERS"), Qt::CaseInsensitive));
 }

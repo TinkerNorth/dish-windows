@@ -90,19 +90,19 @@ downloaded `dish-setup.exe`, a copy of the release manifest that described it,
 and the installer's own log from the last apply attempt. Nothing in it is
 personal, nothing in it is sent anywhere, and you can delete the folder at any
 time; the app recreates it only when it downloads an update. The uninstaller
-removes it whether or not you ask for your settings to be purged.
+removes it.
 
 **What the installer writes.** `dish-setup.exe` is a separate program from the
-app, and it touches two more places on your PC. It creates the Add/Remove
-Programs entry
-`HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TinkerNorth.Dish`
+app (Inno Setup, compiled from [`installer.iss`](installer.iss)), and it
+touches two more places on your PC. It creates the Add/Remove Programs entry
+under
+`HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`
 (or the `HKEY_LOCAL_MACHINE` equivalent for an all-users install), holding the
-display name, version, publisher, install location, install date, uninstall
-command and estimated size that Windows shows you in Installed apps. And it
-creates the shortcuts you asked for: `Dish.lnk` in the Start Menu programs
-folder and, if you turned it on, `Dish.lnk` on the desktop. `uninstall.exe`
-removes all three. The full value list is in
-[`docs/INSTALLER.md`](docs/INSTALLER.md) section 4.
+display name, version, publisher, install location, uninstall command and
+estimated size that Windows shows you in Installed apps. And it creates the
+shortcuts you asked for: a Start Menu entry and, if you turned it on, a
+desktop one. The uninstaller (`unins000.exe`, beside `dish.exe`) removes all
+three. [`docs/INSTALLER.md`](docs/INSTALLER.md) has the details.
 
 The app also **reads** (never writes)
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
@@ -299,12 +299,11 @@ version running. A per-user install, which is the default, never prompts.
 - **Delete the update cache.** `%LOCALAPPDATA%\Dish\updates\` can go at any
   time. The app recreates it only when it downloads an update, and deleting a
   partly-downloaded update simply makes it start over.
-- **Uninstall.** `uninstall.exe`, or Windows Settings, Installed apps, removes
-  the program files, the two shortcuts, the Add/Remove Programs entry and the
-  update cache. Your settings, pairings and crash files are deliberately left
-  behind so that reinstalling restores your setup; tick *Also remove my
-  settings* (or pass `--purge-user-data` to a silent uninstall) to remove those
-  too.
+- **Uninstall.** Windows Settings, Installed apps (or `unins000.exe` beside
+  `dish.exe`) removes the program files, the shortcuts, the Add/Remove
+  Programs entry and the update cache. Your settings, pairings and crash files
+  are deliberately left behind so that reinstalling restores your setup; the
+  *Wipe everything* step below removes those too.
 - **Wipe everything.** Delete `HKEY_CURRENT_USER\Software\Dish\Dish` and
   `HKEY_CURRENT_USER\Software\TinkerNorth\Dish`, and delete
   `%LOCALAPPDATA%\Dish\`. That removes every remembered server, pairing key,

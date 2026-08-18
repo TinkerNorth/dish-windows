@@ -50,10 +50,10 @@ Out of scope:
 
 ## Supported versions
 
-The project has not cut a `v*` tag yet, so there is no released version to
-support. Once releases begin: the latest minor on `main` is supported, the
-previous minor receives high and critical backports for 90 days, and patch
-releases are issued on demand for the latest minor.
+The latest minor release is supported, the previous minor receives high and
+critical backports for 90 days, and patch releases are issued on demand for the
+latest minor. 1.0.0 is the first release, so as of it there is no previous
+minor to backport to.
 
 Windows 10 and Windows 11 x64 are the supported platforms.
 
@@ -144,18 +144,18 @@ Advisory, not blocking: GitHub `dependency-review-action` runs on pull requests
 with `continue-on-error: true`, because it needs Advanced Security, which the
 repository did not have while it was private.
 
-`security.yml` also runs weekly on a schedule. On a `v*` tag, `release.yml`
+`security.yml` also runs weekly on a schedule. On a release tag, `release.yml`
 re-runs the action-pin lint, allowlist expiry, OSV-Scanner, and gitleaks jobs
 against the tagged commit before it builds anything.
 
 ## What a release actually contains
 
-A GitHub Release for a `v*` tag carries five files:
+A GitHub Release for a `MAJOR.MINOR.PATCH` tag carries five files:
 
-- `dish-setup.exe`: the installer. A static-CRT Win32 stub with a standard ZIP
-  of the whole install image appended to it and a 32-byte trailer at EOF
-  carrying the magic, the format version, and a CRC-32 over the ZIP bytes. The
-  format is documented in [`docs/INSTALLER.md`](docs/INSTALLER.md).
+- `dish-setup.exe`: the installer, compiled by Inno Setup from
+  [`installer.iss`](installer.iss). A single self-extracting exe carrying the
+  whole install image; behaviour and command line are documented in
+  [`docs/INSTALLER.md`](docs/INSTALLER.md).
 - `dish-windows.zip`: `dish.exe`, the Qt runtime DLLs and QML modules staged by
   `windeployqt`, and a `SHA256SUMS` text file listing every other file in the
   bundle.
@@ -216,17 +216,17 @@ makes the identity of the host irrelevant.
 `dish-setup.exe`. The download is hashed while it streams, re-hashed in full off
 disk before it is promoted out of the staging directory, and hashed a third time
 at the next boot immediately before the handoff. A mismatch at any of the three
-points discards the file. Inside the installer, the trailer CRC-32 is checked
-before extraction and every installed file is verified against the payload
-manifest's own SHA-256 during the copy.
+points discards the file. Inside the installer, Inno Setup's own per-file CRC
+checks reject a corrupted payload during extraction.
 
-**Downgrade protection, at both ends.** The app stages an update only when the
-manifest version is strictly greater than the running version, and re-evaluates
-that at boot against the version of the exe actually on disk, so an update that
-was overtaken by a manual install is discarded rather than applied. The
-installer independently refuses a payload whose version is not strictly greater
-than the installed one, and refuses to run at all if `--expect-version` does not
-match the payload it carries. No downgrade override is ever passed on this path.
+**Downgrade protection.** All of it lives in the app, deliberately ahead of the
+spawn: an update is staged only when the manifest version is strictly greater
+than the running version, the boot gate re-evaluates that against the version
+of the exe actually on disk (so an update overtaken by a manual install is
+discarded rather than applied), and the janitor deletes any stage at or below
+the running version. The installer itself does not version-gate: running an
+older `dish-setup.exe` by hand is an explicit user action and installs what it
+carries.
 
 **Yank.** Deleting a release un-stages it: any successful check whose version is
 less than or equal to a staged version discards that stage. The window in which
@@ -252,7 +252,8 @@ default.
 
 **Turning it off.** *Check for updates automatically* in Settings stops every
 update-related request. The portable zip has no updater at all: it detects the
-absence of `uninstall.exe` beside it and downgrades to notify-only.
+absence of an Inno Setup uninstaller (`unins*.exe`) beside it and downgrades to
+notify-only.
 
 ## Known gaps
 
@@ -273,9 +274,6 @@ absence of `uninstall.exe` beside it and downgrades to notify-only.
   scanned by Grype or an equivalent.
 - **One SBOM format.** SPDX-JSON only. There is no CycloneDX SBOM.
 - **`SHA256SUMS` is unsigned and in-band.** See above.
-- **No release has shipped.** `release.yml` has never run against a tag, so the
-  pipeline described here is verified by reading it, not by having produced an
-  artifact.
 
 These are tracked in the roadmap section of
 [`CONTRIBUTING.md`](CONTRIBUTING.md). Nothing in this document should be read

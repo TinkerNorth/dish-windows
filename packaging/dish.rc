@@ -15,8 +15,8 @@
 IDI_DISH_ICON ICON "dish.ico"
 
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION    0,1,0,0
-    PRODUCTVERSION 0,1,0,0
+    FILEVERSION    1,0,0,0
+    PRODUCTVERSION 1,0,0,0
     FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
     FILEFLAGS      0
     FILEOS         VOS_NT_WINDOWS32
@@ -29,12 +29,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "TinkerNorth"
             VALUE "FileDescription",  "Dish — wireless gamepad client for Satellite"
-            VALUE "FileVersion",      "0.1.0"
+            VALUE "FileVersion",      "1.0.0"
             VALUE "InternalName",     "dish"
             VALUE "LegalCopyright",   "Copyright (C) 2026 Dish contributors. LGPL-3.0-or-later."
             VALUE "OriginalFilename", "dish.exe"
             VALUE "ProductName",      "Dish"
-            VALUE "ProductVersion",   "0.1.0"
+            VALUE "ProductVersion",   "1.0.0"
         END
     END
     BLOCK "VarFileInfo"

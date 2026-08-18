@@ -4,6 +4,10 @@ This document covers the conventions that are not obvious from reading the
 code: the style gates, the translation gate, the hot-path rules, and what CI
 enforces.
 
+The [Code of Conduct](CODE_OF_CONDUCT.md) applies in every project space:
+issues, pull requests, and review threads. Reports go to
+`security@tinkernorth.com`, as that file says.
+
 ## Licensing of contributions
 
 Dish is LGPL-3.0-or-later end-to-end (`LICENSE`, `COPYING.GPL3`, source
@@ -124,13 +128,10 @@ in `CMakeLists.txt` or it will not exist at runtime.
 ## Translations
 
 Six catalogues live under `translations/`: English plus Bosnian, German,
-Spanish, French, and Brazilian Portuguese, the same set dish-android ships. The
-installer wizard shares them; `qt_add_translations` scans the app and the
-installer targets together, and the installer targets are defined in every
-configuration precisely so `update_translations` produces the same output for
-every contributor. The installer engine, the SFX stub and the uninstall helper
-carry no translatable strings at all: they emit typed enums and the QML renders
-them.
+Spanish, French, and Brazilian Portuguese, the same set dish-android ships.
+They cover the app only; the installer's wizard text comes from Inno Setup's
+own translated `.isl` catalogues (five of the six — Bosnian has no official
+`.isl` yet and is an open follow-up).
 
 **If you add, change, or delete a user-facing string, refresh the catalogues in
 the same commit.** `scripts\check-translations.ps1` re-runs `lupdate` with the
@@ -226,9 +227,16 @@ at the end of this file is the standing backlog.
 5. `scripts/check-translations.ps1`.
 6. `clang-tidy -p build` over `src/**/*.cpp` excluding `src/UI/`, against the
    same Debug tree step 2 produced.
-7. Release configure and build, `dish_setup_exe`, `windeployqt` staging,
-   `scripts/test-installer-roundtrip.ps1` against the freshly packed
-   installer, and artifact upload.
+7. Release configure and build, `dish_setup_image` staging, an Inno Setup
+   compile of `installer.iss`, `scripts/test-installer-roundtrip.ps1` against
+   the freshly compiled installer, and artifact upload.
+
+`version-consistency.yml` runs only when a version-carrying file moves
+(`CMakeLists.txt`, `packaging/dish.rc`, `vcpkg.json`, or the workflow pins): it
+fails the pull request when the three version declarations disagree, or when
+the vcpkg baseline in `vcpkg.json` stops matching the `VCPKG_COMMITID` the
+build workflows pin and the baseline `THIRD_PARTY.md` documents. Blocking, like
+everything above.
 
 Security gates:
 
@@ -308,10 +316,12 @@ and describes the update chain's own integrity guarantees.
 
 ## Cutting a release
 
-`release.yml` runs on a `v*` tag or a `workflow_dispatch` with a tag input. It
-re-runs the security gates against the tagged commit, builds Release, packs
-`dish-setup.exe`, runs the installer round trip against the artifact it is about
-to publish, emits `latest.json`, computes checksums, uploads everything as a
+`release.yml` runs on a bare `MAJOR.MINOR.PATCH` tag (no `v` prefix, e.g.
+`1.2.3`) or a `workflow_dispatch` with a tag input. It
+re-runs the security gates against the tagged commit, builds Release, compiles
+`dish-setup.exe` with Inno Setup, runs the installer round trip against the
+artifact it is about to publish, emits `latest.json`, computes checksums,
+uploads everything as a
 **draft**, and only then flips the release to published. The draft step is
 load-bearing: GitHub never points `releases/latest` at a draft, so every client
 polling the update permalink sees the previous release until the flip makes the
@@ -321,10 +331,11 @@ Before you tag:
 
 - **Bump the version in all three places.** `project(Dish VERSION ...)` in
   `CMakeLists.txt` is the source; `packaging/dish.rc` and `vcpkg.json` are
-  hand-mirrored. `release.yml` now fails the build when the tag, the CMake
-  version, or `dish.exe`'s own `ProductVersion` disagree, so a forgotten
-  `dish.rc` is a red workflow rather than a client that re-applies the same
-  update forever.
+  hand-mirrored. `version-consistency.yml` fails any pull request that moves
+  one of the three without the others, and `release.yml` fails the tag build
+  when the tag, the CMake version, or `dish.exe`'s own `ProductVersion`
+  disagree, so a forgotten `dish.rc` is a red workflow rather than a client
+  that re-applies the same update forever.
 - **Review `packaging/update-policy.json`.** Its `minimumSupportedVersion` is a
   reviewed release input, not a generated value: it goes into `latest.json`, and
   every client older than it treats the update as required and ignores a skip.
@@ -342,7 +353,7 @@ After the workflow finishes:
   failure and back off, so it self-heals once the asset appears, but it is
   invisible from the release page.
 - **Download `dish-setup.exe` and install it by hand** at least once. The manual
-  matrix in [`docs/INSTALLER.md`](docs/INSTALLER.md) section 10 is the list.
+  matrix at the end of [`docs/INSTALLER.md`](docs/INSTALLER.md) is the list.
 
 The asset names `dish-setup.exe`, `dish-windows.zip` and `latest.json` are a
 permanent API. Shipped clients construct the manifest URL from them and validate
@@ -384,10 +395,11 @@ server and must produce byte-identical traffic. Protocol 1:
 - Packet layout: `token(4) | counter(4 BE) | ciphertext+tag`.
 - XUSB report: 12 bytes, little-endian.
 
-The authoritative opcode catalogue is `satellite/docs/contract.md`; the
-client-side subset this repo needs is `src/core/model/Protocol.h`. Any change
-here must be coordinated with `dish-android`, `dish-mac`, `dish-linux`, and
-`satellite` in the same release cycle.
+The authoritative opcode catalogue is
+[`satellite/docs/contract.md`](https://github.com/TinkerNorth/satellite/blob/main/docs/contract.md);
+the client-side subset this repo needs is `src/core/model/Protocol.h`. Any
+change here must be coordinated with `dish-android`, `dish-mac`, `dish-linux`,
+and `satellite` in the same release cycle.
 
 ## Reporting bugs
 

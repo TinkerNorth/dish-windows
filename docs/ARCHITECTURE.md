@@ -82,7 +82,6 @@ layer together.
 | `src/Input/` | The SDL bridge, the input processor, joystick mapping, the output command queue | `core/` | yes |
 | `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingClient` | `core/` | yes |
 | `src/update/` | The updater's IO edge: the manifest and download gateways (dedicated QNAMs), the staging store, `UpdateCoordinator`, and the pre-`main` boot handoff | `core/`, `source/` | yes |
-| `src/installer/` | `dish-setup.exe`: the Qt-free SFX stub and payload format, the install and uninstall reducers, the Win32 ops seams, the pack tool. Not linked into `dish.exe` | `core/`-shaped, own namespace | mixed |
 
 `src/Input/` and `src/Network/` predate the layer model and keep their
 capitalized names. New IO belongs in `src/source/` as a `StateSource` or a
@@ -239,20 +238,7 @@ worker thread that owns a second one for the payload. Scheduling constants live
 on the machine, not in the coordinator, so the backoff ladder and the yank rule
 are pinned by unit tests rather than observed by waiting.
 
-### Reducers that run outside the app
-
-Two machines follow the same doctrine but never load into `dish.exe`:
-[`InstallMachine`](../src/installer/InstallMachine.h) and
-[`UninstallMachine`](../src/installer/UninstallMachine.h), which drive
-`dish-setup.exe`. They are pure and total over their own phase and event sets,
-they return effects as data, and their coordinators execute those effects
-against abstract `FileOps`, `RegistryOps`, `ShortcutOps` and `ProcessOps` seams
-with Win32 implementations behind them. That is what lets an exhaustive
-`(phase x event)` table pin rollback ordering, ARP-last registration and the
-uninstall helper handoff with no filesystem and no registry in the loop. They
-live under `src/installer/` rather than `src/core/reducer/` because nothing in
-the app may depend on them, but the shape is the same and a change to one should
-read like a change to the other.
+### The boot handoff
 
 The one piece of updater code that is deliberately outside the composition root
 is the **boot handoff**. `runStartupHandoff()` is called from `main()` right
@@ -504,14 +490,14 @@ CI), so each needs a device-in-the-loop test pass.
   per-language `numerusform` order, and placeholder integrity across every
   catalogue. `scripts/check-translations.ps1` re-runs `lupdate` in CI and fails
   on any diff, so a new string cannot land without its catalogue entry.
-- **The installer and the updater are tested the same way.** Test names are
-  prefixed so `ctest -R installer` and `-R update` select them: exhaustive
-  reducer tables for `InstallMachine`, `UninstallMachine` and `UpdateMachine`,
-  the payload pack-and-extract round trip including corrupt CRCs and hostile
-  entry names, the manifest and CLI grammars, the staging store's marker-last
-  commit and janitor rules, and the boot gate's guards one at a time. The Win32
-  seams that cannot be faked usefully (long Unicode paths, detecting a running
-  process) are tested against the real implementations in a temporary tree.
+- **The updater is tested the same way.** Test names are prefixed so
+  `ctest -R update` selects them: the exhaustive reducer table for
+  `UpdateMachine`, the manifest grammar, the staging store's marker-last
+  commit and janitor rules, the boot gate's guards one at a time, and the
+  documented Inno switch string the handoff spawns. The installer itself is
+  Inno Setup, so its contract is asserted end to end instead of unit by unit:
+  `scripts/test-installer-roundtrip.ps1` runs install, ARP values, repair and
+  uninstall against a real disk and a real HKCU in both workflows.
   End to end, `scripts/test-installer-roundtrip.ps1` installs, repairs,
   upgrades, applies an update and uninstalls on every pull request. See
   [`docs/INSTALLER.md`](INSTALLER.md).

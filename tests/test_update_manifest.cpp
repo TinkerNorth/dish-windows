@@ -39,14 +39,14 @@ QByteArray golden() {
            "  \"publishedAt\": \"2026-08-03T14:21:07Z\",\n"
            "  \"minimumSupportedVersion\": \"0.1.0\",\n"
            "  \"releaseNotesUrl\": \"https://github.com/TinkerNorth/dish-windows/releases/tag/"
-           "v0.2.0\",\n"
+           "0.2.0\",\n"
            "  \"assets\": {\n"
            "    \"dish-setup.exe\": { \"url\": \"https://github.com/TinkerNorth/dish-windows/"
-           "releases/download/v0.2.0/dish-setup.exe\", \"sha256\": \"" +
+           "releases/download/0.2.0/dish-setup.exe\", \"sha256\": \"" +
            kSha +
            "\", \"size\": 41943040 },\n"
            "    \"dish-windows.zip\": { \"url\": \"https://github.com/TinkerNorth/dish-windows/"
-           "releases/download/v0.2.0/dish-windows.zip\", \"sha256\": \"" +
+           "releases/download/0.2.0/dish-windows.zip\", \"sha256\": \"" +
            kZipSha +
            "\", \"size\": 52428800 }\n"
            "  }\n"
@@ -98,9 +98,9 @@ TEST_CASE("update manifest: the golden document parses field by field", "[update
     CHECK(m.publishedAt == QStringLiteral("2026-08-03T14:21:07Z"));
     CHECK(m.minimumSupportedVersion == QStringLiteral("0.1.0"));
     CHECK(m.releaseNotesUrl ==
-          QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/v0.2.0"));
+          QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/0.2.0"));
     CHECK(m.setupAsset.url ==
-          QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/v0.2.0/"
+          QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/0.2.0/"
                          "dish-setup.exe"));
     CHECK(m.setupAsset.sha256 == QString::fromLatin1(kSha));
     CHECK(m.setupAsset.size == 41943040);
@@ -193,7 +193,7 @@ TEST_CASE("update manifest: the release-notes link is advisory and dropped when 
     const auto notes = [](const QByteArray& url) {
         return parsedOk(
                    withField("\"releaseNotesUrl\": \"https://github.com/TinkerNorth/dish-windows/"
-                             "releases/tag/v0.2.0\"",
+                             "releases/tag/0.2.0\"",
                              "\"releaseNotesUrl\": \"" + url + "\""))
             .releaseNotesUrl;
     };
@@ -221,19 +221,19 @@ TEST_CASE("update manifest: the setup asset is required", "[update][manifest]") 
 TEST_CASE("update manifest: the asset URL must be on the release download prefix",
           "[update][manifest]") {
     const QByteArray goodUrl = "https://github.com/TinkerNorth/dish-windows/releases/download/"
-                               "v0.2.0/dish-setup.exe";
+                               "0.2.0/dish-setup.exe";
     const auto withUrl = [&goodUrl](const QByteArray& url) {
         return errorOf(withField("\"url\": \"" + goodUrl + "\"", "\"url\": \"" + url + "\""));
     };
-    CHECK(withUrl("http://github.com/TinkerNorth/dish-windows/releases/download/v0.2.0/"
+    CHECK(withUrl("http://github.com/TinkerNorth/dish-windows/releases/download/0.2.0/"
                   "dish-setup.exe") == ManifestError::BadAssetUrl);
     // A lookalike host: plain prefix comparison is what catches it, before any
     // URL normalization can make it look benign.
     CHECK(withUrl("https://github.com.evil.example/TinkerNorth/dish-windows/releases/download/"
-                  "v0.2.0/dish-setup.exe") == ManifestError::BadAssetUrl);
-    CHECK(withUrl("https://raw.githubusercontent.com/TinkerNorth/dish-windows/v0.2.0/"
+                  "0.2.0/dish-setup.exe") == ManifestError::BadAssetUrl);
+    CHECK(withUrl("https://raw.githubusercontent.com/TinkerNorth/dish-windows/0.2.0/"
                   "dish-setup.exe") == ManifestError::BadAssetUrl);
-    CHECK(withUrl("https://github.com/SomeoneElse/dish-windows/releases/download/v0.2.0/"
+    CHECK(withUrl("https://github.com/SomeoneElse/dish-windows/releases/download/0.2.0/"
                   "dish-setup.exe") == ManifestError::BadAssetUrl);
     CHECK(withUrl("") == ManifestError::BadAssetUrl);
 }
@@ -289,7 +289,7 @@ TEST_CASE("update manifest: whatever follows the pinned prefix, the host stays g
     // fixed by the prefix and QUrl percent-encodes the rest, so no header can be
     // smuggled and no other scheme or authority can be reached.
     const QByteArray goodUrl = "https://github.com/TinkerNorth/dish-windows/releases/download/"
-                               "v0.2.0/dish-setup.exe";
+                               "0.2.0/dish-setup.exe";
     const auto urlOf = [&goodUrl](const QByteArray& url) {
         return parsedOk(withField("\"url\": \"" + goodUrl + "\"", "\"url\": \"" + url + "\""))
             .setupAsset.url;
@@ -311,7 +311,7 @@ TEST_CASE("update manifest: whatever follows the pinned prefix, the host stays g
     CHECK(refused("file:///C:/Windows/System32/calc.exe"));
     CHECK(refused("\\\\\\\\evil.example\\\\share\\\\dish-setup.exe")); // UNC
     CHECK(refused("//evil.example/dish-setup.exe"));                   // scheme-relative
-    CHECK(refused("HTTPS://GITHUB.COM/TinkerNorth/dish-windows/releases/download/v1/x.exe"));
+    CHECK(refused("HTTPS://GITHUB.COM/TinkerNorth/dish-windows/releases/download/1/x.exe"));
 }
 
 TEST_CASE("update manifest: asset equality is field-wise", "[update][manifest]") {
