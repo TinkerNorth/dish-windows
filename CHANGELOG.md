@@ -23,6 +23,12 @@ share a version number.
 
 ## [Unreleased]
 
+### Fixed
+
+- Configure binding pins its Unbind/Cancel/Apply bar to the bottom of the
+  window, like the wizard's footer. Only the editor above it scrolls, so the
+  primary action no longer scrolls out of reach on a short window.
+
 ### Changed
 
 - **The installer is now Inno Setup.** `dish-setup.exe` is compiled from
