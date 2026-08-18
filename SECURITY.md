@@ -144,13 +144,13 @@ Advisory, not blocking: GitHub `dependency-review-action` runs on pull requests
 with `continue-on-error: true`, because it needs Advanced Security, which the
 repository did not have while it was private.
 
-`security.yml` also runs weekly on a schedule. On a `v*` tag, `release.yml`
+`security.yml` also runs weekly on a schedule. On a release tag, `release.yml`
 re-runs the action-pin lint, allowlist expiry, OSV-Scanner, and gitleaks jobs
 against the tagged commit before it builds anything.
 
 ## What a release actually contains
 
-A GitHub Release for a `v*` tag carries five files:
+A GitHub Release for a `MAJOR.MINOR.PATCH` tag carries five files:
 
 - `dish-setup.exe`: the installer, compiled by Inno Setup from
   [`installer.iss`](installer.iss). A single self-extracting exe carrying the

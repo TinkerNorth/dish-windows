@@ -316,7 +316,8 @@ and describes the update chain's own integrity guarantees.
 
 ## Cutting a release
 
-`release.yml` runs on a `v*` tag or a `workflow_dispatch` with a tag input. It
+`release.yml` runs on a bare `MAJOR.MINOR.PATCH` tag (no `v` prefix, e.g.
+`1.2.3`) or a `workflow_dispatch` with a tag input. It
 re-runs the security gates against the tagged commit, builds Release, compiles
 `dish-setup.exe` with Inno Setup, runs the installer round trip against the
 artifact it is about to publish, emits `latest.json`, computes checksums,

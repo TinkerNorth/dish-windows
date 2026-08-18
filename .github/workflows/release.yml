@@ -2,7 +2,9 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # Bare MAJOR.MINOR.PATCH tags, no v prefix (e.g. 1.2.3). The manifest step
+    # below still hard-gates the exact format; this glob only has to be close.
+    tags: ["[0-9]*.[0-9]*.[0-9]*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -198,7 +200,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.event.inputs.tag || github.ref_name }}'
-          $num = ($tag -replace '^v','') -replace '[-+].*$',''
+          $num = $tag -replace '[-+].*$',''
           & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build\setup-image" installer.iss
           if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
           Copy-Item dist/dish-setup.exe "$PWD/dish-setup.exe"
@@ -256,8 +258,8 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.event.inputs.tag || github.ref_name }}'
-          if ($tag -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not vMAJOR.MINOR.PATCH" }
-          $version = $tag.Substring(1)
+          if ($tag -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not MAJOR.MINOR.PATCH (bare, no v prefix)" }
+          $version = $tag
           $cm = Get-Content CMakeLists.txt -Raw
           if ($cm -notmatch 'project\(\s*Dish[\s\r\n]+VERSION[\s]+(\d+\.\d+\.\d+)') { throw 'project VERSION not found' }
           if ($Matches[1] -ne $version) { throw "Tag $tag but project VERSION is $($Matches[1])" }

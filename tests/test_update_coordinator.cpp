@@ -101,9 +101,9 @@ UpdateManifest manifest(const QString& version, const QString& minimum = QString
     m.publishedAt = QStringLiteral("2026-08-03T14:21:07Z");
     m.minimumSupportedVersion = minimum;
     m.releaseNotesUrl =
-        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/v") + version;
+        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/") + version;
     m.setupAsset.url =
-        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/v") +
+        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/") +
         version + QStringLiteral("/dish-setup.exe");
     m.setupAsset.sha256 = kSha;
     m.setupAsset.size = 41943040;
