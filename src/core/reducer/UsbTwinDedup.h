@@ -12,6 +12,14 @@
 // correct: claiming one of two DualSenses hides exactly one routed twin. Xbox
 // pads never appear as synthetics, since XInput hides them from raw HID, so they
 // always stay on SDL.
+//
+// The claim can only ever hold a USB device (the gateway refuses Bluetooth HID
+// paths), so a Bluetooth routed instance is never the claimed device's twin:
+// hiding one never cures a double stream, it can only silence a wireless pad.
+// USB twins are therefore hidden first, and a Bluetooth instance only as the
+// model's last remaining twin — the single-pad dual-presence case, where SDL's
+// serial dedup can keep the BT-flagged instance while the claim reads the
+// pad's USB link.
 
 #pragma once
 
@@ -32,12 +40,14 @@ struct SyntheticTwin {
 };
 
 // `id` is the bridge's stable "sdl:<iid>" id. `disconnecting` marks a device in
-// grace-period teardown; those are hidden first so a live twin keeps streaming.
+// grace-period teardown; among same-transport twins those are hidden first so a
+// live twin keeps streaming. `bluetooth` is the attach-time transport class.
 struct RoutedDevice {
     std::string id;
     int vendorId = 0;
     int productId = 0;
     bool disconnecting = false;
+    bool bluetooth = false;
 };
 
 inline std::int64_t twinModelKey(int vendorId, int productId) {
@@ -63,10 +73,16 @@ inline std::set<std::string> suppressedRoutedIds(const std::vector<SyntheticTwin
         byModel[key].push_back(r);
     }
     for (auto& [key, group] : byModel) {
-        std::stable_sort(group.begin(), group.end(),
-                         [](const RoutedDevice& a, const RoutedDevice& b) {
-                             return a.disconnecting && !b.disconnecting;
-                         });
+        // Hide priority: USB before Bluetooth (transport outranks disconnecting
+        // — only a USB twin can be duplicating the claim's stream), then
+        // disconnecting before live within a transport. Stable, so input order
+        // keeps the tie-break deterministic.
+        const auto rank = [](const RoutedDevice& d) {
+            return (d.bluetooth ? 2 : 0) + (d.disconnecting ? 0 : 1);
+        };
+        std::stable_sort(
+            group.begin(), group.end(),
+            [&rank](const RoutedDevice& a, const RoutedDevice& b) { return rank(a) < rank(b); });
         const int take = syntheticModelCounts[key];
         for (int i = 0; i < take && i < static_cast<int>(group.size()); ++i) {
             hidden.insert(group[static_cast<std::size_t>(i)].id);

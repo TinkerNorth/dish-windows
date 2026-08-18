@@ -25,6 +25,19 @@ share a version number.
 
 ### Fixed
 
+- With two same-model pads split across transports — one claimed over USB
+  Direct, one on Bluetooth — the twin-dedup picked its suppressed SDL twin by
+  list order, so it could hide the Bluetooth pad and leave the claimed pad's
+  own SDL twin streaming: the wireless pad went dead and the wired one
+  double-streamed. Routed twins now carry their transport and USB twins are
+  always hidden first; a Bluetooth instance is only suppressed as a model's
+  last remaining twin (the single-pad charging-while-paired case). The
+  companion rule — a Bluetooth slot never wears its USB twin's path control —
+  moved from the slot rebuild into `slotPathFields` and is pinned there.
+  (Windows re-derivation of dish-android's dual-presence fix; the android
+  "Use wired" pill does not port — with no USB permission broker here, the
+  wired path is claimed automatically or offered by the wired twin's own card.)
+
 - Configure binding pins its Unbind/Cancel/Apply bar to the bottom of the
   window, like the wizard's footer. Only the editor above it scrolls, so the
   primary action no longer scrolls out of reach on a short window.

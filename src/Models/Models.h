@@ -399,10 +399,10 @@ struct ControllerSlot {
     // A USB-direct (raw-HID) synthetic rather than an SDL pad. Direct streams
     // continuously, so its gamepad Hz reads live rather than as a "~peak".
     bool usbDirect = false;
-    // Gates the USB-path stamp in AppModel::rebuild: the same model can be
-    // present over BOTH transports at once, and the controllers map is keyed by
-    // (vid, pid), so without this the BT twin wears the USB twin's path control.
-    // Always false for a USB-direct synthetic — raw-HID claims are USB-only.
+    // Attached over Bluetooth. reducer::slotPathFields refuses USB-path fields
+    // for a BT slot and twin-dedup hides BT twins last — the raw-HID claim is
+    // USB-only, so a BT instance is never the claimed device. Always false for
+    // a USB-direct synthetic.
     bool bluetooth = false;
     // A raw-joystick-backed SDL pad the "Configure controls" page may remap.
     // False for synthetics and SDL-recognised game controllers, which use SDL's

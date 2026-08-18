@@ -33,7 +33,7 @@ TEST_CASE("slotPathFields: a routed device reflects its controller's phase + des
           "[slotpath][map]") {
     const auto controllers =
         mapOf(controller(0x054C, 0x0CE6, UsbPhase::Routed, PathChoice::Standard));
-    const auto f = slotPathFields(0x054C, 0x0CE6, controllers);
+    const auto f = slotPathFields(0x054C, 0x0CE6, /*bluetooth=*/false, controllers);
     REQUIRE(f.supported);
     REQUIRE(f.phase == UsbPhase::Routed);
     REQUIRE(f.desired == PathChoice::Standard);
@@ -44,7 +44,7 @@ TEST_CASE("slotPathFields: a synthetic (Direct) device reports Direct phase + de
           "[slotpath][map]") {
     const auto controllers =
         mapOf(controller(0x054C, 0x0CE6, UsbPhase::Direct, PathChoice::Direct));
-    const auto f = slotPathFields(0x054C, 0x0CE6, controllers);
+    const auto f = slotPathFields(0x054C, 0x0CE6, /*bluetooth=*/false, controllers);
     REQUIRE(f.supported);
     REQUIRE(f.phase == UsbPhase::Direct);
     REQUIRE(f.desired == PathChoice::Direct);
@@ -55,7 +55,7 @@ TEST_CASE("slotPathFields: a pad with no controller is unsupported (Xbox/XInput)
     // The raw-HID gateway never enumerates Xbox pads, so the map has no entry.
     const auto controllers =
         mapOf(controller(0x054C, 0x0CE6, UsbPhase::Direct, PathChoice::Direct));
-    const auto f = slotPathFields(0x045E, 0x028E, controllers); // Xbox 360 pad
+    const auto f = slotPathFields(0x045E, 0x028E, /*bluetooth=*/false, controllers); // Xbox 360 pad
     REQUIRE_FALSE(f.supported);
     // Inert defaults so the QML hides the control.
     REQUIRE(f.phase == UsbPhase::Routed);
@@ -67,17 +67,44 @@ TEST_CASE("slotPathFields: a 0/0 identity never matches (identity-less SDL slot)
           "[slotpath][map]") {
     auto c = controller(0, 0, UsbPhase::Direct, PathChoice::Direct);
     std::map<int, UsbController> controllers = {{slotPathVpKey(0, 0), c}};
-    REQUIRE_FALSE(slotPathFields(0, 0, controllers).supported);
+    REQUIRE_FALSE(slotPathFields(0, 0, /*bluetooth=*/false, controllers).supported);
 }
 
 TEST_CASE("slotPathFields: a Direct failure is carried through for the inline note",
           "[slotpath][map]") {
     auto c = controller(0x054C, 0x0CE6, UsbPhase::Routed, PathChoice::Direct);
     c.failure = DirectClaimFailure::Busy;
-    const auto f = slotPathFields(0x054C, 0x0CE6, mapOf(c));
+    const auto f = slotPathFields(0x054C, 0x0CE6, /*bluetooth=*/false, mapOf(c));
     REQUIRE(f.supported);
     REQUIRE(f.failure.has_value());
     REQUIRE(*f.failure == DirectClaimFailure::Busy);
+}
+
+TEST_CASE("slotPathFields: a bluetooth slot never wears its USB twin's path fields",
+          "[slotpath][map]") {
+    // Dual presence: the pad streams over BT while its plugged-in cable is
+    // tracked under the same (vid, pid) by the claim manager. The BT card must
+    // not grow a USB PATH control.
+    const auto controllers =
+        mapOf(controller(0x054C, 0x05C4, UsbPhase::Routed, PathChoice::Standard));
+    const auto f = slotPathFields(0x054C, 0x05C4, /*bluetooth=*/true, controllers);
+    REQUIRE_FALSE(f.supported);
+    REQUIRE(f.phase == UsbPhase::Routed);
+    REQUIRE(f.desired == PathChoice::Standard);
+    REQUIRE_FALSE(f.failure.has_value());
+}
+
+TEST_CASE("slotPathFields: a bluetooth slot shows nothing even for a claimed (Direct) model",
+          "[slotpath][map]") {
+    // The USB twin auto-claimed Direct; its synthetic slot carries the control.
+    // The BT slot stays bare rather than wearing the synthetic's phase/toggle.
+    auto c = controller(0x054C, 0x05C4, UsbPhase::Direct, PathChoice::Direct);
+    c.failure = DirectClaimFailure::Busy;
+    const auto f = slotPathFields(0x054C, 0x05C4, /*bluetooth=*/true, mapOf(c));
+    REQUIRE_FALSE(f.supported);
+    REQUIRE(f.phase == UsbPhase::Routed);
+    REQUIRE(f.desired == PathChoice::Standard);
+    REQUIRE_FALSE(f.failure.has_value());
 }
 
 TEST_CASE("parseSyntheticSlotId: a packed vpKey string round-trips to (vid, pid)",
