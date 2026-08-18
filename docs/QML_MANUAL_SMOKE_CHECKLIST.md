@@ -27,8 +27,7 @@ maths is unit-tested (`test_window_hit_test`), the interaction is not.
 - [ ] **Resize borders.** All eight edges and corners show a resize cursor and
       resize on drag.
 - [ ] **Minimum size.** Drag the window as small as it will go. It stops at
-      900x620 with nothing clipped. The setup window is fixed at 460x420: no
-      resize cursors on its edges, no maximize button, no Snap Layouts flyout.
+      900x620 with nothing clipped.
 - [ ] **Windows 10.** On a Windows 10 host the app launches, the body is the
       flat themed colour, and drag, resize, maximize and close all still work.
       The Mica frame extension is a Windows 11 path and is skipped.

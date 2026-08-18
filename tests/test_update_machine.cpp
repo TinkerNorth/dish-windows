@@ -50,7 +50,7 @@ namespace {
 const QString kSha = QString(64, QLatin1Char('a'));
 
 QString assetUrl(const QString& version) {
-    return QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/v") +
+    return QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/download/") +
            version + QStringLiteral("/dish-setup.exe");
 }
 
@@ -64,7 +64,7 @@ UpdateManifest manifest(const QString& version, const QString& minimum = QString
     m.publishedAt = QStringLiteral("2026-08-03T14:21:07Z");
     m.minimumSupportedVersion = minimum;
     m.releaseNotesUrl =
-        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/v") + version;
+        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/") + version;
     m.setupAsset.url = assetUrl(version);
     m.setupAsset.sha256 = kSha;
     m.setupAsset.size = size;
@@ -93,7 +93,7 @@ UpdateStatus available(const QString& version = QStringLiteral("0.2.0")) {
     s.availableAsset = asset(version);
     s.totalBytes = static_cast<quint64>(s.availableAsset.size);
     s.notesUrl =
-        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/v") + version;
+        QStringLiteral("https://github.com/TinkerNorth/dish-windows/releases/tag/") + version;
     return s;
 }
 
@@ -277,7 +277,9 @@ TEST_CASE("update machine: a newer manifest with auto-download starts the transf
     CHECK(r.next.receivedBytes == 0);
     CHECK(r.next.consecutiveFailures == 0);
     CHECK(r.next.error == UpdateError::None);
-    CHECK(r.next.notesUrl.endsWith(QStringLiteral("v0.2.0")));
+    // /tag/0.2.0, not /tag/v0.2.0: bare tags are the release convention, and
+    // a bare-only suffix is what catches a v creeping back into the fixture.
+    CHECK(r.next.notesUrl.endsWith(QStringLiteral("/tag/0.2.0")));
     CHECK_FALSE(r.next.required);
 
     const std::vector<UpdateEffect> expected{ufx::PersistLastCheck{},

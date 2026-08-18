@@ -52,19 +52,6 @@ translations/*.ts text
 *.cmake text
 CMakeLists.txt text
 
-# Vendored third-party sources: byte-for-byte, or the provenance record lies.
-#
-# Must sit BELOW the `*.c`/`*.h` lines above — last match wins. third_party/
-# holds files copied verbatim from an upstream release, and
-# third_party/miniz/README.dish.md records a SHA-256 for each one so a reviewer
-# can check them against the upstream archive. Under `text` those hashes stop
-# reproducing: miniz's LICENSE is CRLF upstream and would be stored LF (its
-# recorded hash is already wrong the moment it is committed), and miniz.c/.h are
-# LF upstream but check out CRLF on any clone with core.autocrlf=true, which is
-# Git for Windows' default. `-text` disables eol conversion only; diffs and
-# blame still work.
-third_party/** -text
-
 # Binaries: never normalise, never diff.
 *.ttf   binary
 *.otf   binary

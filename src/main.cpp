@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
     // widgets module stays out of the process.
     QGuiApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("TinkerNorth"));
-    QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.dev"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.com"));
     QCoreApplication::setApplicationName(QStringLiteral("Dish"));
 
     // loadCatalog walks QLocale::uiLanguages(), so Windows' preferred UI

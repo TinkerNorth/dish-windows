@@ -81,15 +81,13 @@ Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot 'dish.exe')) 'dish.ex
 
 # The app's own QML module entry. Qt searches <exedir>/Dish/Chrome/qmldir before
 # the copy compiled into dish.exe, so the one in the bundle decides what the
-# engine loads. It has to be the APP's: the installer's dish_setup_kit declares
-# the same URI, and while both modules shared a CMake scope they shared the one
-# generated qmldir resource too, which is how a dish.exe carrying the kit's
-# qmldir — no Main — came to ship. release.yml, windows-ci.yml and
-# cmake/DishSetupImage.cmake section 2b all stage and check this one file.
+# engine loads, and it has to declare the app's Main type. release.yml,
+# windows-ci.yml and cmake/DishSetupImage.cmake section 3 all stage and check
+# this one file.
 $qmldir = Join-Path $bundleRoot 'Dish/Chrome/qmldir'
 Assert-True (Test-Path -LiteralPath $qmldir) 'Dish/Chrome/qmldir is in the bundle'
 Assert-True ((Get-Content -LiteralPath $qmldir -Raw) -match '(?m)^Main 1\.0 ') `
-    'the staged qmldir declares the app Main type (not the setup kit''s module)'
+    'the staged qmldir declares the app Main type'
 
 # The runtime DLLs windeployqt does not deploy, and which this test cannot
 # otherwise catch: every Windows machine that builds or runs CI already has the

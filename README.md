@@ -19,12 +19,10 @@ Physical controllers only. There is no on-screen touch gamepad; that belongs to
 
 ## Status
 
-Pre-release, version 0.1.0. Nothing has been tagged yet, so the install section
-below describes what the release pipeline produces once a `v*` tag is pushed.
-The implementation is at protocol-1 parity with the other clients and the test
-suite is broad, but the live session loop, the SDL input threading and the USB
-claim path cannot be exercised in CI (no socket, no satellite, no controller)
-and are verified by hand.
+Version 1.0.0, the first tagged release, at protocol-1 parity with the other
+clients. The test suite is broad, but the live session loop, the SDL input
+threading and the USB claim path cannot be exercised in CI (no socket, no
+satellite, no controller) and are verified by hand.
 [Known limitations](docs/ARCHITECTURE.md#not-yet-implemented) tracks what is
 landed versus what is a tested-but-unwired specification.
 
@@ -94,9 +92,9 @@ automatically* stops every update-related network request when off, and
 notification. What the check sends is spelled out in
 [`PRIVACY.md`](PRIVACY.md) section 2.4.
 
-[`docs/INSTALLER.md`](docs/INSTALLER.md) documents the payload format, the
-command line and exit codes for scripted installs, the staging layout, and the
-apply handoff.
+[`docs/INSTALLER.md`](docs/INSTALLER.md) documents the Inno Setup script, the
+silent command line for scripted installs, the staging layout, and the apply
+handoff.
 
 ## Build from source
 
@@ -147,8 +145,11 @@ src/Input/        SDL bridge, XUSB packing, output command queue
 src/Network/      Winsock UDP session, REST client, pairing, connection pool
 src/UI/           Theme palettes, font probes, crash handler, license manifest
 src/update/       Update check, download, staging store, boot handoff
-src/installer/    dish-setup.exe: SFX stub, install and uninstall reducers, pack tool
 ```
+
+`dish-setup.exe` itself is not built from this tree: it is compiled by Inno
+Setup from [`installer.iss`](installer.iss), whose payload is the install
+image `cmake/DishSetupImage.cmake` stages.
 
 The input hot path is the deliberate exception and is not routed through that
 kernel. An SDL controller event runs `GamepadInputProcessor` and then
@@ -172,7 +173,8 @@ the UI binding contract and the hardening roadmap are in
 
 Ports, byte layouts and JSON shapes match the other Dish clients so all four
 are interchangeable to a satellite. The authoritative contract lives in
-`satellite/docs/contract.md`; the client-side mirror is
+[`satellite/docs/contract.md`](https://github.com/TinkerNorth/satellite/blob/main/docs/contract.md);
+the client-side mirror is
 [`src/core/model/Protocol.h`](src/core/model/Protocol.h).
 
 | | |

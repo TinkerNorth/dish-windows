@@ -5,18 +5,14 @@ format is loosely based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**There are no releases yet.** Nothing has been tagged, so this file has no
-version history to show. Numbered sections begin with the first tagged release;
-until then everything below is under `Unreleased`, and the development history is
-in `git log`.
-
-The binary currently declares version `0.1.0`. That number has one source,
-`project(Dish VERSION 0.1.0)` in [`CMakeLists.txt`](CMakeLists.txt), which
-becomes the `DISH_VERSION` compile definition the in-app About surface reads. It
-is mirrored by hand in `packaging/dish.rc` (the Windows version-info resource
-Explorer and Task Manager show) and in [`vcpkg.json`](vcpkg.json). Keep all three
-in step when it changes; `release.yml` now enforces it, failing the tag build
-when the tag, the CMake version and `dish.exe`'s own `ProductVersion` disagree.
+The version number has one source, `project(Dish VERSION ...)` in
+[`CMakeLists.txt`](CMakeLists.txt), which becomes the `DISH_VERSION` compile
+definition the in-app About surface reads. It is mirrored by hand in
+`packaging/dish.rc` (the Windows version-info resource Explorer and Task
+Manager show) and in [`vcpkg.json`](vcpkg.json). Keep all three in step when it
+changes: `version-consistency.yml` fails a pull request that moves one without
+the others, and `release.yml` fails the tag build when the tag, the CMake
+version and `dish.exe`'s own `ProductVersion` disagree.
 
 Cross-repo coordination: changes to the wire protocol or the pairing flow that
 need matching updates in `satellite`, `dish-android`, `dish-linux` or `dish-mac`
@@ -26,6 +22,25 @@ share a version number.
 ---
 
 ## [Unreleased]
+
+### Changed
+
+- **The installer is now Inno Setup.** `dish-setup.exe` is compiled from
+  [`installer.iss`](installer.iss); the bespoke SFX stub, Qt Quick wizard,
+  install/uninstall engine and pack tool are gone (~30k lines). The defaults
+  survive: per-user with no administrator prompt, all-users on request, Start
+  Menu always, Desktop opt-in, Windows 10 1809+ x64. The asset names and the
+  whole auto-update chain (staging, three-point SHA-256 verification, the
+  two-attempt cap, old-build relaunch on a failed apply) are unchanged. New
+  behaviour: a running Dish is closed and restarted through Restart Manager
+  instead of blocking the install; the silent grammar is Inno's standard
+  switch set; the uninstaller is `unins000.exe` (`uninstall.exe` and
+  `--purge-user-data` are gone, and `PRIVACY.md` documents the manual wipe);
+  the recovery path for a broken download is `innoextract` instead of
+  `7z x`. The installer wizard speaks five of the app's six languages;
+  Bosnian has no official Inno catalogue yet.
+
+## [1.0.0] - 2026-08-17
 
 First public release of the Windows client. It reaches protocol-1 parity with
 the other Dish clients, so a satellite cannot tell them apart. The list below is
@@ -148,6 +163,14 @@ release.
 
 ### Fixed
 
+- **Every in-app pointer at the Satellite download now names the same URL.**
+  The Help FAQ told users to install Satellite from `tinkernorth.com/satellite`,
+  a short form that was never stood up; it now names the
+  `dish.tinkernorth.com/downloads/satellite` address the Welcome screen, the
+  Connections page and the setup wizard already link. The Qt organisation
+  domain both executables declare also moved from `tinkernorth.dev` to
+  `tinkernorth.com` to match every other reference; QSettings on Windows keys
+  the registry path off the organisation *name*, so nothing stored moves.
 - **The app no longer exhausts its Window Manager object quota while a
   controller is attached.** SDL2's RawInput joystick backend leaks roughly
   200 USER objects per second on Windows 11 whenever any joystick is present;
@@ -200,12 +223,15 @@ release.
   `dish-android`.
 - The live session loop, the SDL input threading and the USB claim path cannot be
   exercised in CI, because CI has no socket, no satellite and no controller.
-  Those paths are verified by hand. `docs/ARCHITECTURE.md` section 11 tracks what
-  is landed against what is specified and tested but not yet wired.
+  Those paths are verified by hand. The
+  [Known limitations](docs/ARCHITECTURE.md#not-yet-implemented) section of
+  `docs/ARCHITECTURE.md` tracks what is landed against what is specified and
+  tested but not yet wired.
 - Release artifacts are not signed and carry no build provenance. The gaps are
   listed in [`SECURITY.md`](SECURITY.md). In practice this means SmartScreen
   warns the first time a freshly downloaded `dish-setup.exe` is run, and the
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/commits/main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/v1.0.0...main
+[1.0.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/v1.0.0

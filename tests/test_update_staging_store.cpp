@@ -24,7 +24,6 @@
 #include <QTemporaryDir>
 
 using dish::update::FileStagingStore;
-using dish::update::kApplyResultName;
 using dish::update::kManifestSnapshotName;
 using dish::update::kReadyMarkerName;
 using dish::update::kSetupExeName;
@@ -86,7 +85,6 @@ TEST_CASE("update staging store: the layout names are the contract with the inst
     CHECK(QString::fromLatin1(kSetupExeName) == QStringLiteral("dish-setup.exe"));
     CHECK(QString::fromLatin1(kReadyMarkerName) == QStringLiteral("ready.marker"));
     CHECK(QString::fromLatin1(kManifestSnapshotName) == QStringLiteral("manifest.json"));
-    CHECK(QString::fromLatin1(kApplyResultName) == QStringLiteral("apply-result.txt"));
 
     QTemporaryDir temp;
     REQUIRE(temp.isValid());

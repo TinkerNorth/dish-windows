@@ -5,6 +5,9 @@ out/
 cmake-build-*/
 _deps/
 
+# Inno Setup output (installer.iss)
+dist/
+
 # vcpkg manifest-mode caches (CI restores from $env:VCPKG_ROOT)
 vcpkg_installed/
 .vcpkg-root

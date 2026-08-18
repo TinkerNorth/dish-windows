@@ -9,6 +9,7 @@
 #include "update/UpdateHandoff.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QNetworkInformation>
 #include <QRandomGenerator>
@@ -26,9 +27,11 @@ namespace dish::update {
 
 namespace {
 
-// The portable/managed probe: an uninstall.exe sibling next to dish.exe.
-// Filesystem-only on purpose — an ARP lookup would couple the updater to
-// registry state a half-broken uninstall could strand.
+// The portable/managed probe: an Inno Setup uninstaller (unins*.exe) beside
+// dish.exe. Filesystem-only on purpose — an ARP lookup would couple the
+// updater to registry state a half-broken uninstall could strand. A glob
+// rather than unins000.exe exactly: Inno numbers upward when an older
+// uninstaller is still present in the directory.
 bool detectManagedInstall() {
     QString exeDir;
     if (QCoreApplication::instance() != nullptr) {
@@ -37,7 +40,9 @@ bool detectManagedInstall() {
         exeDir = QFileInfo(UpdateHandoff::runningExecutablePath()).absolutePath();
     }
     if (exeDir.isEmpty()) { return false; }
-    return QFileInfo::exists(exeDir + QStringLiteral("/uninstall.exe"));
+    return !QDir(exeDir)
+                .entryList(QStringList{QStringLiteral("unins*.exe")}, QDir::Files)
+                .isEmpty();
 }
 
 QString noticeKey(reducer::UpdateNotice notice, const QString& version) {
@@ -328,8 +333,7 @@ void UpdateCoordinator::onAboutToQuit() {
     }
     // Failure here is not recoverable from a quitting process; the next boot's
     // gate retries (attempt 2) or quarantines.
-    (void)UpdateHandoff::spawnStagedApply(
-        *staged, static_cast<unsigned long>(QCoreApplication::applicationPid()));
+    (void)UpdateHandoff::spawnStagedApply(*staged);
 }
 
 // ── Reducer plumbing ────────────────────────────────────────────────────────

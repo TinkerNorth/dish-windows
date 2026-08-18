@@ -2,7 +2,9 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # Bare MAJOR.MINOR.PATCH tags, no v prefix (e.g. 1.2.3). The manifest step
+    # below still hard-gates the exact format; this glob only has to be close.
+    tags: ["[0-9]*.[0-9]*.[0-9]*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -99,10 +101,10 @@ jobs:
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
       # only oversubscribes it.
-      # dish_setup_exe pulls in dish_setup_image (windeployqt + the app-local
-      # CRT) and the pack step, so this one target builds the whole installer.
+      # dish_setup_image stages the install image (windeployqt + the app-local
+      # CRT + licences) that the Inno Setup step below ships verbatim.
       - name: Build
-        run: cmake --build build --parallel 4 --target Dish dish_setup_exe
+        run: cmake --build build --parallel 4 --target Dish dish_setup_image
 
       - name: Bundle Qt runtime DLLs
         shell: pwsh
@@ -146,31 +148,16 @@ jobs:
           }
           # The app's OWN QML module entry, which windeployqt cannot know about:
           # --qmldir scans imports and deploys the QT modules they resolve to,
-          # and Dish.Chrome is not one of Qt's.
+          # and Dish.Chrome is not one of Qt's. dish.exe carries a compiled-in
+          # copy, but Qt searches <exedir>/Dish/Chrome/qmldir BEFORE it, so the
+          # file that ships had better be the app's own. It is only the module
+          # ENTRY: the `prefer` line inside sends every type to the compiled-in
+          # copy, so no .qml source ships.
           #
-          # dish.exe does carry its own compiled-in copy now. It did not always:
-          # the app module and the installer's dish_setup_kit declare the SAME
-          # URI, Qt derives the generated resource's name from the URI alone, and
-          # while both calls lived in one CMake scope they shared one
-          # .qt/rcc/qmake_Dish_Chrome.qrc — the second call won it and dish.exe
-          # shipped holding the kit's qmldir, which lists the ~40 kit types and
-          # knows nothing about Main. src/qml/kit/CMakeLists.txt fixed that by
-          # declaring the kit's module from a directory scope of its own.
-          #
-          # This still stages the file, because Qt searches
-          # <exedir>/Dish/Chrome/qmldir BEFORE the compiled-in copy (that
-          # precedence is exactly what let the bug hide in the build tree). A
-          # bundle carrying the module entry its own build generated is right
-          # whichever copy the engine picks; a bundle carrying the WRONG one dies
-          # at startup with
-          #   Module "Dish.Chrome" contains no type named "Main"
-          # It is only the module ENTRY: the `prefer` line inside sends every
-          # type to the compiled-in copy, so no .qml source ships.
-          #
-          # The two asserts are the point. They fail the release, named, if the
-          # CMake arrangement ever regresses to one shared resource, instead of
+          # The two asserts fail the release, named, if the build ever stops
+          # generating a qmldir that declares the app's Main type, instead of
           # letting a bundle nobody launched go out.
-          # cmake/DishSetupImage.cmake section 2b stages and checks the same file.
+          # cmake/DishSetupImage.cmake section 3 stages and checks the same file.
           $qmldir = 'build/Dish/Chrome/qmldir'
           if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the bundled dish.exe could not resolve its own QML module" }
           if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }
@@ -201,21 +188,28 @@ jobs:
           Copy-Item packaging/fonts/Inter-LICENSE.txt dish-windows/licenses/
           Get-ChildItem dish-windows/licenses
 
-      # Beside the zip, not inside it: dish-setup.exe is a release asset in its
-      # own right, and the portable bundle stays exactly what it was.
-      - name: Stage installer
-        shell: pwsh
-        run: Copy-Item build/dish-setup.exe "$PWD/dish-setup.exe"
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress --yes
 
-      # The same assertions windows-ci runs, against the artifact that is about
-      # to be published rather than a rebuild of it. The pack tool and the
-      # staged image stay in build/ (the upgrade leg re-packs the payload as
-      # 99.0.0), so they are named rather than inferred from -Setup's folder.
-      - name: Installer silent round-trip (no UI)
+      # Beside the zip, not inside it: dish-setup.exe is a release asset in its
+      # own right, and the portable bundle stays exactly what it was. The
+      # version is stamped from the tag via /D, so the setup exe, the payload
+      # and latest.json agree; the earlier version asserts already proved the
+      # tag matches project(Dish VERSION ...) and the built dish.exe.
+      - name: Compile installer (Inno Setup)
         shell: pwsh
         run: |
-          ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe `
-            -PackTool build/dish-payload-pack.exe -Image build/setup-image
+          $tag = '${{ github.event.inputs.tag || github.ref_name }}'
+          $num = $tag -replace '[-+].*$',''
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build\setup-image" installer.iss
+          if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
+          Copy-Item dist/dish-setup.exe "$PWD/dish-setup.exe"
+
+      # The same assertions windows-ci runs, against the artifact that is about
+      # to be published rather than a rebuild of it.
+      - name: Installer silent round-trip (no UI)
+        shell: pwsh
+        run: ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe
 
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
@@ -264,8 +258,8 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ github.event.inputs.tag || github.ref_name }}'
-          if ($tag -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not vMAJOR.MINOR.PATCH" }
-          $version = $tag.Substring(1)
+          if ($tag -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not MAJOR.MINOR.PATCH (bare, no v prefix)" }
+          $version = $tag
           $cm = Get-Content CMakeLists.txt -Raw
           if ($cm -notmatch 'project\(\s*Dish[\s\r\n]+VERSION[\s]+(\d+\.\d+\.\d+)') { throw 'project VERSION not found' }
           if ($Matches[1] -ne $version) { throw "Tag $tag but project VERSION is $($Matches[1])" }

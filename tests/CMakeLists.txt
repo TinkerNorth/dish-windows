@@ -136,21 +136,6 @@ set(DISH_TEST_SOURCES
     test_apply_binding_machine.cpp
     test_font_stacks.cpp
     test_theme_contrast.cpp
-    # Installer engine. Listed here (not in a second exe) so `ctest -R
-    # installer` is a filter over the one suite the Debug CI leg already runs.
-    installer/FakeOps.h
-    test_installer_machine.cpp
-    test_uninstall_machine.cpp
-    test_installer_plan.cpp
-    test_installer_journal.cpp
-    test_installer_manifest.cpp
-    test_payload_format.cpp
-    test_installer_registry.cpp
-    test_installer_shortcuts.cpp
-    test_installer_running_app.cpp
-    test_installer_unicode_paths.cpp
-    test_installer_cli.cpp
-    test_installer_version_compare.cpp
     # Auto-updater.
     test_update_version.cpp
     test_update_manifest.cpp
@@ -161,23 +146,10 @@ set(DISH_TEST_SOURCES
     test_update_preference_store.cpp
     test_translations.cpp)
 
-# Per-target compile of the payload layer, exactly as the stub and the pack
-# tool do it: PayloadFormat is deliberately Qt-free and lives in no library, so
-# the pack -> extract round-trip test builds its own copy. miniz comes with it.
-list(APPEND DISH_TEST_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/installer/PayloadFormat.cpp
-    ${CMAKE_SOURCE_DIR}/third_party/miniz/miniz.c)
-# Source properties are directory-scoped, so this repeats installer/CMakeLists.
-if(MSVC)
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/third_party/miniz/miniz.c
-        PROPERTIES COMPILE_OPTIONS "/W3;/wd4005")
-endif()
-
 add_executable(DishTests ${DISH_TEST_SOURCES})
 target_link_libraries(DishTests
     PRIVATE
         dish_core
-        dish_installer_core
         Catch2::Catch2WithMain
         dish_warnings)
 

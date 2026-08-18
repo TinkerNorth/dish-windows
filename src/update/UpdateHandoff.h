@@ -57,7 +57,8 @@ class UpdateHandoff {
     static constexpr const char* kNoHandoffFlag = "--no-update-handoff";
 
     // True when a staged installer was spawned: main must then return 0
-    // immediately and let the installer wait for this pid to exit. False means
+    // immediately. The installer (Inno Setup, /OTA mode) waits for this
+    // process's Running mutex to clear before it touches a file. False means
     // "carry on starting normally", which is also every failure path.
     static bool runStartupHandoff(int argc, char** argv);
 
@@ -79,9 +80,16 @@ class UpdateHandoff {
     // Failed{ApplyFailed} with the manual download link.
     static void quarantine(const StagedUpdate& staged);
 
-    // CreateProcessW with the section 16.6 argv, cwd = the updates ROOT (never
-    // the version directory, so the installer's own directory stays deletable).
-    static bool spawnStagedApply(const StagedUpdate& staged, unsigned long pidToWaitOn);
+    // The documented switch tail of the apply spawn, in one place so the test
+    // suite can pin it against docs/INSTALLER.md: Inno Setup's silent set plus
+    // /OTA (wait for the app's mutex, own the relaunch duty) and /LOG into the
+    // stage directory.
+    static QString applyArguments(const StagedUpdate& staged);
+
+    // CreateProcessW of the staged dish-setup.exe with applyArguments(), cwd =
+    // the updates ROOT (never the version directory, so the installer's own
+    // directory stays deletable).
+    static bool spawnStagedApply(const StagedUpdate& staged);
 
     // Another dish.exe already owns the update lifecycle.
     static bool anotherInstanceRunning();
