@@ -39,11 +39,15 @@ inline int slotPathVpKey(int vendorId, int productId) {
 }
 
 // A vid or pid of 0 short-circuits to unsupported, so an identity-less SDL slot
-// never spuriously pairs with the 0/0 key.
-inline SlotPathFields slotPathFields(int vendorId, int productId,
+// never spuriously pairs with the 0/0 key. A Bluetooth slot is unsupported by
+// rule, not by lookup: the same model can be present over BOTH transports at
+// once (charging over USB while streaming over BT), the controllers map is
+// keyed by (vid, pid), and the raw-HID claim can never serve the wireless
+// link — so a BT slot must not wear its USB twin's path control.
+inline SlotPathFields slotPathFields(int vendorId, int productId, bool bluetooth,
                                      const std::map<int, UsbController>& controllers) {
     SlotPathFields out;
-    if (vendorId == 0 || productId == 0) { return out; }
+    if (bluetooth || vendorId == 0 || productId == 0) { return out; }
     const auto it = controllers.find(slotPathVpKey(vendorId, productId));
     if (it == controllers.end()) { return out; }
     const UsbController& c = it->second;

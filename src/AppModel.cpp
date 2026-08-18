@@ -31,9 +31,10 @@ namespace {
 
 // Shared so both the SDL-slot and synthetic-slot rebuild arms thread through
 // the same cross-reference.
-void stampSlotPath(models::ControllerSlot& s, int vendorId, int productId,
+void stampSlotPath(models::ControllerSlot& s, int vendorId, int productId, bool bluetooth,
                    const std::map<int, reducer::UsbController>& controllers) {
-    const reducer::SlotPathFields f = reducer::slotPathFields(vendorId, productId, controllers);
+    const reducer::SlotPathFields f =
+        reducer::slotPathFields(vendorId, productId, bluetooth, controllers);
     s.pathSupported = f.supported;
     s.pathPhase = f.phase;
     s.desiredPath = f.desired;
@@ -606,7 +607,8 @@ void AppModel::rebuild() {
     std::vector<reducer::RoutedDevice> routed;
     routed.reserve(static_cast<std::size_t>(sdlDevices.size()));
     for (const auto& d : sdlDevices) {
-        routed.push_back({d.id.toStdString(), d.vendorId, d.productId, /*disconnecting=*/false});
+        routed.push_back(
+            {d.id.toStdString(), d.vendorId, d.productId, /*disconnecting=*/false, d.bluetooth});
     }
     const std::set<std::string> hidden = reducer::suppressedRoutedIds(synthetics, routed);
     {
@@ -632,12 +634,8 @@ void AppModel::rebuild() {
         // Only a raw joystick decodes through the remappable mapJoystick path;
         // synthetics below keep the false default.
         s.remappable = d.isRawJoystick;
-        // A Bluetooth pad never gets USB-path fields: the same model can be
-        // present over BOTH transports at once (charging over USB while
-        // BT-paired), and the controllers map is keyed by (vid, pid), so
-        // without this gate the BT twin would wear the USB twin's path control.
         s.bluetooth = d.bluetooth;
-        if (!d.bluetooth) { stampSlotPath(s, d.vendorId, d.productId, controllers); }
+        stampSlotPath(s, d.vendorId, d.productId, d.bluetooth, controllers);
         presentPads.push_back({d.id.toStdString(), d.vendorId, d.productId});
         next.append(s);
     }
@@ -667,7 +665,7 @@ void AppModel::rebuild() {
         // A synthetic IS a USB-direct controller, so it is always
         // path-supported; the mapper reads phase/desired/failure off its own
         // entry, keyed by vid/pid, which round-trips to this key.
-        stampSlotPath(s, c.vendorId, c.productId, controllers);
+        stampSlotPath(s, c.vendorId, c.productId, /*bluetooth=*/false, controllers);
         presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
         next.append(s);
     }
@@ -687,7 +685,7 @@ void AppModel::rebuild() {
         s.capabilities.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
         s.capabilities.hasRumble = input::usbparse::parserHasRumble(parser);
         s.capabilities.hasLightbar = false;
-        stampSlotPath(s, c.vendorId, c.productId, controllers);
+        stampSlotPath(s, c.vendorId, c.productId, /*bluetooth=*/false, controllers);
         presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
         next.append(s);
     }
