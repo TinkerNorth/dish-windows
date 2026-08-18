@@ -100,6 +100,7 @@ meaning anything.
 | `Eyebrow` | `Text` | `mutedTone`. The mono, tracked, uppercase micro-label. |
 | `SectionHeader` | `Row` | `label` (natural case in, uppercase out via `font.capitalization`, never an uppercase string) and an optional `glyph`. |
 | `BrandGlyph` | `Image` | `glyph`, `glyphForToken(token)`, `tinted`, `accessibleName`. Palette-tinted per C8. |
+| `AppMark` | `BrandGlyph` | The identity mark, `dish-logo` (the window icon as a glyph): the title bar and Home's rail entry. `busy` pulses opacity, the one sanctioned brand transient. |
 | `LiveStat` | `Text` | `live`, `rateText(hz, measured)`, `latencyText(ms, samples)`. **The only rate and latency formatter in the app.** `~` means derived or estimated; a sub-millisecond latency reads `"<1 ms"`, never `"~0.0 ms"`, mirroring `reducer::formatLatencyMs`, which is what the models render. |
 | `DishProgressBar` | `Rectangle` | `indeterminate`, `value`. Track `Theme.surfaceDim`, height fixed at 3, no caller-settable height. Static filled track under `Tokens.reducedMotion`. |
 | `LoadingSpinner` | `ColumnLayout` | `text`, `running`. The apply-overlay step spinner and the type-catalog loader. |
@@ -241,7 +242,7 @@ Collapsed, each entry has to be identifiable from its picture alone at
 
 | Entry | Glyph |
 |---|---|
-| Home | `dish-connected` |
+| Home | `dish-logo` (the app mark, `Kit.AppMark`'s asset) |
 | Controllers | `pad` |
 | Connections | `satellite` |
 | Support Dish | a heart text glyph in `Theme.pulse` |
@@ -250,9 +251,11 @@ Collapsed, each entry has to be identifiable from its picture alone at
 **No two rail entries may resolve to the same silhouette.** A different *state*
 of the same family (`-connected`, `-receiving`, `-off`) is not a different rail
 glyph: `dish` and `dish-connected` differ by a 3-unit dot in a 64-unit viewBox,
-which is under one pixel at 16 px. The brand set holds three separable shapes,
-the tilted dish ellipse, the satellite's panel bar and the gear disc, and the
-rail needs four, which is why `brand/pad.svg` exists.
+which is under one pixel at 16 px. Home carries the app mark, the same identity
+as `dish.ico` and the title bar, and its ringed-dish silhouette cannot be read
+as the wire vocabulary's plain dish. The plain set holds three separable
+shapes, the tilted dish ellipse, the satellite's panel bar and the gear disc,
+and the rail needs more, which is why `brand/pad.svg` exists.
 
 ## Brand glyphs
 
@@ -266,11 +269,11 @@ and `height` and pass a bare asset name, no path and no extension.
 | `accessibleName` | string | `""` | Announced name; empty means decorative. |
 | `glyphForToken(token)` | function → string | | Maps a model `glyph` token (`"satelliteBase"` / `"satelliteConnected"` / `"satelliteOff"`) to an asset name. |
 
-The `:/brand/` set: `dish`, `dish-connected`, `dish-disabled`, `dish-master`,
-`dish-off`, `dish-receiving`, `satellite`, `satellite-broadcasting`,
-`satellite-connected`, `satellite-disabled`, `satellite-master`,
-`satellite-off`, `bluetooth`, `bluetooth-connected`, `bluetooth-disabled`,
-`bluetooth-off`, `bluetooth-searching`, `gear`, `pad`.
+The `:/brand/` set: `dish`, `dish-connected`, `dish-disabled`, `dish-logo`,
+`dish-master`, `dish-off`, `dish-receiving`, `satellite`,
+`satellite-broadcasting`, `satellite-connected`, `satellite-disabled`,
+`satellite-master`, `satellite-off`, `bluetooth`, `bluetooth-connected`,
+`bluetooth-disabled`, `bluetooth-off`, `bluetooth-searching`, `gear`, `pad`.
 
 ```qml
 Kit.BrandGlyph {
