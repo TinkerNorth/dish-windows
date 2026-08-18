@@ -25,6 +25,10 @@ share a version number.
 
 ### Changed
 
+- The title bar and the rail's Home entry draw the app mark (`dish-logo`, the
+  window icon's identity) instead of the plain dish silhouette, which read as
+  a second satellite glyph. The plain-dish states stay the wire vocabulary's.
+
 - **The installer is now Inno Setup.** `dish-setup.exe` is compiled from
   [`installer.iss`](installer.iss); the bespoke SFX stub, Qt Quick wizard,
   install/uninstall engine and pack tool are gone (~30k lines). The defaults
