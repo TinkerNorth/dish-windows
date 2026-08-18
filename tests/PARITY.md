@@ -708,3 +708,27 @@ post-audit ledger.
 "per-path rumble + USB-direct OUTPUT write path" item (capability truth is
 done; the output write path itself — rumble/lightbar encoders + gateway
 writes — remains open, and is why Direct still advertises no rumble).
+
+---
+
+## Android 2026-08-15..18 tail (post-#159) — reviewed 2026-08-18
+
+Disposition of everything android merged after the #145–#159 wave above froze
+(its review date, 2026-08-17). Same reading rules. Release chores (#160 Play
+10100 notes + cosign 2.6.5, #161 Play 10101 notes) are SKIP (Play CI; no cosign
+exists anywhere in this repo's workflows), as are the #155/#156 dependabot
+bumps + their pin-map comment sync (android-repo dependencies; this repo's
+action pins are its own).
+
+| ✓ | Android change | Disposition | Notes |
+|---|---|---|---|
+| [x] | #162 decode the Guide button bit in decodeXInput360 | SKIP (platform) + audited | No XInput-360 raw decoder exists here: XUSB hides that family from raw HID and SDL delivers Guide for it. Audited every decoder this repo DOES carry for the same dead-bit class — DS4 `buf[7]&0x01`, DualSense `buf[10]&0x01`, Switch Pro Home `0x10`, Steam `kSteamGuide`, HidP layout button 11 — all decode Guide (test_usb_report_parsers / test_usb_hid_layout pin each). No gap. |
+| [x] | wired path on a Bluetooth card when the cable is present (9c26557, + the 4267500 dual-presence ghost characterization tests) | **re-derived (this wave)** | The android gap is permission-shaped: without a USB grant the attach-time auto pick parks a Routed ghost silently, the BT card hides the whole path section, and nothing represents the cable — hence the pill + "Use wired" action. Windows has no permission broker: a plugged twin of a fast-lane model claims Direct immediately (`hasPermission` is always true; pinned by "a verified model with no recorded failure auto-claims Direct"), and a non-fast-lane wired twin gets its own SDL card carrying the path control — the wired path is taken or visibly offered without new UI, so the pill/action does not port. What the scenario surfaced HERE instead, both landed this wave: **(a)** count-based twin-dedup could hide a same-model **Bluetooth** pad while the claimed pad's USB SDL twin kept streaming (two pads, the BT one attached first) — `RoutedDevice` now carries `bluetooth` and the hide priority is USB-before-BT, transport outranking `disconnecting` (a BT instance is never the claimed device; the gateway refuses BT paths), with a lone BT twin still suppressible for the single-pad dual-presence case (SDL's serial dedup can keep the BT-flagged instance). Pinned in test_usb_twin_dedup. **(b)** the "a BT slot never wears its USB twin's path control" rule lived as an `if` at the rebuild call site — moved into `slotPathFields` (the mapper layer android pinned its new BT cases on) and pinned in test_slot_path_fields, including the claimed-twin arm. |
+| [x] | MainViewModelTest UsbGamepadManager.controllers stub | SKIP (android test plumbing) | Scaffolding for their ANDROID-tagged VM row after the fix above; the Windows analogs are the reducer pins in (a)/(b). |
+
+**Unverified on hardware (recorded, same status as the #154 note):** whether a
+given dual-mode pad streams input on its USB link while a BT session is live
+varies by model (the Luna reportedly stays BT-silent-cable; Sony pads stream on
+the plugged link). The reducer rules above are correct for both worlds: a
+streaming USB twin is suppressed, a silent one costs nothing, and the BT
+instance survives whenever it is not the model's last twin.
