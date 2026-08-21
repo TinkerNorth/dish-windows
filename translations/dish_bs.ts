@@ -13,15 +13,15 @@
     </message>
     <message>
         <source>Connections</source>
-        <translation type="unfinished">Veze</translation>
+        <translation>Veze</translation>
     </message>
     <message>
         <source>Support Dish</source>
-        <translation type="unfinished">Podrži Dish</translation>
+        <translation>Podržite Dish</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Podešavanja</translation>
+        <translation>Podešavanja</translation>
     </message>
     <message>
         <source>Dish %1</source>
@@ -37,11 +37,11 @@
     </message>
     <message>
         <source>Streaming · computer kept awake</source>
-        <translation type="unfinished"></translation>
+        <translation>Striming · računar ostaje budan</translation>
     </message>
     <message>
         <source>Streaming</source>
-        <translation type="unfinished">Striming</translation>
+        <translation>Striming</translation>
     </message>
     <message>
         <source>Set up</source>
@@ -49,31 +49,31 @@
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Natrag</translation>
+        <translation>Natrag</translation>
     </message>
     <message>
         <source>Configure</source>
-        <translation type="unfinished"></translation>
+        <translation>Podesi</translation>
     </message>
     <message>
         <source>Configure keep-awake</source>
-        <translation type="unfinished"></translation>
+        <translation>Podesi držanje budnim</translation>
     </message>
     <message>
         <source>Dish %1 is ready · restart when convenient.</source>
-        <translation type="unfinished">Dish %1 je spreman · ponovo pokrenite kad vam odgovara.</translation>
+        <translation>Dish %1 je spreman · ponovo pokrenite kada vam odgovara.</translation>
     </message>
     <message>
         <source>Update available: Dish %1. See Settings to download.</source>
-        <translation type="unfinished">Dostupno je ažuriranje: Dish %1. Preuzmite ga u Podešavanjima.</translation>
+        <translation>Dostupno ažuriranje: Dish %1. Otvorite Podešavanja za preuzimanje.</translation>
     </message>
     <message>
         <source>This version of Dish is no longer supported. Please update.</source>
-        <translation type="unfinished">Ova verzija Disha više nije podržana. Molimo ažurirajte.</translation>
+        <translation>Ova verzija Disha više nije podržana. Ažurirajte je.</translation>
     </message>
     <message>
         <source>Updated to Dish %1.</source>
-        <translation type="unfinished">Ažurirano na Dish %1.</translation>
+        <translation>Ažurirano na Dish %1.</translation>
     </message>
 </context>
 <context>
@@ -88,7 +88,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message>
         <source>Sending each setting to the host.</source>
@@ -107,7 +107,7 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -123,7 +123,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>buttons or sticks</source>
@@ -241,7 +241,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message>
         <source>Reconnect</source>
@@ -268,7 +268,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Isključeno</translation>
+        <translation>Isključeno</translation>
     </message>
     <message>
         <source>Pending</source>
@@ -399,7 +399,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Isključeno</translation>
+        <translation>Isključeno</translation>
     </message>
     <message>
         <source>Pad</source>
@@ -563,11 +563,11 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Nema žira</translation>
+        <translation>Nema žira</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -579,7 +579,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>No hosts found</source>
@@ -671,7 +671,7 @@
     </message>
     <message>
         <source>Unbind</source>
-        <translation type="unfinished">Odveži</translation>
+        <translation>Odveži</translation>
     </message>
     <message>
         <source>Unbind %1</source>
@@ -679,15 +679,15 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message>
         <source>Close</source>
-        <translation type="unfinished">Zatvori</translation>
+        <translation>Zatvori</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">Primijeni</translation>
+        <translation>Primijeni</translation>
     </message>
     <message>
         <source>Bind</source>
@@ -726,7 +726,7 @@
     <name>ConnectionsPage</name>
     <message>
         <source>Connections</source>
-        <translation type="unfinished">Veze</translation>
+        <translation>Veze</translation>
     </message>
     <message>
         <source>Found</source>
@@ -754,11 +754,11 @@
     </message>
     <message>
         <source>Scanning…</source>
-        <translation type="unfinished">Skeniranje…</translation>
+        <translation>Skeniranje…</translation>
     </message>
     <message>
         <source>Scan</source>
-        <translation type="unfinished">Skeniraj</translation>
+        <translation>Skeniraj</translation>
     </message>
     <message>
         <source>Pair…</source>
@@ -778,11 +778,11 @@
     </message>
     <message>
         <source>Forget</source>
-        <translation type="unfinished">Zaboravi</translation>
+        <translation>Zaboravi</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message numerus="yes">
         <source>%n found · nothing paired yet</source>
@@ -874,7 +874,7 @@
     </message>
     <message>
         <source>Connect</source>
-        <translation type="unfinished">Poveži</translation>
+        <translation>Poveži se</translation>
     </message>
     <message>
         <source>More actions for %1</source>
@@ -921,7 +921,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
 </context>
 <context>
@@ -932,7 +932,7 @@
     </message>
     <message>
         <source>No controllers connected</source>
-        <translation type="unfinished">Nema povezanih kontrolera</translation>
+        <translation>Nema povezanih kontrolera</translation>
     </message>
     <message>
         <source>Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.</source>
@@ -952,15 +952,15 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Nema žira</translation>
+        <translation>Nema žira</translation>
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>Motion %1 Hz</source>
@@ -992,19 +992,19 @@
     </message>
     <message>
         <source>Battery wired</source>
-        <translation type="unfinished">Baterija žičana</translation>
+        <translation>Napajanje kablom</translation>
     </message>
     <message>
         <source>Battery %1% ↑</source>
-        <translation type="unfinished">Baterija %1 % ↑</translation>
+        <translation>Baterija %1 % ↑</translation>
     </message>
     <message>
         <source>Battery full</source>
-        <translation type="unfinished">Baterija puna</translation>
+        <translation>Baterija puna</translation>
     </message>
     <message>
         <source>Battery %1%</source>
-        <translation type="unfinished">Baterija %1 %</translation>
+        <translation>Baterija %1 %</translation>
     </message>
     <message>
         <source>Unplug and replug the controller to finish switching.</source>
@@ -1199,7 +1199,7 @@
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Natrag</translation>
+        <translation>Natrag</translation>
     </message>
     <message>
         <source>Start</source>
@@ -1318,15 +1318,15 @@
     </message>
     <message>
         <source>Connect a controller to adjust its dead zones.</source>
-        <translation type="unfinished">Povežite kontroler da biste prilagodili njegove mrtve zone.</translation>
+        <translation>Povežite kontroler da podesite njegove mrtve zone.</translation>
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Nema žira</translation>
+        <translation>Nema žira</translation>
     </message>
     <message>
         <source>Stick dead zone</source>
@@ -1350,7 +1350,7 @@
     </message>
     <message>
         <source>No controllers connected</source>
-        <translation type="unfinished">Nema povezanih kontrolera</translation>
+        <translation>Nema povezanih kontrolera</translation>
     </message>
     <message>
         <source>Reset</source>
@@ -1369,7 +1369,7 @@
     <name>DonatePage</name>
     <message>
         <source>Support Dish</source>
-        <translation type="unfinished">Podrži Dish</translation>
+        <translation>Podržite Dish</translation>
     </message>
     <message>
         <source>Dish is free and open source — donations keep it that way</source>
@@ -1381,23 +1381,23 @@
     </message>
     <message>
         <source>Dish runs on coffee and goodwill.</source>
-        <translation type="unfinished">Dish radi na kavi i dobroj volji.</translation>
+        <translation>Dish radi na kafi i dobroj volji.</translation>
     </message>
     <message>
         <source>Recurring</source>
-        <translation type="unfinished">Ponavljajuće</translation>
+        <translation>Ponavljajuće</translation>
     </message>
     <message>
         <source>Card, PayPal, GitHub credit</source>
-        <translation type="unfinished">Kartica, PayPal, GitHub kredit</translation>
+        <translation>Kartica, PayPal, GitHub kredit</translation>
     </message>
     <message>
         <source>One-time</source>
-        <translation type="unfinished">Jednokratno</translation>
+        <translation>Jednokratno</translation>
     </message>
     <message>
         <source>Card, Apple Pay, Google Pay, PayPal</source>
-        <translation type="unfinished">Kartica, Apple Pay, Google Pay, PayPal</translation>
+        <translation>Kartica, Apple Pay, Google Pay, PayPal</translation>
     </message>
     <message>
         <source>Dish, Satellite, and every client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells — donations are what keep them true.</source>
@@ -1425,15 +1425,15 @@
     </message>
     <message>
         <source>Either</source>
-        <translation type="unfinished">Bilo koje</translation>
+        <translation>Oboje</translation>
     </message>
     <message>
         <source>Card, Apple Pay, Google Pay</source>
-        <translation type="unfinished">Kartica, Apple Pay, Google Pay</translation>
+        <translation>Kartica, Apple Pay, Google Pay</translation>
     </message>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished">Preporučeno</translation>
+        <translation>Preporučeno</translation>
     </message>
     <message>
         <source>Cadence</source>
@@ -1445,7 +1445,7 @@
     </message>
     <message>
         <source>What your donation pays for</source>
-        <translation type="unfinished">Šta vaša donacija zapravo plaća</translation>
+        <translation>Šta vaša donacija plaća</translation>
     </message>
     <message>
         <source>GitHub Sponsors</source>
@@ -1490,83 +1490,83 @@
     <name>HelpScreen</name>
     <message>
         <source>CONCEPTS</source>
-        <translation type="unfinished">KONCEPTI</translation>
+        <translation>KONCEPTI</translation>
     </message>
     <message>
         <source>What is Dish?</source>
-        <translation type="unfinished">Što je Dish?</translation>
+        <translation>Što je Dish?</translation>
     </message>
     <message>
         <source>Dish turns a controller plugged into this PC into a wireless gamepad for another PC. It forwards input over your local network to the free Satellite helper.</source>
-        <translation type="unfinished">Dish pretvara kontroler priključen na ovaj PC u bežični gamepad za drugi PC. Prosljeđuje unos preko vaše lokalne mreže besplatnom pomoćniku Satellite.</translation>
+        <translation>Dish pretvara kontroler priključen na ovaj PC u bežični gamepad za drugi PC. Unos prosljeđuje preko vaše lokalne mreže besplatnom pomoćniku Satellite.</translation>
     </message>
     <message>
         <source>What is Satellite?</source>
-        <translation type="unfinished">Što je Satellite?</translation>
+        <translation>Što je Satellite?</translation>
     </message>
     <message>
         <source>BEST PERFORMANCE</source>
-        <translation type="unfinished">NAJBOLJE PERFORMANSE</translation>
+        <translation>NAJBOLJE PERFORMANSE</translation>
     </message>
     <message>
         <source>Both PCs on the same router, wired Ethernet where you can, 5 GHz Wi-Fi otherwise. Dish needs this PC and the host PC on the same local network — it sends input as small UDP packets, so a fast LAN keeps the delay tiny.</source>
-        <translation type="unfinished">Oba PC-a na istom usmjerivaču, žičani Ethernet gdje možete, inače 5 GHz Wi-Fi. Dishu trebaju ovaj PC i PC domaćin na istoj lokalnoj mreži — šalje unos kao male UDP pakete, pa brza LAN drži kašnjenje sićušnim.</translation>
+        <translation>Oba PC-a na istom usmjerivaču, žičani Ethernet gdje god možete, inače 5 GHz Wi-Fi. Dish traži da ovaj PC i PC domaćin budu na istoj lokalnoj mreži — unos šalje kao male UDP pakete, pa brz LAN drži kašnjenje minimalnim.</translation>
     </message>
     <message>
         <source>Is wired better than wireless?</source>
-        <translation type="unfinished">Je li žičano bolje od bežičnog?</translation>
+        <translation>Je li žično bolje od bežičnog?</translation>
     </message>
     <message>
         <source>For the controller-to-PC leg, a USB controller has no radio latency. For the PC-to-PC leg, connect both machines to the router with Ethernet if you can.</source>
-        <translation type="unfinished">Za dionicu kontroler-do-PC-a, USB kontroler nema radijsku latenciju. Za dionicu PC-do-PC-a, povežite oba računala na usmjerivač Ethernetom ako možete.</translation>
+        <translation>Na dionici kontroler–PC, USB kontroler nema radio kašnjenja. Na dionici PC–PC, povežite oba računara na usmjerivač Ethernetom ako možete.</translation>
     </message>
     <message>
         <source>TROUBLESHOOTING</source>
-        <translation type="unfinished">RJEŠAVANJE PROBLEMA</translation>
+        <translation>RJEŠAVANJE PROBLEMA</translation>
     </message>
     <message>
         <source>My PIN keeps getting rejected.</source>
-        <translation type="unfinished">Moj PIN se stalno odbija.</translation>
+        <translation>PIN mi se stalno odbija.</translation>
     </message>
     <message>
         <source>My controller keeps disconnecting mid-game.</source>
-        <translation type="unfinished">Moj kontroler se stalno prekida usred igre.</translation>
+        <translation>Kontroler mi se stalno prekida usred igre.</translation>
     </message>
     <message>
         <source>Motion needs three things: a Satellite connection, a controller with a gyroscope (DualSense, DualShock 4, Switch Pro), and a PlayStation-style controller type on the slot. Switch the emulated type to PlayStation to enable the motion channel.</source>
-        <translation type="unfinished">Pokret treba tri stvari: Satellite vezu, kontroler sa žiroskopom (DualSense, DualShock 4, Switch Pro) i tip kontrolera u PlayStation stilu na utoru. Prebacite emulirani tip na PlayStation da omogućite kanal pokreta.</translation>
+        <translation>Za pokret su potrebne tri stvari: Satellite veza, kontroler sa žiroskopom (DualSense, DualShock 4, Switch Pro) i tip kontrolera u PlayStation stilu na slotu. Prebacite emulirani tip na PlayStation da omogućite kanal za pokret.</translation>
     </message>
     <message>
         <source>ABOUT DISH</source>
-        <translation type="unfinished">O DISHU</translation>
+        <translation>O DISHU</translation>
     </message>
     <message>
         <source>Is Dish open source?</source>
-        <translation type="unfinished">Je li Dish otvorenog koda?</translation>
+        <translation>Je li Dish otvorenog koda?</translation>
     </message>
     <message>
         <source>Yes. Dish (Windows, Android, Linux, Mac) and Satellite are all released under LGPL-3.0, source on GitHub at github.com/TinkerNorth. Pull requests welcome.</source>
-        <translation type="unfinished">Da. Dish (Windows, Android, Linux, Mac) i Satellite objavljeni su pod LGPL-3.0, izvor na GitHubu na github.com/TinkerNorth. Pull requestovi su dobrodošli.</translation>
+        <translation>Da. Dish (Windows, Android, Linux, Mac) i Satellite izdani su pod LGPL-3.0, izvorni kod je na GitHubu, na github.com/TinkerNorth. Pull requestovi su dobrodošli.</translation>
     </message>
     <message>
         <source>What does Dish collect?</source>
-        <translation type="unfinished">Što Dish prikuplja?</translation>
+        <translation>Što Dish prikuplja?</translation>
     </message>
     <message>
         <source>LINKS</source>
-        <translation type="unfinished">POVEZNICE</translation>
+        <translation>LINKOVI</translation>
     </message>
     <message>
         <source>Privacy policy</source>
-        <translation type="unfinished">Politika privatnosti</translation>
+        <translation>Politika privatnosti</translation>
     </message>
     <message>
         <source>View source on GitHub</source>
-        <translation type="unfinished">Pogledaj izvor na GitHubu</translation>
+        <translation>Pogledaj izvorni kod na GitHubu</translation>
     </message>
     <message>
         <source>Help &amp; FAQ</source>
-        <translation type="unfinished">Pomoć i ČPP</translation>
+        <translation>Pomoć i česta pitanja</translation>
     </message>
     <message>
         <source>How Dish works, and what to try when it doesn’t</source>
@@ -1641,7 +1641,7 @@
     </message>
     <message>
         <source>Bind…</source>
-        <translation type="unfinished">Poveži…</translation>
+        <translation>Poveži…</translation>
     </message>
     <message>
         <source>Choose a satellite for this pad</source>
@@ -1653,7 +1653,7 @@
     </message>
     <message>
         <source>Unbound</source>
-        <translation type="unfinished">Nije povezano</translation>
+        <translation>Nije povezano</translation>
     </message>
     <message>
         <source>as %1</source>
@@ -1665,19 +1665,19 @@
     </message>
     <message>
         <source>Battery wired</source>
-        <translation type="unfinished">Baterija žičana</translation>
+        <translation>Napajanje kablom</translation>
     </message>
     <message>
         <source>Battery %1% ↑</source>
-        <translation type="unfinished">Baterija %1 % ↑</translation>
+        <translation>Baterija %1 % ↑</translation>
     </message>
     <message>
         <source>Battery full</source>
-        <translation type="unfinished">Baterija puna</translation>
+        <translation>Baterija puna</translation>
     </message>
     <message>
         <source>Battery %1%</source>
-        <translation type="unfinished">Baterija %1 %</translation>
+        <translation>Baterija %1 %</translation>
     </message>
     <message>
         <source>idle</source>
@@ -1773,7 +1773,7 @@
     </message>
     <message>
         <source>Unbind</source>
-        <translation type="unfinished">Odveži</translation>
+        <translation>Odveži</translation>
     </message>
     <message>
         <source>Configure controls…</source>
@@ -1933,15 +1933,15 @@
     <name>KitGallery</name>
     <message>
         <source>Light</source>
-        <translation type="unfinished">Svijetlo</translation>
+        <translation>Svijetlo</translation>
     </message>
     <message>
         <source>Dark</source>
-        <translation type="unfinished">Tamno</translation>
+        <translation>Tamno</translation>
     </message>
     <message>
         <source>System</source>
-        <translation type="unfinished">Sustav</translation>
+        <translation>Sustav</translation>
     </message>
     <message>
         <source>Connection</source>
@@ -1977,7 +1977,7 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>Rumble</source>
@@ -2081,7 +2081,7 @@
     </message>
     <message>
         <source>Unbind</source>
-        <translation type="unfinished">Odveži</translation>
+        <translation>Odveži</translation>
     </message>
     <message>
         <source>Small</source>
@@ -2105,7 +2105,7 @@
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Nema žira</translation>
+        <translation>Nema žira</translation>
     </message>
     <message>
         <source>12%</source>
@@ -2157,7 +2157,7 @@
     </message>
     <message>
         <source>Bind…</source>
-        <translation type="unfinished">Poveži…</translation>
+        <translation>Poveži…</translation>
     </message>
     <message>
         <source>Pick a destination</source>
@@ -2217,7 +2217,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Isključeno</translation>
+        <translation>Isključeno</translation>
     </message>
     <message>
         <source>Pad</source>
@@ -2269,11 +2269,11 @@
     </message>
     <message>
         <source>Let go after</source>
-        <translation type="unfinished"></translation>
+        <translation>Pusti nakon</translation>
     </message>
     <message>
         <source>%1 min</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 min</translation>
     </message>
     <message>
         <source>KitTextField · RowButton</source>
@@ -2281,7 +2281,7 @@
     </message>
     <message>
         <source>PIN</source>
-        <translation type="unfinished">PIN</translation>
+        <translation>PIN</translation>
     </message>
     <message>
         <source>That PIN wasn’t accepted. Check the code on ORION-PC and try again.</source>
@@ -2289,7 +2289,7 @@
     </message>
     <message>
         <source>Help &amp; FAQ</source>
-        <translation type="unfinished">Pomoć i ČPP</translation>
+        <translation>Pomoć i česta pitanja</translation>
     </message>
     <message>
         <source>What Dish sends, and what it never does.</source>
@@ -2297,7 +2297,7 @@
     </message>
     <message>
         <source>Open source licenses</source>
-        <translation type="unfinished">Licence otvorenog koda</translation>
+        <translation>Licence otvorenog koda</translation>
     </message>
     <message>
         <source>Everything Dish is built on.</source>
@@ -2489,7 +2489,7 @@
     </message>
     <message>
         <source>Pair</source>
-        <translation type="unfinished">Upari</translation>
+        <translation>Upari</translation>
     </message>
     <message>
         <source>Enter the six-digit code shown on ORION-PC.</source>
@@ -2528,11 +2528,11 @@
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
-        <translation type="unfinished">Licence otvorenog koda</translation>
+        <translation>Licence otvorenog koda</translation>
     </message>
     <message>
         <source>Acknowledgements for the libraries Dish is built on.</source>
-        <translation type="unfinished">Zahvale za biblioteke na kojima je Dish izgrađen.</translation>
+        <translation>Zahvale bibliotekama na kojima je Dish izgrađen.</translation>
     </message>
     <message>
         <source>No license manifest</source>
@@ -2563,15 +2563,15 @@
     </message>
     <message>
         <source>A controller is still streaming, and the display is being kept awake.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kontroler još uvijek strima, a ekran se drži budnim.</translation>
     </message>
     <message>
         <source>A controller is still streaming, and the computer is being kept awake.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kontroler još uvijek strima, a računar se drži budnim.</translation>
     </message>
     <message>
         <source>A controller is still streaming.</source>
-        <translation type="unfinished"></translation>
+        <translation>Kontroler još uvijek strima.</translation>
     </message>
     <message>
         <source>Quit</source>
@@ -2579,7 +2579,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
 </context>
 <context>
@@ -2590,19 +2590,19 @@
     </message>
     <message>
         <source>Pair with %1</source>
-        <translation type="unfinished">Upari sa %1</translation>
+        <translation>Upari sa %1</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message>
         <source>Pairing…</source>
-        <translation type="unfinished">Uparivanje…</translation>
+        <translation>Uparivanje…</translation>
     </message>
     <message>
         <source>Pair</source>
-        <translation type="unfinished">Upari</translation>
+        <translation>Upari</translation>
     </message>
     <message>
         <source>or</source>
@@ -2669,27 +2669,27 @@
     <name>SettingsPage</name>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Podešavanja</translation>
+        <translation>Podešavanja</translation>
     </message>
     <message>
         <source>Light</source>
-        <translation type="unfinished">Svijetlo</translation>
+        <translation>Svijetlo</translation>
     </message>
     <message>
         <source>Dark</source>
-        <translation type="unfinished">Tamno</translation>
+        <translation>Tamno</translation>
     </message>
     <message>
         <source>System</source>
-        <translation type="unfinished">Sustav</translation>
+        <translation>Sustav</translation>
     </message>
     <message>
         <source>Follow game</source>
-        <translation type="unfinished">Prati igru</translation>
+        <translation>Prati igru</translation>
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Isključeno</translation>
+        <translation>Isključeno</translation>
     </message>
     <message>
         <source>Setup &amp; help</source>
@@ -2697,11 +2697,11 @@
     </message>
     <message>
         <source>Help &amp; FAQ</source>
-        <translation type="unfinished">Pomoć i ČPP</translation>
+        <translation>Pomoć i česta pitanja</translation>
     </message>
     <message>
         <source>Concepts, performance tips, and troubleshooting.</source>
-        <translation type="unfinished">Koncepti, savjeti za performanse i rješavanje problema.</translation>
+        <translation>Koncepti, savjeti za performanse i rješavanje problema.</translation>
     </message>
     <message>
         <source>Appearance</source>
@@ -2709,11 +2709,11 @@
     </message>
     <message>
         <source>Theme</source>
-        <translation type="unfinished">Tema</translation>
+        <translation>Tema</translation>
     </message>
     <message>
         <source>Choose how Dish looks. System matches your Windows light or dark setting.</source>
-        <translation type="unfinished">Odaberite kako Dish izgleda. „Sustav“ prati svijetlu ili tamnu postavku sustava Windows.</translation>
+        <translation>Odaberite kako Dish izgleda. Sustav prati vašu Windows postavku svijetlog ili tamnog načina.</translation>
     </message>
     <message>
         <source>Forwarded features</source>
@@ -2721,11 +2721,11 @@
     </message>
     <message>
         <source>Light bar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>Follow game: the controller LED matches the host game. Off: leave the LED untouched.</source>
-        <translation type="unfinished">Prati igru: LED kontrolera odgovara igri domaćinu. Isključeno: ostavi LED netaknut.</translation>
+        <translation>Prati igru: LED kontrolera prati igru na hostu. Isključeno: LED ostaje netaknut.</translation>
     </message>
     <message>
         <source>Controller tuning</source>
@@ -2757,19 +2757,19 @@
     </message>
     <message>
         <source>Open source licenses</source>
-        <translation type="unfinished">Licence otvorenog koda</translation>
+        <translation>Licence otvorenog koda</translation>
     </message>
     <message>
         <source>Acknowledgements for the libraries Dish is built on.</source>
-        <translation type="unfinished">Zahvale za biblioteke na kojima je Dish izgrađen.</translation>
+        <translation>Zahvale bibliotekama na kojima je Dish izgrađen.</translation>
     </message>
     <message>
         <source>Support Dish</source>
-        <translation type="unfinished">Podrži Dish</translation>
+        <translation>Podržite Dish</translation>
     </message>
     <message>
         <source>Donate via GitHub Sponsors, Ko-fi, or Buy Me a Coffee.</source>
-        <translation type="unfinished">Donirajte preko GitHub Sponsors, Ko-fi ili Buy Me a Coffee.</translation>
+        <translation>Donirajte preko GitHub Sponsors, Ko-fija ili Buy Me a Coffeeja.</translation>
     </message>
     <message>
         <source>Dish %1 · TinkerNorth · LGPL-3.0</source>
@@ -2789,167 +2789,167 @@
     </message>
     <message>
         <source>Share crash reports</source>
-        <translation type="unfinished">Podijeli izvještaje o padovima</translation>
+        <translation>Dijeli izvještaje o padovima</translation>
     </message>
     <message>
         <source>Automatic update checks are off.</source>
-        <translation type="unfinished">Automatske provjere ažuriranja su isključene.</translation>
+        <translation>Automatska provjera ažuriranja je isključena.</translation>
     </message>
     <message>
         <source>Never</source>
-        <translation type="unfinished"></translation>
+        <translation>Nikada</translation>
     </message>
     <message>
         <source>While playing</source>
-        <translation type="unfinished"></translation>
+        <translation>Dok se igra</translation>
     </message>
     <message>
         <source>While connected</source>
-        <translation type="unfinished"></translation>
+        <translation>Dok je povezan</translation>
     </message>
     <message>
         <source>Checking for updates…</source>
-        <translation type="unfinished">Provjera ažuriranja…</translation>
+        <translation>Provjera ažuriranja…</translation>
     </message>
     <message>
         <source>Dish %1 is available.</source>
-        <translation type="unfinished">Dish %1 je dostupan.</translation>
+        <translation>Dish %1 je dostupan.</translation>
     </message>
     <message>
         <source>Downloading Dish %1…</source>
-        <translation type="unfinished">Preuzimanje Disha %1…</translation>
+        <translation>Preuzimanje Disha %1…</translation>
     </message>
     <message>
         <source>Verifying download…</source>
-        <translation type="unfinished">Provjera preuzimanja…</translation>
+        <translation>Provjera preuzimanja…</translation>
     </message>
     <message>
         <source>Dish %1 is ready to install.</source>
-        <translation type="unfinished">Dish %1 je spreman za instalaciju.</translation>
+        <translation>Dish %1 je spreman za instalaciju.</translation>
     </message>
     <message>
         <source>You&apos;re on the latest version.</source>
-        <translation type="unfinished">Imate najnoviju verziju.</translation>
+        <translation>Imate najnoviju verziju.</translation>
     </message>
     <message>
         <source>No update information yet.</source>
-        <translation type="unfinished">Još nema podataka o ažuriranju.</translation>
+        <translation>Još nema informacija o ažuriranju.</translation>
     </message>
     <message>
         <source>You&apos;re offline. Dish will retry automatically.</source>
-        <translation type="unfinished">Niste na vezi. Dish će automatski pokušati ponovo.</translation>
+        <translation>Niste na mreži. Dish će pokušati ponovo automatski.</translation>
     </message>
     <message>
         <source>The update could not be applied automatically. Download it from the releases page.</source>
-        <translation type="unfinished">Ažuriranje nije moguće primijeniti automatski. Preuzmite ga sa stranice izdanja.</translation>
+        <translation>Ažuriranje nije bilo moguće primijeniti automatski. Preuzmite ga sa stranice izdanja.</translation>
     </message>
     <message>
         <source>The download didn&apos;t verify. Dish will try again.</source>
-        <translation type="unfinished">Preuzimanje nije prošlo provjeru. Dish će pokušati ponovo.</translation>
+        <translation>Preuzimanje nije prošlo provjeru. Dish će pokušati ponovo.</translation>
     </message>
     <message>
         <source>There isn&apos;t enough disk space for the update. Dish will try again.</source>
-        <translation type="unfinished">Nema dovoljno prostora na disku za ažuriranje. Dish će pokušati ponovo.</translation>
+        <translation>Nema dovoljno prostora na disku za ažuriranje. Dish će pokušati ponovo.</translation>
     </message>
     <message>
         <source>The update check failed. Dish will retry automatically.</source>
-        <translation type="unfinished">Provjera ažuriranja nije uspjela. Dish će automatski pokušati ponovo.</translation>
+        <translation>Provjera ažuriranja nije uspjela. Dish će pokušati ponovo automatski.</translation>
     </message>
     <message>
         <source>never</source>
-        <translation type="unfinished">nikad</translation>
+        <translation>nikada</translation>
     </message>
     <message>
         <source>Power</source>
-        <translation type="unfinished"></translation>
+        <translation>Napajanje</translation>
     </message>
     <message>
         <source>Keep the computer awake</source>
-        <translation type="unfinished"></translation>
+        <translation>Drži računar budnim</translation>
     </message>
     <message>
         <source>While playing: hold only while a bound controller is being used. While connected: hold for as long as a controller is streaming, however long it sits still.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dok se igra: drži budnim samo dok se povezani kontroler koristi. Dok je povezan: drži budnim sve dok kontroler strima, koliko god dugo mirovao.</translation>
     </message>
     <message>
         <source>Let go after this much stillness</source>
-        <translation type="unfinished"></translation>
+        <translation>Pusti nakon ovoliko mirovanja</translation>
     </message>
     <message>
         <source>%1 min</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 min</translation>
     </message>
     <message>
         <source>Keep the display awake too</source>
-        <translation type="unfinished"></translation>
+        <translation>Drži i ekran budnim</translation>
     </message>
     <message>
         <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
-        <translation type="unfinished"></translation>
+        <translation>Prosljeđivanje kontrolera treba računar, a ne ekran, pa je ovo isključeno osim ako se igra gleda na ovom ekranu.</translation>
     </message>
     <message>
         <source>Updates</source>
-        <translation type="unfinished">Ažuriranja</translation>
+        <translation>Ažuriranja</translation>
     </message>
     <message>
         <source>Dish %1 · last checked %2</source>
-        <translation type="unfinished">Dish %1 · zadnja provjera %2</translation>
+        <translation>Dish %1 · zadnja provjera %2</translation>
     </message>
     <message>
         <source>This version is no longer supported. Please update.</source>
-        <translation type="unfinished">Ova verzija više nije podržana. Molimo ažurirajte.</translation>
+        <translation>Ova verzija više nije podržana. Ažurirajte je.</translation>
     </message>
     <message>
         <source>You&apos;re running the portable version. Get the new zip from the releases page.</source>
-        <translation type="unfinished">Koristite prijenosnu verziju. Preuzmite novi zip sa stranice izdanja.</translation>
+        <translation>Koristite prenosivu verziju. Preuzmite novi zip sa stranice izdanja.</translation>
     </message>
     <message>
         <source>Check for updates</source>
-        <translation type="unfinished">Provjeri ažuriranja</translation>
+        <translation>Provjeri ažuriranja</translation>
     </message>
     <message>
         <source>Download update</source>
-        <translation type="unfinished">Preuzmi ažuriranje</translation>
+        <translation>Preuzmi ažuriranje</translation>
     </message>
     <message>
         <source>Restart to update</source>
-        <translation type="unfinished">Ponovo pokreni za ažuriranje</translation>
+        <translation>Ponovo pokreni za ažuriranje</translation>
     </message>
     <message>
         <source>Open download page</source>
-        <translation type="unfinished">Otvori stranicu za preuzimanje</translation>
+        <translation>Otvori stranicu za preuzimanje</translation>
     </message>
     <message>
         <source>Release notes</source>
-        <translation type="unfinished">Bilješke o izdanju</translation>
+        <translation>Bilješke o izdanju</translation>
     </message>
     <message>
         <source>Download updates automatically</source>
-        <translation type="unfinished">Automatski preuzimaj ažuriranja</translation>
+        <translation>Automatski preuzimaj ažuriranja</translation>
     </message>
     <message>
         <source>Dish downloads new versions in the background and installs them the next time it starts. Skipped on metered connections.</source>
-        <translation type="unfinished">Dish preuzima nove verzije u pozadini i instalira ih pri sljedećem pokretanju. Preskoče se veze s ograničenim prometom.</translation>
+        <translation>Dish preuzima nove verzije u pozadini i instalira ih pri sljedećem pokretanju. Preskače se na vezama s ograničenim prometom.</translation>
     </message>
     <message>
         <source>Check for updates automatically</source>
-        <translation type="unfinished">Automatski provjeravaj ažuriranja</translation>
+        <translation>Automatski provjeravaj ažuriranja</translation>
     </message>
     <message>
         <source>Dish asks GitHub for the newest release at startup and every few hours. Only a standard web request is sent; see the privacy policy for details.</source>
-        <translation type="unfinished">Dish pita GitHub za najnovije izdanje pri pokretanju i svakih nekoliko sati. Šalje se samo standardni web zahtjev; detalje potražite u politici privatnosti.</translation>
+        <translation>Dish pri pokretanju i svakih nekoliko sati pita GitHub za najnovije izdanje. Šalje se samo standardni web zahtjev; detalje potražite u politici privatnosti.</translation>
     </message>
     <message>
         <source>Checking connects to github.com and sends no account data.</source>
-        <translation type="unfinished">Provjera se povezuje na github.com i ne šalje podatke o nalogu.</translation>
+        <translation>Provjera se povezuje na github.com i ne šalje podatke o nalogu.</translation>
     </message>
     <message>
         <source>What&apos;s new in Dish %1</source>
-        <translation type="unfinished">Šta je novo u Dishu %1</translation>
+        <translation>Šta je novo u Dishu %1</translation>
     </message>
     <message>
         <source>Read the release notes for this version.</source>
-        <translation type="unfinished">Pročitajte bilješke o izdanju za ovu verziju.</translation>
+        <translation>Pročitajte bilješke o izdanju za ovu verziju.</translation>
     </message>
 </context>
 <context>
@@ -3088,7 +3088,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message>
         <source>Setup</source>
@@ -3166,78 +3166,78 @@
     <name>UpdatePill</name>
     <message>
         <source>Dish %1 is ready to install.</source>
-        <translation type="unfinished">Dish %1 je spreman za instalaciju.</translation>
+        <translation>Dish %1 je spreman za instalaciju.</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished">%1 od %2</translation>
+        <translation>%1 od %2</translation>
     </message>
     <message>
         <source>Update available: Dish %1</source>
-        <translation type="unfinished">Dostupno ažuriranje: Dish %1</translation>
+        <translation>Dostupno ažuriranje: Dish %1</translation>
     </message>
 </context>
 <context>
     <name>UpdatePopover</name>
     <message>
         <source>Restart to update</source>
-        <translation type="unfinished">Ponovo pokreni za ažuriranje</translation>
+        <translation>Ponovo pokreni za ažuriranje</translation>
     </message>
     <message>
         <source>Downloading Dish %1</source>
-        <translation type="unfinished">Preuzimanje Disha %1</translation>
+        <translation>Preuzimanje Disha %1</translation>
     </message>
     <message>
         <source>Update available</source>
-        <translation type="unfinished">Dostupno ažuriranje</translation>
+        <translation>Dostupno ažuriranje</translation>
     </message>
     <message>
         <source>Dish %1 · %2</source>
-        <translation type="unfinished">Dish %1 · %2</translation>
+        <translation>Dish %1 · %2</translation>
     </message>
     <message>
         <source>Dish %1 is ready. Restart now, or it will be installed the next time Dish starts.</source>
-        <translation type="unfinished">Dish %1 je spreman. Ponovo pokrenite sada ili će biti instaliran pri sljedećem pokretanju Disha.</translation>
+        <translation>Dish %1 je spreman. Pokrenite ponovo sada ili će biti instaliran pri sljedećem pokretanju Disha.</translation>
     </message>
     <message>
         <source>You&apos;re running the portable version. Get the new zip from the releases page.</source>
-        <translation type="unfinished">Koristite prijenosnu verziju. Preuzmite novi zip sa stranice izdanja.</translation>
+        <translation>Koristite prenosivu verziju. Preuzmite novi zip sa stranice izdanja.</translation>
     </message>
     <message>
         <source>Waiting for an unmetered connection.</source>
-        <translation type="unfinished">Čeka se veza bez ograničenja prometa.</translation>
+        <translation>Čeka se veza bez ograničenja prometa.</translation>
     </message>
     <message>
         <source>This version is no longer supported.</source>
-        <translation type="unfinished">Ova verzija više nije podržana.</translation>
+        <translation>Ova verzija više nije podržana.</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished">%1 od %2</translation>
+        <translation>%1 od %2</translation>
     </message>
     <message>
         <source>Restart now</source>
-        <translation type="unfinished">Ponovo pokreni sada</translation>
+        <translation>Pokreni ponovo sada</translation>
     </message>
     <message>
         <source>Later</source>
-        <translation type="unfinished">Kasnije</translation>
+        <translation>Kasnije</translation>
     </message>
     <message>
         <source>Open download page</source>
-        <translation type="unfinished">Otvori stranicu za preuzimanje</translation>
+        <translation>Otvori stranicu za preuzimanje</translation>
     </message>
     <message>
         <source>Download</source>
-        <translation type="unfinished">Preuzmi</translation>
+        <translation>Preuzmi</translation>
     </message>
     <message>
         <source>Release notes</source>
-        <translation type="unfinished">Bilješke o izdanju</translation>
+        <translation>Bilješke o izdanju</translation>
     </message>
     <message>
         <source>Skip this version</source>
-        <translation type="unfinished">Preskoči ovu verziju</translation>
+        <translation>Preskoči ovu verziju</translation>
     </message>
 </context>
 <context>
@@ -3248,11 +3248,11 @@
     </message>
     <message>
         <source>Your controller, on your PC</source>
-        <translation type="unfinished">Vaš kontroler, na vašem PC-u</translation>
+        <translation>Vaš kontroler, na vašem PC-u</translation>
     </message>
     <message>
         <source>Dish forwards a real game controller plugged into this PC to another PC running Satellite, over your local network. Plug in a pad and it shows up ready to play.</source>
-        <translation type="unfinished">Dish prosljeđuje stvarni igraći kontroler priključen na ovaj PC drugom PC-u koji pokreće Satellite, preko vaše lokalne mreže. Priključite pad i pojavljuje se spreman za igru.</translation>
+        <translation>Dish prosljeđuje pravi kontroler priključen na ovaj PC drugom PC-u na kojem radi Satellite, preko vaše lokalne mreže. Priključite pad i on se pojavi spreman za igru.</translation>
     </message>
     <message>
         <source>How it works</source>
@@ -3260,7 +3260,7 @@
     </message>
     <message>
         <source>A short hop over Wi-Fi</source>
-        <translation type="unfinished">Kratki skok preko Wi-Fija</translation>
+        <translation>Kratak skok preko Wi-Fija</translation>
     </message>
     <message>
         <source>One more thing</source>
@@ -3268,7 +3268,7 @@
     </message>
     <message>
         <source>Install Satellite on the host PC</source>
-        <translation type="unfinished">Instalirajte Satellite na PC domaćina</translation>
+        <translation>Instalirajte Satellite na PC domaćin</translation>
     </message>
     <message>
         <source>Satellite is free and open source. Grab it from dish.tinkernorth.com, run the installer, and Dish will find it automatically. You can finish this intro now and install Satellite later.</source>
@@ -3276,23 +3276,23 @@
     </message>
     <message>
         <source>Open download page</source>
-        <translation type="unfinished">Otvori stranicu za preuzimanje</translation>
+        <translation>Otvori stranicu za preuzimanje</translation>
     </message>
     <message>
         <source>Ready when you are</source>
-        <translation type="unfinished">Spremni kad ste i vi</translation>
+        <translation>Spremni kad i vi</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Natrag</translation>
+        <translation>Natrag</translation>
     </message>
     <message>
         <source>Skip</source>
-        <translation type="unfinished">Preskoči</translation>
+        <translation>Preskoči</translation>
     </message>
     <message>
         <source>Next</source>
-        <translation type="unfinished">Dalje</translation>
+        <translation>Dalje</translation>
     </message>
     <message>
         <source>Your controller’s button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.</source>
@@ -3308,7 +3308,7 @@
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished">Završi</translation>
+        <translation>Završi</translation>
     </message>
 </context>
 <context>
@@ -3469,7 +3469,7 @@
     </message>
     <message>
         <source>Scanning…</source>
-        <translation type="unfinished">Skeniranje…</translation>
+        <translation>Skeniranje…</translation>
     </message>
     <message>
         <source>Rescan</source>
@@ -3516,7 +3516,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>The game drives the pad’s light bar. Lightbar forwarding is a global setting.</source>
@@ -3524,7 +3524,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Isključeno</translation>
+        <translation>Isključeno</translation>
     </message>
     <message>
         <source>Pad</source>
@@ -3603,11 +3603,11 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Nema žira</translation>
+        <translation>Nema žira</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -3619,7 +3619,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>How should Dish read it?</source>
@@ -3631,7 +3631,7 @@
     </message>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished">Preporučeno</translation>
+        <translation>Preporučeno</translation>
     </message>
     <message>
         <source>Raw HID claim. Lowest latency.</source>
@@ -3706,7 +3706,7 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Žiro</translation>
+        <translation>Žiro</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -3722,7 +3722,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Svjetlosna traka</translation>
+        <translation>Svjetlosna traka</translation>
     </message>
     <message>
         <source>Controller</source>
@@ -3730,7 +3730,7 @@
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Nema žira</translation>
+        <translation>Nema žira</translation>
     </message>
     <message>
         <source>No touchpad</source>
@@ -3874,7 +3874,7 @@
     <name>dish::qml::AppViewModel</name>
     <message>
         <source>No connections yet</source>
-        <translation type="unfinished">Još nema veza</translation>
+        <translation>Još nema veza</translation>
     </message>
     <message>
         <source>The satellite sent an unreadable controller-type list.</source>
@@ -3882,15 +3882,15 @@
     </message>
     <message>
         <source>https://github.com/sponsors/TinkerNorth</source>
-        <translation type="unfinished">https://github.com/sponsors/TinkerNorth</translation>
+        <translation>https://github.com/sponsors/TinkerNorth</translation>
     </message>
     <message>
         <source>https://ko-fi.com/tinkernorth</source>
-        <translation type="unfinished">https://ko-fi.com/tinkernorth</translation>
+        <translation>https://ko-fi.com/tinkernorth</translation>
     </message>
     <message>
         <source>https://buymeacoffee.com/tinkernorth</source>
-        <translation type="unfinished">https://buymeacoffee.com/tinkernorth</translation>
+        <translation>https://buymeacoffee.com/tinkernorth</translation>
     </message>
     <message numerus="yes">
         <source>%n paired</source>

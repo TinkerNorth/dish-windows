@@ -155,10 +155,16 @@ It needs `lupdate` on `PATH`, or `QT_ROOT_DIR` / `CMAKE_PREFIX_PATH` set, and
 it refuses to run if `translations/` already has uncommitted changes, because
 it cannot otherwise tell your edits from `lupdate`'s.
 
-You are not expected to translate what you extracted. An untranslated entry
-falls back to English, which is what would have happened anyway; the gate
-exists so the entry is visible instead of missing. Coverage is printed but
-never enforced.
+You are expected to translate what you extracted. Coverage is **enforced**:
+the gate fails when any catalogue has an unfinished entry, because a missing
+translation is not a blank — it is English shown to someone who does not read
+English, and nothing else in the suite can see that.
+
+`dish_en.ts` is the exception that proves the rule. Its non-plural entries are
+filled from their own source text by `scripts/seed-source-language.py`, which
+the gate runs for you, so the count means the same thing in all six catalogues.
+The only English entries a person writes are the plural forms, which a source
+string cannot carry.
 
 Three rules the unit tests enforce:
 
