@@ -25,6 +25,13 @@ share a version number.
 
 ### Fixed
 
+- The `⋯` overflow menus open. A Menu takes its width from its background, and
+  both the Connections host menu and the Home row menu restyled that background
+  without restating a width, so the menu opened at zero width — it took focus
+  and drew nothing, which is indistinguishable from a dead button. Both are now
+  sized to their widest item over a shared `Tokens.menuMinWidth` floor, the same
+  way `ComboButton` already did it.
+
 - With two same-model pads split across transports — one claimed over USB
   Direct, one on Bluetooth — the twin-dedup picked its suppressed SDL twin by
   list order, so it could hide the Bluetooth pad and leave the claimed pad's

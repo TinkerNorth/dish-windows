@@ -121,6 +121,12 @@ Needs a pad and a satellite. Nothing here can be faked in CI.
 
 ## Transients and guards
 
+- [ ] **Overflow menus open with a visible width.** On Connections, click the
+      `⋯` on a host card: the Forget menu appears, sized to its text. On Home,
+      open a slot row's context menu the same way. A Menu takes its width from
+      its background, so a restyled background with no `implicitWidth` opens the
+      menu at zero width — it takes focus and draws nothing, which looks exactly
+      like a dead button. Check this after any change to a Menu background.
 - [ ] **One toast host.** Trigger a failure (unplug the network mid-connect).
       Exactly one toast appears, bottom-centre, and it does not block the
       controls under it.
