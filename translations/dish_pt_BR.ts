@@ -13,15 +13,15 @@
     </message>
     <message>
         <source>Connections</source>
-        <translation type="unfinished">Conexões</translation>
+        <translation>Conexões</translation>
     </message>
     <message>
         <source>Support Dish</source>
-        <translation type="unfinished">Apoiar o Dish</translation>
+        <translation>Apoiar o Dish</translation>
     </message>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Configurações</translation>
+        <translation>Configurações</translation>
     </message>
     <message>
         <source>Dish %1</source>
@@ -36,28 +36,44 @@
         <translation>Transmitindo · tela mantida ativa</translation>
     </message>
     <message>
+        <source>Streaming · computer kept awake</source>
+        <translation>Transmitindo · computador mantido ativo</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation>Transmitindo</translation>
+    </message>
+    <message>
         <source>Set up</source>
         <translation>Configurar</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Voltar</translation>
+        <translation>Voltar</translation>
+    </message>
+    <message>
+        <source>Configure</source>
+        <translation>Configurar</translation>
+    </message>
+    <message>
+        <source>Configure keep-awake</source>
+        <translation>Configurar a opção de manter ativo</translation>
     </message>
     <message>
         <source>Dish %1 is ready · restart when convenient.</source>
-        <translation type="unfinished">O Dish %1 está pronto · reinicie quando for conveniente.</translation>
+        <translation>Dish %1 está pronto · reinicie quando for conveniente.</translation>
     </message>
     <message>
         <source>Update available: Dish %1. See Settings to download.</source>
-        <translation type="unfinished">Atualização disponível: Dish %1. Baixe em Configurações.</translation>
+        <translation>Atualização disponível: Dish %1. Vá em Configurações para baixar.</translation>
     </message>
     <message>
         <source>This version of Dish is no longer supported. Please update.</source>
-        <translation type="unfinished">Esta versão do Dish não tem mais suporte. Atualize, por favor.</translation>
+        <translation>Esta versão do Dish não é mais suportada. Atualize.</translation>
     </message>
     <message>
         <source>Updated to Dish %1.</source>
-        <translation type="unfinished">Atualizado para o Dish %1.</translation>
+        <translation>Atualizado para o Dish %1.</translation>
     </message>
 </context>
 <context>
@@ -72,7 +88,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Sending each setting to the host.</source>
@@ -91,7 +107,7 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -107,7 +123,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>buttons or sticks</source>
@@ -224,7 +240,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Reconnect</source>
@@ -251,7 +267,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Desligado</translation>
+        <translation>Desligado</translation>
     </message>
     <message>
         <source>Pending</source>
@@ -382,7 +398,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Desligado</translation>
+        <translation>Desligado</translation>
     </message>
     <message>
         <source>Pad</source>
@@ -545,11 +561,11 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Sem giroscópio</translation>
+        <translation>Sem giroscópio</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -561,7 +577,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>No hosts found</source>
@@ -653,7 +669,7 @@
     </message>
     <message>
         <source>Unbind</source>
-        <translation type="unfinished">Desvincular</translation>
+        <translation>Desvincular</translation>
     </message>
     <message>
         <source>Unbind %1</source>
@@ -661,15 +677,15 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Close</source>
-        <translation type="unfinished">Fechar</translation>
+        <translation>Fechar</translation>
     </message>
     <message>
         <source>Apply</source>
-        <translation type="unfinished">Aplicar</translation>
+        <translation>Aplicar</translation>
     </message>
     <message>
         <source>Bind</source>
@@ -708,7 +724,7 @@
     <name>ConnectionsPage</name>
     <message>
         <source>Connections</source>
-        <translation type="unfinished">Conexões</translation>
+        <translation>Conexões</translation>
     </message>
     <message>
         <source>Found</source>
@@ -736,11 +752,11 @@
     </message>
     <message>
         <source>Scanning…</source>
-        <translation type="unfinished">Buscando…</translation>
+        <translation>Buscando…</translation>
     </message>
     <message>
         <source>Scan</source>
-        <translation type="unfinished">Buscar</translation>
+        <translation>Buscar</translation>
     </message>
     <message>
         <source>Pair…</source>
@@ -760,11 +776,11 @@
     </message>
     <message>
         <source>Forget</source>
-        <translation type="unfinished">Esquecer</translation>
+        <translation>Esquecer</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message numerus="yes">
         <source>%n found · nothing paired yet</source>
@@ -852,7 +868,7 @@
     </message>
     <message>
         <source>Connect</source>
-        <translation type="unfinished">Conectar</translation>
+        <translation>Conectar</translation>
     </message>
     <message>
         <source>More actions for %1</source>
@@ -897,7 +913,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
 </context>
 <context>
@@ -908,7 +924,7 @@
     </message>
     <message>
         <source>No controllers connected</source>
-        <translation type="unfinished">Nenhum controle conectado</translation>
+        <translation>Nenhum controle conectado</translation>
     </message>
     <message>
         <source>Plug in an Xbox, PlayStation, or generic pad over USB or Bluetooth — Windows detects it and Dish lists it here automatically.</source>
@@ -928,15 +944,15 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Sem giroscópio</translation>
+        <translation>Sem giroscópio</translation>
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>Motion %1 Hz</source>
@@ -968,19 +984,19 @@
     </message>
     <message>
         <source>Battery wired</source>
-        <translation type="unfinished">Bateria com fio</translation>
+        <translation>Bateria com fio</translation>
     </message>
     <message>
         <source>Battery %1% ↑</source>
-        <translation type="unfinished">Bateria %1 % ↑</translation>
+        <translation>Bateria %1 % ↑</translation>
     </message>
     <message>
         <source>Battery full</source>
-        <translation type="unfinished">Bateria cheia</translation>
+        <translation>Bateria cheia</translation>
     </message>
     <message>
         <source>Battery %1%</source>
-        <translation type="unfinished">Bateria %1 %</translation>
+        <translation>Bateria %1 %</translation>
     </message>
     <message>
         <source>Unplug and replug the controller to finish switching.</source>
@@ -1173,7 +1189,7 @@
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Voltar</translation>
+        <translation>Voltar</translation>
     </message>
     <message>
         <source>Start</source>
@@ -1292,15 +1308,15 @@
     </message>
     <message>
         <source>Connect a controller to adjust its dead zones.</source>
-        <translation type="unfinished">Conecte um controle para ajustar suas zonas mortas.</translation>
+        <translation>Conecte um controle para ajustar as zonas mortas dele.</translation>
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Sem giroscópio</translation>
+        <translation>Sem giroscópio</translation>
     </message>
     <message>
         <source>Stick dead zone</source>
@@ -1324,7 +1340,7 @@
     </message>
     <message>
         <source>No controllers connected</source>
-        <translation type="unfinished">Nenhum controle conectado</translation>
+        <translation>Nenhum controle conectado</translation>
     </message>
     <message>
         <source>Reset</source>
@@ -1343,7 +1359,7 @@
     <name>DonatePage</name>
     <message>
         <source>Support Dish</source>
-        <translation type="unfinished">Apoiar o Dish</translation>
+        <translation>Apoiar o Dish</translation>
     </message>
     <message>
         <source>Dish is free and open source — donations keep it that way</source>
@@ -1355,23 +1371,23 @@
     </message>
     <message>
         <source>Dish runs on coffee and goodwill.</source>
-        <translation type="unfinished">O Dish funciona a café e boa vontade.</translation>
+        <translation>O Dish funciona a café e boa vontade.</translation>
     </message>
     <message>
         <source>Recurring</source>
-        <translation type="unfinished">Recorrente</translation>
+        <translation>Recorrente</translation>
     </message>
     <message>
         <source>Card, PayPal, GitHub credit</source>
-        <translation type="unfinished">Cartão, PayPal, crédito do GitHub</translation>
+        <translation>Cartão, PayPal, crédito do GitHub</translation>
     </message>
     <message>
         <source>One-time</source>
-        <translation type="unfinished">Única vez</translation>
+        <translation>Única</translation>
     </message>
     <message>
         <source>Card, Apple Pay, Google Pay, PayPal</source>
-        <translation type="unfinished">Cartão, Apple Pay, Google Pay, PayPal</translation>
+        <translation>Cartão, Apple Pay, Google Pay, PayPal</translation>
     </message>
     <message>
         <source>Dish, Satellite, and every client are free, open source, ad-free, and analytics-free. No paywalled features, no upsells — donations are what keep them true.</source>
@@ -1399,15 +1415,15 @@
     </message>
     <message>
         <source>Either</source>
-        <translation type="unfinished">Qualquer um</translation>
+        <translation>Ambas</translation>
     </message>
     <message>
         <source>Card, Apple Pay, Google Pay</source>
-        <translation type="unfinished">Cartão, Apple Pay, Google Pay</translation>
+        <translation>Cartão, Apple Pay, Google Pay</translation>
     </message>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished">Recomendado</translation>
+        <translation>Recomendado</translation>
     </message>
     <message>
         <source>Cadence</source>
@@ -1419,7 +1435,7 @@
     </message>
     <message>
         <source>What your donation pays for</source>
-        <translation type="unfinished">Para o que a sua doação realmente vai</translation>
+        <translation>Para onde vai a sua doação</translation>
     </message>
     <message>
         <source>GitHub Sponsors</source>
@@ -1464,83 +1480,83 @@
     <name>HelpScreen</name>
     <message>
         <source>CONCEPTS</source>
-        <translation type="unfinished">CONCEITOS</translation>
+        <translation>CONCEITOS</translation>
     </message>
     <message>
         <source>What is Dish?</source>
-        <translation type="unfinished">O que é o Dish?</translation>
+        <translation>O que é o Dish?</translation>
     </message>
     <message>
         <source>Dish turns a controller plugged into this PC into a wireless gamepad for another PC. It forwards input over your local network to the free Satellite helper.</source>
-        <translation type="unfinished">O Dish transforma um controle conectado a este PC em um gamepad sem fio para outro PC. Ele encaminha a entrada pela sua rede local ao ajudante gratuito Satellite.</translation>
+        <translation>O Dish transforma um controle conectado a este PC em um gamepad sem fio para outro PC. Ele encaminha a entrada pela sua rede local até o ajudante gratuito Satellite.</translation>
     </message>
     <message>
         <source>What is Satellite?</source>
-        <translation type="unfinished">O que é o Satellite?</translation>
+        <translation>O que é o Satellite?</translation>
     </message>
     <message>
         <source>BEST PERFORMANCE</source>
-        <translation type="unfinished">MELHOR DESEMPENHO</translation>
+        <translation>MELHOR DESEMPENHO</translation>
     </message>
     <message>
         <source>Both PCs on the same router, wired Ethernet where you can, 5 GHz Wi-Fi otherwise. Dish needs this PC and the host PC on the same local network — it sends input as small UDP packets, so a fast LAN keeps the delay tiny.</source>
-        <translation type="unfinished">Ambos os PCs no mesmo roteador, Ethernet com fio quando possível, Wi-Fi de 5 GHz caso contrário. O Dish precisa deste PC e do PC anfitrião na mesma rede local — ele envia a entrada como pequenos pacotes UDP, então uma LAN rápida mantém o atraso mínimo.</translation>
+        <translation>Os dois PCs no mesmo roteador, Ethernet com fio quando der, Wi-Fi de 5 GHz caso contrário. O Dish precisa que este PC e o PC anfitrião estejam na mesma rede local — ele envia a entrada como pequenos pacotes UDP, então uma LAN rápida mantém o atraso mínimo.</translation>
     </message>
     <message>
         <source>Is wired better than wireless?</source>
-        <translation type="unfinished">Com fio é melhor que sem fio?</translation>
+        <translation>Com fio é melhor que sem fio?</translation>
     </message>
     <message>
         <source>For the controller-to-PC leg, a USB controller has no radio latency. For the PC-to-PC leg, connect both machines to the router with Ethernet if you can.</source>
-        <translation type="unfinished">Para o trecho controle-para-PC, um controle USB não tem latência de rádio. Para o trecho PC-para-PC, conecte ambas as máquinas ao roteador por Ethernet se puder.</translation>
+        <translation>No trecho do controle até o PC, um controle USB não tem latência de rádio. No trecho de PC para PC, ligue as duas máquinas ao roteador com Ethernet se puder.</translation>
     </message>
     <message>
         <source>TROUBLESHOOTING</source>
-        <translation type="unfinished">SOLUÇÃO DE PROBLEMAS</translation>
+        <translation>SOLUÇÃO DE PROBLEMAS</translation>
     </message>
     <message>
         <source>My PIN keeps getting rejected.</source>
-        <translation type="unfinished">Meu PIN continua sendo rejeitado.</translation>
+        <translation>Meu PIN continua sendo recusado.</translation>
     </message>
     <message>
         <source>My controller keeps disconnecting mid-game.</source>
-        <translation type="unfinished">Meu controle continua desconectando no meio do jogo.</translation>
+        <translation>Meu controle fica desconectando no meio do jogo.</translation>
     </message>
     <message>
         <source>Motion needs three things: a Satellite connection, a controller with a gyroscope (DualSense, DualShock 4, Switch Pro), and a PlayStation-style controller type on the slot. Switch the emulated type to PlayStation to enable the motion channel.</source>
-        <translation type="unfinished">O movimento precisa de três coisas: uma conexão Satellite, um controle com giroscópio (DualSense, DualShock 4, Switch Pro) e um tipo de controle estilo PlayStation no slot. Mude o tipo emulado para PlayStation para ativar o canal de movimento.</translation>
+        <translation>O movimento precisa de três coisas: uma conexão Satellite, um controle com giroscópio (DualSense, DualShock 4, Switch Pro) e um tipo de controle estilo PlayStation no slot. Mude o tipo emulado para PlayStation para habilitar o canal de movimento.</translation>
     </message>
     <message>
         <source>ABOUT DISH</source>
-        <translation type="unfinished">SOBRE O DISH</translation>
+        <translation>SOBRE O DISH</translation>
     </message>
     <message>
         <source>Is Dish open source?</source>
-        <translation type="unfinished">O Dish é de código aberto?</translation>
+        <translation>O Dish é de código aberto?</translation>
     </message>
     <message>
         <source>Yes. Dish (Windows, Android, Linux, Mac) and Satellite are all released under LGPL-3.0, source on GitHub at github.com/TinkerNorth. Pull requests welcome.</source>
-        <translation type="unfinished">Sim. Dish (Windows, Android, Linux, Mac) e Satellite são lançados sob LGPL-3.0, código no GitHub em github.com/TinkerNorth. Pull requests são bem-vindos.</translation>
+        <translation>Sim. O Dish (Windows, Android, Linux, Mac) e o Satellite são publicados sob a LGPL-3.0, com o código no GitHub em github.com/TinkerNorth. Pull requests são bem-vindos.</translation>
     </message>
     <message>
         <source>What does Dish collect?</source>
-        <translation type="unfinished">O que o Dish coleta?</translation>
+        <translation>O que o Dish coleta?</translation>
     </message>
     <message>
         <source>LINKS</source>
-        <translation type="unfinished">LINKS</translation>
+        <translation>LINKS</translation>
     </message>
     <message>
         <source>Privacy policy</source>
-        <translation type="unfinished">Política de privacidade</translation>
+        <translation>Política de privacidade</translation>
     </message>
     <message>
         <source>View source on GitHub</source>
-        <translation type="unfinished">Ver código no GitHub</translation>
+        <translation>Ver o código no GitHub</translation>
     </message>
     <message>
         <source>Help &amp; FAQ</source>
-        <translation type="unfinished">Ajuda e FAQ</translation>
+        <translation>Ajuda e perguntas frequentes</translation>
     </message>
     <message>
         <source>How Dish works, and what to try when it doesn’t</source>
@@ -1615,7 +1631,7 @@
     </message>
     <message>
         <source>Bind…</source>
-        <translation type="unfinished">Vincular…</translation>
+        <translation>Vincular…</translation>
     </message>
     <message>
         <source>Choose a satellite for this pad</source>
@@ -1627,7 +1643,7 @@
     </message>
     <message>
         <source>Unbound</source>
-        <translation type="unfinished">Não vinculado</translation>
+        <translation>Sem vínculo</translation>
     </message>
     <message>
         <source>as %1</source>
@@ -1639,19 +1655,19 @@
     </message>
     <message>
         <source>Battery wired</source>
-        <translation type="unfinished">Bateria com fio</translation>
+        <translation>Bateria com fio</translation>
     </message>
     <message>
         <source>Battery %1% ↑</source>
-        <translation type="unfinished">Bateria %1 % ↑</translation>
+        <translation>Bateria %1 % ↑</translation>
     </message>
     <message>
         <source>Battery full</source>
-        <translation type="unfinished">Bateria cheia</translation>
+        <translation>Bateria cheia</translation>
     </message>
     <message>
         <source>Battery %1%</source>
-        <translation type="unfinished">Bateria %1 %</translation>
+        <translation>Bateria %1 %</translation>
     </message>
     <message>
         <source>idle</source>
@@ -1747,7 +1763,7 @@
     </message>
     <message>
         <source>Unbind</source>
-        <translation type="unfinished">Desvincular</translation>
+        <translation>Desvincular</translation>
     </message>
     <message>
         <source>Configure controls…</source>
@@ -1905,15 +1921,15 @@
     <name>KitGallery</name>
     <message>
         <source>Light</source>
-        <translation type="unfinished">Claro</translation>
+        <translation>Claro</translation>
     </message>
     <message>
         <source>Dark</source>
-        <translation type="unfinished">Escuro</translation>
+        <translation>Escuro</translation>
     </message>
     <message>
         <source>System</source>
-        <translation type="unfinished">Sistema</translation>
+        <translation>Sistema</translation>
     </message>
     <message>
         <source>Connection</source>
@@ -1949,7 +1965,7 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>Rumble</source>
@@ -2053,7 +2069,7 @@
     </message>
     <message>
         <source>Unbind</source>
-        <translation type="unfinished">Desvincular</translation>
+        <translation>Desvincular</translation>
     </message>
     <message>
         <source>Small</source>
@@ -2077,7 +2093,7 @@
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Sem giroscópio</translation>
+        <translation>Sem giroscópio</translation>
     </message>
     <message>
         <source>12%</source>
@@ -2129,7 +2145,7 @@
     </message>
     <message>
         <source>Bind…</source>
-        <translation type="unfinished">Vincular…</translation>
+        <translation>Vincular…</translation>
     </message>
     <message>
         <source>Pick a destination</source>
@@ -2189,7 +2205,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Desligado</translation>
+        <translation>Desligado</translation>
     </message>
     <message>
         <source>Pad</source>
@@ -2240,12 +2256,20 @@
         <translation>Analógico esquerdo</translation>
     </message>
     <message>
+        <source>Let go after</source>
+        <translation>Liberar após</translation>
+    </message>
+    <message>
+        <source>%1 min</source>
+        <translation>%1 min</translation>
+    </message>
+    <message>
         <source>KitTextField · RowButton</source>
         <translation>KitTextField · RowButton</translation>
     </message>
     <message>
         <source>PIN</source>
-        <translation type="unfinished">PIN</translation>
+        <translation>PIN</translation>
     </message>
     <message>
         <source>That PIN wasn’t accepted. Check the code on ORION-PC and try again.</source>
@@ -2253,7 +2277,7 @@
     </message>
     <message>
         <source>Help &amp; FAQ</source>
-        <translation type="unfinished">Ajuda e FAQ</translation>
+        <translation>Ajuda e perguntas frequentes</translation>
     </message>
     <message>
         <source>What Dish sends, and what it never does.</source>
@@ -2261,7 +2285,7 @@
     </message>
     <message>
         <source>Open source licenses</source>
-        <translation type="unfinished">Licenças de código aberto</translation>
+        <translation>Licenças de código aberto</translation>
     </message>
     <message>
         <source>Everything Dish is built on.</source>
@@ -2453,7 +2477,7 @@
     </message>
     <message>
         <source>Pair</source>
-        <translation type="unfinished">Parear</translation>
+        <translation>Parear</translation>
     </message>
     <message>
         <source>Enter the six-digit code shown on ORION-PC.</source>
@@ -2492,11 +2516,11 @@
     <name>LicensesPage</name>
     <message>
         <source>Open source licenses</source>
-        <translation type="unfinished">Licenças de código aberto</translation>
+        <translation>Licenças de código aberto</translation>
     </message>
     <message>
         <source>Acknowledgements for the libraries Dish is built on.</source>
-        <translation type="unfinished">Créditos das bibliotecas em que o Dish é construído.</translation>
+        <translation>Créditos das bibliotecas em que o Dish é construído.</translation>
     </message>
     <message>
         <source>No license manifest</source>
@@ -2526,8 +2550,16 @@
         <translation>Parar a transmissão e sair?</translation>
     </message>
     <message>
-        <source>A controller is still streaming and the display is being kept awake.</source>
-        <translation>Um controle ainda está transmitindo e a tela está sendo mantida ativa.</translation>
+        <source>A controller is still streaming, and the display is being kept awake.</source>
+        <translation>Um controle ainda está transmitindo, e a tela está sendo mantida ativa.</translation>
+    </message>
+    <message>
+        <source>A controller is still streaming, and the computer is being kept awake.</source>
+        <translation>Um controle ainda está transmitindo, e o computador está sendo mantido ativo.</translation>
+    </message>
+    <message>
+        <source>A controller is still streaming.</source>
+        <translation>Um controle ainda está transmitindo.</translation>
     </message>
     <message>
         <source>Quit</source>
@@ -2535,7 +2567,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
 </context>
 <context>
@@ -2546,19 +2578,19 @@
     </message>
     <message>
         <source>Pair with %1</source>
-        <translation type="unfinished">Parear com %1</translation>
+        <translation>Parear com %1</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Pairing…</source>
-        <translation type="unfinished">Pareando…</translation>
+        <translation>Pareando…</translation>
     </message>
     <message>
         <source>Pair</source>
-        <translation type="unfinished">Parear</translation>
+        <translation>Parear</translation>
     </message>
     <message>
         <source>or</source>
@@ -2625,27 +2657,27 @@
     <name>SettingsPage</name>
     <message>
         <source>Settings</source>
-        <translation type="unfinished">Configurações</translation>
+        <translation>Configurações</translation>
     </message>
     <message>
         <source>Light</source>
-        <translation type="unfinished">Claro</translation>
+        <translation>Claro</translation>
     </message>
     <message>
         <source>Dark</source>
-        <translation type="unfinished">Escuro</translation>
+        <translation>Escuro</translation>
     </message>
     <message>
         <source>System</source>
-        <translation type="unfinished">Sistema</translation>
+        <translation>Sistema</translation>
     </message>
     <message>
         <source>Follow game</source>
-        <translation type="unfinished">Seguir o jogo</translation>
+        <translation>Seguir o jogo</translation>
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Desligado</translation>
+        <translation>Desligado</translation>
     </message>
     <message>
         <source>Setup &amp; help</source>
@@ -2653,11 +2685,11 @@
     </message>
     <message>
         <source>Help &amp; FAQ</source>
-        <translation type="unfinished">Ajuda e FAQ</translation>
+        <translation>Ajuda e perguntas frequentes</translation>
     </message>
     <message>
         <source>Concepts, performance tips, and troubleshooting.</source>
-        <translation type="unfinished">Conceitos, dicas de desempenho e solução de problemas.</translation>
+        <translation>Conceitos, dicas de desempenho e solução de problemas.</translation>
     </message>
     <message>
         <source>Appearance</source>
@@ -2665,11 +2697,11 @@
     </message>
     <message>
         <source>Theme</source>
-        <translation type="unfinished">Tema</translation>
+        <translation>Tema</translation>
     </message>
     <message>
         <source>Choose how Dish looks. System matches your Windows light or dark setting.</source>
-        <translation type="unfinished">Escolha como o Dish aparece. &quot;Sistema&quot; segue a configuração clara ou escura do Windows.</translation>
+        <translation>Escolha a aparência do Dish. Sistema acompanha a configuração clara ou escura do Windows.</translation>
     </message>
     <message>
         <source>Forwarded features</source>
@@ -2677,11 +2709,11 @@
     </message>
     <message>
         <source>Light bar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>Follow game: the controller LED matches the host game. Off: leave the LED untouched.</source>
-        <translation type="unfinished">Seguir o jogo: o LED do controle corresponde ao jogo anfitrião. Desligado: deixar o LED intocado.</translation>
+        <translation>Seguir o jogo: o LED do controle acompanha o jogo no host. Desligado: deixa o LED intacto.</translation>
     </message>
     <message>
         <source>Controller tuning</source>
@@ -2713,19 +2745,19 @@
     </message>
     <message>
         <source>Open source licenses</source>
-        <translation type="unfinished">Licenças de código aberto</translation>
+        <translation>Licenças de código aberto</translation>
     </message>
     <message>
         <source>Acknowledgements for the libraries Dish is built on.</source>
-        <translation type="unfinished">Créditos das bibliotecas em que o Dish é construído.</translation>
+        <translation>Créditos das bibliotecas em que o Dish é construído.</translation>
     </message>
     <message>
         <source>Support Dish</source>
-        <translation type="unfinished">Apoiar o Dish</translation>
+        <translation>Apoiar o Dish</translation>
     </message>
     <message>
         <source>Donate via GitHub Sponsors, Ko-fi, or Buy Me a Coffee.</source>
-        <translation type="unfinished">Doe via GitHub Sponsors, Ko-fi ou Buy Me a Coffee.</translation>
+        <translation>Doe pelo GitHub Sponsors, Ko-fi ou Buy Me a Coffee.</translation>
     </message>
     <message>
         <source>Dish %1 · TinkerNorth · LGPL-3.0</source>
@@ -2745,127 +2777,167 @@
     </message>
     <message>
         <source>Share crash reports</source>
-        <translation type="unfinished">Compartilhar relatórios de falhas</translation>
+        <translation>Compartilhar relatórios de falhas</translation>
     </message>
     <message>
         <source>Automatic update checks are off.</source>
-        <translation type="unfinished">As verificações automáticas de atualização estão desligadas.</translation>
+        <translation>A verificação automática de atualizações está desligada.</translation>
+    </message>
+    <message>
+        <source>Never</source>
+        <translation>Nunca</translation>
+    </message>
+    <message>
+        <source>While playing</source>
+        <translation>Enquanto joga</translation>
+    </message>
+    <message>
+        <source>While connected</source>
+        <translation>Enquanto conectado</translation>
     </message>
     <message>
         <source>Checking for updates…</source>
-        <translation type="unfinished">Procurando atualizações…</translation>
+        <translation>Verificando atualizações…</translation>
     </message>
     <message>
         <source>Dish %1 is available.</source>
-        <translation type="unfinished">O Dish %1 está disponível.</translation>
+        <translation>O Dish %1 está disponível.</translation>
     </message>
     <message>
         <source>Downloading Dish %1…</source>
-        <translation type="unfinished">Baixando o Dish %1…</translation>
+        <translation>Baixando o Dish %1…</translation>
     </message>
     <message>
         <source>Verifying download…</source>
-        <translation type="unfinished">Verificando o download…</translation>
+        <translation>Verificando o download…</translation>
     </message>
     <message>
         <source>Dish %1 is ready to install.</source>
-        <translation type="unfinished">O Dish %1 está pronto para instalar.</translation>
+        <translation>O Dish %1 está pronto para instalar.</translation>
     </message>
     <message>
         <source>You&apos;re on the latest version.</source>
-        <translation type="unfinished">Você está na versão mais recente.</translation>
+        <translation>Você está na versão mais recente.</translation>
     </message>
     <message>
         <source>No update information yet.</source>
-        <translation type="unfinished">Ainda não há informações de atualização.</translation>
+        <translation>Ainda não há informações de atualização.</translation>
     </message>
     <message>
         <source>You&apos;re offline. Dish will retry automatically.</source>
-        <translation type="unfinished">Você está offline. O Dish vai tentar de novo automaticamente.</translation>
+        <translation>Você está off-line. O Dish tentará novamente.</translation>
     </message>
     <message>
         <source>The update could not be applied automatically. Download it from the releases page.</source>
-        <translation type="unfinished">Não foi possível aplicar a atualização automaticamente. Baixe-a na página de versões.</translation>
+        <translation>Não foi possível aplicar a atualização automaticamente. Baixe-a na página de versões.</translation>
     </message>
     <message>
         <source>The download didn&apos;t verify. Dish will try again.</source>
-        <translation type="unfinished">O download não passou na verificação. O Dish vai tentar de novo.</translation>
+        <translation>A verificação do download falhou. O Dish tentará de novo.</translation>
     </message>
     <message>
         <source>There isn&apos;t enough disk space for the update. Dish will try again.</source>
-        <translation type="unfinished">Não há espaço em disco suficiente para a atualização. O Dish vai tentar de novo.</translation>
+        <translation>Não há espaço em disco suficiente para a atualização. O Dish tentará de novo.</translation>
     </message>
     <message>
         <source>The update check failed. Dish will retry automatically.</source>
-        <translation type="unfinished">A verificação de atualização falhou. O Dish vai tentar de novo automaticamente.</translation>
+        <translation>A verificação de atualizações falhou. O Dish tentará novamente.</translation>
     </message>
     <message>
         <source>never</source>
-        <translation type="unfinished">nunca</translation>
+        <translation>nunca</translation>
+    </message>
+    <message>
+        <source>Power</source>
+        <translation>Energia</translation>
+    </message>
+    <message>
+        <source>Keep the computer awake</source>
+        <translation>Manter o computador ativo</translation>
+    </message>
+    <message>
+        <source>While playing: hold only while a bound controller is being used. While connected: hold for as long as a controller is streaming, however long it sits still.</source>
+        <translation>Enquanto joga: segura apenas enquanto um controle vinculado estiver em uso. Enquanto conectado: segura enquanto um controle estiver transmitindo, por mais tempo que ele fique parado.</translation>
+    </message>
+    <message>
+        <source>Let go after this much stillness</source>
+        <translation>Liberar após este tempo parado</translation>
+    </message>
+    <message>
+        <source>%1 min</source>
+        <translation>%1 min</translation>
+    </message>
+    <message>
+        <source>Keep the display awake too</source>
+        <translation>Manter também a tela ativa</translation>
+    </message>
+    <message>
+        <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
+        <translation>Encaminhar um controle precisa da máquina, não da tela, então isto fica desligado a menos que você esteja assistindo a um jogo neste monitor.</translation>
     </message>
     <message>
         <source>Updates</source>
-        <translation type="unfinished">Atualizações</translation>
+        <translation>Atualizações</translation>
     </message>
     <message>
         <source>Dish %1 · last checked %2</source>
-        <translation type="unfinished">Dish %1 · última verificação %2</translation>
+        <translation>Dish %1 · última verificação %2</translation>
     </message>
     <message>
         <source>This version is no longer supported. Please update.</source>
-        <translation type="unfinished">Esta versão não tem mais suporte. Atualize, por favor.</translation>
+        <translation>Esta versão não é mais suportada. Atualize.</translation>
     </message>
     <message>
         <source>You&apos;re running the portable version. Get the new zip from the releases page.</source>
-        <translation type="unfinished">Você está usando a versão portátil. Baixe o novo zip na página de versões.</translation>
+        <translation>Você está usando a versão portátil. Baixe o novo zip na página de versões.</translation>
     </message>
     <message>
         <source>Check for updates</source>
-        <translation type="unfinished">Verificar atualizações</translation>
+        <translation>Verificar atualizações</translation>
     </message>
     <message>
         <source>Download update</source>
-        <translation type="unfinished">Baixar atualização</translation>
+        <translation>Baixar atualização</translation>
     </message>
     <message>
         <source>Restart to update</source>
-        <translation type="unfinished">Reiniciar para atualizar</translation>
+        <translation>Reiniciar para atualizar</translation>
     </message>
     <message>
         <source>Open download page</source>
-        <translation type="unfinished">Abrir página de download</translation>
+        <translation>Abrir página de download</translation>
     </message>
     <message>
         <source>Release notes</source>
-        <translation type="unfinished">Notas da versão</translation>
+        <translation>Notas da versão</translation>
     </message>
     <message>
         <source>Download updates automatically</source>
-        <translation type="unfinished">Baixar atualizações automaticamente</translation>
+        <translation>Baixar atualizações automaticamente</translation>
     </message>
     <message>
         <source>Dish downloads new versions in the background and installs them the next time it starts. Skipped on metered connections.</source>
-        <translation type="unfinished">O Dish baixa novas versões em segundo plano e as instala na próxima vez que abrir. Pulado em conexões limitadas.</translation>
+        <translation>O Dish baixa novas versões em segundo plano e as instala na próxima vez que iniciar. Ignorado em conexões limitadas.</translation>
     </message>
     <message>
         <source>Check for updates automatically</source>
-        <translation type="unfinished">Verificar atualizações automaticamente</translation>
+        <translation>Verificar atualizações automaticamente</translation>
     </message>
     <message>
         <source>Dish asks GitHub for the newest release at startup and every few hours. Only a standard web request is sent; see the privacy policy for details.</source>
-        <translation type="unfinished">O Dish pergunta ao GitHub pela versão mais recente na inicialização e a cada poucas horas. Apenas uma requisição web comum é enviada; veja os detalhes na política de privacidade.</translation>
+        <translation>O Dish consulta o GitHub em busca da versão mais recente ao iniciar e a cada poucas horas. Só é enviada uma requisição web comum; veja a política de privacidade para os detalhes.</translation>
     </message>
     <message>
         <source>Checking connects to github.com and sends no account data.</source>
-        <translation type="unfinished">A verificação se conecta ao github.com e não envia dados de conta.</translation>
+        <translation>A verificação conecta ao github.com e não envia dados de conta.</translation>
     </message>
     <message>
         <source>What&apos;s new in Dish %1</source>
-        <translation type="unfinished">Novidades do Dish %1</translation>
+        <translation>Novidades do Dish %1</translation>
     </message>
     <message>
         <source>Read the release notes for this version.</source>
-        <translation type="unfinished">Leia as notas desta versão.</translation>
+        <translation>Leia as notas desta versão.</translation>
     </message>
 </context>
 <context>
@@ -3002,7 +3074,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>Setup</source>
@@ -3080,78 +3152,78 @@
     <name>UpdatePill</name>
     <message>
         <source>Dish %1 is ready to install.</source>
-        <translation type="unfinished">O Dish %1 está pronto para instalar.</translation>
+        <translation>O Dish %1 está pronto para instalar.</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished">%1 de %2</translation>
+        <translation>%1 de %2</translation>
     </message>
     <message>
         <source>Update available: Dish %1</source>
-        <translation type="unfinished">Atualização disponível: Dish %1</translation>
+        <translation>Atualização disponível: Dish %1</translation>
     </message>
 </context>
 <context>
     <name>UpdatePopover</name>
     <message>
         <source>Restart to update</source>
-        <translation type="unfinished">Reiniciar para atualizar</translation>
+        <translation>Reiniciar para atualizar</translation>
     </message>
     <message>
         <source>Downloading Dish %1</source>
-        <translation type="unfinished">Baixando o Dish %1</translation>
+        <translation>Baixando o Dish %1</translation>
     </message>
     <message>
         <source>Update available</source>
-        <translation type="unfinished">Atualização disponível</translation>
+        <translation>Atualização disponível</translation>
     </message>
     <message>
         <source>Dish %1 · %2</source>
-        <translation type="unfinished">Dish %1 · %2</translation>
+        <translation>Dish %1 · %2</translation>
     </message>
     <message>
         <source>Dish %1 is ready. Restart now, or it will be installed the next time Dish starts.</source>
-        <translation type="unfinished">O Dish %1 está pronto. Reinicie agora ou ele será instalado na próxima vez que o Dish abrir.</translation>
+        <translation>O Dish %1 está pronto. Reinicie agora ou ele será instalado na próxima vez que o Dish iniciar.</translation>
     </message>
     <message>
         <source>You&apos;re running the portable version. Get the new zip from the releases page.</source>
-        <translation type="unfinished">Você está usando a versão portátil. Baixe o novo zip na página de versões.</translation>
+        <translation>Você está usando a versão portátil. Baixe o novo zip na página de versões.</translation>
     </message>
     <message>
         <source>Waiting for an unmetered connection.</source>
-        <translation type="unfinished">Aguardando uma conexão sem limite de dados.</translation>
+        <translation>Aguardando uma conexão sem limite de dados.</translation>
     </message>
     <message>
         <source>This version is no longer supported.</source>
-        <translation type="unfinished">Esta versão não tem mais suporte.</translation>
+        <translation>Esta versão não é mais suportada.</translation>
     </message>
     <message>
         <source>%1 of %2</source>
-        <translation type="unfinished">%1 de %2</translation>
+        <translation>%1 de %2</translation>
     </message>
     <message>
         <source>Restart now</source>
-        <translation type="unfinished">Reiniciar agora</translation>
+        <translation>Reiniciar agora</translation>
     </message>
     <message>
         <source>Later</source>
-        <translation type="unfinished">Depois</translation>
+        <translation>Depois</translation>
     </message>
     <message>
         <source>Open download page</source>
-        <translation type="unfinished">Abrir página de download</translation>
+        <translation>Abrir página de download</translation>
     </message>
     <message>
         <source>Download</source>
-        <translation type="unfinished">Baixar</translation>
+        <translation>Baixar</translation>
     </message>
     <message>
         <source>Release notes</source>
-        <translation type="unfinished">Notas da versão</translation>
+        <translation>Notas da versão</translation>
     </message>
     <message>
         <source>Skip this version</source>
-        <translation type="unfinished">Pular esta versão</translation>
+        <translation>Pular esta versão</translation>
     </message>
 </context>
 <context>
@@ -3162,11 +3234,11 @@
     </message>
     <message>
         <source>Your controller, on your PC</source>
-        <translation type="unfinished">Seu controle, no seu PC</translation>
+        <translation>Seu controle, no seu PC</translation>
     </message>
     <message>
         <source>Dish forwards a real game controller plugged into this PC to another PC running Satellite, over your local network. Plug in a pad and it shows up ready to play.</source>
-        <translation type="unfinished">O Dish encaminha um controle de jogo real conectado a este PC para outro PC executando o Satellite, pela sua rede local. Conecte um controle e ele aparece pronto para jogar.</translation>
+        <translation>O Dish encaminha um controle de verdade conectado a este PC para outro PC que roda o Satellite, pela sua rede local. Conecte um controle e ele aparece pronto para jogar.</translation>
     </message>
     <message>
         <source>How it works</source>
@@ -3174,7 +3246,7 @@
     </message>
     <message>
         <source>A short hop over Wi-Fi</source>
-        <translation type="unfinished">Um curto salto por Wi-Fi</translation>
+        <translation>Um pulo curto pelo Wi-Fi</translation>
     </message>
     <message>
         <source>One more thing</source>
@@ -3182,7 +3254,7 @@
     </message>
     <message>
         <source>Install Satellite on the host PC</source>
-        <translation type="unfinished">Instale o Satellite no PC anfitrião</translation>
+        <translation>Instale o Satellite no PC anfitrião</translation>
     </message>
     <message>
         <source>Satellite is free and open source. Grab it from dish.tinkernorth.com, run the installer, and Dish will find it automatically. You can finish this intro now and install Satellite later.</source>
@@ -3190,23 +3262,23 @@
     </message>
     <message>
         <source>Open download page</source>
-        <translation type="unfinished">Abrir página de download</translation>
+        <translation>Abrir página de download</translation>
     </message>
     <message>
         <source>Ready when you are</source>
-        <translation type="unfinished">Pronto quando você estiver</translation>
+        <translation>Pronto quando você estiver</translation>
     </message>
     <message>
         <source>Back</source>
-        <translation type="unfinished">Voltar</translation>
+        <translation>Voltar</translation>
     </message>
     <message>
         <source>Skip</source>
-        <translation type="unfinished">Pular</translation>
+        <translation>Pular</translation>
     </message>
     <message>
         <source>Next</source>
-        <translation type="unfinished">Avançar</translation>
+        <translation>Avançar</translation>
     </message>
     <message>
         <source>Your controller’s button presses, sticks, and motion travel to a small free helper called Satellite running on the host PC. Satellite shows up to its games as a regular gamepad. No extra setup per game.</source>
@@ -3222,7 +3294,7 @@
     </message>
     <message>
         <source>Finish</source>
-        <translation type="unfinished">Concluir</translation>
+        <translation>Concluir</translation>
     </message>
 </context>
 <context>
@@ -3381,7 +3453,7 @@
     </message>
     <message>
         <source>Scanning…</source>
-        <translation type="unfinished">Buscando…</translation>
+        <translation>Buscando…</translation>
     </message>
     <message>
         <source>Rescan</source>
@@ -3428,7 +3500,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>The game drives the pad’s light bar. Lightbar forwarding is a global setting.</source>
@@ -3436,7 +3508,7 @@
     </message>
     <message>
         <source>Off</source>
-        <translation type="unfinished">Desligado</translation>
+        <translation>Desligado</translation>
     </message>
     <message>
         <source>Pad</source>
@@ -3515,11 +3587,11 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Sem giroscópio</translation>
+        <translation>Sem giroscópio</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -3531,7 +3603,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>How should Dish read it?</source>
@@ -3543,7 +3615,7 @@
     </message>
     <message>
         <source>Recommended</source>
-        <translation type="unfinished">Recomendado</translation>
+        <translation>Recomendado</translation>
     </message>
     <message>
         <source>Raw HID claim. Lowest latency.</source>
@@ -3618,7 +3690,7 @@
     </message>
     <message>
         <source>Gyro</source>
-        <translation type="unfinished">Giroscópio</translation>
+        <translation>Giroscópio</translation>
     </message>
     <message>
         <source>Touchpad</source>
@@ -3634,7 +3706,7 @@
     </message>
     <message>
         <source>Lightbar</source>
-        <translation type="unfinished">Barra de luz</translation>
+        <translation>Barra de luz</translation>
     </message>
     <message>
         <source>Controller</source>
@@ -3642,7 +3714,7 @@
     </message>
     <message>
         <source>No gyro</source>
-        <translation type="unfinished">Sem giroscópio</translation>
+        <translation>Sem giroscópio</translation>
     </message>
     <message>
         <source>No touchpad</source>
@@ -3786,7 +3858,7 @@
     <name>dish::qml::AppViewModel</name>
     <message>
         <source>No connections yet</source>
-        <translation type="unfinished">Nenhuma conexão ainda</translation>
+        <translation>Nenhuma conexão ainda</translation>
     </message>
     <message>
         <source>The satellite sent an unreadable controller-type list.</source>
@@ -3794,15 +3866,15 @@
     </message>
     <message>
         <source>https://github.com/sponsors/TinkerNorth</source>
-        <translation type="unfinished">https://github.com/sponsors/TinkerNorth</translation>
+        <translation>https://github.com/sponsors/TinkerNorth</translation>
     </message>
     <message>
         <source>https://ko-fi.com/tinkernorth</source>
-        <translation type="unfinished">https://ko-fi.com/tinkernorth</translation>
+        <translation>https://ko-fi.com/tinkernorth</translation>
     </message>
     <message>
         <source>https://buymeacoffee.com/tinkernorth</source>
-        <translation type="unfinished">https://buymeacoffee.com/tinkernorth</translation>
+        <translation>https://buymeacoffee.com/tinkernorth</translation>
     </message>
     <message numerus="yes">
         <source>%n paired</source>

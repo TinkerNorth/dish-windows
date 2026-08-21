@@ -15,9 +15,15 @@
     run if they are already dirty, so nothing of yours is lost, but expect
     modified files afterwards.
 
-    Coverage is reported, never enforced: translating a string is a separate
-    act from extracting it, and a gate that waits for the words would just get
-    routed around.
+    Coverage is ENFORCED, not reported. An untranslated string does not fail
+    a build, it just silently ships in English to someone who does not read
+    it, and nothing else in the suite can see that. Every catalogue must be
+    complete.
+
+    The source catalogue (dish_en.ts) is seeded from its own source strings
+    first - see scripts/seed-source-language.py for why that is not busywork -
+    so the count means the same thing in all six and the gate is one rule, not
+    five languages plus an exception.
 
 .PARAMETER LinguistBin
     Directory holding lupdate. Defaults to QT_ROOT_DIR/bin (what
@@ -102,6 +108,20 @@ try {
         if ($LASTEXITCODE -ne 0) { Write-Error "lupdate failed on $ts" }
     }
 
+    # The source catalogue answers for itself; every other language needs words.
+    # Same discovery shape as lupdate above: CI's setup-python puts `python` on
+    # PATH, a developer box more often has `py`.
+    $python = $null
+    foreach ($candidate in @('python', 'python3', 'py')) {
+        $found = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($found) { $python = $found.Source; break }
+    }
+    if (-not $python) {
+        Write-Error 'python not found; scripts/seed-source-language.py needs it.'
+    }
+    & $python scripts/seed-source-language.py translations/dish_en.ts
+    if ($LASTEXITCODE -ne 0) { Write-Error 'seed-source-language.py failed' }
+
     $stale = @(Invoke-Git diff --name-only -- 'translations')
     if ($stale.Count -gt 0) {
         Invoke-Git --no-pager diff --stat -- 'translations'
@@ -125,6 +145,7 @@ try {
 
     Write-Host ''
     Write-Host 'Catalogues are in sync. Coverage:'
+    $incomplete = @()
     # XPath rather than dotted property access: under Set-StrictMode the dotted
     # form throws on any slightly differently shaped catalogue, and a coverage
     # readout must never be the thing that fails the gate.
@@ -153,6 +174,21 @@ try {
         $percent = if ($total -gt 0) { [math]::Floor(100 * $translated / $total) } else { 0 }
         $name = Split-Path -Leaf $ts
         Write-Host ("  {0,-18} {1,4}/{2,-4} {3,3}%" -f $name, $translated, $total, $percent)
+        if ($translated -lt $total) {
+            $incomplete += ("{0} ({1} missing)" -f $name, ($total - $translated))
+        }
+    }
+
+    if ($incomplete.Count -gt 0) {
+        Write-Host ''
+        Write-Host 'Untranslated strings remain:' -ForegroundColor Red
+        foreach ($entry in $incomplete) { Write-Host ("  " + $entry) }
+        Write-Host ''
+        # ASCII only below, same reason as the message above.
+        Write-Host '  Every catalogue must be complete before merge. A missing'
+        Write-Host '  translation is not a blank - it is English shown to someone'
+        Write-Host '  who does not read English.'
+        exit 1
     }
 }
 finally {
