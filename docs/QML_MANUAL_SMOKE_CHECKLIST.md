@@ -139,6 +139,36 @@ Needs a pad and a satellite. Nothing here can be faked in CI.
       onboarding flow opens full-screen over the shell. Both Skip and finishing
       the flow mark it done, and it does not reappear on the next launch.
 
+## Keep awake
+
+`powercfg /requests` (elevated) is the oracle: it names the process holding a
+SYSTEM or DISPLAY request. None of this is reachable from CI.
+
+- [ ] **Default reach is the machine, not the screen.** With a pad streaming on
+      a fresh config, `powercfg /requests` shows Dish under SYSTEM and **not**
+      under DISPLAY, and the screen still blanks on its normal schedule. The
+      pill reads "Streaming · computer kept awake".
+- [ ] **Configure lands on the setting.** Click **Configure** on the pill from
+      any destination. Settings opens at the rail root, not as a pushed detail
+      with a back chevron.
+- [ ] **Never means never.** Set *Keep the computer awake* to Never. The
+      request disappears immediately, the pill drops to "Streaming", and the
+      quit confirm still appears when closing with a pad streaming.
+- [ ] **The idle window lets go and takes back.** Set While playing with a
+      1-minute window. Leave the pad untouched: within ~1 minute the request
+      disappears and the pill drops to "Streaming". Move a stick: both come
+      back within a second.
+- [ ] **A resting pad does not hold it.** With a USB-direct DualSense or DS4
+      claimed (which gets no deadzone), leave it on the desk under While
+      playing. The request must still expire — a drifting stick must not read
+      as activity.
+- [ ] **While connected ignores stillness.** Set While connected and leave the
+      pad untouched well past the window. The request stays.
+- [ ] **The display opt-in widens, never creates.** Turn *Keep the display
+      awake too* on: Dish appears under DISPLAY as well and the pill reads
+      "display kept awake". Turn the mode to Never with the switch still on: no
+      request at all.
+
 ## Accessibility
 
 - [ ] **Keyboard only.** Unplug the mouse. Reach every destination, open the

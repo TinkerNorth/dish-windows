@@ -40,8 +40,9 @@ landed versus what is a tested-but-unwired specification.
   down by the host
 - Several satellites side by side, with per-slot controller binding
 - Per-device deadzones, button remapping, and a guided setup wizard
-- Holds the display awake while a slot is streaming, releases it on the last
-  unbind
+- Keeps the computer awake while a slot is streaming — never, only while a
+  controller is actually being used, or for as long as the link is up — with an
+  optional idle timeout and an opt-in for the display too
 - Light and dark themes, six UI languages
 - A single-file installer, and in-place auto-update that verifies every
   download against the release manifest's SHA-256 before it runs

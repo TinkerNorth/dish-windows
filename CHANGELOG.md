@@ -23,6 +23,20 @@ share a version number.
 
 ## [Unreleased]
 
+### Added
+
+- Configurable keep-awake, under *Power* in Settings. **Never**, **While
+  playing** (the default: hold only while a bound controller has actually been
+  actuated inside a 1–180 minute idle window, 5 by default) or **While
+  connected** (hold for as long as a slot streams, however long the pad sits
+  still). The hold now asserts `ES_SYSTEM_REQUIRED` by default and adds
+  `ES_DISPLAY_REQUIRED` only on request, because forwarding a pad needs the
+  computer, not the panel. Activity is measured post-deadzone against a
+  reference that only advances when it moves, so a drifting stick cannot pin
+  the machine awake and a slow deliberate push still registers. The streaming
+  pill names the reach it actually holds and carries a **Configure** button
+  through to the setting.
+
 ### Fixed
 
 - The `⋯` overflow menus open. A Menu takes its width from its background, and

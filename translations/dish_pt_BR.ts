@@ -36,12 +36,28 @@
         <translation>Transmitindo · tela mantida ativa</translation>
     </message>
     <message>
+        <source>Streaming · computer kept awake</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation type="unfinished">Transmitindo</translation>
+    </message>
+    <message>
         <source>Set up</source>
         <translation>Configurar</translation>
     </message>
     <message>
         <source>Back</source>
         <translation type="unfinished">Voltar</translation>
+    </message>
+    <message>
+        <source>Configure</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Configure keep-awake</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Dish %1 is ready · restart when convenient.</source>
@@ -2240,6 +2256,14 @@
         <translation>Analógico esquerdo</translation>
     </message>
     <message>
+        <source>Let go after</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>KitTextField · RowButton</source>
         <translation>KitTextField · RowButton</translation>
     </message>
@@ -2526,8 +2550,16 @@
         <translation>Parar a transmissão e sair?</translation>
     </message>
     <message>
-        <source>A controller is still streaming and the display is being kept awake.</source>
-        <translation>Um controle ainda está transmitindo e a tela está sendo mantida ativa.</translation>
+        <source>A controller is still streaming, and the display is being kept awake.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A controller is still streaming, and the computer is being kept awake.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A controller is still streaming.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Quit</source>
@@ -2752,6 +2784,18 @@
         <translation type="unfinished">As verificações automáticas de atualização estão desligadas.</translation>
     </message>
     <message>
+        <source>Never</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>While playing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>While connected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Checking for updates…</source>
         <translation type="unfinished">Procurando atualizações…</translation>
     </message>
@@ -2802,6 +2846,34 @@
     <message>
         <source>never</source>
         <translation type="unfinished">nunca</translation>
+    </message>
+    <message>
+        <source>Power</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep the computer awake</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>While playing: hold only while a bound controller is being used. While connected: hold for as long as a controller is streaming, however long it sits still.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Let go after this much stillness</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep the display awake too</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Updates</source>
