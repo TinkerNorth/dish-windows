@@ -110,6 +110,7 @@ set(DISH_CORE_SOURCES
     src/core/update/UpdateManifest.cpp
     src/core/reducer/RestOutcome.h
     src/core/reducer/Backoff.h
+    src/core/reducer/KeepAwake.h
     src/core/reducer/Reconcile.h
     src/core/reducer/CloseNotify.h
     src/core/reducer/PathChoice.h
@@ -151,8 +152,6 @@ set(DISH_CORE_SOURCES
     src/Util/Endian.h
     src/Util/HostBattery.h
     src/Util/HostBattery.cpp
-    src/Util/DisplaySleepInhibitor.h
-    src/Util/DisplaySleepInhibitor.cpp
     # In dish_core so test_translations exercises the real locale-fallback path
     # rather than a copy of it.
     src/Util/Localization.h
@@ -188,6 +187,7 @@ set(DISH_CORE_SOURCES
     src/source/http/SatelliteCatalogRepository.h
     src/source/http/SatelliteCatalogRepository.cpp
     src/source/store/ControllerTypeStore.h
+    src/source/store/KeepAwakePreferenceStore.h
     src/source/store/ControllerTypeStore.cpp
     src/source/store/MotionEnabledStore.h
     src/source/store/MotionEnabledStore.cpp
@@ -218,6 +218,7 @@ set(DISH_CORE_SOURCES
     src/source/notification/EventChannel.h
     src/source/notification/DishNotifications.h
     src/source/notification/DishNotifications.cpp
+    src/source/input/ControllerActivitySource.h
     src/source/inputrate/SlotInputRates.h
     src/source/inputrate/InputRateStore.h
     src/source/inputrate/InputRateStore.cpp
@@ -225,6 +226,8 @@ set(DISH_CORE_SOURCES
     # "no adapter" copy rather than claiming Bluetooth is off.
     src/source/system/BluetoothRadioProbe.h
     src/source/system/BluetoothRadioProbe.cpp
+    src/source/system/WakeInhibitor.h
+    src/source/system/WakeInhibitor.cpp
     # Auto-update runtime: gateways, staging store, coordinator and the boot
     # handoff. In dish_core (not the exe) because main.cpp's boot gate runs
     # before the composition root and the tests link this library, not the exe.

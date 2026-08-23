@@ -302,7 +302,7 @@ never had. These have no android row, so a row-walk would never surface them.
 | # | Behavior | Windows test file | Status | Notes |
 |--:|---|---|---|---|
 | 1 | Winsock lifecycle (`WSAStartup`/`WSACleanup` ref-count, idempotent, dtor-on-failed-init) | test_winsock_init.cpp | confirmed | the only test that touches a real `socket()` — purely to prove init works; it opens, checks, and closes a DGRAM socket, never sends. |
-| 2 | `SetThreadExecutionState` display-sleep inhibitor | test_set_thread_execution_state_inhibitor.cpp (real Win32, own bookkeeping only) + test_wake_state_controller.cpp / test_screen_wake_controller.cpp (fake inhibitor) | confirmed | acquire/release idempotency + dtor-releases via the real inhibitor asserting only its own state (the flag is process-wide + harmless); the controller-side driving uses a **fake** inhibitor (the `WakeStateControllerTest` re-derivation). |
+| 2 | `SetThreadExecutionState` wake inhibitor, configurable reach | test_set_thread_execution_state_inhibitor.cpp (real Win32, own bookkeeping only) + test_keep_awake.cpp (the pure policy) + test_keep_awake_preference_store.cpp + test_controller_activity_source.cpp + test_wake_state_controller.cpp / test_screen_wake_controller.cpp (fake inhibitor) | confirmed | `apply(reach)` idempotency + dtor-releases via the real inhibitor asserting only its own state (the flag is process-wide + harmless); the controller-side driving uses a **fake** inhibitor. The mode/idle-window/display-reach decision is pure and pinned as a truth table. |
 | 3 | Host/laptop battery fallback (`GetSystemPowerStatus`→level/status) | test_host_battery.cpp | confirmed | desktop(128)→100% wired, discharging%, AC+charging-bit→charging, ≥99% AC→full, unknown→0xFF. Distinct source from the pad-capacity mapping (§2.4 PhysicalBatteryMapping). |
 | 4 | Lightbar-LED **drive** (Off-suppressed / FollowGame full-RGB gate + decode→route) | test_lightbar_routing.cpp + test_satellite_client_lightbar.cpp | confirmed | windows *drives* the DualSense lightbar (android decodes-and-drops); decode (4-byte, short-reject, forward-compat trailing) + the routing gate. |
 | 5 | `QSettings`/registry persistence round-trips in an isolated scope | test_feature_settings.cpp, test_theme_store.cpp, test_onboarding_store.cpp + every `*_repository`/`*_store` test | confirmed | all backed by `QSettingsFixture::makeSharedSettings()` — a unique temp `IniFormat` file unlinked on drop; **never** the production `HKCU\Software\TinkerNorth\Dish`. Every concrete repo also runs the RepositoryContract. |
@@ -647,7 +647,8 @@ built app:
   per pad — pad card → wire (measured rate `·` one-way latency over the dish
   glyph; solid accent live, dashed outline dead/"idle") → satellite card (the
   the connection-row vocabulary) or the dashed "Bind…" ghost; the "+ Add a controller"
-  invitation row; the keep-awake floating pill ("Streaming — do not close").
+  invitation row; the streaming pill, whose suffix names the keep-awake reach
+  and which carries the Configure button through to Settings.
 - **Data**: the slot model gained the bound-satellite JOIN roles (`satIp`,
   `satLinkState`, `satChip`, `satDotColor`, `satGlyph`, `satLatencyText`,
   `satLatencySamples`) — joined in C++ by `boundConnectionId` against the

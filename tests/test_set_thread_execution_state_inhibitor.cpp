@@ -5,65 +5,79 @@
 // sets a flag the power manager consults, and each dtor clears it back to
 // ES_CONTINUOUS so the runner is left clean.
 
-#include "Util/DisplaySleepInhibitor.h"
+#include "source/system/WakeInhibitor.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-using dish::util::SetThreadExecutionStateInhibitor;
+#include <QString>
 
-TEST_CASE("STES inhibitor starts unheld", "[wake][windows]") {
+using dish::reducer::KeepAwakeReach;
+using dish::source::SetThreadExecutionStateInhibitor;
+
+namespace {
+
+const QString kReason = QStringLiteral("test reason");
+
+} // namespace
+
+TEST_CASE("STES inhibitor starts holding nothing", "[wake][windows]") {
     const SetThreadExecutionStateInhibitor inh;
-    REQUIRE_FALSE(inh.isHeld());
+    REQUIRE(inh.held() == KeepAwakeReach::None);
 }
 
-TEST_CASE("STES inhibitor acquire flips held; release flips it back", "[wake][windows]") {
+TEST_CASE("STES inhibitor holds the reach it is given", "[wake][windows]") {
     SetThreadExecutionStateInhibitor inh;
-    inh.acquire(QStringLiteral("test reason"));
-    REQUIRE(inh.isHeld());
-    inh.release();
-    REQUIRE_FALSE(inh.isHeld());
+    inh.apply(KeepAwakeReach::System, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::System);
+    inh.apply(KeepAwakeReach::None, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::None);
 }
 
-TEST_CASE("STES inhibitor acquire is idempotent", "[wake][windows]") {
+TEST_CASE("STES inhibitor widens and narrows between System and SystemAndDisplay",
+          "[wake][windows]") {
     SetThreadExecutionStateInhibitor inh;
-    inh.acquire(QStringLiteral("first"));
-    REQUIRE(inh.isHeld());
-    inh.acquire(QStringLiteral("second"));
-    REQUIRE(inh.isHeld());
-    inh.release();
-    REQUIRE_FALSE(inh.isHeld());
+    inh.apply(KeepAwakeReach::System, kReason);
+    inh.apply(KeepAwakeReach::SystemAndDisplay, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::SystemAndDisplay);
+    inh.apply(KeepAwakeReach::System, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::System);
+    inh.apply(KeepAwakeReach::None, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::None);
 }
 
-TEST_CASE("STES inhibitor release is idempotent", "[wake][windows]") {
+TEST_CASE("STES inhibitor apply is idempotent at every reach", "[wake][windows]") {
     SetThreadExecutionStateInhibitor inh;
-    inh.release();
-    REQUIRE_FALSE(inh.isHeld());
+    inh.apply(KeepAwakeReach::None, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::None);
 
-    inh.acquire(QStringLiteral("test"));
-    inh.release();
-    inh.release();
-    REQUIRE_FALSE(inh.isHeld());
+    inh.apply(KeepAwakeReach::SystemAndDisplay, kReason);
+    inh.apply(KeepAwakeReach::SystemAndDisplay, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::SystemAndDisplay);
+
+    inh.apply(KeepAwakeReach::None, kReason);
+    inh.apply(KeepAwakeReach::None, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::None);
 }
 
-TEST_CASE("STES inhibitor re-acquires cleanly after release", "[wake][windows]") {
+TEST_CASE("STES inhibitor re-holds cleanly after letting go", "[wake][windows]") {
     SetThreadExecutionStateInhibitor inh;
-    inh.acquire(QStringLiteral("first stream"));
-    inh.release();
-    inh.acquire(QStringLiteral("second stream"));
-    REQUIRE(inh.isHeld());
-    inh.release();
-    REQUIRE_FALSE(inh.isHeld());
+    inh.apply(KeepAwakeReach::System, QStringLiteral("first stream"));
+    inh.apply(KeepAwakeReach::None, kReason);
+    inh.apply(KeepAwakeReach::System, QStringLiteral("second stream"));
+    REQUIRE(inh.held() == KeepAwakeReach::System);
+    inh.apply(KeepAwakeReach::None, kReason);
+    REQUIRE(inh.held() == KeepAwakeReach::None);
 }
 
 TEST_CASE("STES inhibitor destructor releases a held flag", "[wake][windows]") {
-    // There is no public API for "is ES_DISPLAY_REQUIRED set process-wide", so
-    // the successor's unheld state is as close as a unit test can get to
-    // proving the dtor cleared the flag.
+    // There is no public API for "is ES_SYSTEM_REQUIRED set process-wide", so
+    // the successor's empty state is as close as a unit test can get to proving
+    // the dtor cleared the flag.
     {
         SetThreadExecutionStateInhibitor inh;
-        inh.acquire(QStringLiteral("dies on scope exit"));
-        REQUIRE(inh.isHeld());
+        inh.apply(KeepAwakeReach::SystemAndDisplay, QStringLiteral("dies on scope exit"));
+        REQUIRE(inh.held() == KeepAwakeReach::SystemAndDisplay);
     }
     const SetThreadExecutionStateInhibitor next;
-    REQUIRE_FALSE(next.isHeld());
+    REQUIRE(next.held() == KeepAwakeReach::None);
 }

@@ -3,7 +3,7 @@
 //
 // The three seams between the updater coordinator and the outside world:
 // the manifest fetch, the payload download, and the staging directory. Abstract
-// on purpose (the DisplaySleepInhibitor pattern) so the coordinator's schedule,
+// on purpose (the WakeInhibitor pattern) so the coordinator's schedule,
 // gating and backoff are testable against fakes with no sockets and no disk.
 //
 // Threading contract: a port is called only from the thread that owns it, and
