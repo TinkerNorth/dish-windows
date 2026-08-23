@@ -82,6 +82,9 @@ set(DISH_TEST_SOURCES
     test_screen_wake_controller.cpp
     test_wake_state_composer.cpp
     test_wake_state_controller.cpp
+    test_keep_awake.cpp
+    test_keep_awake_preference_store.cpp
+    test_controller_activity_source.cpp
     test_dish_notifications.cpp
     test_input_rate_tracker.cpp
     test_input_rate_store.cpp
