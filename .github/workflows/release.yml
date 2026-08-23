@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     # Bare MAJOR.MINOR.PATCH tags, no v prefix (org convention for the
-    # product repos — dish-android's pipeline requires bare tags). The
+    # product repos: dish-android's pipeline requires bare tags). The
     # manifest step below still hard-gates the exact format; this glob only
     # has to be close, and every consumer tolerates a legacy v by stripping.
     tags: ["[0-9]*.[0-9]*.[0-9]*"]
@@ -23,7 +23,7 @@ on:
 # WIN_SIGN_CERT_BASE64 + WIN_SIGN_PASSWORD exist, and the release proceeds
 # unsigned (with a loud warning) when they don't. Set the repository variable
 # ENFORCE_RELEASE_SIGNING=true to make missing secrets fail a stable tag.
-# Asset names never change either way — latest.json's stable-name contract
+# Asset names never change either way; latest.json's stable-name contract
 # with shipped clients forbids an -unsigned suffix here.
 #
 # The release is uploaded as a DRAFT and flipped to published afterwards:
@@ -32,7 +32,7 @@ on:
 # what makes publication atomic for every client polling latest.json.
 #
 # Prerelease tags (1.2.3-rc.1) publish marked as prerelease and skip
-# latest.json — stable clients never see them.
+# latest.json; stable clients never see them.
 #
 # Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
 #   actions/checkout                @ v7.0.1  → 3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -394,7 +394,7 @@ jobs:
           retention-days: 14
 
   # ─────────────────────────────────────────────────────────────────────
-  # harden — the shared reusable (scan, SBOMs, SHA256SUMS, cosign keyless).
+  # harden: the shared reusable (scan, SBOMs, SHA256SUMS, cosign keyless).
   # Canonical copy: TinkerNorth/satellite/.github/workflows/_release_harden.yml
   # ─────────────────────────────────────────────────────────────────────
   harden:
