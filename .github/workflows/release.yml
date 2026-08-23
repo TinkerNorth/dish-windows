@@ -2,8 +2,10 @@ name: Release
 
 on:
   push:
-    # Bare MAJOR.MINOR.PATCH tags, no v prefix (e.g. 1.2.3). The manifest step
-    # below still hard-gates the exact format; this glob only has to be close.
+    # Bare MAJOR.MINOR.PATCH tags, no v prefix (org convention for the
+    # product repos — dish-android's pipeline requires bare tags). The
+    # manifest step below still hard-gates the exact format; this glob only
+    # has to be close, and every consumer tolerates a legacy v by stripping.
     tags: ["[0-9]*.[0-9]*.[0-9]*"]
   workflow_dispatch:
     inputs:
@@ -11,14 +13,40 @@ on:
         description: "Tag to release (must already exist)"
         required: true
 
-# Builds a release dish.exe + Qt runtime bundle, SBOM and checksums, and
-# attaches them to the GitHub Release for the tag.
+# Builds a release dish.exe + Qt runtime bundle, proves both the portable
+# bundle and the installer against a real disk and registry, then hands the
+# artifacts to the shared harden workflow (Grype scan, SPDX + CycloneDX SBOMs,
+# SHA256SUMS, cosign keyless signatures) and the SLSA L3 provenance generator
+# before publishing.
 #
-# No signing or provenance attestation yet; the artifacts are unsigned.
+# Authenticode signing is advisory-by-default: dish-setup.exe is signed when
+# WIN_SIGN_CERT_BASE64 + WIN_SIGN_PASSWORD exist, and the release proceeds
+# unsigned (with a loud warning) when they don't. Set the repository variable
+# ENFORCE_RELEASE_SIGNING=true to make missing secrets fail a stable tag.
+# Asset names never change either way — latest.json's stable-name contract
+# with shipped clients forbids an -unsigned suffix here.
+#
+# The release is uploaded as a DRAFT and flipped to published afterwards:
+# GitHub never points releases/latest at a draft, so the assets upload while
+# the update permalink still resolves to the previous release; the flip is
+# what makes publication atomic for every client polling latest.json.
+#
+# Prerelease tags (1.2.3-rc.1) publish marked as prerelease and skip
+# latest.json — stable clients never see them.
+#
+# Pin map (verify with `gh api repos/<owner>/<repo>/git/ref/tags/<tag>`):
+#   actions/checkout                @ v7.0.1  → 3d3c42e5aac5ba805825da76410c181273ba90b1
+#   ilammy/msvc-dev-cmd             @ v1.13.0 → 0b201ec74fa43914dc39ae48a89fd1d8cb592756
+#   jurplel/install-qt-action       @ v4.3.1  → 48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
+#   lukka/run-vcpkg                 @ v11.5   → 5e0cab206a5ea620130caf672fce3e4a6b5666a1
+#   actions/upload-artifact         @ v7.0.1  → 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+#   actions/download-artifact       @ v8.0.1  → 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+#   softprops/action-gh-release     @ v3.0.2  → 3d0d9888cb7fd7b750713d6e236d1fcb99157228
+#   slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml
+#                                   @ v2.1.0  → f7dd8c54c2067bafc12ca7a55595d5ee9b75204a
+#   (scan/SBOM/cosign pins live in _release_harden.yml)
 
-# Read-only by default; only the job that publishes gets contents: write.
-# No id-token / attestations scope — nothing signs or attests here, and an
-# unused write scope on every job is just a wider blast radius.
+# Read-only by default; each job widens only what it needs.
 permissions:
   contents: read
 
@@ -42,20 +70,67 @@ jobs:
       action_pin_lint_enabled: true
       allowlist_expiry_enabled: true
 
+  # ─────────────────────────────────────────────────────────────────────
+  # Signing-secret report. Advisory by default: a missing Authenticode cert
+  # downgrades the release to unsigned binaries rather than failing it. Set
+  # the repository variable ENFORCE_RELEASE_SIGNING=true to restore the hard
+  # gate once a certificate exists.
+  # ─────────────────────────────────────────────────────────────────────
+  required-secrets:
+    name: Required release secrets gate
+    needs: [gates]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify Authenticode signing secrets for tagged releases
+        env:
+          ENFORCE: ${{ vars.ENFORCE_RELEASE_SIGNING }}
+          WIN_SIGN_CERT_BASE64: ${{ secrets.WIN_SIGN_CERT_BASE64 }}
+          WIN_SIGN_PASSWORD: ${{ secrets.WIN_SIGN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in WIN_SIGN_CERT_BASE64 WIN_SIGN_PASSWORD; do
+            [ -n "${!name:-}" ] || missing+=("$name")
+          done
+
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "::notice::Authenticode signing secrets present; dish-setup.exe will be signed."
+            exit 0
+          fi
+
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            echo "::notice::Non-tag release run; unsigned fallback permitted. Missing: ${missing[*]}"
+            exit 0
+          fi
+          case "$GITHUB_REF_NAME" in
+            *-*)
+              echo "::warning::Prerelease tag ${GITHUB_REF_NAME}: artifacts will be unsigned. Missing: ${missing[*]}"
+              exit 0
+              ;;
+          esac
+
+          if [ "${ENFORCE:-}" = "true" ]; then
+            echo "::error::Stable tagged release requires Authenticode signing secrets, but the following are missing: ${missing[*]}"
+            echo "::error::Add the missing repository secrets, or unset the ENFORCE_RELEASE_SIGNING repository variable to allow unsigned artifacts."
+            exit 1
+          fi
+
+          echo "::warning::Stable tag ${GITHUB_REF_NAME} is being released with an UNSIGNED installer. Missing: ${missing[*]}"
+          echo "::warning::SmartScreen will warn users until a certificate is configured. Set ENFORCE_RELEASE_SIGNING=true to make this a hard failure once one exists."
+
   release:
     name: Build Windows release
-    needs: [gates]
+    needs: [gates, required-secrets]
     runs-on: windows-2022
     timeout-minutes: 60
-
-    # The only job that needs to write: it creates the GitHub Release.
-    permissions:
-      contents: write
 
     env:
       VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
+      WIN_SIGN_CERT_BASE64: ${{ secrets.WIN_SIGN_CERT_BASE64 }}
 
     steps:
       # On a tag push this resolves to the empty string and checkout takes
@@ -194,37 +269,41 @@ jobs:
       # Beside the zip, not inside it: dish-setup.exe is a release asset in its
       # own right, and the portable bundle stays exactly what it was. The
       # version is stamped from the tag via /D, so the setup exe, the payload
-      # and latest.json agree; the earlier version asserts already proved the
-      # tag matches project(Dish VERSION ...) and the built dish.exe.
+      # and latest.json agree; the version asserts below prove the tag matches
+      # project(Dish VERSION ...) and the built dish.exe.
       - name: Compile installer (Inno Setup)
         shell: pwsh
         run: |
           $tag = '${{ github.event.inputs.tag || github.ref_name }}'
-          $num = $tag -replace '[-+].*$',''
+          $num = ($tag -replace '^v','') -replace '[-+].*$',''
           & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build\setup-image" installer.iss
           if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
           Copy-Item dist/dish-setup.exe "$PWD/dish-setup.exe"
+
+      # Ported from satellite's release pipeline: sign when the cert exists,
+      # release unsigned (with the required-secrets warning) when it doesn't.
+      # Runs BEFORE the round-trip so the bytes we test are the bytes we ship.
+      - name: Sign installer (if cert configured)
+        if: ${{ env.WIN_SIGN_CERT_BASE64 != '' }}
+        env:
+          WIN_SIGN_PASSWORD: ${{ secrets.WIN_SIGN_PASSWORD }}
+        shell: pwsh
+        run: |
+          $cert = Join-Path $env:RUNNER_TEMP "code-sign.pfx"
+          [IO.File]::WriteAllBytes($cert, [Convert]::FromBase64String($env:WIN_SIGN_CERT_BASE64))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.0.*\x64\signtool.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if ($null -eq $signtool) { throw "signtool.exe not found under Windows Kits" }
+          & $signtool.FullName sign /f $cert /p $env:WIN_SIGN_PASSWORD `
+            /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
+            ./dish-setup.exe
 
       # The same assertions windows-ci runs, against the artifact that is about
       # to be published rather than a rebuild of it.
       - name: Installer silent round-trip (no UI)
         shell: pwsh
         run: ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe
-
-      - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-        with:
-          path: dish-windows
-          format: spdx-json
-          artifact-name: dish-windows-sbom.spdx.json
-          output-file: dish-windows.spdx.json
-          # Off because the action's attach path re-downloads its own artifact
-          # over the REST API, which needs an actions: read scope this job
-          # deliberately does not grant ("Resource not accessible by
-          # integration"). Redundant anyway: the publish step below ships
-          # dish-windows.spdx.json as a release asset, unzipped and covered by
-          # SHA256SUMS, which the action's zipped attach is neither.
-          upload-release-assets: false
 
       # Manifest of the bundle's contents, shipped inside the zip. Paths are
       # relative to the bundle root: windeployqt lays plugins out in
@@ -250,16 +329,25 @@ jobs:
           Compress-Archive -Path dish-windows/* -DestinationPath dish-windows.zip -Force
 
       # Auto-update manifest, fetched by dish.exe from the stable permalink
-      # releases/latest/download/latest.json. Ships with EVERY release; the
-      # asset name never changes. The two version asserts prevent the fatal
-      # drift where the shipped exe self-reports an older version than the
-      # manifest and every client re-applies forever.
-      - name: Emit update manifest (latest.json)
+      # releases/latest/download/latest.json. Ships with every STABLE release;
+      # the asset name never changes. A prerelease tag emits nothing, so the
+      # permalink keeps serving stable clients the last stable release. The
+      # two version asserts prevent the fatal drift where the shipped exe
+      # self-reports an older version than the manifest and every client
+      # re-applies forever.
+      - name: Emit update manifest (latest.json, stable tags only)
+        id: manifest
         shell: pwsh
         run: |
           $tag = '${{ github.event.inputs.tag || github.ref_name }}'
-          if ($tag -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not MAJOR.MINOR.PATCH (bare, no v prefix)" }
-          $version = $tag
+          $bare = $tag -replace '^v',''
+          if ($bare -match '-') {
+            Write-Host "::notice::Prerelease tag ${tag}: skipping latest.json"
+            "stable=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+            exit 0
+          }
+          if ($bare -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') { throw "Tag '$tag' is not MAJOR.MINOR.PATCH[-prerelease]" }
+          $version = $bare
           $cm = Get-Content CMakeLists.txt -Raw
           if ($cm -notmatch 'project\(\s*Dish[\s\r\n]+VERSION[\s]+(\d+\.\d+\.\d+)') { throw 'project VERSION not found' }
           if ($Matches[1] -ne $version) { throw "Tag $tag but project VERSION is $($Matches[1])" }
@@ -286,62 +374,105 @@ jobs:
           $json = ($m | ConvertTo-Json -Depth 4) -replace "`r`n", "`n"
           [IO.File]::WriteAllText("$PWD/latest.json", $json + "`n", (New-Object Text.UTF8Encoding $false))
           Get-Content latest.json
+          "stable=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
 
-      # The manifest above is inside the zip, so it cannot attest to the zip.
-      # This one covers the artifacts a person actually downloads, and is what
-      # the release page's "verify your download" instructions point at.
-      - name: Compute release-asset SHA256SUMS
-        shell: pwsh
-        run: |
-          $lines = Get-ChildItem dish-windows.zip, dish-windows.spdx.json, dish-setup.exe, latest.json | ForEach-Object {
-            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
-          }
-          [IO.File]::WriteAllText("$PWD/SHA256SUMS", ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
-          Get-Content SHA256SUMS
-
+      # The harden workflow (Grype, SBOMs, SHA256SUMS across every asset,
+      # cosign) and the publish job downstream consume this artifact; the
+      # release-asset SHA256SUMS the old pipeline hand-rolled now comes from
+      # harden, covering the SBOMs and provenance too.
       - name: Upload release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: dish-windows-x86_64
+          name: windows-bundle
+          # latest.json exists only for stable tags; the unmatched pattern on
+          # a prerelease is a warning, not a failure, as long as the others
+          # match.
           path: |
             dish-windows.zip
-            dish-windows.spdx.json
             dish-setup.exe
             latest.json
-            SHA256SUMS
-          retention-days: 30
+          retention-days: 14
 
-      # Publishes on both triggers. `tag_name` is explicit because on
-      # workflow_dispatch github.ref is the default branch, not the tag that
-      # was built, and action-gh-release would otherwise create a release
-      # against the branch ref.
-      #
-      # draft: true is load-bearing. GitHub never points releases/latest at a
-      # draft, so the assets upload while the update permalink still resolves
-      # to the previous release; the flip below is what makes publication
-      # atomic for every client polling latest.json.
-      - name: Publish GitHub Release
+  # ─────────────────────────────────────────────────────────────────────
+  # harden — the shared reusable (scan, SBOMs, SHA256SUMS, cosign keyless).
+  # Canonical copy: TinkerNorth/satellite/.github/workflows/_release_harden.yml
+  # ─────────────────────────────────────────────────────────────────────
+  harden:
+    name: Harden artifacts
+    needs: [release]
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+    uses: ./.github/workflows/_release_harden.yml
+    with:
+      artifact-pattern: windows-*
+      product: dish-windows
+
+  provenance:
+    name: SLSA L3 provenance
+    needs: [harden]
+    permissions:
+      id-token: write
+      contents: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.harden.outputs.hashes }}
+      provenance-name: dish-windows.intoto.jsonl
+      upload-assets: false
+
+  # Publishes on both triggers. `tag_name` is explicit because on
+  # workflow_dispatch github.ref is the default branch, not the tag that
+  # was built, and action-gh-release would otherwise create a release
+  # against the branch ref.
+  #
+  # draft: true is load-bearing. GitHub never points releases/latest at a
+  # draft, so the assets upload while the update permalink still resolves
+  # to the previous release; the flip below is what makes publication
+  # atomic for every client polling latest.json.
+  publish:
+    name: Publish to GitHub Releases
+    needs: [harden, provenance]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download hardened bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-bundle
+          path: release
+
+      - name: Download SLSA provenance
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+          path: release
+
+      - name: Show what we're about to publish
+        run: find release -type f -printf '%p\n'
+
+      - name: Publish GitHub Release (as draft)
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          files: |
-            dish-windows.zip
-            dish-windows.spdx.json
-            dish-setup.exe
-            latest.json
-            SHA256SUMS
-          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
           generate_release_notes: true
           draft: true
+          files: release/**/*
+          fail_on_unmatched_files: true
 
       # Assets upload while the release is a draft (drafts are never 'latest');
       # flipping afterwards makes the publish atomic for the update permalink.
-      # gh is preinstalled on windows-2022, so this adds no action to pin.
       - name: Flip release from draft to published
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          gh release edit '${{ github.event.inputs.tag || github.ref_name }}' --draft=false
-          $draft = gh release view '${{ github.event.inputs.tag || github.ref_name }}' --json isDraft --jq .isDraft
-          if ($draft -ne 'false') { throw 'release is still a draft' }
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false
+          draft="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+          [ "$draft" = "false" ] || { echo "::error::release is still a draft"; exit 1; }
