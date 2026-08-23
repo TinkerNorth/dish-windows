@@ -421,6 +421,10 @@ jobs:
       base64-subjects: ${{ needs.harden.outputs.hashes }}
       provenance-name: dish-windows.intoto.jsonl
       upload-assets: false
+      # A SHA-pinned call cannot resolve the prebuilt builder's release, so
+      # the binary never downloads and the generator dies at exit 127; build
+      # it from source instead.
+      compile-generator: true
 
   # Publishes on both triggers. `tag_name` is explicit because on
   # workflow_dispatch github.ref is the default branch, not the tag that
