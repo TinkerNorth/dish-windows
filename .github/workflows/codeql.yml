@@ -21,7 +21,14 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: windows-2022
-    timeout-minutes: 60
+    # 60 was not enough once the Moonlight path landed. CodeQL traces the
+    # compiler, which costs several times a plain build, and the Build step
+    # alone grew to ~57 min against ~36 min for the whole run on main — the
+    # analyse step was reaching the cap with seconds to spare and the job was
+    # cancelled, which reads as a failed check even though `analyze` is
+    # continue-on-error. This is the traced build being slow, not a hang, so
+    # the cap is raised rather than the work cut.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -65,6 +72,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
+          # Keeps vendored FetchContent sources (ENet, Catch2) out of the
+          # analysis; see the file for why.
+          config-file: ./.github/codeql-config.yml
 
       - name: Build
         shell: pwsh
