@@ -169,6 +169,13 @@ void MoonlightControlChannel::sendControllerMotion(std::uint8_t controllerNumber
     sealAndSend(p.data(), p.size());
 }
 
+void MoonlightControlChannel::sendControllerBattery(std::uint8_t controllerNumber,
+                                                    std::uint8_t batteryState,
+                                                    std::uint8_t percentage) {
+    const auto p = moonlight::encodeControllerBattery(controllerNumber, batteryState, percentage);
+    sealAndSend(p.data(), p.size());
+}
+
 void MoonlightControlChannel::sendPeriodicPing() {
     const auto p = moonlight::encodePeriodicPing();
     sealAndSend(p.data(), p.size());

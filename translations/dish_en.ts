@@ -904,6 +904,14 @@
         <source>Unsteady</source>
         <translation>Unsteady</translation>
     </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Moonlight hosts</translation>
+    </message>
+    <message>
+        <source>Stream to a PC running Sunshine, Apollo or Wolf instead of a satellite.</source>
+        <translation>Stream to a PC running Sunshine, Apollo or Wolf instead of a satellite.</translation>
+    </message>
 </context>
 <context>
     <name>ContentDialog</name>
@@ -2568,6 +2576,239 @@
     <message>
         <source>Cancel</source>
         <translation>Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightHostsPage</name>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Moonlight hosts</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation type="unfinished">
+            <numerusform>%n found</numerusform>
+            <numerusform>%n found</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation type="unfinished">
+            <numerusform>%n paired</numerusform>
+            <numerusform>%n paired</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>Xbox</source>
+        <translation>Xbox</translation>
+    </message>
+    <message>
+        <source>PlayStation</source>
+        <translation>PlayStation</translation>
+    </message>
+    <message>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation type="unfinished">Found</translation>
+    </message>
+    <message>
+        <source>scanning…</source>
+        <translation type="unfinished">scanning…</translation>
+    </message>
+    <message>
+        <source>Add by address…</source>
+        <translation>Add by address…</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation type="unfinished">Scanning…</translation>
+    </message>
+    <message>
+        <source>Scan</source>
+        <translation type="unfinished">Scan</translation>
+    </message>
+    <message>
+        <source>Looking for Moonlight hosts</source>
+        <translation>Looking for Moonlight hosts</translation>
+    </message>
+    <message>
+        <source>Scanning your network for hosts advertising GameStream. They appear here as they answer.</source>
+        <translation>Scanning your network for hosts advertising GameStream. They appear here as they answer.</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation>No Moonlight hosts found</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>A PC shows up here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation>Get Sunshine ↗</translation>
+    </message>
+    <message>
+        <source>%1, Moonlight host, %2</source>
+        <translation>%1, Moonlight host, %2</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine/Apollo)</source>
+        <translation>Moonlight host (Sunshine/Apollo)</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Session</translation>
+    </message>
+    <message>
+        <source>App</source>
+        <translation>App</translation>
+    </message>
+    <message>
+        <source>Host default</source>
+        <translation>Host default</translation>
+    </message>
+    <message>
+        <source>Choose…</source>
+        <translation>Choose…</translation>
+    </message>
+    <message>
+        <source>Emulate</source>
+        <translation>Emulate</translation>
+    </message>
+    <message>
+        <source>Pair…</source>
+        <translation type="unfinished">Pair…</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation type="unfinished">Connecting…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation type="unfinished">Connect</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation type="unfinished">Disconnect</translation>
+    </message>
+    <message>
+        <source>More actions for %1</source>
+        <translation type="unfinished">More actions for %1</translation>
+    </message>
+    <message>
+        <source>Forget</source>
+        <translation type="unfinished">Forget</translation>
+    </message>
+    <message>
+        <source>Forget %1?</source>
+        <translation type="unfinished">Forget %1?</translation>
+    </message>
+    <message>
+        <source>Its pairing is deleted — you’ll need the PIN again.</source>
+        <translation>Its pairing is deleted — you’ll need the PIN again.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancel</translation>
+    </message>
+    <message>
+        <source>Moonlight host</source>
+        <translation>Moonlight host</translation>
+    </message>
+    <message>
+        <source>Add a host by address</source>
+        <translation>Add a host by address</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Add</translation>
+    </message>
+    <message>
+        <source>Enter the host’s IP address or hostname. Dish uses the standard Moonlight ports.</source>
+        <translation>Enter the host’s IP address or hostname. Dish uses the standard Moonlight ports.</translation>
+    </message>
+    <message>
+        <source>192.168.1.20</source>
+        <translation>192.168.1.20</translation>
+    </message>
+    <message>
+        <source>Name (optional)</source>
+        <translation>Name (optional)</translation>
+    </message>
+    <message>
+        <source>Pairing</source>
+        <translation type="unfinished">Pairing</translation>
+    </message>
+    <message>
+        <source>Pair with %1</source>
+        <translation type="unfinished">Pair with %1</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Done</translation>
+    </message>
+    <message>
+        <source>Type this PIN into the &lt;b&gt;%1&lt;/b&gt; web interface to approve the pairing.</source>
+        <translation>Type this PIN into the &lt;b&gt;%1&lt;/b&gt; web interface to approve the pairing.</translation>
+    </message>
+    <message>
+        <source>The host did not accept the pairing. Try again.</source>
+        <translation>The host did not accept the pairing. Try again.</translation>
+    </message>
+    <message>
+        <source>Waiting for approval on the host…</source>
+        <translation>Waiting for approval on the host…</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation type="unfinished">New code</translation>
+    </message>
+    <message>
+        <source>What should %1 launch?</source>
+        <translation>What should %1 launch?</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="unfinished">Close</translation>
+    </message>
+    <message>
+        <source>Asking the host what it can run…</source>
+        <translation>Asking the host what it can run…</translation>
+    </message>
+    <message>
+        <source>Pairing…</source>
+        <translation type="unfinished">Pairing…</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Paired</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Starting…</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation type="unfinished">Streaming</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation type="unfinished">Unsteady</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Failed</translation>
+    </message>
+    <message>
+        <source>Disconnected</source>
+        <translation>Disconnected</translation>
     </message>
 </context>
 <context>

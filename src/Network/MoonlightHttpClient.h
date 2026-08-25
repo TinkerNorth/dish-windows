@@ -18,6 +18,7 @@
 #include "core/moonlight/MoonlightIdentity.h"
 
 #include <QByteArray>
+#include <QList>
 #include <QObject>
 #include <QString>
 
@@ -35,6 +36,9 @@ struct MoonlightXmlResponse {
     bool reachable = false;
     int statusCode = 0; // root status_code attribute, 0 if absent
     std::map<QString, QString> values;
+    // The raw document, for list-shaped responses (/applist) whose repeated
+    // nodes the flat map cannot carry.
+    QByteArray rawBody;
 
     QString value(const QString& tag) const {
         const auto it = values.find(tag);
@@ -78,6 +82,16 @@ class MoonlightHttpClient : public QObject {
 // Parse a Moonlight XML document (flat, one level of leaf tags under <root>).
 // Exposed for unit testing without a live server.
 MoonlightXmlResponse parseMoonlightXml(const QByteArray& body);
+
+// One /applist entry.
+struct MoonlightApp {
+    QString id;
+    QString title;
+};
+
+// Parse the /applist document's repeated <App><ID/><AppTitle/></App> nodes,
+// which the flat map above would collapse. Malformed entries are skipped.
+QList<MoonlightApp> parseMoonlightAppList(const QByteArray& body);
 
 // Build a "key=value&..." query string, percent-encoding values.
 QString buildMoonlightQuery(const std::map<QString, QString>& query);

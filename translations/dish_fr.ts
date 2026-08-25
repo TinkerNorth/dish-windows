@@ -904,6 +904,14 @@
         <source>Unsteady</source>
         <translation>Instable</translation>
     </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Hôtes Moonlight</translation>
+    </message>
+    <message>
+        <source>Stream to a PC running Sunshine, Apollo or Wolf instead of a satellite.</source>
+        <translation>Diffusez vers un PC équipé de Sunshine, Apollo ou Wolf plutôt que vers un satellite.</translation>
+    </message>
 </context>
 <context>
     <name>ContentDialog</name>
@@ -2568,6 +2576,239 @@
     <message>
         <source>Cancel</source>
         <translation>Annuler</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightHostsPage</name>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Hôtes Moonlight</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n trouvé</numerusform>
+            <numerusform>%n trouvés</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation>
+            <numerusform>%n appairée</numerusform>
+            <numerusform>%n appairées</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Xbox</source>
+        <translation>Xbox</translation>
+    </message>
+    <message>
+        <source>PlayStation</source>
+        <translation>PlayStation</translation>
+    </message>
+    <message>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Trouvée</translation>
+    </message>
+    <message>
+        <source>scanning…</source>
+        <translation>recherche…</translation>
+    </message>
+    <message>
+        <source>Add by address…</source>
+        <translation>Ajouter par adresse…</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation>Recherche…</translation>
+    </message>
+    <message>
+        <source>Scan</source>
+        <translation>Scanner</translation>
+    </message>
+    <message>
+        <source>Looking for Moonlight hosts</source>
+        <translation>Recherche d’hôtes Moonlight</translation>
+    </message>
+    <message>
+        <source>Scanning your network for hosts advertising GameStream. They appear here as they answer.</source>
+        <translation>Recherche sur votre réseau d’hôtes annonçant GameStream. Ils apparaissent ici dès qu’ils répondent.</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation>Aucun hôte Moonlight trouvé</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>Un PC apparaît ici dès que Sunshine, Apollo ou Wolf y fonctionne et que les deux machines sont sur le même réseau. Vous pouvez aussi l’ajouter par adresse.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation>Obtenir Sunshine ↗</translation>
+    </message>
+    <message>
+        <source>%1, Moonlight host, %2</source>
+        <translation>%1, hôte Moonlight, %2</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine/Apollo)</source>
+        <translation>Hôte Moonlight (Sunshine/Apollo)</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Session</translation>
+    </message>
+    <message>
+        <source>App</source>
+        <translation>Application</translation>
+    </message>
+    <message>
+        <source>Host default</source>
+        <translation>Par défaut de l’hôte</translation>
+    </message>
+    <message>
+        <source>Choose…</source>
+        <translation>Choisir…</translation>
+    </message>
+    <message>
+        <source>Emulate</source>
+        <translation>Émuler</translation>
+    </message>
+    <message>
+        <source>Pair…</source>
+        <translation>Appairer…</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Connexion…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Connecter</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Déconnecter</translation>
+    </message>
+    <message>
+        <source>More actions for %1</source>
+        <translation>Plus d&apos;actions pour %1</translation>
+    </message>
+    <message>
+        <source>Forget</source>
+        <translation>Oublier</translation>
+    </message>
+    <message>
+        <source>Forget %1?</source>
+        <translation>Oublier %1 ?</translation>
+    </message>
+    <message>
+        <source>Its pairing is deleted — you’ll need the PIN again.</source>
+        <translation>Son appairage est supprimé — le code PIN sera à nouveau nécessaire.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+    <message>
+        <source>Moonlight host</source>
+        <translation>Hôte Moonlight</translation>
+    </message>
+    <message>
+        <source>Add a host by address</source>
+        <translation>Ajouter un hôte par adresse</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Ajouter</translation>
+    </message>
+    <message>
+        <source>Enter the host’s IP address or hostname. Dish uses the standard Moonlight ports.</source>
+        <translation>Saisissez l’adresse IP ou le nom de l’hôte. Dish utilise les ports Moonlight standard.</translation>
+    </message>
+    <message>
+        <source>192.168.1.20</source>
+        <translation>192.168.1.20</translation>
+    </message>
+    <message>
+        <source>Name (optional)</source>
+        <translation>Nom (facultatif)</translation>
+    </message>
+    <message>
+        <source>Pairing</source>
+        <translation>Appairage</translation>
+    </message>
+    <message>
+        <source>Pair with %1</source>
+        <translation>Appairer avec %1</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Terminé</translation>
+    </message>
+    <message>
+        <source>Type this PIN into the &lt;b&gt;%1&lt;/b&gt; web interface to approve the pairing.</source>
+        <translation>Saisissez ce code PIN dans l’interface web de &lt;b&gt;%1&lt;/b&gt; pour approuver l’appairage.</translation>
+    </message>
+    <message>
+        <source>The host did not accept the pairing. Try again.</source>
+        <translation>L’hôte a refusé l’appairage. Réessayez.</translation>
+    </message>
+    <message>
+        <source>Waiting for approval on the host…</source>
+        <translation>En attente d’approbation sur l’hôte…</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation>Nouveau code</translation>
+    </message>
+    <message>
+        <source>What should %1 launch?</source>
+        <translation>Que doit lancer %1 ?</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Fermer</translation>
+    </message>
+    <message>
+        <source>Asking the host what it can run…</source>
+        <translation>Interrogation de l’hôte sur ses applications…</translation>
+    </message>
+    <message>
+        <source>Pairing…</source>
+        <translation>Appairage…</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation>Associé</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Démarrage…</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation>Diffusion</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation>Instable</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Échec</translation>
+    </message>
+    <message>
+        <source>Disconnected</source>
+        <translation>Déconnecté</translation>
     </message>
 </context>
 <context>

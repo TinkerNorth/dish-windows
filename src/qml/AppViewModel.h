@@ -306,6 +306,26 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void connectMoonlightHost(const QString& id, const QString& appId);
     Q_INVOKABLE void disconnectMoonlightHost(const QString& id);
     Q_INVOKABLE void forgetMoonlightHost(const QString& id);
+
+    // App pick: refresh asks the host, the rows arrive on moonlightAppsChanged,
+    // and setMoonlightApp remembers the choice for the next launch.
+    Q_INVOKABLE void refreshMoonlightApps(const QString& id);
+    // Rows of {id,title} for the host whose list arrived last.
+    Q_INVOKABLE QVariantList moonlightApps() const;
+    Q_INVOKABLE void setMoonlightApp(const QString& id, const QString& appId,
+                                     const QString& appName);
+
+    // Emulated-device pick: 0 Auto, 1 Xbox, 2 PlayStation, 3 Nintendo. It rides
+    // the next CONTROLLER_ARRIVAL, so a change takes effect on the next bind.
+    Q_INVOKABLE int moonlightDeviceType(const QString& id) const;
+    Q_INVOKABLE void setMoonlightDeviceType(const QString& id, int deviceType);
+
+    // Per-slot routing into a live Moonlight session. bindMoonlightSlot reads the
+    // pad's real capabilities from the slot list, so the host is told what the
+    // hardware can actually do.
+    Q_INVOKABLE void bindMoonlightSlot(const QString& slotId, const QString& hostId);
+    Q_INVOKABLE void unbindMoonlightSlot(const QString& slotId);
+    Q_INVOKABLE QString moonlightBoundHostFor(const QString& slotId) const;
     Q_INVOKABLE void forgetConnection(const QString& connectionId);
 
     // Keyed on the stable id, never a list index: the discovered list can reorder
@@ -474,6 +494,8 @@ class AppViewModel : public QObject {
     // the terminal pairing edge keyed by host id.
     void moonlightHostsChanged();
     void moonlightPairingFinished(const QString& id, bool ok);
+    // A fresh /applist landed for `id`; moonlightApps() now answers for it.
+    void moonlightAppsChanged(const QString& id);
     void emulateStateChanged();
     void deadzonesChanged();
     void railCollapsedChanged();
@@ -607,6 +629,12 @@ class AppViewModel : public QObject {
 
     // Shell-only state, so the store lives here rather than on AppModel.
     source::UiPreferenceStore uiPrefs_;
+
+    // The last /applist to arrive, keyed by the host it came from, so the picker
+    // never renders one host's apps under another's name.
+    QString moonlightAppsHostId_;
+    QStringList moonlightAppIds_;
+    QStringList moonlightAppTitles_;
 };
 
 } // namespace dish::qml

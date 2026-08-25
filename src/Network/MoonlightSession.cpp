@@ -3,14 +3,15 @@
 
 #include "Network/MoonlightSession.h"
 
-#include "Network/MoonlightRtspClient.h"
 #include "core/moonlight/MoonlightCrypto.h"
 #include "core/moonlight/MoonlightPairing.h"
 #include "repository/MoonlightHostRepository.h"
 
+#include <QHostAddress>
+#include <QNetworkDatagram>
 #include <QTimer>
+#include <QUdpSocket>
 #include <QUrl>
-#include <QXmlStreamReader>
 
 namespace dish::net {
 
@@ -100,9 +101,12 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             if (pingTimer_ == nullptr) {
                 pingTimer_ = new QTimer(this);
                 pingTimer_->setInterval(500);
-                QObject::connect(pingTimer_, &QTimer::timeout, this,
-                                 [this] { control_.sendPeriodicPing(); });
+                QObject::connect(pingTimer_, &QTimer::timeout, this, &MoonlightSession::onPingTick);
             }
+            // The FIRST RTP ping must go out immediately after PLAY: a host that
+            // gates media startup on media-port liveness would otherwise sit for
+            // a whole tick before seeing the client's address.
+            onPingTick();
             pingTimer_->start();
             break;
         case moonlight::SessionEffect::StopPinging:
@@ -110,6 +114,11 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             break;
         case moonlight::SessionEffect::Teardown:
             if (pingTimer_ != nullptr) { pingTimer_->stop(); }
+            if (rtpSocket_ != nullptr) {
+                rtpSocket_->close();
+                rtpSocket_->deleteLater();
+                rtpSocket_ = nullptr;
+            }
             control_.disconnect();
             // /cancel is best-effort; ignore the reply.
             http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/cancel"),
@@ -295,20 +304,79 @@ void MoonlightSession::beginRtspAndControl() {
         const auto result = rtsp.handshake(ip, rtspPort, 1280, 720, 30);
         if (!result.has_value() || result->controlPort == 0) {
             QMetaObject::invokeMethod(
-                this, [this] { onControlConnected(false, 0); }, Qt::QueuedConnection);
+                this, [this] { onControlConnected(false, RtspHandshakeResult{}); },
+                Qt::QueuedConnection);
             return;
         }
         const bool ok = control_.connect(ip, result->controlPort, rikey, result->connectData);
         (void)rikeyId;
-        const std::uint16_t port = result->controlPort;
+        const RtspHandshakeResult handshake = *result;
         QMetaObject::invokeMethod(
-            this, [this, ok, port] { onControlConnected(ok, port); }, Qt::QueuedConnection);
+            this, [this, ok, handshake] { onControlConnected(ok, handshake); },
+            Qt::QueuedConnection);
     });
 }
 
-void MoonlightSession::onControlConnected(bool ok, std::uint16_t /*controlPort*/) {
+void MoonlightSession::onControlConnected(bool ok, const RtspHandshakeResult& rtsp) {
+    // Held for onPingTick: the media ports and their SETUP ping payloads.
+    rtsp_ = rtsp;
+    rtpPingSeq_ = 0;
     dispatch(ok ? moonlight::SessionEvent::ControlConnected
                 : moonlight::SessionEvent::ControlConnectFailed);
+}
+
+void MoonlightSession::onPingTick() {
+    // 1) The encrypted control-stream keepalive.
+    control_.sendPeriodicPing();
+
+    // 2) The RTP client pings. Sunshine and Wolf both learn the client's media
+    //    address from these datagrams and will not start (or will time out) a
+    //    stream whose ports never saw one, so they are re-sent every tick rather
+    //    than only once. We never decode media: anything the host sends back is
+    //    drained and dropped below.
+    if (rtsp_.videoPort == 0 && rtsp_.audioPort == 0) { return; }
+    if (rtpSocket_ == nullptr) {
+        rtpSocket_ = new QUdpSocket(this);
+        // Any local port; the host replies to whatever it observes.
+        if (!rtpSocket_->bind(QHostAddress::AnyIPv4, 0)) {
+            rtpSocket_->deleteLater();
+            rtpSocket_ = nullptr;
+            return;
+        }
+    }
+
+    const QHostAddress dest(host_.ip);
+    auto ping = [&](std::uint16_t port, const std::string& payload) {
+        if (port == 0) { return; }
+        const auto datagram = moonlight::encodeRtpPing(payload, rtpPingSeq_);
+        rtpSocket_->writeDatagram(reinterpret_cast<const char*>(datagram.data()),
+                                  static_cast<qint64>(datagram.size()), dest, port);
+    };
+    ping(rtsp_.videoPort, rtsp_.videoPingPayload);
+    ping(rtsp_.audioPort, rtsp_.audioPingPayload);
+    ++rtpPingSeq_;
+
+    // Discard whatever the host sent back: the streams are negotiated so the
+    // session stays healthy, but no payload is ever decoded.
+    while (rtpSocket_->hasPendingDatagrams()) { rtpSocket_->receiveDatagram(0); }
+}
+
+void MoonlightSession::refreshApps() {
+    http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/applist"),
+                    {{QStringLiteral("uniqueid"), kUniqueId}},
+                    [this](const MoonlightXmlResponse& r) {
+                        if (!r.reachable) {
+                            emit appListReady({}, {});
+                            return;
+                        }
+                        QStringList ids;
+                        QStringList titles;
+                        for (const auto& app : parseMoonlightAppList(r.rawBody)) {
+                            ids.append(app.id);
+                            titles.append(app.title);
+                        }
+                        emit appListReady(ids, titles);
+                    });
 }
 
 void MoonlightSession::sendControllerState(const moonlight::ControllerState& state) {
@@ -322,6 +390,24 @@ void MoonlightSession::sendControllerState(const moonlight::ControllerState& sta
 void MoonlightSession::sendControllerArrival(std::uint8_t number, std::uint8_t type,
                                              std::uint8_t caps, std::uint32_t supportedButtons) {
     control_.sendControllerArrival(number, type, caps, supportedButtons);
+}
+
+void MoonlightSession::sendControllerMotion(std::uint8_t number, std::uint8_t motionType, float x,
+                                            float y, float z) {
+    if (state_.phase != moonlight::SessionPhase::Streaming &&
+        state_.phase != moonlight::SessionPhase::Faltering) {
+        return;
+    }
+    control_.sendControllerMotion(number, motionType, x, y, z);
+}
+
+void MoonlightSession::sendControllerBattery(std::uint8_t number, std::uint8_t batteryState,
+                                             std::uint8_t percentage) {
+    if (state_.phase != moonlight::SessionPhase::Streaming &&
+        state_.phase != moonlight::SessionPhase::Faltering) {
+        return;
+    }
+    control_.sendControllerBattery(number, batteryState, percentage);
 }
 
 void MoonlightSession::quit() {

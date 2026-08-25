@@ -82,6 +82,8 @@ class MoonlightControlChannel {
                                std::uint8_t capabilities, std::uint32_t supportedButtons);
     void sendControllerMotion(std::uint8_t controllerNumber, std::uint8_t motionType, float x,
                               float y, float z);
+    void sendControllerBattery(std::uint8_t controllerNumber, std::uint8_t batteryState,
+                               std::uint8_t percentage);
     void sendPeriodicPing();
 
   private:

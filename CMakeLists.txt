@@ -166,6 +166,7 @@ set(DISH_CORE_SOURCES
     src/core/moonlight/MoonlightPairing.cpp
     src/core/moonlight/MoonlightRtsp.h
     src/core/moonlight/MoonlightRtsp.cpp
+    src/core/moonlight/MoonlightPadSlots.h
     src/core/moonlight/MoonlightSessionMachine.h
     src/core/model/Protocol.h
     src/core/model/IdentityKey.h
@@ -490,6 +491,7 @@ qt_add_qml_module(Dish
         src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml
         src/qml/pages/ConnectionsPage.qml
+        src/qml/pages/MoonlightHostsPage.qml
         src/qml/pages/SettingsPage.qml
         # Detail pages pushed via Qt.resolvedUrl, so they must be listed in the
         # module or the resolved URL maps to no registered component.

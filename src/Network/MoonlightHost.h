@@ -18,6 +18,13 @@ namespace dish::models {
 inline constexpr int kMoonlightHttpPort = 47989;
 inline constexpr int kMoonlightHttpsPort = 47984;
 
+// The "device to emulate" picker values, persisted per host. Auto lets the host
+// decide (wire type Unknown); the rest map onto the CONTROLLER_ARRIVAL type.
+inline constexpr int kMoonlightDeviceAuto = 0;
+inline constexpr int kMoonlightDeviceXbox = 1;
+inline constexpr int kMoonlightDevicePlayStation = 2;
+inline constexpr int kMoonlightDeviceNintendo = 3;
+
 struct MoonlightHost {
     QString name;
     QString ip;
@@ -30,6 +37,12 @@ struct MoonlightHost {
     // True when this row came from an mDNS sweep this session (vs. manual entry
     // or the remembered list).
     bool discovered = false;
+    // The last app the user picked from /applist (Sunshine's default exposes
+    // "Desktop"); empty means launch the host default.
+    QString lastAppId;
+    QString lastAppName;
+    // kMoonlightDevice*, the emulated-device pick for CONTROLLER_ARRIVAL.
+    int deviceType = kMoonlightDeviceAuto;
 
     // Prefer the host UUID so a DHCP address change keeps one row; fall back to
     // the address for a host we have not queried yet.

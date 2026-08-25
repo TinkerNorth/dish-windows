@@ -324,6 +324,13 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
                      [this] { emit moonlightHostsChanged(); });
     QObject::connect(model_->moonlight(), &net::MoonlightManager::pairingFinished, this,
                      [this](const QString& id, bool ok) { emit moonlightPairingFinished(id, ok); });
+    QObject::connect(model_->moonlight(), &net::MoonlightManager::appListReady, this,
+                     [this](const QString& id, const QStringList& ids, const QStringList& titles) {
+                         moonlightAppsHostId_ = id;
+                         moonlightAppIds_ = ids;
+                         moonlightAppTitles_ = titles;
+                         emit moonlightAppsChanged(id);
+                     });
 
     // The settings stores republish through StateSource Observables, not Qt
     // signals, so subscribe to turn a republish into our Qt NOTIFY.
@@ -719,6 +726,8 @@ QVariantList AppViewModel::moonlightHosts() const {
         m[QStringLiteral("paired")] = row.paired;
         m[QStringLiteral("discovered")] = row.discovered;
         m[QStringLiteral("phase")] = row.phaseToken;
+        m[QStringLiteral("appName")] = row.appName;
+        m[QStringLiteral("deviceType")] = row.deviceType;
         out.append(m);
     }
     return out;
@@ -745,6 +754,57 @@ void AppViewModel::disconnectMoonlightHost(const QString& id) {
 }
 
 void AppViewModel::forgetMoonlightHost(const QString& id) { model_->moonlight()->forgetHost(id); }
+
+void AppViewModel::refreshMoonlightApps(const QString& id) { model_->moonlight()->refreshApps(id); }
+
+QVariantList AppViewModel::moonlightApps() const {
+    QVariantList out;
+    for (int i = 0; i < moonlightAppIds_.size() && i < moonlightAppTitles_.size(); ++i) {
+        QVariantMap m;
+        m[QStringLiteral("id")] = moonlightAppIds_.at(i);
+        m[QStringLiteral("title")] = moonlightAppTitles_.at(i);
+        out.append(m);
+    }
+    return out;
+}
+
+void AppViewModel::setMoonlightApp(const QString& id, const QString& appId,
+                                   const QString& appName) {
+    model_->moonlight()->setHostApp(id, appId, appName);
+}
+
+int AppViewModel::moonlightDeviceType(const QString& id) const {
+    for (const auto& row : model_->moonlight()->hostRows()) {
+        if (row.id == id) { return row.deviceType; }
+    }
+    return 0; // Auto
+}
+
+void AppViewModel::setMoonlightDeviceType(const QString& id, int deviceType) {
+    model_->moonlight()->setHostDeviceType(id, deviceType);
+}
+
+void AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostId) {
+    // The pad's detected hardware decides the advertised CONTROLLER_ARRIVAL
+    // capabilities, so the host is never told about a feature the pad lacks.
+    const models::ControllerSlot* slot = slotById(slotId);
+    const bool hasRumble = slot != nullptr && slot->capabilities.hasRumble;
+    const bool hasMotion = slot != nullptr && slot->capabilities.hasMotion;
+    const bool hasTouchpad = slot != nullptr && slot->capabilities.hasTouchpad;
+    const bool hasLightbar = slot != nullptr && slot->capabilities.hasLightbar;
+    // A pad reporting any level at all has a battery to report.
+    const bool hasBattery = slot != nullptr && slot->capabilities.batteryLevel != 0xFF;
+    model_->moonlight()->bindSlot(slotId, hostId, hasRumble, hasMotion, hasTouchpad, hasBattery,
+                                  hasLightbar);
+}
+
+void AppViewModel::unbindMoonlightSlot(const QString& slotId) {
+    model_->moonlight()->unbindSlot(slotId);
+}
+
+QString AppViewModel::moonlightBoundHostFor(const QString& slotId) const {
+    return model_->moonlight()->boundHostFor(slotId);
+}
 
 QVariantList AppViewModel::discoveredServers() const {
     // The one-spot rule: a satellite that already has a connections row renders

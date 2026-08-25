@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace dish::moonlight {
@@ -88,6 +89,34 @@ inline constexpr std::uint32_t kBtnMisc = 0x200000;
 inline constexpr std::uint8_t kMotionAccel = 0x01;
 inline constexpr std::uint8_t kMotionGyro = 0x02;
 
+// CONTROLLER_BATTERY state byte.
+inline constexpr std::uint8_t kBatteryStateUnknown = 0x00;
+inline constexpr std::uint8_t kBatteryStateNotPresent = 0x01;
+inline constexpr std::uint8_t kBatteryStateDischarging = 0x02;
+inline constexpr std::uint8_t kBatteryStateCharging = 0x03;
+inline constexpr std::uint8_t kBatteryStateNotCharging = 0x04;
+inline constexpr std::uint8_t kBatteryStateFull = 0x05;
+inline constexpr std::uint8_t kBatteryPercentageUnknown = 0xFF;
+
+// Map the Satellite wire battery status (0 unknown, 1 discharging, 2 charging,
+// 3 full, 4 wired) onto the Moonlight battery state, so the SDL battery stream
+// forwards to either host kind from one publisher.
+inline std::uint8_t batteryStateFromSatelliteStatus(std::uint8_t satelliteStatus) {
+    switch (satelliteStatus) {
+    case 1:
+        return kBatteryStateDischarging;
+    case 2:
+        return kBatteryStateCharging;
+    case 3:
+        return kBatteryStateFull;
+    case 4:
+        // Wired with no charge telemetry reads as charging, the closest state.
+        return kBatteryStateCharging;
+    default:
+        return kBatteryStateUnknown;
+    }
+}
+
 // The exact byte length of a CONTROLLER_MULTI plaintext control payload, header
 // included. Fixed so the hot path can preallocate: 4 (ptype+len) + 4 (input
 // size BE) + 4 (input type LE) + 26 (struct) = 38.
@@ -144,6 +173,12 @@ std::vector<std::uint8_t> encodePeriodicPing();
 
 // TERMINATION on graceful quit.
 std::vector<std::uint8_t> encodeTermination();
+
+// The RTP client ping datagram for the video/audio UDP ports: the host learns
+// the client's address from it and gates media startup on its arrival. With a
+// 16-char X-SS-Ping-Payload from SETUP it is the 20-byte session-id form
+// [payload 16][seq u32 LE]; otherwise the 4-byte legacy "PING".
+std::vector<std::uint8_t> encodeRtpPing(const std::string& pingPayload, std::uint32_t seq);
 
 // ── Host -> client events (decode of a decrypted control plaintext) ──────────
 

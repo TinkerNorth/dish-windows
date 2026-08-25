@@ -178,6 +178,16 @@ std::vector<std::uint8_t> encodePeriodicPing() {
     return out;
 }
 
+std::vector<std::uint8_t> encodeRtpPing(const std::string& pingPayload, std::uint32_t seq) {
+    if (pingPayload.size() == 16) {
+        std::vector<std::uint8_t> out(20);
+        std::memcpy(out.data(), pingPayload.data(), 16);
+        putU32Le(out.data() + 16, seq);
+        return out;
+    }
+    return {'P', 'I', 'N', 'G'};
+}
+
 std::vector<std::uint8_t> encodeTermination() {
     // Wolf's ControlTerminatePacket carries a 4-byte reason (graceful).
     std::vector<std::uint8_t> out(4 + 4);

@@ -24,6 +24,11 @@ struct RtspHandshakeResult {
     std::uint16_t videoPort = 0;
     std::uint16_t audioPort = 0;
     std::uint32_t connectData = 0; // ENet secret from the control SETUP, 0 if none
+    // X-SS-Ping-Payload from the video/audio SETUP responses (16 chars when the
+    // host supports the session-id extension, empty otherwise). The RTP client
+    // ping carries it so the host can match the datagram to this session.
+    std::string videoPingPayload;
+    std::string audioPingPayload;
 };
 
 class MoonlightRtspClient {

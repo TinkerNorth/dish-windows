@@ -51,6 +51,8 @@ QList<MoonlightHostRow> mergeMoonlightRows(const QList<models::MoonlightHost>& r
         r.paired = h.paired;
         r.discovered = isDiscovered;
         r.phaseToken = phaseTokensById.value(r.id, QStringLiteral("idle"));
+        r.appName = h.lastAppName;
+        r.deviceType = h.deviceType;
         return r;
     };
 
@@ -151,6 +153,10 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
     QObject::connect(
         session, &MoonlightSession::rgbLedReceived, this,
         [this, id](int n, int r, int g, int b) { emit rgbLedReceived(id, n, r, g, b); });
+    QObject::connect(session, &MoonlightSession::appListReady, this,
+                     [this, id](const QStringList& ids, const QStringList& titles) {
+                         emit appListReady(id, ids, titles);
+                     });
     return session;
 }
 
@@ -172,7 +178,33 @@ void MoonlightManager::connectHost(const QString& id, const QString& appId) {
     const auto host = hostById(id);
     if (!host.has_value()) { return; }
     auto* session = ensureSession(*host);
-    if (session != nullptr) { session->launch(appId); }
+    if (session == nullptr) { return; }
+    // An explicit pick wins; otherwise fall back to what the user chose last.
+    session->launch(appId.isEmpty() ? host->lastAppId : appId);
+}
+
+void MoonlightManager::refreshApps(const QString& id) {
+    const auto host = hostById(id);
+    if (!host.has_value()) { return; }
+    auto* session = ensureSession(*host);
+    if (session != nullptr) { session->refreshApps(); }
+}
+
+void MoonlightManager::setHostApp(const QString& id, const QString& appId, const QString& appName) {
+    auto host = hostById(id);
+    if (!host.has_value()) { return; }
+    host->lastAppId = appId;
+    host->lastAppName = appName;
+    repo_->rememberHost(*host);
+    emit hostsChanged();
+}
+
+void MoonlightManager::setHostDeviceType(const QString& id, int deviceType) {
+    auto host = hostById(id);
+    if (!host.has_value()) { return; }
+    host->deviceType = deviceType;
+    repo_->rememberHost(*host);
+    emit hostsChanged();
 }
 
 void MoonlightManager::disconnectHost(const QString& id) {
@@ -191,6 +223,160 @@ void MoonlightManager::forgetHost(const QString& id) {
 std::optional<moonlight::SessionPhase> MoonlightManager::sessionPhase(const QString& id) const {
     if (auto* session = sessions_.value(id, nullptr)) { return session->phase(); }
     return std::nullopt;
+}
+
+// ── Per-slot input routing ──────────────────────────────────────────────────
+
+void MoonlightManager::bindSlot(const QString& slotId, const QString& hostId, bool hasRumble,
+                                bool hasMotion, bool hasTouchpad, bool hasBattery,
+                                bool hasLightbar) {
+    const auto host = hostById(hostId);
+    if (!host.has_value()) { return; }
+    auto* session = ensureSession(*host);
+    if (session == nullptr) { return; }
+
+    // Re-binding the same slot elsewhere releases the old assignment first.
+    unbindSlot(slotId);
+
+    const std::string key = slotId.toStdString();
+    auto& padSet = padSlots_[hostId];
+    const auto number = padSet.assign(key);
+    if (!number.has_value()) { return; } // host already carries kMaxPads
+
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        routes_[key] = Route{session, *number, hostId};
+        anyBound_.store(true, std::memory_order_relaxed);
+    }
+
+    // Announce the pad: the host's emulated-device pick decides the type it
+    // materialises, the capabilities are the real hardware's.
+    const std::uint8_t caps =
+        moonlight::padCapabilities(hasRumble, hasMotion, hasTouchpad, hasBattery, hasLightbar);
+    const std::uint8_t type = moonlight::arrivalTypeFromDevicePick(host->deviceType);
+    // The full button set Dish can produce, so the host does not have to guess.
+    constexpr std::uint32_t kSupportedButtons =
+        moonlight::kBtnDpadUp | moonlight::kBtnDpadDown | moonlight::kBtnDpadLeft |
+        moonlight::kBtnDpadRight | moonlight::kBtnStart | moonlight::kBtnBack |
+        moonlight::kBtnLeftStick | moonlight::kBtnRightStick | moonlight::kBtnLeftButton |
+        moonlight::kBtnRightButton | moonlight::kBtnHome | moonlight::kBtnA | moonlight::kBtnB |
+        moonlight::kBtnX | moonlight::kBtnY;
+    session->sendControllerArrival(*number, type, caps, kSupportedButtons);
+}
+
+void MoonlightManager::unbindSlot(const QString& slotId) {
+    const std::string key = slotId.toStdString();
+    Route route;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        const auto it = routes_.find(key);
+        if (it == routes_.end()) { return; }
+        route = it->second;
+        routes_.erase(it);
+        anyBound_.store(!routes_.empty(), std::memory_order_relaxed);
+    }
+
+    auto& padSet = padSlots_[route.hostId];
+    padSet.release(key);
+
+    // The unplug signal: one last CONTROLLER_MULTI naming this controller with
+    // its bit already cleared from the active mask.
+    if (route.session != nullptr) {
+        moonlight::ControllerState farewell;
+        farewell.controllerNumber = route.controllerNumber;
+        farewell.activeGamepadMask = padSet.activeMask();
+        route.session->sendControllerState(farewell);
+    }
+}
+
+QString MoonlightManager::boundHostFor(const QString& slotId) const {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    const auto it = routes_.find(slotId.toStdString());
+    return it == routes_.end() ? QString() : it->second.hostId;
+}
+
+QString MoonlightManager::slotForController(const QString& hostId, int controllerNumber) const {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    for (const auto& [slotId, route] : routes_) {
+        if (route.hostId == hostId && route.controllerNumber == controllerNumber) {
+            return QString::fromStdString(slotId);
+        }
+    }
+    return {};
+}
+
+void MoonlightManager::forwardReport(const std::string& slotId, std::uint16_t buttons,
+                                     std::uint8_t lt, std::uint8_t rt, std::int16_t lx,
+                                     std::int16_t ly, std::int16_t rx, std::int16_t ry) {
+    if (!anyBound_.load(std::memory_order_relaxed)) { return; }
+    MoonlightSession* session = nullptr;
+    moonlight::ControllerState state;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        const auto it = routes_.find(slotId);
+        if (it == routes_.end()) { return; }
+        session = it->second.session;
+        state.controllerNumber = it->second.controllerNumber;
+        const auto padIt = padSlots_.constFind(it->second.hostId);
+        state.activeGamepadMask = padIt == padSlots_.constEnd()
+                                      ? static_cast<std::uint16_t>(1U << state.controllerNumber)
+                                      : padIt->activeMask();
+    }
+    // The processor's button word is XUSB, which is bit-for-bit the layout
+    // Moonlight's low 16 button flags use (pinned by a unit test), so the fold
+    // is the identity rather than a translation table.
+    state.buttonFlags = buttons;
+    state.leftTrigger = lt;
+    state.rightTrigger = rt;
+    state.leftStickX = lx;
+    state.leftStickY = ly;
+    state.rightStickX = rx;
+    state.rightStickY = ry;
+    if (session != nullptr) { session->sendControllerState(state); }
+}
+
+void MoonlightManager::forwardMotion(const std::string& slotId, std::int16_t gyroX,
+                                     std::int16_t gyroY, std::int16_t gyroZ, std::int16_t accelX,
+                                     std::int16_t accelY, std::int16_t accelZ) {
+    if (!anyBound_.load(std::memory_order_relaxed)) { return; }
+    MoonlightSession* session = nullptr;
+    std::uint8_t number = 0;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        const auto it = routes_.find(slotId);
+        if (it == routes_.end()) { return; }
+        session = it->second.session;
+        number = it->second.controllerNumber;
+    }
+    if (session == nullptr) { return; }
+    // The wire carries floats in the sensors' natural units; the SDL path hands
+    // us the satellite's fixed-point scaling (gyro 2000/32767 deg/s, accel
+    // 4/32767 g), so convert once here.
+    constexpr float kGyroScale = 2000.0F / 32767.0F;
+    constexpr float kAccelScale = 4.0F / 32767.0F;
+    session->sendControllerMotion(
+        number, moonlight::kMotionGyro, static_cast<float>(gyroX) * kGyroScale,
+        static_cast<float>(gyroY) * kGyroScale, static_cast<float>(gyroZ) * kGyroScale);
+    session->sendControllerMotion(
+        number, moonlight::kMotionAccel, static_cast<float>(accelX) * kAccelScale,
+        static_cast<float>(accelY) * kAccelScale, static_cast<float>(accelZ) * kAccelScale);
+}
+
+void MoonlightManager::forwardBattery(const std::string& slotId, std::uint8_t level,
+                                      std::uint8_t satelliteStatus) {
+    if (!anyBound_.load(std::memory_order_relaxed)) { return; }
+    MoonlightSession* session = nullptr;
+    std::uint8_t number = 0;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        const auto it = routes_.find(slotId);
+        if (it == routes_.end()) { return; }
+        session = it->second.session;
+        number = it->second.controllerNumber;
+    }
+    if (session == nullptr) { return; }
+    session->sendControllerBattery(
+        number, moonlight::batteryStateFromSatelliteStatus(satelliteStatus), level);
 }
 
 } // namespace dish::net

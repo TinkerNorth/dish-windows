@@ -21,6 +21,7 @@
 #include "Network/MoonlightControlChannel.h"
 #include "Network/MoonlightHost.h"
 #include "Network/MoonlightHttpClient.h"
+#include "Network/MoonlightRtspClient.h"
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightIdentity.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
@@ -37,6 +38,7 @@ class MoonlightHostRepository;
 }
 
 class QTimer;
+class QUdpSocket;
 
 namespace dish::net {
 
@@ -65,12 +67,22 @@ class MoonlightSession : public QObject {
     // Graceful teardown: TERMINATION + ENet disconnect + /cancel.
     void quit();
 
+    // GET /applist (HTTPS, needs pairing) and emit appListReady.
+    void refreshApps();
+
     // Hot path: forward one controller's state. No-op unless streaming.
     void sendControllerState(const moonlight::ControllerState& state);
 
     // Announce a virtual pad (its emulated type + caps) once the stream is live.
     void sendControllerArrival(std::uint8_t number, std::uint8_t type, std::uint8_t caps,
                                std::uint32_t supportedButtons);
+
+    // Forward a motion sample / battery report for a bound pad. No-ops unless
+    // streaming, like sendControllerState.
+    void sendControllerMotion(std::uint8_t number, std::uint8_t motionType, float x, float y,
+                              float z);
+    void sendControllerBattery(std::uint8_t number, std::uint8_t batteryState,
+                               std::uint8_t percentage);
 
   signals:
     void phaseChanged();
@@ -87,8 +99,13 @@ class MoonlightSession : public QObject {
     void runEffects(const std::vector<moonlight::SessionEffect>& effects);
     void beginLaunch();
     void beginRtspAndControl();
-    void onControlConnected(bool ok, std::uint16_t controlPort);
+    void onControlConnected(bool ok, const RtspHandshakeResult& rtsp);
     void wireControlHandlers();
+    // One tick of both keepalives: the encrypted PERIODIC_PING on the control
+    // stream and the RTP client pings on the negotiated video/audio UDP ports.
+    // The host gates media startup on the RTP pings; their incoming payloads are
+    // read and discarded (we never decode media).
+    void onPingTick();
 
     // The parsed /launch rikey material.
     std::array<std::uint8_t, 16> rikey_{};
@@ -106,6 +123,11 @@ class MoonlightSession : public QObject {
     QString pendingAppId_;
     QString rtspTarget_;
     QTimer* pingTimer_ = nullptr;
+
+    // The negotiated media ports + the SETUP ping payloads, for onPingTick.
+    RtspHandshakeResult rtsp_;
+    QUdpSocket* rtpSocket_ = nullptr;
+    std::uint32_t rtpPingSeq_ = 0;
 };
 
 } // namespace dish::net

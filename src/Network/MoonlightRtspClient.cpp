@@ -78,11 +78,15 @@ std::optional<RtspHandshakeResult> MoonlightRtspClient::handshake(const std::str
 
     if (auto r = setup("audio"); r && r->statusCode == 200) {
         if (auto p = ml::setupServerPort(*r)) { result.audioPort = static_cast<std::uint16_t>(*p); }
+        const auto ping = r->options.find("X-SS-Ping-Payload");
+        if (ping != r->options.end()) { result.audioPingPayload = ping->second; }
     } else {
         return std::nullopt;
     }
     if (auto r = setup("video"); r && r->statusCode == 200) {
         if (auto p = ml::setupServerPort(*r)) { result.videoPort = static_cast<std::uint16_t>(*p); }
+        const auto ping = r->options.find("X-SS-Ping-Payload");
+        if (ping != r->options.end()) { result.videoPingPayload = ping->second; }
     } else {
         return std::nullopt;
     }

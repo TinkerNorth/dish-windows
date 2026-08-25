@@ -9,6 +9,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+
 using namespace dish::moonlight;
 namespace mc = dish::moonlight::crypto;
 
@@ -66,6 +68,24 @@ TEST_CASE("PERIODIC_PING and TERMINATION headers", "[moonlight][control]") {
     REQUIRE(hx(encodePeriodicPing()) == "00020000");
     // 0100 (type) 0400 (len=4) 80030023 (graceful reason, big-endian)
     REQUIRE(hx(encodeTermination()) == "0001040080030023");
+}
+
+TEST_CASE("encodeRtpPing carries the session payload, else the legacy form",
+          "[moonlight][control][rtp]") {
+    // With a 16-char X-SS-Ping-Payload: [payload 16][seq u32 LE] = 20 bytes.
+    const std::string payload = "0123456789ABCDEF";
+    const auto withPayload = encodeRtpPing(payload, 0x01020304);
+    REQUIRE(withPayload.size() == 20);
+    REQUIRE(std::string(withPayload.begin(), withPayload.begin() + 16) == payload);
+    REQUIRE(withPayload[16] == 0x04); // little-endian seq
+    REQUIRE(withPayload[17] == 0x03);
+    REQUIRE(withPayload[18] == 0x02);
+    REQUIRE(withPayload[19] == 0x01);
+
+    // A host that sent no payload gets the 4-byte legacy ping.
+    REQUIRE(hx(encodeRtpPing("", 7)) == "50494E47"); // "PING"
+    // A wrong-length payload is not half-sent; it degrades to the legacy form.
+    REQUIRE(encodeRtpPing("short", 0).size() == 4);
 }
 
 TEST_CASE("CONTROLLER_ARRIVAL announces type and caps", "[moonlight][control]") {

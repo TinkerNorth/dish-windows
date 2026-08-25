@@ -36,6 +36,33 @@ TEST_CASE("buildMoonlightQuery percent-encodes and orders deterministically", "[
     REQUIRE(q.contains(QStringLiteral("salt=00FF")));
 }
 
+TEST_CASE("parseMoonlightAppList reads repeated App nodes", "[moonlight][http]") {
+    const QByteArray body = "<root status_code=\"200\">"
+                            "<App><IsHdrSupported>0</IsHdrSupported>"
+                            "<AppTitle>Desktop</AppTitle><ID>1</ID></App>"
+                            "<App><AppTitle>Steam Big Picture</AppTitle><ID>881448767</ID></App>"
+                            "</root>";
+    const auto apps = parseMoonlightAppList(body);
+    REQUIRE(apps.size() == 2);
+    REQUIRE(apps[0].id == QStringLiteral("1"));
+    REQUIRE(apps[0].title == QStringLiteral("Desktop"));
+    REQUIRE(apps[1].id == QStringLiteral("881448767"));
+    REQUIRE(apps[1].title == QStringLiteral("Steam Big Picture"));
+}
+
+TEST_CASE("parseMoonlightAppList skips entries with no ID and survives garbage",
+          "[moonlight][http]") {
+    // An entry with no ID is not launchable, so it is dropped rather than shown.
+    const QByteArray missingId =
+        "<root><App><AppTitle>Nameless</AppTitle></App><App><ID>7</ID></App></root>";
+    const auto apps = parseMoonlightAppList(missingId);
+    REQUIRE(apps.size() == 1);
+    REQUIRE(apps[0].id == QStringLiteral("7"));
+
+    REQUIRE(parseMoonlightAppList(QByteArray("not xml <<<")).isEmpty());
+    REQUIRE(parseMoonlightAppList(QByteArray()).isEmpty());
+}
+
 TEST_CASE("parseMoonlightXml on garbage is unreachable-safe", "[moonlight][http]") {
     const auto resp = parseMoonlightXml(QByteArray("not xml <<<"));
     // A parse error still yields an object; callers gate on reachable / values.

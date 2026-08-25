@@ -13,6 +13,9 @@ QJsonObject MoonlightHost::toJson() const {
     obj[QStringLiteral("httpsPort")] = httpsPort;
     obj[QStringLiteral("uuid")] = uuid;
     obj[QStringLiteral("paired")] = paired;
+    obj[QStringLiteral("lastAppId")] = lastAppId;
+    obj[QStringLiteral("lastAppName")] = lastAppName;
+    obj[QStringLiteral("deviceType")] = deviceType;
     return obj;
 }
 
@@ -24,6 +27,9 @@ MoonlightHost MoonlightHost::fromJson(const QJsonObject& obj) {
     h.httpsPort = obj.value(QStringLiteral("httpsPort")).toInt(kMoonlightHttpsPort);
     h.uuid = obj.value(QStringLiteral("uuid")).toString();
     h.paired = obj.value(QStringLiteral("paired")).toBool();
+    h.lastAppId = obj.value(QStringLiteral("lastAppId")).toString();
+    h.lastAppName = obj.value(QStringLiteral("lastAppName")).toString();
+    h.deviceType = obj.value(QStringLiteral("deviceType")).toInt(kMoonlightDeviceAuto);
     return h;
 }
 

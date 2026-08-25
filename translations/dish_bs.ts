@@ -912,6 +912,14 @@
         <source>Unsteady</source>
         <translation>Nestabilan</translation>
     </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Moonlight hostovi</translation>
+    </message>
+    <message>
+        <source>Stream to a PC running Sunshine, Apollo or Wolf instead of a satellite.</source>
+        <translation>Strimaj na računar sa Sunshine, Apollo ili Wolf umjesto na satelit.</translation>
+    </message>
 </context>
 <context>
     <name>ContentDialog</name>
@@ -2580,6 +2588,241 @@
     <message>
         <source>Cancel</source>
         <translation>Otkaži</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightHostsPage</name>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Moonlight hostovi</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n pronađen</numerusform>
+            <numerusform>%n pronađena</numerusform>
+            <numerusform>%n pronađenih</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation>
+            <numerusform>%n uparen</numerusform>
+            <numerusform>%n uparena</numerusform>
+            <numerusform>%n uparenih</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Automatski</translation>
+    </message>
+    <message>
+        <source>Xbox</source>
+        <translation>Xbox</translation>
+    </message>
+    <message>
+        <source>PlayStation</source>
+        <translation>PlayStation</translation>
+    </message>
+    <message>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Pronađen</translation>
+    </message>
+    <message>
+        <source>scanning…</source>
+        <translation>skeniranje…</translation>
+    </message>
+    <message>
+        <source>Add by address…</source>
+        <translation>Dodaj preko adrese…</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation>Skeniranje…</translation>
+    </message>
+    <message>
+        <source>Scan</source>
+        <translation>Skeniraj</translation>
+    </message>
+    <message>
+        <source>Looking for Moonlight hosts</source>
+        <translation>Tražimo Moonlight hostove</translation>
+    </message>
+    <message>
+        <source>Scanning your network for hosts advertising GameStream. They appear here as they answer.</source>
+        <translation>Pretražujemo mrežu za hostovima koji nude GameStream. Pojavljuju se ovdje kada odgovore.</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation>Nije pronađen nijedan Moonlight host</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>Računar se pojavljuje ovdje kada na njemu radi Sunshine, Apollo ili Wolf i kada su oba uređaja na istoj mreži. Možeš ga dodati i preko adrese.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation>Preuzmi Sunshine ↗</translation>
+    </message>
+    <message>
+        <source>%1, Moonlight host, %2</source>
+        <translation>%1, Moonlight host, %2</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine/Apollo)</source>
+        <translation>Moonlight host (Sunshine/Apollo)</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Sesija</translation>
+    </message>
+    <message>
+        <source>App</source>
+        <translation>Aplikacija</translation>
+    </message>
+    <message>
+        <source>Host default</source>
+        <translation>Zadano na hostu</translation>
+    </message>
+    <message>
+        <source>Choose…</source>
+        <translation>Odaberi…</translation>
+    </message>
+    <message>
+        <source>Emulate</source>
+        <translation>Emuliraj</translation>
+    </message>
+    <message>
+        <source>Pair…</source>
+        <translation>Upari…</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Povezivanje…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Poveži se</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Prekini vezu</translation>
+    </message>
+    <message>
+        <source>More actions for %1</source>
+        <translation>Više radnji za %1</translation>
+    </message>
+    <message>
+        <source>Forget</source>
+        <translation>Zaboravi</translation>
+    </message>
+    <message>
+        <source>Forget %1?</source>
+        <translation>Zaboraviti %1?</translation>
+    </message>
+    <message>
+        <source>Its pairing is deleted — you’ll need the PIN again.</source>
+        <translation>Uparivanje se briše — ponovo će ti trebati PIN.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Otkaži</translation>
+    </message>
+    <message>
+        <source>Moonlight host</source>
+        <translation>Moonlight host</translation>
+    </message>
+    <message>
+        <source>Add a host by address</source>
+        <translation>Dodaj host preko adrese</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Dodaj</translation>
+    </message>
+    <message>
+        <source>Enter the host’s IP address or hostname. Dish uses the standard Moonlight ports.</source>
+        <translation>Unesi IP adresu ili naziv hosta. Dish koristi standardne Moonlight portove.</translation>
+    </message>
+    <message>
+        <source>192.168.1.20</source>
+        <translation>192.168.1.20</translation>
+    </message>
+    <message>
+        <source>Name (optional)</source>
+        <translation>Naziv (opcionalno)</translation>
+    </message>
+    <message>
+        <source>Pairing</source>
+        <translation>Uparivanje</translation>
+    </message>
+    <message>
+        <source>Pair with %1</source>
+        <translation>Upari sa %1</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Gotovo</translation>
+    </message>
+    <message>
+        <source>Type this PIN into the &lt;b&gt;%1&lt;/b&gt; web interface to approve the pairing.</source>
+        <translation>Upiši ovaj PIN u web sučelje hosta &lt;b&gt;%1&lt;/b&gt; da odobriš uparivanje.</translation>
+    </message>
+    <message>
+        <source>The host did not accept the pairing. Try again.</source>
+        <translation>Host nije prihvatio uparivanje. Pokušaj ponovo.</translation>
+    </message>
+    <message>
+        <source>Waiting for approval on the host…</source>
+        <translation>Čekamo odobrenje na hostu…</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation>Novi kod</translation>
+    </message>
+    <message>
+        <source>What should %1 launch?</source>
+        <translation>Šta %1 treba pokrenuti?</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Zatvori</translation>
+    </message>
+    <message>
+        <source>Asking the host what it can run…</source>
+        <translation>Pitamo host šta može pokrenuti…</translation>
+    </message>
+    <message>
+        <source>Pairing…</source>
+        <translation>Uparivanje…</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation>Uparen</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Pokreće se…</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation>Strimanje</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation>Nestabilan</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Neuspjelo</translation>
+    </message>
+    <message>
+        <source>Disconnected</source>
+        <translation>Veza prekinuta</translation>
     </message>
 </context>
 <context>

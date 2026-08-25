@@ -28,6 +28,7 @@ QString buildMoonlightQuery(const std::map<QString, QString>& query) {
 
 MoonlightXmlResponse parseMoonlightXml(const QByteArray& body) {
     MoonlightXmlResponse resp;
+    resp.rawBody = body;
     QXmlStreamReader xml(body);
     QString currentTag;
     while (!xml.atEnd()) {
@@ -49,6 +50,39 @@ MoonlightXmlResponse parseMoonlightXml(const QByteArray& body) {
     }
     if (!xml.hasError()) { resp.reachable = true; }
     return resp;
+}
+
+QList<MoonlightApp> parseMoonlightAppList(const QByteArray& body) {
+    QList<MoonlightApp> apps;
+    QXmlStreamReader xml(body);
+    MoonlightApp current;
+    bool inApp = false;
+    QString leaf;
+    while (!xml.atEnd()) {
+        const auto token = xml.readNext();
+        if (token == QXmlStreamReader::StartElement) {
+            if (xml.name() == QLatin1String("App")) {
+                inApp = true;
+                current = MoonlightApp{};
+            } else if (inApp) {
+                leaf = xml.name().toString();
+            }
+        } else if (token == QXmlStreamReader::Characters && inApp && !leaf.isEmpty() &&
+                   !xml.isWhitespace()) {
+            if (leaf == QLatin1String("ID")) {
+                current.id = xml.text().toString();
+            } else if (leaf == QLatin1String("AppTitle")) {
+                current.title = xml.text().toString();
+            }
+        } else if (token == QXmlStreamReader::EndElement) {
+            if (xml.name() == QLatin1String("App")) {
+                inApp = false;
+                if (!current.id.isEmpty()) { apps.append(current); }
+            }
+            leaf.clear();
+        }
+    }
+    return apps;
 }
 
 void MoonlightHttpClient::getHttp(const QString& host, int httpPort, const QString& path,
