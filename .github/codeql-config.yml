@@ -1,0 +1,20 @@
+# CodeQL configuration for dish-windows.
+#
+# Referenced by .github/workflows/codeql.yml (init `config-file:`).
+#
+# Why the exclusion: CMakeLists.txt pulls ENet and Catch2 in with FetchContent
+# and compiles ENet as our own `enet` target, so the CodeQL tracer sees those
+# third-party translation units as part of our build and reports on them. They
+# are pinned upstream sources we do not patch, so an alert in them is neither
+# actionable here nor fixable here — it belongs upstream. Analysing them also
+# costs time on a job that is already the slowest in CI.
+#
+# This narrows WHERE alerts are reported, not WHICH queries run: the
+# security-extended and security-and-quality suites stay in force over all
+# first-party code under src/ and tests/.
+#
+# The path is build/_deps/** because both workflows configure into build/ and
+# FetchContent populates <builddir>/_deps/<name>-src.
+
+paths-ignore:
+  - build/_deps/**
