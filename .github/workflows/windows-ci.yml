@@ -166,9 +166,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item build-release/dish.exe artifact/
           # windeployqt walks Qt's dependency graph only. dish.exe imports
-          # libsodium.dll and SDL2.dll directly, so without this copy the
-          # artifact ships a dish.exe that cannot start (0xc0000135).
+          # libsodium.dll, SDL2.dll and (for the Moonlight crypto) libcrypto
+          # directly, so without this copy the artifact ships a dish.exe that
+          # cannot start (0xc0000135). vcpkg's applocal step drops them beside the
+          # freshly linked exe; libcrypto carries the 3-x64 soversion. libssl is
+          # NOT shipped: the Moonlight path uses only libcrypto and TLS rides Qt's
+          # Schannel backend.
           Copy-Item build-release/libsodium.dll, build-release/SDL2.dll artifact/
+          Copy-Item build-release/libcrypto-3-x64.dll artifact/
           # --qmldir is required: the Quick chrome is the only UI, so an
           # artifact without the QML modules opens to a white window.
           # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.

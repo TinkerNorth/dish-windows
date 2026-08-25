@@ -27,6 +27,8 @@ today.
 | [Qt 6](#2-qt-6) | 6.7.3 (CI and release); CMake requires >= 6.7 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
 | [SDL2](#sdl2) | 2.32.10#1 (vcpkg baseline `9e593bb1`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
 | [libsodium](#libsodium) | 1.0.22#1 (vcpkg baseline `9e593bb1`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
+| [OpenSSL](#openssl) | 3.x (vcpkg baseline `9e593bb1`) | `Apache-2.0` | Dynamically linked; the DLLs ship in the release zip and installer payload. Moonlight path only. | Keep the notice, ship the Apache-2.0 text |
+| [ENet (cgutman fork)](#enet-cgutman-fork) | commit `44c85e1` | `MIT` | Statically linked into `dish.exe`. Moonlight control stream. | Keep the copyright and permission notice |
 | [Inter](#4-inter) | 4.001 | `OFL-1.1` | Four `.ttf` faces embedded in `dish.exe` as Qt resources under `:/fonts/`. | Ship the license text with every copy. See section 4. |
 | [Catch2](#5-catch2) | 3.5.4 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
 | [Visual C++ runtime](#visual-c-runtime) | 14.4x (`Microsoft.VC143.CRT`) | Proprietary, Microsoft | Five DLLs staged app-local, in the installer payload and in the release zip alike. | Microsoft Visual Studio redistributable terms |
@@ -197,6 +199,64 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
+
+### OpenSSL
+
+OpenSSL 3.x (vcpkg, resolved against the same pinned baseline). SPDX
+`Apache-2.0`. Upstream: <https://www.openssl.org/>. Dynamically linked. Only
+`libcrypto-3-x64.dll` ships in the release zip and installer payload; `libssl` is
+neither linked nor shipped, because TLS rides Qt's Schannel backend and the
+Moonlight code touches only libcrypto.
+
+Used ONLY by the Moonlight (GameStream) path, which needs primitives libsodium
+does not provide: AES-128-ECB and AES-128-GCM (the pairing blobs and the control
+stream), RSA-2048 sign/verify, and self-signed X.509 certificate generation. The
+Satellite protocol-1 path continues to use libsodium exclusively. OpenSSL 3 is
+under the Apache License 2.0; the full text travels with the binary in
+`licenses/`.
+
+### ENet (cgutman fork)
+
+ENet, the cgutman fork that adds IPv4+IPv6 support, pinned by CMake FetchContent
+to commit `44c85e16279553d9c052e572bcbfcd745fb74abf`. SPDX `MIT`. Upstream:
+<https://github.com/cgutman/enet> (fork of <https://github.com/lsalzman/enet>).
+Statically linked into `dish.exe`.
+
+Used for the Moonlight control stream (UDP), which the GameStream protocol
+carries over ENet. Its struct handling and connect flow were referenced while
+porting the control channel; the C library itself is vendored, not reimplemented.
+
+```
+Copyright (c) 2002-2020 Lee Salzman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### Wolf (protocol reference, not linked)
+
+The Moonlight control-stream struct layouts, the pairing phase logic, and the
+RTSP message shapes were ported from the reference implementation in
+[games-on-whales/wolf](https://github.com/games-on-whales/wolf) (`src/moonlight-protocol`,
+`src/moonlight-server`) and its protocol docs. Wolf is `MIT` licensed. No Wolf
+code is compiled into `dish.exe`; only the wire formats it documents were
+reimplemented. No GPL Moonlight source (moonlight-common-c, moonlight-qt,
+Sunshine, Apollo) was consulted, in keeping with this project's LGPL license.
 
 
 ## 4. Inter

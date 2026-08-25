@@ -316,6 +316,15 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     QObject::connect(model_, &dish::AppModel::catalogStateChanged, this,
                      [this] { emit emulateStateChanged(); });
 
+    // Moonlight (GameStream) subsystem: relay its host-list and pairing edges to
+    // our own Qt NOTIFYs so a QML host page can bind them.
+    QObject::connect(model_->moonlight(), &net::MoonlightManager::hostsChanged, this,
+                     [this] { emit moonlightHostsChanged(); });
+    QObject::connect(model_->moonlight(), &net::MoonlightManager::scanningChanged, this,
+                     [this] { emit moonlightHostsChanged(); });
+    QObject::connect(model_->moonlight(), &net::MoonlightManager::pairingFinished, this,
+                     [this](const QString& id, bool ok) { emit moonlightPairingFinished(id, ok); });
+
     // The settings stores republish through StateSource Observables, not Qt
     // signals, so subscribe to turn a republish into our Qt NOTIFY.
     // emitCurrent=false: the getters read the initial values lazily.
@@ -697,6 +706,45 @@ void AppViewModel::setControllerType(const QString& slotId, int type) {
 void AppViewModel::startDiscovery() { model_->wifi()->startDiscovery(); }
 
 bool AppViewModel::isScanning() const { return model_->wifi()->isScanning(); }
+
+// ── Moonlight (GameStream) host surface ──────────────────────────────────────
+
+QVariantList AppViewModel::moonlightHosts() const {
+    QVariantList out;
+    for (const auto& row : model_->moonlight()->hostRows()) {
+        QVariantMap m;
+        m[QStringLiteral("id")] = row.id;
+        m[QStringLiteral("name")] = row.name;
+        m[QStringLiteral("ip")] = row.ip;
+        m[QStringLiteral("paired")] = row.paired;
+        m[QStringLiteral("discovered")] = row.discovered;
+        m[QStringLiteral("phase")] = row.phaseToken;
+        out.append(m);
+    }
+    return out;
+}
+
+bool AppViewModel::moonlightScanning() const { return model_->moonlight()->isScanning(); }
+
+void AppViewModel::startMoonlightDiscovery() { model_->moonlight()->startDiscovery(); }
+
+void AppViewModel::addMoonlightHost(const QString& ip, const QString& name) {
+    model_->moonlight()->addManualHost(ip, name);
+}
+
+void AppViewModel::pairMoonlightHost(const QString& id, const QString& pin) {
+    model_->moonlight()->pairHost(id, pin);
+}
+
+void AppViewModel::connectMoonlightHost(const QString& id, const QString& appId) {
+    model_->moonlight()->connectHost(id, appId);
+}
+
+void AppViewModel::disconnectMoonlightHost(const QString& id) {
+    model_->moonlight()->disconnectHost(id);
+}
+
+void AppViewModel::forgetMoonlightHost(const QString& id) { model_->moonlight()->forgetHost(id); }
 
 QVariantList AppViewModel::discoveredServers() const {
     // The one-spot rule: a satellite that already has a connections row renders

@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.21)
 project(Dish
     VERSION 1.1.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
-    LANGUAGES CXX)
+    # C is enabled for the vendored ENet fork (Moonlight control stream), whose
+    # backend is pure C; everything first-party is C++.
+    LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -85,6 +87,61 @@ find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS LinguistTools)
 # port with no upstream CMake config.
 find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+# OpenSSL backs the Moonlight (GameStream) path only: it needs AES-128-ECB,
+# AES-128-GCM, RSA-2048 sign/verify and X.509 generation, none of which libsodium
+# offers. The Satellite protocol-1 crypto (core/wire/SessionCrypto) stays on
+# libsodium. See THIRD_PARTY.md.
+find_package(OpenSSL REQUIRED)
+
+# --- ENet (Moonlight control stream, MIT) ------------------------------------
+# The Moonlight control channel runs over the cgutman ENet fork (IPv4+IPv6),
+# vendored via FetchContent and pinned to a commit for reproducibility, the same
+# way tests/ pins Catch2.
+#
+# We fetch the SOURCE only and compile it as our own `enet` static target rather
+# than add_subdirectory'ing the fork's CMakeLists: that file declares
+# cmake_minimum_required well below CMake's current floor, so its project() call
+# fails to inherit this build's MSVC toolchain and the compiler check dies on
+# kernel32.lib. Building the handful of .c files directly sidesteps all of that.
+# See THIRD_PARTY.md.
+include(FetchContent)
+# SOURCE_SUBDIR points at a path with no CMakeLists.txt, so MakeAvailable
+# POPULATES the source (reliably setting enet_SOURCE_DIR across re-configures)
+# but never add_subdirectory's the fork's ancient CMakeLists.
+FetchContent_Declare(
+    enet
+    GIT_REPOSITORY https://github.com/cgutman/enet.git
+    GIT_TAG        44c85e16279553d9c052e572bcbfcd745fb74abf
+    SOURCE_SUBDIR  _dish_no_such_subdir)
+FetchContent_MakeAvailable(enet)
+
+if(NOT enet_SOURCE_DIR OR NOT EXISTS "${enet_SOURCE_DIR}/callbacks.c")
+    message(FATAL_ERROR "ENet source was not populated at '${enet_SOURCE_DIR}'")
+endif()
+
+# The platform backend: win32.c on Windows, unix.c elsewhere. The rest are
+# portable.
+set(_enet_sources
+    ${enet_SOURCE_DIR}/callbacks.c
+    ${enet_SOURCE_DIR}/compress.c
+    ${enet_SOURCE_DIR}/host.c
+    ${enet_SOURCE_DIR}/list.c
+    ${enet_SOURCE_DIR}/packet.c
+    ${enet_SOURCE_DIR}/peer.c
+    ${enet_SOURCE_DIR}/protocol.c)
+if(WIN32)
+    list(APPEND _enet_sources ${enet_SOURCE_DIR}/win32.c)
+else()
+    list(APPEND _enet_sources ${enet_SOURCE_DIR}/unix.c)
+endif()
+
+add_library(enet STATIC ${_enet_sources})
+# Pure-C target: keep Qt's autogen machinery off it.
+set_target_properties(enet PROPERTIES AUTOMOC OFF AUTORCC OFF AUTOUIC OFF)
+target_include_directories(enet SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
+if(WIN32)
+    target_link_libraries(enet PUBLIC ws2_32 winmm)
+endif()
 
 # --- Core library: everything except main.cpp and the UI, so tests can link it ---
 set(DISH_CORE_SOURCES
@@ -96,6 +153,20 @@ set(DISH_CORE_SOURCES
     src/architecture/Repository.h
     src/core/wire/SessionCrypto.h
     src/core/wire/SessionCrypto.cpp
+    # Moonlight (GameStream) protocol core: control-stream codec, pairing
+    # crypto, RTSP text and the session FSM. Pure logic; sockets live in
+    # src/Network, persistence in src/repository.
+    src/core/moonlight/MoonlightControl.h
+    src/core/moonlight/MoonlightControl.cpp
+    src/core/moonlight/MoonlightCrypto.h
+    src/core/moonlight/MoonlightCrypto.cpp
+    src/core/moonlight/MoonlightIdentity.h
+    src/core/moonlight/MoonlightIdentity.cpp
+    src/core/moonlight/MoonlightPairing.h
+    src/core/moonlight/MoonlightPairing.cpp
+    src/core/moonlight/MoonlightRtsp.h
+    src/core/moonlight/MoonlightRtsp.cpp
+    src/core/moonlight/MoonlightSessionMachine.h
     src/core/model/Protocol.h
     src/core/model/IdentityKey.h
     src/core/net/Tofu.h
@@ -174,6 +245,24 @@ set(DISH_CORE_SOURCES
     src/Network/ConnectionHub.cpp
     src/Network/ConnectionStore.h
     src/Network/ConnectionStore.cpp
+    # Moonlight (GameStream) IO layer: the HTTP/HTTPS control API, the plaintext
+    # RTSP handshake, the ENet control channel and the session coordinator.
+    src/Network/MoonlightHost.h
+    src/Network/MoonlightHost.cpp
+    src/Network/MoonlightHttpClient.h
+    src/Network/MoonlightHttpClient.cpp
+    src/Network/MoonlightRtspClient.h
+    src/Network/MoonlightRtspClient.cpp
+    src/Network/MoonlightControlChannel.h
+    src/Network/MoonlightControlChannel.cpp
+    src/Network/MoonlightSession.h
+    src/Network/MoonlightSession.cpp
+    src/Network/MoonlightManager.h
+    src/Network/MoonlightManager.cpp
+    src/source/connection/NvstreamDiscovery.h
+    src/source/connection/NvstreamDiscovery.cpp
+    src/repository/MoonlightHostRepository.h
+    src/repository/MoonlightHostRepository.cpp
     src/source/connection/LANDiscovery.h
     src/source/connection/LANDiscovery.cpp
     src/source/connection/MdnsDiscovery.h
@@ -314,6 +403,9 @@ set(DISH_CORE_SOURCES
 
 add_library(dish_core STATIC ${DISH_CORE_SOURCES})
 target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+# The cgutman ENet CMake adds its include dir only to its own target, so
+# consumers name it explicitly. SYSTEM keeps /W4 /WX off its C headers.
+target_include_directories(dish_core SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
 # From the project VERSION so the About screen can't drift from dish.rc.
 target_compile_definitions(dish_core PUBLIC DISH_VERSION="${PROJECT_VERSION}")
 target_link_libraries(dish_core
@@ -322,9 +414,18 @@ target_link_libraries(dish_core
         # For the theme palette (QColor + QStyleHints) and the role models.
         Qt6::Gui
         unofficial-sodium::sodium
+        # Moonlight path only; see the find_package comment above. Just libcrypto:
+        # the Moonlight crypto uses EVP / RSA / X.509 (all in libcrypto), and TLS
+        # rides Qt's Schannel backend, so libssl is never linked or shipped.
+        OpenSSL::Crypto
+        # The vendored cgutman ENet fork (Moonlight control stream). Its CMake
+        # exports no INTERFACE include dir, so it is added explicitly below.
+        enet
         $<TARGET_NAME_IF_EXISTS:SDL2::SDL2> $<TARGET_NAME_IF_EXISTS:SDL2::SDL2-static>
         Threads::Threads
         ws2_32
+        # ENet's Win32 backend uses timeGetTime.
+        winmm
         # Raw-HID claim path: SetupAPI enumeration + the HID class API.
         setupapi
         hid

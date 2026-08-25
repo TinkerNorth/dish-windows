@@ -41,6 +41,32 @@
       ]
     },
     {
+      "group": "org.openssl",
+      "artifact": "openssl",
+      "version": "3",
+      "name": "OpenSSL",
+      "url": "https://www.openssl.org/",
+      "licenses": [
+        {
+          "name": "Apache License 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0"
+        }
+      ]
+    },
+    {
+      "group": "com.github.cgutman",
+      "artifact": "enet",
+      "version": "44c85e1",
+      "name": "ENet (cgutman fork)",
+      "url": "https://github.com/cgutman/enet",
+      "licenses": [
+        {
+          "name": "MIT License",
+          "url": "https://opensource.org/license/mit"
+        }
+      ]
+    },
+    {
       "group": "org.catchorg",
       "artifact": "Catch2",
       "version": "3.5.4",

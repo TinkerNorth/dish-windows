@@ -292,6 +292,20 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void startDiscovery();
     Q_INVOKABLE bool isScanning() const;
     Q_INVOKABLE QVariantList discoveredServers() const;
+
+    // ── Moonlight (GameStream) hosts ─────────────────────────────────────────
+    // Rows of {id,name,ip,paired,discovered,phase}; phase is a lowercase token
+    // ("idle"|"pairing"|"paired"|"connecting"|"streaming"|"faltering"|"failed").
+    // The sibling of the Satellite discovery surface above, kept clearly labeled
+    // as a distinct host kind. moonlightPairingFinished(id, ok) reports a pair.
+    Q_INVOKABLE QVariantList moonlightHosts() const;
+    Q_INVOKABLE bool moonlightScanning() const;
+    Q_INVOKABLE void startMoonlightDiscovery();
+    Q_INVOKABLE void addMoonlightHost(const QString& ip, const QString& name);
+    Q_INVOKABLE void pairMoonlightHost(const QString& id, const QString& pin);
+    Q_INVOKABLE void connectMoonlightHost(const QString& id, const QString& appId);
+    Q_INVOKABLE void disconnectMoonlightHost(const QString& id);
+    Q_INVOKABLE void forgetMoonlightHost(const QString& id);
     Q_INVOKABLE void forgetConnection(const QString& connectionId);
 
     // Keyed on the stable id, never a list index: the discovered list can reorder
@@ -455,6 +469,11 @@ class AppViewModel : public QObject {
 
     void scanningChanged();
     void reversePairingChanged();
+
+    // Moonlight host list moved (discovery, pairing, or a phase transition), and
+    // the terminal pairing edge keyed by host id.
+    void moonlightHostsChanged();
+    void moonlightPairingFinished(const QString& id, bool ok);
     void emulateStateChanged();
     void deadzonesChanged();
     void railCollapsedChanged();

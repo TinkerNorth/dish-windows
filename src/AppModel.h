@@ -9,6 +9,7 @@
 #include "Models/Models.h"
 #include "Network/ConnectionHub.h"
 #include "Network/ConnectionStore.h"
+#include "Network/MoonlightManager.h"
 #include "Network/WifiConnectionManager.h"
 #include "architecture/Observable.h"
 #include "composer/CatalogComposer.h"
@@ -84,6 +85,9 @@ class AppModel : public QObject {
     // The reactive/command surface the UI binds to. Hot-path binding and
     // routing still live on hub().
     composer::ConnectionCoordinator* connections() { return connections_; }
+    // The Moonlight (GameStream) subsystem, a sibling of the Satellite manager.
+    // Owns the host list, pairing and sessions for Sunshine/Apollo/Wolf hosts.
+    net::MoonlightManager* moonlight() { return &moonlight_; }
     input::GamepadInputProcessor* processor() { return &processor_; }
     input::SDLGamepadBridge* bridge() { return bridge_; }
     composer::WakeStateController* wake() { return &wakeController_; }
@@ -277,6 +281,9 @@ class AppModel : public QObject {
     net::WifiConnectionManager* wifi_;
     net::ConnectionHub* hub_;
     composer::ConnectionCoordinator* connections_;
+    // Self-contained: owns its own repo/identity/sessions and shares nothing with
+    // the Satellite hot path, so the Moonlight path can never regress it.
+    net::MoonlightManager moonlight_;
     input::GamepadInputProcessor processor_;
     input::SDLGamepadBridge* bridge_;
     FeatureSettings* featureSettings_;
