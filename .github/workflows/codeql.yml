@@ -72,9 +72,6 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
-          # Keeps vendored FetchContent sources (ENet, Catch2) out of the
-          # analysis; see the file for why.
-          config-file: ./.github/codeql-config.yml
 
       - name: Build
         shell: pwsh
