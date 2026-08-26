@@ -516,6 +516,56 @@ TEST_CASE("A session detached from the store can no longer write to it",
     REQUIRE_FALSE(repo.serverCert(QStringLiteral("ml:ip:192.0.2.11")).has_value());
 }
 
+TEST_CASE("A forgotten host offers Pair again even while the host still answers for it",
+          "[moonlight][flow][forget]") {
+    // The end-to-end shape of the reported symptom, through the real manager.
+    // The client identity outlives a forget, so the host keeps answering
+    // PairStatus 1 to the uniqueid this install sends, and the only thing that
+    // separates a paired host from a stranger is the certificate WE hold.
+    Fixture fx;
+    fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
+    fx.store->setServerCert(kIdA, QStringLiteral("deadbeef"));
+    fx.manager->rememberProvenTrust(kIdA);
+    REQUIRE(fx.manager->hostRows().first().paired);
+
+    fx.manager->forgetHost(kIdA);
+    // Rediscovered a moment later, exactly as it would be on the hosts screen.
+    fx.manager->applyDiscoverySweep({host(QStringLiteral("PC"), kIpA)});
+    REQUIRE(fx.listedRow(kIdA));
+
+    const auto after = fx.manager->sessionUiInputs(kIdA, QString());
+    REQUIRE_FALSE(after.serverCertStored);
+    // Whatever the host goes on to say about PairStatus, our half is gone, and
+    // the row has to offer the PIN rather than a relationship it cannot use.
+    auto stillAnswering = after;
+    stillAnswering.probeAnswered = true;
+    stillAnswering.hostPairStatus = true;
+    REQUIRE(dish::moonlight::trustFor(stillAnswering) == dish::moonlight::TrustState::NotPaired);
+    REQUIRE(dish::moonlight::sessionUiState(stillAnswering) ==
+            dish::moonlight::SessionUiState::NotPaired);
+}
+
+TEST_CASE("A forget takes the probe cache with it and nothing puts it back",
+          "[moonlight][flow][forget]") {
+    Fixture fx;
+    fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
+    fx.manager->pairHost(kIdA, QStringLiteral("1234"));
+    REQUIRE(fx.manager->sessionUiInputs(kIdA, QString()).pairingActive);
+
+    // Forgetting mid-pairing cancels the exchange, drops the session and severs
+    // its signals, so a reply still in flight cannot re-create the cache it was
+    // about to write into, nor remember a pairing for a host that is gone.
+    fx.manager->forgetHost(kIdA);
+
+    const auto after = fx.manager->sessionUiInputs(kIdA, QString());
+    REQUIRE_FALSE(after.pairingActive);
+    REQUIRE_FALSE(after.pairingRefused);
+    REQUIRE_FALSE(after.probeAnswered);
+    REQUIRE_FALSE(after.serverCertStored);
+    REQUIRE_FALSE(fx.storedHost(kIdA));
+    REQUIRE_FALSE(fx.manager->sessionPhase(kIdA).has_value());
+}
+
 TEST_CASE("The identity is the client's and never goes with a host", "[moonlight][flow][forget]") {
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));

@@ -104,6 +104,51 @@ TEST_CASE("M7 trust lost, from either side of the evidence", "[moonlight][sessio
     REQUIRE(sessionUiState(stranger) == SessionUiState::NotPaired);
 }
 
+TEST_CASE("A forgotten host the host still answers for is NOT paired, and can pair again",
+          "[moonlight][sessionui]") {
+    // THE REPORTED SYMPTOM. The client identity outlives a forget, and a host
+    // reports PairStatus against the uniqueid on the request, so a box that still
+    // holds this install answers 1 to a client that has thrown its half away.
+    // Reading that word alone rendered the host Paired, and Paired is the one
+    // word that hides the Pair button: the user was left looking at a host that
+    // claimed to be paired, with no certificate to open a channel with and no
+    // control anywhere that could repair it.
+    SessionUiInputs forgotten;
+    forgotten.probeAnswered = true;
+    forgotten.hostPairStatus = true;    // the host's half, still on file there
+    forgotten.serverCertStored = false; // ours, deleted by the forget
+
+    REQUIRE(sessionUiState(forgotten) == SessionUiState::NotPaired);
+    REQUIRE(tokenOf(forgotten) == QStringLiteral("notPaired"));
+    // NOT TrustLost: nothing was lost, we simply do not hold the anchor, and the
+    // way back in is the same PIN a stranger needs.
+    REQUIRE(trustFor(forgotten) == TrustState::NotPaired);
+    REQUIRE(moonlightTrustToken(trustFor(forgotten)) == QStringLiteral("notPaired"));
+
+    // Both halves is what Paired means, and only both.
+    SessionUiInputs whole = forgotten;
+    whole.serverCertStored = true;
+    REQUIRE(trustFor(whole) == TrustState::Paired);
+    REQUIRE(sessionUiState(whole) != SessionUiState::NotPaired);
+
+    // The host's half alone is not enough in either direction: a certificate we
+    // hold for a host that says it does not know us is trust LOST, which is a
+    // different sentence and a different thing to have happened.
+    SessionUiInputs lost;
+    lost.probeAnswered = true;
+    lost.hostPairStatus = false;
+    lost.serverCertStored = true;
+    REQUIRE(sessionUiState(lost) == SessionUiState::TrustLost);
+    REQUIRE(trustFor(lost) == TrustState::NotPaired);
+
+    // A host that did not answer this visit still falls back on the memory.
+    SessionUiInputs silent;
+    silent.probeTimedOut = true;
+    silent.serverCertStored = true;
+    REQUIRE(trustFor(silent) == TrustState::Remembered);
+    REQUIRE(sessionUiState(silent) == SessionUiState::Remembered);
+}
+
 TEST_CASE("A readable mutual-TLS reply outranks a plaintext PairStatus of 0",
           "[moonlight][sessionui]") {
     // A host with no client certificate in front of it reports PairStatus 0 to
@@ -354,9 +399,12 @@ TEST_CASE("Only the two refusals and a live session offer to close the app",
 
 TEST_CASE("Trust is three words, and a remembered host that is silent keeps its pairing",
           "[moonlight][sessionui]") {
+    // Both halves. The host's word on its own was what stranded a forgotten host
+    // behind a Paired chip with no Pair button; see the recovery case above.
     SessionUiInputs answeredPaired;
     answeredPaired.probeAnswered = true;
     answeredPaired.hostPairStatus = true;
+    answeredPaired.serverCertStored = true;
     REQUIRE(trustFor(answeredPaired) == TrustState::Paired);
     REQUIRE(moonlightTrustToken(trustFor(answeredPaired)) == QStringLiteral("paired"));
 

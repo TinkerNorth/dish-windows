@@ -515,6 +515,10 @@ void MoonlightManager::forgetHost(const QString& id) {
     bindings_ = repo_->bindings();
 
     if (auto* session = sessions_.take(id)) {
+        // A pairing parked on the host is waiting for a PIN for a host that will
+        // not exist when it lands. Cancelling it here is what stops phase 5
+        // completing into a forget and writing the pairing back.
+        session->cancelPairing();
         // BEFORE the quit, because quit() tears the session down and the teardown
         // sends /cancel over TLS. That handshake runs the session's pin verifier
         // on a LATER turn of the event loop, which would write the pinned
@@ -522,6 +526,13 @@ void MoonlightManager::forgetHost(const QString& id) {
         // and leave a forgotten host holding the one piece of state that decides
         // whether the NEXT pairing is allowed to succeed.
         session->detachFromStore();
+        // AND NOTHING THIS SESSION SAYS REACHES US AGAIN. Its replies land on
+        // handlers that write probes_[id], and QHash::operator[] INSERTS: a reply
+        // that arrives between here and the deferred delete would re-create the
+        // cache for a host that no longer exists, and the app-list handler would
+        // go on to remember its pairing as proved. deleteLater is not soon enough
+        // to rely on, so the wire is cut rather than raced.
+        QObject::disconnect(session, nullptr, this, nullptr);
         session->quit();
         session->deleteLater();
     }

@@ -78,6 +78,7 @@ Kit.Page {
         function onMoonlightHostsChanged() { page.refresh(); }
         function onMoonlightPairingFinished(hostId, ok) {
             page.refresh();
+            pairSheet.settled = true;
             if (ok) {
                 pairSheet.close();
             } else {
@@ -410,6 +411,9 @@ Kit.Page {
         property string hostName: ""
         property string pin: ""
         property bool rejected: false
+        // The exchange ended on its own, either way. Nothing is left running, so
+        // closing the sheet has nothing to cancel.
+        property bool settled: false
 
         eyebrow: qsTr("Pairing")
         heading: qsTr("Pair with %1").arg(pairSheet.hostName)
@@ -418,15 +422,22 @@ Kit.Page {
         acceptText: qsTr("Done")
         acceptEnabled: false
 
-        // Closing the sheet has to reach the exchange, not just the screen: phase
-        // one parks on the host until a human types the PIN, so a dialog dismissed
-        // without this leaves a request running for the whole read timeout.
-        onRejected: App.cancelMoonlightPairing(pairSheet.hostId)
+        // ON CLOSED, NOT ON REJECTED. Kit.ContentDialog carries
+        // `closePolicy: Popup.CloseOnEscape`, so Escape dismisses the sheet
+        // without ever raising rejected(), and phase one parks on the host until
+        // a human types the PIN: the exchange would run on behind a screen the
+        // user believes they have left, and complete into a pairing they
+        // abandoned. Closing covers the button and the key alike.
+        onClosed: {
+            if (!pairSheet.settled)
+                App.cancelMoonlightPairing(pairSheet.hostId);
+        }
 
         function openFor(id, name) {
             pairSheet.hostId = id;
             pairSheet.hostName = name;
             pairSheet.rejected = false;
+            pairSheet.settled = false;
             // A fresh 4-digit code per attempt, which is what the host expects to
             // be told. Minted in C++: a PIN is security-relevant and JavaScript's
             // Math.random() is not a suitable source.

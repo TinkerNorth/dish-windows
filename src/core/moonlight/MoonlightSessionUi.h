@@ -153,7 +153,24 @@ inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     // A 401 is trust LOST only where there was trust: a host we have never
     // paired with refuses the same way and is simply not paired.
     if (in.unauthorized && in.serverCertStored) { return SessionUiState::TrustLost; }
-    if (in.probeAnswered && !in.hostPairStatus) {
+
+    // TRUST IS MUTUAL AND THIS CLIENT HOLDS ONE HALF OF IT. A host reports
+    // PairStatus against the uniqueid on the request, and this client's uniqueid
+    // outlives a forget, so a box that still has this install on file answers 1
+    // to a client that has thrown its half away. That is the host's half only:
+    // every paired-only call is mutual TLS pinned against the certificate the
+    // pairing handshake stored, and with no certificate there is nothing to pin,
+    // no app list and no session. So a host we cannot open a channel to is NOT
+    // PAIRED however warmly it answers, and the way back in is the same PIN a
+    // stranger needs.
+    //
+    // Reading the host's word alone is what strands the user: it renders a
+    // relationship nothing in the client can use, and the one control that
+    // repairs it is hidden on exactly that word.
+    //
+    // Answered-unpaired WITH a certificate stored is the other thing entirely,
+    // and keeps its own state: something was lost there.
+    if (in.probeAnswered && !(in.hostPairStatus && in.serverCertStored)) {
         return in.serverCertStored ? SessionUiState::TrustLost : SessionUiState::NotPaired;
     }
 
@@ -251,7 +268,14 @@ inline TrustState trustFor(const SessionUiInputs& in) {
     if (in.uniqueIdChanged || in.serverCertChanged || in.unauthorized) {
         return TrustState::NotPaired;
     }
-    if (in.probeAnswered) { return in.hostPairStatus ? TrustState::Paired : TrustState::NotPaired; }
+    // BOTH HALVES, for the reason sessionUiState gives above: the host's word
+    // that it knows us, and a certificate of its own that we can pin against.
+    // One without the other is a chip promising what the next tap cannot deliver,
+    // and Paired is the one chip that hides the Pair button.
+    if (in.hostPairStatus && in.serverCertStored) { return TrustState::Paired; }
+    // Answered and unpaired is a fact about now, whatever is remembered; only a
+    // host that did not answer this visit falls back on the memory.
+    if (in.probeAnswered) { return TrustState::NotPaired; }
     return in.serverCertStored ? TrustState::Remembered : TrustState::NotPaired;
 }
 
