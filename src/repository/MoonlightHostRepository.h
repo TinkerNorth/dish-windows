@@ -41,6 +41,11 @@ class MoonlightHostRepository {
     // Per-host TOFU pin of the server certificate PEM.
     std::optional<QString> serverCert(const QString& id) const;
     void setServerCert(const QString& id, const QString& certPem);
+    // Drop the pin while keeping the host. The answer to a host that has
+    // announced a new identity: the pin we hold is the OLD host's, so refusing
+    // its certificate protects nothing and would leave the user with no way to
+    // pair again at all. Forgetting the host clears it too.
+    void clearServerCert(const QString& id);
 
     // The standing bindings. A binding survives the host being unreachable and
     // the pairing being lost, because it is an intent rather than a connection.

@@ -42,7 +42,8 @@ struct MoonlightHost {
     QString ip;
     int httpPort = kMoonlightHttpPort;
     int httpsPort = kMoonlightHttpsPort;
-    // The host's uniqueid from /serverinfo, once known; the stable identity.
+    // The host's uniqueid from /serverinfo, once known. The WITNESS for "is this
+    // still the same host", never the key: see id().
     QString uuid;
     // True once pairing has completed and been persisted.
     bool paired = false;
@@ -58,12 +59,14 @@ struct MoonlightHost {
     // record written before the move keeps the answer its user gave.
     int deviceType = kMoonlightDeviceAuto;
 
-    // Prefer the host UUID so a DHCP address change keeps one row; fall back to
-    // the address for a host we have not queried yet.
-    QString id() const {
-        if (!uuid.isEmpty()) { return QStringLiteral("ml:uuid:%1").arg(uuid); }
-        return QStringLiteral("ml:ip:%1").arg(ip);
-    }
+    // THE ADDRESS, ALWAYS, and deliberately not the uniqueid. A host is added
+    // before it has ever been asked its identity, so an id derived from the
+    // uniqueid would change the first time a probe answered. Everything written
+    // under the old one is then orphaned where no forget can reach it: the pinned
+    // certificate, the standing bindings, the controller-number allocations and
+    // the live session. The uuid stays as the witness for a host that is no longer
+    // the one we paired with, which is the question it can actually answer.
+    QString id() const { return QStringLiteral("ml:ip:%1").arg(ip); }
     bool isValid() const { return !ip.isEmpty(); }
 
     QJsonObject toJson() const;

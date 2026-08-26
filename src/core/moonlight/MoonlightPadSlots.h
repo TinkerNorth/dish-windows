@@ -93,6 +93,23 @@ class PadSlots {
 inline bool bindStartsSession(const PadSlots& pads) { return pads.empty(); }
 inline bool unbindEndsSession(const PadSlots& pads) { return pads.empty(); }
 
+// Why a bind did not take. Every one of these was once a silent return, and a
+// silent return is precisely what "I pressed bind and nothing happened" looks
+// like from the outside: no route, no session, no log line and no reason. The
+// caller is expected to say which of them happened, so `Bound` is the only value
+// that means nothing has to be reported.
+enum class BindOutcome {
+    Bound,
+    // Neither the remembered list nor the discovery sweep resolves the host id.
+    UnknownHost,
+    // The client identity could not be loaded or generated (an OpenSSL failure),
+    // so there is nothing to present to the host.
+    NoIdentity,
+    // The host already carries kMaxPads controllers, which is a protocol ceiling
+    // rather than a state that resolves itself.
+    HostFull,
+};
+
 // The capability bits to advertise in CONTROLLER_ARRIVAL for a pad with these
 // hardware features. Analog triggers are always present on the pads Dish
 // forwards; the rest follow the detected hardware.

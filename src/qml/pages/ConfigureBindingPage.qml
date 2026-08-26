@@ -200,7 +200,7 @@ Kit.Page {
             // The real label arrives later with the host row.
             draft.chooseDestination(moonlightId, moonlightId, "moonlight");
             const stored = App.moonlightBindingType(page.slotId);
-            draft.chooseType(stored, page.moonlightTypeName(page.moonlightTokenFor(stored)));
+            draft.chooseType(stored, page.typeNameFor(stored));
             page.reloadMoonlight();
         } else if (boundId.length > 0) {
             // The real label arrives later with the host row. Every satellite
@@ -251,59 +251,12 @@ Kit.Page {
         page.moonlightAccounting += 1;
     }
 
-    function moonlightTypeName(token) {
-        switch (token) {
-        case "xbox":
-            return "Xbox";
-        case "playstation":
-            return "PlayStation";
-        case "nintendo":
-            return "Nintendo";
-        }
-        return qsTr("Auto");
-    }
-
-    function moonlightTokenFor(type) {
-        const options = App.moonlightTypeOptions();
-        for (let i = 0; i < options.length; ++i) {
-            if (options[i].type === type) {
-                return options[i].token;
-            }
-        }
-        return "auto";
-    }
+    // The trust words and the four type cards, shared with the hosts screen and
+    // the wizard so no two surfaces can disagree about either.
+    MoonlightVocabulary { id: vocab }
 
     function moonlightTypes() {
-        const out = [];
-        const options = App.moonlightTypeOptions();
-        for (let i = 0; i < options.length; ++i) {
-            out.push({
-                "type": options[i].type,
-                "token": options[i].token,
-                "name": page.moonlightTypeName(options[i].token)
-            });
-        }
-        return out;
-    }
-
-    function moonlightTrustText(token) {
-        switch (token) {
-        case "paired":
-            return qsTr("Paired");
-        case "remembered":
-            return qsTr("Remembered");
-        }
-        return qsTr("Not paired");
-    }
-
-    function moonlightTrustTone(token) {
-        if (token === "paired") {
-            return Kit.CapabilityChip.Ok;
-        }
-        if (token === "remembered") {
-            return Kit.CapabilityChip.Neutral;
-        }
-        return Kit.CapabilityChip.Absent;
+        return vocab.typesFrom(App.moonlightTypeOptions());
     }
 
     function reloadTypes() {
@@ -351,10 +304,14 @@ Kit.Page {
         function onMoonlightHostsChanged() { page.reloadMoonlight(); }
     }
 
+    // One name lookup for both destination kinds. A Moonlight host has no catalog
+    // to load, so `types` is deliberately empty for one and this reads the table
+    // instead: without the branch every Moonlight type would render nameless.
     function typeNameFor(wireType) {
-        for (let i = 0; i < page.types.length; ++i) {
-            if (page.types[i].type === wireType) {
-                return page.types[i].name;
+        const list = draft.hostIsMoonlight ? page.moonlightTypes() : page.types;
+        for (let i = 0; i < list.length; ++i) {
+            if (list[i].type === wireType) {
+                return list[i].name;
             }
         }
         return "";
@@ -624,9 +581,15 @@ Kit.Page {
                      .arg(draft.hostName);
         case "bindRejected":
             return qsTr("%1 refused the binding.").arg(draft.hostName);
+        case "hostFull":
+            return qsTr("%1 already carries four controllers, which is the most a session takes. Unbind one to make room.")
+                     .arg(draft.hostName);
         case "cancelled":
             return qsTr("Apply cancelled. Nothing was changed.");
         }
+        // Everything else, including a host that vanished between the pick and
+        // the press, lands here. Never nothing: a bind with no answer is one the
+        // user cannot tell from a bind that worked.
         return qsTr("Couldn’t apply the binding.");
     }
 
@@ -997,8 +960,8 @@ Kit.Page {
                                 title: moonlightOption.modelData.name
                                 subtitle: qsTr("Moonlight host · %1")
                                             .arg(moonlightOption.modelData.ip)
-                                chipText: page.moonlightTrustText(moonlightOption.trust)
-                                chipTone: page.moonlightTrustTone(moonlightOption.trust)
+                                chipText: vocab.trustText(moonlightOption.trust)
+                                chipTone: vocab.trustTone(moonlightOption.trust)
 
                                 onPicked: draft.chooseDestination(moonlightOption.modelData.id,
                                                                   moonlightOption.modelData.name,
@@ -1170,8 +1133,8 @@ Kit.Page {
                                 title: moonlightType.modelData.name
                                 subtitle: moonlightType.autoCard
                                           ? qsTr("Auto sends %1 for this controller.")
-                                              .arg(page.moonlightTypeName(
-                                                  App.moonlightResolvedAutoToken(page.slotId)))
+                                              .arg(page.typeNameFor(
+                                                  App.moonlightResolvedAutoType(page.slotId)))
                                           : ""
                                 chipText: moonlightType.autoCard ? qsTr("Picked for you") : ""
                                 chipTone: Kit.CapabilityChip.Ok

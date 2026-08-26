@@ -722,22 +722,6 @@
         <translation>Nema vibracije</translation>
     </message>
     <message>
-        <source>Auto</source>
-        <translation type="unfinished">Automatski</translation>
-    </message>
-    <message>
-        <source>Paired</source>
-        <translation type="unfinished">Uparen</translation>
-    </message>
-    <message>
-        <source>Remembered</source>
-        <translation>Zapamćeno</translation>
-    </message>
-    <message>
-        <source>Not paired</source>
-        <translation>Nije uparen</translation>
-    </message>
-    <message>
         <source>Unbind a controller on this host to make room.</source>
         <translation>Odvežite jedan kontroler s ovog hosta da napravite mjesta.</translation>
     </message>
@@ -756,6 +740,10 @@
     <message>
         <source>Picked for you</source>
         <translation>Izabrano za vas</translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 već nosi četiri kontrolera, što je najviše koliko sesija prima. Odvežite jedan da napravite mjesta.</translation>
     </message>
 </context>
 <context>
@@ -2769,10 +2757,6 @@
         <translation>Novi kod</translation>
     </message>
     <message>
-        <source>Paired</source>
-        <translation>Uparen</translation>
-    </message>
-    <message>
         <source>In use by %1</source>
         <translation>Koristi %1</translation>
     </message>
@@ -2797,16 +2781,27 @@
         <translation>Prekini sesiju</translation>
     </message>
     <message>
-        <source>Its pairing is deleted. You will need the PIN again.</source>
-        <translation>Njegovo uparivanje se briše. Trebat će vam PIN ponovo.</translation>
+        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
+        <translation>Dish briše svoje uparivanje. Host zadržava vlastiti zapis dok neko tamo ne ukloni Dish, i trebat će vam PIN ponovo.</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightVocabulary</name>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Uparen</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation>Zapamćeno</translation>
+        <translation type="unfinished">Zapamćeno</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation>Nije uparen</translation>
+        <translation type="unfinished">Nije uparen</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation type="unfinished">Automatski</translation>
     </message>
 </context>
 <context>
@@ -3373,6 +3368,14 @@
             <numerusform>moonlight · %n slobodnih</numerusform>
         </translation>
     </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 već nosi četiri kontrolera, što je najviše koliko sesija prima. Odvežite jedan da napravite mjesta.</translation>
+    </message>
+    <message>
+        <source>Couldn’t apply the binding.</source>
+        <translation type="unfinished">Nije moguće primijeniti povezivanje.</translation>
+    </message>
 </context>
 <context>
     <name>StepList</name>
@@ -3717,18 +3720,6 @@
     <message>
         <source>Pairing is one-time. After this, Dish reconnects to it by itself.</source>
         <translation>Uparivanje je jednokratno. Nakon toga se Dish sam ponovo povezuje s njim.</translation>
-    </message>
-    <message>
-        <source>Paired</source>
-        <translation type="unfinished">Uparen</translation>
-    </message>
-    <message>
-        <source>Remembered</source>
-        <translation>Zapamćeno</translation>
-    </message>
-    <message>
-        <source>Not paired</source>
-        <translation>Nije uparen</translation>
     </message>
     <message>
         <source>Moonlight hosts</source>
@@ -4324,10 +4315,6 @@
     <message>
         <source>Best fit</source>
         <translation>Najbolji izbor</translation>
-    </message>
-    <message>
-        <source>Auto</source>
-        <translation type="unfinished">Automatski</translation>
     </message>
     <message>
         <source>How should the host see it?</source>

@@ -185,7 +185,8 @@ Kit.Page {
             // session for four controllers, and the ceiling is the protocol's.
             const taken = wizard.accounting >= 0
                         ? App.moonlightBoundSlotCount(wizard.draft.hostId) : 0;
-            return qsTr("moonlight · %n free", "", Math.max(0, 4 - taken));
+            return qsTr("moonlight · %n free", "",
+                        Math.max(0, App.moonlightMaxControllers() - taken));
         }
         const free = wizard.accounting >= 0
                    ? App.hostSlotCapacity() - App.hostBoundSlotCount(wizard.draft.hostId) : 0;
@@ -292,8 +293,16 @@ Kit.Page {
                      .arg(wizard.draft.hostName);
         if (reasonToken === "bindRejected")
             return qsTr("%1 refused the binding. Try again.").arg(wizard.draft.hostName);
-        // A cancel is the user's own answer; a toast about it is noise.
-        return "";
+        if (reasonToken === "hostFull")
+            return qsTr("%1 already carries four controllers, which is the most a session takes. Unbind one to make room.")
+                     .arg(wizard.draft.hostName);
+        // A cancel is the user's own answer; a toast about it is noise. Anything
+        // else is a failure the user has to hear about, even when there is nothing
+        // specific to say: an apply that reports nothing at all is one they cannot
+        // tell from an apply that worked.
+        if (reasonToken === "cancelled")
+            return "";
+        return qsTr("Couldn’t apply the binding.");
     }
 
     function onApplyDone(ok, reasonToken, directFellBack) {

@@ -720,22 +720,6 @@
         <translation>Sin vibración</translation>
     </message>
     <message>
-        <source>Auto</source>
-        <translation type="unfinished">Automático</translation>
-    </message>
-    <message>
-        <source>Paired</source>
-        <translation type="unfinished">Vinculado</translation>
-    </message>
-    <message>
-        <source>Remembered</source>
-        <translation>Recordado</translation>
-    </message>
-    <message>
-        <source>Not paired</source>
-        <translation>Sin emparejar</translation>
-    </message>
-    <message>
         <source>Unbind a controller on this host to make room.</source>
         <translation>Desvincula un mando de este host para hacer sitio.</translation>
     </message>
@@ -754,6 +738,10 @@
     <message>
         <source>Picked for you</source>
         <translation>Elegido para ti</translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 ya tiene cuatro mandos, que es el máximo que admite una sesión. Desvincula uno para hacer sitio.</translation>
     </message>
 </context>
 <context>
@@ -2755,10 +2743,6 @@
         <translation>Nuevo código</translation>
     </message>
     <message>
-        <source>Paired</source>
-        <translation>Vinculado</translation>
-    </message>
-    <message>
         <source>In use by %1</source>
         <translation>En uso por %1</translation>
     </message>
@@ -2782,16 +2766,27 @@
         <translation>Salir de la sesión</translation>
     </message>
     <message>
-        <source>Its pairing is deleted. You will need the PIN again.</source>
-        <translation>Se borra su emparejamiento. Necesitarás el PIN de nuevo.</translation>
+        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
+        <translation>Dish borra su emparejamiento. El anfitrión conserva su propio registro hasta que alguien elimine Dish allí, y necesitarás el PIN de nuevo.</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightVocabulary</name>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Vinculado</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation>Recordado</translation>
+        <translation type="unfinished">Recordado</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation>Sin emparejar</translation>
+        <translation type="unfinished">Sin emparejar</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation type="unfinished">Automático</translation>
     </message>
 </context>
 <context>
@@ -3355,6 +3350,14 @@
             <numerusform>moonlight · %n libres</numerusform>
         </translation>
     </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 ya tiene cuatro mandos, que es el máximo que admite una sesión. Desvincula uno para hacer sitio.</translation>
+    </message>
+    <message>
+        <source>Couldn’t apply the binding.</source>
+        <translation type="unfinished">No se pudo aplicar el vínculo.</translation>
+    </message>
 </context>
 <context>
     <name>StepList</name>
@@ -3697,18 +3700,6 @@
     <message>
         <source>Pairing is one-time. After this, Dish reconnects to it by itself.</source>
         <translation>El emparejamiento se hace una sola vez. Después, Dish se reconecta por sí solo.</translation>
-    </message>
-    <message>
-        <source>Paired</source>
-        <translation type="unfinished">Vinculado</translation>
-    </message>
-    <message>
-        <source>Remembered</source>
-        <translation>Recordado</translation>
-    </message>
-    <message>
-        <source>Not paired</source>
-        <translation>Sin emparejar</translation>
     </message>
     <message>
         <source>Moonlight hosts</source>
@@ -4304,10 +4295,6 @@
     <message>
         <source>Best fit</source>
         <translation>Mejor opción</translation>
-    </message>
-    <message>
-        <source>Auto</source>
-        <translation type="unfinished">Automático</translation>
     </message>
     <message>
         <source>How should the host see it?</source>

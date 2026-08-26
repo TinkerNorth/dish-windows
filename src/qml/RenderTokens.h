@@ -129,6 +129,22 @@ inline QString moonlightSessionToken(moonlight::SessionUiState s) {
     return {};
 }
 
+// Why a bind did not take, as the token the binding flow turns into a sentence.
+// `Bound` has no token: there is nothing to report about a bind that worked.
+inline QString moonlightBindOutcomeToken(moonlight::BindOutcome outcome) {
+    switch (outcome) {
+    case moonlight::BindOutcome::Bound:
+        return {};
+    case moonlight::BindOutcome::UnknownHost:
+        return QStringLiteral("hostGone");
+    case moonlight::BindOutcome::NoIdentity:
+        return QStringLiteral("identityFailed");
+    case moonlight::BindOutcome::HostFull:
+        return QStringLiteral("hostFull");
+    }
+    return {};
+}
+
 inline QString moonlightTrustToken(moonlight::TrustState t) {
     switch (t) {
     case moonlight::TrustState::Paired:

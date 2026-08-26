@@ -760,6 +760,10 @@ void AppViewModel::pairMoonlightHost(const QString& id, const QString& pin) {
     model_->moonlight()->pairHost(id, pin);
 }
 
+void AppViewModel::cancelMoonlightPairing(const QString& id) {
+    model_->moonlight()->cancelPairing(id);
+}
+
 void AppViewModel::connectMoonlightHost(const QString& id, const QString& appId) {
     model_->moonlight()->connectHost(id, appId);
 }
@@ -792,15 +796,17 @@ int AppViewModel::moonlightDeviceType(const QString& id) const {
     for (const auto& row : model_->moonlight()->hostRows()) {
         if (row.id == id) { return row.deviceType; }
     }
-    return 0; // Auto
+    // 0xFF, never 0: 0 is the wire's CONTROLLER_TYPE_UNKNOWN, and a caller that
+    // matched this against the type list would find nothing there.
+    return models::kMoonlightDeviceAuto;
 }
 
 void AppViewModel::setMoonlightDeviceType(const QString& id, int deviceType) {
     model_->moonlight()->setHostDeviceType(id, deviceType);
 }
 
-void AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostId,
-                                     int controllerType) {
+QString AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostId,
+                                        int controllerType) {
     // The pad's detected hardware decides the advertised CONTROLLER_ARRIVAL
     // capabilities, so the host is never told about a feature the pad lacks.
     const models::ControllerSlot* slot = slotById(slotId);
@@ -810,8 +816,9 @@ void AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostI
     const bool hasLightbar = slot != nullptr && slot->capabilities.hasLightbar;
     // A pad reporting any level at all has a battery to report.
     const bool hasBattery = slot != nullptr && slot->capabilities.batteryLevel != 0xFF;
-    model_->moonlight()->bindSlot(slotId, hostId, controllerType, hasRumble, hasMotion, hasTouchpad,
-                                  hasBattery, hasLightbar);
+    return tokens::moonlightBindOutcomeToken(
+        model_->moonlight()->bindSlot(slotId, hostId, controllerType, hasRumble, hasMotion,
+                                      hasTouchpad, hasBattery, hasLightbar));
 }
 
 void AppViewModel::unbindMoonlightSlot(const QString& slotId) {
@@ -858,13 +865,7 @@ int AppViewModel::moonlightBoundSlotCount(const QString& id) const {
     return model_->moonlight()->boundSlotCount(id);
 }
 
-int AppViewModel::moonlightNextControllerNumber(const QString& id) const {
-    const int taken = model_->moonlight()->boundSlotCount(id);
-    // Displayed one-based, and never past the ceiling: a host that is full says
-    // so in its own state rather than promising a fifth slot.
-    return taken < static_cast<int>(moonlight::kMaxPads) ? taken + 1
-                                                         : static_cast<int>(moonlight::kMaxPads);
-}
+int AppViewModel::moonlightMaxControllers() const { return static_cast<int>(moonlight::kMaxPads); }
 
 QString AppViewModel::moonlightRunningAppName(const QString& id) const {
     return model_->moonlight()->runningAppName(id);
@@ -906,12 +907,6 @@ int AppViewModel::moonlightResolvedAutoType(const QString& slotId) const {
                : models::kMoonlightDeviceXbox;
 }
 
-QString AppViewModel::moonlightResolvedAutoToken(const QString& slotId) const {
-    return moonlightResolvedAutoType(slotId) == models::kMoonlightDevicePlayStation
-               ? QStringLiteral("playstation")
-               : QStringLiteral("xbox");
-}
-
 int AppViewModel::moonlightBindingType(const QString& slotId) const {
     const auto stored = model_->moonlight()->binding(slotId);
     return stored.has_value() ? stored->controllerType : models::kMoonlightDeviceAuto;
@@ -927,14 +922,16 @@ void AppViewModel::applyMoonlightBinding(const QString& slotId, const QString& h
     binding.hostId = hostId;
     binding.controllerType = type;
     model_->moonlight()->rememberBinding(binding);
-    bindMoonlightSlot(slotId, hostId, type);
+    const QString refusal = bindMoonlightSlot(slotId, hostId, type);
 
     // Nothing here waits on the host. A binding is a durable intent and pairing
     // is remembered trust verified lazily, so the session is attempted when the
-    // controller is used rather than when the binding is saved.
+    // controller is used rather than when the binding is saved. What DOES decide
+    // the answer is whether the pad was routed at all: a refusal reported as a
+    // success is the shape of "I pressed bind and nothing happened".
     apply_ = reducer::ApplyState{};
     emit applyChanged();
-    emit applyFinished(true, QString(), false);
+    emit applyFinished(refusal.isEmpty(), refusal, false);
 }
 
 void AppViewModel::reattachMoonlightBindings() {
@@ -943,7 +940,11 @@ void AppViewModel::reattachMoonlightBindings() {
     if (standing.isEmpty()) { return; }
     for (const auto& binding : standing) {
         if (!moon->boundHostFor(binding.slotId).isEmpty()) { continue; }
+        // The pad is not plugged in. Not a failure and not worth a word: the
+        // binding is waiting for its controller, which is what a binding does.
         if (slotById(binding.slotId) == nullptr) { continue; }
+        // Whatever comes back is already logged by the manager, and there is
+        // nobody to tell: this runs off a device arriving, not off a button.
         bindMoonlightSlot(binding.slotId, binding.hostId, binding.controllerType);
     }
 }

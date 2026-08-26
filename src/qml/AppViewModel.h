@@ -303,6 +303,10 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void startMoonlightDiscovery();
     Q_INVOKABLE void addMoonlightHost(const QString& ip, const QString& name);
     Q_INVOKABLE void pairMoonlightHost(const QString& id, const QString& pin);
+    // Back out of a pairing. Phase 1 parks on the host until a human types the
+    // PIN, so a dialog that closes without this leaves a request running and the
+    // section still showing a code nobody will type.
+    Q_INVOKABLE void cancelMoonlightPairing(const QString& id);
     Q_INVOKABLE void connectMoonlightHost(const QString& id, const QString& appId);
     Q_INVOKABLE void disconnectMoonlightHost(const QString& id);
     Q_INVOKABLE void forgetMoonlightHost(const QString& id);
@@ -326,8 +330,12 @@ class AppViewModel : public QObject {
     // pad's real capabilities from the slot list, so the host is told what the
     // hardware can actually do, and the session is reference counted per host:
     // the first pad starts one and the last pad off cancels it.
-    Q_INVOKABLE void bindMoonlightSlot(const QString& slotId, const QString& hostId,
-                                       int controllerType);
+    // Returns the empty string when the pad was routed, and otherwise the token
+    // naming what stopped it: "hostGone" | "identityFailed" | "hostFull". Never
+    // void, because a bind that says nothing is one the user cannot tell from a
+    // bind that worked.
+    Q_INVOKABLE QString bindMoonlightSlot(const QString& slotId, const QString& hostId,
+                                          int controllerType);
     Q_INVOKABLE void unbindMoonlightSlot(const QString& slotId);
     Q_INVOKABLE QString moonlightBoundHostFor(const QString& slotId) const;
 
@@ -360,10 +368,11 @@ class AppViewModel : public QObject {
     // is security-relevant and Math.random() is not a suitable source.
     Q_INVOKABLE QString moonlightPairingPin() const;
 
-    // How many controllers the host carries now, the number a new binding would
-    // take, and the number an applied one holds (0 when it holds none).
+    // How many controllers the host carries now, and the protocol ceiling it is
+    // measured against. Both are counts; the one-based ordinal a screen shows is
+    // arithmetic QML does on them, not a second number this has to vend.
     Q_INVOKABLE int moonlightBoundSlotCount(const QString& id) const;
-    Q_INVOKABLE int moonlightNextControllerNumber(const QString& id) const;
+    Q_INVOKABLE int moonlightMaxControllers() const;
 
     // The app the host is running for us, so a joining binding can name it.
     Q_INVOKABLE QString moonlightRunningAppName(const QString& id) const;
@@ -383,7 +392,6 @@ class AppViewModel : public QObject {
     // source reports motion, Xbox otherwise. The token is the same vocabulary
     // moonlightTypeOptions vends.
     Q_INVOKABLE int moonlightResolvedAutoType(const QString& slotId) const;
-    Q_INVOKABLE QString moonlightResolvedAutoToken(const QString& slotId) const;
 
     // The type this binding carries, Auto when it has none stored yet.
     Q_INVOKABLE int moonlightBindingType(const QString& slotId) const;

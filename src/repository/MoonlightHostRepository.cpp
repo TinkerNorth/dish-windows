@@ -103,6 +103,11 @@ void MoonlightHostRepository::setServerCert(const QString& id, const QString& ce
     settings_->setValue(QLatin1String(keys::kMoonlightServerCertPrefix) + id, certPem);
 }
 
+void MoonlightHostRepository::clearServerCert(const QString& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    settings_->remove(QLatin1String(keys::kMoonlightServerCertPrefix) + id);
+}
+
 QList<models::MoonlightBinding> MoonlightHostRepository::readBindings() const {
     const QByteArray raw =
         settings_->value(QLatin1String(keys::kMoonlightBindingListKey)).toString().toUtf8();

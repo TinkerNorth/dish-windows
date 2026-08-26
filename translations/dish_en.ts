@@ -720,22 +720,6 @@
         <translation>No rumble</translation>
     </message>
     <message>
-        <source>Auto</source>
-        <translation type="unfinished">Auto</translation>
-    </message>
-    <message>
-        <source>Paired</source>
-        <translation type="unfinished">Paired</translation>
-    </message>
-    <message>
-        <source>Remembered</source>
-        <translation>Remembered</translation>
-    </message>
-    <message>
-        <source>Not paired</source>
-        <translation>Not paired</translation>
-    </message>
-    <message>
         <source>Unbind a controller on this host to make room.</source>
         <translation>Unbind a controller on this host to make room.</translation>
     </message>
@@ -754,6 +738,10 @@
     <message>
         <source>Picked for you</source>
         <translation>Picked for you</translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</translation>
     </message>
 </context>
 <context>
@@ -2755,10 +2743,6 @@
         <translation type="unfinished">New code</translation>
     </message>
     <message>
-        <source>Paired</source>
-        <translation type="unfinished">Paired</translation>
-    </message>
-    <message>
         <source>In use by %1</source>
         <translation>In use by %1</translation>
     </message>
@@ -2782,16 +2766,27 @@
         <translation>Quit session</translation>
     </message>
     <message>
-        <source>Its pairing is deleted. You will need the PIN again.</source>
-        <translation>Its pairing is deleted. You will need the PIN again.</translation>
+        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
+        <translation>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightVocabulary</name>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Paired</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation>Remembered</translation>
+        <translation type="unfinished">Remembered</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation>Not paired</translation>
+        <translation type="unfinished">Not paired</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation type="unfinished">Auto</translation>
     </message>
 </context>
 <context>
@@ -3355,6 +3350,14 @@
             <numerusform>moonlight · %n free</numerusform>
         </translation>
     </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</translation>
+    </message>
+    <message>
+        <source>Couldn’t apply the binding.</source>
+        <translation type="unfinished">Couldn’t apply the binding.</translation>
+    </message>
 </context>
 <context>
     <name>StepList</name>
@@ -3697,18 +3700,6 @@
     <message>
         <source>Pairing is one-time. After this, Dish reconnects to it by itself.</source>
         <translation>Pairing is one-time. After this, Dish reconnects to it by itself.</translation>
-    </message>
-    <message>
-        <source>Paired</source>
-        <translation type="unfinished">Paired</translation>
-    </message>
-    <message>
-        <source>Remembered</source>
-        <translation>Remembered</translation>
-    </message>
-    <message>
-        <source>Not paired</source>
-        <translation>Not paired</translation>
     </message>
     <message>
         <source>Moonlight hosts</source>
@@ -4304,10 +4295,6 @@
     <message>
         <source>Best fit</source>
         <translation>Best fit</translation>
-    </message>
-    <message>
-        <source>Auto</source>
-        <translation type="unfinished">Auto</translation>
     </message>
     <message>
         <source>How should the host see it?</source>

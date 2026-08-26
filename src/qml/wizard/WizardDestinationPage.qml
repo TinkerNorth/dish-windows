@@ -140,23 +140,8 @@ ColumnLayout {
         page.draft.chooseDestination(id, name, "moonlight");
     }
 
-    function trustText(token) {
-        switch (token) {
-        case "paired":
-            return qsTr("Paired");
-        case "remembered":
-            return qsTr("Remembered");
-        }
-        return qsTr("Not paired");
-    }
-
-    function trustTone(token) {
-        if (token === "paired")
-            return Kit.CapabilityChip.Ok;
-        if (token === "remembered")
-            return Kit.CapabilityChip.Neutral;
-        return Kit.CapabilityChip.Absent;
-    }
+    // The trust words, shared with the hosts screen and the binding editor.
+    MoonlightVocabulary { id: vocab }
 
     Connections {
         target: App
@@ -318,8 +303,8 @@ ColumnLayout {
             subtitle: qsTr("Moonlight host · %1").arg(moonlightRow.modelData.ip)
             // Trust is a word, never a liveness light: the host cannot tell us it
             // has forgotten us.
-            chipText: page.trustText(moonlightRow.trust)
-            chipTone: page.trustTone(moonlightRow.trust)
+            chipText: vocab.trustText(moonlightRow.trust)
+            chipTone: vocab.trustTone(moonlightRow.trust)
 
             onPicked: page.pickMoonlight(moonlightRow.modelData.id, moonlightRow.modelData.name)
         }

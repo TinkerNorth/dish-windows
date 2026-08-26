@@ -488,6 +488,7 @@ qt_add_qml_module(Dish
         src/qml/UpdatePopover.qml
         ${DISH_KIT_QML_FILES}
         src/qml/shared/BindingDraft.qml
+        src/qml/shared/MoonlightVocabulary.qml
         src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml
         src/qml/pages/ConnectionsPage.qml

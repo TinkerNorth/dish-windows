@@ -184,7 +184,7 @@ Kit.Page {
 
                 Accessible.role: Accessible.ListItem
                 Accessible.name: qsTr("%1, Moonlight host, %2")
-                                     .arg(host.label).arg(page.trustText(host.trust))
+                                     .arg(host.label).arg(vocab.trustText(host.trust))
 
                 contentItem: ColumnLayout {
                     spacing: Tokens.s5
@@ -228,8 +228,8 @@ Kit.Page {
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Kit.CapabilityChip {
-                            text: page.trustText(host.trust)
-                            tone: page.trustTone(host.trust)
+                            text: vocab.trustText(host.trust)
+                            tone: vocab.trustTone(host.trust)
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Kit.CapabilityChip {
@@ -344,7 +344,10 @@ Kit.Page {
         id: forgetConfirm
         eyebrow: qsTr("Forget")
         heading: qsTr("Forget %1?").arg(page.currentLabel)
-        bodyText: qsTr("Its pairing is deleted. You will need the PIN again.")
+        // Forget is UNILATERAL and the copy has to say so: the protocol has no
+        // unpair verb, so the host keeps its own record of this device until a
+        // human deletes it there.
+        bodyText: qsTr("Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.")
         acceptText: qsTr("Forget")
         rejectText: qsTr("Cancel")
         destructiveAccept: true
@@ -414,6 +417,11 @@ Kit.Page {
         rejectText: qsTr("Cancel")
         acceptText: qsTr("Done")
         acceptEnabled: false
+
+        // Closing the sheet has to reach the exchange, not just the screen: phase
+        // one parks on the host until a human types the PIN, so a dialog dismissed
+        // without this leaves a request running for the whole read timeout.
+        onRejected: App.cancelMoonlightPairing(pairSheet.hostId)
 
         function openFor(id, name) {
             pairSheet.hostId = id;
@@ -497,21 +505,8 @@ Kit.Page {
         ]
     }
 
-    // ---- Helpers: tokens to localized copy ----------------------------------
-    // Three words and nothing else. "Remembered" is not a failure and is not
-    // amber: a host that is switched off is not a problem to solve.
-    function trustText(token) {
-        switch (token) {
-        case "paired":     return qsTr("Paired");
-        case "remembered": return qsTr("Remembered");
-        }
-        return qsTr("Not paired");
-    }
-    function trustTone(token) {
-        if (token === "paired")
-            return Kit.CapabilityChip.Ok;
-        if (token === "remembered")
-            return Kit.CapabilityChip.Neutral;
-        return Kit.CapabilityChip.Absent;
-    }
+    // ---- Tokens to localized copy -------------------------------------------
+    // Shared with the destination step and the binding editor, so the three
+    // surfaces that show a trust chip cannot drift apart on what it says.
+    MoonlightVocabulary { id: vocab }
 }

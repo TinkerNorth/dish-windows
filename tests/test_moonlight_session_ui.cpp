@@ -17,6 +17,7 @@
 #include <utility>
 
 using namespace dish::moonlight;
+using dish::qml::tokens::moonlightBindOutcomeToken;
 using dish::qml::tokens::moonlightSessionToken;
 using dish::qml::tokens::moonlightTrustToken;
 
@@ -127,6 +128,32 @@ TEST_CASE("M8 host replaced beats every other trust answer", "[moonlight][sessio
     in.uniqueIdChanged = true;
     REQUIRE(sessionUiState(in) == SessionUiState::HostReplaced);
     REQUIRE(tokenOf(in) == QStringLiteral("hostReplaced"));
+}
+
+TEST_CASE("A certificate that is not the pinned one is the same answer as a new uniqueid",
+          "[moonlight][sessionui]") {
+    // The second witness, and the one that arrives FIRST: the pin is checked
+    // during the TLS handshake and the uniqueid only once a plaintext probe
+    // answers. Without it the refused handshake reads as an unreachable host and
+    // sends the user looking at their network for a trust problem.
+    SessionUiInputs in = paired();
+    in.serverCertChanged = true;
+    REQUIRE(sessionUiState(in) == SessionUiState::HostReplaced);
+    REQUIRE(tokenOf(in) == QStringLiteral("hostReplaced"));
+    REQUIRE(trustFor(in) == TrustState::NotPaired);
+
+    // Even with nothing else known about the host, which is the state a forgotten
+    // and rebuilt host is in.
+    SessionUiInputs bare;
+    bare.serverCertChanged = true;
+    REQUIRE(sessionUiState(bare) == SessionUiState::HostReplaced);
+
+    // And it outranks a host that is carrying its four controllers, because a pad
+    // cannot join a session on a host nothing can authenticate to.
+    SessionUiInputs full = paired();
+    full.serverCertChanged = true;
+    full.boundControllers = static_cast<int>(kMaxPads);
+    REQUIRE(sessionUiState(full) == SessionUiState::HostReplaced);
 }
 
 TEST_CASE("M9 through M12: the app list, in flight and in every way it can end",
@@ -351,6 +378,22 @@ TEST_CASE("Trust is three words, and a remembered host that is silent keeps its 
     replaced.serverCertStored = true;
     replaced.uniqueIdChanged = true;
     REQUIRE(trustFor(replaced) == TrustState::NotPaired);
+}
+
+TEST_CASE("A bind that refused says which refusal it was", "[moonlight][sessionui]") {
+    // A bind that returns nothing is one the user cannot tell from a bind that
+    // worked, so only the outcome that WORKED has no token to report.
+    REQUIRE(moonlightBindOutcomeToken(BindOutcome::Bound).isEmpty());
+    REQUIRE(moonlightBindOutcomeToken(BindOutcome::UnknownHost) == QStringLiteral("hostGone"));
+    REQUIRE(moonlightBindOutcomeToken(BindOutcome::NoIdentity) == QStringLiteral("identityFailed"));
+    REQUIRE(moonlightBindOutcomeToken(BindOutcome::HostFull) == QStringLiteral("hostFull"));
+
+    QSet<QString> seen;
+    for (auto outcome :
+         {BindOutcome::UnknownHost, BindOutcome::NoIdentity, BindOutcome::HostFull}) {
+        seen.insert(moonlightBindOutcomeToken(outcome));
+    }
+    REQUIRE(seen.size() == 3); // no two refusals share a sentence
 }
 
 TEST_CASE("The wire lifecycle maps onto exactly one outcome each", "[moonlight][sessionui]") {

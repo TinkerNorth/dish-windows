@@ -34,7 +34,7 @@ enum class SessionUiState {
     Unreachable,    // M5  never answered, and nothing remembered
     Remembered,     // M6  never answered, but the pairing is remembered
     TrustLost,      // M7  answered with PairStatus 0 over a stored cert, or a 401
-    HostReplaced,   // M8  the host's uniqueid is not the remembered one
+    HostReplaced,   // M8  the host's uniqueid, or its certificate, is not ours
     AppsLoading,    // M9  paired, no session of ours, /applist in flight
     NewSession,     // M10 paired, no session of ours, the list is readable
     NoApps,         // M11 the list came back empty
@@ -85,6 +85,12 @@ struct SessionUiInputs {
     bool unauthorized = false;
     // /serverinfo named a uniqueid that is not the remembered one.
     bool uniqueIdChanged = false;
+    // The host presented a server certificate that is not the pinned one. The
+    // second witness for the same fact, and the one that arrives FIRST: the pin
+    // is checked during a TLS handshake, and the uniqueid only once a plaintext
+    // probe answers. Without it the refused handshake reads as an unreachable
+    // host, which sends the user looking at their network for a trust problem.
+    bool serverCertChanged = false;
     bool pairingActive = false;
     bool pairingRefused = false;
     bool appsInFlight = false;
@@ -128,7 +134,7 @@ inline SessionUiState outcomeState(SessionOutcome outcome) {
 inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     if (in.pairingActive) { return SessionUiState::PairingPin; }
     if (in.pairingRefused) { return SessionUiState::PairingRefused; }
-    if (in.uniqueIdChanged) { return SessionUiState::HostReplaced; }
+    if (in.uniqueIdChanged || in.serverCertChanged) { return SessionUiState::HostReplaced; }
 
     // The full host is judged FIRST, before anything the network could change,
     // because it is the one state derived entirely from local bookkeeping and the
@@ -242,7 +248,9 @@ inline SessionOutcome sessionOutcomeFor(const SessionState& state) {
 }
 
 inline TrustState trustFor(const SessionUiInputs& in) {
-    if (in.uniqueIdChanged || in.unauthorized) { return TrustState::NotPaired; }
+    if (in.uniqueIdChanged || in.serverCertChanged || in.unauthorized) {
+        return TrustState::NotPaired;
+    }
     if (in.probeAnswered) { return in.hostPairStatus ? TrustState::Paired : TrustState::NotPaired; }
     return in.serverCertStored ? TrustState::Remembered : TrustState::NotPaired;
 }

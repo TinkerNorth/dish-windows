@@ -87,8 +87,21 @@ ColumnLayout {
         page.refresh();
     }
 
+    // Backing out has to reach the exchange, not just the screen: phase 1 parks on
+    // the host until a human types the PIN.
+    function cancelPairing() {
+        App.cancelMoonlightPairing(page.draft.hostId);
+        page.refresh();
+    }
+
+    // The one-based ordinal this binding will show as. Arithmetic on two counts
+    // C++ vends, never a third number it has to keep consistent with them: a host
+    // that is full says so in its own state rather than promising a fifth slot.
     function controllerNumber(revision) {
-        return revision >= 0 ? App.moonlightNextControllerNumber(page.draft.hostId) : 1;
+        if (revision < 0)
+            return 1;
+        const taken = App.moonlightBoundSlotCount(page.draft.hostId);
+        return Math.min(taken + 1, App.moonlightMaxControllers());
     }
 
     function joinedAppName(revision) {
@@ -274,7 +287,7 @@ ColumnLayout {
             text: qsTr("Cancel")
             variant: Kit.DishButton.Outline
             size: Kit.DishButton.Small
-            onClicked: page.refresh()
+            onClicked: page.cancelPairing()
         }
     }
 

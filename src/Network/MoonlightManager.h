@@ -79,6 +79,15 @@ QList<MoonlightHostRow> mergeMoonlightRows(const QList<models::MoonlightHost>& r
                                            const QList<models::MoonlightHost>& discovered,
                                            const QHash<QString, QString>& phaseTokensById);
 
+// What the discovered list becomes after a sweep. A sweep that found something
+// replaces the previous one; a sweep that found NOTHING keeps it. An empty result
+// is not evidence that every host went away: a blocked multicast, a Wi-Fi roam
+// and a timeout all produce exactly the same empty list, and a host that vanishes
+// from this list is a host no binding can name any more. Exposed for unit
+// testing.
+QList<models::MoonlightHost> mergeDiscoverySweep(const QList<models::MoonlightHost>& previous,
+                                                 const QList<models::MoonlightHost>& found);
+
 class MoonlightManager : public QObject {
     Q_OBJECT
   public:
@@ -94,11 +103,32 @@ class MoonlightManager : public QObject {
     // Kick a background _nvstream._tcp sweep; results merge into the host list.
     void startDiscovery();
 
+    // One sweep's result, applied on the main thread. Its own method rather than
+    // a lambda body inside startDiscovery so the merge rule can be exercised
+    // through the manager and not only against the pure function.
+    void applyDiscoverySweep(const QList<models::MoonlightHost>& found);
+
+    // Record that this host proved it still trusts us. CONFIRMING TRUST IS A
+    // PAIRING OUTCOME: it must leave the client exactly where a five-phase
+    // pairing would, or a host the client has forgotten but the host still
+    // trusts can never be written down again. Called on every mutual-TLS reply a
+    // host answers, which is the only proof this client can actually obtain.
+    void rememberProvenTrust(const QString& id);
+
     // Add a host the user typed by hand (discovery fallback).
     void addManualHost(const QString& ip, const QString& name);
 
     // Run PIN pairing against the host; pairingFinished(id, ok) reports the end.
+    // A pairing already in flight for this host is cancelled first, so the "new
+    // code" action restarts the exchange rather than racing a second one against
+    // it.
     void pairHost(const QString& id, const QString& pin);
+
+    // Abandon a pairing the user backed out of. Phase 1 parks on the host until a
+    // human types the PIN, so without this a cancelled dialog leaves a request
+    // running for up to the read timeout and the section stuck showing a PIN
+    // nobody is going to type.
+    void cancelPairing(const QString& id);
 
     // Launch (or resume) an app and bring the control stream up. Empty appId
     // launches the host's remembered pick, then the host's default.
@@ -141,7 +171,11 @@ class MoonlightManager : public QObject {
     // this never touches: a slot bound to a Moonlight host streams here, and the
     // Satellite tables keep answering for slots bound to a satellite.
     //
-    // Main thread. Allocates a controller number, sends CONTROLLER_ARRIVAL with
+    // Main thread. Returns WHY it did not take, never void: a bind that quietly
+    // returns is indistinguishable from a bind that worked, which is what "I
+    // pressed bind and nothing happened" is made of.
+    //
+    // Allocates a controller number, sends CONTROLLER_ARRIVAL with
     // THIS BINDING's emulated-device pick and the pad's real capabilities, and
     // adds the pad to the active mask. `hasRumble` and friends are the pad's
     // detected hardware.
@@ -150,8 +184,9 @@ class MoonlightManager : public QObject {
     // carries one session for up to four controllers, so the first pad on a host
     // starts (or rejoins) it and every later pad only announces itself on the
     // stream that is already up.
-    void bindSlot(const QString& slotId, const QString& hostId, int controllerType, bool hasRumble,
-                  bool hasMotion, bool hasTouchpad, bool hasBattery, bool hasLightbar);
+    moonlight::BindOutcome bindSlot(const QString& slotId, const QString& hostId,
+                                    int controllerType, bool hasRumble, bool hasMotion,
+                                    bool hasTouchpad, bool hasBattery, bool hasLightbar);
 
     // Main thread. Drops the pad's bit from the active mask and sends one final
     // CONTROLLER_MULTI naming it with the bit already cleared, which is the
@@ -216,6 +251,9 @@ class MoonlightManager : public QObject {
     // loads the client identity on first use (RSA keygen is not paid at startup).
     MoonlightSession* ensureSession(const models::MoonlightHost& host);
     std::optional<models::MoonlightHost> hostById(const QString& id) const;
+    // Only the PERSISTED list, which is what separates a host the user keeps from
+    // one that happens to be answering an mDNS sweep right now.
+    std::optional<models::MoonlightHost> rememberedHost(const QString& id) const;
 
     // Every slot currently routed at one host, snapshotted under routeMtx_ so
     // the caller can act on it without holding the lock.

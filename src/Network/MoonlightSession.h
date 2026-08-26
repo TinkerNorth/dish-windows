@@ -59,12 +59,37 @@ class MoonlightSession : public QObject {
     // Whether the last refusal said the running session can be joined instead.
     bool resumeAvailable() const { return resumeAvailable_; }
 
+    // The host presented a server certificate that is not the pinned one, so the
+    // handshake was refused. Recorded because the refusal reaches every caller as
+    // an ordinary transport error, and a host whose identity changed is a trust
+    // state with its own answer rather than a network to go and check.
+    bool serverCertMismatch() const { return serverCertMismatch_; }
+
+    // The host this session drives is being forgotten. Drops the repository and
+    // the pin verifier, so nothing still in flight can write the pairing back
+    // after the caller has removed it: the verifier runs on a TLS handshake that
+    // completes on a LATER turn of the event loop, and the teardown this call
+    // precedes opens exactly one such handshake to send /cancel.
+    void detachFromStore();
+
     // Run the five-phase PIN pairing. Emits pinReady with the client PIN to show
     // (the reverse path is not used here; Moonlight pairing shows the client's
     // own PIN and the operator types it — but Sunshine shows the PIN on the host
     // and the user types it here, so the 4-digit code we pass in is what the user
     // entered). Emits pairingFinished(ok).
     void pair(const QString& pin);
+
+    // Abandon a pairing in flight. The five phases chain through callbacks and
+    // phase 1 PARKS ON THE HOST until a human types the PIN, so there is nothing
+    // here that can be aborted from this side within the user's patience. What
+    // this does instead is make the chain inert: the next callback to land sees a
+    // generation that has moved on and stops, without reporting a refusal the
+    // host never made.
+    void cancelPairing();
+
+    // Forget the pin mismatch recorded above. The caller has decided to trust
+    // what the host presents next, which is what pairing again means.
+    void clearServerCertMismatch() { serverCertMismatch_ = false; }
 
     // Launch (or resume) an app and bring the control stream up. `appId` comes
     // from /applist; empty launches the default "Desktop".
@@ -163,6 +188,10 @@ class MoonlightSession : public QObject {
     QString rtspTarget_;
     QString failureMessage_;
     bool resumeAvailable_ = false;
+    bool serverCertMismatch_ = false;
+    // Bumped by cancelPairing. Every phase callback carries the value it started
+    // with and returns quietly when it no longer matches.
+    unsigned pairGeneration_ = 0;
     QTimer* pingTimer_ = nullptr;
 
     // The pads announced so far, replayed whenever the control stream comes up.

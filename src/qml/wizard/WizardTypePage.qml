@@ -60,31 +60,9 @@ ColumnLayout {
                                        && App.emulateError.length > 0
                                        && page.types.length === 0
 
-    // The brand names are not translated; Auto is.
-    function moonlightTypeName(token) {
-        switch (token) {
-        case "xbox":
-            return "Xbox";
-        case "playstation":
-            return "PlayStation";
-        case "nintendo":
-            return "Nintendo";
-        }
-        return qsTr("Auto");
-    }
-
-    function moonlightTypes() {
-        const out = [];
-        const options = App.moonlightTypeOptions();
-        for (let i = 0; i < options.length; ++i) {
-            out.push({
-                "type": options[i].type,
-                "token": options[i].token,
-                "name": page.moonlightTypeName(options[i].token)
-            });
-        }
-        return out;
-    }
+    // The four type cards, shared with the binding editor so the two surfaces
+    // cannot disagree about what a card is called.
+    MoonlightVocabulary { id: vocab }
 
     // The pick a fresh binding on this host starts from: whatever the host was
     // last set to, which is where the pick used to live, and Auto otherwise.
@@ -106,12 +84,12 @@ ColumnLayout {
     }
 
     // What Auto sends for THIS pad, resolved here rather than on the wire so the
-    // card can state what the binding will carry.
+    // card can state what the binding will carry. The name comes back out of the
+    // type list rather than from a second mapping alongside it.
     property int resolvedAutoType: -1
-    property string resolvedAutoToken: ""
 
     function autoResolvedName() {
-        return page.moonlightTypeName(page.resolvedAutoToken);
+        return page.typeNameForValue(page.resolvedAutoType);
     }
 
     function reload() {
@@ -120,9 +98,8 @@ ColumnLayout {
             return;
         }
         if (page.draft.hostIsMoonlight) {
-            page.types = page.moonlightTypes();
+            page.types = vocab.typesFrom(App.moonlightTypeOptions());
             page.resolvedAutoType = App.moonlightResolvedAutoType(page.draft.slotId);
-            page.resolvedAutoToken = App.moonlightResolvedAutoToken(page.draft.slotId);
             // There is no best fit to mark: the host does not tell us what fits.
             page.bestFitType = -1;
             if (page.draft.type === -1 && page.types.length > 0)
