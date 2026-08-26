@@ -164,4 +164,13 @@ void MoonlightHostRepository::forgetBinding(const QString& slotId) {
     writeBindings(kept);
 }
 
+void MoonlightHostRepository::forgetBindingsForHost(const QString& hostId) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    QList<models::MoonlightBinding> kept;
+    for (const auto& b : readBindings()) {
+        if (b.hostId != hostId) { kept.append(b); }
+    }
+    writeBindings(kept);
+}
+
 } // namespace dish::repository

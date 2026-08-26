@@ -7,6 +7,8 @@
 
 #include <QJsonObject>
 
+#include <utility>
+
 #include <catch2/catch_test_macros.hpp>
 
 using dish::models::MoonlightHost;
@@ -159,4 +161,34 @@ TEST_CASE("A binding stored with the old Auto is migrated too", "[moonlight][rep
     legacy[QStringLiteral("controllerType")] = 0;
     const auto migrated = dish::models::MoonlightBinding::fromJson(legacy);
     REQUIRE(migrated.controllerType == dish::models::kMoonlightDeviceAuto);
+}
+
+TEST_CASE("Forgetting a host retires the bindings that drove it", "[moonlight][repo]") {
+    auto settings = dish::test::makeSharedSettings();
+    MoonlightHostRepository repo(settings);
+
+    const QString gone = QStringLiteral("ml:ip:192.168.0.2");
+    const QString kept = QStringLiteral("ml:ip:192.168.0.3");
+
+    for (const auto& [slot, host] : {std::make_pair(QStringLiteral("sdl:1"), gone),
+                                     std::make_pair(QStringLiteral("sdl:2"), gone),
+                                     std::make_pair(QStringLiteral("sdl:3"), kept)}) {
+        dish::models::MoonlightBinding b;
+        b.slotId = slot;
+        b.hostId = host;
+        repo.rememberBinding(b);
+    }
+    REQUIRE(repo.bindings().size() == 3);
+
+    // A binding is an intent to drive THAT host, so it goes with the pairing
+    // rather than outliving it and asking to be re-attached forever.
+    repo.forgetBindingsForHost(gone);
+    REQUIRE(repo.bindings().size() == 1);
+    REQUIRE(repo.binding(QStringLiteral("sdl:3"))->hostId == kept);
+    REQUIRE_FALSE(repo.binding(QStringLiteral("sdl:1")).has_value());
+    REQUIRE_FALSE(repo.binding(QStringLiteral("sdl:2")).has_value());
+
+    // Forgetting a host nothing drove is not an error and touches nothing.
+    repo.forgetBindingsForHost(QStringLiteral("ml:ip:10.0.0.1"));
+    REQUIRE(repo.bindings().size() == 1);
 }

@@ -48,6 +48,10 @@ class MoonlightHostRepository {
     std::optional<models::MoonlightBinding> binding(const QString& slotId) const;
     void rememberBinding(const models::MoonlightBinding& binding);
     void forgetBinding(const QString& slotId);
+    // Every binding that drove one host. A binding is an intent to drive THAT
+    // host, so forgetting the host retires it rather than leaving it pointing at
+    // a pairing that no longer exists.
+    void forgetBindingsForHost(const QString& hostId);
 
   private:
     QList<models::MoonlightHost> readHosts() const; // assumes mutex_ held

@@ -217,6 +217,10 @@ class MoonlightManager : public QObject {
     MoonlightSession* ensureSession(const models::MoonlightHost& host);
     std::optional<models::MoonlightHost> hostById(const QString& id) const;
 
+    // Every slot currently routed at one host, snapshotted under routeMtx_ so
+    // the caller can act on it without holding the lock.
+    QStringList slotsRoutedTo(const QString& hostId) const;
+
     // Resolves a slot to its live session + controller number under routeMtx_.
     struct Route {
         MoonlightSession* session = nullptr;

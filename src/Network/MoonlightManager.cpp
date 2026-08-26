@@ -308,7 +308,31 @@ void MoonlightManager::cancelHostApp(const QString& id) {
     if (session != nullptr) { session->cancelHostApp(); }
 }
 
+QStringList MoonlightManager::slotsRoutedTo(const QString& hostId) const {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    QStringList out;
+    for (const auto& [slotId, route] : routes_) {
+        if (route.hostId == hostId) { out.append(QString::fromStdString(slotId)); }
+    }
+    return out;
+}
+
 void MoonlightManager::forgetHost(const QString& id) {
+    // EVERY ROUTE AT THIS HOST GOES FIRST. forwardReport reads the routing table
+    // on the input thread and dereferences the session it finds there, so a route
+    // left pointing at a session this function is about to delete is a use after
+    // free on that thread. unbindSlot also sends each pad its farewell and tears
+    // the session down once the last one is off.
+    for (const auto& slotId : slotsRoutedTo(id)) { unbindSlot(slotId); }
+    padSlots_.remove(id);
+    // What we learned by asking this host goes with it: a host forgotten and
+    // added again is a stranger, not a paired one.
+    probes_.remove(id);
+    // A binding is an intent to drive THIS host. Forgetting the host retires it,
+    // or it would keep asking to be re-attached to a pairing that is gone.
+    repo_->forgetBindingsForHost(id);
+    bindings_ = repo_->bindings();
+
     if (auto* session = sessions_.take(id)) {
         session->quit();
         session->deleteLater();
