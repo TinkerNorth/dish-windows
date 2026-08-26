@@ -118,12 +118,13 @@ std::vector<std::uint8_t> encodeControllerArrival(std::uint8_t controllerNumber,
                                                   std::uint8_t controllerType,
                                                   std::uint8_t capabilities,
                                                   std::uint32_t supportedButtons) {
-    // body: ctrl#(1) + type(1) + cap(1) + supportedButtons(4) = 7.
-    std::vector<std::uint8_t> out(12 + 7);
-    std::size_t off = writeInputHeader(out.data(), kInputControllerArrival, 7);
+    // body: ctrl#(1) + type(1) + cap(1) + reserved(1) + supportedButtons(4) = 8.
+    std::vector<std::uint8_t> out(12 + kControllerArrivalBody);
+    std::size_t off = writeInputHeader(out.data(), kInputControllerArrival, kControllerArrivalBody);
     out[off++] = controllerNumber;
     out[off++] = controllerType;
     out[off++] = capabilities;
+    out[off++] = 0;
     putU32Le(out.data() + off, supportedButtons);
     return out;
 }

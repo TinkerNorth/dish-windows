@@ -3,6 +3,7 @@
 
 #include "Network/MoonlightHttpClient.h"
 
+#include <QLoggingCategory>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -14,6 +15,8 @@
 #include <QXmlStreamReader>
 
 namespace dish::net {
+
+Q_LOGGING_CATEGORY(lcMoonlightHttp, "dish.moonlight.http")
 
 MoonlightHttpClient::MoonlightHttpClient(QObject* parent)
     : QObject(parent), nam_(new QNetworkAccessManager(this)) {}
@@ -39,6 +42,7 @@ MoonlightXmlResponse parseMoonlightXml(const QByteArray& body) {
                 if (attrs.hasAttribute(QStringLiteral("status_code"))) {
                     resp.statusCode = attrs.value(QStringLiteral("status_code")).toInt();
                 }
+                resp.statusMessage = attrs.value(QStringLiteral("status_message")).toString();
             } else {
                 currentTag = xml.name().toString();
             }
@@ -48,6 +52,7 @@ MoonlightXmlResponse parseMoonlightXml(const QByteArray& body) {
             currentTag.clear();
         }
     }
+    resp.resumeAvailable = resp.value(QStringLiteral("resume")) == QLatin1String("1");
     if (!xml.hasError()) { resp.reachable = true; }
     return resp;
 }
@@ -103,11 +108,21 @@ void MoonlightHttpClient::getHttps(const QString& host, int httpsPort, const QSt
 
 void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb) {
     QNetworkRequest request{QUrl(url)};
+    // Sunshine speaks HTTP/1.1 only, and one plain request per connection is
+    // what the teardown below can reason about.
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
 
     if (https) {
         QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
         // Self-signed host cert: trust comes from the TOFU pin below, not a CA.
         ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
+        // Never offer a ticket, never share a session between sockets, never
+        // persist one: see the header. A resumed handshake is the one thing a
+        // Moonlight host will not survive.
+        ssl.setSslOption(QSsl::SslOptionDisableSessionTickets, true);
+        ssl.setSslOption(QSsl::SslOptionDisableSessionSharing, true);
+        ssl.setSslOption(QSsl::SslOptionDisableSessionPersistence, true);
+        ssl.setSessionTicket(QByteArray());
         if (identity_.has_value()) {
             const QSslCertificate cert(QByteArray::fromStdString(identity_->certPem), QSsl::Pem);
             const QSslKey key(QByteArray::fromStdString(identity_->privateKeyPem), QSsl::Rsa,
@@ -129,17 +144,31 @@ void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb)
         });
     }
 
-    QObject::connect(reply, &QNetworkReply::finished, this, [reply, cb = std::move(cb)] {
-        MoonlightXmlResponse resp;
-        if (reply->error() == QNetworkReply::NoError) {
-            resp = parseMoonlightXml(reply->readAll());
-            resp.reachable = true;
-        } else {
-            resp.reachable = false;
-        }
-        reply->deleteLater();
-        if (cb) { cb(resp); }
-    });
+    const QString path = QUrl(url).path();
+    QObject::connect(
+        reply, &QNetworkReply::finished, this, [this, reply, path, cb = std::move(cb)] {
+            MoonlightXmlResponse resp;
+            if (reply->error() == QNetworkReply::NoError) {
+                resp = parseMoonlightXml(reply->readAll());
+                resp.reachable = true;
+                if (resp.ok()) {
+                    qCDebug(lcMoonlightHttp) << path << "answered" << resp.statusCode;
+                } else {
+                    qCWarning(lcMoonlightHttp)
+                        << path << "refused in the body:" << resp.statusCode << resp.statusMessage
+                        << "resume available:" << resp.resumeAvailable;
+                }
+            } else {
+                resp.reachable = false;
+                qCWarning(lcMoonlightHttp) << path << "unreachable:" << reply->errorString();
+            }
+            reply->deleteLater();
+            // Leave the host holding nothing of ours between calls: a pooled idle
+            // connection is a socket the host has to keep, and the next request
+            // through it would be the one offering a session to resume.
+            nam_->clearConnectionCache();
+            if (cb) { cb(resp); }
+        });
 }
 
 } // namespace dish::net

@@ -10,6 +10,15 @@
 // source/http/SatelliteTlsVerifier). Every HTTPS call presents the client's
 // Moonlight identity certificate, which is how a paired host authorises it.
 //
+// NO TLS SESSION IS EVER RESUMED. A resumed session carries the peer identity
+// forward instead of asking for the certificate again, so the host's verify
+// callback never runs, and a Moonlight host cannot survive that: Sunshine
+// answers a resumed handshake with a fatal internal_error alert (RFC 8446 alert
+// 80) and logs nothing at all. Every HTTPS request therefore disables ticket
+// reuse, session sharing and session persistence, and the connection cache is
+// dropped once the reply is in so the host is left holding nothing of ours
+// between calls.
+//
 // Responses are the small Moonlight XML documents; a minimal tag reader pulls
 // out the fields we need rather than pulling in a full XML dependency.
 
@@ -30,11 +39,27 @@ class QNetworkAccessManager;
 
 namespace dish::net {
 
+// A reply that names no status_code is a plain success, which is what a host
+// that answers plainly sends.
+inline constexpr int kMoonlightStatusOk = 200;
+
 // A parsed Moonlight XML response: the flat leaf-tag -> text map plus the
 // root status. `reachable` is false when the transport produced no answer.
+//
+// A HOST SAYS NO IN THE BODY, NOT IN THE STATUS LINE. Measured against a live
+// Sunshine host: asking /launch to start a second app answers HTTP 200 carrying
+// `<root status_code="400" status_message="An app is already running on this
+// host"><resume>0</resume></root>`. Code that reads only the HTTP status treats
+// that refusal as a success and then fails further downstream on the missing
+// sessionUrl0, naming the wrong thing. Every XML endpoint is read through
+// `ok()`, never through the transport status.
 struct MoonlightXmlResponse {
     bool reachable = false;
-    int statusCode = 0; // root status_code attribute, 0 if absent
+    int statusCode = kMoonlightStatusOk; // root status_code attribute
+    QString statusMessage;               // root status_message attribute
+    // <resume>1</resume>: the refused session can be joined with /resume rather
+    // than cancelled.
+    bool resumeAvailable = false;
     std::map<QString, QString> values;
     // The raw document, for list-shaped responses (/applist) whose repeated
     // nodes the flat map cannot carry.
@@ -45,6 +70,13 @@ struct MoonlightXmlResponse {
         return it == values.end() ? QString() : it->second;
     }
     bool paired() const { return value(QStringLiteral("paired")) == QLatin1String("1"); }
+    bool ok() const { return statusCode >= 200 && statusCode <= 299; }
+    // The host already has an app running and will not start another. Either
+    // /resume that session (when resumeAvailable) or /cancel it.
+    bool appAlreadyRunning() const {
+        return !ok() &&
+               statusMessage.contains(QLatin1String("already running"), Qt::CaseInsensitive);
+    }
 };
 
 class MoonlightHttpClient : public QObject {

@@ -30,6 +30,7 @@
 #include <QString>
 
 #include <array>
+#include <map>
 #include <memory>
 #include <thread>
 
@@ -52,6 +53,11 @@ class MoonlightSession : public QObject {
     const models::MoonlightHost& host() const { return host_; }
     moonlight::SessionPhase phase() const { return state_.phase; }
     moonlight::SessionFailure failure() const { return state_.failure; }
+    // The host's own words for the last refusal (`status_message`), empty when
+    // the failure did not come from the host's body.
+    const QString& failureMessage() const { return failureMessage_; }
+    // Whether the last refusal said the running session can be joined instead.
+    bool resumeAvailable() const { return resumeAvailable_; }
 
     // Run the five-phase PIN pairing. Emits pinReady with the client PIN to show
     // (the reverse path is not used here; Moonlight pairing shows the client's
@@ -67,15 +73,29 @@ class MoonlightSession : public QObject {
     // Graceful teardown: TERMINATION + ENet disconnect + /cancel.
     void quit();
 
+    // GET /cancel on its own, with no live session of ours to tear down. This is
+    // the answer to a host that refused /launch because an app is already
+    // running and offered no <resume>: nothing local is streaming, so quit() has
+    // nothing to do, and the app on the host has to be stopped before the next
+    // /launch can succeed.
+    void cancelHostApp();
+
     // GET /applist (HTTPS, needs pairing) and emit appListReady.
     void refreshApps();
 
     // Hot path: forward one controller's state. No-op unless streaming.
     void sendControllerState(const moonlight::ControllerState& state);
 
-    // Announce a virtual pad (its emulated type + caps) once the stream is live.
+    // Announce a virtual pad (its emulated type + caps). The announcement is
+    // REMEMBERED as well as sent: a pad can be bound before the stream is live,
+    // and the host only materialises a controller it has heard arrive, so every
+    // remembered pad is re-announced the moment the control stream comes up.
     void sendControllerArrival(std::uint8_t number, std::uint8_t type, std::uint8_t caps,
                                std::uint32_t supportedButtons);
+
+    // Drop a pad from the remembered set, so a later reconnect does not announce
+    // a controller nobody is bound to any more.
+    void forgetControllerArrival(std::uint8_t number);
 
     // Forward a motion sample / battery report for a bound pad. No-ops unless
     // streaming, like sendControllerState.
@@ -98,9 +118,14 @@ class MoonlightSession : public QObject {
     void dispatch(moonlight::SessionEvent event);
     void runEffects(const std::vector<moonlight::SessionEffect>& effects);
     void beginLaunch();
+    void requestSession(const QString& path, const std::map<QString, QString>& query);
+    void onLaunchReply(const MoonlightXmlResponse& r, bool resuming);
     void beginRtspAndControl();
-    void onControlConnected(bool ok, const RtspHandshakeResult& rtsp);
+    void onRtspFinished(bool rtspOk, bool controlOk, const RtspHandshakeResult& rtsp);
     void wireControlHandlers();
+    void sendPendingArrivals();
+    void closeMediaSockets();
+    bool streaming() const;
     // One tick of both keepalives: the encrypted PERIODIC_PING on the control
     // stream and the RTP client pings on the negotiated video/audio UDP ports.
     // The host gates media startup on the RTP pings; their incoming payloads are
@@ -122,11 +147,25 @@ class MoonlightSession : public QObject {
     moonlight::SessionState state_;
     QString pendingAppId_;
     QString rtspTarget_;
+    QString failureMessage_;
+    bool resumeAvailable_ = false;
     QTimer* pingTimer_ = nullptr;
+
+    // The pads announced so far, replayed whenever the control stream comes up.
+    struct PadArrival {
+        std::uint8_t type = 0;
+        std::uint8_t capabilities = 0;
+        std::uint32_t supportedButtons = 0;
+    };
+    std::map<std::uint8_t, PadArrival> arrivals_;
 
     // The negotiated media ports + the SETUP ping payloads, for onPingTick.
     RtspHandshakeResult rtsp_;
-    QUdpSocket* rtpSocket_ = nullptr;
+    // ONE LONG-LIVED SOCKET PER STREAM. The host learns where to send RTP from
+    // the source address of these datagrams, so a throwaway socket per ping
+    // names a new port every time and closes the one it just learned.
+    QUdpSocket* videoPingSocket_ = nullptr;
+    QUdpSocket* audioPingSocket_ = nullptr;
     std::uint32_t rtpPingSeq_ = 0;
 };
 

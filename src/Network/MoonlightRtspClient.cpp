@@ -6,133 +6,152 @@
 #include "core/moonlight/MoonlightRtsp.h"
 
 #include <QByteArray>
+#include <QLoggingCategory>
+#include <QString>
 #include <QTcpSocket>
 
-#include <map>
+#include <utility>
 
 namespace dish::net {
+
+Q_LOGGING_CATEGORY(lcMoonlightRtsp, "dish.moonlight.rtsp")
 
 namespace {
 namespace ml = dish::moonlight;
 
-// Send one RTSP request and read one response off `socket`. Moonlight closes the
-// message with the TCP framing; we read until the response parses or the socket
-// goes quiet.
-std::optional<ml::RtspResponse> exchange(QTcpSocket& socket, const std::string& request,
-                                         int timeoutMs) {
-    const QByteArray out = QByteArray::fromStdString(request);
-    if (socket.write(out) != out.size()) { return std::nullopt; }
-    if (!socket.waitForBytesWritten(timeoutMs)) { return std::nullopt; }
-
-    QByteArray buffer;
-    // RTSP responses are small; read until we can parse a complete one or time
-    // out. The status line + a blank line terminates the header block.
-    while (socket.waitForReadyRead(timeoutMs)) {
-        buffer += socket.readAll();
-        const auto parsed = ml::parseRtspResponse(buffer.toStdString());
-        if (parsed.has_value() && buffer.contains("\r\n\r\n")) { return parsed; }
-    }
-    if (!buffer.isEmpty()) { return ml::parseRtspResponse(buffer.toStdString()); }
-    return std::nullopt;
+// Line ends spelled out, so a framing bug is readable in a log line.
+QString escaped(const QByteArray& raw) {
+    constexpr int kRawLogChars = 512;
+    return QString::fromUtf8(raw.left(kRawLogChars))
+        .replace(QLatin1String("\r"), QLatin1String("\\r"))
+        .replace(QLatin1String("\n"), QLatin1String("\\n"));
 }
 
 } // namespace
 
-std::optional<RtspHandshakeResult> MoonlightRtspClient::handshake(const std::string& host,
-                                                                  std::uint16_t rtspPort, int width,
-                                                                  int height, int fps,
-                                                                  int timeoutMs) {
+MoonlightRtspClient::MoonlightRtspClient(std::string host, std::uint16_t rtspPort, int timeoutMs)
+    : host_(std::move(host)), rtspPort_(rtspPort), timeoutMs_(timeoutMs) {}
+
+std::optional<ml::RtspResponse>
+MoonlightRtspClient::send(const std::string& command, const std::string& target,
+                          const std::map<std::string, std::string>& options,
+                          const std::string& payload) {
+    const int cseq = nextCseq();
+    stage_ = command + " (CSeq " + std::to_string(cseq) + ")";
+
     QTcpSocket socket;
-    socket.connectToHost(QString::fromStdString(host), rtspPort);
-    if (!socket.waitForConnected(timeoutMs)) { return std::nullopt; }
-
-    const std::string target = "rtsp://" + host + ":" + std::to_string(rtspPort);
-    int cseq = 1;
-    const std::map<std::string, std::string> baseOpts = {{"X-GS-ClientVersion", "14"}};
-
-    // OPTIONS
-    if (auto r =
-            exchange(socket, ml::buildRtspRequest("OPTIONS", target, cseq++, baseOpts), timeoutMs);
-        !r || r->statusCode != 200) {
+    socket.connectToHost(QString::fromStdString(host_), rtspPort_);
+    if (!socket.waitForConnected(timeoutMs_)) {
+        qCWarning(lcMoonlightRtsp)
+            << "connect for" << QString::fromStdString(stage_) << "failed:" << socket.errorString();
         return std::nullopt;
     }
 
-    // DESCRIBE
-    if (auto r =
-            exchange(socket, ml::buildRtspRequest("DESCRIBE", target, cseq++, baseOpts), timeoutMs);
-        !r || r->statusCode != 200) {
+    const QByteArray out =
+        QByteArray::fromStdString(ml::buildRtspRequest(command, target, cseq, options, payload));
+    qCDebug(lcMoonlightRtsp) << "->" << QString::fromStdString(stage_) << "target"
+                             << QString::fromStdString(target) << out.size() << "bytes";
+    if (socket.write(out) != out.size() || !socket.waitForBytesWritten(timeoutMs_)) {
+        qCWarning(lcMoonlightRtsp)
+            << QString::fromStdString(stage_) << "could not be written:" << socket.errorString();
+        return std::nullopt;
+    }
+
+    // Content-length frames the reply when the host sends one. It does not on
+    // DESCRIBE, and since it closes the connection once it has answered, the
+    // rest of the stream is the body.
+    QByteArray buffer;
+    for (;;) {
+        buffer += socket.readAll();
+        if (ml::rtspResponseComplete(buffer.toStdString())) { break; }
+        if (socket.state() == QAbstractSocket::UnconnectedState) { break; }
+        if (!socket.waitForReadyRead(timeoutMs_)) { break; }
+    }
+    buffer += socket.readAll();
+    socket.abort();
+
+    if (buffer.isEmpty()) {
+        qCWarning(lcMoonlightRtsp) << "host closed the connection during"
+                                   << QString::fromStdString(stage_) << "before answering";
+        return std::nullopt;
+    }
+    auto response = ml::parseRtspResponse(buffer.toStdString());
+    if (!response.has_value()) {
+        qCWarning(lcMoonlightRtsp)
+            << "unparsable reply to" << QString::fromStdString(stage_) << ":" << escaped(buffer);
+        return std::nullopt;
+    }
+    if (response->statusCode < 200 || response->statusCode > 299) {
+        qCWarning(lcMoonlightRtsp)
+            << "<-" << QString::fromStdString(stage_) << "refused:" << response->statusCode;
+        return std::nullopt;
+    }
+    qCDebug(lcMoonlightRtsp) << "<-" << QString::fromStdString(stage_) << response->statusCode
+                             << "with" << static_cast<int>(response->options.size()) << "options,"
+                             << static_cast<int>(response->payloads.size()) << "payload lines";
+    return response;
+}
+
+std::optional<ml::RtspResponse> MoonlightRtspClient::setup(const std::string& streamId) {
+    auto response =
+        send("SETUP", "streamid=" + streamId,
+             {{"Transport", "unicast;X-GS-ClientPort=" + streamId}, {"X-GS-ClientVersion", "14"}});
+    if (response.has_value() && !ml::setupServerPort(*response).has_value()) {
+        qCWarning(lcMoonlightRtsp)
+            << "SETUP" << QString::fromStdString(streamId) << "carried no server_port";
+    }
+    return response;
+}
+
+std::optional<RtspHandshakeResult> MoonlightRtspClient::handshake(int width, int height, int fps) {
+    const std::string target = "rtsp://" + host_ + ":" + std::to_string(rtspPort_);
+    const std::map<std::string, std::string> version = {{"X-GS-ClientVersion", "14"}};
+
+    if (!send("OPTIONS", target, version).has_value()) { return std::nullopt; }
+    if (!send("DESCRIBE", target, {{"X-GS-ClientVersion", "14"}, {"Accept", "application/sdp"}})
+             .has_value()) {
         return std::nullopt;
     }
 
     RtspHandshakeResult result;
 
-    // SETUP audio / video / control. Each returns its server_port.
-    auto setup = [&](const char* stream) -> std::optional<ml::RtspResponse> {
-        std::map<std::string, std::string> opts = baseOpts;
-        opts["Transport"] = "unicast;X-GS-ClientPort=50000-50001";
-        opts["Session"] = "DEADBEEFCAFE";
-        const std::string setupTarget = std::string("streamid=") + stream + "/0/0";
-        return exchange(socket, ml::buildRtspRequest("SETUP", setupTarget, cseq++, opts),
-                        timeoutMs);
-    };
+    const auto audio = setup("audio");
+    if (!audio.has_value()) { return std::nullopt; }
+    const auto video = setup("video");
+    if (!video.has_value()) { return std::nullopt; }
+    const auto control = setup("control");
+    if (!control.has_value()) { return std::nullopt; }
 
-    if (auto r = setup("audio"); r && r->statusCode == 200) {
-        if (auto p = ml::setupServerPort(*r)) { result.audioPort = static_cast<std::uint16_t>(*p); }
-        const auto ping = r->options.find("X-SS-Ping-Payload");
-        if (ping != r->options.end()) { result.audioPingPayload = ping->second; }
-    } else {
+    const auto audioPort = ml::setupServerPort(*audio);
+    const auto videoPort = ml::setupServerPort(*video);
+    const auto controlPort = ml::setupServerPort(*control);
+    if (!controlPort.has_value()) { return std::nullopt; }
+    result.audioPort = static_cast<std::uint16_t>(audioPort.value_or(0));
+    result.videoPort = static_cast<std::uint16_t>(videoPort.value_or(0));
+    result.controlPort = static_cast<std::uint16_t>(*controlPort);
+    result.connectData = ml::setupConnectData(*control).value_or(0);
+    result.audioPingPayload = ml::setupPingPayload(*audio);
+    result.videoPingPayload = ml::setupPingPayload(*video);
+    if (result.videoPingPayload.empty()) { result.videoPingPayload = result.audioPingPayload; }
+    if (result.audioPingPayload.empty()) { result.audioPingPayload = result.videoPingPayload; }
+
+    const std::string sdp = ml::buildAnnounceSdp(width, height, fps);
+    if (!send("ANNOUNCE", target,
+              {{"Content-type", "application/sdp"}, {"Session", "DEADBEEFCAFE"}}, sdp)
+             .has_value()) {
         return std::nullopt;
     }
-    if (auto r = setup("video"); r && r->statusCode == 200) {
-        if (auto p = ml::setupServerPort(*r)) { result.videoPort = static_cast<std::uint16_t>(*p); }
-        const auto ping = r->options.find("X-SS-Ping-Payload");
-        if (ping != r->options.end()) { result.videoPingPayload = ping->second; }
-    } else {
-        return std::nullopt;
-    }
-    if (auto r = setup("control"); r && r->statusCode == 200) {
-        if (auto p = ml::setupServerPort(*r)) {
-            result.controlPort = static_cast<std::uint16_t>(*p);
-        }
-        if (auto cd = ml::setupConnectData(*r)) { result.connectData = *cd; }
-    } else {
-        return std::nullopt;
-    }
+    if (!send("PLAY", target, {{"Session", "DEADBEEFCAFE"}}).has_value()) { return std::nullopt; }
 
-    // ANNOUNCE the (minimal) session config. We do not decode media, so the
-    // numbers only have to be well-formed for the host to accept and PLAY.
-    std::string sdp;
-    sdp += "v=0\r\n";
-    sdp += "a=x-nv-video[0].clientViewportWd:" + std::to_string(width) + " \r\n";
-    sdp += "a=x-nv-video[0].clientViewportHt:" + std::to_string(height) + " \r\n";
-    sdp += "a=x-nv-video[0].maxFPS:" + std::to_string(fps) + " \r\n";
-    sdp += "a=x-nv-video[0].packetSize:1024 \r\n";
-    sdp += "a=x-nv-vqos[0].bw.maximumBitrateKbps:5000 \r\n";
-    sdp += "a=x-nv-vqos[0].fec.minRequiredFecPackets:2 \r\n";
-    sdp += "a=x-nv-general.featureFlags:167 \r\n";
-    sdp += "a=x-nv-audio.surround.numChannels:2 \r\n";
-    sdp += "a=x-nv-video[0].encoderCscMode:0 \r\n";
-    {
-        std::map<std::string, std::string> opts = baseOpts;
-        opts["Session"] = "DEADBEEFCAFE";
-        opts["Content-type"] = "application/sdp";
-        if (auto r = exchange(
-                socket,
-                ml::buildRtspRequest("ANNOUNCE", "streamid=control/13/0", cseq++, opts, sdp),
-                timeoutMs);
-            !r || r->statusCode != 200) {
-            return std::nullopt;
-        }
+    qCInfo(lcMoonlightRtsp) << "negotiated ports on" << QString::fromStdString(host_) << ": control"
+                            << result.controlPort << "video" << result.videoPort << "audio"
+                            << result.audioPort << "; connect-data" << result.connectData
+                            << "; ping payload" << static_cast<int>(result.videoPingPayload.size())
+                            << "chars";
+    if (result.videoPingPayload.empty()) {
+        qCWarning(lcMoonlightRtsp)
+            << "host named no ping payload; falling back to the legacy 4-byte media ping";
     }
-
-    // PLAY.
-    if (auto r =
-            exchange(socket, ml::buildRtspRequest("PLAY", target, cseq++, baseOpts), timeoutMs);
-        !r || r->statusCode != 200) {
-        return std::nullopt;
-    }
-
-    socket.disconnectFromHost();
     return result;
 }
 

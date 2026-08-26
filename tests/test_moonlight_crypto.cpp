@@ -46,6 +46,44 @@ TEST_CASE("sealControl reproduces Wolf's control packet vectors", "[moonlight][c
             "C1F153");
 }
 
+TEST_CASE("the control IV keeps only the low byte of seq, so it wraps at 256",
+          "[moonlight][crypto][gcm]") {
+    // Wolf's construction is `iv[0] = seq`, a u32 assigned into a u8. Writing
+    // all four bytes agrees for exactly 256 packets and then diverges, and the
+    // host answers the 257th with `Failed to verify tag` and ends the session,
+    // which is why a session died just past two minutes every time.
+    const std::string key = "EDF04A215C4FBEA20934120C8480D855";
+    const std::string payload = "020302000000";
+
+    // Everything after the 4-byte seq field is identical across the wrap: same
+    // tag, same ciphertext. Only the seq the header carries moves on.
+    const std::string atZero = seal(key, 0, payload);
+    const std::string at256 = seal(key, 256, payload);
+    REQUIRE(atZero.substr(0, 8) == at256.substr(0, 8)); // type + length
+    REQUIRE(atZero.substr(8, 8) == "00000000");         // seq 0
+    REQUIRE(at256.substr(8, 8) == "00010000");          // seq 256, little-endian
+    REQUIRE(atZero.substr(16) == at256.substr(16));     // tag + ciphertext
+    REQUIRE(seal(key, 255, payload).substr(16) == seal(key, 511, payload).substr(16));
+    REQUIRE(seal(key, 1, payload).substr(16) == seal(key, 257, payload).substr(16));
+
+    // A neighbouring sequence number still differs; the wrap is a period of
+    // exactly 256, not a constant IV.
+    REQUIRE(seal(key, 0, payload).substr(16) != seal(key, 1, payload).substr(16));
+    REQUIRE(seal(key, 0, payload).substr(16) != seal(key, 255, payload).substr(16));
+
+    // And the receiver opens a packet from past the wrap, because it derives
+    // the same low byte from the seq the packet carries.
+    const auto k = key16(key);
+    const auto pt = *c::hexDecode(payload);
+    for (std::uint32_t seq : {255u, 256u, 257u, 512u, 65535u, 0xFFFFFFFFu}) {
+        const auto sealed = c::sealControl(k, seq, pt.data(), pt.size());
+        REQUIRE(sealed.has_value());
+        const auto opened = c::openControl(k, sealed->data(), sealed->size());
+        REQUIRE(opened.has_value());
+        REQUIRE(*opened == pt);
+    }
+}
+
 TEST_CASE("openControl round-trips and evolves with seq", "[moonlight][crypto][gcm]") {
     const auto key = key16("EDF04A215C4FBEA20934120C8480D855");
     const auto payload = *c::hexDecode("060212000000000E05000000033400C00000059F0329");

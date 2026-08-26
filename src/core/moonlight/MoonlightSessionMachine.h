@@ -32,12 +32,13 @@ enum class SessionPhase {
 
 enum class SessionFailure {
     None,
-    PairRejected,     // wrong PIN / server refused
-    Unreachable,      // HTTP/RTSP transport dead
-    LaunchRejected,   // /launch returned an error
-    RtspFailed,       // RTSP handshake failed
-    ControlFailed,    // ENet could not connect
-    ServerTerminated, // host sent TERMINATION / closed
+    PairRejected,      // wrong PIN / server refused
+    Unreachable,       // HTTP/RTSP transport dead
+    LaunchRejected,    // /launch returned an error
+    AppAlreadyRunning, // the host already has an app up and offered no resume
+    RtspFailed,        // RTSP handshake failed
+    ControlFailed,     // ENet could not connect
+    ServerTerminated,  // host sent TERMINATION / closed
 };
 
 struct SessionState {
@@ -58,6 +59,10 @@ enum class SessionEvent {
     StartLaunch,
     LaunchSucceeded,
     LaunchFailed,
+    // The host answered with an in-body refusal saying an app is already
+    // running and named no resumable session. Distinct from LaunchFailed
+    // because the only way forward is /cancel, which is the user's call.
+    LaunchRefusedBusy,
     RtspSucceeded,
     RtspFailed,
     ControlConnected,
@@ -111,7 +116,11 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         }
         return {};
     case SessionEvent::StartLaunch:
-        if (s.phase == SessionPhase::Paired) {
+        // A remembered host is already paired, so a launch does not have to be
+        // preceded by pairing in this run; and a launch that failed or a session
+        // that closed can be retried without one either.
+        if (s.phase == SessionPhase::Idle || s.phase == SessionPhase::Paired ||
+            s.phase == SessionPhase::Closed || s.phase == SessionPhase::Failed) {
             return {to(SessionPhase::Launching), {SessionEffect::BeginLaunch}};
         }
         return {};
@@ -123,6 +132,12 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
     case SessionEvent::LaunchFailed:
         if (s.phase == SessionPhase::Launching) {
             return {to(SessionPhase::Failed, SessionFailure::LaunchRejected),
+                    {SessionEffect::NotifyFailure}};
+        }
+        return {};
+    case SessionEvent::LaunchRefusedBusy:
+        if (s.phase == SessionPhase::Launching) {
+            return {to(SessionPhase::Failed, SessionFailure::AppAlreadyRunning),
                     {SessionEffect::NotifyFailure}};
         }
         return {};

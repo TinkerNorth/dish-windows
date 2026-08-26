@@ -28,6 +28,72 @@ TEST_CASE("parseMoonlightXml reports not-paired and challenge fields", "[moonlig
     REQUIRE(resp.value(QStringLiteral("challengeresponse")) == QStringLiteral("ABCD"));
 }
 
+TEST_CASE("a host refuses in the body, not in the status line", "[moonlight][http][status]") {
+    // Measured against a live Sunshine host: asking /launch to start a second
+    // app answers HTTP 200 carrying this. Code that reads only the transport
+    // status treats the refusal as a success and then fails downstream on the
+    // missing sessionUrl0, naming the wrong thing.
+    const QByteArray body =
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+        "<root status_code=\"400\" status_message=\"An app is already running on this host\">"
+        "<resume>0</resume></root>";
+    const auto resp = parseMoonlightXml(body);
+    REQUIRE(resp.reachable);
+    REQUIRE_FALSE(resp.ok());
+    REQUIRE(resp.statusCode == 400);
+    REQUIRE(resp.statusMessage == QStringLiteral("An app is already running on this host"));
+    REQUIRE(resp.appAlreadyRunning());
+    REQUIRE_FALSE(resp.resumeAvailable);
+}
+
+TEST_CASE("a refusal that offers a resume says so", "[moonlight][http][status]") {
+    const QByteArray body =
+        "<root status_code=\"400\" status_message=\"An app is already running on this host\">"
+        "<resume>1</resume></root>";
+    const auto resp = parseMoonlightXml(body);
+    REQUIRE_FALSE(resp.ok());
+    REQUIRE(resp.appAlreadyRunning());
+    REQUIRE(resp.resumeAvailable);
+}
+
+TEST_CASE("a refusal for some other reason is not read as a busy host",
+          "[moonlight][http][status]") {
+    const auto denied = parseMoonlightXml(
+        QByteArray("<root status_code=\"401\" status_message=\"Unauthorized\"></root>"));
+    REQUIRE_FALSE(denied.ok());
+    REQUIRE(denied.statusCode == 401);
+    REQUIRE_FALSE(denied.appAlreadyRunning());
+    REQUIRE_FALSE(denied.resumeAvailable);
+
+    const auto malformed = parseMoonlightXml(
+        QByteArray("<root status_code=\"500\" status_message=\"Internal error\"></root>"));
+    REQUIRE_FALSE(malformed.ok());
+    REQUIRE_FALSE(malformed.appAlreadyRunning());
+}
+
+TEST_CASE("a reply naming no status_code is a plain success", "[moonlight][http][status]") {
+    // Which is what a host that answers plainly sends, /applist among them.
+    const auto resp = parseMoonlightXml(QByteArray("<root><App><ID>1</ID></App></root>"));
+    REQUIRE(resp.reachable);
+    REQUIRE(resp.ok());
+    REQUIRE(resp.statusCode == kMoonlightStatusOk);
+    REQUIRE(resp.statusMessage.isEmpty());
+    REQUIRE_FALSE(resp.appAlreadyRunning());
+}
+
+TEST_CASE("a successful launch names its session and is not a refusal",
+          "[moonlight][http][status]") {
+    const QByteArray body = "<root status_code=\"200\">"
+                            "<sessionUrl0>rtsp://192.168.68.98:48010</sessionUrl0>"
+                            "<gamesession>1</gamesession></root>";
+    const auto resp = parseMoonlightXml(body);
+    REQUIRE(resp.ok());
+    REQUIRE_FALSE(resp.appAlreadyRunning());
+    REQUIRE(resp.value(QStringLiteral("sessionUrl0")) ==
+            QStringLiteral("rtsp://192.168.68.98:48010"));
+    REQUIRE(resp.value(QStringLiteral("gamesession")) == QStringLiteral("1"));
+}
+
 TEST_CASE("buildMoonlightQuery percent-encodes and orders deterministically", "[moonlight][http]") {
     const QString q =
         buildMoonlightQuery({{QStringLiteral("uniqueid"), QStringLiteral("0123456789ABCDEF")},

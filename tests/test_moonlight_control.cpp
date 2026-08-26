@@ -88,11 +88,44 @@ TEST_CASE("encodeRtpPing carries the session payload, else the legacy form",
     REQUIRE(encodeRtpPing("short", 0).size() == 4);
 }
 
-TEST_CASE("CONTROLLER_ARRIVAL announces type and caps", "[moonlight][control]") {
+TEST_CASE("SS_PING is the payload verbatim, never hex-decoded", "[moonlight][control][rtp]") {
+    // A live Sunshine host's X-SS-Ping-Payload, off the wire. It LOOKS like hex
+    // and is not: the host mints 16 printable ASCII characters and matches the
+    // same 16 bytes coming back. Hex-decoding it makes an 8-byte datagram and
+    // sending the text with no sequence makes a 16-byte one; both land in the
+    // 5..19 byte dead zone Wolf's listener drops without a word, and the host
+    // then reports `Initial Ping Timeout` ten seconds after PLAY.
+    const std::string payload = "988E4FC7E070A22F";
+    REQUIRE(payload.size() == 16);
+    const auto ping = encodeRtpPing(payload, 0);
+    // Exactly the 20 bytes the host logged back to us: the ASCII payload
+    // followed by a little-endian u32 sequence of zero.
+    REQUIRE(hx(ping) == "3938384534464337453037304132324600000000");
+    REQUIRE(ping.size() == 20);
+
+    // The sequence advances in place; nothing else in the datagram moves.
+    const auto second = encodeRtpPing(payload, 1);
+    REQUIRE(std::vector<std::uint8_t>(ping.begin(), ping.begin() + 16) ==
+            std::vector<std::uint8_t>(second.begin(), second.begin() + 16));
+    REQUIRE(hx(second).substr(32) == "01000000");
+
+    // Nothing this encoder produces can land in the silently-dropped dead zone.
+    for (const std::string& candidate :
+         {std::string(), std::string("x"), std::string("short"), std::string(15, 'a'),
+          std::string(16, 'a'), std::string(17, 'a')}) {
+        const auto size = encodeRtpPing(candidate, 0).size();
+        REQUIRE((size == 4 || size >= 20));
+    }
+}
+
+TEST_CASE("CONTROLLER_ARRIVAL is read from a naturally aligned struct",
+          "[moonlight][control][arrival]") {
     const auto bytes = encodeControllerArrival(
         0, kPadTypePlayStation, kPadCapAnalogTriggers | kPadCapRumble | kPadCapGyro, 0xDEADBEEF);
-    // wrapper(12) + body(7)
-    REQUIRE(bytes.size() == 19);
+    // wrapper(12) + body(8). EIGHT, not seven: the u32 button mask starts at
+    // offset 4 of the body, so offset 3 is the struct's alignment padding.
+    REQUIRE(bytes.size() == 12 + kControllerArrivalBody);
+    REQUIRE(bytes.size() == 20);
     // input type is 0x55000004 little-endian at offset 8.
     REQUIRE(bytes[8] == 0x04);
     REQUIRE(bytes[9] == 0x00);
@@ -101,6 +134,44 @@ TEST_CASE("CONTROLLER_ARRIVAL announces type and caps", "[moonlight][control]") 
     REQUIRE(bytes[12] == 0x00);                // controllerNumber
     REQUIRE(bytes[13] == kPadTypePlayStation); // type
     REQUIRE(bytes[14] == (kPadCapAnalogTriggers | kPadCapRumble | kPadCapGyro));
+    REQUIRE(bytes[15] == 0x00); // the reserved pad byte
+    // supportedButtons, little-endian, starting at the aligned offset.
+    REQUIRE(bytes[16] == 0xEF);
+    REQUIRE(bytes[17] == 0xBE);
+    REQUIRE(bytes[18] == 0xAD);
+    REQUIRE(bytes[19] == 0xDE);
+
+    // The declared lengths follow the body: packet_len = 8 + body, and the
+    // big-endian input size = 4 + body.
+    REQUIRE(bytes[2] == 0x10); // packet_len 16, little-endian
+    REQUIRE(bytes[3] == 0x00);
+    REQUIRE(hx(std::vector<std::uint8_t>(bytes.begin() + 4, bytes.begin() + 8)) == "0000000C");
+}
+
+TEST_CASE("CONTROLLER_ARRIVAL carries the capability and button words a host reads back",
+          "[moonlight][control][arrival]") {
+    // The alignment tell, byte for byte. A live Sunshine host logged
+    // `capabilities [FF03] supportedButtonFlags [000000FF]` for the seven-byte
+    // body and `capabilities [0003] supportedButtonFlags [0000FFFF]` for this
+    // one: analog triggers plus rumble, and the whole low sixteen buttons.
+    const auto bytes =
+        encodeControllerArrival(0, kPadTypeXbox, kPadCapAnalogTriggers | kPadCapRumble, 0x0000FFFF);
+    REQUIRE(hx(bytes) == "060210000000000C0400005500010300FFFF0000");
+
+    // Read back the way the host does, off the aligned offsets.
+    REQUIRE(bytes[14] == 0x03);
+    const std::uint32_t buttons = static_cast<std::uint32_t>(bytes[16]) |
+                                  (static_cast<std::uint32_t>(bytes[17]) << 8) |
+                                  (static_cast<std::uint32_t>(bytes[18]) << 16) |
+                                  (static_cast<std::uint32_t>(bytes[19]) << 24);
+    REQUIRE(buttons == 0x0000FFFFu);
+
+    // A second pad announces under its own number, nothing else shifting.
+    const auto second = encodeControllerArrival(1, kPadTypeNintendo, kPadCapRumble, 0x0000FFFF);
+    REQUIRE(second[12] == 0x01);
+    REQUIRE(second[13] == kPadTypeNintendo);
+    REQUIRE(second[14] == kPadCapRumble);
+    REQUIRE(second[15] == 0x00);
 }
 
 TEST_CASE("decodeServerEvent parses each event body", "[moonlight][control][decode]") {

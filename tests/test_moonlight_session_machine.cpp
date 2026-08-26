@@ -53,6 +53,48 @@ TEST_CASE("Happy path Idle -> Streaming", "[moonlight][session]") {
     REQUIRE(has(r.effects, SessionEffect::StartPinging));
 }
 
+TEST_CASE("A launch starts from a remembered host and from a terminal state",
+          "[moonlight][session]") {
+    // A remembered host is already paired, so the first thing a fresh session
+    // object does can be a launch; and a failed launch or a closed session can
+    // be retried without pairing again. Without this the connect button on a
+    // remembered host reduced to nothing at all.
+    for (auto phase :
+         {SessionPhase::Idle, SessionPhase::Paired, SessionPhase::Closed, SessionPhase::Failed}) {
+        auto r = reduceSession(st(phase), SessionEvent::StartLaunch);
+        REQUIRE(r.next.has_value());
+        REQUIRE(r.next->phase == SessionPhase::Launching);
+        REQUIRE(r.next->failure == SessionFailure::None);
+        REQUIRE(has(r.effects, SessionEffect::BeginLaunch));
+    }
+    // But not on top of a launch already in flight, or a live stream.
+    for (auto phase :
+         {SessionPhase::Launching, SessionPhase::RtspHandshake, SessionPhase::ControlConnecting,
+          SessionPhase::Streaming, SessionPhase::Pairing}) {
+        REQUIRE_FALSE(reduceSession(st(phase), SessionEvent::StartLaunch).next.has_value());
+    }
+}
+
+TEST_CASE("A busy host is a failure of its own, not a generic launch rejection",
+          "[moonlight][session]") {
+    // The host answered 200 with an in-body status_code saying an app is already
+    // running and named no resumable session. The only way forward is /cancel,
+    // which is the user's call, so it does not share LaunchRejected's reason.
+    auto r = reduceSession(st(SessionPhase::Launching), SessionEvent::LaunchRefusedBusy);
+    REQUIRE(r.next.has_value());
+    REQUIRE(r.next->phase == SessionPhase::Failed);
+    REQUIRE(r.next->failure == SessionFailure::AppAlreadyRunning);
+    REQUIRE(has(r.effects, SessionEffect::NotifyFailure));
+    // No teardown: there is nothing of ours to tear down, and /cancel would
+    // stop an app the user may not want stopped.
+    REQUIRE_FALSE(has(r.effects, SessionEffect::Teardown));
+
+    // Outside a launch it is inert.
+    for (auto phase : {SessionPhase::Idle, SessionPhase::Paired, SessionPhase::Streaming}) {
+        REQUIRE_FALSE(reduceSession(st(phase), SessionEvent::LaunchRefusedBusy).next.has_value());
+    }
+}
+
 TEST_CASE("Faltering toggles on missed and recovered pings", "[moonlight][session]") {
     SessionState s = st(SessionPhase::Streaming);
     auto r = reduceSession(s, SessionEvent::PingsMissed);

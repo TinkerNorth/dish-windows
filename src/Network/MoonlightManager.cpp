@@ -211,6 +211,13 @@ void MoonlightManager::disconnectHost(const QString& id) {
     if (auto* session = sessions_.value(id, nullptr)) { session->quit(); }
 }
 
+void MoonlightManager::cancelHostApp(const QString& id) {
+    const auto host = hostById(id);
+    if (!host.has_value()) { return; }
+    auto* session = ensureSession(*host);
+    if (session != nullptr) { session->cancelHostApp(); }
+}
+
 void MoonlightManager::forgetHost(const QString& id) {
     if (auto* session = sessions_.take(id)) {
         session->quit();
@@ -254,13 +261,9 @@ void MoonlightManager::bindSlot(const QString& slotId, const QString& hostId, bo
     const std::uint8_t caps =
         moonlight::padCapabilities(hasRumble, hasMotion, hasTouchpad, hasBattery, hasLightbar);
     const std::uint8_t type = moonlight::arrivalTypeFromDevicePick(host->deviceType);
-    // The full button set Dish can produce, so the host does not have to guess.
-    constexpr std::uint32_t kSupportedButtons =
-        moonlight::kBtnDpadUp | moonlight::kBtnDpadDown | moonlight::kBtnDpadLeft |
-        moonlight::kBtnDpadRight | moonlight::kBtnStart | moonlight::kBtnBack |
-        moonlight::kBtnLeftStick | moonlight::kBtnRightStick | moonlight::kBtnLeftButton |
-        moonlight::kBtnRightButton | moonlight::kBtnHome | moonlight::kBtnA | moonlight::kBtnB |
-        moonlight::kBtnX | moonlight::kBtnY;
+    // The whole low sixteen: every button the CONTROLLER_MULTI word can carry,
+    // so the host does not have to guess which ones this pad will ever send.
+    constexpr std::uint32_t kSupportedButtons = 0x0000FFFFu;
     session->sendControllerArrival(*number, type, caps, kSupportedButtons);
 }
 
@@ -286,6 +289,8 @@ void MoonlightManager::unbindSlot(const QString& slotId) {
         farewell.controllerNumber = route.controllerNumber;
         farewell.activeGamepadMask = padSet.activeMask();
         route.session->sendControllerState(farewell);
+        // And it stops being re-announced when the stream next comes up.
+        route.session->forgetControllerArrival(route.controllerNumber);
     }
 }
 

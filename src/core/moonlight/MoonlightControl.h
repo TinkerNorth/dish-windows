@@ -149,6 +149,15 @@ std::size_t encodeControllerMulti(const ControllerState& state, std::uint8_t* ou
 // Convenience wrapper returning an owned buffer, for tests and cold callers.
 std::vector<std::uint8_t> encodeControllerMulti(const ControllerState& state);
 
+// The CONTROLLER_ARRIVAL body length. EIGHT BYTES, NOT SEVEN. Its fields are a
+// u8 number, a u8 type, a u8 capability bitfield and a u32 button mask, which
+// add up to seven; but the host reads them out of a NATURALLY ALIGNED struct, so
+// the u32 starts at offset 4 and offset 3 is reserved padding. Sending seven
+// shifts everything after the type by one byte: a live Sunshine host read a
+// capabilities word of 0x03 as 0xFF03 and a 0xFFFF button mask as 0x000000FF,
+// and logged `capabilities [FF03] supportedButtonFlags [000000FF]`.
+inline constexpr std::size_t kControllerArrivalBody = 8;
+
 // CONTROLLER_ARRIVAL: announce a new virtual pad and its emulated type + caps.
 std::vector<std::uint8_t> encodeControllerArrival(std::uint8_t controllerNumber,
                                                   std::uint8_t controllerType,

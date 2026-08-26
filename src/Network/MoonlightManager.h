@@ -108,6 +108,12 @@ class MoonlightManager : public QObject {
     void setHostDeviceType(const QString& id, int deviceType);
 
     void disconnectHost(const QString& id);
+
+    // Stop whatever app the host is running, without a session of ours to tear
+    // down. The answer to a host that refused /launch because an app is already
+    // running and offered no resumable session.
+    void cancelHostApp(const QString& id);
+
     void forgetHost(const QString& id);
 
     std::optional<moonlight::SessionPhase> sessionPhase(const QString& id) const;
