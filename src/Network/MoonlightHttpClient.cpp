@@ -148,6 +148,8 @@ void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb)
     QObject::connect(
         reply, &QNetworkReply::finished, this, [this, reply, path, cb = std::move(cb)] {
             MoonlightXmlResponse resp;
+            const QVariant status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+            const int httpStatus = status.isValid() ? status.toInt() : 0;
             if (reply->error() == QNetworkReply::NoError) {
                 resp = parseMoonlightXml(reply->readAll());
                 resp.reachable = true;
@@ -160,8 +162,10 @@ void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb)
                 }
             } else {
                 resp.reachable = false;
-                qCWarning(lcMoonlightHttp) << path << "unreachable:" << reply->errorString();
+                qCWarning(lcMoonlightHttp)
+                    << path << "unreachable:" << reply->errorString() << "http" << httpStatus;
             }
+            resp.httpStatus = httpStatus;
             reply->deleteLater();
             // Leave the host holding nothing of ours between calls: a pooled idle
             // connection is a socket the host has to keep, and the next request

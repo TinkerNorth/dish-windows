@@ -53,9 +53,9 @@ struct MoonlightHost {
     // "Desktop"); empty means launch the host default.
     QString lastAppId;
     QString lastAppName;
-    // kMoonlightDevice*, the emulated-device pick for CONTROLLER_ARRIVAL. Kept
-    // for the hosts written before the pick moved to the binding, and read as
-    // the default a fresh binding on this host starts from.
+    // kMoonlightDevice*. The pick used to live here, one per host; it is now per
+    // binding, and this is what a fresh binding on this host starts from, so a
+    // record written before the move keeps the answer its user gave.
     int deviceType = kMoonlightDeviceAuto;
 
     // Prefer the host UUID so a DHCP address change keeps one row; fall back to

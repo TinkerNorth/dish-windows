@@ -341,14 +341,16 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void probeMoonlightHost(const QString& id);
 
     // The session section's ONE state, as a token: "checking" | "notPaired" |
-    // "pairingPin" | "pairRefused" | "unreachable" | "rememberedOffline" |
+    // "pairingPin" | "pairingRefused" | "unreachable" | "remembered" |
     // "trustLost" | "hostReplaced" | "appsLoading" | "newSession" | "noApps" |
-    // "appsUnreadable" | "joiningSession" | "hostFull" | "busyOther" |
-    // "rejoinRefused" | "refused" | "setupFailed" | "live" | "dropped" |
-    // "endedByHost". QML localizes and colours from it and never re-derives it.
-    Q_INVOKABLE QString moonlightSessionState(const QString& id) const;
-    Q_INVOKABLE bool moonlightSessionBlocksApply(const QString& id) const;
-    Q_INVOKABLE bool moonlightSessionIsProblem(const QString& id) const;
+    // "appsFailed" | "joining" | "hostFull" | "busyOther" | "resumeFailed" |
+    // "refused" | "setupFailed" | "live" | "dropped" | "endedByHost". QML
+    // localizes and colours from it and never re-derives it. `slotId` names the
+    // binding asking, which is what tells riding a session from joining one; it
+    // may be empty for a binding that has not been applied.
+    Q_INVOKABLE QString moonlightSessionState(const QString& id, const QString& slotId) const;
+    Q_INVOKABLE bool moonlightSessionBlocksApply(const QString& id, const QString& slotId) const;
+    Q_INVOKABLE bool moonlightSessionIsProblem(const QString& id, const QString& slotId) const;
 
     // The host row's trust word: "paired" | "remembered" | "notPaired". Never a
     // liveness light, because there is no liveness to draw.

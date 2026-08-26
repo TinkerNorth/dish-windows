@@ -57,6 +57,10 @@ struct MoonlightXmlResponse {
     bool reachable = false;
     int statusCode = kMoonlightStatusOk; // root status_code attribute
     QString statusMessage;               // root status_message attribute
+    // The transport's own status line, which a body-level refusal does NOT
+    // report. Only one value is load-bearing: 401 is a host saying it does not
+    // know this client, which is trust lost rather than a call that failed.
+    int httpStatus = 0;
     // <resume>1</resume>: the refused session can be joined with /resume rather
     // than cancelled.
     bool resumeAvailable = false;
@@ -77,6 +81,7 @@ struct MoonlightXmlResponse {
         return !ok() &&
                statusMessage.contains(QLatin1String("already running"), Qt::CaseInsensitive);
     }
+    bool unauthorized() const { return httpStatus == 401; }
 };
 
 class MoonlightHttpClient : public QObject {

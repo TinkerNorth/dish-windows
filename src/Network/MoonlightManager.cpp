@@ -163,7 +163,8 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
             // has to ask the host again to draw it.
             probe.answered = true;
             probe.timedOut = false;
-            probe.pairStatus = true;
+            probe.mtlsVerified = true;
+            probe.unauthorized = false;
             probe.uniqueIdChanged = false;
         }
         emit pairingFinished(id, ok);
@@ -174,16 +175,27 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
     QObject::connect(
         session, &MoonlightSession::rgbLedReceived, this,
         [this, id](int n, int r, int g, int b) { emit rgbLedReceived(id, n, r, g, b); });
-    QObject::connect(session, &MoonlightSession::appListReady, this,
-                     [this, id](const QStringList& ids, const QStringList& titles, bool ok) {
-                         auto& probe = probes_[id];
-                         probe.appsInFlight = false;
-                         probe.appsFetched = ok;
-                         probe.appsFailed = !ok;
-                         probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
-                         emit appListReady(id, ids, titles);
-                         emit hostsChanged();
-                     });
+    QObject::connect(
+        session, &MoonlightSession::appListReady, this,
+        [this, id](const QStringList& ids, const QStringList& titles, bool ok, bool unauthorized) {
+            auto& probe = probes_[id];
+            probe.appsInFlight = false;
+            probe.appsFetched = ok;
+            probe.appsFailed = !ok;
+            probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
+            probe.unauthorized = unauthorized;
+            if (ok) {
+                // A readable mutual-TLS reply IS the proof of trust: the host ran
+                // its verify callback and let us in, whatever a plaintext probe
+                // said about PairStatus.
+                probe.answered = true;
+                probe.timedOut = false;
+                probe.mtlsVerified = true;
+            }
+            if (unauthorized) { probe.mtlsVerified = false; }
+            emit appListReady(id, ids, titles);
+            emit hostsChanged();
+        });
     QObject::connect(session, &MoonlightSession::probeFinished, this,
                      [this, id](bool answered, bool pairStatus, const QString& uniqueId) {
                          auto& probe = probes_[id];
@@ -253,6 +265,7 @@ void MoonlightManager::refreshApps(const QString& id) {
     probe.appsInFlight = true;
     probe.appsFetched = false;
     probe.appsFailed = false;
+    probe.unauthorized = false;
     session->refreshApps();
     emit hostsChanged();
 }
@@ -411,13 +424,14 @@ void MoonlightManager::forgetBinding(const QString& slotId) {
     emit hostsChanged();
 }
 
-moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& hostId) const {
+moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& hostId,
+                                                             const QString& slotId) const {
     moonlight::SessionUiInputs in;
     const auto probe = probes_.value(hostId);
     in.probeInFlight = probe.inFlight;
     in.probeAnswered = probe.answered;
     in.probeTimedOut = probe.timedOut;
-    in.hostPairStatus = probe.pairStatus;
+    in.hostPairStatus = probe.pairStatus || probe.mtlsVerified;
     in.uniqueIdChanged = probe.uniqueIdChanged;
     in.pairingActive = probe.pairingActive;
     in.pairingRefused = probe.pairingRefused;
@@ -427,15 +441,17 @@ moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& host
     in.appCount = probe.appCount;
     in.serverCertStored = repo_->serverCert(hostId).has_value();
     in.boundControllers = boundSlotCount(hostId);
-    // A host that answers plaintext but refuses the mutual-TLS list has forgotten
-    // this device whatever its PairStatus said, and /applist is the call that
-    // finds that out.
-    in.unauthorized = probe.appsFailed && probe.answered && !probe.pairStatus;
+    // A host that answers the plaintext probe but hands the mutual-TLS list back
+    // a 401 has forgotten this device whatever its PairStatus said.
+    in.unauthorized = probe.unauthorized;
 
     if (auto* session = sessions_.value(hostId, nullptr)) {
         const moonlight::SessionState state{session->phase(), session->failure()};
         in.outcome = moonlight::sessionOutcomeFor(state);
-        in.hostSessionActive = in.outcome == moonlight::SessionOutcome::Live;
+        in.sessionLive = in.outcome == moonlight::SessionOutcome::Live;
+        // This binding rides that session only once its pad is actually routed
+        // to this host; until then it is a binding that WOULD join one.
+        in.bindingLive = in.sessionLive && !slotId.isEmpty() && boundHostFor(slotId) == hostId;
     }
     return in;
 }

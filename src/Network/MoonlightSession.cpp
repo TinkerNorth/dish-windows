@@ -534,7 +534,7 @@ void MoonlightSession::refreshApps() {
                             qCWarning(lcMoonlightSession)
                                 << host_.ip << "/applist gave nothing back: reachable"
                                 << r.reachable << "status" << r.statusCode << r.statusMessage;
-                            emit appListReady({}, {}, false);
+                            emit appListReady({}, {}, false, r.unauthorized());
                             return;
                         }
                         QStringList ids;
@@ -543,7 +543,7 @@ void MoonlightSession::refreshApps() {
                             ids.append(app.id);
                             titles.append(app.title);
                         }
-                        emit appListReady(ids, titles, true);
+                        emit appListReady(ids, titles, true, false);
                     });
 }
 

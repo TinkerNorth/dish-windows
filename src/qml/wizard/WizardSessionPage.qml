@@ -77,7 +77,7 @@ ColumnLayout {
     function refresh() {
         if (!page.isMoonlight)
             return;
-        page.state = App.moonlightSessionState(page.draft.hostId);
+        page.state = App.moonlightSessionState(page.draft.hostId, page.draft.slotId);
         page.accounting += 1;
     }
 
@@ -123,10 +123,10 @@ ColumnLayout {
         switch (page.state) {
         case "notPaired":
             return qsTr("Not paired yet");
-        case "pairRefused":
+        case "pairingRefused":
             return qsTr("%1 did not accept the PIN").arg(page.hostName);
         case "unreachable":
-        case "rememberedOffline":
+        case "remembered":
             return qsTr("%1 is not answering").arg(page.hostName);
         case "trustLost":
             return qsTr("%1 no longer recognises this device").arg(page.hostName);
@@ -134,7 +134,7 @@ ColumnLayout {
             return qsTr("%1 was reset").arg(page.hostName);
         case "newSession":
             return qsTr("New session");
-        case "joiningSession":
+        case "joining":
             return page.joinedAppName(page.accounting).length > 0
                    ? qsTr("Joining %1").arg(page.joinedAppName(page.accounting))
                    : qsTr("Joining the session on %1").arg(page.hostName);
@@ -142,7 +142,7 @@ ColumnLayout {
             return qsTr("%1 is full").arg(page.hostName);
         case "busyOther":
             return qsTr("Another device is using %1").arg(page.hostName);
-        case "rejoinRefused":
+        case "resumeFailed":
             return qsTr("Could not rejoin the session on %1").arg(page.hostName);
         case "live":
             return qsTr("Streaming to %1").arg(page.hostName);
@@ -160,11 +160,11 @@ ColumnLayout {
             return qsTr("%1 needs a one time PIN before Dish can start a session. Pair now, or add the controller and pair later.").arg(page.hostName);
         case "pairingPin":
             return qsTr("Type %1 into the Moonlight or Sunshine page on %2.").arg(page.pin).arg(page.hostName);
-        case "pairRefused":
+        case "pairingRefused":
             return qsTr("Check that the code went into the right host, then try again.");
         case "unreachable":
             return qsTr("Check that the host is switched on and on this network, then try again.");
-        case "rememberedOffline":
+        case "remembered":
             return qsTr("Dish remembers the pairing with %1 and will start a session when the host is back.").arg(page.hostName);
         case "trustLost":
             return qsTr("The host removed the pairing. Pair again to start a session.");
@@ -172,14 +172,14 @@ ColumnLayout {
             return qsTr("This host has a new identity, so the old pairing no longer works. Pair again to start a session.");
         case "newSession":
             return qsTr("This is the first controller on %1, so it picks what the host runs.").arg(page.hostName);
-        case "joiningSession":
+        case "joining":
             return qsTr("%1 is already running a session for this device. This controller joins it as controller %2.")
                      .arg(page.hostName).arg(page.controllerNumber(page.accounting));
         case "hostFull":
             return qsTr("A session carries four controllers at most, and %1 already has four. Unbind one to make room.").arg(page.hostName);
         case "busyOther":
             return qsTr("%1 is running an app for a different device and will not hand that session over. Close it to start a new one, or add the controller and try again later.").arg(page.hostName);
-        case "rejoinRefused":
+        case "resumeFailed":
             return qsTr("The host has a session but would not hand it back. Close the app on %1 and start a new one.").arg(page.hostName);
         case "live":
             return qsTr("%1 · controller %2 of 4")
@@ -203,20 +203,21 @@ ColumnLayout {
     // Amber is the problem colour, never the working one. C++ owns the rule so
     // the hosts screen and this page cannot disagree about it.
     readonly property bool problem: page.accounting >= 0
-                                    && App.moonlightSessionIsProblem(page.draft.hostId)
+                                    && App.moonlightSessionIsProblem(page.draft.hostId,
+                                                                     page.draft.slotId)
 
     readonly property bool spinning: page.state === "checking" || page.state === "pairingPin"
                                      || page.state === "appsLoading"
-    readonly property bool banner: page.state === "appsUnreadable" || page.state === "refused"
+    readonly property bool banner: page.state === "appsFailed" || page.state === "refused"
                                    || page.state === "setupFailed"
-    readonly property bool calloutState: page.state === "notPaired" || page.state === "pairRefused"
+    readonly property bool calloutState: page.state === "notPaired" || page.state === "pairingRefused"
                                          || page.state === "unreachable"
-                                         || page.state === "rememberedOffline"
+                                         || page.state === "remembered"
                                          || page.state === "trustLost"
                                          || page.state === "hostReplaced"
                                          || page.state === "hostFull"
                                          || page.state === "busyOther"
-                                         || page.state === "rejoinRefused"
+                                         || page.state === "resumeFailed"
                                          || page.state === "dropped"
                                          || page.state === "endedByHost"
 
@@ -317,14 +318,14 @@ ColumnLayout {
     // ── Could not read it ───────────────────────────────────────────────────
     Kit.ErrorBanner {
         visible: page.banner
-        tone: page.state === "appsUnreadable" ? Kit.ErrorBanner.Warning : Kit.ErrorBanner.Error
-        text: page.state === "appsUnreadable"
+        tone: page.state === "appsFailed" ? Kit.ErrorBanner.Warning : Kit.ErrorBanner.Error
+        text: page.state === "appsFailed"
               ? qsTr("Could not read the app list from %1").arg(page.hostName)
               : page.state === "setupFailed"
                 ? qsTr("Could not finish the session on %1").arg(page.hostName)
                 : qsTr("%1 refused the session: %2")
                     .arg(page.hostName).arg(App.moonlightRefusalMessage(page.draft.hostId))
-        detail: page.state === "appsUnreadable"
+        detail: page.state === "appsFailed"
                 ? qsTr("Dish will start whatever the host lists first. Retry once %1 is reachable.").arg(page.hostName)
                 : page.state === "setupFailed"
                   ? qsTr("The app started but the stream did not come up, so Dish closed it again.")
@@ -357,14 +358,14 @@ ColumnLayout {
             onClicked: page.startPairing()
         }
         Kit.DishButton {
-            visible: page.state === "pairRefused"
+            visible: page.state === "pairingRefused"
             text: qsTr("Try again")
             variant: Kit.DishButton.Primary
             size: Kit.DishButton.Small
             onClicked: page.startPairing()
         }
         Kit.DishButton {
-            visible: page.state === "busyOther" || page.state === "rejoinRefused"
+            visible: page.state === "busyOther" || page.state === "resumeFailed"
             text: qsTr("Close the app on %1").arg(page.hostName)
             variant: Kit.DishButton.Destructive
             size: Kit.DishButton.Small
@@ -385,8 +386,8 @@ ColumnLayout {
             onClicked: page.reload()
         }
         Kit.DishButton {
-            visible: page.state === "unreachable" || page.state === "rememberedOffline"
-                     || page.state === "busyOther" || page.state === "rejoinRefused"
+            visible: page.state === "unreachable" || page.state === "remembered"
+                     || page.state === "busyOther" || page.state === "resumeFailed"
             text: qsTr("Retry")
             variant: Kit.DishButton.Outline
             size: Kit.DishButton.Small

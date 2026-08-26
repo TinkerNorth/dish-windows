@@ -314,9 +314,18 @@ Kit.Page {
     function refreshCatalog() {
         if (draft.hostIsMoonlight) {
             // No catalog to read, and no Pending state to wait through: a
-            // Moonlight type resolves the moment a host is picked.
+            // Moonlight type resolves the moment a host is picked, starting from
+            // whatever this host was last set to.
             const options = page.moonlightTypes();
             if (draft.type === -1 && options.length > 0) {
+                const remembered = App.moonlightDeviceType(draft.hostId);
+                for (let i = 0; i < options.length; ++i) {
+                    if (options[i].type === remembered) {
+                        draft.chooseType(remembered, options[i].name);
+                        page.types = [];
+                        return;
+                    }
+                }
                 draft.chooseType(options[0].type, options[0].name);
             }
             page.types = [];
@@ -557,7 +566,8 @@ Kit.Page {
     // when the controller is used. The one exception is a host already carrying
     // its four controllers, which is a protocol ceiling.
     readonly property bool moonlightFull: draft.hostIsMoonlight && page.moonlightAccounting >= 0
-                                          && App.moonlightSessionBlocksApply(draft.hostId)
+                                          && App.moonlightSessionBlocksApply(draft.hostId,
+                                                                             page.slotId)
     readonly property bool canApply: page.padRow !== null && draft.hasDestination && draft.hasType
                                      && !page.moonlightFull
     readonly property bool noHosts: App.connectionModel.count === 0

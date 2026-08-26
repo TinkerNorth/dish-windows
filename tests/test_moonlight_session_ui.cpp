@@ -32,14 +32,14 @@ SessionUiInputs paired() {
     return in;
 }
 
-QString tokenOf(const SessionUiInputs& in) { return moonlightSessionToken(resolveSessionUi(in)); }
+QString tokenOf(const SessionUiInputs& in) { return moonlightSessionToken(sessionUiState(in)); }
 
 } // namespace
 
 TEST_CASE("M1 checking: a probe is in flight and nothing is cached", "[moonlight][sessionui]") {
     SessionUiInputs in;
     in.probeInFlight = true;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::Checking);
+    REQUIRE(sessionUiState(in) == SessionUiState::Checking);
     REQUIRE(tokenOf(in) == QStringLiteral("checking"));
 }
 
@@ -48,7 +48,7 @@ TEST_CASE("M2 not paired: the host answered and has never met us", "[moonlight][
     in.probeAnswered = true;
     in.hostPairStatus = false;
     in.serverCertStored = false;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::NotPaired);
+    REQUIRE(sessionUiState(in) == SessionUiState::NotPaired);
     REQUIRE(tokenOf(in) == QStringLiteral("notPaired"));
 }
 
@@ -56,7 +56,7 @@ TEST_CASE("M3 pairing outranks not paired: the PIN is on screen", "[moonlight][s
     SessionUiInputs in;
     in.probeAnswered = true;
     in.pairingActive = true;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::PairingPin);
+    REQUIRE(sessionUiState(in) == SessionUiState::PairingPin);
     REQUIRE(tokenOf(in) == QStringLiteral("pairingPin"));
 }
 
@@ -64,8 +64,8 @@ TEST_CASE("M4 pairing refused", "[moonlight][sessionui]") {
     SessionUiInputs in;
     in.probeAnswered = true;
     in.pairingRefused = true;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::PairRefused);
-    REQUIRE(tokenOf(in) == QStringLiteral("pairRefused"));
+    REQUIRE(sessionUiState(in) == SessionUiState::PairingRefused);
+    REQUIRE(tokenOf(in) == QStringLiteral("pairingRefused"));
 }
 
 TEST_CASE("M5 and M6: a silent host reads differently once it is remembered",
@@ -73,12 +73,12 @@ TEST_CASE("M5 and M6: a silent host reads differently once it is remembered",
     SessionUiInputs in;
     in.probeTimedOut = true;
     in.serverCertStored = false;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::Unreachable);
+    REQUIRE(sessionUiState(in) == SessionUiState::Unreachable);
     REQUIRE(tokenOf(in) == QStringLiteral("unreachable"));
 
     in.serverCertStored = true;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::RememberedOffline);
-    REQUIRE(tokenOf(in) == QStringLiteral("rememberedOffline"));
+    REQUIRE(sessionUiState(in) == SessionUiState::Remembered);
+    REQUIRE(tokenOf(in) == QStringLiteral("remembered"));
 }
 
 TEST_CASE("M7 trust lost, from either side of the evidence", "[moonlight][sessionui]") {
@@ -86,19 +86,46 @@ TEST_CASE("M7 trust lost, from either side of the evidence", "[moonlight][sessio
     answered.probeAnswered = true;
     answered.hostPairStatus = false;
     answered.serverCertStored = true;
-    REQUIRE(resolveSessionUi(answered) == SessionUiState::TrustLost);
+    REQUIRE(sessionUiState(answered) == SessionUiState::TrustLost);
     REQUIRE(tokenOf(answered) == QStringLiteral("trustLost"));
 
     // A mutual-TLS 401 says the same thing whatever the plaintext probe claimed.
     SessionUiInputs unauthorized = paired();
     unauthorized.unauthorized = true;
-    REQUIRE(resolveSessionUi(unauthorized) == SessionUiState::TrustLost);
+    REQUIRE(sessionUiState(unauthorized) == SessionUiState::TrustLost);
+
+    // But only where there was trust to lose: a host we have never paired with
+    // refuses in exactly the same way and is simply not paired.
+    SessionUiInputs stranger;
+    stranger.probeAnswered = true;
+    stranger.unauthorized = true;
+    stranger.serverCertStored = false;
+    REQUIRE(sessionUiState(stranger) == SessionUiState::NotPaired);
+}
+
+TEST_CASE("A readable mutual-TLS reply outranks a plaintext PairStatus of 0",
+          "[moonlight][sessionui]") {
+    // A host with no client certificate in front of it reports PairStatus 0 to
+    // everyone, so the plaintext probe cannot be the last word on trust. The
+    // manager folds a readable /applist into hostPairStatus before this runs.
+    SessionUiInputs in;
+    in.probeAnswered = true;
+    in.serverCertStored = true;
+    in.hostPairStatus = false;
+    REQUIRE(sessionUiState(in) == SessionUiState::TrustLost);
+    REQUIRE(trustFor(in) == TrustState::NotPaired);
+
+    in.hostPairStatus = true;
+    in.appsFetched = true;
+    in.appCount = 2;
+    REQUIRE(sessionUiState(in) == SessionUiState::NewSession);
+    REQUIRE(trustFor(in) == TrustState::Paired);
 }
 
 TEST_CASE("M8 host replaced beats every other trust answer", "[moonlight][sessionui]") {
     SessionUiInputs in = paired();
     in.uniqueIdChanged = true;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::HostReplaced);
+    REQUIRE(sessionUiState(in) == SessionUiState::HostReplaced);
     REQUIRE(tokenOf(in) == QStringLiteral("hostReplaced"));
 }
 
@@ -106,55 +133,92 @@ TEST_CASE("M9 through M12: the app list, in flight and in every way it can end",
           "[moonlight][sessionui]") {
     SessionUiInputs loading = paired();
     loading.appsInFlight = true;
-    REQUIRE(resolveSessionUi(loading) == SessionUiState::AppsLoading);
+    REQUIRE(sessionUiState(loading) == SessionUiState::AppsLoading);
     REQUIRE(tokenOf(loading) == QStringLiteral("appsLoading"));
 
     SessionUiInputs ready = paired();
     ready.appsFetched = true;
     ready.appCount = 2;
-    REQUIRE(resolveSessionUi(ready) == SessionUiState::NewSession);
+    REQUIRE(sessionUiState(ready) == SessionUiState::NewSession);
     REQUIRE(tokenOf(ready) == QStringLiteral("newSession"));
 
     SessionUiInputs empty = paired();
     empty.appsFetched = true;
     empty.appCount = 0;
-    REQUIRE(resolveSessionUi(empty) == SessionUiState::NoApps);
+    REQUIRE(sessionUiState(empty) == SessionUiState::NoApps);
     REQUIRE(tokenOf(empty) == QStringLiteral("noApps"));
 
     SessionUiInputs failed = paired();
     failed.appsFailed = true;
-    REQUIRE(resolveSessionUi(failed) == SessionUiState::AppsUnreadable);
-    REQUIRE(tokenOf(failed) == QStringLiteral("appsUnreadable"));
+    REQUIRE(sessionUiState(failed) == SessionUiState::AppsFailed);
+    REQUIRE(tokenOf(failed) == QStringLiteral("appsFailed"));
 }
 
 TEST_CASE("M13 joining our session, and it shows no picker", "[moonlight][sessionui]") {
     SessionUiInputs in = paired();
-    in.hostSessionActive = true;
+    in.sessionLive = true;
+    in.outcome = SessionOutcome::Live;
     in.appsFetched = true;
     in.appCount = 3;
     // The app is settled by whoever created the session, so a list that HAS
     // arrived still does not put the user in front of a choice.
-    REQUIRE(resolveSessionUi(in) == SessionUiState::JoiningSession);
-    REQUIRE(tokenOf(in) == QStringLiteral("joiningSession"));
+    REQUIRE(sessionUiState(in) == SessionUiState::Joining);
+    REQUIRE(tokenOf(in) == QStringLiteral("joining"));
+
+    // The same host, asked by the binding that is actually on the stream.
+    in.bindingLive = true;
+    REQUIRE(sessionUiState(in) == SessionUiState::Live);
 }
 
-TEST_CASE("M14 host full outranks joining: there is no fifth controller",
+TEST_CASE("A live session outranks a probe that has not answered yet", "[moonlight][sessionui]") {
+    // The session is its own proof that the host is there, so a spinner must not
+    // be drawn over it.
+    SessionUiInputs in;
+    in.probeInFlight = true;
+    in.sessionLive = true;
+    in.outcome = SessionOutcome::Live;
+    REQUIRE(sessionUiState(in) == SessionUiState::Joining);
+    in.bindingLive = true;
+    REQUIRE(sessionUiState(in) == SessionUiState::Live);
+}
+
+TEST_CASE("M14 host full is judged before anything the network could change",
           "[moonlight][sessionui]") {
     SessionUiInputs in = paired();
     in.boundControllers = static_cast<int>(kMaxPads);
-    in.hostSessionActive = true;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::HostFull);
+    in.sessionLive = true;
+    in.outcome = SessionOutcome::Live;
+    REQUIRE(sessionUiState(in) == SessionUiState::HostFull);
     REQUIRE(tokenOf(in) == QStringLiteral("hostFull"));
 
     in.boundControllers = static_cast<int>(kMaxPads) - 1;
-    REQUIRE(resolveSessionUi(in) == SessionUiState::JoiningSession);
+    REQUIRE(sessionUiState(in) == SessionUiState::Joining);
+
+    // It is the ONLY state that blocks Apply and the only one derived purely
+    // from local bookkeeping, so no network answer may hide it: a spinner or an
+    // unreachable host over it would enable an Apply the bind will refuse.
+    SessionUiInputs checking;
+    checking.probeInFlight = true;
+    checking.boundControllers = static_cast<int>(kMaxPads);
+    REQUIRE(sessionUiState(checking) == SessionUiState::HostFull);
+
+    SessionUiInputs silent;
+    silent.probeTimedOut = true;
+    silent.serverCertStored = true;
+    silent.boundControllers = static_cast<int>(kMaxPads);
+    REQUIRE(sessionUiState(silent) == SessionUiState::HostFull);
+
+    SessionUiInputs stranger;
+    stranger.probeAnswered = true;
+    stranger.boundControllers = static_cast<int>(kMaxPads);
+    REQUIRE(sessionUiState(stranger) == SessionUiState::HostFull);
 }
 
 TEST_CASE("M15 through M18: a refusal outranks the app list it arrived beside",
           "[moonlight][sessionui]") {
     const std::pair<SessionOutcome, const char*> cases[] = {
         {SessionOutcome::BusyOther, "busyOther"},
-        {SessionOutcome::RejoinRefused, "rejoinRefused"},
+        {SessionOutcome::ResumeFailed, "resumeFailed"},
         {SessionOutcome::Refused, "refused"},
         {SessionOutcome::SetupFailed, "setupFailed"},
     };
@@ -172,33 +236,31 @@ TEST_CASE("M19 through M21: live, dropped and ended are three different things",
           "[moonlight][sessionui]") {
     SessionUiInputs live = paired();
     live.outcome = SessionOutcome::Live;
-    REQUIRE(resolveSessionUi(live) == SessionUiState::Live);
+    live.sessionLive = true;
+    live.bindingLive = true;
+    REQUIRE(sessionUiState(live) == SessionUiState::Live);
     REQUIRE(tokenOf(live) == QStringLiteral("live"));
 
     SessionUiInputs dropped = paired();
     dropped.outcome = SessionOutcome::Dropped;
-    REQUIRE(resolveSessionUi(dropped) == SessionUiState::Dropped);
+    REQUIRE(sessionUiState(dropped) == SessionUiState::Dropped);
     REQUIRE(tokenOf(dropped) == QStringLiteral("dropped"));
 
     SessionUiInputs ended = paired();
     ended.outcome = SessionOutcome::EndedByHost;
-    REQUIRE(resolveSessionUi(ended) == SessionUiState::EndedByHost);
+    REQUIRE(sessionUiState(ended) == SessionUiState::EndedByHost);
     REQUIRE(tokenOf(ended) == QStringLiteral("endedByHost"));
 }
 
 TEST_CASE("Every state has a token and no two share one", "[moonlight][sessionui]") {
     const SessionUiState all[] = {
-        SessionUiState::Checking,       SessionUiState::NotPaired,
-        SessionUiState::PairingPin,     SessionUiState::PairRefused,
-        SessionUiState::Unreachable,    SessionUiState::RememberedOffline,
-        SessionUiState::TrustLost,      SessionUiState::HostReplaced,
-        SessionUiState::AppsLoading,    SessionUiState::NewSession,
-        SessionUiState::NoApps,         SessionUiState::AppsUnreadable,
-        SessionUiState::JoiningSession, SessionUiState::HostFull,
-        SessionUiState::BusyOther,      SessionUiState::RejoinRefused,
-        SessionUiState::Refused,        SessionUiState::SetupFailed,
-        SessionUiState::Live,           SessionUiState::Dropped,
-        SessionUiState::EndedByHost,
+        SessionUiState::Checking,       SessionUiState::NotPaired,    SessionUiState::PairingPin,
+        SessionUiState::PairingRefused, SessionUiState::Unreachable,  SessionUiState::Remembered,
+        SessionUiState::TrustLost,      SessionUiState::HostReplaced, SessionUiState::AppsLoading,
+        SessionUiState::NewSession,     SessionUiState::NoApps,       SessionUiState::AppsFailed,
+        SessionUiState::Joining,        SessionUiState::HostFull,     SessionUiState::BusyOther,
+        SessionUiState::ResumeFailed,   SessionUiState::Refused,      SessionUiState::SetupFailed,
+        SessionUiState::Live,           SessionUiState::Dropped,      SessionUiState::EndedByHost,
     };
     QSet<QString> seen;
     for (const auto state : all) {
@@ -212,17 +274,13 @@ TEST_CASE("Every state has a token and no two share one", "[moonlight][sessionui
 
 TEST_CASE("Only a full host blocks the bind", "[moonlight][sessionui]") {
     const SessionUiState all[] = {
-        SessionUiState::Checking,       SessionUiState::NotPaired,
-        SessionUiState::PairingPin,     SessionUiState::PairRefused,
-        SessionUiState::Unreachable,    SessionUiState::RememberedOffline,
-        SessionUiState::TrustLost,      SessionUiState::HostReplaced,
-        SessionUiState::AppsLoading,    SessionUiState::NewSession,
-        SessionUiState::NoApps,         SessionUiState::AppsUnreadable,
-        SessionUiState::JoiningSession, SessionUiState::HostFull,
-        SessionUiState::BusyOther,      SessionUiState::RejoinRefused,
-        SessionUiState::Refused,        SessionUiState::SetupFailed,
-        SessionUiState::Live,           SessionUiState::Dropped,
-        SessionUiState::EndedByHost,
+        SessionUiState::Checking,       SessionUiState::NotPaired,    SessionUiState::PairingPin,
+        SessionUiState::PairingRefused, SessionUiState::Unreachable,  SessionUiState::Remembered,
+        SessionUiState::TrustLost,      SessionUiState::HostReplaced, SessionUiState::AppsLoading,
+        SessionUiState::NewSession,     SessionUiState::NoApps,       SessionUiState::AppsFailed,
+        SessionUiState::Joining,        SessionUiState::HostFull,     SessionUiState::BusyOther,
+        SessionUiState::ResumeFailed,   SessionUiState::Refused,      SessionUiState::SetupFailed,
+        SessionUiState::Live,           SessionUiState::Dropped,      SessionUiState::EndedByHost,
     };
     for (const auto state : all) {
         const bool blocked = sessionUiBlocksApply(state);
@@ -239,18 +297,18 @@ TEST_CASE("Amber is the problem colour and never the working one", "[moonlight][
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::AppsLoading));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::NewSession));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::NoApps));
-    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::AppsUnreadable));
-    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::JoiningSession));
+    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::AppsFailed));
+    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::Joining));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::Live));
 
-    REQUIRE(sessionUiIsProblem(SessionUiState::PairRefused));
+    REQUIRE(sessionUiIsProblem(SessionUiState::PairingRefused));
     REQUIRE(sessionUiIsProblem(SessionUiState::Unreachable));
-    REQUIRE(sessionUiIsProblem(SessionUiState::RememberedOffline));
+    REQUIRE(sessionUiIsProblem(SessionUiState::Remembered));
     REQUIRE(sessionUiIsProblem(SessionUiState::TrustLost));
     REQUIRE(sessionUiIsProblem(SessionUiState::HostReplaced));
     REQUIRE(sessionUiIsProblem(SessionUiState::HostFull));
     REQUIRE(sessionUiIsProblem(SessionUiState::BusyOther));
-    REQUIRE(sessionUiIsProblem(SessionUiState::RejoinRefused));
+    REQUIRE(sessionUiIsProblem(SessionUiState::ResumeFailed));
     REQUIRE(sessionUiIsProblem(SessionUiState::Refused));
     REQUIRE(sessionUiIsProblem(SessionUiState::SetupFailed));
     REQUIRE(sessionUiIsProblem(SessionUiState::Dropped));
@@ -260,7 +318,7 @@ TEST_CASE("Amber is the problem colour and never the working one", "[moonlight][
 TEST_CASE("Only the two refusals and a live session offer to close the app",
           "[moonlight][sessionui]") {
     REQUIRE(sessionUiOffersQuit(SessionUiState::BusyOther));
-    REQUIRE(sessionUiOffersQuit(SessionUiState::RejoinRefused));
+    REQUIRE(sessionUiOffersQuit(SessionUiState::ResumeFailed));
     REQUIRE(sessionUiOffersQuit(SessionUiState::Live));
     REQUIRE_FALSE(sessionUiOffersQuit(SessionUiState::NewSession));
     REQUIRE_FALSE(sessionUiOffersQuit(SessionUiState::Dropped));
@@ -305,7 +363,8 @@ TEST_CASE("The wire lifecycle maps onto exactly one outcome each", "[moonlight][
     REQUIRE(sessionOutcomeFor({SessionPhase::Failed, SessionFailure::AppAlreadyRunning}) ==
             SessionOutcome::BusyOther);
     REQUIRE(sessionOutcomeFor({SessionPhase::Failed, SessionFailure::ResumeRejected}) ==
-            SessionOutcome::RejoinRefused);
+            SessionOutcome::ResumeFailed);
+    REQUIRE(detail::outcomeState(SessionOutcome::ResumeFailed) == SessionUiState::ResumeFailed);
     REQUIRE(sessionOutcomeFor({SessionPhase::Failed, SessionFailure::LaunchRejected}) ==
             SessionOutcome::Refused);
     REQUIRE(sessionOutcomeFor({SessionPhase::Failed, SessionFailure::RtspFailed}) ==

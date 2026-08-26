@@ -89,12 +89,12 @@ inline QString moonlightSessionToken(moonlight::SessionUiState s) {
         return QStringLiteral("notPaired");
     case moonlight::SessionUiState::PairingPin:
         return QStringLiteral("pairingPin");
-    case moonlight::SessionUiState::PairRefused:
-        return QStringLiteral("pairRefused");
+    case moonlight::SessionUiState::PairingRefused:
+        return QStringLiteral("pairingRefused");
     case moonlight::SessionUiState::Unreachable:
         return QStringLiteral("unreachable");
-    case moonlight::SessionUiState::RememberedOffline:
-        return QStringLiteral("rememberedOffline");
+    case moonlight::SessionUiState::Remembered:
+        return QStringLiteral("remembered");
     case moonlight::SessionUiState::TrustLost:
         return QStringLiteral("trustLost");
     case moonlight::SessionUiState::HostReplaced:
@@ -105,16 +105,16 @@ inline QString moonlightSessionToken(moonlight::SessionUiState s) {
         return QStringLiteral("newSession");
     case moonlight::SessionUiState::NoApps:
         return QStringLiteral("noApps");
-    case moonlight::SessionUiState::AppsUnreadable:
-        return QStringLiteral("appsUnreadable");
-    case moonlight::SessionUiState::JoiningSession:
-        return QStringLiteral("joiningSession");
+    case moonlight::SessionUiState::AppsFailed:
+        return QStringLiteral("appsFailed");
+    case moonlight::SessionUiState::Joining:
+        return QStringLiteral("joining");
     case moonlight::SessionUiState::HostFull:
         return QStringLiteral("hostFull");
     case moonlight::SessionUiState::BusyOther:
         return QStringLiteral("busyOther");
-    case moonlight::SessionUiState::RejoinRefused:
-        return QStringLiteral("rejoinRefused");
+    case moonlight::SessionUiState::ResumeFailed:
+        return QStringLiteral("resumeFailed");
     case moonlight::SessionUiState::Refused:
         return QStringLiteral("refused");
     case moonlight::SessionUiState::SetupFailed:

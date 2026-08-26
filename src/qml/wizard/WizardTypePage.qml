@@ -86,6 +86,25 @@ ColumnLayout {
         return out;
     }
 
+    // The pick a fresh binding on this host starts from: whatever the host was
+    // last set to, which is where the pick used to live, and Auto otherwise.
+    function defaultType() {
+        const remembered = App.moonlightDeviceType(page.draft.hostId);
+        for (let i = 0; i < page.types.length; ++i) {
+            if (page.types[i].type === remembered)
+                return remembered;
+        }
+        return page.types.length > 0 ? page.types[0].type : -1;
+    }
+
+    function typeNameForValue(value) {
+        for (let i = 0; i < page.types.length; ++i) {
+            if (page.types[i].type === value)
+                return page.types[i].name;
+        }
+        return "";
+    }
+
     // What Auto sends for THIS pad, resolved here rather than on the wire so the
     // card can state what the binding will carry.
     property int resolvedAutoType: -1
@@ -104,9 +123,10 @@ ColumnLayout {
             page.types = page.moonlightTypes();
             page.resolvedAutoType = App.moonlightResolvedAutoType(page.draft.slotId);
             page.resolvedAutoToken = App.moonlightResolvedAutoToken(page.draft.slotId);
+            // There is no best fit to mark: the host does not tell us what fits.
             page.bestFitType = -1;
             if (page.draft.type === -1 && page.types.length > 0)
-                page.draft.chooseType(page.types[0].type, page.types[0].name);
+                page.draft.chooseType(page.defaultType(), page.typeNameForValue(page.defaultType()));
             return;
         }
         page.types = App.emulateTypesForHost(page.draft.hostId);

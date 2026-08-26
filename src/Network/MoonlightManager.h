@@ -173,9 +173,12 @@ class MoonlightManager : public QObject {
     void rememberBinding(const models::MoonlightBinding& binding);
     void forgetBinding(const QString& slotId);
 
-    // Everything the session section renders from, for one host. Pure inputs;
-    // MoonlightSessionUi turns them into the one state that renders.
-    moonlight::SessionUiInputs sessionUiInputs(const QString& hostId) const;
+    // Everything the session section renders from, for one host as seen by one
+    // binding. Pure inputs; MoonlightSessionUi turns them into the one state that
+    // renders. `slotId` may be empty: a binding that has not been applied yet is
+    // not on the stream, which is what separates joining a session from riding
+    // one.
+    moonlight::SessionUiInputs sessionUiInputs(const QString& hostId, const QString& slotId) const;
 
     // The reverse of the routing table: which local slot a host's inbound
     // rumble / LED event (addressed by controller number) belongs to. Empty when
@@ -232,6 +235,11 @@ class MoonlightManager : public QObject {
         bool appsInFlight = false;
         bool appsFetched = false;
         bool appsFailed = false;
+        bool unauthorized = false;
+        // A mutual-TLS call the host actually answered. It outranks the plaintext
+        // PairStatus, which a host with no client certificate in front of it
+        // reports as 0 whoever is asking.
+        bool mtlsVerified = false;
         int appCount = 0;
         bool pairingActive = false;
         bool pairingRefused = false;

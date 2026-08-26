@@ -832,24 +832,24 @@ bool AppViewModel::isMoonlightHost(const QString& connectionId) const {
 
 void AppViewModel::probeMoonlightHost(const QString& id) { model_->moonlight()->probeHost(id); }
 
-QString AppViewModel::moonlightSessionState(const QString& id) const {
+QString AppViewModel::moonlightSessionState(const QString& id, const QString& slotId) const {
     return tokens::moonlightSessionToken(
-        moonlight::resolveSessionUi(model_->moonlight()->sessionUiInputs(id)));
+        moonlight::sessionUiState(model_->moonlight()->sessionUiInputs(id, slotId)));
 }
 
-bool AppViewModel::moonlightSessionBlocksApply(const QString& id) const {
+bool AppViewModel::moonlightSessionBlocksApply(const QString& id, const QString& slotId) const {
     return moonlight::sessionUiBlocksApply(
-        moonlight::resolveSessionUi(model_->moonlight()->sessionUiInputs(id)));
+        moonlight::sessionUiState(model_->moonlight()->sessionUiInputs(id, slotId)));
 }
 
-bool AppViewModel::moonlightSessionIsProblem(const QString& id) const {
+bool AppViewModel::moonlightSessionIsProblem(const QString& id, const QString& slotId) const {
     return moonlight::sessionUiIsProblem(
-        moonlight::resolveSessionUi(model_->moonlight()->sessionUiInputs(id)));
+        moonlight::sessionUiState(model_->moonlight()->sessionUiInputs(id, slotId)));
 }
 
 QString AppViewModel::moonlightTrust(const QString& id) const {
     return tokens::moonlightTrustToken(
-        moonlight::trustFor(model_->moonlight()->sessionUiInputs(id)));
+        moonlight::trustFor(model_->moonlight()->sessionUiInputs(id, QString())));
 }
 
 QString AppViewModel::moonlightPairingPin() const { return net::generateMoonlightPin(); }

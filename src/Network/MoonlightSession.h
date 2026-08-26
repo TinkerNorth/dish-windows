@@ -116,8 +116,10 @@ class MoonlightSession : public QObject {
     void phaseChanged();
     void pairingFinished(bool ok);
     // `ok` is false when the host refused the list or could not be reached, which
-    // an empty list on its own cannot say.
-    void appListReady(const QStringList& appIds, const QStringList& appTitles, bool ok);
+    // an empty list on its own cannot say. `unauthorized` narrows that to the one
+    // refusal that means something else: a host that does not know this client.
+    void appListReady(const QStringList& appIds, const QStringList& appTitles, bool ok,
+                      bool unauthorized);
     // `answered` false means the probe did not reach the host at all.
     void probeFinished(bool answered, bool pairStatus, const QString& uniqueId);
 
