@@ -149,6 +149,95 @@ TEST_CASE("A forgotten host the host still answers for is NOT paired, and can pa
     REQUIRE(sessionUiState(silent) == SessionUiState::Remembered);
 }
 
+TEST_CASE("A host that refused this client is never promised back", "[moonlight][sessionui]") {
+    // ORDERING, not the rule. The rule already said a rejection means unpaired,
+    // but it was judged AFTER the block that returns on the strength of nobody
+    // having answered yet, so a 401 arriving while the plaintext probe was still
+    // out or had timed out never reached it. The section rendered Remembered,
+    // whose copy promises a session when the host is back, about a host that had
+    // just refused this client, while the row beside it said Not paired.
+    //
+    // The split is real: the 401 comes from the mutual-TLS call on 47984 and the
+    // probe from plaintext on 47989, so one can answer while the other does not.
+    SessionUiInputs rejectedWhileSilent;
+    rejectedWhileSilent.unauthorized = true;
+    rejectedWhileSilent.serverCertStored = true;
+    rejectedWhileSilent.probeAnswered = false;
+    rejectedWhileSilent.probeTimedOut = true;
+    REQUIRE(sessionUiState(rejectedWhileSilent) == SessionUiState::TrustLost);
+    REQUIRE(tokenOf(rejectedWhileSilent) == QStringLiteral("trustLost"));
+    REQUIRE(trustFor(rejectedWhileSilent) == TrustState::NotPaired);
+
+    // And with the probe still in flight, where it drew a spinner instead.
+    SessionUiInputs rejectedWhileChecking = rejectedWhileSilent;
+    rejectedWhileChecking.probeTimedOut = false;
+    REQUIRE(sessionUiState(rejectedWhileChecking) == SessionUiState::TrustLost);
+
+    // With nothing held it is NotPaired rather than TrustLost, because nothing
+    // was lost, but it is never Unreachable: the host answered, with a refusal.
+    SessionUiInputs strangerRejected;
+    strangerRejected.unauthorized = true;
+    strangerRejected.probeTimedOut = true;
+    REQUIRE(sessionUiState(strangerRejected) == SessionUiState::NotPaired);
+    REQUIRE(trustFor(strangerRejected) == TrustState::NotPaired);
+
+    // A host carrying its four pads still outranks all of it: that is the one
+    // state that blocks Apply, and no trust answer may enable a bind the
+    // manager is going to refuse.
+    SessionUiInputs full = rejectedWhileSilent;
+    full.boundControllers = static_cast<int>(kMaxPads);
+    REQUIRE(sessionUiState(full) == SessionUiState::HostFull);
+}
+
+TEST_CASE("The row and the section never disagree about trust", "[moonlight][sessionui]") {
+    // The cross product, because the user's dead end was two surfaces answering
+    // one question differently and no single case would have caught it. Every
+    // combination of the seven inputs that bear on trust, against both readers.
+    int checked = 0;
+    for (int mask = 0; mask < 128; ++mask) {
+        SessionUiInputs in;
+        in.probeAnswered = (mask & 1) != 0;
+        in.probeTimedOut = (mask & 2) != 0;
+        in.hostPairStatus = (mask & 4) != 0;
+        in.serverCertStored = (mask & 8) != 0;
+        in.unauthorized = (mask & 16) != 0;
+        in.uniqueIdChanged = (mask & 32) != 0;
+        in.serverCertChanged = (mask & 64) != 0;
+
+        const SessionUiState state = sessionUiState(in);
+        const TrustState trust = trustFor(in);
+        const bool sectionUnpaired = state == SessionUiState::NotPaired ||
+                                     state == SessionUiState::TrustLost ||
+                                     state == SessionUiState::HostReplaced;
+
+        // CHECK, not REQUIRE: a REQUIRE stops the case at the first bad
+        // combination, and when this fires the useful thing is every combination
+        // that disagrees, not the lowest-numbered one.
+        //
+        // A section that says there is no usable trust must not sit under a row
+        // claiming there is, and Paired is the word that hides the Pair button.
+        if (sectionUnpaired) { CHECK(trust == TrustState::NotPaired); }
+        if (trust == TrustState::Paired) { CHECK_FALSE(sectionUnpaired); }
+        // Remembered promises a session when the host returns, which is a lie
+        // over a host that has refused us or is not the one we paired with.
+        if (trust == TrustState::Remembered) {
+            CHECK_FALSE(in.unauthorized);
+            CHECK(state != SessionUiState::NotPaired);
+        }
+        // A rejection leaves exactly one family of answers, whatever else is
+        // known about the host.
+        if (in.unauthorized) { CHECK(sectionUnpaired); }
+        // AND THE DEAD END ITSELF, stated as an invariant: a row that says Not
+        // paired over a host that HAS answered must sit above a section offering
+        // the way back, never a spinner or a promise. The user was left with the
+        // row saying one thing and the section below it saying nothing they
+        // could act on.
+        if (trust == TrustState::NotPaired && in.probeAnswered) { CHECK(sectionUnpaired); }
+        ++checked;
+    }
+    REQUIRE(checked == 128);
+}
+
 TEST_CASE("A readable mutual-TLS reply outranks a plaintext PairStatus of 0",
           "[moonlight][sessionui]") {
     // A host with no client certificate in front of it reports PairStatus 0 to

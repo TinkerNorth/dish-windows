@@ -129,12 +129,51 @@ inline SessionUiState outcomeState(SessionOutcome outcome) {
     return SessionUiState::Checking;
 }
 
+// The two ways to be unpaired, split on WHAT WE HOLD and on nothing else. A host
+// we never paired with refuses exactly the way a host that dropped us does, and
+// telling a first-time user that a pairing they never made has been removed is
+// simply false. NotPaired is the truth and carries the same recovery.
+inline SessionUiState unpairedState(bool serverCertStored) {
+    return serverCertStored ? SessionUiState::TrustLost : SessionUiState::NotPaired;
+}
+
+// This host is not one we can open a channel to. ONE FUNCTION, not two copies of
+// an expression, because the host row and the session section answering the same
+// question differently is exactly what stranded the user: the row read the
+// host's word alone, said Paired, and hid the Pair button, while the section
+// below it could not open a channel at all. Two spellings of one rule drifted
+// once and must not be able to again.
+//
+// TRUST IS MUTUAL AND THIS CLIENT HOLDS ONE HALF OF IT. A host reports
+// PairStatus against the uniqueid on the request, and this install's uniqueid
+// outlives a forget, so a box that still has us on file answers 1 to a client
+// that threw its half away. That is the host's word only: every paired-only call
+// is mutual TLS pinned against the certificate the pairing handshake stored, and
+// with no certificate there is nothing to pin, no app list and no session. So a
+// host we cannot reach is NOT PAIRED however warmly it answers, and the way back
+// in is the same PIN a stranger needs.
+//
+// A REJECTION SETTLES IT whatever else is known, which is why the caller judges
+// this before the "nobody has answered yet" fallback rather than after it: a 401
+// IS an answer, and a host that has just refused this client must never render
+// Remembered, which promises a session it is not going to give.
+inline bool notPaired(const SessionUiInputs& in) {
+    return in.unauthorized || (in.probeAnswered && !(in.hostPairStatus && in.serverCertStored));
+}
+
+// The host is not the one we paired with. Two witnesses for one fact: the pin
+// check refuses during the TLS handshake, the uniqueid only once a plaintext
+// probe answers, and either alone is proof enough.
+inline bool identityChanged(const SessionUiInputs& in) {
+    return in.uniqueIdChanged || in.serverCertChanged;
+}
+
 } // namespace detail
 
 inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     if (in.pairingActive) { return SessionUiState::PairingPin; }
     if (in.pairingRefused) { return SessionUiState::PairingRefused; }
-    if (in.uniqueIdChanged || in.serverCertChanged) { return SessionUiState::HostReplaced; }
+    if (detail::identityChanged(in)) { return SessionUiState::HostReplaced; }
 
     // The full host is judged FIRST, before anything the network could change,
     // because it is the one state derived entirely from local bookkeeping and the
@@ -142,36 +181,19 @@ inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     // over it would enable an Apply the bind is going to refuse.
     if (in.boundControllers >= static_cast<int>(kMaxPads)) { return SessionUiState::HostFull; }
 
+    // BEFORE the fallback below, not after it. A rejection is an answer, and the
+    // block below returns on the strength of nobody having answered yet: reached
+    // second, this could never fire while a plaintext probe was still out or had
+    // timed out, and the section would promise a session for a host that had just
+    // said no while the row beside it said the opposite. See detail::notPaired.
+    if (detail::notPaired(in)) { return detail::unpairedState(in.serverCertStored); }
+
     // A live session is its own proof that the host is there, so a probe that has
     // not answered yet cannot draw a spinner over it.
     if (!in.probeAnswered && !in.sessionLive) {
         if (!in.probeTimedOut) { return SessionUiState::Checking; }
         if (in.outcome != SessionOutcome::None) { return detail::outcomeState(in.outcome); }
         return in.serverCertStored ? SessionUiState::Remembered : SessionUiState::Unreachable;
-    }
-
-    // A 401 is trust LOST only where there was trust: a host we have never
-    // paired with refuses the same way and is simply not paired.
-    if (in.unauthorized && in.serverCertStored) { return SessionUiState::TrustLost; }
-
-    // TRUST IS MUTUAL AND THIS CLIENT HOLDS ONE HALF OF IT. A host reports
-    // PairStatus against the uniqueid on the request, and this client's uniqueid
-    // outlives a forget, so a box that still has this install on file answers 1
-    // to a client that has thrown its half away. That is the host's half only:
-    // every paired-only call is mutual TLS pinned against the certificate the
-    // pairing handshake stored, and with no certificate there is nothing to pin,
-    // no app list and no session. So a host we cannot open a channel to is NOT
-    // PAIRED however warmly it answers, and the way back in is the same PIN a
-    // stranger needs.
-    //
-    // Reading the host's word alone is what strands the user: it renders a
-    // relationship nothing in the client can use, and the one control that
-    // repairs it is hidden on exactly that word.
-    //
-    // Answered-unpaired WITH a certificate stored is the other thing entirely,
-    // and keeps its own state: something was lost there.
-    if (in.probeAnswered && !(in.hostPairStatus && in.serverCertStored)) {
-        return in.serverCertStored ? SessionUiState::TrustLost : SessionUiState::NotPaired;
     }
 
     if (in.bindingLive) { return SessionUiState::Live; }
@@ -265,17 +287,15 @@ inline SessionOutcome sessionOutcomeFor(const SessionState& state) {
 }
 
 inline TrustState trustFor(const SessionUiInputs& in) {
-    if (in.uniqueIdChanged || in.serverCertChanged || in.unauthorized) {
-        return TrustState::NotPaired;
-    }
-    // BOTH HALVES, for the reason sessionUiState gives above: the host's word
-    // that it knows us, and a certificate of its own that we can pin against.
-    // One without the other is a chip promising what the next tap cannot deliver,
-    // and Paired is the one chip that hides the Pair button.
+    if (detail::identityChanged(in)) { return TrustState::NotPaired; }
+    // THE SAME FUNCTION the session section reads, never a second spelling of
+    // it. This row has no TrustLost of its own: both unpaired states render here
+    // as the one word that offers the way back.
+    if (detail::notPaired(in)) { return TrustState::NotPaired; }
+    // Both halves present, which is the only thing that earns the chip that
+    // hides the Pair button.
     if (in.hostPairStatus && in.serverCertStored) { return TrustState::Paired; }
-    // Answered and unpaired is a fact about now, whatever is remembered; only a
-    // host that did not answer this visit falls back on the memory.
-    if (in.probeAnswered) { return TrustState::NotPaired; }
+    // Nobody answered this visit, so the memory is all there is.
     return in.serverCertStored ? TrustState::Remembered : TrustState::NotPaired;
 }
 
