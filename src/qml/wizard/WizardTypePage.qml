@@ -5,6 +5,11 @@
 // one capability table so the types are actually comparable. A row reads Pending
 // whenever the host or its catalog is unresolved — a cross is never drawn from a
 // catalog we could not read, and a type is never guessed.
+//
+// A Moonlight host has no catalog to read and no capability API to ask, so its
+// four types come from a table this client owns and every row is resolved from
+// the moment a host is picked. The host still gets the last word on the device it
+// materialises and never tells us what it chose, which is what the caption says.
 
 // Bound: the card delegate reads the outer `page` id alongside its modelData.
 pragma ComponentBehavior: Bound
@@ -23,9 +28,11 @@ ColumnLayout {
     // ── The wizard's step contract ──────────────────────────────────────────
     readonly property bool canAdvance: page.draft.hasType && page.types.length > 0
     readonly property string primaryLabel: qsTr("Continue ›")
-    readonly property string hint: page.draft.hostName.length > 0
-                                   ? qsTr("Types offered by %1’s catalog.").arg(page.draft.hostName)
-                                   : ""
+    readonly property string hint: page.draft.hostIsMoonlight
+                                   ? ""
+                                   : page.draft.hostName.length > 0
+                                     ? qsTr("Types offered by %1’s catalog.").arg(page.draft.hostName)
+                                     : ""
 
     function primaryActivated() {
         return true;
@@ -34,7 +41,7 @@ ColumnLayout {
     function activated() {
         // Keyed on the DESTINATION, never on the pad: the pad has no binding
         // yet, and the slot-keyed read resolves through hub_->bindings().
-        if (page.draft.hasDestination)
+        if (page.draft.hasDestination && !page.draft.hostIsMoonlight)
             App.refreshEmulateForHost(page.draft.hostId);
         page.reload();
     }
@@ -44,15 +51,62 @@ ColumnLayout {
     // The host's own pick for this pad — the pre-selection and the Best fit badge.
     property int bestFitType: -1
 
-    readonly property bool loadingOnly: App.emulateLoading && page.types.length === 0
+    // The Moonlight table needs no fetch, so neither of these can be true for it.
+    readonly property bool loadingOnly: !page.draft.hostIsMoonlight && App.emulateLoading
+                                        && page.types.length === 0
     // A failure with a cache behind it is silent: the cached types resolve the
     // draft and the user has nothing to act on.
-    readonly property bool failedOnly: !App.emulateLoading && App.emulateError.length > 0
+    readonly property bool failedOnly: !page.draft.hostIsMoonlight && !App.emulateLoading
+                                       && App.emulateError.length > 0
                                        && page.types.length === 0
+
+    // The brand names are not translated; Auto is.
+    function moonlightTypeName(token) {
+        switch (token) {
+        case "xbox":
+            return "Xbox";
+        case "playstation":
+            return "PlayStation";
+        case "nintendo":
+            return "Nintendo";
+        }
+        return qsTr("Auto");
+    }
+
+    function moonlightTypes() {
+        const out = [];
+        const options = App.moonlightTypeOptions();
+        for (let i = 0; i < options.length; ++i) {
+            out.push({
+                "type": options[i].type,
+                "token": options[i].token,
+                "name": page.moonlightTypeName(options[i].token)
+            });
+        }
+        return out;
+    }
+
+    // What Auto sends for THIS pad, resolved here rather than on the wire so the
+    // card can state what the binding will carry.
+    property int resolvedAutoType: -1
+    property string resolvedAutoToken: ""
+
+    function autoResolvedName() {
+        return page.moonlightTypeName(page.resolvedAutoToken);
+    }
 
     function reload() {
         if (!page.draft.hasDestination) {
             page.types = [];
+            return;
+        }
+        if (page.draft.hostIsMoonlight) {
+            page.types = page.moonlightTypes();
+            page.resolvedAutoType = App.moonlightResolvedAutoType(page.draft.slotId);
+            page.resolvedAutoToken = App.moonlightResolvedAutoToken(page.draft.slotId);
+            page.bestFitType = -1;
+            if (page.draft.type === -1 && page.types.length > 0)
+                page.draft.chooseType(page.types[0].type, page.types[0].name);
             return;
         }
         page.types = App.emulateTypesForHost(page.draft.hostId);
@@ -121,7 +175,8 @@ ColumnLayout {
 
     // ── Head ────────────────────────────────────────────────────────────────
     Label {
-        text: qsTr("How should the PC see it?")
+        text: page.draft.hostIsMoonlight ? qsTr("How should the host see it?")
+                                         : qsTr("How should the PC see it?")
         color: Theme.onSurface
         font.pixelSize: Tokens.textStatus
         font.bold: true
@@ -129,7 +184,10 @@ ColumnLayout {
         Layout.fillWidth: true
     }
     Label {
-        text: qsTr("Pick the controller the PC should report. Each unlocks different extras — this pad limits all three the same way.")
+        text: page.draft.hostIsMoonlight
+              ? qsTr("Dish asks %1 to plug in this controller. Some hosts override the choice.")
+                  .arg(page.draft.hostName)
+              : qsTr("Pick the controller the PC should report. Each unlocks different extras — this pad limits all three the same way.")
         color: Theme.muted
         font.pixelSize: Tokens.textSummary
         lineHeight: 1.5
@@ -183,6 +241,10 @@ ColumnLayout {
 
             readonly property bool selected: page.draft.type === typeCard.modelData.type
             readonly property bool bestFit: typeCard.modelData.type === page.bestFitType
+            // The Moonlight Auto card, which resolves before the wire rather than
+            // being the host's own answer.
+            readonly property bool autoCard: page.draft.hostIsMoonlight
+                                             && typeCard.modelData.token === "auto"
 
             Layout.fillWidth: true
             padding: Tokens.s5
@@ -243,10 +305,21 @@ ColumnLayout {
                     }
 
                     Kit.CapabilityChip {
-                        visible: typeCard.bestFit
-                        text: qsTr("Best fit")
+                        visible: typeCard.bestFit || typeCard.autoCard
+                        // There is no Moonlight best fit: the host does not tell
+                        // us what fits.
+                        text: typeCard.autoCard ? qsTr("Picked for you") : qsTr("Best fit")
                         tone: Kit.CapabilityChip.Ok
                     }
+                }
+
+                Label {
+                    visible: typeCard.autoCard
+                    text: qsTr("Auto sends %1 for this controller.").arg(page.autoResolvedName())
+                    color: Theme.mutedStrong
+                    font.pixelSize: Tokens.textMeta
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                 }
 
                 Rectangle {
@@ -257,7 +330,11 @@ ColumnLayout {
                 }
 
                 Kit.CapabilityTable {
-                    rows: page.typeRows(typeCard.modelData.type, page.draft.revision)
+                    // The Auto card shows what Auto actually resolves to, not a
+                    // fourth set of rows nobody will ever get.
+                    rows: page.typeRows(typeCard.autoCard ? page.resolvedAutoType
+                                                          : typeCard.modelData.type,
+                                        page.draft.revision)
                     showHeader: false
                     compact: true
                     Layout.fillWidth: true

@@ -196,6 +196,10 @@ enum class ServerEventType {
     RumbleTriggers,
     MotionEvent,
     RgbLed,
+    // The host ending the session on purpose. The same 0x0100 the client sends
+    // to end one, and the only thing that tells a deliberate stop apart from a
+    // link that simply went away.
+    Termination,
     Unknown, // a type we ignore gracefully
 };
 

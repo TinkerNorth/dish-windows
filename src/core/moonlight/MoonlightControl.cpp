@@ -211,6 +211,9 @@ std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_
     const std::size_t bl = bodyLen <= avail ? bodyLen : avail;
 
     switch (ev.rawType) {
+    case kCtrlTermination:
+        ev.type = ServerEventType::Termination;
+        break;
     case kCtrlRumbleData:
         // unused(4) + ctrl(2) + low(2) + high(2)
         if (bl >= 10) {

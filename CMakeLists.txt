@@ -508,6 +508,7 @@ qt_add_qml_module(Dish
         src/qml/wizard/WizardInputPage.qml
         src/qml/wizard/WizardDestinationPage.qml
         src/qml/wizard/WizardTypePage.qml
+        src/qml/wizard/WizardSessionPage.qml
         src/qml/wizard/WizardFeelPage.qml
         src/qml/wizard/WizardReviewPage.qml)
 

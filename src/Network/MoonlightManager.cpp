@@ -7,6 +7,7 @@
 #include "repository/MoonlightHostRepository.h"
 #include "source/connection/NvstreamDiscovery.h"
 
+#include <QRandomGenerator>
 #include <QSet>
 #include <QSettings>
 
@@ -35,6 +36,13 @@ QString moonlightPhaseToken(moonlight::SessionPhase phase) {
         return QStringLiteral("failed");
     }
     return QStringLiteral("idle");
+}
+
+QString generateMoonlightPin() {
+    // Four digits, uniform over 0000..9999, from the cryptographically seeded
+    // generator rather than the arithmetic one.
+    return QStringLiteral("%1").arg(QRandomGenerator::global()->bounded(10000), 4, 10,
+                                    QLatin1Char('0'));
 }
 
 QList<MoonlightHostRow> mergeMoonlightRows(const QList<models::MoonlightHost>& remembered,
@@ -145,6 +153,17 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
         emit hostsChanged();
     });
     QObject::connect(session, &MoonlightSession::pairingFinished, this, [this, id](bool ok) {
+        auto& probe = probes_[id];
+        probe.pairingActive = false;
+        probe.pairingRefused = !ok;
+        if (ok) {
+            // The pairing that just landed is proof of trust on its own; nothing
+            // has to ask the host again to draw it.
+            probe.answered = true;
+            probe.timedOut = false;
+            probe.pairStatus = true;
+            probe.uniqueIdChanged = false;
+        }
         emit pairingFinished(id, ok);
         emit hostsChanged();
     });
@@ -154,8 +173,30 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
         session, &MoonlightSession::rgbLedReceived, this,
         [this, id](int n, int r, int g, int b) { emit rgbLedReceived(id, n, r, g, b); });
     QObject::connect(session, &MoonlightSession::appListReady, this,
-                     [this, id](const QStringList& ids, const QStringList& titles) {
+                     [this, id](const QStringList& ids, const QStringList& titles, bool ok) {
+                         auto& probe = probes_[id];
+                         probe.appsInFlight = false;
+                         probe.appsFetched = ok;
+                         probe.appsFailed = !ok;
+                         probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
                          emit appListReady(id, ids, titles);
+                         emit hostsChanged();
+                     });
+    QObject::connect(session, &MoonlightSession::probeFinished, this,
+                     [this, id](bool answered, bool pairStatus, const QString& uniqueId) {
+                         auto& probe = probes_[id];
+                         probe.inFlight = false;
+                         probe.answered = answered;
+                         probe.timedOut = !answered;
+                         probe.pairStatus = pairStatus;
+                         // A host that came back with a different identity is a
+                         // different host: the old pairing cannot work and the
+                         // user has to be told rather than shown a failure later.
+                         const auto known = hostById(id);
+                         probe.uniqueIdChanged = answered && !uniqueId.isEmpty() &&
+                                                 known.has_value() && !known->uuid.isEmpty() &&
+                                                 known->uuid != uniqueId;
+                         emit hostsChanged();
                      });
     return session;
 }
@@ -171,7 +212,25 @@ void MoonlightManager::pairHost(const QString& id, const QString& pin) {
         emit pairingFinished(id, false);
         return;
     }
+    auto& probe = probes_[id];
+    probe.pairingActive = true;
+    probe.pairingRefused = false;
     session->pair(pin);
+    emit hostsChanged();
+}
+
+void MoonlightManager::probeHost(const QString& id) {
+    const auto host = hostById(id);
+    if (!host.has_value()) { return; }
+    auto* session = ensureSession(*host);
+    if (session == nullptr) { return; }
+    auto& probe = probes_[id];
+    if (probe.inFlight) { return; }
+    probe.inFlight = true;
+    probe.answered = false;
+    probe.timedOut = false;
+    session->probe();
+    emit hostsChanged();
 }
 
 void MoonlightManager::connectHost(const QString& id, const QString& appId) {
@@ -187,7 +246,23 @@ void MoonlightManager::refreshApps(const QString& id) {
     const auto host = hostById(id);
     if (!host.has_value()) { return; }
     auto* session = ensureSession(*host);
-    if (session != nullptr) { session->refreshApps(); }
+    if (session == nullptr) { return; }
+    auto& probe = probes_[id];
+    probe.appsInFlight = true;
+    probe.appsFetched = false;
+    probe.appsFailed = false;
+    session->refreshApps();
+    emit hostsChanged();
+}
+
+QString MoonlightManager::runningAppName(const QString& id) const {
+    const auto host = hostById(id);
+    return host.has_value() ? host->lastAppName : QString();
+}
+
+QString MoonlightManager::refusalMessage(const QString& id) const {
+    auto* session = sessions_.value(id, nullptr);
+    return session == nullptr ? QString() : session->failureMessage();
 }
 
 void MoonlightManager::setHostApp(const QString& id, const QString& appId, const QString& appName) {
@@ -234,8 +309,8 @@ std::optional<moonlight::SessionPhase> MoonlightManager::sessionPhase(const QStr
 
 // ── Per-slot input routing ──────────────────────────────────────────────────
 
-void MoonlightManager::bindSlot(const QString& slotId, const QString& hostId, bool hasRumble,
-                                bool hasMotion, bool hasTouchpad, bool hasBattery,
+void MoonlightManager::bindSlot(const QString& slotId, const QString& hostId, int controllerType,
+                                bool hasRumble, bool hasMotion, bool hasTouchpad, bool hasBattery,
                                 bool hasLightbar) {
     const auto host = hostById(hostId);
     if (!host.has_value()) { return; }
@@ -247,6 +322,9 @@ void MoonlightManager::bindSlot(const QString& slotId, const QString& hostId, bo
 
     const std::string key = slotId.toStdString();
     auto& padSet = padSlots_[hostId];
+    // Read before the assignment: whether this pad has to bring the session up is
+    // a question about the host as it was, not as it is about to be.
+    const bool firstOnHost = moonlight::bindStartsSession(padSet);
     const auto number = padSet.assign(key);
     if (!number.has_value()) { return; } // host already carries kMaxPads
 
@@ -256,15 +334,20 @@ void MoonlightManager::bindSlot(const QString& slotId, const QString& hostId, bo
         anyBound_.store(true, std::memory_order_relaxed);
     }
 
-    // Announce the pad: the host's emulated-device pick decides the type it
-    // materialises, the capabilities are the real hardware's.
-    const std::uint8_t caps =
-        moonlight::padCapabilities(hasRumble, hasMotion, hasTouchpad, hasBattery, hasLightbar);
-    const std::uint8_t type = moonlight::arrivalTypeFromDevicePick(host->deviceType);
-    // The whole low sixteen: every button the CONTROLLER_MULTI word can carry,
-    // so the host does not have to guess which ones this pad will ever send.
-    constexpr std::uint32_t kSupportedButtons = 0x0000FFFFu;
-    session->sendControllerArrival(*number, type, caps, kSupportedButtons);
+    // Announce the pad. The type is THIS BINDING's pick with Auto already
+    // resolved, and the capabilities are that type's ceiling intersected with the
+    // pad's real hardware, so the host is never told about something that will
+    // not arrive.
+    const std::uint8_t type = moonlight::arrivalTypeForBinding(controllerType, hasMotion);
+    const std::uint8_t caps = moonlight::declaredCapabilities(type, hasRumble, hasMotion,
+                                                              hasTouchpad, hasBattery, hasLightbar);
+    session->sendControllerArrival(*number, type, caps, moonlight::declaredButtonFlags(caps));
+
+    // The arrival is remembered and replayed when the stream comes up, so the
+    // first pad may announce itself before there is a stream to announce on. A
+    // later pad joins the session that is already running and sends no HTTP at
+    // all: launch() reduces to nothing outside a phase that can start one.
+    if (firstOnHost) { session->launch(host->lastAppId); }
 }
 
 void MoonlightManager::unbindSlot(const QString& slotId) {
@@ -291,7 +374,61 @@ void MoonlightManager::unbindSlot(const QString& slotId) {
         route.session->sendControllerState(farewell);
         // And it stops being re-announced when the stream next comes up.
         route.session->forgetControllerArrival(route.controllerNumber);
+        // The last pad off the host owns the teardown: a session nobody is bound
+        // to is an app stranded on someone's desktop, and it is also what refuses
+        // the next /launch.
+        if (moonlight::unbindEndsSession(padSet)) { route.session->quit(); }
     }
+}
+
+int MoonlightManager::boundSlotCount(const QString& hostId) const {
+    const auto it = padSlots_.constFind(hostId);
+    return it == padSlots_.constEnd() ? 0 : static_cast<int>(it->size());
+}
+
+QList<models::MoonlightBinding> MoonlightManager::bindings() const { return repo_->bindings(); }
+
+std::optional<models::MoonlightBinding> MoonlightManager::binding(const QString& slotId) const {
+    return repo_->binding(slotId);
+}
+
+void MoonlightManager::rememberBinding(const models::MoonlightBinding& binding) {
+    repo_->rememberBinding(binding);
+    emit hostsChanged();
+}
+
+void MoonlightManager::forgetBinding(const QString& slotId) {
+    repo_->forgetBinding(slotId);
+    emit hostsChanged();
+}
+
+moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& hostId) const {
+    moonlight::SessionUiInputs in;
+    const auto probe = probes_.value(hostId);
+    in.probeInFlight = probe.inFlight;
+    in.probeAnswered = probe.answered;
+    in.probeTimedOut = probe.timedOut;
+    in.hostPairStatus = probe.pairStatus;
+    in.uniqueIdChanged = probe.uniqueIdChanged;
+    in.pairingActive = probe.pairingActive;
+    in.pairingRefused = probe.pairingRefused;
+    in.appsInFlight = probe.appsInFlight;
+    in.appsFetched = probe.appsFetched;
+    in.appsFailed = probe.appsFailed;
+    in.appCount = probe.appCount;
+    in.serverCertStored = repo_->serverCert(hostId).has_value();
+    in.boundControllers = boundSlotCount(hostId);
+    // A host that answers plaintext but refuses the mutual-TLS list has forgotten
+    // this device whatever its PairStatus said, and /applist is the call that
+    // finds that out.
+    in.unauthorized = probe.appsFailed && probe.answered && !probe.pairStatus;
+
+    if (auto* session = sessions_.value(hostId, nullptr)) {
+        const moonlight::SessionState state{session->phase(), session->failure()};
+        in.outcome = moonlight::sessionOutcomeFor(state);
+        in.hostSessionActive = in.outcome == moonlight::SessionOutcome::Live;
+    }
+    return in;
 }
 
 QString MoonlightManager::boundHostFor(const QString& slotId) const {

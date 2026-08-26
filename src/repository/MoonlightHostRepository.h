@@ -42,9 +42,18 @@ class MoonlightHostRepository {
     std::optional<QString> serverCert(const QString& id) const;
     void setServerCert(const QString& id, const QString& certPem);
 
+    // The standing bindings. A binding survives the host being unreachable and
+    // the pairing being lost, because it is an intent rather than a connection.
+    QList<models::MoonlightBinding> bindings() const;
+    std::optional<models::MoonlightBinding> binding(const QString& slotId) const;
+    void rememberBinding(const models::MoonlightBinding& binding);
+    void forgetBinding(const QString& slotId);
+
   private:
     QList<models::MoonlightHost> readHosts() const; // assumes mutex_ held
     void writeHosts(const QList<models::MoonlightHost>& hosts);
+    QList<models::MoonlightBinding> readBindings() const; // assumes mutex_ held
+    void writeBindings(const QList<models::MoonlightBinding>& bindings);
 
     std::shared_ptr<QSettings> settings_;
     mutable std::mutex mutex_;

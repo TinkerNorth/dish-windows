@@ -8,6 +8,7 @@
 #include "Input/GamepadInputProcessor.h"
 #include "Input/JoystickMapping.h"
 #include "Input/SDLGamepadBridge.h"
+#include "Network/MoonlightManager.h"
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
@@ -23,6 +24,7 @@
 #include "core/reducer/SlotPathFields.h"
 #include "source/usb/UsbGamepadManager.h"
 #include "qml/AppSettingsMaps.h"
+#include "qml/RenderTokens.h"
 #include "repository/DeadzoneRepository.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/MotionEnabledStore.h"
@@ -518,6 +520,10 @@ void AppViewModel::onStateChanged() {
     // may have changed with it.
     emit deadzonesChanged();
 
+    // And a pad that has just appeared may already carry a standing Moonlight
+    // binding, which is what starts its session.
+    reattachMoonlightBindings();
+
     emit stateChanged();
 }
 
@@ -573,7 +579,15 @@ void AppViewModel::bindSlot(const QString& slotId, const QString& connectionId) 
     model_->hub()->bind(slotId, connectionId);
 }
 
-void AppViewModel::unbindSlot(const QString& slotId) { model_->hub()->unbind(slotId); }
+void AppViewModel::unbindSlot(const QString& slotId) {
+    // The two paths keep separate routing tables and each one ignores a slot it
+    // does not hold, so unbinding is asked of both rather than guessed at.
+    if (!model_->moonlight()->boundHostFor(slotId).isEmpty()) {
+        model_->moonlight()->unbindSlot(slotId);
+    }
+    model_->moonlight()->forgetBinding(slotId);
+    model_->hub()->unbind(slotId);
+}
 
 namespace {
 // A synthetic slot's id IS the packed vpKey string, so it parses. An SDL slot's
@@ -784,7 +798,8 @@ void AppViewModel::setMoonlightDeviceType(const QString& id, int deviceType) {
     model_->moonlight()->setHostDeviceType(id, deviceType);
 }
 
-void AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostId) {
+void AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostId,
+                                     int controllerType) {
     // The pad's detected hardware decides the advertised CONTROLLER_ARRIVAL
     // capabilities, so the host is never told about a feature the pad lacks.
     const models::ControllerSlot* slot = slotById(slotId);
@@ -794,8 +809,8 @@ void AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& hostI
     const bool hasLightbar = slot != nullptr && slot->capabilities.hasLightbar;
     // A pad reporting any level at all has a battery to report.
     const bool hasBattery = slot != nullptr && slot->capabilities.batteryLevel != 0xFF;
-    model_->moonlight()->bindSlot(slotId, hostId, hasRumble, hasMotion, hasTouchpad, hasBattery,
-                                  hasLightbar);
+    model_->moonlight()->bindSlot(slotId, hostId, controllerType, hasRumble, hasMotion, hasTouchpad,
+                                  hasBattery, hasLightbar);
 }
 
 void AppViewModel::unbindMoonlightSlot(const QString& slotId) {
@@ -804,6 +819,130 @@ void AppViewModel::unbindMoonlightSlot(const QString& slotId) {
 
 QString AppViewModel::moonlightBoundHostFor(const QString& slotId) const {
     return model_->moonlight()->boundHostFor(slotId);
+}
+
+bool AppViewModel::isMoonlightHost(const QString& connectionId) const {
+    if (connectionId.isEmpty()) { return false; }
+    for (const auto& row : model_->moonlight()->hostRows()) {
+        if (row.id == connectionId) { return true; }
+    }
+    return false;
+}
+
+void AppViewModel::probeMoonlightHost(const QString& id) { model_->moonlight()->probeHost(id); }
+
+QString AppViewModel::moonlightSessionState(const QString& id) const {
+    return tokens::moonlightSessionToken(
+        moonlight::resolveSessionUi(model_->moonlight()->sessionUiInputs(id)));
+}
+
+bool AppViewModel::moonlightSessionBlocksApply(const QString& id) const {
+    return moonlight::sessionUiBlocksApply(
+        moonlight::resolveSessionUi(model_->moonlight()->sessionUiInputs(id)));
+}
+
+bool AppViewModel::moonlightSessionIsProblem(const QString& id) const {
+    return moonlight::sessionUiIsProblem(
+        moonlight::resolveSessionUi(model_->moonlight()->sessionUiInputs(id)));
+}
+
+QString AppViewModel::moonlightTrust(const QString& id) const {
+    return tokens::moonlightTrustToken(
+        moonlight::trustFor(model_->moonlight()->sessionUiInputs(id)));
+}
+
+QString AppViewModel::moonlightPairingPin() const { return net::generateMoonlightPin(); }
+
+int AppViewModel::moonlightBoundSlotCount(const QString& id) const {
+    return model_->moonlight()->boundSlotCount(id);
+}
+
+int AppViewModel::moonlightNextControllerNumber(const QString& id) const {
+    const int taken = model_->moonlight()->boundSlotCount(id);
+    // Displayed one-based, and never past the ceiling: a host that is full says
+    // so in its own state rather than promising a fifth slot.
+    return taken < static_cast<int>(moonlight::kMaxPads) ? taken + 1
+                                                         : static_cast<int>(moonlight::kMaxPads);
+}
+
+QString AppViewModel::moonlightRunningAppName(const QString& id) const {
+    return model_->moonlight()->runningAppName(id);
+}
+
+QString AppViewModel::moonlightRefusalMessage(const QString& id) const {
+    return model_->moonlight()->refusalMessage(id);
+}
+
+void AppViewModel::quitMoonlightApp(const QString& id) {
+    model_->moonlight()->cancelHostApp(id);
+    // A successful cancel proves nothing: the host answers 200 whether or not
+    // anything was running, so the only honest next step is to ask again.
+    model_->moonlight()->probeHost(id);
+}
+
+QVariantList AppViewModel::moonlightTypeOptions() const {
+    const std::pair<int, const char*> options[] = {
+        {models::kMoonlightDeviceAuto, "auto"},
+        {models::kMoonlightDeviceXbox, "xbox"},
+        {models::kMoonlightDevicePlayStation, "playstation"},
+        {models::kMoonlightDeviceNintendo, "nintendo"},
+    };
+    QVariantList out;
+    for (const auto& [type, token] : options) {
+        QVariantMap m;
+        m[QStringLiteral("type")] = type;
+        m[QStringLiteral("token")] = QString::fromLatin1(token);
+        out.append(m);
+    }
+    return out;
+}
+
+int AppViewModel::moonlightResolvedAutoType(const QString& slotId) const {
+    const models::ControllerSlot* slot = slotById(slotId);
+    const bool hasMotion = slot != nullptr && slot->capabilities.hasMotion;
+    return moonlight::resolveAutoArrivalType(hasMotion) == moonlight::kPadTypePlayStation
+               ? models::kMoonlightDevicePlayStation
+               : models::kMoonlightDeviceXbox;
+}
+
+QString AppViewModel::moonlightResolvedAutoToken(const QString& slotId) const {
+    return moonlightResolvedAutoType(slotId) == models::kMoonlightDevicePlayStation
+               ? QStringLiteral("playstation")
+               : QStringLiteral("xbox");
+}
+
+int AppViewModel::moonlightBindingType(const QString& slotId) const {
+    const auto stored = model_->moonlight()->binding(slotId);
+    return stored.has_value() ? stored->controllerType : models::kMoonlightDeviceAuto;
+}
+
+void AppViewModel::applyMoonlightBinding(const QString& slotId, const QString& hostId, int type) {
+    // A slot can only drive one destination, and the two paths keep separate
+    // tables, so leaving the satellite side is part of arriving here.
+    model_->hub()->unbind(slotId);
+
+    models::MoonlightBinding binding;
+    binding.slotId = slotId;
+    binding.hostId = hostId;
+    binding.controllerType = type;
+    model_->moonlight()->rememberBinding(binding);
+    bindMoonlightSlot(slotId, hostId, type);
+
+    // Nothing here waits on the host. A binding is a durable intent and pairing
+    // is remembered trust verified lazily, so the session is attempted when the
+    // controller is used rather than when the binding is saved.
+    apply_ = reducer::ApplyState{};
+    emit applyChanged();
+    emit applyFinished(true, QString(), false);
+}
+
+void AppViewModel::reattachMoonlightBindings() {
+    auto* moon = model_->moonlight();
+    for (const auto& binding : moon->bindings()) {
+        if (!moon->boundHostFor(binding.slotId).isEmpty()) { continue; }
+        if (slotById(binding.slotId) == nullptr) { continue; }
+        bindMoonlightSlot(binding.slotId, binding.hostId, binding.controllerType);
+    }
 }
 
 QVariantList AppViewModel::discoveredServers() const {
@@ -1128,6 +1267,44 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
         in.linkDirect = in.linkUsb && slot->pathSupported && desiredPath == QLatin1String("direct");
     }
 
+    // A Moonlight host has NO CAPABILITY API: it never advertises what its
+    // emulated pads carry, and it picks the device from what the client declares.
+    // So the type layer is the client-side table in MoonlightPadSlots, the host
+    // layer carries everything (crossing out a row we cannot verify would mark
+    // every Moonlight binding degraded), and the link layer carries everything
+    // because the control stream does.
+    if (hostKind == QLatin1String("moonlight")) {
+        in.linkDirect = false;
+        in.hostIsBluetooth = false;
+        in.hostResolved = !hostId.isEmpty();
+        in.hostMouseControl = true;
+        in.hostRumble = true;
+        in.typeResolved = true;
+        const std::uint8_t arrival = moonlight::arrivalTypeForBinding(type, in.padMotion);
+        const std::uint8_t ceiling = moonlight::typeCapabilityCeiling(arrival);
+        in.typeMotion = (ceiling & moonlight::kPadCapGyro) != 0;
+        in.typeTouchpad = (ceiling & moonlight::kPadCapTouchpad) != 0;
+        in.typeRumble = (ceiling & moonlight::kPadCapRumble) != 0;
+        in.typeLightbar = (ceiling & moonlight::kPadCapRgbLed) != 0;
+        in.userMotionOn = motionOn;
+        in.userRumbleOn = rumbleOn;
+        in.userTouchpadMode = touchpadMode;
+        QVariantList moonRows;
+        for (const auto& row : reducer::solveCapabilities(in)) {
+            QVariantMap m;
+            m[QStringLiteral("feature")] = capFeatureToken(row.feature);
+            m[QStringLiteral("inOk")] = row.inOk;
+            m[QStringLiteral("linkOk")] = row.linkOk;
+            m[QStringLiteral("typeOk")] = row.typeOk;
+            m[QStringLiteral("hostOk")] = row.hostOk;
+            m[QStringLiteral("verdict")] = capVerdictToken(row.verdict);
+            m[QStringLiteral("failingLayer")] = capLayerToken(row.failingLayer);
+            m[QStringLiteral("hasFailingLayer")] = row.hasFailingLayer;
+            moonRows.append(m);
+        }
+        return moonRows;
+    }
+
     const bool hostIsBluetooth = hostKind == QLatin1String("bluetooth");
     in.hostIsBluetooth = hostIsBluetooth;
     // A Bluetooth destination is Windows' own gamepad layer, with no catalog to
@@ -1308,6 +1485,11 @@ void AppViewModel::applyBinding(const QString& slotId, const QString& connection
         apply_ = reducer::ApplyState{};
         emit applyChanged();
         emit applyFinished(false, QStringLiteral("slotGone"), false);
+        return;
+    }
+
+    if (isMoonlightHost(connectionId)) {
+        applyMoonlightBinding(resolved, connectionId, type);
         return;
     }
 

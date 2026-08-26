@@ -29,8 +29,26 @@ MoonlightHost MoonlightHost::fromJson(const QJsonObject& obj) {
     h.paired = obj.value(QStringLiteral("paired")).toBool();
     h.lastAppId = obj.value(QStringLiteral("lastAppId")).toString();
     h.lastAppName = obj.value(QStringLiteral("lastAppName")).toString();
-    h.deviceType = obj.value(QStringLiteral("deviceType")).toInt(kMoonlightDeviceAuto);
+    h.deviceType =
+        migrateDevicePick(obj.value(QStringLiteral("deviceType")).toInt(kMoonlightDeviceAuto));
     return h;
+}
+
+QJsonObject MoonlightBinding::toJson() const {
+    QJsonObject obj;
+    obj[QStringLiteral("slotId")] = slotId;
+    obj[QStringLiteral("hostId")] = hostId;
+    obj[QStringLiteral("controllerType")] = controllerType;
+    return obj;
+}
+
+MoonlightBinding MoonlightBinding::fromJson(const QJsonObject& obj) {
+    MoonlightBinding b;
+    b.slotId = obj.value(QStringLiteral("slotId")).toString();
+    b.hostId = obj.value(QStringLiteral("hostId")).toString();
+    b.controllerType =
+        migrateDevicePick(obj.value(QStringLiteral("controllerType")).toInt(kMoonlightDeviceAuto));
+    return b;
 }
 
 } // namespace dish::models

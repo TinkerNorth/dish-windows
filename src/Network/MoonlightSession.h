@@ -83,6 +83,14 @@ class MoonlightSession : public QObject {
     // GET /applist (HTTPS, needs pairing) and emit appListReady.
     void refreshApps();
 
+    // GET /serverinfo over PLAINTEXT and emit probeFinished. This is how
+    // remembered trust is verified: the host never tells us it has forgotten us,
+    // so the only honest answer comes from asking. Read PairStatus and uniqueid
+    // from it and NOTHING ELSE: a plaintext probe reports the host free whatever
+    // it is running, because currentgame and state describe the asking client's
+    // own session and an unpaired asker has none.
+    void probe();
+
     // Hot path: forward one controller's state. No-op unless streaming.
     void sendControllerState(const moonlight::ControllerState& state);
 
@@ -107,7 +115,11 @@ class MoonlightSession : public QObject {
   signals:
     void phaseChanged();
     void pairingFinished(bool ok);
-    void appListReady(const QStringList& appIds, const QStringList& appTitles);
+    // `ok` is false when the host refused the list or could not be reached, which
+    // an empty list on its own cannot say.
+    void appListReady(const QStringList& appIds, const QStringList& appTitles, bool ok);
+    // `answered` false means the probe did not reach the host at all.
+    void probeFinished(bool answered, bool pairStatus, const QString& uniqueId);
 
     // Host -> client events, forwarded for AppModel to route to the local pad.
     void rumbleReceived(int controllerNumber, int lowFreq, int highFreq);

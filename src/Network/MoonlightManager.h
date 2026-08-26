@@ -15,6 +15,7 @@
 #include "core/moonlight/MoonlightIdentity.h"
 #include "core/moonlight/MoonlightPadSlots.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
+#include "core/moonlight/MoonlightSessionUi.h"
 
 #include <QHash>
 #include <QList>
@@ -67,6 +68,10 @@ struct MoonlightHostRow {
 // The lowercase phase token for a session state, for the row above.
 QString moonlightPhaseToken(moonlight::SessionPhase phase);
 
+// A fresh four-digit pairing code. Here rather than in QML because a PIN is
+// security-relevant and JavaScript's Math.random() is not a suitable source.
+QString generateMoonlightPin();
+
 // Pure merge of the remembered list with a discovery sweep and the live session
 // phases into the flat row list. Remembered rows come first; a discovered host
 // already remembered is folded (not duplicated). Exposed for unit testing.
@@ -102,10 +107,23 @@ class MoonlightManager : public QObject {
     // GET /applist on a paired host; the reply arrives as appListReady.
     void refreshApps(const QString& id);
 
-    // Persist the user's app pick and emulated-device pick for a host. The
-    // device pick takes effect on the next bind (it rides CONTROLLER_ARRIVAL).
+    // Persist the user's app pick for a host. The app belongs to the SESSION, so
+    // it is set by whoever creates one and inherited by everything that joins.
     void setHostApp(const QString& id, const QString& appId, const QString& appName);
     void setHostDeviceType(const QString& id, int deviceType);
+
+    // The app the host is running for us, named for the bindings that join it.
+    QString runningAppName(const QString& id) const;
+
+    // The host's own words for its last refusal, so a message we cannot phrase
+    // better is quoted rather than paraphrased. Empty when the failure did not
+    // come from the host's body.
+    QString refusalMessage(const QString& id) const;
+
+    // Re-verify remembered trust: a plaintext /serverinfo for PairStatus and the
+    // host's uniqueid. Never polled; run on entering a screen and before a
+    // session starts. The answer lands on hostsChanged().
+    void probeHost(const QString& id);
 
     void disconnectHost(const QString& id);
 
@@ -124,18 +142,40 @@ class MoonlightManager : public QObject {
     // Satellite tables keep answering for slots bound to a satellite.
     //
     // Main thread. Allocates a controller number, sends CONTROLLER_ARRIVAL with
-    // the host's emulated-device pick and the pad's real capabilities, and adds
-    // the pad to the active mask. `hasRumble` and friends are the pad's detected
-    // hardware.
-    void bindSlot(const QString& slotId, const QString& hostId, bool hasRumble, bool hasMotion,
-                  bool hasTouchpad, bool hasBattery, bool hasLightbar);
+    // THIS BINDING's emulated-device pick and the pad's real capabilities, and
+    // adds the pad to the active mask. `hasRumble` and friends are the pad's
+    // detected hardware.
+    //
+    // THE SESSION IS REFERENCE COUNTED PER HOST, never one per binding: a host
+    // carries one session for up to four controllers, so the first pad on a host
+    // starts (or rejoins) it and every later pad only announces itself on the
+    // stream that is already up.
+    void bindSlot(const QString& slotId, const QString& hostId, int controllerType, bool hasRumble,
+                  bool hasMotion, bool hasTouchpad, bool hasBattery, bool hasLightbar);
 
     // Main thread. Drops the pad's bit from the active mask and sends one final
     // CONTROLLER_MULTI naming it with the bit already cleared, which is the
-    // protocol's unplug signal.
+    // protocol's unplug signal. The LAST pad off a host tears its session down,
+    // so no app is left stranded on it.
     void unbindSlot(const QString& slotId);
 
     QString boundHostFor(const QString& slotId) const;
+
+    // How many controllers this host currently carries, for the four-pad ceiling
+    // and for the host row's "in use by" chip.
+    int boundSlotCount(const QString& hostId) const;
+
+    // ── Standing bindings ────────────────────────────────────────────────────
+    // A binding outlives the session: it is an intent, and pairing is remembered
+    // trust verified lazily, so nothing here is gated on the host answering.
+    QList<models::MoonlightBinding> bindings() const;
+    std::optional<models::MoonlightBinding> binding(const QString& slotId) const;
+    void rememberBinding(const models::MoonlightBinding& binding);
+    void forgetBinding(const QString& slotId);
+
+    // Everything the session section renders from, for one host. Pure inputs;
+    // MoonlightSessionUi turns them into the one state that renders.
+    moonlight::SessionUiInputs sessionUiInputs(const QString& hostId) const;
 
     // The reverse of the routing table: which local slot a host's inbound
     // rumble / LED event (addressed by controller number) belongs to. Empty when
@@ -181,10 +221,27 @@ class MoonlightManager : public QObject {
         QString hostId;
     };
 
+    // Per host: what the last probe and the last /applist answered, so the
+    // session section renders from what we asked rather than from a guess.
+    struct HostProbe {
+        bool inFlight = false;
+        bool answered = false;
+        bool timedOut = false;
+        bool pairStatus = false;
+        bool uniqueIdChanged = false;
+        bool appsInFlight = false;
+        bool appsFetched = false;
+        bool appsFailed = false;
+        int appCount = 0;
+        bool pairingActive = false;
+        bool pairingRefused = false;
+    };
+
     std::unique_ptr<repository::MoonlightHostRepository> repo_;
     std::optional<moonlight::Identity> identity_;
     QList<models::MoonlightHost> discovered_;
     QHash<QString, MoonlightSession*> sessions_;
+    QHash<QString, HostProbe> probes_;
     bool scanning_ = false;
     std::thread discoveryThread_;
 

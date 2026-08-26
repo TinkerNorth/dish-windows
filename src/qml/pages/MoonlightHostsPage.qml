@@ -9,6 +9,14 @@
 //
 // Every row states its kind in words ("Moonlight host"), because the only visual
 // difference from a satellite row would otherwise be the glyph.
+//
+// THIS SCREEN OWNS TRUST, NOT SESSIONS. Moonlight has no bidirectional liveness:
+// pairing is one-time trust that only we can check, the host never notifies us,
+// and a host-side unpair is discovered on the next call. So a row carries a trust
+// WORD verified when the screen is entered, never a connection light. Which
+// controller drives which host, what it emulates and what the host runs are all
+// questions the binding flow asks, because a session belongs to a host and its
+// controllers rather than to this inventory.
 
 pragma ComponentBehavior: Bound
 
@@ -34,11 +42,9 @@ Kit.Page {
     property var hostRows: App.moonlightHosts()
     property string currentHostId: ""
     property string currentLabel: ""
-
-    // Index-aligned with the wire values (0 Auto, 1 Xbox, 2 PS, 3 Nintendo), so
-    // the picker maps by position and the C++ never sees a localized word.
-    readonly property var deviceOptions: [qsTr("Auto"), qsTr("Xbox"),
-                                          qsTr("PlayStation"), qsTr("Nintendo")]
+    // Bumped on every host move so the invokable-backed trust and controller
+    // counts re-evaluate: a call is not a binding dependency.
+    property int accounting: 0
 
     readonly property int pairedCount: page.countWhere(true)
     readonly property int foundCount: page.countWhere(false)
@@ -50,9 +56,22 @@ Kit.Page {
         return n;
     }
 
-    function refresh() { page.hostRows = App.moonlightHosts(); }
+    function refresh() {
+        page.hostRows = App.moonlightHosts();
+        page.accounting += 1;
+    }
 
-    Component.onCompleted: if (!App.moonlightScanning()) App.startMoonlightDiscovery()
+    // Remembered trust is re-verified on entering the screen and never polled.
+    function reprobe() {
+        for (var i = 0; i < page.hostRows.length; ++i)
+            App.probeMoonlightHost(page.hostRows[i].id);
+    }
+
+    Component.onCompleted: {
+        if (!App.moonlightScanning())
+            App.startMoonlightDiscovery();
+        page.reprobe();
+    }
 
     Connections {
         target: App
@@ -61,15 +80,9 @@ Kit.Page {
             page.refresh();
             if (ok) {
                 pairSheet.close();
-                // A freshly paired host can be asked what it runs.
-                App.refreshMoonlightApps(hostId);
             } else {
                 pairSheet.rejected = true;
             }
-        }
-        function onMoonlightAppsChanged(hostId) {
-            if (hostId === appSheet.hostId)
-                appSheet.apps = App.moonlightApps();
         }
     }
 
@@ -160,17 +173,18 @@ Kit.Page {
                 readonly property string label: host.modelData.name
                 readonly property bool paired: host.modelData.paired
                 readonly property string phase: host.modelData.phase
-                readonly property bool streaming: host.phase === "streaming"
-                                                  || host.phase === "faltering"
                 readonly property bool busy: host.phase === "pairing"
-                                             || host.phase === "launching"
-                                             || host.phase === "connecting"
+
+                readonly property string trust: page.accounting >= 0
+                                                ? App.moonlightTrust(host.hostId) : ""
+                readonly property int controllers: page.accounting >= 0
+                                                   ? App.moonlightBoundSlotCount(host.hostId) : 0
 
                 Layout.fillWidth: true
 
                 Accessible.role: Accessible.ListItem
                 Accessible.name: qsTr("%1, Moonlight host, %2")
-                                     .arg(host.label).arg(page.phaseText(host.phase))
+                                     .arg(host.label).arg(page.trustText(host.trust))
 
                 contentItem: ColumnLayout {
                     spacing: Tokens.s5
@@ -184,10 +198,6 @@ Kit.Page {
                             glyph: "dish-logo"
                             Layout.preferredWidth: Tokens.glyphSm
                             Layout.preferredHeight: Tokens.glyphSm
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Kit.StatusDot {
-                            token: page.phaseDot(host.phase)
                             Layout.alignment: Qt.AlignVCenter
                         }
                         ColumnLayout {
@@ -218,79 +228,37 @@ Kit.Page {
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Kit.CapabilityChip {
-                            text: page.phaseText(host.phase)
-                            tone: page.phaseTone(host.phase)
+                            text: page.trustText(host.trust)
+                            tone: page.trustTone(host.trust)
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Kit.CapabilityChip {
+                            visible: host.controllers > 0
+                            text: qsTr("In use by %1")
+                                    .arg(qsTr("%n controllers", "", host.controllers))
+                            tone: Kit.CapabilityChip.Ok
                             Layout.alignment: Qt.AlignVCenter
                         }
                     }
 
-                    // ── Session settings, only once the host is paired ───────
-                    Kit.Card {
+                    // What a controller bound to this host will run, stated but
+                    // never chosen here: the app belongs to the session, and the
+                    // session belongs to the binding flow.
+                    Label {
                         visible: host.paired
-                        filled: false
-                        dense: true
+                        text: host.modelData.appName.length > 0
+                              ? qsTr("Session · %1").arg(host.modelData.appName)
+                              : qsTr("Session · whatever the host lists first")
+                        color: Theme.mutedStrong
+                        font.pixelSize: Tokens.textMeta
+                        elide: Text.ElideRight
                         Layout.fillWidth: true
-
-                        contentItem: ColumnLayout {
-                            spacing: Tokens.s4
-
-                            Kit.Eyebrow { mutedTone: true; text: qsTr("Session") }
-
-                            // App pick.
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Tokens.s4
-
-                                Label {
-                                    text: qsTr("App")
-                                    color: Theme.mutedStrong
-                                    font.pixelSize: Tokens.textMeta
-                                }
-                                Label {
-                                    text: host.modelData.appName.length > 0
-                                          ? host.modelData.appName
-                                          : qsTr("Host default")
-                                    color: Theme.onSurface
-                                    font.pixelSize: Tokens.textMeta
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                Kit.DishButton {
-                                    text: qsTr("Choose…")
-                                    variant: Kit.DishButton.Outline
-                                    size: Kit.DishButton.Small
-                                    onClicked: appSheet.openFor(host.hostId, host.label)
-                                }
-                            }
-
-                            // Emulated-device pick. Static list, so it renders
-                            // without asking the host anything.
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Tokens.s4
-
-                                Label {
-                                    text: qsTr("Emulate")
-                                    color: Theme.mutedStrong
-                                    font.pixelSize: Tokens.textMeta
-                                }
-                                Item { Layout.fillWidth: true }
-                                // SegmentedControl is value-based, so the wire
-                                // int is mapped to its label and back here.
-                                Kit.SegmentedControl {
-                                    options: page.deviceOptions
-                                    value: page.deviceOptions[host.modelData.deviceType]
-                                    small: true
-                                    onPicked: function (option) {
-                                        App.setMoonlightDeviceType(
-                                            host.hostId, page.deviceOptions.indexOf(option));
-                                    }
-                                }
-                            }
-                        }
                     }
 
                     // ── Actions ─────────────────────────────────────────────
+                    // Pair, Forget and one escape hatch. Connecting is implicit:
+                    // binding a controller starts or joins the session and
+                    // unbinding the last one tears it down.
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Tokens.s4
@@ -298,24 +266,11 @@ Kit.Page {
                         Item { Layout.fillWidth: true }
 
                         Kit.DishButton {
-                            visible: !host.paired
+                            visible: host.trust !== "paired"
                             text: qsTr("Pair…")
                             variant: Kit.DishButton.Primary
                             enabled: !host.busy
                             onClicked: pairSheet.openFor(host.hostId, host.label)
-                        }
-                        Kit.DishButton {
-                            visible: host.paired && !host.streaming
-                            text: host.busy ? qsTr("Connecting…") : qsTr("Connect")
-                            variant: Kit.DishButton.Primary
-                            enabled: !host.busy
-                            onClicked: App.connectMoonlightHost(host.hostId, "")
-                        }
-                        Kit.DishButton {
-                            visible: host.streaming
-                            text: qsTr("Disconnect")
-                            variant: Kit.DishButton.Outline
-                            onClicked: App.disconnectMoonlightHost(host.hostId)
                         }
                         Kit.DishButton {
                             text: "⋯"
@@ -339,12 +294,32 @@ Kit.Page {
 
         background: Rectangle {
             implicitWidth: Math.max(Tokens.menuMinWidth,
-                                    forgetItem.implicitWidth
+                                    Math.max(forgetItem.implicitWidth, quitItem.implicitWidth)
                                     + hostMenu.leftPadding + hostMenu.rightPadding)
             color: Theme.surface
             border.width: 1
             border.color: Theme.outline
             radius: Tokens.radiusButton
+        }
+
+        // The escape hatch for a host that is running something nobody here can
+        // reach. /cancel answers 200 whether or not anything was running, so the
+        // host is asked again afterwards rather than believed.
+        MenuItem {
+            id: quitItem
+            text: qsTr("Quit session")
+
+            contentItem: Text {
+                text: quitItem.text
+                font.pixelSize: Tokens.textSummary
+                color: Theme.onSurface
+                verticalAlignment: Text.AlignVCenter
+            }
+            background: Rectangle {
+                color: quitItem.highlighted ? Theme.primaryHover : "transparent"
+                radius: Tokens.radiusChip
+            }
+            onTriggered: App.quitMoonlightApp(page.currentHostId)
         }
 
         MenuItem {
@@ -369,7 +344,7 @@ Kit.Page {
         id: forgetConfirm
         eyebrow: qsTr("Forget")
         heading: qsTr("Forget %1?").arg(page.currentLabel)
-        bodyText: qsTr("Its pairing is deleted — you’ll need the PIN again.")
+        bodyText: qsTr("Its pairing is deleted. You will need the PIN again.")
         acceptText: qsTr("Forget")
         rejectText: qsTr("Cancel")
         destructiveAccept: true
@@ -444,9 +419,10 @@ Kit.Page {
             pairSheet.hostId = id;
             pairSheet.hostName = name;
             pairSheet.rejected = false;
-            // A fresh 4-digit code per attempt, which is what the host expects
-            // to be told.
-            pairSheet.pin = String(Math.floor(1000 + Math.random() * 9000));
+            // A fresh 4-digit code per attempt, which is what the host expects to
+            // be told. Minted in C++: a PIN is security-relevant and JavaScript's
+            // Math.random() is not a suitable source.
+            pairSheet.pin = App.moonlightPairingPin();
             App.pairMoonlightHost(id, pairSheet.pin);
             pairSheet.open();
         }
@@ -521,94 +497,21 @@ Kit.Page {
         ]
     }
 
-    // ---- App pick -----------------------------------------------------------
-    Kit.ContentDialog {
-        id: appSheet
-
-        property string hostId: ""
-        property string hostName: ""
-        property var apps: []
-
-        eyebrow: qsTr("App")
-        heading: qsTr("What should %1 launch?").arg(appSheet.hostName)
-        preferredWidth: 430
-        rejectText: qsTr("Close")
-        acceptEnabled: false
-
-        function openFor(id, name) {
-            appSheet.hostId = id;
-            appSheet.hostName = name;
-            appSheet.apps = [];
-            App.refreshMoonlightApps(id);
-            appSheet.open();
-        }
-
-        body: [
-            Kit.LoadingSpinner {
-                visible: appSheet.apps.length === 0
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: Tokens.s5
-                Layout.bottomMargin: Tokens.s5
-            },
-            Label {
-                visible: appSheet.apps.length === 0
-                text: qsTr("Asking the host what it can run…")
-                color: Theme.muted
-                font.pixelSize: Tokens.textSummary
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            },
-            Repeater {
-                model: appSheet.apps
-                delegate: Kit.RowButton {
-                    id: appRow
-                    required property var modelData
-                    title: appRow.modelData.title.length > 0
-                           ? appRow.modelData.title : appRow.modelData.id
-                    Layout.fillWidth: true
-                    onClicked: {
-                        App.setMoonlightApp(appSheet.hostId, appRow.modelData.id,
-                                            appRow.modelData.title);
-                        appSheet.close();
-                    }
-                }
-            }
-        ]
-    }
-
     // ---- Helpers: tokens to localized copy ----------------------------------
-    function phaseText(token) {
+    // Three words and nothing else. "Remembered" is not a failure and is not
+    // amber: a host that is switched off is not a problem to solve.
+    function trustText(token) {
         switch (token) {
-        case "pairing":    return qsTr("Pairing…");
         case "paired":     return qsTr("Paired");
-        case "launching":  return qsTr("Starting…");
-        case "connecting": return qsTr("Connecting…");
-        case "streaming":  return qsTr("Streaming");
-        case "faltering":  return qsTr("Unsteady");
-        case "failed":     return qsTr("Failed");
-        case "closed":     return qsTr("Disconnected");
-        default:           return qsTr("Found");
+        case "remembered": return qsTr("Remembered");
         }
+        return qsTr("Not paired");
     }
-    function phaseTone(token) {
-        switch (token) {
-        case "streaming":  return Kit.CapabilityChip.Ok;
-        case "paired":     return Kit.CapabilityChip.Present;
-        case "faltering":  return Kit.CapabilityChip.Warn;
-        case "connecting": return Kit.CapabilityChip.Warn;
-        case "launching":  return Kit.CapabilityChip.Warn;
-        case "pairing":    return Kit.CapabilityChip.Warn;
-        case "failed":     return Kit.CapabilityChip.Warn;
-        default:           return Kit.CapabilityChip.Neutral;
-        }
-    }
-    function phaseDot(token) {
-        switch (token) {
-        case "streaming":  return "success";
-        case "paired":     return "primary";
-        case "faltering":  return "warning";
-        case "failed":     return "warning";
-        default:           return "muted";
-        }
+    function trustTone(token) {
+        if (token === "paired")
+            return Kit.CapabilityChip.Ok;
+        if (token === "remembered")
+            return Kit.CapabilityChip.Neutral;
+        return Kit.CapabilityChip.Absent;
     }
 }

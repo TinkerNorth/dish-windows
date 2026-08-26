@@ -36,8 +36,10 @@ enum class SessionFailure {
     Unreachable,       // HTTP/RTSP transport dead
     LaunchRejected,    // /launch returned an error
     AppAlreadyRunning, // the host already has an app up and offered no resume
+    ResumeRejected,    // the host offered a resumable session and then refused it
     RtspFailed,        // RTSP handshake failed
     ControlFailed,     // ENet could not connect
+    LinkDropped,       // the control stream closed with no termination from the host
     ServerTerminated,  // host sent TERMINATION / closed
 };
 
@@ -63,15 +65,22 @@ enum class SessionEvent {
     // running and named no resumable session. Distinct from LaunchFailed
     // because the only way forward is /cancel, which is the user's call.
     LaunchRefusedBusy,
+    // The host said the running session was ours to resume, and then would not
+    // hand it back. Distinct from LaunchFailed because the host has a session and
+    // the only way forward is to close it.
+    ResumeRefused,
     RtspSucceeded,
     RtspFailed,
     ControlConnected,
     ControlConnectFailed,
     PingsMissed,      // heartbeat window elapsed with no traffic
     PingsRecovered,   // traffic resumed
-    ServerTerminated, // host sent TERMINATION or disconnected
-    Unreachable,      // an HTTP/RTSP call could not reach the host
-    UserQuit,         // local teardown request
+    ServerTerminated, // host sent TERMINATION, or the app closed
+    // The control stream went away without the host saying why. Recoverable: the
+    // host will usually let us resume, which a termination will not.
+    ControlDropped,
+    Unreachable, // an HTTP/RTSP call could not reach the host
+    UserQuit,    // local teardown request
 };
 
 // Effects the coordinator performs. Returned as data, executed at the edge.
@@ -141,6 +150,12 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
                     {SessionEffect::NotifyFailure}};
         }
         return {};
+    case SessionEvent::ResumeRefused:
+        if (s.phase == SessionPhase::Launching) {
+            return {to(SessionPhase::Failed, SessionFailure::ResumeRejected),
+                    {SessionEffect::NotifyFailure}};
+        }
+        return {};
     case SessionEvent::RtspSucceeded:
         if (s.phase == SessionPhase::RtspHandshake) {
             return {to(SessionPhase::ControlConnecting), {SessionEffect::ConnectControl}};
@@ -174,6 +189,12 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         if (s.phase == SessionPhase::Streaming || s.phase == SessionPhase::Faltering ||
             s.phase == SessionPhase::ControlConnecting) {
             return {to(SessionPhase::Failed, SessionFailure::ServerTerminated),
+                    {SessionEffect::Teardown, SessionEffect::NotifyFailure}};
+        }
+        return {};
+    case SessionEvent::ControlDropped:
+        if (s.phase == SessionPhase::Streaming || s.phase == SessionPhase::Faltering) {
+            return {to(SessionPhase::Failed, SessionFailure::LinkDropped),
                     {SessionEffect::Teardown, SessionEffect::NotifyFailure}};
         }
         return {};

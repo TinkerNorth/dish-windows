@@ -18,12 +18,24 @@ namespace dish::models {
 inline constexpr int kMoonlightHttpPort = 47989;
 inline constexpr int kMoonlightHttpsPort = 47984;
 
-// The "device to emulate" picker values, persisted per host. Auto lets the host
-// decide (wire type Unknown); the rest map onto the CONTROLLER_ARRIVAL type.
-inline constexpr int kMoonlightDeviceAuto = 0;
+// The "device to emulate" picker values, persisted per binding. The three named
+// ones map straight onto the CONTROLLER_ARRIVAL type byte. AUTO IS 0xFF, NOT 0:
+// 0 is the wire's CONTROLLER_TYPE_UNKNOWN, and a picker value that collides with
+// a wire value is a bug waiting for someone to pass one where the other belongs.
+// Auto resolves client-side before the packet is built, so Unknown never leaves
+// this machine. A record written before this carried 0 for Auto and is migrated
+// on read.
+inline constexpr int kMoonlightDeviceAuto = 0xFF;
 inline constexpr int kMoonlightDeviceXbox = 1;
 inline constexpr int kMoonlightDevicePlayStation = 2;
 inline constexpr int kMoonlightDeviceNintendo = 3;
+
+// The stored 0 that used to mean Auto.
+inline constexpr int kMoonlightDeviceLegacyAuto = 0;
+
+inline int migrateDevicePick(int stored) {
+    return stored == kMoonlightDeviceLegacyAuto ? kMoonlightDeviceAuto : stored;
+}
 
 struct MoonlightHost {
     QString name;
@@ -41,7 +53,9 @@ struct MoonlightHost {
     // "Desktop"); empty means launch the host default.
     QString lastAppId;
     QString lastAppName;
-    // kMoonlightDevice*, the emulated-device pick for CONTROLLER_ARRIVAL.
+    // kMoonlightDevice*, the emulated-device pick for CONTROLLER_ARRIVAL. Kept
+    // for the hosts written before the pick moved to the binding, and read as
+    // the default a fresh binding on this host starts from.
     int deviceType = kMoonlightDeviceAuto;
 
     // Prefer the host UUID so a DHCP address change keeps one row; fall back to
@@ -54,6 +68,24 @@ struct MoonlightHost {
 
     QJsonObject toJson() const;
     static MoonlightHost fromJson(const QJsonObject& obj);
+};
+
+// One controller's standing intent to drive a Moonlight host. The type is PER
+// BINDING because two pads on one host can be two different devices; the app and
+// the pairing are per host, and live on MoonlightHost above.
+struct MoonlightBinding {
+    QString slotId;
+    QString hostId;
+    int controllerType = kMoonlightDeviceAuto;
+
+    bool isValid() const { return !slotId.isEmpty() && !hostId.isEmpty(); }
+
+    bool operator==(const MoonlightBinding& o) const {
+        return slotId == o.slotId && hostId == o.hostId && controllerType == o.controllerType;
+    }
+
+    QJsonObject toJson() const;
+    static MoonlightBinding fromJson(const QJsonObject& obj);
 };
 
 } // namespace dish::models

@@ -48,6 +48,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
     disconnect();
 
     key_ = rikey;
+    terminated_ = false;
     sealer_ = std::make_unique<moonlight::crypto::ControlSealer>(key_);
     if (!sealer_->ok()) {
         sealer_.reset();
@@ -194,7 +195,7 @@ void MoonlightControlChannel::receiveLoop() {
 
         if (event.type == ENET_EVENT_TYPE_DISCONNECT) {
             connected_.store(false, std::memory_order_relaxed);
-            if (disconnectHandler_) { disconnectHandler_(); }
+            if (disconnectHandler_) { disconnectHandler_(terminated_); }
             break;
         }
         if (event.type != ENET_EVENT_TYPE_RECEIVE) { continue; }
@@ -216,6 +217,9 @@ void MoonlightControlChannel::receiveLoop() {
                     break;
                 case moonlight::ServerEventType::RgbLed:
                     if (ledHandler_) { ledHandler_(ev->led); }
+                    break;
+                case moonlight::ServerEventType::Termination:
+                    terminated_ = true;
                     break;
                 case moonlight::ServerEventType::Unknown:
                     // Ignored gracefully.

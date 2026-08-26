@@ -5,6 +5,8 @@
 
 #include "QSettingsFixture.h"
 
+#include <QJsonObject>
+
 #include <catch2/catch_test_macros.hpp>
 
 using dish::models::MoonlightHost;
@@ -77,4 +79,84 @@ TEST_CASE("Server cert pin round-trips and clears with the host", "[moonlight][r
 
     repo.forgetHost(h.id());
     REQUIRE_FALSE(repo.serverCert(h.id()).has_value());
+}
+
+TEST_CASE("A stored Auto of 0 is migrated to 0xFF on read", "[moonlight][repo]") {
+    // 0 used to mean Auto and is the wire's CONTROLLER_TYPE_UNKNOWN, so a record
+    // written before the change would otherwise announce Unknown to the host and
+    // let it pick with no way of telling us what it picked.
+    QJsonObject legacy;
+    legacy[QStringLiteral("ip")] = QStringLiteral("192.168.0.9");
+    legacy[QStringLiteral("deviceType")] = 0;
+    const auto migrated = MoonlightHost::fromJson(legacy);
+    REQUIRE(migrated.deviceType == dish::models::kMoonlightDeviceAuto);
+    REQUIRE(migrated.deviceType == 0xFF);
+
+    // An explicit pick is left alone.
+    QJsonObject explicitPick;
+    explicitPick[QStringLiteral("ip")] = QStringLiteral("192.168.0.9");
+    explicitPick[QStringLiteral("deviceType")] = dish::models::kMoonlightDeviceNintendo;
+    REQUIRE(MoonlightHost::fromJson(explicitPick).deviceType ==
+            dish::models::kMoonlightDeviceNintendo);
+
+    // A record that never named one defaults to Auto rather than to Unknown.
+    QJsonObject bare;
+    bare[QStringLiteral("ip")] = QStringLiteral("192.168.0.9");
+    REQUIRE(MoonlightHost::fromJson(bare).deviceType == dish::models::kMoonlightDeviceAuto);
+}
+
+TEST_CASE("A binding round-trips its host and its own controller type", "[moonlight][repo]") {
+    auto settings = dish::test::makeSharedSettings();
+    MoonlightHostRepository repo(settings);
+
+    dish::models::MoonlightBinding pad;
+    pad.slotId = QStringLiteral("sdl:1");
+    pad.hostId = QStringLiteral("ml:ip:192.168.0.2");
+    pad.controllerType = dish::models::kMoonlightDevicePlayStation;
+    repo.rememberBinding(pad);
+
+    // The type is PER BINDING: a second pad on the same host is a different
+    // device without disturbing the first.
+    dish::models::MoonlightBinding other;
+    other.slotId = QStringLiteral("sdl:2");
+    other.hostId = QStringLiteral("ml:ip:192.168.0.2");
+    other.controllerType = dish::models::kMoonlightDeviceNintendo;
+    repo.rememberBinding(other);
+
+    REQUIRE(repo.bindings().size() == 2);
+    REQUIRE(repo.binding(QStringLiteral("sdl:1"))->controllerType ==
+            dish::models::kMoonlightDevicePlayStation);
+    REQUIRE(repo.binding(QStringLiteral("sdl:2"))->controllerType ==
+            dish::models::kMoonlightDeviceNintendo);
+    REQUIRE_FALSE(repo.binding(QStringLiteral("sdl:9")).has_value());
+
+    // Re-binding the same slot upserts rather than duplicating.
+    pad.controllerType = dish::models::kMoonlightDeviceXbox;
+    repo.rememberBinding(pad);
+    REQUIRE(repo.bindings().size() == 2);
+    REQUIRE(repo.binding(QStringLiteral("sdl:1"))->controllerType ==
+            dish::models::kMoonlightDeviceXbox);
+
+    // And it survives a fresh repository over the same store.
+    MoonlightHostRepository reopened(settings);
+    REQUIRE(reopened.bindings().size() == 2);
+
+    reopened.forgetBinding(QStringLiteral("sdl:1"));
+    REQUIRE(reopened.bindings().size() == 1);
+    REQUIRE_FALSE(reopened.binding(QStringLiteral("sdl:1")).has_value());
+
+    // A record naming no slot or no host is not a binding.
+    dish::models::MoonlightBinding junk;
+    junk.hostId = QStringLiteral("ml:ip:192.168.0.2");
+    reopened.rememberBinding(junk);
+    REQUIRE(reopened.bindings().size() == 1);
+}
+
+TEST_CASE("A binding stored with the old Auto is migrated too", "[moonlight][repo]") {
+    QJsonObject legacy;
+    legacy[QStringLiteral("slotId")] = QStringLiteral("sdl:1");
+    legacy[QStringLiteral("hostId")] = QStringLiteral("ml:ip:192.168.0.2");
+    legacy[QStringLiteral("controllerType")] = 0;
+    const auto migrated = dish::models::MoonlightBinding::fromJson(legacy);
+    REQUIRE(migrated.controllerType == dish::models::kMoonlightDeviceAuto);
 }

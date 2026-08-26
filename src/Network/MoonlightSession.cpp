@@ -108,9 +108,13 @@ void MoonlightSession::wireControlHandlers() {
             [this, e] { emit motionRequested(e.controllerNumber, e.reportRateHz, e.motionType); },
             Qt::QueuedConnection);
     });
-    control_.setDisconnectHandler([this] {
+    control_.setDisconnectHandler([this](bool terminated) {
         QMetaObject::invokeMethod(
-            this, [this] { dispatch(moonlight::SessionEvent::ServerTerminated); },
+            this,
+            [this, terminated] {
+                dispatch(terminated ? moonlight::SessionEvent::ServerTerminated
+                                    : moonlight::SessionEvent::ControlDropped);
+            },
             Qt::QueuedConnection);
     });
 }
@@ -380,7 +384,14 @@ void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resumin
         resumeAvailable_ = r.resumeAvailable;
         qCWarning(lcMoonlightSession) << host_.ip << "refused the session:" << r.statusCode
                                       << r.statusMessage << "resume" << r.resumeAvailable;
-        if (r.appAlreadyRunning() && r.resumeAvailable && !resuming) {
+        if (resuming) {
+            // The host named this session ours to take back and then would not
+            // hand it over. There is nothing left to try but closing it.
+            qCWarning(lcMoonlightSession) << host_.ip << "refused the resume it offered";
+            dispatch(moonlight::SessionEvent::ResumeRefused);
+            return;
+        }
+        if (r.appAlreadyRunning() && r.resumeAvailable) {
             qCInfo(lcMoonlightSession) << host_.ip << "app already running and resumable, resuming";
             requestSession(
                 QStringLiteral("/resume"),
@@ -523,7 +534,7 @@ void MoonlightSession::refreshApps() {
                             qCWarning(lcMoonlightSession)
                                 << host_.ip << "/applist gave nothing back: reachable"
                                 << r.reachable << "status" << r.statusCode << r.statusMessage;
-                            emit appListReady({}, {});
+                            emit appListReady({}, {}, false);
                             return;
                         }
                         QStringList ids;
@@ -532,8 +543,21 @@ void MoonlightSession::refreshApps() {
                             ids.append(app.id);
                             titles.append(app.title);
                         }
-                        emit appListReady(ids, titles);
+                        emit appListReady(ids, titles, true);
                     });
+}
+
+void MoonlightSession::probe() {
+    http_->getHttp(
+        host_.ip, host_.httpPort, QStringLiteral("/serverinfo"),
+        {{QStringLiteral("uniqueid"), kUniqueId}}, [this](const MoonlightXmlResponse& r) {
+            const QString uniqueId = r.value(QStringLiteral("uniqueid"));
+            const bool paired = r.value(QStringLiteral("PairStatus")) == QLatin1String("1");
+            qCInfo(lcMoonlightSession)
+                << host_.ip << "/serverinfo reachable" << r.reachable << "PairStatus"
+                << r.value(QStringLiteral("PairStatus")) << "uniqueid" << uniqueId;
+            emit probeFinished(r.reachable, paired, uniqueId);
+        });
 }
 
 void MoonlightSession::sendControllerState(const moonlight::ControllerState& state) {

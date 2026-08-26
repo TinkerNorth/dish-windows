@@ -51,8 +51,10 @@ class MoonlightControlChannel {
     using RumbleTriggerHandler = std::function<void(const moonlight::RumbleTriggerEvent&)>;
     using MotionRequestHandler = std::function<void(const moonlight::MotionRequestEvent&)>;
     using RgbLedHandler = std::function<void(const moonlight::RgbLedEvent&)>;
-    // Called when the host disconnects or sends TERMINATION.
-    using DisconnectHandler = std::function<void()>;
+    // Called when the control stream goes away. `terminated` is true only when
+    // the host said so with a TERMINATION packet; a link that simply closed is
+    // recoverable and a deliberate stop is not, so the two must not be merged.
+    using DisconnectHandler = std::function<void(bool terminated)>;
 
     void setRumbleHandler(RumbleHandler h) { rumbleHandler_ = std::move(h); }
     void setRumbleTriggerHandler(RumbleTriggerHandler h) { triggerHandler_ = std::move(h); }
@@ -110,6 +112,9 @@ class MoonlightControlChannel {
     MotionRequestHandler motionHandler_;
     RgbLedHandler ledHandler_;
     DisconnectHandler disconnectHandler_;
+    // Set by the receive thread when the host sends TERMINATION, read by the
+    // same thread when the disconnect that follows it arrives.
+    bool terminated_ = false;
 
     std::array<std::uint8_t, 16> key_{};
     bool enetRef_ = false;

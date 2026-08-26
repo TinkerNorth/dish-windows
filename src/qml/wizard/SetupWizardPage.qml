@@ -52,9 +52,14 @@ Kit.Page {
     readonly property var shellApi: wizard.shellStack ? wizard.shellStack.shellApi : null
 
     // ── Step state ──────────────────────────────────────────────────────────
-    // 0 Input · 1 Destination · 2 Type · 3 Feel · 4 Review.
+    // 0 Input · 1 Destination · 2 Type · 3 Session · 4 Feel · 5 Review.
+    // Step 3 exists only for a Moonlight destination, where what the host will
+    // run is a distinct question from how the pad should feel; every other
+    // destination steps straight over it in both directions.
     property int step: 0
-    readonly property int lastStep: 4
+    readonly property int lastStep: 5
+    readonly property int sessionStep: 3
+    readonly property bool sessionStepApplies: wizard.draft.hostKind === "moonlight"
     // Latched on a successful bind so the header dot and the blockers know the
     // wire is real before the pop lands.
     property bool applied: false
@@ -72,8 +77,22 @@ Kit.Page {
         return n === 0 ? inputPage
              : n === 1 ? destinationPage
              : n === 2 ? typePage
-             : n === 3 ? feelPage
+             : n === 3 ? sessionPage
+             : n === 4 ? feelPage
              : reviewPage;
+    }
+
+    // Every step is a sibling gated on `visible`, so the skipped one is still
+    // instantiated; only the navigation steps over it.
+    function stepAfter(n) {
+        const next = n + 1;
+        return next === wizard.sessionStep && !wizard.sessionStepApplies ? next + 1 : next;
+    }
+
+    function stepBefore(n) {
+        const previous = n - 1;
+        return previous === wizard.sessionStep && !wizard.sessionStepApplies ? previous - 1
+                                                                            : previous;
     }
 
     readonly property var activePage: wizard.pageForStep(wizard.step)
@@ -118,7 +137,8 @@ Kit.Page {
         wizard.step === 0 ? qsTr("Step 1 of 3 · Input")
       : wizard.step === 1 ? qsTr("Step 2 of 3 · Destination")
       : wizard.step === 2 ? qsTr("Step 3 of 3 · Type")
-      : wizard.step === 3 ? qsTr("Step 3 of 3 · Feel")
+      : wizard.step === 3 ? qsTr("Step 3 of 3 · Session")
+      : wizard.step === 4 ? qsTr("Step 3 of 3 · Feel")
       : qsTr("Step 3 of 3 · Review")
 
     readonly property string hintText: {
@@ -144,7 +164,7 @@ Kit.Page {
             parts.push(wizard.draft.desiredPath === "direct" ? qsTr("Direct") : qsTr("Standard"));
         // The rate joins only from Review onward, where the banner is the
         // review and the numbers are the point.
-        if (wizard.step >= 4) {
+        if (wizard.step >= wizard.lastStep) {
             const rate = rateFormat.rateText(wizard.padInfo.hz, wizard.padInfo.hzLive);
             if (rate.length > 0)
                 parts.push(rate);
@@ -155,6 +175,13 @@ Kit.Page {
     // Never a slot NUMBER before bindSlot allocates one. `accounting` is read
     // so the caller's binding re-runs when a slot is bound elsewhere.
     function hostSubText() {
+        if (wizard.sessionStepApplies) {
+            // A Moonlight host has no slot table of ours to count: it carries one
+            // session for four controllers, and the ceiling is the protocol's.
+            const taken = wizard.accounting >= 0
+                        ? App.moonlightBoundSlotCount(wizard.draft.hostId) : 0;
+            return qsTr("moonlight · %n free", "", Math.max(0, 4 - taken));
+        }
         const free = wizard.accounting >= 0
                    ? App.hostSlotCapacity() - App.hostBoundSlotCount(wizard.draft.hostId) : 0;
         if (free <= 0)
@@ -190,7 +217,7 @@ Kit.Page {
             return qsTr("—");
         if (!wizard.draft.hasType || wizard.draft.typeName.length === 0)
             return qsTr("as —");
-        if (wizard.step >= 4 && reviewPage.extrasSummary.length > 0)
+        if (wizard.step >= wizard.lastStep && reviewPage.extrasSummary.length > 0)
             return qsTr("as %1 · %2").arg(wizard.draft.typeName).arg(reviewPage.extrasSummary);
         return qsTr("as %1").arg(wizard.draft.typeName);
     }
@@ -199,7 +226,7 @@ Kit.Page {
 
     function goBack() {
         if (wizard.step > 0 && !wizard.applying)
-            wizard.step -= 1;
+            wizard.step = wizard.stepBefore(wizard.step);
     }
 
     function primaryPressed() {
@@ -211,7 +238,7 @@ Kit.Page {
         if (page.primaryActivated() === false)
             return;
         if (wizard.step < wizard.lastStep)
-            wizard.step += 1;
+            wizard.step = wizard.stepAfter(wizard.step);
     }
 
     // Completed markers jump back. Back is non-destructive, so this is safe.
@@ -465,10 +492,23 @@ Kit.Page {
                     height: stepHost.height
                 }
 
+                WizardSessionPage {
+                    id: sessionPage
+                    draft: wizard.draft
+                    visible: wizard.step === 3
+                    width: stepHost.width
+                    height: stepHost.height
+
+                    onBindingsRequested: {
+                        if (wizard.shellApi)
+                            wizard.shellApi.selectDestination(1);
+                    }
+                }
+
                 WizardFeelPage {
                     id: feelPage
                     draft: wizard.draft
-                    visible: wizard.step === 3
+                    visible: wizard.step === 4
                     width: stepHost.width
                     height: stepHost.height
                 }
@@ -476,7 +516,7 @@ Kit.Page {
                 WizardReviewPage {
                     id: reviewPage
                     draft: wizard.draft
-                    visible: wizard.step === 4
+                    visible: wizard.step === 5
                     width: stepHost.width
                     height: stepHost.height
                 }

@@ -103,4 +103,65 @@ void MoonlightHostRepository::setServerCert(const QString& id, const QString& ce
     settings_->setValue(QLatin1String(keys::kMoonlightServerCertPrefix) + id, certPem);
 }
 
+QList<models::MoonlightBinding> MoonlightHostRepository::readBindings() const {
+    const QByteArray raw =
+        settings_->value(QLatin1String(keys::kMoonlightBindingListKey)).toString().toUtf8();
+    QList<models::MoonlightBinding> out;
+    if (raw.isEmpty()) { return out; }
+    const QJsonDocument doc = QJsonDocument::fromJson(raw);
+    if (!doc.isArray()) { return out; } // corrupt blob must not brick the list
+    for (const auto v : doc.array()) {
+        if (v.isObject()) {
+            const auto binding = models::MoonlightBinding::fromJson(v.toObject());
+            if (binding.isValid()) { out.append(binding); }
+        }
+    }
+    return out;
+}
+
+void MoonlightHostRepository::writeBindings(const QList<models::MoonlightBinding>& bindings) {
+    QJsonArray arr;
+    for (const auto& b : bindings) { arr.append(b.toJson()); }
+    settings_->setValue(QLatin1String(keys::kMoonlightBindingListKey),
+                        QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+}
+
+QList<models::MoonlightBinding> MoonlightHostRepository::bindings() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return readBindings();
+}
+
+std::optional<models::MoonlightBinding>
+MoonlightHostRepository::binding(const QString& slotId) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& b : readBindings()) {
+        if (b.slotId == slotId) { return b; }
+    }
+    return std::nullopt;
+}
+
+void MoonlightHostRepository::rememberBinding(const models::MoonlightBinding& binding) {
+    if (!binding.isValid()) { return; }
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto list = readBindings();
+    for (auto& b : list) {
+        if (b.slotId == binding.slotId) {
+            b = binding; // upsert in place
+            writeBindings(list);
+            return;
+        }
+    }
+    list.append(binding);
+    writeBindings(list);
+}
+
+void MoonlightHostRepository::forgetBinding(const QString& slotId) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    QList<models::MoonlightBinding> kept;
+    for (const auto& b : readBindings()) {
+        if (b.slotId != slotId) { kept.append(b); }
+    }
+    writeBindings(kept);
+}
+
 } // namespace dish::repository

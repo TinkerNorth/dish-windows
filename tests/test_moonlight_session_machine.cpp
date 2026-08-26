@@ -167,3 +167,55 @@ TEST_CASE("Out-of-order events are inert no-ops", "[moonlight][session]") {
     // StartPairing can restart from a terminal state.
     REQUIRE(reduceSession(st(SessionPhase::Failed), SessionEvent::StartPairing).next.has_value());
 }
+
+TEST_CASE("A resume the host offered and then refused is its own failure", "[moonlight][session]") {
+    // The only way forward is closing the app on the host, which is a different
+    // sentence and a different button from a plain launch refusal.
+    auto r = reduceSession(st(SessionPhase::Launching), SessionEvent::ResumeRefused);
+    REQUIRE(r.next.has_value());
+    REQUIRE(r.next->phase == SessionPhase::Failed);
+    REQUIRE(r.next->failure == SessionFailure::ResumeRejected);
+    REQUIRE(has(r.effects, SessionEffect::NotifyFailure));
+
+    // It applies only where a resume can be in flight.
+    REQUIRE_FALSE(
+        reduceSession(st(SessionPhase::Streaming), SessionEvent::ResumeRefused).next.has_value());
+    REQUIRE_FALSE(
+        reduceSession(st(SessionPhase::Idle), SessionEvent::ResumeRefused).next.has_value());
+}
+
+TEST_CASE("A dropped link and a host that ended the session are not the same thing",
+          "[moonlight][session]") {
+    // A drop is recoverable and the host will usually let us resume; a
+    // termination is the host saying no.
+    auto dropped = reduceSession(st(SessionPhase::Streaming), SessionEvent::ControlDropped);
+    REQUIRE(dropped.next.has_value());
+    REQUIRE(dropped.next->phase == SessionPhase::Failed);
+    REQUIRE(dropped.next->failure == SessionFailure::LinkDropped);
+    REQUIRE(has(dropped.effects, SessionEffect::Teardown));
+    REQUIRE(has(dropped.effects, SessionEffect::NotifyFailure));
+
+    auto faltering = reduceSession(st(SessionPhase::Faltering), SessionEvent::ControlDropped);
+    REQUIRE(faltering.next.has_value());
+    REQUIRE(faltering.next->failure == SessionFailure::LinkDropped);
+
+    auto ended = reduceSession(st(SessionPhase::Streaming), SessionEvent::ServerTerminated);
+    REQUIRE(ended.next.has_value());
+    REQUIRE(ended.next->failure == SessionFailure::ServerTerminated);
+
+    // A stream that was never up cannot drop.
+    REQUIRE_FALSE(reduceSession(st(SessionPhase::ControlConnecting), SessionEvent::ControlDropped)
+                      .next.has_value());
+    REQUIRE_FALSE(
+        reduceSession(st(SessionPhase::Idle), SessionEvent::ControlDropped).next.has_value());
+}
+
+TEST_CASE("A dropped session can be launched again without pairing again", "[moonlight][session]") {
+    // The binding survives the drop, so the next use retries rather than asking
+    // the user to start over.
+    const SessionState dropped{SessionPhase::Failed, SessionFailure::LinkDropped};
+    auto r = reduceSession(dropped, SessionEvent::StartLaunch);
+    REQUIRE(r.next.has_value());
+    REQUIRE(r.next->phase == SessionPhase::Launching);
+    REQUIRE(has(r.effects, SessionEffect::BeginLaunch));
+}

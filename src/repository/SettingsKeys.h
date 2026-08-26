@@ -42,6 +42,10 @@ inline constexpr const char* kMoonlightKeyKey = "moonlight_key_pem";
 inline constexpr const char* kMoonlightHostListKey = "moonlight_host_list";
 // Per-host pinned server certificate PEM: "moonlight_server_cert:<id>".
 inline constexpr const char* kMoonlightServerCertPrefix = "moonlight_server_cert:";
+// The standing Moonlight bindings, one JSON array under a single key. The
+// controller type lives here rather than on the host: two pads on one host can
+// be two different devices.
+inline constexpr const char* kMoonlightBindingListKey = "moonlight_binding_list";
 
 // Retired key names, kept only so old installs can be upgraded in place.
 inline constexpr const char* kLegacyWifiListKey = "wifi_list";

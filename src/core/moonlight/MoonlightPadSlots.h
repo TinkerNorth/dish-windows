@@ -83,6 +83,16 @@ class PadSlots {
     std::map<std::string, std::uint8_t> assigned_;
 };
 
+// The session belongs to the HOST and is reference counted by the pads bound to
+// it: the first pad on a host brings it up and the last one off tears it down,
+// so a second binding never starts a second session and no app is ever left
+// stranded. Both are asked of the pad set BEFORE the assignment and AFTER the
+// release, which is what makes them the same question in both directions.
+// `pads`, never `slots`: Qt's moc keywords make `slots` a macro that expands to
+// nothing, and the parameter would vanish.
+inline bool bindStartsSession(const PadSlots& pads) { return pads.empty(); }
+inline bool unbindEndsSession(const PadSlots& pads) { return pads.empty(); }
+
 // The capability bits to advertise in CONTROLLER_ARRIVAL for a pad with these
 // hardware features. Analog triggers are always present on the pads Dish
 // forwards; the rest follow the detected hardware.
@@ -98,7 +108,8 @@ inline std::uint8_t padCapabilities(bool hasRumble, bool hasMotion, bool hasTouc
 }
 
 // The user's emulated-device pick (kMoonlightDevice*) as a CONTROLLER_ARRIVAL
-// wire type. Auto sends Unknown, which lets the host choose.
+// wire type. Auto has no wire value of its own and resolves before the packet is
+// built; see arrivalTypeForBinding.
 inline std::uint8_t arrivalTypeFromDevicePick(int devicePick) {
     switch (devicePick) {
     case 1:
@@ -110,6 +121,64 @@ inline std::uint8_t arrivalTypeFromDevicePick(int devicePick) {
     default:
         return kPadTypeUnknown;
     }
+}
+
+// What a host actually materialises for each emulated type, as capability bits.
+// NO MOONLIGHT HOST EXPOSES THIS: there is no API that reports it and the data
+// flows the other way, the host picking its emulated device from what the client
+// declares. So it is client-side knowledge, taken from what the reference host
+// builds per type. Only the PlayStation pad carries trigger rumble, a touchpad,
+// motion, a battery and an LED; Xbox and Nintendo carry analog triggers and
+// rumble and nothing else. Nintendo has NO MOTION over Moonlight, unlike the
+// Satellite type of the same name: the two are different type systems that
+// happen to share their nouns.
+inline std::uint8_t typeCapabilityCeiling(std::uint8_t arrivalType) {
+    switch (arrivalType) {
+    case kPadTypeXbox:
+    case kPadTypeNintendo:
+        return static_cast<std::uint8_t>(kPadCapAnalogTriggers | kPadCapRumble);
+    default:
+        return 0xFF;
+    }
+}
+
+// Auto resolves on the CLIENT, before the wire. A source that reports motion
+// asks for a PlayStation pad and everything else for an Xbox one: it is the only
+// rule that matches the reference host's own promotion of an Unknown pad with
+// motion, and it lets the type card tell the truth about what the binding will
+// carry. Sending Unknown instead would leave the host to pick with no way of
+// telling us what it picked.
+inline std::uint8_t resolveAutoArrivalType(bool sourceHasMotion) {
+    return sourceHasMotion ? kPadTypePlayStation : kPadTypeXbox;
+}
+
+// The CONTROLLER_ARRIVAL type for one binding: the user's pick, or the resolved
+// Auto answer for the source this binding drives.
+inline std::uint8_t arrivalTypeForBinding(int devicePick, bool sourceHasMotion) {
+    const std::uint8_t picked = arrivalTypeFromDevicePick(devicePick);
+    if (picked != kPadTypeUnknown) { return picked; }
+    return resolveAutoArrivalType(sourceHasMotion);
+}
+
+// What the arrival packet declares: the type's ceiling intersected with what the
+// input source can actually provide. Declaring a bit the source cannot fill
+// makes the host request reports that never arrive.
+inline std::uint8_t declaredCapabilities(std::uint8_t arrivalType, bool hasRumble, bool hasMotion,
+                                         bool hasTouchpad, bool hasBattery, bool hasLightbar) {
+    const std::uint8_t source =
+        padCapabilities(hasRumble, hasMotion, hasTouchpad, hasBattery, hasLightbar);
+    return static_cast<std::uint8_t>(source & typeCapabilityCeiling(arrivalType));
+}
+
+// The whole low sixteen, which every type carries, plus the touchpad click only
+// when a touchpad is in the declared set.
+inline constexpr std::uint32_t kSupportedButtonsBase = 0x0000FFFFu;
+inline constexpr std::uint32_t kSupportedButtonTouchpadClick = 0x00100000u;
+
+inline std::uint32_t declaredButtonFlags(std::uint8_t declaredCaps) {
+    std::uint32_t flags = kSupportedButtonsBase;
+    if ((declaredCaps & kPadCapTouchpad) != 0) { flags |= kSupportedButtonTouchpadClick; }
+    return flags;
 }
 
 } // namespace dish::moonlight
