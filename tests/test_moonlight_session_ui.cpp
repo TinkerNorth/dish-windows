@@ -231,17 +231,28 @@ TEST_CASE("Only a full host blocks the bind", "[moonlight][sessionui]") {
 }
 
 TEST_CASE("Amber is the problem colour and never the working one", "[moonlight][sessionui]") {
-    // In progress is not a problem.
+    // In progress is not a problem, and neither is a host nobody has paired yet:
+    // its next step is simply the next step.
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::Checking));
+    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::NotPaired));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::PairingPin));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::AppsLoading));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::NewSession));
+    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::NoApps));
+    REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::AppsUnreadable));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::JoiningSession));
     REQUIRE_FALSE(sessionUiIsProblem(SessionUiState::Live));
 
     REQUIRE(sessionUiIsProblem(SessionUiState::PairRefused));
     REQUIRE(sessionUiIsProblem(SessionUiState::Unreachable));
+    REQUIRE(sessionUiIsProblem(SessionUiState::RememberedOffline));
+    REQUIRE(sessionUiIsProblem(SessionUiState::TrustLost));
+    REQUIRE(sessionUiIsProblem(SessionUiState::HostReplaced));
     REQUIRE(sessionUiIsProblem(SessionUiState::HostFull));
+    REQUIRE(sessionUiIsProblem(SessionUiState::BusyOther));
+    REQUIRE(sessionUiIsProblem(SessionUiState::RejoinRefused));
+    REQUIRE(sessionUiIsProblem(SessionUiState::Refused));
+    REQUIRE(sessionUiIsProblem(SessionUiState::SetupFailed));
     REQUIRE(sessionUiIsProblem(SessionUiState::Dropped));
     REQUIRE(sessionUiIsProblem(SessionUiState::EndedByHost));
 }

@@ -155,20 +155,36 @@ inline bool sessionUiOffersQuit(SessionUiState state) {
            state == SessionUiState::Live;
 }
 
-// Amber is the problem colour, never the working one: a state that is simply in
-// progress reads neutral.
+// Amber is the problem colour, never the working one. A state that is in
+// progress reads neutral, and so does one whose next step is simply the next
+// step: a host nobody has paired yet is not a fault to report.
 inline bool sessionUiIsProblem(SessionUiState state) {
     switch (state) {
+    case SessionUiState::PairRefused:
+    case SessionUiState::Unreachable:
+    case SessionUiState::RememberedOffline:
+    case SessionUiState::TrustLost:
+    case SessionUiState::HostReplaced:
+    case SessionUiState::HostFull:
+    case SessionUiState::BusyOther:
+    case SessionUiState::RejoinRefused:
+    case SessionUiState::Refused:
+    case SessionUiState::SetupFailed:
+    case SessionUiState::Dropped:
+    case SessionUiState::EndedByHost:
+        return true;
     case SessionUiState::Checking:
+    case SessionUiState::NotPaired:
     case SessionUiState::PairingPin:
     case SessionUiState::AppsLoading:
     case SessionUiState::NewSession:
+    case SessionUiState::NoApps:
+    case SessionUiState::AppsUnreadable:
     case SessionUiState::JoiningSession:
     case SessionUiState::Live:
         return false;
-    default:
-        return true;
     }
+    return false;
 }
 
 // The wire lifecycle as the one thing the section renders from it. A phase that
