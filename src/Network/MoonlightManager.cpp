@@ -247,22 +247,27 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
     QObject::connect(
         session, &MoonlightSession::appListReady, this,
         [this, id](const QStringList& ids, const QStringList& titles, bool ok, bool unauthorized) {
-            auto& probe = probes_[id];
-            probe.appsInFlight = false;
-            probe.appsFetched = ok;
-            probe.appsFailed = !ok;
-            probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
-            probe.unauthorized = unauthorized;
-            if (ok) {
-                // A readable mutual-TLS reply IS the proof of trust: the host ran
-                // its verify callback and let us in, whatever a plaintext probe
-                // said about PairStatus.
-                probe.answered = true;
-                probe.timedOut = false;
-                probe.mtlsVerified = true;
-                rememberProvenTrust(id);
+            {
+                auto& probe = probes_[id];
+                probe.appsInFlight = false;
+                probe.appsFetched = ok;
+                probe.appsFailed = !ok;
+                probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
+                probe.unauthorized = unauthorized;
+                if (ok) {
+                    // A readable mutual-TLS reply IS the proof of trust: the host
+                    // ran its verify callback and let us in, whatever a plaintext
+                    // probe said about PairStatus.
+                    probe.answered = true;
+                    probe.timedOut = false;
+                    probe.mtlsVerified = true;
+                }
+                if (unauthorized) { probe.mtlsVerified = false; }
             }
-            if (unauthorized) { probe.mtlsVerified = false; }
+            // Scoped above and called here: this emits, and a handler that probes
+            // some other host would insert into probes_ and leave a reference into
+            // it dangling mid-update.
+            if (ok) { rememberProvenTrust(id); }
             emit appListReady(id, ids, titles);
             emit hostsChanged();
         });
@@ -313,11 +318,16 @@ void MoonlightManager::pairHost(const QString& id, const QString& pin) {
         emit pairingFinished(id, false);
         return;
     }
-    auto& probe = probes_[id];
+    // Read, never held: cancelPairing and pair below both emit, and a handler that
+    // probes some other host would insert into probes_ and invalidate a reference
+    // taken across the call.
+    const bool wasPairing = probes_[id].pairingActive;
+    const bool identityMoved = probes_[id].uniqueIdChanged || session->serverCertMismatch();
+
     // "New code" is pressed while a pairing is already parked on the host waiting
     // for a PIN nobody is going to type. Racing a second exchange against it would
     // leave two chains reporting into one row.
-    if (probe.pairingActive) {
+    if (wasPairing) {
         qCInfo(lcMoonlightManager)
             << "pair:" << id << "restarting; the previous attempt is dropped";
         session->cancelPairing();
@@ -327,17 +337,20 @@ void MoonlightManager::pairHost(const QString& id, const QString& pin) {
     // and refuses phase 5 before the host ever answers, which leaves the user with
     // no way back in from inside the app. Asking to pair again IS the decision to
     // trust what this host presents next.
-    if (probe.uniqueIdChanged || session->serverCertMismatch()) {
+    if (identityMoved) {
         qCWarning(lcMoonlightManager)
             << "pair:" << id << "announced an identity that is not the remembered one;"
             << "dropping the pinned certificate so this pairing can pin the new one";
         repo_->clearServerCert(id);
         session->clearServerCertMismatch();
-        probe.uniqueIdChanged = false;
     }
     qCInfo(lcMoonlightManager) << "pair:" << id << "starting the five HTTP phases";
-    probe.pairingActive = true;
-    probe.pairingRefused = false;
+    {
+        auto& probe = probes_[id];
+        probe.uniqueIdChanged = probe.uniqueIdChanged && !identityMoved;
+        probe.pairingActive = true;
+        probe.pairingRefused = false;
+    }
     session->pair(pin);
     emit hostsChanged();
 }
