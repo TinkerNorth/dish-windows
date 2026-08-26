@@ -3582,8 +3582,8 @@
         <translation>Step %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 3</source>
-        <translation>Sub-step %1 of 3</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation>Sub-step %1 of %2</translation>
     </message>
 </context>
 <context>
@@ -3725,6 +3725,10 @@
     <message>
         <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
         <translation>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation type="unfinished">Get Sunshine ↗</translation>
     </message>
 </context>
 <context>

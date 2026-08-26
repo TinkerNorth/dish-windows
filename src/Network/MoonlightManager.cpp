@@ -84,7 +84,9 @@ QList<MoonlightHostRow> mergeMoonlightRows(const QList<models::MoonlightHost>& r
 
 MoonlightManager::MoonlightManager(std::shared_ptr<QSettings> settings, QObject* parent)
     : QObject(parent),
-      repo_(std::make_unique<repository::MoonlightHostRepository>(std::move(settings))) {}
+      repo_(std::make_unique<repository::MoonlightHostRepository>(std::move(settings))) {
+    bindings_ = repo_->bindings();
+}
 
 MoonlightManager::~MoonlightManager() {
     if (discoveryThread_.joinable()) { discoveryThread_.join(); }
@@ -386,19 +388,26 @@ int MoonlightManager::boundSlotCount(const QString& hostId) const {
     return it == padSlots_.constEnd() ? 0 : static_cast<int>(it->size());
 }
 
-QList<models::MoonlightBinding> MoonlightManager::bindings() const { return repo_->bindings(); }
+QList<models::MoonlightBinding> MoonlightManager::bindings() const { return bindings_; }
 
 std::optional<models::MoonlightBinding> MoonlightManager::binding(const QString& slotId) const {
-    return repo_->binding(slotId);
+    for (const auto& b : bindings_) {
+        if (b.slotId == slotId) { return b; }
+    }
+    return std::nullopt;
 }
 
 void MoonlightManager::rememberBinding(const models::MoonlightBinding& binding) {
+    if (!binding.isValid()) { return; }
     repo_->rememberBinding(binding);
+    bindings_ = repo_->bindings();
     emit hostsChanged();
 }
 
 void MoonlightManager::forgetBinding(const QString& slotId) {
+    if (!binding(slotId).has_value()) { return; }
     repo_->forgetBinding(slotId);
+    bindings_ = repo_->bindings();
     emit hostsChanged();
 }
 

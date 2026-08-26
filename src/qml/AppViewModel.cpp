@@ -585,6 +585,7 @@ void AppViewModel::unbindSlot(const QString& slotId) {
     if (!model_->moonlight()->boundHostFor(slotId).isEmpty()) {
         model_->moonlight()->unbindSlot(slotId);
     }
+    // The intent goes with the routing: an unbound pad has no standing binding.
     model_->moonlight()->forgetBinding(slotId);
     model_->hub()->unbind(slotId);
 }
@@ -938,7 +939,9 @@ void AppViewModel::applyMoonlightBinding(const QString& slotId, const QString& h
 
 void AppViewModel::reattachMoonlightBindings() {
     auto* moon = model_->moonlight();
-    for (const auto& binding : moon->bindings()) {
+    const auto standing = moon->bindings();
+    if (standing.isEmpty()) { return; }
+    for (const auto& binding : standing) {
         if (!moon->boundHostFor(binding.slotId).isEmpty()) { continue; }
         if (slotById(binding.slotId) == nullptr) { continue; }
         bindMoonlightSlot(binding.slotId, binding.hostId, binding.controllerType);

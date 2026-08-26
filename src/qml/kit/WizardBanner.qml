@@ -30,6 +30,9 @@ Item {
     property int stage: 1
     // 0 type · 1 feel · 2 review. Only meaningful while stage === 3.
     property int subStep: 0
+    // How many sub-steps stage 3 has. Three normally; a Moonlight binding asks a
+    // fourth question (which session) that no other destination has.
+    property int subStepCount: 3
     property bool compact: false
 
     // Completed markers only; the page decides what a jump back means.
@@ -347,10 +350,11 @@ Item {
                     Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
 
                     Accessible.role: Accessible.StaticText
-                    Accessible.name: qsTr("Sub-step %1 of 3").arg(banner.subStep + 1)
+                    Accessible.name: qsTr("Sub-step %1 of %2")
+                                       .arg(banner.subStep + 1).arg(banner.subStepCount)
 
                     Repeater {
-                        model: 3
+                        model: banner.subStepCount
 
                         delegate: Rectangle {
                             id: pip

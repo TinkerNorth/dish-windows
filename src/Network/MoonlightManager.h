@@ -240,6 +240,9 @@ class MoonlightManager : public QObject {
     std::unique_ptr<repository::MoonlightHostRepository> repo_;
     std::optional<moonlight::Identity> identity_;
     QList<models::MoonlightHost> discovered_;
+    // Held in memory because the slot list asks for them on every move, and the
+    // store is the same shared QSettings the Satellite path writes through.
+    QList<models::MoonlightBinding> bindings_;
     QHash<QString, MoonlightSession*> sessions_;
     QHash<QString, HostProbe> probes_;
     bool scanning_ = false;

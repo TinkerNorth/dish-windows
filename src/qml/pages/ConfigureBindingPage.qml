@@ -312,7 +312,17 @@ Kit.Page {
 
     // A different destination is a different catalog.
     function refreshCatalog() {
-        if (draft.hasDestination && !draft.hostIsBluetooth && !draft.hostIsMoonlight) {
+        if (draft.hostIsMoonlight) {
+            // No catalog to read, and no Pending state to wait through: a
+            // Moonlight type resolves the moment a host is picked.
+            const options = page.moonlightTypes();
+            if (draft.type === -1 && options.length > 0) {
+                draft.chooseType(options[0].type, options[0].name);
+            }
+            page.types = [];
+            return;
+        }
+        if (draft.hasDestination && !draft.hostIsBluetooth) {
             App.refreshEmulateForHost(draft.hostId);
         }
         page.reloadTypes();
@@ -997,10 +1007,18 @@ Kit.Page {
                         // The wizard's own step, rendered inline: one file, so a
                         // state cannot read one way here and another there.
                         WizardSessionPage {
+                            id: moonlightSession
                             visible: draft.hostIsMoonlight
                             draft: page.editedDraft
                             Layout.fillWidth: true
                             Layout.topMargin: Tokens.s2
+
+                            // The wizard calls activated() on entering the step;
+                            // there is no wizard here, so becoming visible is the
+                            // same moment.
+                            onVisibleChanged: if (moonlightSession.visible) {
+                                moonlightSession.reload();
+                            }
 
                             onBindingsRequested: if (page.shellApi) {
                                 page.shellApi.selectDestination(1);

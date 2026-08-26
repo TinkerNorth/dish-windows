@@ -366,6 +366,12 @@ ColumnLayout {
             onClicked: App.openExternalUrl(page.satelliteUrl)
         }
         Kit.DishButton {
+            text: qsTr("Get Sunshine ↗")
+            variant: Kit.DishButton.Outline
+            size: Kit.DishButton.Small
+            onClicked: App.openExternalUrl(page.sunshineUrl)
+        }
+        Kit.DishButton {
             text: App.scanning ? qsTr("Scanning…") : qsTr("Rescan")
             variant: Kit.DishButton.Outline
             size: Kit.DishButton.Small

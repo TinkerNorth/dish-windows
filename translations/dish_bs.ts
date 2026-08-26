@@ -3600,8 +3600,8 @@
         <translation>Korak %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 3</source>
-        <translation>Podkorak %1 od 3</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation>Podkorak %1 od %2</translation>
     </message>
 </context>
 <context>
@@ -3745,6 +3745,10 @@
     <message>
         <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
         <translation>Računar se pojavljuje ovdje čim na njemu radi Sunshine, Apollo ili Wolf i obje mašine su na istoj mreži. Možete ga dodati i po adresi.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation type="unfinished">Preuzmi Sunshine ↗</translation>
     </message>
 </context>
 <context>

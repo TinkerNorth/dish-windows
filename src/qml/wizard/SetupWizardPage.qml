@@ -68,7 +68,12 @@ Kit.Page {
     // Stage 1 Input, 2 Destination, 3 Binding — three pages live in stage 3,
     // which is why it also carries a sub-step indicator.
     readonly property int stage: wizard.step === 0 ? 1 : wizard.step === 1 ? 2 : 3
-    readonly property int subStep: wizard.step >= 2 ? wizard.step - 2 : 0
+    // The skipped session step must not leave a hole in the pips: everything past
+    // it shifts down by one when it does not apply.
+    readonly property int subStep: wizard.step < 2 ? 0
+        : (wizard.sessionStepApplies || wizard.step < wizard.sessionStep)
+          ? wizard.step - 2 : wizard.step - 3
+    readonly property int subStepCount: wizard.sessionStepApplies ? 4 : 3
 
     // Resolved by call, not by a property binding: onStepChanged fires BEFORE a
     // binding on `step` re-evaluates, so reading `activePage` from the handler
@@ -437,6 +442,7 @@ Kit.Page {
             transmitting: wizard.applying
             stage: wizard.stage
             subStep: wizard.subStep
+            subStepCount: wizard.subStepCount
             // Below four-fifths of the minimum window the banner drops its slot
             // sub-lines and marker labels rather than eating the body.
             compact: root.height < Tokens.minWindowHeight * 0.8
