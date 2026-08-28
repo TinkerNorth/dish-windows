@@ -471,11 +471,16 @@ TEST_CASE("The first pad on a host launches and the second makes no call at all"
     MoonlightRequestLog log(*fx.manager);
     log.clear();
 
+    // The app belongs to the SESSION, and the first pad on a host is what
+    // settles it: the pick the binding flow wrote is the one that is launched.
+    fx.manager->setHostApp(kIdA, QStringLiteral("881448767"), QStringLiteral("Desktop"));
+
     // First pad: the binding is saved and the session is asked for.
     fx.remember(QStringLiteral("sdl:1"), kIdA);
     REQUIRE(fx.hasBinding(QStringLiteral("sdl:1")));
     REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
     REQUIRE(log.count(kLaunch) == 1);
+    REQUIRE(log.query(0).contains(QStringLiteral("appid=881448767")));
     REQUIRE(*fx.manager->sessionPhase(kIdA) == SessionPhase::Launching);
 
     // Second pad on the same host: NO HTTP AT ALL. Not a second launch, not a
@@ -918,17 +923,25 @@ TEST_CASE("Forgetting a host with a live session closes it before the credential
     MoonlightSessionTestAccess::settle(*session, SessionPhase::Streaming);
     REQUIRE(fx.store->serverCert(kIdA).has_value());
 
-    MoonlightRequestLog log(*fx.manager, [&fx] {
-        return fx.store->serverCert(kIdA).has_value() ? QStringLiteral("credentials")
-                                                      : QStringLiteral("nothing");
+    // Two facts, read at the instant each request goes out. The /cancel has to
+    // leave while the credentials are still on file, because they are what
+    // authenticates it, AND after the store has been let go, because the
+    // handshake it opens runs the pin verifier on a later turn of the loop and
+    // would write the certificate back over the forget.
+    MoonlightRequestLog log(*fx.manager, [&fx, session] {
+        return QStringLiteral("%1 %2").arg(
+            fx.store->serverCert(kIdA).has_value() ? QStringLiteral("credentials")
+                                                   : QStringLiteral("none"),
+            MoonlightSessionTestAccess::persists(*session) ? QStringLiteral("attached")
+                                                           : QStringLiteral("detached"));
     });
 
     fx.manager->forgetHost(kIdA);
 
-    // It spoke, and it spoke while it still could.
+    // It spoke, and it spoke while it still could, with nothing left that could
+    // write back what the forget is about to remove.
     REQUIRE(log.count(kCancel) == 1);
-    REQUIRE(log.witnessed().contains(QStringLiteral("credentials")));
-    REQUIRE_FALSE(log.witnessed().contains(QStringLiteral("nothing")));
+    REQUIRE(log.witnessed() == QStringList{QStringLiteral("credentials detached")});
     // And nothing this session does afterwards can reach the store, which is what
     // stops the /cancel handshake pinning the certificate back over the forget.
     REQUIRE_FALSE(dish::net::MoonlightSessionTestAccess::persists(*session));
