@@ -94,6 +94,26 @@ ColumnLayout {
         page.refresh();
     }
 
+    // ASK FOR A SESSION, not just for the host's news. A link that dropped and a
+    // host that ended the session both leave a binding pointing at nothing
+    // running, and re-probing tells the user what they already know. This is what
+    // Reconnect and Start a session actually do; a host that ended one has
+    // nothing left to resume, so what comes back is a new session.
+    function startSession() {
+        App.connectMoonlightHost(page.draft.hostId, page.draft.appId);
+        page.refresh();
+    }
+
+    // The banner covers three states and they do not recover the same way. A list
+    // that could not be read is re-read; a session the host refused or could not
+    // finish is asked for again.
+    function retryBanner() {
+        if (page.state === "appsFailed")
+            page.reload();
+        else
+            page.startSession();
+    }
+
     // The one-based ordinal this binding will show as. Arithmetic on two counts
     // C++ vends, never a third number it has to keep consistent with them: a host
     // that is full says so in its own state rather than promising a fifth slot.
@@ -346,7 +366,7 @@ ColumnLayout {
         showRetry: true
         Layout.fillWidth: true
 
-        onRetryRequested: page.reload()
+        onRetryRequested: page.retryBanner()
     }
 
     // ── Needs an answer ─────────────────────────────────────────────────────
@@ -389,14 +409,14 @@ ColumnLayout {
             text: qsTr("Reconnect")
             variant: Kit.DishButton.Primary
             size: Kit.DishButton.Small
-            onClicked: page.reload()
+            onClicked: page.startSession()
         }
         Kit.DishButton {
             visible: page.state === "endedByHost"
             text: qsTr("Start a session")
             variant: Kit.DishButton.Primary
             size: Kit.DishButton.Small
-            onClicked: page.reload()
+            onClicked: page.startSession()
         }
         Kit.DishButton {
             visible: page.state === "unreachable" || page.state === "remembered"
