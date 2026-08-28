@@ -190,8 +190,10 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             if (pingTimer_ != nullptr) { pingTimer_->stop(); }
             closeMediaSockets();
             control_.disconnect();
-            qCInfo(lcMoonlightSession)
-                << host_.ip << "tearing the session down, cancelling the app";
+            qCInfo(lcMoonlightSession) << host_.ip << "tearing our end of the session down";
+            break;
+        case moonlight::SessionEffect::CancelOnHost:
+            qCInfo(lcMoonlightSession) << host_.ip << "asking the host to close the app we started";
             cancelHostApp();
             break;
         case moonlight::SessionEffect::BeginPairing:
@@ -599,16 +601,17 @@ void MoonlightSession::refreshApps() {
 }
 
 void MoonlightSession::probe() {
-    http_->getHttp(
-        host_.ip, host_.httpPort, QStringLiteral("/serverinfo"),
-        {{QStringLiteral("uniqueid"), kUniqueId}}, [this](const MoonlightXmlResponse& r) {
-            const QString uniqueId = r.value(QStringLiteral("uniqueid"));
-            const bool paired = r.value(QStringLiteral("PairStatus")) == QLatin1String("1");
-            qCInfo(lcMoonlightSession)
-                << host_.ip << "/serverinfo reachable" << r.reachable << "PairStatus"
-                << r.value(QStringLiteral("PairStatus")) << "uniqueid" << uniqueId;
-            emit probeFinished(r.reachable, paired, uniqueId);
-        });
+    http_->getHttp(host_.ip, host_.httpPort, QStringLiteral("/serverinfo"),
+                   {{QStringLiteral("uniqueid"), kUniqueId}},
+                   [this](const MoonlightXmlResponse& r) {
+                       const QString uniqueId = r.value(QStringLiteral("uniqueid"));
+                       // The PairStatus is logged and goes no further. It is a diagnostic
+                       // about the host, never an answer about this client's trust.
+                       qCInfo(lcMoonlightSession)
+                           << host_.ip << "/serverinfo reachable" << r.reachable << "PairStatus"
+                           << r.value(QStringLiteral("PairStatus")) << "uniqueid" << uniqueId;
+                       emit probeFinished(r.reachable, uniqueId);
+                   });
 }
 
 void MoonlightSession::sendControllerState(const moonlight::ControllerState& state) {

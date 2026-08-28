@@ -29,7 +29,7 @@ SessionUiInputs paired() {
     SessionUiInputs in;
     in.probeAnswered = true;
     in.hostPairStatus = true;
-    in.serverCertStored = true;
+    in.pairingHeld = true;
     return in;
 }
 
@@ -48,7 +48,7 @@ TEST_CASE("M2 not paired: the host answered and has never met us", "[moonlight][
     SessionUiInputs in;
     in.probeAnswered = true;
     in.hostPairStatus = false;
-    in.serverCertStored = false;
+    in.pairingHeld = false;
     REQUIRE(sessionUiState(in) == SessionUiState::NotPaired);
     REQUIRE(tokenOf(in) == QStringLiteral("notPaired"));
 }
@@ -73,11 +73,11 @@ TEST_CASE("M5 and M6: a silent host reads differently once it is remembered",
           "[moonlight][sessionui]") {
     SessionUiInputs in;
     in.probeTimedOut = true;
-    in.serverCertStored = false;
+    in.pairingHeld = false;
     REQUIRE(sessionUiState(in) == SessionUiState::Unreachable);
     REQUIRE(tokenOf(in) == QStringLiteral("unreachable"));
 
-    in.serverCertStored = true;
+    in.pairingHeld = true;
     REQUIRE(sessionUiState(in) == SessionUiState::Remembered);
     REQUIRE(tokenOf(in) == QStringLiteral("remembered"));
 }
@@ -86,7 +86,7 @@ TEST_CASE("M7 trust lost, from either side of the evidence", "[moonlight][sessio
     SessionUiInputs answered;
     answered.probeAnswered = true;
     answered.hostPairStatus = false;
-    answered.serverCertStored = true;
+    answered.pairingHeld = true;
     REQUIRE(sessionUiState(answered) == SessionUiState::TrustLost);
     REQUIRE(tokenOf(answered) == QStringLiteral("trustLost"));
 
@@ -100,7 +100,7 @@ TEST_CASE("M7 trust lost, from either side of the evidence", "[moonlight][sessio
     SessionUiInputs stranger;
     stranger.probeAnswered = true;
     stranger.unauthorized = true;
-    stranger.serverCertStored = false;
+    stranger.pairingHeld = false;
     REQUIRE(sessionUiState(stranger) == SessionUiState::NotPaired);
 }
 
@@ -115,8 +115,8 @@ TEST_CASE("A forgotten host the host still answers for is NOT paired, and can pa
     // control anywhere that could repair it.
     SessionUiInputs forgotten;
     forgotten.probeAnswered = true;
-    forgotten.hostPairStatus = true;    // the host's half, still on file there
-    forgotten.serverCertStored = false; // ours, deleted by the forget
+    forgotten.hostPairStatus = true; // the host's half, still on file there
+    forgotten.pairingHeld = false;   // ours, deleted by the forget
 
     REQUIRE(sessionUiState(forgotten) == SessionUiState::NotPaired);
     REQUIRE(tokenOf(forgotten) == QStringLiteral("notPaired"));
@@ -127,7 +127,7 @@ TEST_CASE("A forgotten host the host still answers for is NOT paired, and can pa
 
     // Both halves is what Paired means, and only both.
     SessionUiInputs whole = forgotten;
-    whole.serverCertStored = true;
+    whole.pairingHeld = true;
     REQUIRE(trustFor(whole) == TrustState::Paired);
     REQUIRE(sessionUiState(whole) != SessionUiState::NotPaired);
 
@@ -137,14 +137,14 @@ TEST_CASE("A forgotten host the host still answers for is NOT paired, and can pa
     SessionUiInputs lost;
     lost.probeAnswered = true;
     lost.hostPairStatus = false;
-    lost.serverCertStored = true;
+    lost.pairingHeld = true;
     REQUIRE(sessionUiState(lost) == SessionUiState::TrustLost);
     REQUIRE(trustFor(lost) == TrustState::NotPaired);
 
     // A host that did not answer this visit still falls back on the memory.
     SessionUiInputs silent;
     silent.probeTimedOut = true;
-    silent.serverCertStored = true;
+    silent.pairingHeld = true;
     REQUIRE(trustFor(silent) == TrustState::Remembered);
     REQUIRE(sessionUiState(silent) == SessionUiState::Remembered);
 }
@@ -161,7 +161,7 @@ TEST_CASE("A host that refused this client is never promised back", "[moonlight]
     // probe from plaintext on 47989, so one can answer while the other does not.
     SessionUiInputs rejectedWhileSilent;
     rejectedWhileSilent.unauthorized = true;
-    rejectedWhileSilent.serverCertStored = true;
+    rejectedWhileSilent.pairingHeld = true;
     rejectedWhileSilent.probeAnswered = false;
     rejectedWhileSilent.probeTimedOut = true;
     REQUIRE(sessionUiState(rejectedWhileSilent) == SessionUiState::TrustLost);
@@ -199,7 +199,7 @@ TEST_CASE("The row and the section never disagree about trust", "[moonlight][ses
         in.probeAnswered = (mask & 1) != 0;
         in.probeTimedOut = (mask & 2) != 0;
         in.hostPairStatus = (mask & 4) != 0;
-        in.serverCertStored = (mask & 8) != 0;
+        in.pairingHeld = (mask & 8) != 0;
         in.unauthorized = (mask & 16) != 0;
         in.uniqueIdChanged = (mask & 32) != 0;
         in.serverCertChanged = (mask & 64) != 0;
@@ -245,7 +245,7 @@ TEST_CASE("A readable mutual-TLS reply outranks a plaintext PairStatus of 0",
     // manager folds a readable /applist into hostPairStatus before this runs.
     SessionUiInputs in;
     in.probeAnswered = true;
-    in.serverCertStored = true;
+    in.pairingHeld = true;
     in.hostPairStatus = false;
     REQUIRE(sessionUiState(in) == SessionUiState::TrustLost);
     REQUIRE(trustFor(in) == TrustState::NotPaired);
@@ -365,7 +365,7 @@ TEST_CASE("M14 host full is judged before anything the network could change",
 
     SessionUiInputs silent;
     silent.probeTimedOut = true;
-    silent.serverCertStored = true;
+    silent.pairingHeld = true;
     silent.boundControllers = static_cast<int>(kMaxPads);
     REQUIRE(sessionUiState(silent) == SessionUiState::HostFull);
 
@@ -493,12 +493,12 @@ TEST_CASE("Trust is three words, and a remembered host that is silent keeps its 
     SessionUiInputs answeredPaired;
     answeredPaired.probeAnswered = true;
     answeredPaired.hostPairStatus = true;
-    answeredPaired.serverCertStored = true;
+    answeredPaired.pairingHeld = true;
     REQUIRE(trustFor(answeredPaired) == TrustState::Paired);
     REQUIRE(moonlightTrustToken(trustFor(answeredPaired)) == QStringLiteral("paired"));
 
     SessionUiInputs silent;
-    silent.serverCertStored = true;
+    silent.pairingHeld = true;
     REQUIRE(trustFor(silent) == TrustState::Remembered);
     REQUIRE(moonlightTrustToken(trustFor(silent)) == QStringLiteral("remembered"));
 
@@ -512,7 +512,7 @@ TEST_CASE("Trust is three words, and a remembered host that is silent keeps its 
     SessionUiInputs replaced;
     replaced.probeAnswered = true;
     replaced.hostPairStatus = true;
-    replaced.serverCertStored = true;
+    replaced.pairingHeld = true;
     replaced.uniqueIdChanged = true;
     REQUIRE(trustFor(replaced) == TrustState::NotPaired);
 }

@@ -92,9 +92,48 @@ enum class SessionEffect {
     SendArrival,    // send CONTROLLER_ARRIVAL for each pad
     StartPinging,   // begin the PERIODIC_PING keepalive
     StopPinging,    // pause pinging while faltering
-    Teardown,       // TERMINATION + ENet disconnect + /cancel
-    NotifyFailure,  // surface the terminal reason
+    // LOCAL ONLY: stop pinging, close the media sockets, TERMINATION + ENet
+    // disconnect. It is deliberately separate from the one below, because
+    // bringing our own end down and telling the host to close an app are two
+    // different acts with two different consequences for the person at the host.
+    Teardown,
+    // GET /cancel: the host closes whatever it is running for us. Emitted only
+    // where the host actually has an app of ours to close, and NEVER on a link
+    // that merely dropped: a drop is as likely to be a blip as an ending, and
+    // closing somebody's game out from under them is worse than the tidying is
+    // worth.
+    CancelOnHost,
+    NotifyFailure, // surface the terminal reason
 };
+
+// Whether the host is running an app because THIS session asked it to. A launch
+// still in flight has been asked and not answered, so it is not on this list:
+// speculatively cancelling one would close an app we do not know exists, and the
+// answer arrives soon enough to be acted on (see LaunchSucceeded below).
+inline bool hostHoldsOurApp(SessionPhase phase) {
+    switch (phase) {
+    case SessionPhase::RtspHandshake:
+    case SessionPhase::ControlConnecting:
+    case SessionPhase::Streaming:
+    case SessionPhase::Faltering:
+        return true;
+    case SessionPhase::Idle:
+    case SessionPhase::Pairing:
+    case SessionPhase::Paired:
+    case SessionPhase::Launching:
+    case SessionPhase::Closed:
+    case SessionPhase::Failed:
+        return false;
+    }
+    return false;
+}
+
+// Whether this session has an attempt of its own underway or up, which is what
+// separates closing OUR app from closing one another device left running: the
+// second has nothing local to tear down and the bare /cancel is the whole act.
+inline bool sessionAttemptInFlight(SessionPhase phase) {
+    return phase == SessionPhase::Launching || hostHoldsOurApp(phase);
+}
 
 struct SessionReduction {
     std::optional<SessionState> next; // nullopt: no state change
@@ -137,6 +176,15 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         if (s.phase == SessionPhase::Launching) {
             return {to(SessionPhase::RtspHandshake), {SessionEffect::BeginRtsp}};
         }
+        // THE LAUNCH WE WALKED AWAY FROM CAME GOOD ANYWAY. The last pad left
+        // while the reply was still out, so nothing here wants the session any
+        // more, but the host has now started an app on our account and it is the
+        // app that refuses every later /launch. Taking it back down is the whole
+        // of "the client quits only what it started": no state moves, because
+        // the session is already closed.
+        if (s.phase == SessionPhase::Closed) {
+            return {std::nullopt, {SessionEffect::CancelOnHost}};
+        }
         return {};
     case SessionEvent::LaunchFailed:
         if (s.phase == SessionPhase::Launching) {
@@ -163,8 +211,14 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         return {};
     case SessionEvent::RtspFailed:
         if (s.phase == SessionPhase::RtspHandshake) {
+            // THE LAUNCH ALREADY SUCCEEDED. We are here because the host started
+            // an app for us and the stream then would not come up, so the app is
+            // ours to take back down: left running it is the very thing that
+            // refuses the next /launch, and the copy this state renders promises
+            // the user we closed it.
             return {to(SessionPhase::Failed, SessionFailure::RtspFailed),
-                    {SessionEffect::NotifyFailure}};
+                    {SessionEffect::Teardown, SessionEffect::CancelOnHost,
+                     SessionEffect::NotifyFailure}};
         }
         return {};
     case SessionEvent::ControlConnected:
@@ -175,8 +229,11 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         return {};
     case SessionEvent::ControlConnectFailed:
         if (s.phase == SessionPhase::ControlConnecting) {
+            // Same as RtspFailed above, one step later: the app is running on the
+            // host on our account and nothing is going to ride it.
             return {to(SessionPhase::Failed, SessionFailure::ControlFailed),
-                    {SessionEffect::NotifyFailure}};
+                    {SessionEffect::Teardown, SessionEffect::CancelOnHost,
+                     SessionEffect::NotifyFailure}};
         }
         return {};
     case SessionEvent::PingsMissed:
@@ -189,11 +246,18 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         if (s.phase == SessionPhase::Streaming || s.phase == SessionPhase::Faltering ||
             s.phase == SessionPhase::ControlConnecting) {
             return {to(SessionPhase::Failed, SessionFailure::ServerTerminated),
-                    {SessionEffect::Teardown, SessionEffect::NotifyFailure}};
+                    {SessionEffect::Teardown, SessionEffect::CancelOnHost,
+                     SessionEffect::NotifyFailure}};
         }
         return {};
     case SessionEvent::ControlDropped:
         if (s.phase == SessionPhase::Streaming || s.phase == SessionPhase::Faltering) {
+            // OUR END COMES DOWN AND THE HOST IS TOLD NOTHING. A control stream
+            // that closed without a termination is as likely to be a Wi-Fi blip
+            // as an ending, and the host will usually hand the session back on a
+            // /resume; closing the app would take somebody's game with it. This
+            // is the one teardown in the machine with no /cancel beside it, and
+            // it is why a drop and an ending are two states and not one.
             return {to(SessionPhase::Failed, SessionFailure::LinkDropped),
                     {SessionEffect::Teardown, SessionEffect::NotifyFailure}};
         }
@@ -210,6 +274,14 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
         if (s.phase == SessionPhase::Idle || s.phase == SessionPhase::Closed ||
             s.phase == SessionPhase::Failed) {
             return {}; // already down
+        }
+        // The /cancel goes only where the host has an app of ours to close. A
+        // pairing, or a host merely paired with, has been asked for nothing, and
+        // a /cancel there is a mutual-TLS round trip that closes whatever the
+        // person at that machine happened to be running.
+        if (hostHoldsOurApp(s.phase)) {
+            return {to(SessionPhase::Closed),
+                    {SessionEffect::Teardown, SessionEffect::CancelOnHost}};
         }
         return {to(SessionPhase::Closed), {SessionEffect::Teardown}};
     }

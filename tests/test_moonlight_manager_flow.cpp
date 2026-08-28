@@ -534,7 +534,7 @@ TEST_CASE("A forgotten host offers Pair again even while the host still answers 
     REQUIRE(fx.listedRow(kIdA));
 
     const auto after = fx.manager->sessionUiInputs(kIdA, QString());
-    REQUIRE_FALSE(after.serverCertStored);
+    REQUIRE_FALSE(after.pairingHeld);
     // Whatever the host goes on to say about PairStatus, our half is gone, and
     // the row has to offer the PIN rather than a relationship it cannot use.
     auto stillAnswering = after;
@@ -561,7 +561,7 @@ TEST_CASE("A forget takes the probe cache with it and nothing puts it back",
     REQUIRE_FALSE(after.pairingActive);
     REQUIRE_FALSE(after.pairingRefused);
     REQUIRE_FALSE(after.probeAnswered);
-    REQUIRE_FALSE(after.serverCertStored);
+    REQUIRE_FALSE(after.pairingHeld);
     REQUIRE_FALSE(fx.storedHost(kIdA));
     REQUIRE_FALSE(fx.manager->sessionPhase(kIdA).has_value());
 }

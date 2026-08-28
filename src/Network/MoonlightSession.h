@@ -108,12 +108,12 @@ class MoonlightSession : public QObject {
     // GET /applist (HTTPS, needs pairing) and emit appListReady.
     void refreshApps();
 
-    // GET /serverinfo over PLAINTEXT and emit probeFinished. This is how
-    // remembered trust is verified: the host never tells us it has forgotten us,
-    // so the only honest answer comes from asking. Read PairStatus and uniqueid
-    // from it and NOTHING ELSE: a plaintext probe reports the host free whatever
-    // it is running, because currentgame and state describe the asking client's
-    // own session and an unpaired asker has none.
+    // GET /serverinfo over PLAINTEXT and emit probeFinished. It answers TWO
+    // questions and no others: is the host there, and is it still the host we
+    // paired with. It cannot answer the third: a plaintext probe reports the host
+    // free whatever it is running, because currentgame and state describe the
+    // asking client's own session, and its PairStatus is 0 for every caller. The
+    // pairing question is asked by a mutual-TLS call and by nothing else.
     void probe();
 
     // Hot path: forward one controller's state. No-op unless streaming.
@@ -145,8 +145,12 @@ class MoonlightSession : public QObject {
     // refusal that means something else: a host that does not know this client.
     void appListReady(const QStringList& appIds, const QStringList& appTitles, bool ok,
                       bool unauthorized);
-    // `answered` false means the probe did not reach the host at all.
-    void probeFinished(bool answered, bool pairStatus, const QString& uniqueId);
+    // `answered` false means the probe did not reach the host at all. It carries
+    // NO PairStatus, deliberately: the plaintext reply reports 0 to every caller
+    // on a live Sunshine host, so a parameter holding it is a parameter somebody
+    // gates the pairing question on, and that gate is the one that stops a paired
+    // host ever looking paired.
+    void probeFinished(bool answered, const QString& uniqueId);
 
     // Host -> client events, forwarded for AppModel to route to the local pad.
     void rumbleReceived(int controllerNumber, int lowFreq, int highFreq);
@@ -154,6 +158,12 @@ class MoonlightSession : public QObject {
     void motionRequested(int controllerNumber, int rateHz, int motionType);
 
   private:
+    // Test-only seam. It feeds the reducer the world signals a live host would
+    // raise (a control stream that connected, dropped, or was terminated), so the
+    // effects that follow run for real against a non-routable address rather than
+    // being asserted by reading the switch statement they come out of.
+    friend class MoonlightSessionTestAccess;
+
     void dispatch(moonlight::SessionEvent event);
     void runEffects(const std::vector<moonlight::SessionEffect>& effects);
     void beginLaunch();

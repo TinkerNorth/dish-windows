@@ -77,11 +77,20 @@ struct SessionUiInputs {
     bool probeInFlight = false;
     bool probeAnswered = false;
     bool probeTimedOut = false;
-    // PairStatus 1 on the probe that answered.
+    // The host confirmed this pairing on a MUTUAL-TLS call this visit. Never a
+    // plaintext PairStatus: Sunshine computes that field on the mutual-TLS route
+    // alone and hands every plaintext caller a 0, measured against the live host
+    // for the very uniqueid it was holding a pairing for.
     bool hostPairStatus = false;
-    bool serverCertStored = false;
-    // A mutual-TLS call came back 401. Trust lost only where a certificate is
-    // stored: a host we have never paired with refuses exactly the same way.
+    // THIS CLIENT'S HALF of the pairing: a remembered host whose record says
+    // paired, with the server certificate that half pins against. Deliberately
+    // NOT "a certificate is stored": TOFU pins on the first TLS handshake with a
+    // host, including one it then refuses with a 401, so a stored pin on its own
+    // is evidence of contact and not of trust. Reading it as trust made a host
+    // nobody had ever paired with claim it was Remembered.
+    bool pairingHeld = false;
+    // A mutual-TLS call came back 401. Trust lost only where a pairing is held:
+    // a host we have never paired with refuses exactly the same way.
     bool unauthorized = false;
     // /serverinfo named a uniqueid that is not the remembered one.
     bool uniqueIdChanged = false;
@@ -133,8 +142,8 @@ inline SessionUiState outcomeState(SessionOutcome outcome) {
 // we never paired with refuses exactly the way a host that dropped us does, and
 // telling a first-time user that a pairing they never made has been removed is
 // simply false. NotPaired is the truth and carries the same recovery.
-inline SessionUiState unpairedState(bool serverCertStored) {
-    return serverCertStored ? SessionUiState::TrustLost : SessionUiState::NotPaired;
+inline SessionUiState unpairedState(bool pairingHeld) {
+    return pairingHeld ? SessionUiState::TrustLost : SessionUiState::NotPaired;
 }
 
 // This host is not one we can open a channel to. ONE FUNCTION, not two copies of
@@ -158,7 +167,7 @@ inline SessionUiState unpairedState(bool serverCertStored) {
 // IS an answer, and a host that has just refused this client must never render
 // Remembered, which promises a session it is not going to give.
 inline bool notPaired(const SessionUiInputs& in) {
-    return in.unauthorized || (in.probeAnswered && !(in.hostPairStatus && in.serverCertStored));
+    return in.unauthorized || (in.probeAnswered && !(in.hostPairStatus && in.pairingHeld));
 }
 
 // The host is not the one we paired with. Two witnesses for one fact: the pin
@@ -186,14 +195,14 @@ inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     // second, this could never fire while a plaintext probe was still out or had
     // timed out, and the section would promise a session for a host that had just
     // said no while the row beside it said the opposite. See detail::notPaired.
-    if (detail::notPaired(in)) { return detail::unpairedState(in.serverCertStored); }
+    if (detail::notPaired(in)) { return detail::unpairedState(in.pairingHeld); }
 
     // A live session is its own proof that the host is there, so a probe that has
     // not answered yet cannot draw a spinner over it.
     if (!in.probeAnswered && !in.sessionLive) {
         if (!in.probeTimedOut) { return SessionUiState::Checking; }
         if (in.outcome != SessionOutcome::None) { return detail::outcomeState(in.outcome); }
-        return in.serverCertStored ? SessionUiState::Remembered : SessionUiState::Unreachable;
+        return in.pairingHeld ? SessionUiState::Remembered : SessionUiState::Unreachable;
     }
 
     if (in.bindingLive) { return SessionUiState::Live; }
@@ -294,9 +303,9 @@ inline TrustState trustFor(const SessionUiInputs& in) {
     if (detail::notPaired(in)) { return TrustState::NotPaired; }
     // Both halves present, which is the only thing that earns the chip that
     // hides the Pair button.
-    if (in.hostPairStatus && in.serverCertStored) { return TrustState::Paired; }
+    if (in.hostPairStatus && in.pairingHeld) { return TrustState::Paired; }
     // Nobody answered this visit, so the memory is all there is.
-    return in.serverCertStored ? TrustState::Remembered : TrustState::NotPaired;
+    return in.pairingHeld ? TrustState::Remembered : TrustState::NotPaired;
 }
 
 } // namespace dish::moonlight

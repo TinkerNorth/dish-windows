@@ -255,6 +255,14 @@ class MoonlightManager : public QObject {
     // one that happens to be answering an mDNS sweep right now.
     std::optional<models::MoonlightHost> rememberedHost(const QString& id) const;
 
+    // THIS CLIENT'S HALF of a pairing: a remembered record that says paired, plus
+    // the server certificate that half pins against. Both, because the TOFU pin
+    // is written on the FIRST TLS handshake with a host, including one the host
+    // then refuses, so a stored certificate on its own proves contact and not
+    // trust. One function because the trust word, the session section and the
+    // decision to re-verify all have to mean the same thing by it.
+    bool holdsPairing(const QString& id) const;
+
     // Every slot currently routed at one host, snapshotted under routeMtx_ so
     // the caller can act on it without holding the lock.
     QStringList slotsRoutedTo(const QString& hostId) const;
@@ -272,15 +280,16 @@ class MoonlightManager : public QObject {
         bool inFlight = false;
         bool answered = false;
         bool timedOut = false;
-        bool pairStatus = false;
         bool uniqueIdChanged = false;
         bool appsInFlight = false;
         bool appsFetched = false;
         bool appsFailed = false;
         bool unauthorized = false;
-        // A mutual-TLS call the host actually answered. It outranks the plaintext
-        // PairStatus, which a host with no client certificate in front of it
-        // reports as 0 whoever is asking.
+        // A mutual-TLS call the host actually answered, which is the ONLY thing
+        // that can say this pairing still stands. The plaintext PairStatus is not
+        // kept at all: a host with no client certificate in front of it reports 0
+        // whoever is asking, so a field holding it is a field somebody will gate
+        // on, and gating on it is what makes a paired host unable to look paired.
         bool mtlsVerified = false;
         int appCount = 0;
         bool pairingActive = false;
