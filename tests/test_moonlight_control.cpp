@@ -84,8 +84,14 @@ TEST_CASE("encodeRtpPing carries the session payload, else the legacy form",
 
     // A host that sent no payload gets the 4-byte legacy ping.
     REQUIRE(hx(encodeRtpPing("", 7)) == "50494E47"); // "PING"
-    // A wrong-length payload is not half-sent; it degrades to the legacy form.
-    REQUIRE(encodeRtpPing("short", 0).size() == 4);
+    // A wrong-length payload is still the session form, padded or cut to the
+    // 16 bytes it has room for: the host that handed it out matches by it, and
+    // would answer the legacy form by never learning our media address.
+    const auto padded = encodeRtpPing("short", 0);
+    REQUIRE(padded.size() == 20);
+    REQUIRE(std::string(padded.begin(), padded.begin() + 5) == "short");
+    REQUIRE(padded[5] == 0);
+    REQUIRE(encodeRtpPing(std::string(17, 'a'), 0).size() == 20);
 }
 
 TEST_CASE("SS_PING is the payload verbatim, never hex-decoded", "[moonlight][control][rtp]") {

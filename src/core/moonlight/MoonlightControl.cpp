@@ -180,9 +180,14 @@ std::vector<std::uint8_t> encodePeriodicPing() {
 }
 
 std::vector<std::uint8_t> encodeRtpPing(const std::string& pingPayload, std::uint32_t seq) {
-    if (pingPayload.size() == 16) {
-        std::vector<std::uint8_t> out(20);
-        std::memcpy(out.data(), pingPayload.data(), 16);
+    // A host that handed out a payload matches the ping by it, so a payload of
+    // an unexpected length is sent padded or cut to the 16 bytes the form has
+    // room for rather than dropped for the legacy 4-byte ping, which that host
+    // would answer by never learning our media address. Only an absent payload
+    // means the legacy form.
+    if (!pingPayload.empty()) {
+        std::vector<std::uint8_t> out(20, 0);
+        std::memcpy(out.data(), pingPayload.data(), std::min<std::size_t>(16, pingPayload.size()));
         putU32Le(out.data() + 16, seq);
         return out;
     }

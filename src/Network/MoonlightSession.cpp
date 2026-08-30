@@ -7,12 +7,9 @@
 #include "core/moonlight/MoonlightPairing.h"
 #include "repository/MoonlightHostRepository.h"
 
-#include <QGuiApplication>
 #include <QHostAddress>
 #include <QLoggingCategory>
 #include <QNetworkDatagram>
-#include <QScreen>
-#include <QSize>
 #include <QTimer>
 #include <QUdpSocket>
 #include <QUrl>
@@ -38,29 +35,14 @@ struct DisplayMode {
     int fps = 30;
 };
 
-// The mode to ask the host for. ASK FOR THE DISPLAY WE HAVE, not the smallest
-// mode the protocol will express. Dish decodes nothing, so a small mode looks
-// like the frugal choice, but a host that materialises a virtual display sized
-// to the request (Apollo, Vibepollo) would then resize the desktop of the person
-// sitting in front of it, which is exactly who this client is for. `sops=0`
-// keeps a real-display host from changing modes either way.
-DisplayMode requestedDisplayMode() {
-    DisplayMode mode;
-    const QScreen* screen = QGuiApplication::primaryScreen();
-    if (screen == nullptr) { return mode; }
-    // QScreen reports device-independent pixels; the host wants the real ones.
-    const QSize logical = screen->size();
-    const auto scale = screen->devicePixelRatio();
-    const int width = static_cast<int>(logical.width() * scale);
-    const int height = static_cast<int>(logical.height() * scale);
-    if (width > 0 && height > 0) {
-        mode.width = width;
-        mode.height = height;
-    }
-    const qreal hz = screen->refreshRate();
-    if (hz >= 1.0) { mode.fps = static_cast<int>(hz + 0.5); }
-    return mode;
-}
+// The mode to ask the host for: the smallest a host will take, and the same
+// numbers on all three Dish clients. Dish decodes nothing, so every pixel the
+// host encodes for this stream is GPU time taken from the game the user is
+// playing on that same machine; asking for this client's own screen put a 4K
+// request in front of a live Sunshine host and encoder timeouts in its log.
+// `sops=0` is what keeps the host from changing the user's display to match,
+// so the size asked for here never reaches their desktop.
+DisplayMode requestedDisplayMode() { return DisplayMode{}; }
 
 } // namespace
 
@@ -176,16 +158,10 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             beginRtspAndControl();
             break;
         case moonlight::SessionEffect::StartPinging:
-            if (pingTimer_ == nullptr) {
-                pingTimer_ = new QTimer(this);
-                pingTimer_->setInterval(500);
-                QObject::connect(pingTimer_, &QTimer::timeout, this, &MoonlightSession::onPingTick);
-            }
-            // The FIRST RTP ping must go out immediately after PLAY: a host that
-            // gates media startup on media-port liveness would otherwise sit for
-            // a whole tick before seeing the client's address.
-            onPingTick();
-            pingTimer_->start();
+            // Normally already running since SETUP named the ports; this is the
+            // control ping joining in, and a start for the path that never
+            // heard the ports named first.
+            startPinging();
             break;
         case moonlight::SessionEffect::StopPinging:
             if (pingTimer_ != nullptr) { pingTimer_->stop(); }
@@ -212,6 +188,28 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             break;
         }
     }
+}
+
+void MoonlightSession::startPinging() {
+    if (pingTimer_ == nullptr) {
+        pingTimer_ = new QTimer(this);
+        pingTimer_->setInterval(500);
+        QObject::connect(pingTimer_, &QTimer::timeout, this, &MoonlightSession::onPingTick);
+    }
+    // The FIRST RTP ping goes out now, not a tick from now: a host that gates
+    // media startup on media-port liveness would otherwise sit for a whole tick
+    // before seeing the client's address.
+    onPingTick();
+    if (!pingTimer_->isActive()) { pingTimer_->start(); }
+}
+
+void MoonlightSession::onRtspNamedPorts(const RtspHandshakeResult& rtsp) {
+    // Only while the handshake that named them is still the current one: a quit
+    // that landed in between has torn the media sockets down already.
+    if (state_.phase != moonlight::SessionPhase::RtspHandshake) { return; }
+    rtsp_ = rtsp;
+    rtpPingSeq_ = 0;
+    startPinging();
 }
 
 void MoonlightSession::closeMediaSockets() {
@@ -419,9 +417,11 @@ void MoonlightSession::beginLaunch() {
          // Dish, whose user is sitting at the host using this as a pad: it would
          // silence the very machine they are listening to.
          {QStringLiteral("localAudioPlayMode"), QStringLiteral("1")},
-         {QStringLiteral("surroundAudioInfo"), QStringLiteral("196610")},
-         {QStringLiteral("remoteControllersBitmap"), QStringLiteral("1")},
-         {QStringLiteral("gcmap"), QStringLiteral("1")}});
+         {QStringLiteral("surroundAudioInfo"), QStringLiteral("196610")}});
+    // No remoteControllersBitmap and no gcmap, as the other two clients send
+    // none: the pads are plugged by their CONTROLLER_ARRIVAL, each with its own
+    // type, and a bitmap naming one pad up front is a pad the host may build
+    // before it hears what it is.
 }
 
 void MoonlightSession::requestSession(const QString& path,
@@ -517,8 +517,13 @@ void MoonlightSession::beginRtspAndControl() {
                 Qt::QueuedConnection);
             return;
         }
-        const bool ok = control_.connect(ip, result->controlPort, rikey, result->connectData);
+        // The media ports are pinged from this moment, not from when the ENet
+        // handshake below has finished: the host counts its initial-ping
+        // deadline from its own session start.
         const RtspHandshakeResult handshake = *result;
+        QMetaObject::invokeMethod(
+            this, [this, handshake] { onRtspNamedPorts(handshake); }, Qt::QueuedConnection);
+        const bool ok = control_.connect(ip, result->controlPort, rikey, result->connectData);
         QMetaObject::invokeMethod(
             this, [this, ok, handshake] { onRtspFinished(true, ok, handshake); },
             Qt::QueuedConnection);
@@ -639,6 +644,22 @@ void MoonlightSession::sendControllerArrival(std::uint8_t number, std::uint8_t t
     qCInfo(lcMoonlightSession) << host_.ip << "CONTROLLER_ARRIVAL pad" << number << "type" << type
                                << "caps" << caps << "buttons" << supportedButtons;
     control_.sendControllerArrival(number, type, caps, supportedButtons);
+    sendInitialState(number);
+}
+
+std::uint16_t MoonlightSession::presentMask() const {
+    std::uint16_t mask = 0;
+    for (const auto& [number, pad] : arrivals_) {
+        mask = static_cast<std::uint16_t>(mask | (1U << number));
+    }
+    return mask;
+}
+
+void MoonlightSession::sendInitialState(std::uint8_t number) {
+    moonlight::ControllerState state;
+    state.controllerNumber = number;
+    state.activeGamepadMask = presentMask();
+    control_.sendControllerState(state);
 }
 
 void MoonlightSession::forgetControllerArrival(std::uint8_t number) { arrivals_.erase(number); }
@@ -649,6 +670,7 @@ void MoonlightSession::sendPendingArrivals() {
             << host_.ip << "CONTROLLER_ARRIVAL pad" << number << "type" << pad.type << "caps"
             << pad.capabilities << "buttons" << pad.supportedButtons;
         control_.sendControllerArrival(number, pad.type, pad.capabilities, pad.supportedButtons);
+        sendInitialState(number);
     }
 }
 
