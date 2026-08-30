@@ -32,6 +32,13 @@ jobs:
       # Qt ships dynamic on Windows; match it or the ABI diverges.
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
+      # Job-level so lukka/run-vcpkg sees it already defined and leaves it
+      # alone: its default (clear;x-gha,readwrite) has never restored a
+      # package here, so both configures rebuilt OpenSSL from source (~7 min
+      # each) on every run. The files provider is backed by the actions/cache
+      # step below; codeql.yml uses the same key, so the two lanes share
+      # archives.
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
 
     steps:
       - name: Checkout
@@ -54,6 +61,28 @@ jobs:
           arch: win64_msvc2019_64
           modules: ""
           cache: true
+
+      # ImageVersion is in the cache key because a runner-image update can
+      # carry a new MSVC, which changes vcpkg's ABI hashes: under a fixed key
+      # the cache would go permanently stale — restored but never hit, rebuilt
+      # but never saved, since actions/cache does not update an existing key.
+      # The directory must exist before vcpkg first writes into it.
+      - name: Prepare vcpkg binary cache
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
+          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-${{ runner.os }}-${{ env.IMAGE_VERSION }}-${{ env.VCPKG_COMMITID }}-${{ hashFiles('vcpkg.json') }}
+          # A pin or manifest bump still restores the previous archives: vcpkg
+          # keys each package by ABI hash, skips what no longer matches, and
+          # rebuilds only the delta, saved under the new key.
+          restore-keys: |
+            vcpkg-bin-${{ runner.os }}-
 
       - name: Set up vcpkg + install dependencies
         uses: lukka/run-vcpkg@5e0cab206a5ea620130caf672fce3e4a6b5666a1 # v11.5
@@ -139,12 +168,19 @@ jobs:
           # -Wno-unused-command-line-argument: compile_commands.json carries
           # MSVC-style flags (/Zc:preprocessor, /utf-8) that the GNU-style
           # clang driver would otherwise reject.
+          # Four at a time = the vCPU count; clang-tidy is single-threaded and
+          # a serial sweep of the same files took 17 minutes. Out-Host keeps
+          # diagnostics on the console and off the pipeline, so $failed
+          # collects file names only — and any failing file now fails the
+          # step, where the serial loop's verdict was whichever file ran last.
           $files = git ls-files 'src/*.cpp' | Where-Object { $_ -notlike 'src/UI/*' }
-          foreach ($f in $files) {
+          $failed = $files | ForEach-Object -Parallel {
             clang-tidy -p build --quiet `
               --extra-arg-before=-Wno-unused-command-line-argument `
-              $f
-          }
+              $_ | Out-Host
+            if ($LASTEXITCODE -ne 0) { $_ }
+          } -ThrottleLimit 4
+          if ($failed) { throw "clang-tidy failed on: $($failed -join ', ')" }
 
       - name: Configure (Release)
         shell: pwsh
