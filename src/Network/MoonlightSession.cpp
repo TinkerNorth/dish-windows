@@ -20,8 +20,11 @@ Q_LOGGING_CATEGORY(lcMoonlightSession, "dish.moonlight.session")
 
 namespace {
 
-// Moonlight clients send a fixed 16-hex uniqueid; the host disambiguates by IP.
-const QString kUniqueId = QStringLiteral("0123456789ABCDEF");
+// Only for a session detached from any store, which no live caller builds: a
+// host keys pending pairings and session ownership on the uniqueid, so the
+// Moonlight-conventional constant collides the moment two installs pair with
+// one host. The real id is minted per install by the repository.
+const QString kFallbackUniqueId = QStringLiteral("0123456789ABCDEF");
 
 std::array<std::uint8_t, 16> toKey16(const moonlight::crypto::Bytes& b) {
     std::array<std::uint8_t, 16> k{};
@@ -50,6 +53,7 @@ MoonlightSession::MoonlightSession(models::MoonlightHost host, moonlight::Identi
                                    repository::MoonlightHostRepository* repo, QObject* parent)
     : QObject(parent), host_(std::move(host)), identity_(std::move(identity)), repo_(repo),
       http_(new MoonlightHttpClient(this)) {
+    uniqueId_ = repo_ != nullptr ? repo_->getOrCreateUniqueId() : kFallbackUniqueId;
     http_->setClientIdentity(identity_);
     // TOFU pin: accept-and-remember the server cert first seen, reject a change.
     http_->setPinVerifier([this](const QString&, const QByteArray& der) {
@@ -224,7 +228,7 @@ void MoonlightSession::closeMediaSockets() {
 void MoonlightSession::cancelHostApp() {
     ++cancelsInFlight_;
     http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/cancel"),
-                    {{QStringLiteral("uniqueid"), kUniqueId}},
+                    {{QStringLiteral("uniqueid"), uniqueId_}},
                     [this](const MoonlightXmlResponse& r) {
                         qCInfo(lcMoonlightSession) << host_.ip << "/cancel reachable" << r.reachable
                                                    << "status" << r.statusCode << r.statusMessage;
@@ -281,7 +285,7 @@ void MoonlightSession::pair(const QString& pin) {
     // which is what a live Sunshine host did to every attempt without it.
     http_->getHttp(
         ip, httpPort, QStringLiteral("/pair"),
-        {{QStringLiteral("uniqueid"), kUniqueId},
+        {{QStringLiteral("uniqueid"), uniqueId_},
          {QStringLiteral("devicename"), QStringLiteral("Dish")},
          {QStringLiteral("updateState"), QStringLiteral("1")},
          {QStringLiteral("phrase"), QStringLiteral("getservercert")},
@@ -298,7 +302,7 @@ void MoonlightSession::pair(const QString& pin) {
             // Phase 2
             http_->getHttp(
                 ip, httpPort, QStringLiteral("/pair"),
-                {{QStringLiteral("uniqueid"), kUniqueId},
+                {{QStringLiteral("uniqueid"), uniqueId_},
                  {QStringLiteral("clientchallenge"),
                   QString::fromStdString(pc->clientChallengeHex())}},
                 [this, pc, fail, abandoned, ip, httpPort,
@@ -314,7 +318,7 @@ void MoonlightSession::pair(const QString& pin) {
                     // Phase 3
                     http_->getHttp(
                         ip, httpPort, QStringLiteral("/pair"),
-                        {{QStringLiteral("uniqueid"), kUniqueId},
+                        {{QStringLiteral("uniqueid"), uniqueId_},
                          {QStringLiteral("serverchallengeresp"),
                           QString::fromStdString(pc->serverChallengeRespHex())}},
                         [this, pc, fail, abandoned, ip, httpPort,
@@ -330,7 +334,7 @@ void MoonlightSession::pair(const QString& pin) {
                             // Phase 4
                             http_->getHttp(
                                 ip, httpPort, QStringLiteral("/pair"),
-                                {{QStringLiteral("uniqueid"), kUniqueId},
+                                {{QStringLiteral("uniqueid"), uniqueId_},
                                  {QStringLiteral("clientpairingsecret"),
                                   QString::fromStdString(pc->clientPairingSecretHex())}},
                                 [this, pc, fail, abandoned, ip,
@@ -343,7 +347,7 @@ void MoonlightSession::pair(const QString& pin) {
                                     // Phase 5 (HTTPS, presents the client cert)
                                     http_->getHttps(
                                         ip, httpsPort, QStringLiteral("/pair"),
-                                        {{QStringLiteral("uniqueid"), kUniqueId},
+                                        {{QStringLiteral("uniqueid"), uniqueId_},
                                          {QStringLiteral("phrase"),
                                           QStringLiteral("pairchallenge")}},
                                         [this, pc, fail,
@@ -403,7 +407,7 @@ void MoonlightSession::beginLaunch() {
 
     requestSession(
         QStringLiteral("/launch"),
-        {{QStringLiteral("uniqueid"), kUniqueId},
+        {{QStringLiteral("uniqueid"), uniqueId_},
          {QStringLiteral("appid"), pendingAppId_.isEmpty() ? QStringLiteral("1") : pendingAppId_},
          {QStringLiteral("mode"), modeString},
          {QStringLiteral("additionalStates"), QStringLiteral("1")},
@@ -457,7 +461,7 @@ void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resumin
             qCInfo(lcMoonlightSession) << host_.ip << "app already running and resumable, resuming";
             requestSession(
                 QStringLiteral("/resume"),
-                {{QStringLiteral("uniqueid"), kUniqueId},
+                {{QStringLiteral("uniqueid"), uniqueId_},
                  {QStringLiteral("rikey"), QString::fromStdString(moonlight::crypto::hexEncode(
                                                rikey_.data(), rikey_.size()))},
                  {QStringLiteral("rikeyid"), QString::number(rikeyId_)},
@@ -593,7 +597,7 @@ void MoonlightSession::onPingTick() {
 
 void MoonlightSession::refreshApps() {
     http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/applist"),
-                    {{QStringLiteral("uniqueid"), kUniqueId}},
+                    {{QStringLiteral("uniqueid"), uniqueId_}},
                     [this](const MoonlightXmlResponse& r) {
                         // /applist refuses in the body too: an unpaired client
                         // gets HTTP 200 with a status_code of its own.
@@ -616,7 +620,7 @@ void MoonlightSession::refreshApps() {
 
 void MoonlightSession::probe() {
     http_->getHttp(host_.ip, host_.httpPort, QStringLiteral("/serverinfo"),
-                   {{QStringLiteral("uniqueid"), kUniqueId}},
+                   {{QStringLiteral("uniqueid"), uniqueId_}},
                    [this](const MoonlightXmlResponse& r) {
                        const QString uniqueId = r.value(QStringLiteral("uniqueid"));
                        // The PairStatus is logged and goes no further. It is a diagnostic

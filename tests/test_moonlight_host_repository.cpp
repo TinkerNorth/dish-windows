@@ -31,6 +31,25 @@ TEST_CASE("Moonlight identity is generated once and persists", "[moonlight][repo
     REQUIRE(second->privateKeyPem == first->privateKeyPem);
 }
 
+TEST_CASE("The uniqueid is minted once per install and never shared between installs",
+          "[moonlight][repo]") {
+    auto settings = dish::test::makeSharedSettings();
+    MoonlightHostRepository repo(settings);
+
+    const QString first = repo.getOrCreateUniqueId();
+    REQUIRE(first.size() == 16);
+    for (const QChar c : first) { REQUIRE(QStringLiteral("0123456789ABCDEF").contains(c)); }
+    // Not the constant every Moonlight client traditionally shares: a host
+    // keys pending pairings and session ownership on this, so a shared value
+    // collides the moment two installs pair with the same host.
+    REQUIRE(first != QStringLiteral("0123456789ABCDEF"));
+    // Stable for this install...
+    REQUIRE(MoonlightHostRepository(settings).getOrCreateUniqueId() == first);
+    // ...and different for another.
+    auto other = dish::test::makeSharedSettings();
+    REQUIRE(MoonlightHostRepository(other).getOrCreateUniqueId() != first);
+}
+
 TEST_CASE("Host list upserts, forgets, and survives a corrupt blob", "[moonlight][repo]") {
     auto settings = dish::test::makeSharedSettings();
     MoonlightHostRepository repo(settings);

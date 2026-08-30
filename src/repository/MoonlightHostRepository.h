@@ -34,6 +34,13 @@ class MoonlightHostRepository {
     // nullopt only if generation failed (an OpenSSL error).
     std::optional<moonlight::Identity> getOrCreateIdentity();
 
+    // The uniqueid every GameStream request carries, minted once per install.
+    // Moonlight clients traditionally share one constant here, but a host keys
+    // its pending pairings and session ownership on it, so two installs behind
+    // one value collide the moment both pair with the same host. The other two
+    // Dish clients mint theirs; this is the same sixteen hex digits.
+    QString getOrCreateUniqueId();
+
     QList<models::MoonlightHost> hosts() const;
     void rememberHost(const models::MoonlightHost& host);
     void forgetHost(const QString& id);

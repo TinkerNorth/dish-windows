@@ -38,6 +38,7 @@ inline constexpr const char* kDeviceIdKey = "deviceId";
 // owner; generated once and presented on every HTTPS call to a paired host.
 inline constexpr const char* kMoonlightCertKey = "moonlight_cert_pem";
 inline constexpr const char* kMoonlightKeyKey = "moonlight_key_pem";
+inline constexpr const char* kMoonlightUniqueIdKey = "moonlight_uniqueid";
 // The remembered Moonlight host list, one JSON array under a single key.
 inline constexpr const char* kMoonlightHostListKey = "moonlight_host_list";
 // Per-host pinned server certificate PEM: "moonlight_server_cert:<id>".

@@ -206,6 +206,9 @@ class MoonlightSession : public QObject {
 
     models::MoonlightHost host_;
     moonlight::Identity identity_;
+    // Per-install, from the repository; the fallback constant only for a
+    // session built with no store, which only tests do.
+    QString uniqueId_;
     repository::MoonlightHostRepository* repo_;
 
     MoonlightHttpClient* http_;

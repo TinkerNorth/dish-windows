@@ -307,6 +307,10 @@ TEST_CASE("A pairing runs the five phases in order against a host that answers",
     // Phase 5 is the mutual-TLS one, which the plaintext fake cannot complete;
     // reaching it at all is the proof that phases 1 to 4 all verified.
     REQUIRE(pumpUntil([&] { return fake.phasesServed().size() == 4; }));
+    // Every request carried this install's own uniqueid, not the constant the
+    // Moonlight clients share: the host keys its pending pairing on it.
+    REQUIRE(log.query(0).contains(QStringLiteral("uniqueid=") + repo.getOrCreateUniqueId()));
+    REQUIRE_FALSE(log.query(0).contains(QStringLiteral("uniqueid=0123456789ABCDEF")));
     REQUIRE(fake.phasesServed() == QList<int>({1, 2, 3, 4}));
     REQUIRE(fake.pairedSomebody());
     REQUIRE(pumpUntil([&] { return log.paths().count(kPair) == 5; }));

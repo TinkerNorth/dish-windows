@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 
 namespace dish::repository {
 
@@ -33,6 +34,22 @@ std::optional<moonlight::Identity> MoonlightHostRepository::getOrCreateIdentity(
                         QString::fromStdString(fresh->certPem));
     settings_->setValue(QLatin1String(keys::kMoonlightKeyKey),
                         QString::fromStdString(fresh->privateKeyPem));
+    return fresh;
+}
+
+QString MoonlightHostRepository::getOrCreateUniqueId() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const QString stored = settings_->value(QLatin1String(keys::kMoonlightUniqueIdKey)).toString();
+    if (!stored.isEmpty()) { return stored; }
+    // Sixteen uppercase hex digits, the shape every GameStream host expects.
+    // system() rather than global(): the id is long-lived identity, so it is
+    // seeded from the OS entropy pool the way the key material above is.
+    QString fresh;
+    fresh.reserve(16);
+    auto* rng = QRandomGenerator::system();
+    static const char digits[] = "0123456789ABCDEF";
+    for (int i = 0; i < 16; ++i) { fresh.append(QLatin1Char(digits[rng->bounded(16)])); }
+    settings_->setValue(QLatin1String(keys::kMoonlightUniqueIdKey), fresh);
     return fresh;
 }
 
