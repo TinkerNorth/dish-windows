@@ -28,7 +28,7 @@ std::optional<moonlight::Identity> MoonlightHostRepository::getOrCreateIdentity(
         id.privateKeyPem = key.toStdString();
         return id;
     }
-    const auto fresh = moonlight::generateIdentity();
+    auto fresh = moonlight::generateIdentity();
     if (!fresh) { return std::nullopt; }
     settings_->setValue(QLatin1String(keys::kMoonlightCertKey),
                         QString::fromStdString(fresh->certPem));
@@ -39,7 +39,7 @@ std::optional<moonlight::Identity> MoonlightHostRepository::getOrCreateIdentity(
 
 QString MoonlightHostRepository::getOrCreateUniqueId() {
     std::lock_guard<std::mutex> lock(mutex_);
-    const QString stored = settings_->value(QLatin1String(keys::kMoonlightUniqueIdKey)).toString();
+    QString stored = settings_->value(QLatin1String(keys::kMoonlightUniqueIdKey)).toString();
     if (!stored.isEmpty()) { return stored; }
     // Sixteen uppercase hex digits, the shape every GameStream host expects.
     // system() rather than global(): the id is long-lived identity, so it is
