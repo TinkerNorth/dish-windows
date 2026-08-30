@@ -5,6 +5,11 @@
 // need be; the live scan IS the step, not a dialog over it. The trap here:
 // pairingSucceeded is a GLOBAL signal — a background reconnect fires it too — so
 // the pending host id is stored and compared before the wizard may move.
+//
+// Two host kinds live here, in two sections rather than one list, because they
+// pair differently and a merged list would make Pair mean two things in one
+// column. A Moonlight host is never pressed for a PIN from this step: pairing is
+// remembered trust and the session step owns it.
 
 // Bound: the row delegates read the outer `page` id alongside their required
 // model properties.
@@ -46,10 +51,19 @@ ColumnLayout {
     function activated() {
         if (!App.scanning)
             App.startDiscovery();
+        if (!App.moonlightScanning())
+            App.startMoonlightDiscovery();
+        page.refreshMoonlight();
+    }
+
+    function refreshMoonlight() {
+        page.moonlightRows = App.moonlightHosts();
     }
 
     // ── Page state ──────────────────────────────────────────────────────────
     readonly property int hostCount: App.connectionModel.count + App.discoveredServers.length
+                                     + page.moonlightRows.length
+    property var moonlightRows: []
     property bool selectedNeedsPairing: false
     // The host THIS page asked the user to pair. Compared on pairingSucceeded.
     property string pendingHostId: ""
@@ -58,6 +72,7 @@ ColumnLayout {
     property int accounting: 0
 
     readonly property string satelliteUrl: "https://dish.tinkernorth.com/downloads/satellite"
+    readonly property string sunshineUrl: "https://github.com/LizardByte/Sunshine"
 
     spacing: Tokens.s6
 
@@ -118,10 +133,21 @@ ColumnLayout {
         page.draft.chooseDestination(id, name, "satellite");
     }
 
+    // A Moonlight host is picked without a PIN: its pairing is remembered trust
+    // and the session step re-verifies it, so nothing here can block the bind.
+    function pickMoonlight(id, name) {
+        page.selectedNeedsPairing = false;
+        page.draft.chooseDestination(id, name, "moonlight");
+    }
+
+    // The trust words, shared with the hosts screen and the binding editor.
+    MoonlightVocabulary { id: vocab }
+
     Connections {
         target: App
 
         function onStateChanged() { page.accounting += 1; }
+        function onMoonlightHostsChanged() { page.refreshMoonlight(); }
 
         // Gate on THIS page's pending host: a background reconnect raises the
         // same signal, and following it would bind a host the user never saw.
@@ -246,6 +272,55 @@ ColumnLayout {
         }
     }
 
+    // ── Moonlight hosts, their own section ──────────────────────────────────
+    RowLayout {
+        visible: page.moonlightRows.length > 0
+        spacing: Tokens.s5
+        Layout.fillWidth: true
+        Layout.topMargin: Tokens.s2
+
+        Kit.Eyebrow {
+            mutedTone: true
+            text: qsTr("Moonlight hosts")
+            Layout.fillWidth: true
+        }
+    }
+
+    Repeater {
+        model: page.moonlightRows
+
+        delegate: Kit.SelectRow {
+            id: moonlightRow
+
+            required property var modelData
+
+            readonly property string trust: page.accounting >= 0
+                                            ? App.moonlightTrust(moonlightRow.modelData.id) : ""
+
+            Layout.fillWidth: true
+            selected: page.draft.hostId === moonlightRow.modelData.id
+            title: moonlightRow.modelData.name
+            subtitle: qsTr("Moonlight host · %1").arg(moonlightRow.modelData.ip)
+            // Trust is a word, never a liveness light: the host cannot tell us it
+            // has forgotten us.
+            chipText: vocab.trustText(moonlightRow.trust)
+            chipTone: vocab.trustTone(moonlightRow.trust)
+
+            onPicked: page.pickMoonlight(moonlightRow.modelData.id, moonlightRow.modelData.name)
+        }
+    }
+
+    Kit.EmptyState {
+        visible: page.moonlightRows.length === 0 && !App.moonlightScanning()
+                 && page.hostCount > 0
+        glyph: "satellite-off"
+        title: qsTr("No Moonlight hosts found")
+        body: qsTr("A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.")
+        showAction: false
+        Layout.fillWidth: true
+        Layout.topMargin: Tokens.s5
+    }
+
     // Empty is a STATE, with the next step in it — never a bare spinner and
     // never a bare "none found".
     Kit.EmptyState {
@@ -274,6 +349,12 @@ ColumnLayout {
             variant: Kit.DishButton.Outline
             size: Kit.DishButton.Small
             onClicked: App.openExternalUrl(page.satelliteUrl)
+        }
+        Kit.DishButton {
+            text: qsTr("Get Sunshine ↗")
+            variant: Kit.DishButton.Outline
+            size: Kit.DishButton.Small
+            onClicked: App.openExternalUrl(page.sunshineUrl)
         }
         Kit.DishButton {
             text: App.scanning ? qsTr("Scanning…") : qsTr("Rescan")

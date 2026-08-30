@@ -719,6 +719,30 @@
         <source>No rumble</source>
         <translation>Sem vibração</translation>
     </message>
+    <message>
+        <source>Unbind a controller on this host to make room.</source>
+        <translation>Desvincule um controle deste host para abrir espaço.</translation>
+    </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation type="unfinished">Hosts Moonlight</translation>
+    </message>
+    <message>
+        <source>Moonlight host · %1</source>
+        <translation>Host Moonlight · %1</translation>
+    </message>
+    <message>
+        <source>Auto sends %1 for this controller.</source>
+        <translation>Auto envia %1 para este controle.</translation>
+    </message>
+    <message>
+        <source>Picked for you</source>
+        <translation>Escolhido para você</translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 já tem quatro controles, que é o máximo que uma sessão comporta. Desvincule um para abrir espaço.</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -903,6 +927,14 @@
     <message>
         <source>Unsteady</source>
         <translation>Instável</translation>
+    </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Hosts Moonlight</translation>
+    </message>
+    <message>
+        <source>Stream to a PC running Sunshine, Apollo or Wolf instead of a satellite.</source>
+        <translation>Transmita para um PC com Sunshine, Apollo ou Wolf em vez de um satélite.</translation>
     </message>
 </context>
 <context>
@@ -2571,6 +2603,193 @@
     </message>
 </context>
 <context>
+    <name>MoonlightHostsPage</name>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Hosts Moonlight</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n encontrado</numerusform>
+            <numerusform>%n encontrados</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation>
+            <numerusform>%n pareado</numerusform>
+            <numerusform>%n pareados</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Encontrado</translation>
+    </message>
+    <message>
+        <source>scanning…</source>
+        <translation>buscando…</translation>
+    </message>
+    <message>
+        <source>Add by address…</source>
+        <translation>Adicionar pelo endereço…</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation>Buscando…</translation>
+    </message>
+    <message>
+        <source>Scan</source>
+        <translation>Buscar</translation>
+    </message>
+    <message>
+        <source>Looking for Moonlight hosts</source>
+        <translation>Procurando hosts Moonlight</translation>
+    </message>
+    <message>
+        <source>Scanning your network for hosts advertising GameStream. They appear here as they answer.</source>
+        <translation>Procurando na sua rede hosts que anunciam GameStream. Eles aparecem aqui conforme respondem.</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation>Nenhum host Moonlight encontrado</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>Um PC aparece aqui quando o Sunshine, Apollo ou Wolf está em execução nele e as duas máquinas estão na mesma rede. Você também pode adicioná-lo pelo endereço.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation>Obter o Sunshine ↗</translation>
+    </message>
+    <message>
+        <source>%1, Moonlight host, %2</source>
+        <translation>%1, host Moonlight, %2</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine/Apollo)</source>
+        <translation>Host Moonlight (Sunshine/Apollo)</translation>
+    </message>
+    <message>
+        <source>Pair…</source>
+        <translation>Parear…</translation>
+    </message>
+    <message>
+        <source>More actions for %1</source>
+        <translation>Mais ações para %1</translation>
+    </message>
+    <message>
+        <source>Forget</source>
+        <translation>Esquecer</translation>
+    </message>
+    <message>
+        <source>Forget %1?</source>
+        <translation>Esquecer %1?</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
+        <source>Moonlight host</source>
+        <translation>Host Moonlight</translation>
+    </message>
+    <message>
+        <source>Add a host by address</source>
+        <translation>Adicionar um host pelo endereço</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Adicionar</translation>
+    </message>
+    <message>
+        <source>Enter the host’s IP address or hostname. Dish uses the standard Moonlight ports.</source>
+        <translation>Digite o endereço IP ou o nome do host. O Dish usa as portas padrão do Moonlight.</translation>
+    </message>
+    <message>
+        <source>192.168.1.20</source>
+        <translation>192.168.1.20</translation>
+    </message>
+    <message>
+        <source>Name (optional)</source>
+        <translation>Nome (opcional)</translation>
+    </message>
+    <message>
+        <source>Pairing</source>
+        <translation>Pareamento</translation>
+    </message>
+    <message>
+        <source>Pair with %1</source>
+        <translation>Parear com %1</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Concluído</translation>
+    </message>
+    <message>
+        <source>Type this PIN into the &lt;b&gt;%1&lt;/b&gt; web interface to approve the pairing.</source>
+        <translation>Digite este PIN na interface web do &lt;b&gt;%1&lt;/b&gt; para aprovar o pareamento.</translation>
+    </message>
+    <message>
+        <source>The host did not accept the pairing. Try again.</source>
+        <translation>O host não aceitou o pareamento. Tente novamente.</translation>
+    </message>
+    <message>
+        <source>Waiting for approval on the host…</source>
+        <translation>Aguardando aprovação no host…</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation>Novo código</translation>
+    </message>
+    <message>
+        <source>In use by %1</source>
+        <translation>Em uso por %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n controllers</source>
+        <translation>
+            <numerusform>%n controle</numerusform>
+            <numerusform>%n controles</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Session · %1</source>
+        <translation>Sessão · %1</translation>
+    </message>
+    <message>
+        <source>Session · whatever the host lists first</source>
+        <translation>Sessão · o que o host listar primeiro</translation>
+    </message>
+    <message>
+        <source>Quit session</source>
+        <translation>Encerrar sessão</translation>
+    </message>
+    <message>
+        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
+        <translation>O Dish apaga o pareamento dele. O host mantém o próprio registro até que alguém remova o Dish por lá, e você precisará do PIN de novo.</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightVocabulary</name>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Pareado</translation>
+    </message>
+    <message>
+        <source>Remembered</source>
+        <translation type="unfinished">Lembrado</translation>
+    </message>
+    <message>
+        <source>Not paired</source>
+        <translation type="unfinished">Não pareado</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation type="unfinished">Automático</translation>
+    </message>
+</context>
+<context>
     <name>PairingDialog</name>
     <message>
         <source>Pairing</source>
@@ -3120,6 +3339,25 @@
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>O Windows pode levar até 20 segundos para liberar o dispositivo.</translation>
     </message>
+    <message>
+        <source>Step 3 of 3 · Session</source>
+        <translation>Etapa 3 de 3 · Sessão</translation>
+    </message>
+    <message numerus="yes">
+        <source>moonlight · %n free</source>
+        <translation>
+            <numerusform>moonlight · %n livre</numerusform>
+            <numerusform>moonlight · %n livres</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 já tem quatro controles, que é o máximo que uma sessão comporta. Desvincule um para abrir espaço.</translation>
+    </message>
+    <message>
+        <source>Couldn’t apply the binding.</source>
+        <translation type="unfinished">Não foi possível aplicar o vínculo.</translation>
+    </message>
 </context>
 <context>
     <name>StepList</name>
@@ -3347,8 +3585,8 @@
         <translation>Etapa %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 3</source>
-        <translation>Subetapa %1 de 3</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation>Subetapa %1 de %2</translation>
     </message>
 </context>
 <context>
@@ -3462,6 +3700,26 @@
     <message>
         <source>Pairing is one-time. After this, Dish reconnects to it by itself.</source>
         <translation>O pareamento acontece uma única vez. Depois disso, o Dish se reconecta sozinho.</translation>
+    </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation type="unfinished">Hosts Moonlight</translation>
+    </message>
+    <message>
+        <source>Moonlight host · %1</source>
+        <translation>Host Moonlight · %1</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation type="unfinished">Nenhum host Moonlight encontrado</translation>
+    </message>
+    <message>
+        <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>Um PC aparece aqui assim que o Sunshine, o Apollo ou o Wolf estiver rodando nele e as duas máquinas estiverem na mesma rede. Você também pode adicionar um por endereço.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation type="unfinished">Obter o Sunshine ↗</translation>
     </message>
 </context>
 <context>
@@ -3766,6 +4024,233 @@
     </message>
 </context>
 <context>
+    <name>WizardSessionPage</name>
+    <message>
+        <source>Continue ›</source>
+        <translation type="unfinished">Continuar ›</translation>
+    </message>
+    <message>
+        <source>Unbind a controller on this host to make room.</source>
+        <translation>Desvincule um controle deste host para abrir espaço.</translation>
+    </message>
+    <message>
+        <source>Not paired yet</source>
+        <translation>Ainda não pareado</translation>
+    </message>
+    <message>
+        <source>%1 did not accept the PIN</source>
+        <translation>%1 não aceitou o PIN</translation>
+    </message>
+    <message>
+        <source>%1 is not answering</source>
+        <translation>%1 não está respondendo</translation>
+    </message>
+    <message>
+        <source>%1 no longer recognises this device</source>
+        <translation>%1 não reconhece mais este dispositivo</translation>
+    </message>
+    <message>
+        <source>%1 was reset</source>
+        <translation>%1 foi redefinido</translation>
+    </message>
+    <message>
+        <source>New session</source>
+        <translation>Nova sessão</translation>
+    </message>
+    <message>
+        <source>Joining %1</source>
+        <translation>Entrando em %1</translation>
+    </message>
+    <message>
+        <source>Joining the session on %1</source>
+        <translation>Entrando na sessão em %1</translation>
+    </message>
+    <message>
+        <source>%1 is full</source>
+        <translation>%1 está cheio</translation>
+    </message>
+    <message>
+        <source>Another device is using %1</source>
+        <translation>Outro dispositivo está usando %1</translation>
+    </message>
+    <message>
+        <source>Could not rejoin the session on %1</source>
+        <translation>Não foi possível voltar à sessão em %1</translation>
+    </message>
+    <message>
+        <source>Streaming to %1</source>
+        <translation>Transmitindo para %1</translation>
+    </message>
+    <message>
+        <source>Session on %1 ended</source>
+        <translation>A sessão em %1 terminou</translation>
+    </message>
+    <message>
+        <source>%1 ended the session</source>
+        <translation>%1 encerrou a sessão</translation>
+    </message>
+    <message>
+        <source>%1 needs a one time PIN before Dish can start a session. Pair now, or add the controller and pair later.</source>
+        <translation>%1 precisa de um PIN único antes que o Dish possa iniciar uma sessão. Pareie agora, ou adicione o controle e pareie depois.</translation>
+    </message>
+    <message>
+        <source>Type %1 into the Moonlight or Sunshine page on %2.</source>
+        <translation>Digite %1 na página do Moonlight ou do Sunshine em %2.</translation>
+    </message>
+    <message>
+        <source>Check that the code went into the right host, then try again.</source>
+        <translation>Confira se o código foi digitado no host certo e tente de novo.</translation>
+    </message>
+    <message>
+        <source>Check that the host is switched on and on this network, then try again.</source>
+        <translation>Confira se o host está ligado e nesta rede e tente de novo.</translation>
+    </message>
+    <message>
+        <source>Dish remembers the pairing with %1 and will start a session when the host is back.</source>
+        <translation>O Dish lembra do pareamento com %1 e iniciará uma sessão quando o host voltar.</translation>
+    </message>
+    <message>
+        <source>The host removed the pairing. Pair again to start a session.</source>
+        <translation>O host removeu o pareamento. Pareie de novo para iniciar uma sessão.</translation>
+    </message>
+    <message>
+        <source>This host has a new identity, so the old pairing no longer works. Pair again to start a session.</source>
+        <translation>Este host tem uma identidade nova, então o pareamento antigo não funciona mais. Pareie de novo para iniciar uma sessão.</translation>
+    </message>
+    <message>
+        <source>This is the first controller on %1, so it picks what the host runs.</source>
+        <translation>Este é o primeiro controle em %1, então ele escolhe o que o host executa.</translation>
+    </message>
+    <message>
+        <source>%1 is already running a session for this device. This controller joins it as controller %2.</source>
+        <translation>%1 já está executando uma sessão para este dispositivo. Este controle entra nela como controle %2.</translation>
+    </message>
+    <message>
+        <source>A session carries four controllers at most, and %1 already has four. Unbind one to make room.</source>
+        <translation>Uma sessão comporta no máximo quatro controles, e %1 já tem quatro. Desvincule um para abrir espaço.</translation>
+    </message>
+    <message>
+        <source>%1 is running an app for a different device and will not hand that session over. Close it to start a new one, or add the controller and try again later.</source>
+        <translation>%1 está executando um app para outro dispositivo e não vai entregar essa sessão. Feche-a para iniciar uma nova, ou adicione o controle e tente de novo mais tarde.</translation>
+    </message>
+    <message>
+        <source>The host has a session but would not hand it back. Close the app on %1 and start a new one.</source>
+        <translation>O host tem uma sessão mas não a devolveu. Feche o app em %1 e inicie uma nova.</translation>
+    </message>
+    <message>
+        <source>%1 · controller %2 of 4</source>
+        <translation>%1 · controle %2 de 4</translation>
+    </message>
+    <message>
+        <source>The link dropped. Dish will rejoin the next time you use this controller.</source>
+        <translation>A conexão caiu. O Dish vai entrar de novo na próxima vez que você usar este controle.</translation>
+    </message>
+    <message>
+        <source>The app closed on the host. Start a new session to keep using this controller.</source>
+        <translation>O app fechou no host. Inicie uma nova sessão para continuar usando este controle.</translation>
+    </message>
+    <message>
+        <source>Waiting for the host to accept the PIN…</source>
+        <translation>Aguardando o host aceitar o PIN…</translation>
+    </message>
+    <message>
+        <source>Reading the app list from %1…</source>
+        <translation>Lendo a lista de apps de %1…</translation>
+    </message>
+    <message>
+        <source>Checking %1…</source>
+        <translation>Verificando %1…</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation type="unfinished">Sessão</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation type="unfinished">Novo código</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancelar</translation>
+    </message>
+    <message>
+        <source>streaming</source>
+        <translation>transmitindo</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Pareado</translation>
+    </message>
+    <message>
+        <source>Close the app on %1</source>
+        <translation>Fechar o app em %1</translation>
+    </message>
+    <message>
+        <source>No apps on this host</source>
+        <translation>Nenhum app neste host</translation>
+    </message>
+    <message>
+        <source>%1 has no apps set up yet. Add one on the host, or add the controller and Dish will start whatever the host lists first.</source>
+        <translation>%1 ainda não tem apps configurados. Adicione um no host, ou adicione o controle e o Dish iniciará o que o host listar primeiro.</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished">Tentar novamente</translation>
+    </message>
+    <message>
+        <source>Could not read the app list from %1</source>
+        <translation>Não foi possível ler a lista de apps de %1</translation>
+    </message>
+    <message>
+        <source>Could not finish the session on %1</source>
+        <translation>Não foi possível concluir a sessão em %1</translation>
+    </message>
+    <message>
+        <source>%1 refused the session: %2</source>
+        <translation>%1 recusou a sessão: %2</translation>
+    </message>
+    <message>
+        <source>Dish will start whatever the host lists first. Retry once %1 is reachable.</source>
+        <translation>O Dish iniciará o que o host listar primeiro. Tente de novo quando %1 estiver acessível.</translation>
+    </message>
+    <message>
+        <source>The app started but the stream did not come up, so Dish closed it again.</source>
+        <translation>O app iniciou mas o stream não subiu, então o Dish o fechou de novo.</translation>
+    </message>
+    <message>
+        <source>Add the controller anyway and Dish will try again the next time you use it.</source>
+        <translation>Adicione o controle mesmo assim e o Dish tentará de novo na próxima vez que você usá-lo.</translation>
+    </message>
+    <message>
+        <source>Pair now</source>
+        <translation>Parear agora</translation>
+    </message>
+    <message>
+        <source>Pair again</source>
+        <translation>Parear de novo</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Tentar de novo</translation>
+    </message>
+    <message>
+        <source>Reconnect</source>
+        <translation type="unfinished">Reconectar</translation>
+    </message>
+    <message>
+        <source>Start a session</source>
+        <translation>Iniciar uma sessão</translation>
+    </message>
+    <message>
+        <source>See controllers on %1</source>
+        <translation>Ver controles em %1</translation>
+    </message>
+    <message>
+        <source>Without a pick, Dish starts whatever %1 lists first.</source>
+        <translation>Sem escolha, o Dish inicia o que %1 listar primeiro.</translation>
+    </message>
+</context>
+<context>
     <name>WizardTypePage</name>
     <message>
         <source>Continue ›</source>
@@ -3810,6 +4295,22 @@
     <message>
         <source>Best fit</source>
         <translation>Melhor opção</translation>
+    </message>
+    <message>
+        <source>How should the host see it?</source>
+        <translation>Como o host deve vê-lo?</translation>
+    </message>
+    <message>
+        <source>Dish asks %1 to plug in this controller. Some hosts override the choice.</source>
+        <translation>O Dish pede que %1 conecte este controle. Alguns hosts ignoram a escolha.</translation>
+    </message>
+    <message>
+        <source>Picked for you</source>
+        <translation>Escolhido para você</translation>
+    </message>
+    <message>
+        <source>Auto sends %1 for this controller.</source>
+        <translation>Auto envia %1 para este controle.</translation>
     </message>
 </context>
 <context>

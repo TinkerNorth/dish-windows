@@ -32,6 +32,13 @@ jobs:
       # Qt ships dynamic on Windows; match it or the ABI diverges.
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
+      # Job-level so lukka/run-vcpkg sees it already defined and leaves it
+      # alone: its default (clear;x-gha,readwrite) has never restored a
+      # package here, so both configures rebuilt OpenSSL from source (~7 min
+      # each) on every run. The files provider is backed by the actions/cache
+      # step below; codeql.yml uses the same key, so the two lanes share
+      # archives.
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
 
     steps:
       - name: Checkout
@@ -54,6 +61,28 @@ jobs:
           arch: win64_msvc2019_64
           modules: ""
           cache: true
+
+      # ImageVersion is in the cache key because a runner-image update can
+      # carry a new MSVC, which changes vcpkg's ABI hashes: under a fixed key
+      # the cache would go permanently stale — restored but never hit, rebuilt
+      # but never saved, since actions/cache does not update an existing key.
+      # The directory must exist before vcpkg first writes into it.
+      - name: Prepare vcpkg binary cache
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
+          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-${{ runner.os }}-${{ env.IMAGE_VERSION }}-${{ env.VCPKG_COMMITID }}-${{ hashFiles('vcpkg.json') }}
+          # A pin or manifest bump still restores the previous archives: vcpkg
+          # keys each package by ABI hash, skips what no longer matches, and
+          # rebuilds only the delta, saved under the new key.
+          restore-keys: |
+            vcpkg-bin-${{ runner.os }}-
 
       - name: Set up vcpkg + install dependencies
         uses: lukka/run-vcpkg@5e0cab206a5ea620130caf672fce3e4a6b5666a1 # v11.5
@@ -139,12 +168,33 @@ jobs:
           # -Wno-unused-command-line-argument: compile_commands.json carries
           # MSVC-style flags (/Zc:preprocessor, /utf-8) that the GNU-style
           # clang driver would otherwise reject.
+          # Four at a time = the vCPU count; clang-tidy is single-threaded and
+          # a serial sweep of the same files took 17 minutes. Each worker
+          # folds BOTH its streams into data (2>&1 under an explicit EAP
+          # Continue, try/catch for the rest): native stderr that crosses the
+          # runspace boundary lands on the step's error stream, where the
+          # runner's $ErrorActionPreference = 'Stop' turns the first routine
+          # "N warnings generated." summary into a step kill. The main
+          # runspace prints the lines and collects the failures, so any
+          # failing file fails the step — the old serial loop's verdict was
+          # whichever file happened to run last.
           $files = git ls-files 'src/*.cpp' | Where-Object { $_ -notlike 'src/UI/*' }
-          foreach ($f in $files) {
-            clang-tidy -p build --quiet `
-              --extra-arg-before=-Wno-unused-command-line-argument `
-              $f
+          $failed = [System.Collections.Generic.List[string]]::new()
+          $files | ForEach-Object -Parallel {
+            $ErrorActionPreference = 'Continue'
+            try {
+              $out = clang-tidy -p build --quiet `
+                --extra-arg-before=-Wno-unused-command-line-argument `
+                $_ 2>&1
+              [pscustomobject]@{ File = $_; Code = $LASTEXITCODE; Out = $out }
+            } catch {
+              [pscustomobject]@{ File = $_; Code = 1; Out = @("$_") }
+            }
+          } -ThrottleLimit 4 | ForEach-Object {
+            foreach ($line in $_.Out) { "$line" }
+            if ($_.Code -ne 0) { $failed.Add($_.File) }
           }
+          if ($failed.Count) { throw "clang-tidy failed on: $($failed -join ', ')" }
 
       - name: Configure (Release)
         shell: pwsh
@@ -166,9 +216,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item build-release/dish.exe artifact/
           # windeployqt walks Qt's dependency graph only. dish.exe imports
-          # libsodium.dll and SDL2.dll directly, so without this copy the
-          # artifact ships a dish.exe that cannot start (0xc0000135).
+          # libsodium.dll, SDL2.dll and (for the Moonlight crypto) libcrypto
+          # directly, so without this copy the artifact ships a dish.exe that
+          # cannot start (0xc0000135). vcpkg's applocal step drops them beside the
+          # freshly linked exe; libcrypto carries the 3-x64 soversion. libssl is
+          # NOT shipped: the Moonlight path uses only libcrypto and TLS rides Qt's
+          # Schannel backend.
           Copy-Item build-release/libsodium.dll, build-release/SDL2.dll artifact/
+          Copy-Item build-release/libcrypto-3-x64.dll artifact/
           # --qmldir is required: the Quick chrome is the only UI, so an
           # artifact without the QML modules opens to a white window.
           # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.

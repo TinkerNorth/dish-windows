@@ -721,6 +721,30 @@
         <source>No rumble</source>
         <translation>Nema vibracije</translation>
     </message>
+    <message>
+        <source>Unbind a controller on this host to make room.</source>
+        <translation>Odvežite jedan kontroler s ovog hosta da napravite mjesta.</translation>
+    </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation type="unfinished">Moonlight hostovi</translation>
+    </message>
+    <message>
+        <source>Moonlight host · %1</source>
+        <translation>Moonlight host · %1</translation>
+    </message>
+    <message>
+        <source>Auto sends %1 for this controller.</source>
+        <translation>Auto šalje %1 za ovaj kontroler.</translation>
+    </message>
+    <message>
+        <source>Picked for you</source>
+        <translation>Izabrano za vas</translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 već nosi četiri kontrolera, što je najviše koliko sesija prima. Odvežite jedan da napravite mjesta.</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -911,6 +935,14 @@
     <message>
         <source>Unsteady</source>
         <translation>Nestabilan</translation>
+    </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Moonlight hostovi</translation>
+    </message>
+    <message>
+        <source>Stream to a PC running Sunshine, Apollo or Wolf instead of a satellite.</source>
+        <translation>Strimaj na računar sa Sunshine, Apollo ili Wolf umjesto na satelit.</translation>
     </message>
 </context>
 <context>
@@ -2583,6 +2615,196 @@
     </message>
 </context>
 <context>
+    <name>MoonlightHostsPage</name>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation>Moonlight hostovi</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n found</source>
+        <translation>
+            <numerusform>%n pronađen</numerusform>
+            <numerusform>%n pronađena</numerusform>
+            <numerusform>%n pronađenih</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n paired</source>
+        <translation>
+            <numerusform>%n uparen</numerusform>
+            <numerusform>%n uparena</numerusform>
+            <numerusform>%n uparenih</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Pronađen</translation>
+    </message>
+    <message>
+        <source>scanning…</source>
+        <translation>skeniranje…</translation>
+    </message>
+    <message>
+        <source>Add by address…</source>
+        <translation>Dodaj preko adrese…</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation>Skeniranje…</translation>
+    </message>
+    <message>
+        <source>Scan</source>
+        <translation>Skeniraj</translation>
+    </message>
+    <message>
+        <source>Looking for Moonlight hosts</source>
+        <translation>Tražimo Moonlight hostove</translation>
+    </message>
+    <message>
+        <source>Scanning your network for hosts advertising GameStream. They appear here as they answer.</source>
+        <translation>Pretražujemo mrežu za hostovima koji nude GameStream. Pojavljuju se ovdje kada odgovore.</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation>Nije pronađen nijedan Moonlight host</translation>
+    </message>
+    <message>
+        <source>A PC shows up here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>Računar se pojavljuje ovdje kada na njemu radi Sunshine, Apollo ili Wolf i kada su oba uređaja na istoj mreži. Možeš ga dodati i preko adrese.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation>Preuzmi Sunshine ↗</translation>
+    </message>
+    <message>
+        <source>%1, Moonlight host, %2</source>
+        <translation>%1, Moonlight host, %2</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine/Apollo)</source>
+        <translation>Moonlight host (Sunshine/Apollo)</translation>
+    </message>
+    <message>
+        <source>Pair…</source>
+        <translation>Upari…</translation>
+    </message>
+    <message>
+        <source>More actions for %1</source>
+        <translation>Više radnji za %1</translation>
+    </message>
+    <message>
+        <source>Forget</source>
+        <translation>Zaboravi</translation>
+    </message>
+    <message>
+        <source>Forget %1?</source>
+        <translation>Zaboraviti %1?</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Otkaži</translation>
+    </message>
+    <message>
+        <source>Moonlight host</source>
+        <translation>Moonlight host</translation>
+    </message>
+    <message>
+        <source>Add a host by address</source>
+        <translation>Dodaj host preko adrese</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Dodaj</translation>
+    </message>
+    <message>
+        <source>Enter the host’s IP address or hostname. Dish uses the standard Moonlight ports.</source>
+        <translation>Unesi IP adresu ili naziv hosta. Dish koristi standardne Moonlight portove.</translation>
+    </message>
+    <message>
+        <source>192.168.1.20</source>
+        <translation>192.168.1.20</translation>
+    </message>
+    <message>
+        <source>Name (optional)</source>
+        <translation>Naziv (opcionalno)</translation>
+    </message>
+    <message>
+        <source>Pairing</source>
+        <translation>Uparivanje</translation>
+    </message>
+    <message>
+        <source>Pair with %1</source>
+        <translation>Upari sa %1</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Gotovo</translation>
+    </message>
+    <message>
+        <source>Type this PIN into the &lt;b&gt;%1&lt;/b&gt; web interface to approve the pairing.</source>
+        <translation>Upiši ovaj PIN u web sučelje hosta &lt;b&gt;%1&lt;/b&gt; da odobriš uparivanje.</translation>
+    </message>
+    <message>
+        <source>The host did not accept the pairing. Try again.</source>
+        <translation>Host nije prihvatio uparivanje. Pokušaj ponovo.</translation>
+    </message>
+    <message>
+        <source>Waiting for approval on the host…</source>
+        <translation>Čekamo odobrenje na hostu…</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation>Novi kod</translation>
+    </message>
+    <message>
+        <source>In use by %1</source>
+        <translation>Koristi %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n controllers</source>
+        <translation>
+            <numerusform>%n kontroler</numerusform>
+            <numerusform>%n kontrolera</numerusform>
+            <numerusform>%n kontrolera</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Session · %1</source>
+        <translation>Sesija · %1</translation>
+    </message>
+    <message>
+        <source>Session · whatever the host lists first</source>
+        <translation>Sesija · ono što host prvo navede</translation>
+    </message>
+    <message>
+        <source>Quit session</source>
+        <translation>Prekini sesiju</translation>
+    </message>
+    <message>
+        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
+        <translation>Dish briše svoje uparivanje. Host zadržava vlastiti zapis dok neko tamo ne ukloni Dish, i trebat će vam PIN ponovo.</translation>
+    </message>
+</context>
+<context>
+    <name>MoonlightVocabulary</name>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Uparen</translation>
+    </message>
+    <message>
+        <source>Remembered</source>
+        <translation type="unfinished">Zapamćeno</translation>
+    </message>
+    <message>
+        <source>Not paired</source>
+        <translation type="unfinished">Nije uparen</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation type="unfinished">Automatski</translation>
+    </message>
+</context>
+<context>
     <name>PairingDialog</name>
     <message>
         <source>Pairing</source>
@@ -3134,6 +3356,26 @@
         <source>Windows can take up to 20 seconds to hand over the device.</source>
         <translation>Windowsu može trebati do 20 sekundi da preda uređaj.</translation>
     </message>
+    <message>
+        <source>Step 3 of 3 · Session</source>
+        <translation>Korak 3 od 3 · Sesija</translation>
+    </message>
+    <message numerus="yes">
+        <source>moonlight · %n free</source>
+        <translation>
+            <numerusform>moonlight · %n slobodan</numerusform>
+            <numerusform>moonlight · %n slobodna</numerusform>
+            <numerusform>moonlight · %n slobodnih</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
+        <translation>%1 već nosi četiri kontrolera, što je najviše koliko sesija prima. Odvežite jedan da napravite mjesta.</translation>
+    </message>
+    <message>
+        <source>Couldn’t apply the binding.</source>
+        <translation type="unfinished">Nije moguće primijeniti povezivanje.</translation>
+    </message>
 </context>
 <context>
     <name>StepList</name>
@@ -3361,8 +3603,8 @@
         <translation>Korak %1, %2</translation>
     </message>
     <message>
-        <source>Sub-step %1 of 3</source>
-        <translation>Podkorak %1 od 3</translation>
+        <source>Sub-step %1 of %2</source>
+        <translation>Podkorak %1 od %2</translation>
     </message>
 </context>
 <context>
@@ -3478,6 +3720,26 @@
     <message>
         <source>Pairing is one-time. After this, Dish reconnects to it by itself.</source>
         <translation>Uparivanje je jednokratno. Nakon toga se Dish sam ponovo povezuje s njim.</translation>
+    </message>
+    <message>
+        <source>Moonlight hosts</source>
+        <translation type="unfinished">Moonlight hostovi</translation>
+    </message>
+    <message>
+        <source>Moonlight host · %1</source>
+        <translation>Moonlight host · %1</translation>
+    </message>
+    <message>
+        <source>No Moonlight hosts found</source>
+        <translation type="unfinished">Nije pronađen nijedan Moonlight host</translation>
+    </message>
+    <message>
+        <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
+        <translation>Računar se pojavljuje ovdje čim na njemu radi Sunshine, Apollo ili Wolf i obje mašine su na istoj mreži. Možete ga dodati i po adresi.</translation>
+    </message>
+    <message>
+        <source>Get Sunshine ↗</source>
+        <translation type="unfinished">Preuzmi Sunshine ↗</translation>
     </message>
 </context>
 <context>
@@ -3782,6 +4044,233 @@
     </message>
 </context>
 <context>
+    <name>WizardSessionPage</name>
+    <message>
+        <source>Continue ›</source>
+        <translation type="unfinished">Nastavi ›</translation>
+    </message>
+    <message>
+        <source>Unbind a controller on this host to make room.</source>
+        <translation>Odvežite jedan kontroler s ovog hosta da napravite mjesta.</translation>
+    </message>
+    <message>
+        <source>Not paired yet</source>
+        <translation>Još nije uparen</translation>
+    </message>
+    <message>
+        <source>%1 did not accept the PIN</source>
+        <translation>%1 nije prihvatio PIN</translation>
+    </message>
+    <message>
+        <source>%1 is not answering</source>
+        <translation>%1 se ne odaziva</translation>
+    </message>
+    <message>
+        <source>%1 no longer recognises this device</source>
+        <translation>%1 više ne prepoznaje ovaj uređaj</translation>
+    </message>
+    <message>
+        <source>%1 was reset</source>
+        <translation>%1 je resetovan</translation>
+    </message>
+    <message>
+        <source>New session</source>
+        <translation>Nova sesija</translation>
+    </message>
+    <message>
+        <source>Joining %1</source>
+        <translation>Pridruživanje %1</translation>
+    </message>
+    <message>
+        <source>Joining the session on %1</source>
+        <translation>Pridruživanje sesiji na %1</translation>
+    </message>
+    <message>
+        <source>%1 is full</source>
+        <translation>%1 je pun</translation>
+    </message>
+    <message>
+        <source>Another device is using %1</source>
+        <translation>Drugi uređaj koristi %1</translation>
+    </message>
+    <message>
+        <source>Could not rejoin the session on %1</source>
+        <translation>Nije moguće ponovo se pridružiti sesiji na %1</translation>
+    </message>
+    <message>
+        <source>Streaming to %1</source>
+        <translation>Prijenos ka %1</translation>
+    </message>
+    <message>
+        <source>Session on %1 ended</source>
+        <translation>Sesija na %1 je završena</translation>
+    </message>
+    <message>
+        <source>%1 ended the session</source>
+        <translation>%1 je završio sesiju</translation>
+    </message>
+    <message>
+        <source>%1 needs a one time PIN before Dish can start a session. Pair now, or add the controller and pair later.</source>
+        <translation>%1 treba jednokratni PIN prije nego Dish može pokrenuti sesiju. Uparite sada, ili dodajte kontroler i uparite kasnije.</translation>
+    </message>
+    <message>
+        <source>Type %1 into the Moonlight or Sunshine page on %2.</source>
+        <translation>Upišite %1 na Moonlight ili Sunshine stranicu na %2.</translation>
+    </message>
+    <message>
+        <source>Check that the code went into the right host, then try again.</source>
+        <translation>Provjerite je li kod unesen na pravi host, pa pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>Check that the host is switched on and on this network, then try again.</source>
+        <translation>Provjerite je li host uključen i na ovoj mreži, pa pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>Dish remembers the pairing with %1 and will start a session when the host is back.</source>
+        <translation>Dish pamti uparivanje s %1 i pokrenut će sesiju kad se host vrati.</translation>
+    </message>
+    <message>
+        <source>The host removed the pairing. Pair again to start a session.</source>
+        <translation>Host je uklonio uparivanje. Uparite ponovo da pokrenete sesiju.</translation>
+    </message>
+    <message>
+        <source>This host has a new identity, so the old pairing no longer works. Pair again to start a session.</source>
+        <translation>Ovaj host ima novi identitet, pa staro uparivanje više ne radi. Uparite ponovo da pokrenete sesiju.</translation>
+    </message>
+    <message>
+        <source>This is the first controller on %1, so it picks what the host runs.</source>
+        <translation>Ovo je prvi kontroler na %1, pa on bira šta host pokreće.</translation>
+    </message>
+    <message>
+        <source>%1 is already running a session for this device. This controller joins it as controller %2.</source>
+        <translation>%1 već vodi sesiju za ovaj uređaj. Ovaj kontroler joj se pridružuje kao kontroler %2.</translation>
+    </message>
+    <message>
+        <source>A session carries four controllers at most, and %1 already has four. Unbind one to make room.</source>
+        <translation>Sesija nosi najviše četiri kontrolera, a %1 ih već ima četiri. Odvežite jedan da napravite mjesta.</translation>
+    </message>
+    <message>
+        <source>%1 is running an app for a different device and will not hand that session over. Close it to start a new one, or add the controller and try again later.</source>
+        <translation>%1 vodi aplikaciju za drugi uređaj i neće predati tu sesiju. Zatvorite je da pokrenete novu, ili dodajte kontroler i pokušajte kasnije.</translation>
+    </message>
+    <message>
+        <source>The host has a session but would not hand it back. Close the app on %1 and start a new one.</source>
+        <translation>Host ima sesiju ali je nije vratio. Zatvorite aplikaciju na %1 i pokrenite novu.</translation>
+    </message>
+    <message>
+        <source>%1 · controller %2 of 4</source>
+        <translation>%1 · kontroler %2 od 4</translation>
+    </message>
+    <message>
+        <source>The link dropped. Dish will rejoin the next time you use this controller.</source>
+        <translation>Veza je pala. Dish će se ponovo pridružiti sljedeći put kad upotrijebite ovaj kontroler.</translation>
+    </message>
+    <message>
+        <source>The app closed on the host. Start a new session to keep using this controller.</source>
+        <translation>Aplikacija se zatvorila na hostu. Pokrenite novu sesiju da nastavite koristiti ovaj kontroler.</translation>
+    </message>
+    <message>
+        <source>Waiting for the host to accept the PIN…</source>
+        <translation>Čekanje da host prihvati PIN…</translation>
+    </message>
+    <message>
+        <source>Reading the app list from %1…</source>
+        <translation>Čitanje liste aplikacija sa %1…</translation>
+    </message>
+    <message>
+        <source>Checking %1…</source>
+        <translation>Provjera %1…</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation type="unfinished">Sesija</translation>
+    </message>
+    <message>
+        <source>New code</source>
+        <translation type="unfinished">Novi kod</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation type="unfinished">Otkaži</translation>
+    </message>
+    <message>
+        <source>streaming</source>
+        <translation>prijenos</translation>
+    </message>
+    <message>
+        <source>Paired</source>
+        <translation type="unfinished">Uparen</translation>
+    </message>
+    <message>
+        <source>Close the app on %1</source>
+        <translation>Zatvori aplikaciju na %1</translation>
+    </message>
+    <message>
+        <source>No apps on this host</source>
+        <translation>Nema aplikacija na ovom hostu</translation>
+    </message>
+    <message>
+        <source>%1 has no apps set up yet. Add one on the host, or add the controller and Dish will start whatever the host lists first.</source>
+        <translation>%1 još nema postavljenih aplikacija. Dodajte jednu na hostu, ili dodajte kontroler pa će Dish pokrenuti ono što host prvo navede.</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation type="unfinished">Pokušaj ponovo</translation>
+    </message>
+    <message>
+        <source>Could not read the app list from %1</source>
+        <translation>Nije moguće pročitati listu aplikacija sa %1</translation>
+    </message>
+    <message>
+        <source>Could not finish the session on %1</source>
+        <translation>Nije moguće dovršiti sesiju na %1</translation>
+    </message>
+    <message>
+        <source>%1 refused the session: %2</source>
+        <translation>%1 je odbio sesiju: %2</translation>
+    </message>
+    <message>
+        <source>Dish will start whatever the host lists first. Retry once %1 is reachable.</source>
+        <translation>Dish će pokrenuti ono što host prvo navede. Pokušajte ponovo kad %1 bude dostupan.</translation>
+    </message>
+    <message>
+        <source>The app started but the stream did not come up, so Dish closed it again.</source>
+        <translation>Aplikacija je pokrenuta ali prijenos nije uspostavljen, pa ju je Dish ponovo zatvorio.</translation>
+    </message>
+    <message>
+        <source>Add the controller anyway and Dish will try again the next time you use it.</source>
+        <translation>Ipak dodajte kontroler i Dish će pokušati ponovo sljedeći put kad ga upotrijebite.</translation>
+    </message>
+    <message>
+        <source>Pair now</source>
+        <translation>Upari sada</translation>
+    </message>
+    <message>
+        <source>Pair again</source>
+        <translation>Upari ponovo</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Pokušaj ponovo</translation>
+    </message>
+    <message>
+        <source>Reconnect</source>
+        <translation type="unfinished">Ponovo poveži</translation>
+    </message>
+    <message>
+        <source>Start a session</source>
+        <translation>Pokreni sesiju</translation>
+    </message>
+    <message>
+        <source>See controllers on %1</source>
+        <translation>Pogledaj kontrolere na %1</translation>
+    </message>
+    <message>
+        <source>Without a pick, Dish starts whatever %1 lists first.</source>
+        <translation>Bez izbora, Dish pokreće ono što %1 prvo navede.</translation>
+    </message>
+</context>
+<context>
     <name>WizardTypePage</name>
     <message>
         <source>Continue ›</source>
@@ -3826,6 +4315,22 @@
     <message>
         <source>Best fit</source>
         <translation>Najbolji izbor</translation>
+    </message>
+    <message>
+        <source>How should the host see it?</source>
+        <translation>Kako bi ga host trebao vidjeti?</translation>
+    </message>
+    <message>
+        <source>Dish asks %1 to plug in this controller. Some hosts override the choice.</source>
+        <translation>Dish traži od %1 da priključi ovaj kontroler. Neki hostovi zanemaruju izbor.</translation>
+    </message>
+    <message>
+        <source>Picked for you</source>
+        <translation>Izabrano za vas</translation>
+    </message>
+    <message>
+        <source>Auto sends %1 for this controller.</source>
+        <translation>Auto šalje %1 za ovaj kontroler.</translation>
     </message>
 </context>
 <context>

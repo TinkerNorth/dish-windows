@@ -33,6 +33,21 @@ inline constexpr const char* kMotionEnabledPrefix = "motion_enabled:";
 // Stable per-install device id (machineId source for X-Device-Id). One owner.
 inline constexpr const char* kDeviceIdKey = "deviceId";
 
+// ── Moonlight (GameStream) path ──────────────────────────────────────────────
+// The client's persistent Moonlight identity (self-signed cert + key PEM). One
+// owner; generated once and presented on every HTTPS call to a paired host.
+inline constexpr const char* kMoonlightCertKey = "moonlight_cert_pem";
+inline constexpr const char* kMoonlightKeyKey = "moonlight_key_pem";
+inline constexpr const char* kMoonlightUniqueIdKey = "moonlight_uniqueid";
+// The remembered Moonlight host list, one JSON array under a single key.
+inline constexpr const char* kMoonlightHostListKey = "moonlight_host_list";
+// Per-host pinned server certificate PEM: "moonlight_server_cert:<id>".
+inline constexpr const char* kMoonlightServerCertPrefix = "moonlight_server_cert:";
+// The standing Moonlight bindings, one JSON array under a single key. The
+// controller type lives here rather than on the host: two pads on one host can
+// be two different devices.
+inline constexpr const char* kMoonlightBindingListKey = "moonlight_binding_list";
+
 // Retired key names, kept only so old installs can be upgraded in place.
 inline constexpr const char* kLegacyWifiListKey = "wifi_list";
 inline constexpr const char* kLegacySharedKeyPrefix = "wifi_shared_key/";

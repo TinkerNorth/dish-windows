@@ -1,7 +1,17 @@
 # gitleaks configuration for dish-windows.
 #
 # Default rule set is inherited from gitleaks 8.x. The allowlists below
-# suppress known false-positives (LGPL header, wire-protocol constants).
+# suppress known false-positives (LGPL header, wire-protocol constants,
+# published interop test vectors).
+#
+# Each `[[allowlists]]` block is a separate OR'd exemption. Criteria WITHIN a
+# block combine per its `condition` (gitleaks defaults to "OR"), which is why
+# path-scoped and value-scoped criteria that must both hold live in their own
+# block with `condition = "AND"` rather than being folded into a block above.
+#
+# The singular `[allowlist]` table this file used to carry is deprecated in
+# gitleaks 8.30 and cannot coexist with `[[allowlists]]`; the blocks below are
+# a behaviour-preserving split of it.
 #
 # Reference: https://github.com/gitleaks/gitleaks#configuration
 
@@ -10,21 +20,45 @@ title = "dish-windows gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
-description = "Allowlist for known non-secret strings in dish-windows."
-
 # Anchored. gitleaks treats these as unanchored regexes against the whole
 # path, so a bare `LICENSE` also exempted packaging/fonts/Inter-LICENSE.txt
 # and would exempt anything else with LICENSE anywhere in its path.
+[[allowlists]]
+description = "License texts (LGPL header boilerplate scans as key material)."
 paths = [
     '''^COPYING\.GPL3$''',
     '''^LICENSE$''',
 ]
 
+# Wire-protocol port numbers (documented in CONTRIBUTING.md). Anchored to
+# the whole match: unanchored, this suppressed any finding whose secret
+# merely CONTAINED "9876" — a real key with those four digits in it would
+# have been silently dropped.
+[[allowlists]]
+description = "Wire-protocol port numbers."
 regexes = [
-    # Wire-protocol port numbers (documented in CONTRIBUTING.md). Anchored to
-    # the whole match: unanchored, this suppressed any finding whose secret
-    # merely CONTAINED "9876" — a real key with those four digits in it would
-    # have been silently dropped.
     '''^(9876|9877|9878|9879)$''',
+]
+
+# Wolf's published GameStream control-packet AES-128 key, lifted verbatim from
+# its testControl.cpp interop vectors (github.com/games-on-whales/wolf). Not a
+# secret: upstream publishes this fixed key precisely so third-party clients can
+# prove byte-for-byte wire compatibility against it. The expected ciphertexts
+# pinned in tests/test_moonlight_crypto.cpp are GCM seals *under this key*, so it
+# has to stay committed byte-stable — edit or redact it and every pinned packet
+# in that file stops matching.
+#
+# `condition = "AND"` makes both criteria mandatory, so this exempts that one
+# value in that one file and nothing else. Both regexes are anchored for the same
+# reason as the blocks above: unanchored, the path would exempt anything with
+# that name anywhere in its path, and the secret would exempt any real key that
+# merely CONTAINED this hex run.
+[[allowlists]]
+description = "Wolf control-packet interop test vector key (tests/test_moonlight_crypto.cpp)."
+condition = "AND"
+paths = [
+    '''^tests/test_moonlight_crypto\.cpp$''',
+]
+regexes = [
+    '''^EDF04A215C4FBEA20934120C8480D855$''',
 ]

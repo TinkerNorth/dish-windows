@@ -151,6 +151,11 @@ Kit.Page {
         catalogFailed: page.catalogBroken
     }
 
+    // The same draft, named rather than referenced by id, so a child that has a
+    // `draft` property of its own can be handed this one without the assignment
+    // reading as `draft: draft`.
+    readonly property BindingDraft editedDraft: draft
+
     // The snapshot the page opened with; `dirty` is read off it, so a rail click
     // never confirms on a page the user only looked at.
     // NOT `baseline`: Item declares that anchor line FINAL, and shadowing it
@@ -190,9 +195,16 @@ Kit.Page {
                           page.padClaimable);
 
         const boundId = page.padRow.boundConnectionId;
-        if (boundId.length > 0) {
-            // The real label arrives later with the host row. Every destination
-            // this page can offer is a Satellite — Windows has no BT-host source.
+        const moonlightId = App.moonlightBoundHostFor(page.slotId);
+        if (moonlightId.length > 0) {
+            // The real label arrives later with the host row.
+            draft.chooseDestination(moonlightId, moonlightId, "moonlight");
+            const stored = App.moonlightBindingType(page.slotId);
+            draft.chooseType(stored, page.typeNameFor(stored));
+            page.reloadMoonlight();
+        } else if (boundId.length > 0) {
+            // The real label arrives later with the host row. Every satellite
+            // destination this page can offer is one — Windows has no BT source.
             draft.chooseDestination(boundId, boundId, "satellite");
             // Keyed on the DESTINATION, never on the pad: in bind mode the pad has
             // no binding, and the slot-keyed read resolves through one.
@@ -210,7 +222,10 @@ Kit.Page {
         page.snapshot();
     }
 
-    Component.onCompleted: page.seed()
+    Component.onCompleted: {
+        page.reloadMoonlight();
+        page.seed();
+    }
 
     // ── The controller-type catalog ─────────────────────────────────────────
     // emulateTypes is a one-shot read, so it is re-pulled on every catalog move;
@@ -218,8 +233,31 @@ Kit.Page {
     // function call is not a binding dependency.
     property var types: []
 
-    readonly property bool catalogLoading: App.emulateLoading
-    readonly property bool catalogBroken: App.emulateError.length > 0 && page.types.length === 0
+    // A Moonlight host has no catalog to read: its four types come from a table
+    // this client owns, so neither of these can be true for one.
+    readonly property bool catalogLoading: !draft.hostIsMoonlight && App.emulateLoading
+    readonly property bool catalogBroken: !draft.hostIsMoonlight
+                                          && App.emulateError.length > 0
+                                          && page.types.length === 0
+
+    // ── Moonlight destinations ──────────────────────────────────────────────
+    property var moonlightRows: []
+    // Bumped on every host move so the invokable-backed trust and session reads
+    // re-evaluate: a call is not a binding dependency.
+    property int moonlightAccounting: 0
+
+    function reloadMoonlight() {
+        page.moonlightRows = App.moonlightHosts();
+        page.moonlightAccounting += 1;
+    }
+
+    // The trust words and the four type cards, shared with the hosts screen and
+    // the wizard so no two surfaces can disagree about either.
+    MoonlightVocabulary { id: vocab }
+
+    function moonlightTypes() {
+        return vocab.typesFrom(App.moonlightTypeOptions());
+    }
 
     function reloadTypes() {
         page.types = App.emulateTypesForHost(draft.hostId);
@@ -227,6 +265,25 @@ Kit.Page {
 
     // A different destination is a different catalog.
     function refreshCatalog() {
+        if (draft.hostIsMoonlight) {
+            // No catalog to read, and no Pending state to wait through: a
+            // Moonlight type resolves the moment a host is picked, starting from
+            // whatever this host was last set to.
+            const options = page.moonlightTypes();
+            if (draft.type === -1 && options.length > 0) {
+                const remembered = App.moonlightDeviceType(draft.hostId);
+                for (let i = 0; i < options.length; ++i) {
+                    if (options[i].type === remembered) {
+                        draft.chooseType(remembered, options[i].name);
+                        page.types = [];
+                        return;
+                    }
+                }
+                draft.chooseType(options[0].type, options[0].name);
+            }
+            page.types = [];
+            return;
+        }
         if (draft.hasDestination && !draft.hostIsBluetooth) {
             App.refreshEmulateForHost(draft.hostId);
         }
@@ -242,10 +299,19 @@ Kit.Page {
         }
     }
 
+    Connections {
+        target: App
+        function onMoonlightHostsChanged() { page.reloadMoonlight(); }
+    }
+
+    // One name lookup for both destination kinds. A Moonlight host has no catalog
+    // to load, so `types` is deliberately empty for one and this reads the table
+    // instead: without the branch every Moonlight type would render nameless.
     function typeNameFor(wireType) {
-        for (let i = 0; i < page.types.length; ++i) {
-            if (page.types[i].type === wireType) {
-                return page.types[i].name;
+        const list = draft.hostIsMoonlight ? page.moonlightTypes() : page.types;
+        for (let i = 0; i < list.length; ++i) {
+            if (list[i].type === wireType) {
+                return list[i].name;
             }
         }
         return "";
@@ -452,14 +518,25 @@ Kit.Page {
     }
 
     // ── Apply ───────────────────────────────────────────────────────────────
+    // A Moonlight host state NEVER blocks the bind: a binding is a durable intent
+    // and pairing is remembered trust verified late, so the session is attempted
+    // when the controller is used. The one exception is a host already carrying
+    // its four controllers, which is a protocol ceiling.
+    readonly property bool moonlightFull: draft.hostIsMoonlight && page.moonlightAccounting >= 0
+                                          && App.moonlightSessionBlocksApply(draft.hostId,
+                                                                             page.slotId)
     readonly property bool canApply: page.padRow !== null && draft.hasDestination && draft.hasType
+                                     && !page.moonlightFull
     readonly property bool noHosts: App.connectionModel.count === 0
+                                    && page.moonlightRows.length === 0
     property bool applyRequested: false
 
     readonly property string actionHint: !draft.hasDestination
         ? qsTr("Pick a destination to continue.")
-        : !draft.hasType ? qsTr("Waiting on the controller catalog.")
-                         : qsTr("Nothing is sent until you apply.")
+        : page.moonlightFull
+          ? qsTr("Unbind a controller on this host to make room.")
+          : !draft.hasType ? qsTr("Waiting on the controller catalog.")
+                           : qsTr("Nothing is sent until you apply.")
 
     function stepState(token) {
         // A skipped step is a step that will not run: drawn done, captioned so
@@ -485,6 +562,11 @@ Kit.Page {
     function apply() {
         page.applyRequested = true;
         applyOverlay.open();
+        // The app belongs to the SESSION rather than to this binding, so it is
+        // written to the remembered host before the bind that may start one.
+        if (draft.hostIsMoonlight && draft.appId.length > 0) {
+            App.setMoonlightApp(draft.hostId, draft.appId, draft.appName);
+        }
         App.applyBinding(page.slotId, draft.hostId, draft.type, draft.desiredPath,
                          draft.motionOn, draft.rumbleOn, draft.touchpadMode);
     }
@@ -499,9 +581,15 @@ Kit.Page {
                      .arg(draft.hostName);
         case "bindRejected":
             return qsTr("%1 refused the binding.").arg(draft.hostName);
+        case "hostFull":
+            return qsTr("%1 already carries four controllers, which is the most a session takes. Unbind one to make room.")
+                     .arg(draft.hostName);
         case "cancelled":
             return qsTr("Apply cancelled. Nothing was changed.");
         }
+        // Everything else, including a host that vanished between the pick and
+        // the press, lands here. Never nothing: a bind with no answer is one the
+        // user cannot tell from a bind that worked.
         return qsTr("Couldn’t apply the binding.");
     }
 
@@ -844,11 +932,70 @@ Kit.Page {
                             }
                         }
 
+                        // ── MOONLIGHT DESTINATIONS ──────────────────────────
+                        // Their own rows, because the two host kinds pair
+                        // differently and a merged list would make Pair mean two
+                        // things in one column.
+                        Kit.Eyebrow {
+                            visible: page.moonlightRows.length > 0
+                            mutedTone: true
+                            text: qsTr("Moonlight hosts")
+                            Layout.topMargin: Tokens.s2
+                        }
+
+                        Repeater {
+                            model: page.moonlightRows
+
+                            delegate: Kit.SelectRow {
+                                id: moonlightOption
+
+                                required property var modelData
+
+                                readonly property string trust:
+                                    page.moonlightAccounting >= 0
+                                    ? App.moonlightTrust(moonlightOption.modelData.id) : ""
+
+                                Layout.fillWidth: true
+                                selected: draft.hostId === moonlightOption.modelData.id
+                                title: moonlightOption.modelData.name
+                                subtitle: qsTr("Moonlight host · %1")
+                                            .arg(moonlightOption.modelData.ip)
+                                chipText: vocab.trustText(moonlightOption.trust)
+                                chipTone: vocab.trustTone(moonlightOption.trust)
+
+                                onPicked: draft.chooseDestination(moonlightOption.modelData.id,
+                                                                  moonlightOption.modelData.name,
+                                                                  "moonlight")
+                            }
+                        }
+
                         Kit.Callout {
                             visible: draft.hostIsBluetooth
                             Layout.fillWidth: true
                             tone: Kit.Callout.Info
                             text: qsTr("This PC pairs as a Bluetooth gamepad. Gyro, touchpad and mouse need a Satellite host.")
+                        }
+
+                        // ── SESSION ─────────────────────────────────────────
+                        // The wizard's own step, rendered inline: one file, so a
+                        // state cannot read one way here and another there.
+                        WizardSessionPage {
+                            id: moonlightSession
+                            visible: draft.hostIsMoonlight
+                            draft: page.editedDraft
+                            Layout.fillWidth: true
+                            Layout.topMargin: Tokens.s2
+
+                            // The wizard calls activated() on entering the step;
+                            // there is no wizard here, so becoming visible is the
+                            // same moment.
+                            onVisibleChanged: if (moonlightSession.visible) {
+                                moonlightSession.reload();
+                            }
+
+                            onBindingsRequested: if (page.shellApi) {
+                                page.shellApi.selectDestination(1);
+                            }
                         }
 
                         RowLayout {
@@ -959,6 +1106,71 @@ Kit.Page {
                             }
                         }
 
+                        // A Moonlight type comes from a table this client owns
+                        // rather than from a catalog, so there is nothing to wait
+                        // on and nothing that can fail to load. The host still
+                        // gets the last word and never says what it chose.
+                        Repeater {
+                            model: draft.hasDestination && draft.hostIsMoonlight
+                                   ? page.moonlightTypes() : []
+
+                            delegate: Kit.SelectRow {
+                                id: moonlightType
+
+                                required property var modelData
+
+                                readonly property bool autoCard:
+                                    moonlightType.modelData.token === "auto"
+                                readonly property var rows:
+                                    draft.revision >= 0
+                                    ? draft.rowsFor(moonlightType.autoCard
+                                                    ? App.moonlightResolvedAutoType(page.slotId)
+                                                    : moonlightType.modelData.type)
+                                    : []
+
+                                Layout.fillWidth: true
+                                selected: draft.type === moonlightType.modelData.type
+                                title: moonlightType.modelData.name
+                                subtitle: moonlightType.autoCard
+                                          ? qsTr("Auto sends %1 for this controller.")
+                                              .arg(page.typeNameFor(
+                                                  App.moonlightResolvedAutoType(page.slotId)))
+                                          : ""
+                                chipText: moonlightType.autoCard ? qsTr("Picked for you") : ""
+                                chipTone: Kit.CapabilityChip.Ok
+
+                                onPicked: draft.chooseType(moonlightType.modelData.type,
+                                                           moonlightType.modelData.name)
+
+                                // What the TYPE layer alone offers, in the same
+                                // order and vocabulary the satellite rows use.
+                                Flow {
+                                    spacing: Tokens.s2
+
+                                    Repeater {
+                                        model: moonlightType.rows
+
+                                        delegate: Kit.CapabilityChip {
+                                            id: moonlightChip
+                                            required property var modelData
+
+                                            readonly property bool interesting:
+                                                moonlightChip.modelData.feature === "motion"
+                                                || moonlightChip.modelData.feature === "touchpad"
+                                                || moonlightChip.modelData.feature === "rumble"
+                                                || moonlightChip.modelData.feature === "lightbar"
+
+                                            visible: moonlightChip.interesting
+                                            text: draft.featureName(moonlightChip.modelData.feature)
+                                            tone: moonlightChip.modelData.typeOk
+                                                  ? Kit.CapabilityChip.Present
+                                                  : Kit.CapabilityChip.Absent
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Loading: never a guessed default, and never a bare spinner.
                         Kit.LoadingSpinner {
                             visible: draft.hasDestination && !draft.hostIsBluetooth && page.catalogLoading
@@ -980,6 +1192,7 @@ Kit.Page {
 
                         Repeater {
                             model: draft.hasDestination && !draft.hostIsBluetooth
+                                   && !draft.hostIsMoonlight
                                    && !page.catalogLoading && !page.catalogBroken ? page.types : []
 
                             delegate: Kit.SelectRow {
