@@ -29,6 +29,10 @@ ColumnLayout {
     // Returns false so the wizard does not step: the apply overlay owns the
     // screen from here, and the outcome decides what happens.
     function primaryActivated() {
+        // The app belongs to the SESSION rather than to this binding, so it is
+        // written to the remembered host before the bind that may start one.
+        if (page.draft.hostIsMoonlight && page.draft.appId.length > 0)
+            App.setMoonlightApp(page.draft.hostId, page.draft.appId, page.draft.appName);
         App.applyBinding(page.draft.slotId, page.draft.hostId, page.draft.type,
                          page.draft.desiredPath, page.draft.motionOn, page.draft.rumbleOn,
                          page.draft.touchpadMode);

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "core/moonlight/MoonlightSessionUi.h"
 #include "core/reducer/ConnectionRows.h"
 #include "core/reducer/SatelliteLinkState.h"
 
@@ -76,6 +77,82 @@ inline QString glyphToken(reducer::ConnectionGlyph g) {
         return QStringLiteral("satelliteConnected");
     case reducer::ConnectionGlyph::SatelliteOff:
         return QStringLiteral("satelliteOff");
+    }
+    return {};
+}
+
+inline QString moonlightSessionToken(moonlight::SessionUiState s) {
+    switch (s) {
+    case moonlight::SessionUiState::Checking:
+        return QStringLiteral("checking");
+    case moonlight::SessionUiState::NotPaired:
+        return QStringLiteral("notPaired");
+    case moonlight::SessionUiState::PairingPin:
+        return QStringLiteral("pairingPin");
+    case moonlight::SessionUiState::PairingRefused:
+        return QStringLiteral("pairingRefused");
+    case moonlight::SessionUiState::Unreachable:
+        return QStringLiteral("unreachable");
+    case moonlight::SessionUiState::Remembered:
+        return QStringLiteral("remembered");
+    case moonlight::SessionUiState::TrustLost:
+        return QStringLiteral("trustLost");
+    case moonlight::SessionUiState::HostReplaced:
+        return QStringLiteral("hostReplaced");
+    case moonlight::SessionUiState::AppsLoading:
+        return QStringLiteral("appsLoading");
+    case moonlight::SessionUiState::NewSession:
+        return QStringLiteral("newSession");
+    case moonlight::SessionUiState::NoApps:
+        return QStringLiteral("noApps");
+    case moonlight::SessionUiState::AppsFailed:
+        return QStringLiteral("appsFailed");
+    case moonlight::SessionUiState::Joining:
+        return QStringLiteral("joining");
+    case moonlight::SessionUiState::HostFull:
+        return QStringLiteral("hostFull");
+    case moonlight::SessionUiState::BusyOther:
+        return QStringLiteral("busyOther");
+    case moonlight::SessionUiState::ResumeFailed:
+        return QStringLiteral("resumeFailed");
+    case moonlight::SessionUiState::Refused:
+        return QStringLiteral("refused");
+    case moonlight::SessionUiState::SetupFailed:
+        return QStringLiteral("setupFailed");
+    case moonlight::SessionUiState::Live:
+        return QStringLiteral("live");
+    case moonlight::SessionUiState::Dropped:
+        return QStringLiteral("dropped");
+    case moonlight::SessionUiState::EndedByHost:
+        return QStringLiteral("endedByHost");
+    }
+    return {};
+}
+
+// Why a bind did not take, as the token the binding flow turns into a sentence.
+// `Bound` has no token: there is nothing to report about a bind that worked.
+inline QString moonlightBindOutcomeToken(moonlight::BindOutcome outcome) {
+    switch (outcome) {
+    case moonlight::BindOutcome::Bound:
+        return {};
+    case moonlight::BindOutcome::UnknownHost:
+        return QStringLiteral("hostGone");
+    case moonlight::BindOutcome::NoIdentity:
+        return QStringLiteral("identityFailed");
+    case moonlight::BindOutcome::HostFull:
+        return QStringLiteral("hostFull");
+    }
+    return {};
+}
+
+inline QString moonlightTrustToken(moonlight::TrustState t) {
+    switch (t) {
+    case moonlight::TrustState::Paired:
+        return QStringLiteral("paired");
+    case moonlight::TrustState::Remembered:
+        return QStringLiteral("remembered");
+    case moonlight::TrustState::NotPaired:
+        return QStringLiteral("notPaired");
     }
     return {};
 }

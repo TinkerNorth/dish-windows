@@ -94,6 +94,28 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
     QObject::connect(wifi_, &net::WifiConnectionManager::poolChanged, this,
                      &AppModel::installRumbleHandlers);
 
+    // Moonlight host -> local pad: rumble and LED come back over the control
+    // stream and actuate through the SAME bridge plumbing the Satellite path
+    // uses, resolved from the controller number the host addressed.
+    QObject::connect(
+        &moonlight_, &net::MoonlightManager::rumbleReceived, this,
+        [this](const QString& hostId, int controllerNumber, int lowFreq, int highFreq) {
+            const QString slotId = moonlight_.slotForController(hostId, controllerNumber);
+            if (slotId.isEmpty()) { return; }
+            bridge_->applyRumble(slotId, static_cast<std::uint16_t>(lowFreq),
+                                 static_cast<std::uint16_t>(highFreq),
+                                 /*durationMs=*/0);
+        });
+    QObject::connect(
+        &moonlight_, &net::MoonlightManager::rgbLedReceived, this,
+        [this](const QString& hostId, int controllerNumber, int r, int g, int b) {
+            if (!featureSettings_->lightbarFollowGame()) { return; }
+            const QString slotId = moonlight_.slotForController(hostId, controllerNumber);
+            if (slotId.isEmpty()) { return; }
+            bridge_->applyLightbar(slotId, static_cast<std::uint8_t>(r),
+                                   static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b));
+        });
+
     autoReconnectTimer_->setInterval(15'000);
     QObject::connect(autoReconnectTimer_, &QTimer::timeout, this,
                      [this] { wifi_->autoReconnectAll(); });
@@ -109,6 +131,11 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
             sender = routing_.value(QString::fromStdString(did));
         }
         if (sender) { sender(buttons, lt, rt, lx, ly, rx, ry); }
+        // The Moonlight path is a PARALLEL seam with its own table and lock: the
+        // Satellite routing above is untouched, and a slot bound to a Moonlight
+        // host streams here instead. Guarded by an atomic, so an install with no
+        // Moonlight host pays one relaxed load per report.
+        moonlight_.forwardReport(did, buttons, lt, rt, lx, ly, rx, ry);
     });
 
     processor_.setMotionSender([this](const std::string& did, std::int16_t gx, std::int16_t gy,
@@ -120,6 +147,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
             sender = motionRouting_.value(QString::fromStdString(did));
         }
         if (sender) { sender(gx, gy, gz, ax, ay, az, dtUs); }
+        moonlight_.forwardMotion(did, gx, gy, gz, ax, ay, az);
     });
 
     processor_.setBatterySender(
@@ -130,6 +158,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
                 sender = batteryRouting_.value(QString::fromStdString(did));
             }
             if (sender) { sender(level, status); }
+            moonlight_.forwardBattery(did, level, status);
         });
 
     processor_.setTouchpadSender([this](const std::string& did,

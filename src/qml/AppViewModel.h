@@ -292,6 +292,109 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void startDiscovery();
     Q_INVOKABLE bool isScanning() const;
     Q_INVOKABLE QVariantList discoveredServers() const;
+
+    // ── Moonlight (GameStream) hosts ─────────────────────────────────────────
+    // Rows of {id,name,ip,paired,discovered,phase}; phase is a lowercase token
+    // ("idle"|"pairing"|"paired"|"connecting"|"streaming"|"faltering"|"failed").
+    // The sibling of the Satellite discovery surface above, kept clearly labeled
+    // as a distinct host kind. moonlightPairingFinished(id, ok) reports a pair.
+    Q_INVOKABLE QVariantList moonlightHosts() const;
+    Q_INVOKABLE bool moonlightScanning() const;
+    Q_INVOKABLE void startMoonlightDiscovery();
+    Q_INVOKABLE void addMoonlightHost(const QString& ip, const QString& name);
+    Q_INVOKABLE void pairMoonlightHost(const QString& id, const QString& pin);
+    // Back out of a pairing. Phase 1 parks on the host until a human types the
+    // PIN, so a dialog that closes without this leaves a request running and the
+    // section still showing a code nobody will type.
+    Q_INVOKABLE void cancelMoonlightPairing(const QString& id);
+    Q_INVOKABLE void connectMoonlightHost(const QString& id, const QString& appId);
+    Q_INVOKABLE void disconnectMoonlightHost(const QString& id);
+    Q_INVOKABLE void forgetMoonlightHost(const QString& id);
+
+    // App pick: refresh asks the host, the rows arrive on moonlightAppsChanged,
+    // and setMoonlightApp remembers the choice for the next launch.
+    Q_INVOKABLE void refreshMoonlightApps(const QString& id);
+    // Rows of {id,title} for the host whose list arrived last.
+    Q_INVOKABLE QVariantList moonlightApps() const;
+    Q_INVOKABLE void setMoonlightApp(const QString& id, const QString& appId,
+                                     const QString& appName);
+
+    // Emulated-device pick: 0xFF Auto, 1 Xbox, 2 PlayStation, 3 Nintendo. It
+    // rides the next CONTROLLER_ARRIVAL, so a change takes effect on the next
+    // bind. Per HOST here, which is only the default a fresh binding starts
+    // from; the pick that ships is the binding's own.
+    Q_INVOKABLE int moonlightDeviceType(const QString& id) const;
+    Q_INVOKABLE void setMoonlightDeviceType(const QString& id, int deviceType);
+
+    // Per-slot routing into a live Moonlight session. bindMoonlightSlot reads the
+    // pad's real capabilities from the slot list, so the host is told what the
+    // hardware can actually do, and the session is reference counted per host:
+    // the first pad starts one and the last pad off cancels it.
+    // Returns the empty string when the pad was routed, and otherwise the token
+    // naming what stopped it: "hostGone" | "identityFailed" | "hostFull". Never
+    // void, because a bind that says nothing is one the user cannot tell from a
+    // bind that worked.
+    Q_INVOKABLE QString bindMoonlightSlot(const QString& slotId, const QString& hostId,
+                                          int controllerType);
+    Q_INVOKABLE void unbindMoonlightSlot(const QString& slotId);
+    Q_INVOKABLE QString moonlightBoundHostFor(const QString& slotId) const;
+
+    // Whether this destination id names a Moonlight host. The one place the two
+    // host kinds are told apart, so nothing else has to know how an id is spelt.
+    Q_INVOKABLE bool isMoonlightHost(const QString& connectionId) const;
+
+    // Re-verify remembered trust: PairStatus and the host's identity, over
+    // plaintext. NEVER POLLED. Called on entering a screen and before a session
+    // starts, because the host cannot tell us it has forgotten us.
+    Q_INVOKABLE void probeMoonlightHost(const QString& id);
+
+    // The session section's ONE state, as a token: "checking" | "notPaired" |
+    // "pairingPin" | "pairingRefused" | "unreachable" | "remembered" |
+    // "trustLost" | "hostReplaced" | "appsLoading" | "newSession" | "noApps" |
+    // "appsFailed" | "joining" | "hostFull" | "busyOther" | "resumeFailed" |
+    // "refused" | "setupFailed" | "live" | "dropped" | "endedByHost". QML
+    // localizes and colours from it and never re-derives it. `slotId` names the
+    // binding asking, which is what tells riding a session from joining one; it
+    // may be empty for a binding that has not been applied.
+    Q_INVOKABLE QString moonlightSessionState(const QString& id, const QString& slotId) const;
+    Q_INVOKABLE bool moonlightSessionBlocksApply(const QString& id, const QString& slotId) const;
+    Q_INVOKABLE bool moonlightSessionIsProblem(const QString& id, const QString& slotId) const;
+
+    // The host row's trust word: "paired" | "remembered" | "notPaired". Never a
+    // liveness light, because there is no liveness to draw.
+    Q_INVOKABLE QString moonlightTrust(const QString& id) const;
+
+    // A fresh four-digit pairing code. Generated here rather than in QML: a PIN
+    // is security-relevant and Math.random() is not a suitable source.
+    Q_INVOKABLE QString moonlightPairingPin() const;
+
+    // How many controllers the host carries now, and the protocol ceiling it is
+    // measured against. Both are counts; the one-based ordinal a screen shows is
+    // arithmetic QML does on them, not a second number this has to vend.
+    Q_INVOKABLE int moonlightBoundSlotCount(const QString& id) const;
+    Q_INVOKABLE int moonlightMaxControllers() const;
+
+    // The app the host is running for us, so a joining binding can name it.
+    Q_INVOKABLE QString moonlightRunningAppName(const QString& id) const;
+
+    // The host's own words for its last refusal, quoted rather than paraphrased.
+    Q_INVOKABLE QString moonlightRefusalMessage(const QString& id) const;
+
+    // Close whatever the host is running. /cancel answers 200 whether or not
+    // anything was running, so this re-probes rather than believing it.
+    Q_INVOKABLE void quitMoonlightApp(const QString& id);
+
+    // The four type cards, in order, as {type, token} with token one of
+    // "auto" | "xbox" | "playstation" | "nintendo".
+    Q_INVOKABLE QVariantList moonlightTypeOptions() const;
+
+    // What Auto resolves to for this pad, before the wire: PlayStation when the
+    // source reports motion, Xbox otherwise. The token is the same vocabulary
+    // moonlightTypeOptions vends.
+    Q_INVOKABLE int moonlightResolvedAutoType(const QString& slotId) const;
+
+    // The type this binding carries, Auto when it has none stored yet.
+    Q_INVOKABLE int moonlightBindingType(const QString& slotId) const;
     Q_INVOKABLE void forgetConnection(const QString& connectionId);
 
     // Keyed on the stable id, never a list index: the discovered list can reorder
@@ -455,6 +558,13 @@ class AppViewModel : public QObject {
 
     void scanningChanged();
     void reversePairingChanged();
+
+    // Moonlight host list moved (discovery, pairing, or a phase transition), and
+    // the terminal pairing edge keyed by host id.
+    void moonlightHostsChanged();
+    void moonlightPairingFinished(const QString& id, bool ok);
+    // A fresh /applist landed for `id`; moonlightApps() now answers for it.
+    void moonlightAppsChanged(const QString& id);
     void emulateStateChanged();
     void deadzonesChanged();
     void railCollapsedChanged();
@@ -588,6 +698,20 @@ class AppViewModel : public QObject {
 
     // Shell-only state, so the store lives here rather than on AppModel.
     source::UiPreferenceStore uiPrefs_;
+
+    // The last /applist to arrive, keyed by the host it came from, so the picker
+    // never renders one host's apps under another's name.
+    // A Moonlight binding writes a record and routes the pad; there is no
+    // descriptor to PUT and no liveness to wait on, so it settles at once.
+    void applyMoonlightBinding(const QString& slotId, const QString& hostId, int type);
+    // Re-routes the standing Moonlight bindings whose pad is present and not yet
+    // routed. A binding is an intent that outlives a session, so it is the pad
+    // appearing that starts one, not the binding being saved.
+    void reattachMoonlightBindings();
+
+    QString moonlightAppsHostId_;
+    QStringList moonlightAppIds_;
+    QStringList moonlightAppTitles_;
 };
 
 } // namespace dish::qml

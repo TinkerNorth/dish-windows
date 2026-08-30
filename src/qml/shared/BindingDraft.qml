@@ -19,7 +19,7 @@ QtObject {
 
     property string slotId: ""
     property string hostId: ""
-    property string hostKind: "satellite" // "satellite" | "bluetooth"
+    property string hostKind: "satellite" // "satellite" | "bluetooth" | "moonlight"
     property int type: -1                 // -1 = unresolved; never guessed
     property string desiredPath: "standard" // "standard" | "direct" — never "auto"
     property bool motionOn: true
@@ -32,6 +32,13 @@ QtObject {
     property string typeName: ""
     // Raw-HID claimable, so "switch to Direct" is advice and not a dead end.
     property bool padClaimable: false
+
+    // The app this binding will start on a Moonlight host, empty when it will
+    // join one that is already running or start whatever the host lists first.
+    // The app belongs to the SESSION, so only the binding that creates one picks
+    // it and every later binding inherits it.
+    property string appId: ""
+    property string appName: ""
     // The catalog fetch failed outright — a Pending row is a retry, not a wait.
     property bool catalogFailed: false
 
@@ -45,7 +52,13 @@ QtObject {
     // A Bluetooth destination is Windows' own gamepad layer: there is no
     // catalog and so no type to resolve.
     readonly property bool hostIsBluetooth: draft.hostKind === "bluetooth"
-    readonly property bool hasType: draft.hostIsBluetooth || draft.type >= 0
+    readonly property bool hostIsMoonlight: draft.hostKind === "moonlight"
+    // A Moonlight type comes from a table rather than a catalog, and Auto is
+    // 0xFF rather than a small index, so it is resolved the moment a host is
+    // picked and never Pending.
+    readonly property bool hasType: draft.hostIsBluetooth
+                                    || (draft.hostIsMoonlight && draft.type !== -1)
+                                    || draft.type >= 0
     readonly property bool complete: draft.hasInput && draft.hasDestination && draft.hasType
 
     // The type step compares three of these side by side without committing.
@@ -216,6 +229,18 @@ QtObject {
         // until the new catalog resolves it.
         draft.type = -1;
         draft.typeName = "";
+        // And a different host runs a different session, so the app it would
+        // start is not this host's to inherit.
+        draft.appId = "";
+        draft.appName = "";
+        draft.sanitize();
+    }
+
+    // The app the session this binding creates should run. Empty is a real
+    // answer: the host starts whatever it lists first.
+    function chooseApp(id, name) {
+        draft.appId = id;
+        draft.appName = name;
         draft.sanitize();
     }
 
