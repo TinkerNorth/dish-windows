@@ -21,14 +21,13 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: windows-2022
-    # 60 was not enough once the Moonlight path landed. CodeQL traces the
-    # compiler, which costs several times a plain build, and the Build step
-    # alone grew to ~57 min against ~36 min for the whole run on main — the
-    # analyse step was reaching the cap with seconds to spare and the job was
-    # cancelled, which reads as a failed check even though `analyze` is
-    # continue-on-error. This is the traced build being slow, not a hang, so
-    # the cap is raised rather than the work cut.
-    timeout-minutes: 120
+    # Back down from 120. That cap existed because the Build step used to run
+    # configure inside the traced region, so vcpkg's dependency builds were
+    # compiled under CodeQL's tracer (OpenSSL alone: 40 min traced against ~7
+    # untraced). Configure now runs before init and the tracer sees only
+    # first-party compiles; a warm binary cache lands the whole job around
+    # 25 min and a cold one around 35, so 60 catches a hang with margin.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -38,6 +37,12 @@ jobs:
       VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       VCPKG_DEFAULT_TRIPLET: x64-windows
       QT_VERSION: "6.7.3"
+      # Job-level so lukka/run-vcpkg sees it already defined and leaves it
+      # alone: its default (clear;x-gha,readwrite) has never restored a
+      # package here, so every run rebuilt OpenSSL from source. The files
+      # provider is backed by the actions/cache step below; windows-ci.yml
+      # uses the same key, so the two lanes share archives.
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
 
     steps:
       - name: Checkout
@@ -61,28 +66,62 @@ jobs:
           modules: ""
           cache: true
 
-      - name: Set up vcpkg + install dependencies
+      # ImageVersion is in the cache key because a runner-image update can
+      # carry a new MSVC, which changes vcpkg's ABI hashes: under a fixed key
+      # the cache would go permanently stale — restored but never hit, rebuilt
+      # but never saved, since actions/cache does not update an existing key.
+      # The directory must exist before vcpkg first writes into it.
+      - name: Prepare vcpkg binary cache
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
+          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-${{ runner.os }}-${{ env.IMAGE_VERSION }}-${{ env.VCPKG_COMMITID }}-${{ hashFiles('vcpkg.json') }}
+          # A pin or manifest bump still restores the previous archives: vcpkg
+          # keys each package by ABI hash, skips what no longer matches, and
+          # rebuilds only the delta, saved under the new key.
+          restore-keys: |
+            vcpkg-bin-${{ runner.os }}-
+
+      - name: Set up vcpkg
         uses: lukka/run-vcpkg@5e0cab206a5ea620130caf672fce3e4a6b5666a1 # v11.5
         with:
           vcpkgGitCommitId: ${{ env.VCPKG_COMMITID }}
 
-      # init and analyze come from the same repo — bump both SHAs together.
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
-        with:
-          languages: ${{ matrix.language }}
-          queries: security-extended,security-and-quality
-
-      - name: Build
+      # Deliberately BEFORE CodeQL init: configure is where the vcpkg
+      # toolchain builds or restores the dependencies, and the tracer has no
+      # business watching that. Traced, the dependency builds cost ~48 min of
+      # a 60 min Build step and pushed third-party TUs into the database for
+      # the analyse step to chew on; their headers still reach the database
+      # through the includes of traced first-party compiles.
+      - name: Configure (vcpkg dependencies build untraced)
         shell: pwsh
         run: |
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DDISH_BUILD_TESTS=OFF `
             "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
-          # only oversubscribes it.
-          cmake --build build --parallel 4 --target Dish
+
+      # init and analyze come from the same repo — bump both SHAs together.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: ${{ matrix.language }}
+          # security-extended without security-and-quality: the quality suite
+          # tripled the query count for maintainability findings that, like
+          # everything here pre-GHAS, surface only in the logs.
+          queries: security-extended
+
+      # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
+      # only oversubscribes it.
+      - name: Build (traced)
+        shell: pwsh
+        run: cmake --build build --parallel 4 --target Dish
 
       - name: Perform CodeQL analysis
         # SARIF upload needs Advanced Security, which a private repo does not
