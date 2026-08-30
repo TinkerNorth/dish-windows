@@ -107,8 +107,15 @@ void MoonlightSession::detachFromStore() {
 }
 
 MoonlightSession::~MoonlightSession() {
-    quit();
+    // The worker first: it may be inside the ENet handshake on control_, which
+    // the teardown below cuts. Then the wire, and only the wire. No /cancel from
+    // a destructor: the client it would go out on is a child of this object and
+    // dies in the same breath, so it never left; and closing Dish is not an
+    // unbind, so the app the host is running is left for the next session to
+    // resume, which is what the other two clients leave it for.
     if (worker_.joinable()) { worker_.join(); }
+    if (pingTimer_ != nullptr) { pingTimer_->stop(); }
+    control_.disconnect();
 }
 
 void MoonlightSession::wireControlHandlers() {
@@ -217,11 +224,13 @@ void MoonlightSession::closeMediaSockets() {
 }
 
 void MoonlightSession::cancelHostApp() {
+    ++cancelsInFlight_;
     http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/cancel"),
                     {{QStringLiteral("uniqueid"), kUniqueId}},
                     [this](const MoonlightXmlResponse& r) {
                         qCInfo(lcMoonlightSession) << host_.ip << "/cancel reachable" << r.reachable
                                                    << "status" << r.statusCode << r.statusMessage;
+                        if (--cancelsInFlight_ == 0) { emit cancelSettled(); }
                     });
 }
 

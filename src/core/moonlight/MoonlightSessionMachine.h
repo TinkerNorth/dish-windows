@@ -245,9 +245,12 @@ inline SessionReduction reduceSession(const SessionState& s, SessionEvent e) {
     case SessionEvent::ServerTerminated:
         if (s.phase == SessionPhase::Streaming || s.phase == SessionPhase::Faltering ||
             s.phase == SessionPhase::ControlConnecting) {
+            // NO /cancel. The host ended this itself, so nothing of ours is
+            // running to quit, and a /cancel sent now closes whatever the person
+            // at that machine started next. The client quits only what it
+            // started; the binding is kept and the next use opens a new session.
             return {to(SessionPhase::Failed, SessionFailure::ServerTerminated),
-                    {SessionEffect::Teardown, SessionEffect::CancelOnHost,
-                     SessionEffect::NotifyFailure}};
+                    {SessionEffect::Teardown, SessionEffect::NotifyFailure}};
         }
         return {};
     case SessionEvent::ControlDropped:

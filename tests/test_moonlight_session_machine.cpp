@@ -138,6 +138,9 @@ TEST_CASE("ServerTerminated tears down from any live phase", "[moonlight][sessio
         REQUIRE(r.next->phase == SessionPhase::Failed);
         REQUIRE(r.next->failure == SessionFailure::ServerTerminated);
         REQUIRE(has(r.effects, SessionEffect::Teardown));
+        // The host ended it: nothing of ours is running to quit, and a /cancel
+        // now would close whatever the person at that machine started next.
+        REQUIRE_FALSE(has(r.effects, SessionEffect::CancelOnHost));
     }
     // Not applicable before there is a stream.
     REQUIRE_FALSE(

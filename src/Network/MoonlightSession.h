@@ -108,6 +108,9 @@ class MoonlightSession : public QObject {
     // GET /applist (HTTPS, needs pairing) and emit appListReady.
     void refreshApps();
 
+    // A /cancel has gone out and nothing has come back for it yet.
+    bool cancelInFlight() const { return cancelsInFlight_ > 0; }
+
     // GET /serverinfo over PLAINTEXT and emit probeFinished. It answers TWO
     // questions and no others: is the host there, and is it still the host we
     // paired with. It cannot answer the third: a plaintext probe reports the host
@@ -152,6 +155,11 @@ class MoonlightSession : public QObject {
     // host ever looking paired.
     void probeFinished(bool answered, const QString& uniqueId);
 
+    // The /cancel this session last sent has been answered, or given up on. A
+    // forget waits for it before letting the session go: the client it goes out
+    // on is a child of this object, and a request whose client dies is aborted.
+    void cancelSettled();
+
     // Host -> client events, forwarded for AppModel to route to the local pad.
     void rumbleReceived(int controllerNumber, int lowFreq, int highFreq);
     void rgbLedReceived(int controllerNumber, int r, int g, int b);
@@ -173,7 +181,18 @@ class MoonlightSession : public QObject {
     void onRtspFinished(bool rtspOk, bool controlOk, const RtspHandshakeResult& rtsp);
     void wireControlHandlers();
     void sendPendingArrivals();
+    // The first CONTROLLER_MULTI a pad sends, right behind its arrival: zeroed,
+    // carrying the active mask, so a bound pad nobody has touched yet is a pad
+    // the game can see rather than a name the host is still waiting to hear
+    // from.
+    void sendInitialState(std::uint8_t number);
+    std::uint16_t presentMask() const;
     void closeMediaSockets();
+    // The media ports were just named by SETUP. Kept, and pinged from this
+    // moment on: the host counts its initial-ping deadline from its own session
+    // start, so waiting for the ENet handshake to finish first is already late.
+    void onRtspNamedPorts(const RtspHandshakeResult& rtsp);
+    void startPinging();
     bool streaming() const;
     // One tick of both keepalives: the encrypted PERIODIC_PING on the control
     // stream and the RTP client pings on the negotiated video/audio UDP ports.
@@ -203,6 +222,7 @@ class MoonlightSession : public QObject {
     // with and returns quietly when it no longer matches.
     unsigned pairGeneration_ = 0;
     QTimer* pingTimer_ = nullptr;
+    int cancelsInFlight_ = 0;
 
     // The pads announced so far, replayed whenever the control stream comes up.
     struct PadArrival {

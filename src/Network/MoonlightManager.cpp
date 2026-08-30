@@ -11,6 +11,7 @@
 #include <QRandomGenerator>
 #include <QSet>
 #include <QSettings>
+#include <QTimer>
 
 namespace dish::net {
 
@@ -18,6 +19,11 @@ namespace dish::net {
 // what happened. A command that returns without a word is undiagnosable from a
 // log and invisible on screen, which is the same defect twice.
 Q_LOGGING_CATEGORY(lcMoonlightManager, "dish.moonlight.manager")
+
+namespace {
+// How long a forget keeps a session alive for the /cancel it sent to be answered.
+constexpr int kForgetCancelGraceMs = 10'000;
+} // namespace
 
 QString moonlightPhaseToken(moonlight::SessionPhase phase) {
     switch (phase) {
@@ -577,7 +583,18 @@ void MoonlightManager::forgetHost(const QString& id) {
         // A host with no pad on it was never released above, so this is what
         // closes a session that was up without one. Already-closed is a no-op.
         session->quit();
-        session->deleteLater();
+        if (session->cancelInFlight()) {
+            // THE /cancel HAS TO LAND BEFORE THE SESSION GOES. Its client is a
+            // child of the session and dies with it, and a request whose client
+            // dies is aborted, so deleting on the next turn of the loop was
+            // deleting the quit it had just sent. The reply releases the object,
+            // or a bounded wait does when a host never answers.
+            QObject::connect(session, &MoonlightSession::cancelSettled, session,
+                             &QObject::deleteLater);
+            QTimer::singleShot(kForgetCancelGraceMs, session, &QObject::deleteLater);
+        } else {
+            session->deleteLater();
+        }
     }
     repo_->forgetHost(id);
     emit hostsChanged();

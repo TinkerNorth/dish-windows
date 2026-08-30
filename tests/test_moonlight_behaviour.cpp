@@ -37,6 +37,7 @@
 #include <QCoreApplication>
 #include <QDeadlineTimer>
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 
@@ -872,9 +873,11 @@ TEST_CASE("Dropped and ended come out of one phase as two different answers",
     REQUIRE(fx.uiStateAnswered(kIdA) == SessionUiState::Dropped);
     REQUIRE(fx.uiStateAnswered(kIdB) == SessionUiState::EndedByHost);
     REQUIRE(fx.uiStateAnswered(kIdA) != fx.uiStateAnswered(kIdB));
-    // One of the two spoke to the host and the other did not, which is the whole
-    // difference and the reason they cannot be one state.
-    REQUIRE(log.count(kCancel) == 1);
+    // NEITHER speaks to the host. A drop is left alone because the host will let
+    // us resume it; an end is the host's own doing, so nothing of ours is
+    // running to quit. The difference is what the next use does: Reconnect
+    // resumes, Start session opens a new one.
+    REQUIRE(log.count(kCancel) == 0);
 }
 
 // ── B19 · a launch that succeeded and then could not be finished ────────────
@@ -936,11 +939,20 @@ TEST_CASE("Forgetting a host with a live session closes it before the credential
                                                            : QStringLiteral("detached"));
     });
 
+    QPointer<MoonlightSession> alive(session);
     fx.manager->forgetHost(kIdA);
 
     // It spoke, and it spoke while it still could, with nothing left that could
     // write back what the forget is about to remove.
     REQUIRE(log.count(kCancel) == 1);
+    // AND IT IS STILL THERE TO HEAR THE ANSWER. The /cancel goes out on a client
+    // that is a child of the session, and a request whose client dies is
+    // aborted, so a session deleted on the next turn of the loop is a quit that
+    // never reached the host. A TEST-NET host never answers; the session waits.
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    REQUIRE(alive);
+    REQUIRE(session->cancelInFlight());
     REQUIRE(log.witnessed() == QStringList{QStringLiteral("credentials detached")});
     // And nothing this session does afterwards can reach the store, which is what
     // stops the /cancel handshake pinning the certificate back over the forget.
