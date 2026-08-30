@@ -68,7 +68,7 @@ class MoonlightControlChannel {
     // failure, leaving the channel closed.
     bool connect(const std::string& hostIp, std::uint16_t port,
                  const std::array<std::uint8_t, 16>& rikey, std::uint32_t connectData,
-                 int timeoutMs = 2000);
+                 int timeoutMs = 5000);
 
     // TERMINATION (best effort) + ENet disconnect + receive-thread join.
     void disconnect();
@@ -115,6 +115,9 @@ class MoonlightControlChannel {
     // Set by the receive thread when the host sends TERMINATION, read by the
     // same thread when the disconnect that follows it arrives.
     bool terminated_ = false;
+    // Raised by disconnect() while a connect() is blocked in its handshake, so
+    // the link that handshake establishes is torn down rather than published.
+    bool cancelled_ = false;
 
     std::array<std::uint8_t, 16> key_{};
     bool enetRef_ = false;

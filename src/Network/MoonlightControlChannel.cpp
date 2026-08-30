@@ -5,6 +5,7 @@
 
 #include <enet/enet.h>
 
+#include <chrono>
 #include <cstring>
 #include <mutex>
 
@@ -47,55 +48,84 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
                                       std::uint32_t connectData, int timeoutMs) {
     disconnect();
 
-    key_ = rikey;
-    terminated_ = false;
-    sealer_ = std::make_unique<moonlight::crypto::ControlSealer>(key_);
-    if (!sealer_->ok()) {
-        sealer_.reset();
-        return false;
+    {
+        // The key and the sealer are read under sendMtx_ by every sender, and
+        // the cancel flag is what a disconnect() landing mid-handshake raises.
+        std::lock_guard<std::mutex> lock(sendMtx_);
+        key_ = rikey;
+        terminated_ = false;
+        cancelled_ = false;
+        sealer_ = std::make_unique<moonlight::crypto::ControlSealer>(key_);
+        if (!sealer_->ok()) {
+            sealer_.reset();
+            return false;
+        }
+        seq_ = 0;
     }
-    seq_ = 0;
 
+    // LOCALS UNTIL THE LINK IS UP. host_ and peer_ are what disconnect() destroys
+    // and what every sender reads, and this call blocks in the handshake below
+    // with no lock it could hold for that long, so nothing is published until
+    // the host has answered. A disconnect() that lands meanwhile finds nothing
+    // to destroy and leaves the flag; the link it would have cut is torn down
+    // here instead of outliving it.
+    //
     // A client host (no bound address): 1 outgoing peer, 1 channel is enough for
     // the control stream. The cgutman fork takes the address family first and a
     // sockaddr_storage-based ENetAddress, so the port is set via the setter.
-    host_ = enet_host_create(AF_INET, nullptr, 1, 1, 0, 0);
-    if (host_ == nullptr) { return false; }
+    ENetHost* host = enet_host_create(AF_INET, nullptr, 1, 1, 0, 0);
+    if (host == nullptr) { return false; }
 
     ENetAddress address{};
     if (enet_address_set_host(&address, hostIp.c_str()) != 0) {
-        enet_host_destroy(host_);
-        host_ = nullptr;
+        enet_host_destroy(host);
         return false;
     }
     enet_address_set_port(&address, port);
 
     // The connect `data` word carries the ENet secret the host handed us in the
     // control SETUP response, so it can match this peer to the launched session.
-    peer_ = enet_host_connect(host_, &address, 1, connectData);
-    if (peer_ == nullptr) {
-        enet_host_destroy(host_);
-        host_ = nullptr;
+    ENetPeer* peer = enet_host_connect(host, &address, 1, connectData);
+    if (peer == nullptr) {
+        enet_host_destroy(host);
         return false;
     }
 
     ENetEvent event;
-    if (enet_host_service(host_, &event, timeoutMs) > 0 && event.type == ENET_EVENT_TYPE_CONNECT) {
-        connected_.store(true, std::memory_order_relaxed);
-        running_.store(true, std::memory_order_relaxed);
-        rxThread_ = std::thread([this] { receiveLoop(); });
-        return true;
+    const bool up =
+        enet_host_service(host, &event, timeoutMs) > 0 && event.type == ENET_EVENT_TYPE_CONNECT;
+    if (up) {
+        std::lock_guard<std::mutex> lock(sendMtx_);
+        if (!cancelled_) {
+            host_ = host;
+            peer_ = peer;
+            // Pairs with the acquire in sealAndSend: a sender that sees the link
+            // up sees the host and peer it was published with.
+            connected_.store(true, std::memory_order_release);
+            running_.store(true, std::memory_order_relaxed);
+            rxThread_ = std::thread([this] { receiveLoop(); });
+            return true;
+        }
     }
 
-    enet_peer_reset(peer_);
-    peer_ = nullptr;
-    enet_host_destroy(host_);
-    host_ = nullptr;
+    if (up) {
+        enet_peer_disconnect_now(peer, 0);
+    } else {
+        enet_peer_reset(peer);
+    }
+    enet_host_destroy(host);
+    std::lock_guard<std::mutex> lock(sendMtx_);
     sealer_.reset();
     return false;
 }
 
 void MoonlightControlChannel::disconnect() {
+    {
+        // A connect() blocked in its handshake cannot be interrupted; the flag
+        // makes it tear down whatever it establishes instead of publishing it.
+        std::lock_guard<std::mutex> lock(sendMtx_);
+        cancelled_ = true;
+    }
     if (running_.exchange(false, std::memory_order_relaxed)) {
         // Best-effort graceful TERMINATION before we drop the link.
         if (connected_.load(std::memory_order_relaxed)) {
@@ -119,6 +149,9 @@ void MoonlightControlChannel::disconnect() {
 }
 
 void MoonlightControlChannel::sealAndSend(const std::uint8_t* plaintext, std::size_t len) {
+    // Before the lock: a keepalive tick during the handshake must not wait on
+    // it, and until the link is published there is nothing here to send on.
+    if (!connected_.load(std::memory_order_acquire)) { return; }
     std::lock_guard<std::mutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
     std::size_t outLen = 0;
@@ -187,11 +220,17 @@ void MoonlightControlChannel::receiveLoop() {
         ENetEvent event;
         int rc = 0;
         {
+            // Serviced without waiting: this lock is the one every hot-path send
+            // takes, and a 16 ms wait held inside it was 16 ms a controller
+            // report could queue behind the receive side.
             std::lock_guard<std::mutex> lock(sendMtx_);
             if (host_ == nullptr) { break; }
-            rc = enet_host_service(host_, &event, 16);
+            rc = enet_host_service(host_, &event, 0);
         }
-        if (rc <= 0) { continue; }
+        if (rc <= 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            continue;
+        }
 
         if (event.type == ENET_EVENT_TYPE_DISCONNECT) {
             connected_.store(false, std::memory_order_relaxed);
