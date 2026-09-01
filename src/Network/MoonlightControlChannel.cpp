@@ -203,6 +203,14 @@ void MoonlightControlChannel::sendControllerMotion(std::uint8_t controllerNumber
     sealAndSend(p.data(), p.size());
 }
 
+void MoonlightControlChannel::sendControllerTouch(std::uint8_t controllerNumber,
+                                                  std::uint8_t eventType, std::uint32_t pointerId,
+                                                  float x, float y, float pressure) {
+    const auto p =
+        moonlight::encodeControllerTouch(controllerNumber, eventType, pointerId, x, y, pressure);
+    sealAndSend(p.data(), p.size());
+}
+
 void MoonlightControlChannel::sendControllerBattery(std::uint8_t controllerNumber,
                                                     std::uint8_t batteryState,
                                                     std::uint8_t percentage) {

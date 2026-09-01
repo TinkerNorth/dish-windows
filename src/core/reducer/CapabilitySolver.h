@@ -8,11 +8,12 @@
 //
 //   Input  what the pad itself reports
 //   Link   the USB path. Standard (SDL) carries everything the pad's driver
-//          exposes — the input layer's per-pad probe is what constrains it.
-//          Direct reads everything the pad sends but drives nothing back yet
-//          (no output write path), so rumble and the lightbar fire only on
-//          Standard. Mirrors dish-android's per-path rule: a capability shows
-//          only where it fires.
+//          exposes — the input layer's per-pad probe is what constrains it —
+//          but SDL has no adaptive-trigger or player-LED call, so those two
+//          never fire there. Direct reads everything the pad sends AND writes
+//          its OUT reports, so it carries every actuator its family has.
+//          Mirrors dish-android's per-path rule: a capability shows only where
+//          it fires.
 //   Type   the catalog type's features: an Xbox 360 type carries no gyro however
 //          good the pad is
 //   Host   the satellite's hostFeatures. A Bluetooth host is Windows' own gamepad
@@ -33,7 +34,17 @@ enum class CapLayer { Input, Link, Type, Host };
 enum class CapVerdict { Available, Unavailable, Pending, Off };
 
 // Declaration order is the render order both surfaces use.
-enum class CapFeature { Gamepad, Triggers, Motion, Touchpad, Mouse, Rumble, Lightbar };
+enum class CapFeature {
+    Gamepad,
+    Triggers,
+    Motion,
+    Touchpad,
+    Mouse,
+    Rumble,
+    Lightbar,
+    TriggerEffects,
+    PlayerLeds
+};
 
 struct CapabilityInputs {
     bool padMotion = false;
@@ -43,6 +54,10 @@ struct CapabilityInputs {
     // input layer; the link layer still gates the path.
     bool padRumble = true;
     bool padLightbar = false;
+    // Protocol-2 actuators. Default false: unlike rumble these are rare enough
+    // that an unknown pad claiming them would be the surprising answer.
+    bool padTriggerEffects = false;
+    bool padPlayerLeds = false;
 
     bool linkDirect = false;   // usb && directCapable && the draft wants Direct
     bool linkUsb = false;      // false means Bluetooth transport
@@ -50,6 +65,7 @@ struct CapabilityInputs {
 
     bool typeResolved = false; // false means the type layer refuses nothing
     bool typeMotion = false, typeTouchpad = false, typeRumble = false, typeLightbar = false;
+    bool typeTriggerEffects = false, typePlayerLeds = false;
 
     bool hostResolved = false; // false means Pending
     bool hostIsBluetooth = false;
@@ -89,20 +105,25 @@ inline bool inputCarries(const CapabilityInputs& in, CapFeature f) {
         return in.padRumble;
     case CapFeature::Lightbar:
         return in.padLightbar;
+    case CapFeature::TriggerEffects:
+        return in.padTriggerEffects;
+    case CapFeature::PlayerLeds:
+        return in.padPlayerLeds;
     }
     return false;
 }
 
 inline bool linkCarries(const CapabilityInputs& in, CapFeature f) {
     if (in.linkDirect) {
-        // A raw-HID claim reads everything the pad sends but drives nothing
-        // back yet: no output write path exists, so rumble and the lightbar
-        // fire only on the Standard path.
-        return f != CapFeature::Rumble && f != CapFeature::Lightbar;
+        // A raw-HID claim both reads the pad's IN reports and writes its OUT
+        // ones, so every actuator the family has is reachable.
+        return true;
     }
     // Standard (SDL) forwards motion, touch, rumble and the lightbar wherever
-    // the pad's driver exposes them; the input layer's probe constrains it.
-    return true;
+    // the pad's driver exposes them; the input layer's probe constrains it. The
+    // adaptive triggers and the player LEDs have no SDL call at all, so they
+    // are the one thing the Standard path structurally cannot carry.
+    return f != CapFeature::TriggerEffects && f != CapFeature::PlayerLeds;
 }
 
 inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {
@@ -123,6 +144,10 @@ inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {
         return in.typeRumble;
     case CapFeature::Lightbar:
         return in.typeLightbar;
+    case CapFeature::TriggerEffects:
+        return in.typeTriggerEffects;
+    case CapFeature::PlayerLeds:
+        return in.typePlayerLeds;
     }
     return false;
 }
@@ -130,7 +155,8 @@ inline bool typeCarries(const CapabilityInputs& in, CapFeature f) {
 inline bool hostCarries(const CapabilityInputs& in, CapFeature f) {
     if (!in.hostResolved) { return true; } // same rule as the type layer
     if (in.hostIsBluetooth) {
-        // Windows' own gamepad layer has no motion, touch or lightbar channel.
+        // Windows' own gamepad layer has no motion, touch, lightbar, trigger
+        // effect or player-LED channel.
         return f == CapFeature::Gamepad || f == CapFeature::Triggers || f == CapFeature::Rumble;
     }
     switch (f) {
@@ -139,6 +165,8 @@ inline bool hostCarries(const CapabilityInputs& in, CapFeature f) {
     case CapFeature::Motion:
     case CapFeature::Touchpad:
     case CapFeature::Lightbar:
+    case CapFeature::TriggerEffects:
+    case CapFeature::PlayerLeds:
         return true;
     case CapFeature::Mouse:
         return in.hostMouseControl;
@@ -175,8 +203,9 @@ inline bool capabilitiesPending(const CapabilityInputs& in) {
 
 inline std::vector<CapabilityRow> solveCapabilities(const CapabilityInputs& in) {
     static constexpr CapFeature kOrder[] = {
-        CapFeature::Gamepad, CapFeature::Triggers, CapFeature::Motion,  CapFeature::Touchpad,
-        CapFeature::Mouse,   CapFeature::Rumble,   CapFeature::Lightbar};
+        CapFeature::Gamepad,  CapFeature::Triggers,       CapFeature::Motion,
+        CapFeature::Touchpad, CapFeature::Mouse,          CapFeature::Rumble,
+        CapFeature::Lightbar, CapFeature::TriggerEffects, CapFeature::PlayerLeds};
     const bool pending = capabilitiesPending(in);
 
     std::vector<CapabilityRow> rows;

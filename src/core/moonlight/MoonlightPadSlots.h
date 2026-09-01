@@ -116,7 +116,16 @@ enum class BindOutcome {
 inline std::uint8_t padCapabilities(bool hasRumble, bool hasMotion, bool hasTouchpad,
                                     bool hasBattery, bool hasLightbar) {
     std::uint8_t caps = kPadCapAnalogTriggers;
-    if (hasRumble) { caps = static_cast<std::uint8_t>(caps | kPadCapRumble); }
+    if (hasRumble) {
+        caps = static_cast<std::uint8_t>(caps | kPadCapRumble);
+        // Trigger rumble rides the rumble bit rather than a hardware probe of
+        // its own, because no pad this client can claim has impulse-trigger
+        // motors: the host's RUMBLE_TRIGGERS is folded onto the body motors
+        // (core/moonlight/MoonlightTriggerRumble.h), so the effect DOES land,
+        // just not where the game drew it. Not advertising would make the fold
+        // dead code — the host would never send the packet.
+        caps = static_cast<std::uint8_t>(caps | kPadCapTriggerRumble);
+    }
     if (hasMotion) { caps = static_cast<std::uint8_t>(caps | kPadCapAccel | kPadCapGyro); }
     if (hasTouchpad) { caps = static_cast<std::uint8_t>(caps | kPadCapTouchpad); }
     if (hasBattery) { caps = static_cast<std::uint8_t>(caps | kPadCapBattery); }

@@ -64,6 +64,58 @@ TEST_CASE("CONTROLLER_MULTI carries sticks, triggers and flags2", "[moonlight][c
     REQUIRE(viaBuf[23] == 0xFF); // RT
 }
 
+TEST_CASE("CONTROLLER_TOUCH lays out the header, pointer id and three netfloats",
+          "[moonlight][control]") {
+    // control.hpp CONTROLLER_TOUCH_PACKET: ctrl(1) event(1) zero(2) pointer(4)
+    // x/y/pressure as little-endian floats. The INPUT_DATA wrapper's data-size
+    // field is BIG-endian while everything else is little, which is the one
+    // trap in this packet and the reason the whole 32 bytes are pinned here
+    // rather than just the body.
+    const auto bytes = encodeControllerTouch(/*ctrl=*/1, kTouchEventDown, /*pointerId=*/2,
+                                             /*x=*/0.0F, /*y=*/1.0F, /*pressure=*/1.0F);
+    REQUIRE(bytes.size() == 32U);
+    // 0206 (INPUT_DATA) | 1C00 (len 28 LE) | 00000018 (data size 24 BE)
+    // | 05000055 (0x55000005 LE) | 01 01 0000 | 02000000
+    // | 00000000 (0.0f) | 0000803F (1.0f) | 0000803F (1.0f)
+    REQUIRE(hx(bytes) == "0602"
+                         "1C00"
+                         "00000018"
+                         "05000055"
+                         "01"
+                         "01"
+                         "0000"
+                         "02000000"
+                         "00000000"
+                         "0000803F"
+                         "0000803F");
+}
+
+TEST_CASE("CONTROLLER_TOUCH carries the event type it was handed", "[moonlight][control]") {
+    // The host holds a contact open until an UP arrives, so the event byte is
+    // the difference between a released finger and a stranded one.
+    // Body starts after the 12-byte INPUT_DATA wrapper: ctrl at 12, event at 13.
+    CHECK(encodeControllerTouch(0, kTouchEventDown, 0, 0.0F, 0.0F, 1.0F)[13] == kTouchEventDown);
+    CHECK(encodeControllerTouch(0, kTouchEventMove, 0, 0.0F, 0.0F, 1.0F)[13] == kTouchEventMove);
+    CHECK(encodeControllerTouch(0, kTouchEventUp, 0, 0.0F, 0.0F, 0.0F)[13] == kTouchEventUp);
+}
+
+TEST_CASE("CONTROLLER_TOUCH pointer ids are a full little-endian u32", "[moonlight][control]") {
+    // A pad's tracking id is one byte, but the wire field is four: truncating
+    // it would collide two contacts on any host that keyed on the full value.
+    const auto bytes = encodeControllerTouch(0, kTouchEventDown, 0x12345678, 0.0F, 0.0F, 1.0F);
+    CHECK(bytes[16] == 0x78);
+    CHECK(bytes[17] == 0x56);
+    CHECK(bytes[18] == 0x34);
+    CHECK(bytes[19] == 0x12);
+}
+
+TEST_CASE("CONTROLLER_TOUCH is the same length whatever it carries", "[moonlight][control]") {
+    // Fixed-size packet: a host reads the body by offset, so a size that varied
+    // with the payload would shift every field after it.
+    CHECK(encodeControllerTouch(0, kTouchEventUp, 0, -1.0F, 2.0F, 0.0F).size() == 32U);
+    CHECK(encodeControllerTouch(3, kTouchEventMove, 0xFFFFFFFF, 0.5F, 0.5F, 1.0F).size() == 32U);
+}
+
 TEST_CASE("PERIODIC_PING and TERMINATION headers", "[moonlight][control]") {
     REQUIRE(hx(encodePeriodicPing()) == "00020000");
     // 0100 (type) 0400 (len=4) 80030023 (graceful reason, big-endian)

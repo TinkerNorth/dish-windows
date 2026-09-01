@@ -201,6 +201,26 @@
         <source>Direct mode can’t drive it — switch the connection to Standard.</source>
         <translation>El Modo directo no puede accionarlo — cambia la conexión a Estándar.</translation>
     </message>
+    <message>
+        <source>Adaptive triggers</source>
+        <translation type="unfinished">Gatillos adaptativos</translation>
+    </message>
+    <message>
+        <source>Player LEDs</source>
+        <translation type="unfinished">LED de jugador</translation>
+    </message>
+    <message>
+        <source>adaptive triggers</source>
+        <translation type="unfinished">gatillos adaptativos</translation>
+    </message>
+    <message>
+        <source>player LEDs</source>
+        <translation type="unfinished">LED de jugador</translation>
+    </message>
+    <message>
+        <source>Standard mode can’t drive it — switch the connection to Direct.</source>
+        <translation type="unfinished">El Modo estándar no puede accionarlo — cambia la conexión a Directo.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>

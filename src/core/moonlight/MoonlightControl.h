@@ -86,6 +86,14 @@ inline constexpr std::uint32_t kBtnTouchpad = 0x100000;
 inline constexpr std::uint32_t kBtnMisc = 0x200000;
 
 // MOTION_EVENT sensor selector (host asks the client to start streaming it).
+// ── CONTROLLER_TOUCH event types (control.hpp TOUCH_EVENT_TYPE) ──────────────
+// Shared by the touchscreen, pen and controller-touchpad surfaces. Only the
+// three a two-finger pad can produce are modelled; HOVER and the pen-only
+// values have no source here.
+inline constexpr std::uint8_t kTouchEventDown = 0x01;
+inline constexpr std::uint8_t kTouchEventUp = 0x02;
+inline constexpr std::uint8_t kTouchEventMove = 0x03;
+
 inline constexpr std::uint8_t kMotionAccel = 0x01;
 inline constexpr std::uint8_t kMotionGyro = 0x02;
 
@@ -163,6 +171,15 @@ std::vector<std::uint8_t> encodeControllerArrival(std::uint8_t controllerNumber,
                                                   std::uint8_t controllerType,
                                                   std::uint8_t capabilities,
                                                   std::uint32_t supportedButtons);
+
+// CONTROLLER_TOUCH: one pointer event on the emulated pad's touch surface.
+// `x` / `y` are normalised 0..1 across the pad (the host multiplies by its
+// emulated touchpad's resolution) and `pressure` is 1.0 for a solid contact,
+// 0.0 on release. Unlike the satellite's full-state frame this is an EVENT
+// stream, so the caller diffs first (MoonlightTouchDiffer.h).
+std::vector<std::uint8_t> encodeControllerTouch(std::uint8_t controllerNumber,
+                                                std::uint8_t eventType, std::uint32_t pointerId,
+                                                float x, float y, float pressure);
 
 // CONTROLLER_MOTION: forward a gyro/accel sample (3 little-endian floats).
 std::vector<std::uint8_t> encodeControllerMotion(std::uint8_t controllerNumber,

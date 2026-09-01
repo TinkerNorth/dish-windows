@@ -201,6 +201,26 @@
         <source>Direct mode can’t drive it — switch the connection to Standard.</source>
         <translation>Brzi način ovo ne može pokrenuti — prebacite vezu na Standardni.</translation>
     </message>
+    <message>
+        <source>Adaptive triggers</source>
+        <translation type="unfinished">Adaptivni okidači</translation>
+    </message>
+    <message>
+        <source>Player LEDs</source>
+        <translation type="unfinished">LED indikatori igrača</translation>
+    </message>
+    <message>
+        <source>adaptive triggers</source>
+        <translation type="unfinished">adaptivne okidače</translation>
+    </message>
+    <message>
+        <source>player LEDs</source>
+        <translation type="unfinished">LED indikatore igrača</translation>
+    </message>
+    <message>
+        <source>Standard mode can’t drive it — switch the connection to Direct.</source>
+        <translation type="unfinished">Standardni način ovo ne može pokrenuti — prebacite vezu na Brzi.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
