@@ -25,6 +25,9 @@
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightIdentity.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
+#include "core/moonlight/MoonlightTelemetry.h"
+#include "core/moonlight/MoonlightTouchDiffer.h"
+#include "core/moonlight/MoonlightTriggerRumble.h"
 
 #include <QObject>
 #include <QString>
@@ -135,10 +138,29 @@ class MoonlightSession : public QObject {
 
     // Forward a motion sample / battery report for a bound pad. No-ops unless
     // streaming, like sendControllerState.
-    void sendControllerMotion(std::uint8_t number, std::uint8_t motionType, float x, float y,
+    //
+    // Motion is subscription-gated: nothing goes out until the host asks with a
+    // MOTION_EVENT, and a sample arriving faster than the requested rate is
+    // dropped rather than queued. Returns whether the sample went out, so a
+    // caller can skip converting the other axis set when the host is not
+    // listening.
+    bool sendControllerMotion(std::uint8_t number, std::uint8_t motionType, float x, float y,
                               float z);
     void sendControllerBattery(std::uint8_t number, std::uint8_t batteryState,
                                std::uint8_t percentage);
+    // One diffed touch event. Unlike motion this is never rate-gated: the events
+    // are transitions, and dropping one strands a contact on the host.
+    void sendControllerTouch(std::uint8_t number, const moonlight::TouchEvent& event);
+
+    // Whether the host has asked for this pad's motion at all. The capability
+    // pills read it, and forwardMotion skips the unit conversion when false.
+    bool motionWanted(std::uint8_t number, std::uint8_t motionType) const {
+        return motionGate_.wanted(number, motionType);
+    }
+
+    // Forget a pad's motion subscriptions when it unbinds. A returning pad waits
+    // to be asked again rather than resuming a stream the host forgot.
+    void forgetMotionSubscriptions(std::uint8_t number) { motionGate_.clear(number); }
 
   signals:
     void phaseChanged();
@@ -161,6 +183,10 @@ class MoonlightSession : public QObject {
     void cancelSettled();
 
     // Host -> client events, forwarded for AppModel to route to the local pad.
+    // Already MIXED: the host's body-rumble and trigger-rumble streams both land
+    // on the pad's two motors, because no pad this client can claim has trigger
+    // motors (see MoonlightTriggerRumble.h). A listener actuates what it is
+    // given and does no folding of its own.
     void rumbleReceived(int controllerNumber, int lowFreq, int highFreq);
     void rgbLedReceived(int controllerNumber, int r, int g, int b);
     void motionRequested(int controllerNumber, int rateHz, int motionType);
@@ -214,6 +240,19 @@ class MoonlightSession : public QObject {
     MoonlightHttpClient* http_;
     MoonlightControlChannel control_;
     std::thread worker_;
+
+    // Applies one stream's update to a controller's mix and returns what the
+    // motors should now be driven at. ENet-receive-thread only.
+    moonlight::BodyRumble
+    updateRumbleMix(int controllerNumber,
+                    const std::function<moonlight::RumbleMix(moonlight::RumbleMix)>& apply);
+
+    // Written from the ENet receive thread, read from the input thread; the gate
+    // carries its own lock.
+    mutable moonlight::MoonlightMotionGate motionGate_;
+    // Per controller number, the live mix of the host's two rumble streams. Only
+    // touched on the ENet receive thread (both handlers run there), so no lock.
+    std::map<int, moonlight::RumbleMix> rumbleMix_;
 
     moonlight::SessionState state_;
     QString pendingAppId_;

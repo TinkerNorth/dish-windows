@@ -84,6 +84,10 @@ class MoonlightControlChannel {
                                std::uint8_t capabilities, std::uint32_t supportedButtons);
     void sendControllerMotion(std::uint8_t controllerNumber, std::uint8_t motionType, float x,
                               float y, float z);
+    // One CONTROLLER_TOUCH event. Already diffed by the caller: the wire wants
+    // transitions, not the pad's full-state frame.
+    void sendControllerTouch(std::uint8_t controllerNumber, std::uint8_t eventType,
+                             std::uint32_t pointerId, float x, float y, float pressure);
     void sendControllerBattery(std::uint8_t controllerNumber, std::uint8_t batteryState,
                                std::uint8_t percentage);
     void sendPeriodicPing();

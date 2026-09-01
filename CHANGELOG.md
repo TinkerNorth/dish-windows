@@ -23,6 +23,52 @@ share a version number.
 
 ## [Unreleased]
 
+### Added
+
+- **Protocol 2** `[wire-coordinated]` (satellite #86, #87; dish-android #174,
+  #175). The version is now negotiated rather than assumed: the client offers 2,
+  the satellite settles the session on that offer and echoes it back, and the
+  *settled* version keys the wire frames. A satellite that predates versioning
+  echoes 1 and keeps working on the v1 frames. A 409 whose range still overlaps
+  ours is re-offered at the satellite's ceiling instead of dead-ending, and one
+  that does not names which end has to update.
+- **The POINTER frame** (0x000C, v2, 19 bytes). The touchpad click moved out of
+  the finger flags into a buttons byte and a signed vertical wheel was appended.
+  A physical pad's touch surface reports one click and no wheel, so the right,
+  middle and wheel fields ride as zero rather than being synthesised from
+  gestures the user never made.
+- **Feedback to a Direct-claimed pad.** The USB-direct claim path gained an OUT
+  report path, so a raw-HID claim now drives the pad as well as reading it:
+  - rumble and the RGB lightbar, which previously fired only on the SDL path;
+  - `MSG_TRIGGER_EFFECTS` (0x0010) replays the game's own DualSense
+    adaptive-trigger blocks verbatim;
+  - `MSG_PLAYER_LEDS` (0x0011) drives the DualSense indicator bar and the Switch
+    Pro's player lights.
+  The descriptor advertises the actuator, not the hardware: a capability is
+  claimed only where a report would actually land, so the satellite never sends
+  into a path that would drop it.
+- **Moonlight touch.** A bound pad's touchpad now reaches the host as
+  `CONTROLLER_TOUCH` events: the full-state frame is diffed into per-pointer
+  DOWN / MOVE / UP, with a tracking-id change closing the old contact before
+  opening the new one.
+- **Moonlight motion is subscription-gated.** Samples go out only after the host
+  asks with a `MOTION_EVENT`, per (pad, motion type) and at the requested rate.
+  Previously the stream ran whether or not anything wanted it.
+- **Moonlight trigger rumble** is folded onto the pad's body motors and
+  advertised, so a game whose only haptics are trigger effects is no longer
+  silent. No pad this client can claim has impulse-trigger motors (Linux xpad
+  publishes no hidraw node for an Xbox pad; Windows XInput hides one from raw
+  HID), so the fold is the honest maximum rather than a shortcut. The two host
+  rumble streams mix per motor by maximum, so neither can cancel the other.
+
+### Fixed
+
+- Moonlight accelerometer samples were sent in g where the wire wants metres per
+  second squared, so a host read every pad as nearly motionless.
+- An absent `protocolVersion` in a satellite response was read as this build's
+  version rather than as 1, which would have made a pre-versioning satellite
+  look like it had agreed to frames it cannot decode.
+
 ## [1.1.0] - 2026-08-24
 
 ### Added

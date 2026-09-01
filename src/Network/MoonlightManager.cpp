@@ -640,7 +640,14 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
 
     {
         std::lock_guard<std::mutex> lock(routeMtx_);
-        routes_[key] = Route{session, *number, hostId};
+        // Named rather than braced-aggregate: the differ is default-constructed
+        // on purpose (a fresh binding starts from "nothing is touching"), and a
+        // positional init would have to spell that out to stay warning-clean.
+        Route route;
+        route.session = session;
+        route.controllerNumber = *number;
+        route.hostId = hostId;
+        routes_[key] = std::move(route);
         anyBound_.store(true, std::memory_order_relaxed);
     }
 
@@ -854,17 +861,51 @@ void MoonlightManager::forwardMotion(const std::string& slotId, std::int16_t gyr
         number = it->second.controllerNumber;
     }
     if (session == nullptr) { return; }
-    // The wire carries floats in the sensors' natural units; the SDL path hands
-    // us the satellite's fixed-point scaling (gyro 2000/32767 deg/s, accel
-    // 4/32767 g), so convert once here.
-    constexpr float kGyroScale = 2000.0F / 32767.0F;
-    constexpr float kAccelScale = 4.0F / 32767.0F;
-    session->sendControllerMotion(
-        number, moonlight::kMotionGyro, static_cast<float>(gyroX) * kGyroScale,
-        static_cast<float>(gyroY) * kGyroScale, static_cast<float>(gyroZ) * kGyroScale);
-    session->sendControllerMotion(
-        number, moonlight::kMotionAccel, static_cast<float>(accelX) * kAccelScale,
-        static_cast<float>(accelY) * kAccelScale, static_cast<float>(accelZ) * kAccelScale);
+    // The wire carries floats in the sensors' natural units and the sources hand
+    // us the satellite's fixed-point scaling, so convert through the one owner
+    // of that translation. Accel in particular is metres per second squared on
+    // this wire, not g: the gravity factor is not decoration.
+    //
+    // The send is subscription-gated inside the session, so an unasked-for
+    // stream costs nothing beyond this conversion.
+    session->sendControllerMotion(number, moonlight::kMotionGyro, moonlight::gyroDegS(gyroX),
+                                  moonlight::gyroDegS(gyroY), moonlight::gyroDegS(gyroZ));
+    session->sendControllerMotion(number, moonlight::kMotionAccel, moonlight::accelMs2(accelX),
+                                  moonlight::accelMs2(accelY), moonlight::accelMs2(accelZ));
+}
+
+void MoonlightManager::forwardTouch(const std::string& slotId, bool finger0Active,
+                                    std::uint8_t finger0Id, std::int16_t finger0X,
+                                    std::int16_t finger0Y, bool finger1Active,
+                                    std::uint8_t finger1Id, std::int16_t finger1X,
+                                    std::int16_t finger1Y) {
+    if (!anyBound_.load(std::memory_order_relaxed)) { return; }
+    MoonlightSession* session = nullptr;
+    std::uint8_t number = 0;
+    std::vector<moonlight::TouchEvent> events;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        const auto it = routes_.find(slotId);
+        if (it == routes_.end()) { return; }
+        session = it->second.session;
+        number = it->second.controllerNumber;
+        // Diffed under the route lock, because the differ IS the route's state:
+        // two threads diffing the same pad would each see the other's frame as
+        // the previous one and emit crossed DOWN/UP pairs.
+        moonlight::TouchFinger f0;
+        f0.active = finger0Active;
+        f0.id = finger0Id;
+        f0.x = moonlight::touchNorm(finger0X);
+        f0.y = moonlight::touchNorm(finger0Y);
+        moonlight::TouchFinger f1;
+        f1.active = finger1Active;
+        f1.id = finger1Id;
+        f1.x = moonlight::touchNorm(finger1X);
+        f1.y = moonlight::touchNorm(finger1Y);
+        events = it->second.touchDiffer.diff(f0, f1);
+    }
+    if (session == nullptr) { return; }
+    for (const auto& event : events) { session->sendControllerTouch(number, event); }
 }
 
 void MoonlightManager::forwardBattery(const std::string& slotId, std::uint8_t level,

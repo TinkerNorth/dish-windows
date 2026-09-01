@@ -23,6 +23,9 @@ set(DISH_TEST_SOURCES
     test_session_crypto.cpp
     # Moonlight (GameStream) path.
     test_moonlight_control.cpp
+    test_moonlight_touch_differ.cpp
+    test_moonlight_telemetry.cpp
+    test_moonlight_trigger_rumble.cpp
     test_moonlight_crypto.cpp
     test_moonlight_pairing.cpp
     test_moonlight_rtsp.cpp
@@ -110,6 +113,7 @@ set(DISH_TEST_SOURCES
     test_satellite_client_rumble.cpp
     test_satellite_client_motion.cpp
     test_satellite_client_touchpad.cpp
+    test_satellite_client_pointer.cpp
     test_satellite_client_session.cpp
     test_satellite_client_lightbar.cpp
     test_satellite_client_send_counter.cpp
@@ -133,6 +137,8 @@ set(DISH_TEST_SOURCES
     test_usb_path_preference_store.cpp
     test_usb_gamepad_manager.cpp
     test_usb_report_parsers.cpp
+    test_usb_output_reports.cpp
+    test_usb_gamepad_manager_feedback.cpp
     test_usb_hid_layout.cpp
     test_usb_twin_dedup.cpp
     test_hid_transport.cpp
@@ -150,6 +156,8 @@ set(DISH_TEST_SOURCES
     test_app_view_model_connections.cpp
     test_app_view_model_bind_availability.cpp
     test_capability_solver.cpp
+    test_feedback_routing.cpp
+    test_protocol_negotiation.cpp
     test_apply_binding_machine.cpp
     test_font_stacks.cpp
     test_theme_contrast.cpp

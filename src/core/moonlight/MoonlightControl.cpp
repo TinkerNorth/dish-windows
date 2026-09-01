@@ -129,6 +129,26 @@ std::vector<std::uint8_t> encodeControllerArrival(std::uint8_t controllerNumber,
     return out;
 }
 
+std::vector<std::uint8_t> encodeControllerTouch(std::uint8_t controllerNumber,
+                                                std::uint8_t eventType, std::uint32_t pointerId,
+                                                float x, float y, float pressure) {
+    // body: ctrl#(1) + eventType(1) + zero(2) + pointerId(4) + 3 netfloats(12) = 20.
+    std::vector<std::uint8_t> out(12 + 20);
+    std::size_t off = writeInputHeader(out.data(), kInputControllerTouch, 20);
+    out[off++] = controllerNumber;
+    out[off++] = eventType;
+    out[off++] = 0;
+    out[off++] = 0;
+    putU32Le(out.data() + off, pointerId);
+    off += 4;
+    putFloatLe(out.data() + off, x);
+    off += 4;
+    putFloatLe(out.data() + off, y);
+    off += 4;
+    putFloatLe(out.data() + off, pressure);
+    return out;
+}
+
 std::vector<std::uint8_t> encodeControllerMotion(std::uint8_t controllerNumber,
                                                  std::uint8_t motionType, float x, float y,
                                                  float z) {

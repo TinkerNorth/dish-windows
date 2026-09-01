@@ -57,6 +57,7 @@ class WinHidGateway : public UsbDeviceGateway {
     void releaseClaim(int syntheticId) override;
     bool isKnownFastLaneModel(int vendorId, int productId) const override;
     std::int64_t completionCount(int syntheticId) const override;
+    bool writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) override;
 
   private:
     // The HidP-driven field map for GENERIC-HID pads, built once at claim time
@@ -87,6 +88,15 @@ class WinHidGateway : public UsbDeviceGateway {
         // Feature-report buffer length from HIDP_CAPS, for the Steam Controller
         // config sequences (id byte included).
         int featureReportLen = 0;
+        // Output-report buffer length from HIDP_CAPS (id byte included). The
+        // Windows HID stack rejects a WriteFile whose length is not exactly
+        // this, so a report shorter than the device's longest is zero-padded up
+        // to it — the pad ignores the tail, and the alternative is a write that
+        // fails with ERROR_INVALID_PARAMETER and no output at all.
+        int outputReportLen = 0;
+        // Serialises writers against each other. The read loop is untouched: the
+        // handle is overlapped, so a write never waits on the pending read.
+        std::mutex writeMtx;
 
         ~Claimed();
     };

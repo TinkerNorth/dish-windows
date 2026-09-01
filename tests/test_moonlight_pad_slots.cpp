@@ -189,10 +189,15 @@ TEST_CASE("CONTROLLER_ARRIVAL declares the type ceiling met by the pad hardware"
           "[moonlight][padslots]") {
     // A pad with everything, on each type. The declaration never exceeds the
     // ceiling, because a host asked for motion it will not receive keeps asking.
+    // Trigger rumble rides the rumble bit: no pad this client can Direct-claim
+    // has impulse-trigger motors, so the host's RUMBLE_TRIGGERS is folded onto
+    // the body motors instead of dropped, and not advertising it would stop the
+    // host ever sending the packet the fold exists for.
     const std::uint8_t everything =
         declaredCapabilities(kPadTypePlayStation, true, true, true, true, true);
-    REQUIRE(everything == (kPadCapAnalogTriggers | kPadCapRumble | kPadCapTouchpad | kPadCapAccel |
-                           kPadCapGyro | kPadCapBattery | kPadCapRgbLed));
+    REQUIRE(everything ==
+            (kPadCapAnalogTriggers | kPadCapRumble | kPadCapTriggerRumble | kPadCapTouchpad |
+             kPadCapAccel | kPadCapGyro | kPadCapBattery | kPadCapRgbLed));
 
     REQUIRE(declaredCapabilities(kPadTypeXbox, true, true, true, true, true) == 0x03);
     REQUIRE(declaredCapabilities(kPadTypeNintendo, true, true, true, true, true) == 0x03);
@@ -205,6 +210,30 @@ TEST_CASE("CONTROLLER_ARRIVAL declares the type ceiling met by the pad hardware"
 
     // The pad a live host logged as capabilities [0003]: rumble and nothing else.
     REQUIRE(declaredCapabilities(kPadTypeXbox, true, false, false, false, false) == 0x0003);
+}
+
+TEST_CASE("trigger rumble is advertised only alongside real motors", "[moonlight][padslots]") {
+    // The fold lands on the body motors, so a pad with none has nothing to fold
+    // onto and must not ask the host for the packet.
+    const std::uint8_t withMotors =
+        declaredCapabilities(kPadTypePlayStation, /*hasRumble=*/true, false, false, false, false);
+    CHECK((withMotors & kPadCapTriggerRumble) != 0);
+    CHECK((withMotors & kPadCapRumble) != 0);
+    const std::uint8_t without =
+        declaredCapabilities(kPadTypePlayStation, /*hasRumble=*/false, false, false, false, false);
+    CHECK((without & kPadCapTriggerRumble) == 0);
+    CHECK((without & kPadCapRumble) == 0);
+    CHECK(without == kPadCapAnalogTriggers);
+}
+
+TEST_CASE("an Xbox or Nintendo type masks trigger rumble away", "[moonlight][padslots]") {
+    // The reference host materialises trigger motors only for its PlayStation
+    // pad, so declaring them on the other two would be asking for a packet the
+    // emulated device cannot represent.
+    CHECK((declaredCapabilities(kPadTypeXbox, true, true, true, true, true) &
+           kPadCapTriggerRumble) == 0);
+    CHECK((declaredCapabilities(kPadTypeNintendo, true, true, true, true, true) &
+           kPadCapTriggerRumble) == 0);
 }
 
 TEST_CASE("The button word is the low sixteen, plus the touchpad click only when there is one",
@@ -232,11 +261,14 @@ TEST_CASE("The arrival packet is byte-exact for every type", "[moonlight][padslo
         std::uint8_t caps;
         std::uint32_t buttons;
     };
-    // The PlayStation ceiling is 0xFF, but trigger rumble (0x04) is not a bit any
-    // input source here reports, so the declaration a real pad makes is 0xFB.
+    // The PlayStation ceiling is 0xFF and a pad with everything now declares all
+    // of it: trigger rumble (0x04) rides the rumble bit, because the host's
+    // trigger stream folds onto the body motors rather than being dropped.
+    // The Xbox and Nintendo ceilings still mask it away, which is why those two
+    // stay at 0x03.
     const Case cases[] = {
         {dish::models::kMoonlightDeviceXbox, false, 0x01, 0x03, 0x0000FFFFu},
-        {dish::models::kMoonlightDevicePlayStation, true, 0x02, 0xFB, 0x0000FFFFu | 0x00100000u},
+        {dish::models::kMoonlightDevicePlayStation, true, 0x02, 0xFF, 0x0000FFFFu | 0x00100000u},
         {dish::models::kMoonlightDeviceNintendo, true, 0x03, 0x03, 0x0000FFFFu},
     };
 

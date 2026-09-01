@@ -16,6 +16,8 @@
 #include "core/moonlight/MoonlightPadSlots.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
 #include "core/moonlight/MoonlightSessionUi.h"
+#include "core/moonlight/MoonlightTelemetry.h"
+#include "core/moonlight/MoonlightTouchDiffer.h"
 
 #include <QHash>
 #include <QList>
@@ -231,6 +233,12 @@ class MoonlightManager : public QObject {
                        std::int16_t accelZ);
     void forwardBattery(const std::string& slotId, std::uint8_t level,
                         std::uint8_t satelliteStatus);
+    // The pad's full-state touch frame, in satellite wire units. Diffed into
+    // CONTROLLER_TOUCH events here, because the host wants transitions and the
+    // difference between the two shapes is this class's to own.
+    void forwardTouch(const std::string& slotId, bool finger0Active, std::uint8_t finger0Id,
+                      std::int16_t finger0X, std::int16_t finger0Y, bool finger1Active,
+                      std::uint8_t finger1Id, std::int16_t finger1X, std::int16_t finger1Y);
 
     // True while at least one slot is bound to a Moonlight host.
     bool hasBoundSlots() const { return anyBound_.load(std::memory_order_relaxed); }
@@ -272,6 +280,10 @@ class MoonlightManager : public QObject {
         MoonlightSession* session = nullptr;
         std::uint8_t controllerNumber = 0;
         QString hostId;
+        // Per bound pad: the last touch frame, so the event stream is the
+        // difference between frames. Dies with the route, which is exactly when
+        // the host forgets the pad's contacts too.
+        moonlight::MoonlightTouchDiffer touchDiffer;
     };
 
     // Per host: what the last probe and the last /applist answered, so the
