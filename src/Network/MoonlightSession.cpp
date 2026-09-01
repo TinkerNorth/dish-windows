@@ -106,10 +106,31 @@ MoonlightSession::~MoonlightSession() {
 
 void MoonlightSession::wireControlHandlers() {
     control_.setRumbleHandler([this](const moonlight::RumbleEvent& e) {
-        // Marshal to the session's thread; UI routing must not run on the ENet
-        // receive thread.
+        // Mixed on THIS thread, where both rumble streams land, so the two can
+        // never interleave into a torn mix. Marshalling only the result keeps
+        // the UI routing off the ENet receive thread.
+        const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
+            return moonlight::withBodyRumble(mix, e.lowFreq, e.highFreq);
+        });
         QMetaObject::invokeMethod(
-            this, [this, e] { emit rumbleReceived(e.controllerNumber, e.lowFreq, e.highFreq); },
+            this,
+            [this, n = static_cast<int>(e.controllerNumber), mixed] {
+                emit rumbleReceived(n, mixed.strong, mixed.weak);
+            },
+            Qt::QueuedConnection);
+    });
+    // No pad this client can claim has trigger motors, so the host's trigger
+    // stream folds onto the body motors instead of being dropped. The fold and
+    // the reason live in core/moonlight/MoonlightTriggerRumble.h.
+    control_.setRumbleTriggerHandler([this](const moonlight::RumbleTriggerEvent& e) {
+        const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
+            return moonlight::withTriggerRumble(mix, e.left, e.right);
+        });
+        QMetaObject::invokeMethod(
+            this,
+            [this, n = static_cast<int>(e.controllerNumber), mixed] {
+                emit rumbleReceived(n, mixed.strong, mixed.weak);
+            },
             Qt::QueuedConnection);
     });
     control_.setRgbLedHandler([this](const moonlight::RgbLedEvent& e) {
@@ -118,6 +139,10 @@ void MoonlightSession::wireControlHandlers() {
             Qt::QueuedConnection);
     });
     control_.setMotionRequestHandler([this](const moonlight::MotionRequestEvent& e) {
+        // Applied on this thread, not the marshalled one: the gate is what stops
+        // motion going out, and a queued hop would leave a window where an
+        // unsubscribe has arrived but samples still stream.
+        motionGate_.onMotionRequest(e.controllerNumber, e.reportRateHz, e.motionType);
         QMetaObject::invokeMethod(
             this,
             [this, e] { emit motionRequested(e.controllerNumber, e.reportRateHz, e.motionType); },
@@ -678,10 +703,31 @@ void MoonlightSession::sendPendingArrivals() {
     }
 }
 
-void MoonlightSession::sendControllerMotion(std::uint8_t number, std::uint8_t motionType, float x,
+moonlight::BodyRumble MoonlightSession::updateRumbleMix(
+    int controllerNumber, const std::function<moonlight::RumbleMix(moonlight::RumbleMix)>& apply) {
+    auto& mix = rumbleMix_[controllerNumber];
+    mix = apply(mix);
+    return moonlight::mixRumble(mix);
+}
+
+bool MoonlightSession::sendControllerMotion(std::uint8_t number, std::uint8_t motionType, float x,
                                             float y, float z) {
-    if (!streaming()) { return; }
+    if (!streaming()) { return false; }
+    // Steady clock, not wall clock: a system time change must not open the gate
+    // for a second or wedge it shut for an hour.
+    const auto nowUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                           std::chrono::steady_clock::now().time_since_epoch())
+                           .count();
+    if (!motionGate_.shouldSend(number, motionType, nowUs)) { return false; }
     control_.sendControllerMotion(number, motionType, x, y, z);
+    return true;
+}
+
+void MoonlightSession::sendControllerTouch(std::uint8_t number,
+                                           const moonlight::TouchEvent& event) {
+    if (!streaming()) { return; }
+    control_.sendControllerTouch(number, event.eventType, event.pointerId, event.x, event.y,
+                                 event.pressure);
 }
 
 void MoonlightSession::sendControllerBattery(std::uint8_t number, std::uint8_t batteryState,

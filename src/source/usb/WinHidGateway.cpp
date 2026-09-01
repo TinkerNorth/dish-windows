@@ -22,6 +22,11 @@ namespace dish::source::usb {
 namespace {
 
 // HID usage page / usages for game controllers (HID Usage Tables §4).
+// How long an OUT report may sit unacknowledged before it is abandoned. Well
+// under the 2 s heartbeat, so a wedged pad can never back the feedback caller
+// up into the session's liveness.
+constexpr DWORD kOutputWriteTimeoutMs = 250;
+
 constexpr USAGE kUsagePageGenericDesktop = 0x01;
 constexpr USAGE kUsageJoystick = 0x04;
 constexpr USAGE kUsageGamepad = 0x05;
@@ -552,6 +557,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->productId = device.productId;
     claim->parser = parser;
     claim->featureReportLen = featureReportLen;
+    claim->outputReportLen = caps.OutputReportByteLength;
     if (parser == input::usbparse::HidParser::GenericHid) {
         // The caps-derived field map replaces the fixed-offset guess wherever
         // the collection declares real usages; the guess stays as the fallback.
@@ -701,6 +707,61 @@ std::int64_t WinHidGateway::completionCount(int syntheticId) const {
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return 0; }
     return it->second->completions.load();
+}
+
+bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) {
+    if (data == nullptr || len == 0) { return false; }
+    Claimed* c = nullptr;
+    {
+        // The claim map's lock is released before the write: a write can block
+        // on a sleeping pad, and holding mtx_ across it would stall reconcile().
+        // Safe because releaseClaim() joins the reader and erases the entry only
+        // from the owner thread, and every caller here is downstream of a live
+        // binding for this device.
+        std::lock_guard<std::mutex> lock(mtx_);
+        const auto it = claimed_.find(syntheticId);
+        if (it == claimed_.end()) { return false; }
+        c = it->second.get();
+    }
+    if (c->outputReportLen <= 0) { return false; }
+    const auto want = static_cast<std::size_t>(c->outputReportLen);
+    // A report LONGER than the collection's output length is not ours to
+    // truncate: it would reach the pad as a different report.
+    if (len > want) { return false; }
+
+    std::lock_guard<std::mutex> lock(c->writeMtx);
+    // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any
+    // other length outright.
+    std::array<std::uint8_t, 256> buf{};
+    if (want > buf.size()) { return false; }
+    std::memcpy(buf.data(), data, len);
+
+    HANDLE handle = static_cast<HANDLE>(c->handle);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) { return false; }
+    // The handle is overlapped, so the write needs its own OVERLAPPED and event
+    // or it would complete into the read loop's. Waiting on the event keeps the
+    // call synchronous from the caller's point of view without ever blocking
+    // the pending ReadFile.
+    OVERLAPPED ov{};
+    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (ov.hEvent == nullptr) { return false; }
+    DWORD written = 0;
+    bool ok = WriteFile(handle, buf.data(), static_cast<DWORD>(want), &written, &ov) != 0;
+    if (!ok && GetLastError() == ERROR_IO_PENDING) {
+        // A pad that never completes the write must not wedge the caller (the
+        // network receive thread); after the timeout the transfer is cancelled
+        // and the feedback is simply dropped, which is the right outcome for a
+        // lossy telemetry return path.
+        if (WaitForSingleObject(ov.hEvent, kOutputWriteTimeoutMs) == WAIT_OBJECT_0) {
+            ok = GetOverlappedResult(handle, &ov, &written, FALSE) != 0;
+        } else {
+            CancelIoEx(handle, &ov);
+            GetOverlappedResult(handle, &ov, &written, TRUE);
+            ok = false;
+        }
+    }
+    CloseHandle(ov.hEvent);
+    return ok && written == static_cast<DWORD>(want);
 }
 
 } // namespace dish::source::usb

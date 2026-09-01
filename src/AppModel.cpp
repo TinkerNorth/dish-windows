@@ -5,6 +5,7 @@
 
 #include "LightbarRouting.h"
 #include "composer/StreamingSlotCount.h"
+#include "core/input/UsbOutputReports.h"
 #include "core/input/UsbReportParsers.h"
 #include "core/reducer/CatalogPrewarm.h"
 #include "core/reducer/PickerVisibility.h"
@@ -102,9 +103,11 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         [this](const QString& hostId, int controllerNumber, int lowFreq, int highFreq) {
             const QString slotId = moonlight_.slotForController(hostId, controllerNumber);
             if (slotId.isEmpty()) { return; }
-            bridge_->applyRumble(slotId, static_cast<std::uint16_t>(lowFreq),
-                                 static_cast<std::uint16_t>(highFreq),
-                                 /*durationMs=*/0);
+            // Duration 0: the host refreshes rumble on its own schedule and a
+            // stop is an explicit 0,0, so nothing here should expire it early.
+            actuateRumble(slotId, static_cast<std::uint16_t>(lowFreq),
+                          static_cast<std::uint16_t>(highFreq),
+                          /*durationMs=*/0);
         });
     QObject::connect(
         &moonlight_, &net::MoonlightManager::rgbLedReceived, this,
@@ -112,8 +115,8 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
             if (!featureSettings_->lightbarFollowGame()) { return; }
             const QString slotId = moonlight_.slotForController(hostId, controllerNumber);
             if (slotId.isEmpty()) { return; }
-            bridge_->applyLightbar(slotId, static_cast<std::uint8_t>(r),
-                                   static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b));
+            actuateLightbar(slotId, static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g),
+                            static_cast<std::uint8_t>(b));
         });
 
     autoReconnectTimer_->setInterval(15'000);
@@ -184,14 +187,32 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
             sender(fwd.finger0Active, fwd.finger0Id, fwd.finger0X, fwd.finger0Y, fwd.finger1Active,
                    fwd.finger1Id, fwd.finger1X, fwd.finger1Y, fwd.buttonPressed, fwd.eventTimeMs);
         }
+        // The Moonlight path takes the SAME full-state frame and diffs it into
+        // CONTROLLER_TOUCH events. The pad click has no packet of its own there:
+        // it rides the pad frame as BTN_TOUCHPAD, which forwardReport already
+        // carries, so only the finger positions come this way.
+        moonlight_.forwardTouch(did, s.finger0Active, s.finger0Id, s.finger0X, s.finger0Y,
+                                s.finger1Active, s.finger1Id, s.finger1X, s.finger1Y);
     });
 
-    // So bind() can advertise CAP_LIGHTBAR. slotHardware answers for both a
-    // framework slot (the SDL probe) and a synthetic one (the parser family) —
-    // a Direct claim has no drivable lightbar, and slotHardware says so.
+    // Every actuator cap goes through the one router, so the descriptor claims
+    // exactly what actuate*() would land: the SDL probe for a framework slot,
+    // the parser family plus a live claim for a synthetic one.
     hub_->setLightbarCapabilityFn([this](const QString& slotId) {
-        const SlotHardware hw = slotHardware(slotId);
-        return hw.hasLightbar && !hw.usbDirect;
+        return reducer::slotCarriesFeedback(feedbackInputs(slotId),
+                                            reducer::FeedbackKind::Lightbar);
+    });
+
+    // Protocol 2. Direct-path only by construction: the router knows SDL has no
+    // call for either, so a Standard slot never advertises them and the
+    // satellite never sends 0x0010 / 0x0011 into a path that would drop them.
+    hub_->setTriggerEffectsCapabilityFn([this](const QString& slotId) {
+        return reducer::slotCarriesFeedback(feedbackInputs(slotId),
+                                            reducer::FeedbackKind::TriggerEffects);
+    });
+    hub_->setPlayerLedsCapabilityFn([this](const QString& slotId) {
+        return reducer::slotCarriesFeedback(feedbackInputs(slotId),
+                                            reducer::FeedbackKind::PlayerLeds);
     });
 
     // CAP_MOTION is sent iff the pad HAS a gyro and the user left motion
@@ -206,11 +227,10 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
     });
 
     // CAP_RUMBLE follows the active path's real actuator: the SDL probe for a
-    // Standard slot, never a USB-direct claim (no output write path exists), so
-    // the satellite only offers rumble where it actually fires.
+    // Standard slot, the claim's OUT report path for a Direct one, so the
+    // satellite only offers rumble where it actually fires.
     hub_->setRumbleCapabilityFn([this](const QString& slotId) {
-        const SlotHardware hw = slotHardware(slotId);
-        return hw.hasRumble && !hw.usbDirect;
+        return reducer::slotCarriesFeedback(feedbackInputs(slotId), reducer::FeedbackKind::Rumble);
     });
 
     // The user's Emulate override wins over the SDL hardware classification;
@@ -350,10 +370,9 @@ void AppModel::installRumbleHandlers() {
             const auto target = reducer::resolveRumble(snapshot, id);
             if (!target.valid()) { return; }
             // Vibration only: the light bar has its own return path via
-            // MSG_LIGHTBAR. applyRumble marshals the actuation onto the SDL
-            // thread internally.
-            bridge_->applyRumble(target.deviceId, rm.strongMagnitude, rm.weakMagnitude,
-                                 rm.durationMs);
+            // MSG_LIGHTBAR. actuateRumble picks the path the slot is actually
+            // on, so a Direct-claimed pad rumbles over its own OUT endpoint.
+            actuateRumble(target.deviceId, rm.strongMagnitude, rm.weakMagnitude, rm.durationMs);
         });
         // The MSG_LIGHTBAR stream, independent of rumble. Gated by the light-bar
         // setting: "Off" suppresses the colour entirely.
@@ -361,18 +380,36 @@ void AppModel::installRumbleHandlers() {
             const auto color =
                 lightbarColorFromLightbarMessage(lm, featureSettings_->lightbarFollowGame());
             if (!color) { return; }
-            QString deviceId;
-            const auto bindings = hub_->bindings();
-            for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
-                if (it.value() == id) {
-                    deviceId = it.key();
-                    break;
-                }
-            }
+            const QString deviceId = boundSlotForConnection(id);
             if (deviceId.isEmpty()) { return; }
-            bridge_->applyLightbar(deviceId, color->r, color->g, color->b);
+            actuateLightbar(deviceId, color->r, color->g, color->b);
+        });
+        // MSG_TRIGGER_EFFECTS: the game's own DualSense effect blocks, replayed
+        // verbatim. Arrives only for a slot whose descriptor advertised the
+        // actuator, so there is nothing to gate here beyond finding the slot.
+        conn->setTriggerEffectsHandler(
+            [this, id](const net::SatelliteClient::TriggerEffectsMessage& tm) {
+                const QString deviceId = boundSlotForConnection(id);
+                if (deviceId.isEmpty()) { return; }
+                actuateTriggerEffects(deviceId, tm.left, tm.right);
+            });
+        // MSG_PLAYER_LEDS: the indicator bar. Deliberately NOT gated on the
+        // light-bar setting — that switch is about the RGB colour following the
+        // game, and a player number is not a colour.
+        conn->setPlayerLedsHandler([this, id](const net::SatelliteClient::PlayerLedsMessage& pm) {
+            const QString deviceId = boundSlotForConnection(id);
+            if (deviceId.isEmpty()) { return; }
+            actuatePlayerLeds(deviceId, pm.ledMask);
         });
     }
+}
+
+QString AppModel::boundSlotForConnection(const QString& connectionId) const {
+    const auto bindings = hub_->bindings();
+    for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
+        if (it.value() == connectionId) { return it.key(); }
+    }
+    return {};
 }
 
 void AppModel::start() {
@@ -863,7 +900,12 @@ AppModel::SlotHardware AppModel::slotHardware(const QString& slotId) const {
         hw.hasMotion = input::usbparse::parserHasImu(parser);
         hw.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
         hw.hasRumble = input::usbparse::parserHasRumble(parser);
-        hw.hasLightbar = false;
+        // The Direct path now has an OUT report path, so a claimed pad answers
+        // for its real actuators instead of a flat false. Whether it can drive
+        // them right now is the router's call (the claim has to be live).
+        hw.hasLightbar = input::usbout::parserHasLightbar(parser);
+        hw.hasTriggerEffects = input::usbout::parserHasTriggerEffects(parser);
+        hw.hasPlayerLeds = input::usbout::parserHasPlayerLeds(parser);
         return hw;
     }
     for (const auto& d : bridge_->devices()) {
@@ -872,9 +914,95 @@ AppModel::SlotHardware AppModel::slotHardware(const QString& slotId) const {
         hw.hasLightbar = d.hasLightbar;
         hw.hasTouchpad = d.hasTouchpad;
         hw.hasRumble = d.hasRumble;
+        // Left false: SDL has no adaptive-trigger or player-LED call, so a pad
+        // on the Standard path cannot land either however good its hardware is.
         return hw;
     }
     return hw;
+}
+
+reducer::SlotFeedbackInputs AppModel::feedbackInputs(const QString& slotId) const {
+    const SlotHardware hw = slotHardware(slotId);
+    reducer::SlotFeedbackInputs in;
+    in.usbDirect = hw.usbDirect;
+    in.padRumble = hw.hasRumble;
+    in.padLightbar = hw.hasLightbar;
+    in.padTriggerEffects = hw.hasTriggerEffects;
+    in.padPlayerLeds = hw.hasPlayerLeds;
+    if (hw.usbDirect) {
+        const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+        in.directClaimLive = vp.has_value() && usbManager_ != nullptr &&
+                             usbManager_->isDirectClaimed(vp->first, vp->second);
+    }
+    return in;
+}
+
+void AppModel::actuateRumble(const QString& slotId, std::uint16_t strong, std::uint16_t weak,
+                             std::uint16_t durationMs) {
+    const auto in = feedbackInputs(slotId);
+    switch (reducer::resolveFeedbackTarget(in, reducer::FeedbackKind::Rumble)) {
+    case reducer::FeedbackTarget::Standard:
+        // applyRumble marshals the actuation onto the SDL thread internally.
+        bridge_->applyRumble(slotId, strong, weak, durationMs);
+        return;
+    case reducer::FeedbackTarget::DirectUsb: {
+        // No duration on the raw path: the pad's motors run until the next
+        // write, and the satellite refreshes well before its own expiry. A
+        // stop is magnitudes 0,0, which arrives as an ordinary report.
+        const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+        if (vp.has_value() && usbManager_ != nullptr) {
+            usbManager_->applyRumble(vp->first, vp->second, strong, weak);
+        }
+        return;
+    }
+    case reducer::FeedbackTarget::None:
+        return;
+    }
+}
+
+void AppModel::actuateLightbar(const QString& slotId, std::uint8_t r, std::uint8_t g,
+                               std::uint8_t b) {
+    const auto in = feedbackInputs(slotId);
+    switch (reducer::resolveFeedbackTarget(in, reducer::FeedbackKind::Lightbar)) {
+    case reducer::FeedbackTarget::Standard:
+        bridge_->applyLightbar(slotId, r, g, b);
+        return;
+    case reducer::FeedbackTarget::DirectUsb: {
+        const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+        if (vp.has_value() && usbManager_ != nullptr) {
+            usbManager_->applyLightbar(vp->first, vp->second, r, g, b);
+        }
+        return;
+    }
+    case reducer::FeedbackTarget::None:
+        return;
+    }
+}
+
+void AppModel::actuateTriggerEffects(
+    const QString& slotId, const std::array<std::uint8_t, proto::kTriggerEffectBlockBytes>& left,
+    const std::array<std::uint8_t, proto::kTriggerEffectBlockBytes>& right) {
+    const auto in = feedbackInputs(slotId);
+    if (reducer::resolveFeedbackTarget(in, reducer::FeedbackKind::TriggerEffects) !=
+        reducer::FeedbackTarget::DirectUsb) {
+        return;
+    }
+    const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+    if (vp.has_value() && usbManager_ != nullptr) {
+        usbManager_->applyTriggerEffects(vp->first, vp->second, left.data(), right.data());
+    }
+}
+
+void AppModel::actuatePlayerLeds(const QString& slotId, std::uint8_t ledMask) {
+    const auto in = feedbackInputs(slotId);
+    if (reducer::resolveFeedbackTarget(in, reducer::FeedbackKind::PlayerLeds) !=
+        reducer::FeedbackTarget::DirectUsb) {
+        return;
+    }
+    const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+    if (vp.has_value() && usbManager_ != nullptr) {
+        usbManager_->applyPlayerLeds(vp->first, vp->second, ledMask);
+    }
 }
 
 void AppModel::applyBindingPresence() {
