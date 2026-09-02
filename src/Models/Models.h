@@ -466,6 +466,16 @@ struct ControllerSlot {
     // "Layout guessed" warn chip, which belongs on the Direct option card
     // because the risk exists only there. Always false for a Bluetooth pad.
     bool verifiedModel = false;
+
+    // Controller audio. `micArmed` is "this slot's descriptor claims a
+    // microphone" (route matched AND the per-binding toggle on) — the
+    // condition for showing a mute control at all, because a mute over no
+    // microphone is dead chrome. `micMuted` is the LOCAL mute truth
+    // (MicMuteStore), shown unconditionally where armed: the pad's own lamp
+    // may later be repainted by the host, but the app never reports a state it
+    // did not decide.
+    bool micArmed = false;
+    bool micMuted = false;
 };
 
 struct RememberedWifi {

@@ -50,6 +50,12 @@ class ConnectionHub : public QObject {
     BatterySender batterySenderForSlot(const QString& slotId) const;
     TouchpadSender touchpadSenderForSlot(const QString& slotId) const;
 
+    // seq, opus bytes, length -> sent. For the mic capture engine, which calls
+    // it from the audio thread (same closure contract as ReportSender from the
+    // SDL input thread).
+    using MicAudioSender = std::function<bool(std::uint16_t, const std::uint8_t*, std::size_t)>;
+    MicAudioSender micAudioSenderForSlot(const QString& slotId) const;
+
     // The seams below let bind() stamp per-device hardware facts onto the
     // REST descriptor. AppModel installs them off the SDL bridge's device
     // classification; each is unset in tests and before the bridge exists, and

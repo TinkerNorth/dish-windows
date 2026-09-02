@@ -411,9 +411,9 @@ Kit.Page {
     readonly property bool motionTunable: page.carries("motion")
     readonly property bool rumbleTunable: page.carries("rumble")
     readonly property bool touchpadTunable: page.carries("touchpad") || page.carries("mouse")
-    // Never true this wave: the pad audio routes land in the next release, so
-    // every mic/speaker row reads Unavailable and the rows stay hidden. The
-    // wiring exists so the release that flips the routes needs no UI change.
+    // Carried where the whole path does: a Direct-claimed Sony pad whose own
+    // endpoints this machine confidently named, on an emulated type with audio,
+    // against a host whose probe said yes.
     readonly property bool micTunable: page.carries("mic")
     readonly property bool speakerTunable: page.carries("speaker")
     readonly property bool nothingTunable: draft.hasDestination && draft.hasType
@@ -669,6 +669,8 @@ Kit.Page {
                 required property bool hasLightbar
                 required property bool hasRumble
                 required property bool verifiedModel
+                required property bool micArmed
+                required property bool micMuted
                 required property int gamepadHz
                 required property bool gamepadHzLive
 
@@ -1330,6 +1332,22 @@ Kit.Page {
                                     description: qsTr("The pad’s mic carries your voice to the host. Off sends nothing.")
                                     checked: draft.micOn
                                     onToggled: checked => draft.setMic(checked)
+                                }
+
+                                // The LIVE mute, distinct from the durable
+                                // toggle above it: same state the slot card
+                                // and the pad's own mute button drive, so
+                                // every surface answers alike. Shown only
+                                // while the current binding actually arms a
+                                // microphone.
+                                Kit.DishButton {
+                                    visible: page.padRow !== null && page.padRow.micArmed
+                                    text: page.padRow !== null && page.padRow.micMuted
+                                          ? qsTr("Mic muted") : qsTr("Mic live")
+                                    variant: page.padRow !== null && page.padRow.micMuted
+                                             ? Kit.DishButton.Primary : Kit.DishButton.Outline
+                                    size: Kit.DishButton.Small
+                                    onClicked: App.toggleSlotMicMute(page.slotId)
                                 }
 
                                 Rectangle {

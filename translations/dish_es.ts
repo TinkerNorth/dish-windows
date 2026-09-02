@@ -795,6 +795,14 @@
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
         <translation type="unfinished">El audio del host suena por el altavoz o los auriculares del mando.</translation>
     </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Micrófono silenciado</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Micrófono activo</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -1175,6 +1183,22 @@
     <message>
         <source>Direct claim couldn’t start the controller’s report stream.</source>
         <translation>El control en Directo no pudo iniciar el flujo de informes del mando.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Micrófono silenciado</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Micrófono activo</translation>
+    </message>
+    <message>
+        <source>Microphone muted, click to unmute</source>
+        <translation type="unfinished">Micrófono silenciado, haz clic para activarlo</translation>
+    </message>
+    <message>
+        <source>Microphone live, click to mute</source>
+        <translation type="unfinished">Micrófono activo, haz clic para silenciarlo</translation>
     </message>
 </context>
 <context>
@@ -3843,6 +3867,22 @@
     <message>
         <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
         <translation>Aquí todavía no se guarda nada. Todo viaja con la vinculación en el paso siguiente.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Micrófono</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">El micrófono del mando lleva tu voz al host. Apagado no envía nada.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Sonido del mando</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">El audio del host suena por el altavoz o los auriculares del mando.</translation>
     </message>
 </context>
 <context>

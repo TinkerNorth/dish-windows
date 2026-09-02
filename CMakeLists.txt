@@ -211,13 +211,23 @@ set(DISH_CORE_SOURCES
     src/core/reducer/CapabilitySolver.h
     src/core/reducer/CapabilitySolver.cpp
     src/core/reducer/HostAudioVerdict.h
-    # Controller audio: the reorder window and the pure codec seam in core, the
-    # libopus-linking implementation at the source edge with the other
+    # Controller audio: the reorder window, the pure codec seam, the
+    # pad-to-endpoint matcher and the engine rules in core; the libopus link,
+    # the SDL device gateway and the engines at the source edge with the other
     # third-party-facing code.
     src/core/audio/AudioJitter.h
     src/core/audio/AudioCodec.h
+    src/core/audio/PadAudioMatcher.h
+    src/core/audio/AudioEnginePolicy.h
     src/source/audio/OpusAudioCodec.h
     src/source/audio/OpusAudioCodec.cpp
+    src/source/audio/AudioDeviceGateway.h
+    src/source/audio/SdlAudioGateway.h
+    src/source/audio/SdlAudioGateway.cpp
+    src/source/audio/MicCaptureEngine.h
+    src/source/audio/MicCaptureEngine.cpp
+    src/source/audio/SpeakerPlayoutEngine.h
+    src/source/audio/SpeakerPlayoutEngine.cpp
     src/core/reducer/ApplyBindingMachine.h
     src/core/reducer/UpdateMachine.h
     src/core/reducer/UpdateMachine.cpp
@@ -295,6 +305,8 @@ set(DISH_CORE_SOURCES
     src/source/store/MotionEnabledStore.cpp
     src/source/store/AudioEnabledStore.h
     src/source/store/AudioEnabledStore.cpp
+    src/source/store/MicMuteStore.h
+    src/source/store/MicMuteStore.cpp
     src/source/store/SatelliteMotionBackendStatusStore.h
     src/source/store/SatelliteMotionBackendStatusStore.cpp
     src/source/store/UsbPathPreferenceStore.h

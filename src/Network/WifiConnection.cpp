@@ -408,6 +408,17 @@ void WifiConnection::sendTouchpad(bool finger0Active, std::uint8_t finger0Id, st
     }
 }
 
+bool WifiConnection::sendMicAudio(std::uint16_t seq, const std::uint8_t* opus,
+                                  std::size_t opusLen) {
+    if (!boundSlotId_.has_value()) { return false; }
+    const auto it = slots_.find(*boundSlotId_);
+    if (it == slots_.end() || !it->second.registered) { return false; }
+    if (auto c = clientRef_.get()) {
+        return c->sendMicAudio(it->second.controllerIndex, seq, opus, opusLen);
+    }
+    return false;
+}
+
 void WifiConnection::setRumbleHandler(RumbleHandler handler) {
     rumbleHandler_ = std::move(handler);
     if (auto c = clientRef_.get()) { c->setRumbleHandler(rumbleHandler_); }

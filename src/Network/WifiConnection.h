@@ -175,6 +175,11 @@ class WifiConnection : public QObject {
                       std::int16_t finger0Y, bool finger1Active, std::uint8_t finger1Id,
                       std::int16_t finger1X, std::int16_t finger1Y, bool buttonPressed,
                       std::uint32_t eventTimeMs);
+    // MSG_MIC_AUDIO for the bound slot; the capture engine calls it from the
+    // audio thread, the same cross-thread contract as sendReport from the SDL
+    // input thread. Gated on `registered` like every stream — the server drops
+    // audio for an unapplied slot anyway. Returns false when nothing was sent.
+    bool sendMicAudio(std::uint16_t seq, const std::uint8_t* opus, std::size_t opusLen);
 
     // Held here rather than on the per-session SatelliteClient so they survive a
     // reconnect; markConnected re-installs them.

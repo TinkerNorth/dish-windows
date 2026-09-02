@@ -27,6 +27,10 @@
 #include "core/reducer/FeedbackRouting.h"
 #include "core/reducer/HostAudioVerdict.h"
 #include "core/reducer/PollRateSampler.h"
+#include "core/audio/PadAudioMatcher.h"
+#include "source/audio/MicCaptureEngine.h"
+#include "source/audio/SdlAudioGateway.h"
+#include "source/audio/SpeakerPlayoutEngine.h"
 #include "source/input/ControllerActivitySource.h"
 #include "source/inputrate/InputRateStore.h"
 #include "source/http/SatelliteCatalogRepository.h"
@@ -35,6 +39,7 @@
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/KeepAwakePreferenceStore.h"
 #include "source/store/AudioEnabledStore.h"
+#include "source/store/MicMuteStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/TouchpadModeStore.h"
@@ -119,7 +124,18 @@ class AppModel : public QObject {
     // Mic defaults OFF (privacy), speaker ON; the stores own those defaults.
     source::MicEnabledStore* micEnabledStore() { return &micEnabledStore_; }
     source::SpeakerEnabledStore* speakerEnabledStore() { return &speakerEnabledStore_; }
+    // Live per-slot mute, deliberately unpersisted (see MicMuteStore.h).
+    source::MicMuteStore* micMuteStore() { return &micMuteStore_; }
     source::TouchpadModeStore* touchpadModeStore() { return &touchpadModeStore_; }
+
+    // Both mute controls land here: the slot card's click and (via the
+    // observer's edge upcall) the DualSense's own button. Writes the store,
+    // syncs the claimed pad's wire latch, drives the pad's mute lamp locally
+    // at once — the button must never feel dead waiting on a host round-trip;
+    // a later MSG_MIC_LED repaints the lamp, last writer wins THERE, while the
+    // UI keeps showing this local truth — and re-runs the engine reconcile.
+    void setSlotMicMuted(const QString& slotId, bool muted);
+    void toggleSlotMicMute(const QString& slotId);
     source::JoystickRemapStore* joystickRemapStore() { return &joystickRemapStore_; }
 
     // The stored override if any, else the default layout.
@@ -307,12 +323,37 @@ class AppModel : public QObject {
                           const std::array<std::uint8_t, proto::kTriggerEffectBlockBytes>& left,
                           const std::array<std::uint8_t, proto::kTriggerEffectBlockBytes>& right);
     void actuatePlayerLeds(const QString& slotId, std::uint8_t ledMask);
-    // MSG_MIC_LED. Routed through FeedbackRouting like every other feedback
-    // kind, but the routing answers None on every slot this wave: the USB
-    // output-report builder for the lamp is Wave 2's, so this resolves the
-    // target and stops. The seam exists so the dispatch shape is already
-    // final.
+    // MSG_MIC_LED, routed through FeedbackRouting like every other feedback
+    // kind and landed via the DS5 mute-lamp builder. Also driven locally on a
+    // mute change (setSlotMicMuted); the host's writes and the local ones
+    // share the FeedbackState shadow, so whichever wrote last owns the lamp.
     void actuateMicLed(const QString& slotId, std::uint8_t state);
+
+    // ── Controller audio (Wave 2 engines) ───────────────────────────────────
+
+    // Re-run the pad-to-endpoint matcher over the claimed pads and the live
+    // audio device lists; on a change, re-publish the affected bound slots'
+    // descriptors (the caps fold reads the routes) and rebuild.
+    void resolveAudioRoutes();
+
+    // Converge the capture and playout engines on what should run right now:
+    // the pure eligibility rules (core/audio/AudioEnginePolicy.h) over each
+    // slot's binding, toggles, route, host verdict and mute. Runs at the end
+    // of every rebuild(), which every relevant change funnels into.
+    void reconcileAudioEngines();
+
+    // Re-attach a bound slot so its descriptor re-folds and re-PUTs (the hub's
+    // capability fns re-run on bind). No-op for an unbound slot.
+    void republishSlotCaps(const QString& slotId);
+
+    // The matcher's answer for a synthetic slot's pad, NONE for everything
+    // else. Takes audioRoutesMtx_ — callable from the receive threads via
+    // feedbackInputs().
+    audio::PadAudioRoute audioRouteForSlot(const QString& slotId) const;
+
+    // The pad's own mute button moved (queued to the main thread by the
+    // observer; the edge itself is seen on the gateway read thread).
+    void onPadMicMuteChanged(int vendorId, int productId, bool muted);
 
     // The slot bound to a connection, or empty. Reads the hub's binding table,
     // which is what makes it callable from a receive thread.
@@ -392,6 +433,21 @@ class AppModel : public QObject {
     repository::AudioPreferenceRepository speakerPrefRepo_{QStringLiteral("speaker_preferences")};
     source::MicEnabledStore micEnabledStore_{&micPrefRepo_};
     source::SpeakerEnabledStore speakerEnabledStore_{&speakerPrefRepo_};
+    source::MicMuteStore micMuteStore_;
+
+    // Declaration order: the gateway must outlive the engines that borrow it
+    // (members destroy in reverse order, so it is declared first). The gateway
+    // owns SDL_INIT_AUDIO — NOT the SDL bridge, whose gamepad subsystems
+    // stop/start independently.
+    source::audio::SdlAudioGateway audioGateway_;
+    source::audio::MicCaptureEngine micEngine_{&audioGateway_};
+    source::audio::SpeakerPlayoutEngine speakerEngine_{&audioGateway_};
+
+    // The matcher's current answer, whole-table per resolve. Guarded because
+    // feedbackInputs() reads it from the receive threads while resolve writes
+    // it on the main thread.
+    mutable std::mutex audioRoutesMtx_;
+    std::map<int, audio::PadAudioRoute> padAudioRoutes_;
     // Absent = the ds4 pair-time default.
     repository::TouchpadModeRepository touchpadModeRepo_;
     source::TouchpadModeStore touchpadModeStore_{&touchpadModeRepo_};
@@ -429,6 +485,19 @@ class AppModel : public QObject {
         // already reaches the slot card via the controllers() snapshot.
         void notice(const reducer::UsbController& c, reducer::UsbNotice n) override {
             owner_->onUsbNotice(c, n);
+        }
+
+        // Fires on the GATEWAY READ THREAD (the one observer call that does);
+        // queued across so the store, the lamp and the engines are touched
+        // only on the main thread.
+        void padMicMuteChanged(int vendorId, int productId, bool muted) override {
+            AppModel* owner = owner_;
+            QMetaObject::invokeMethod(
+                owner,
+                [owner, vendorId, productId, muted] {
+                    owner->onPadMicMuteChanged(vendorId, productId, muted);
+                },
+                Qt::QueuedConnection);
         }
 
       private:

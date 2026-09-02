@@ -497,6 +497,10 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void setMicEnabled(const QString& slotId, bool on);
     Q_INVOKABLE bool speakerEnabledFor(const QString& slotId) const;
     Q_INVOKABLE void setSpeakerEnabled(const QString& slotId, bool on);
+    // The live mute control (both surfaces' click lands here; the pad's own
+    // button reaches the same state through the report decoder). State reads
+    // ride the slot model's micArmed/micMuted roles, so there is no getter.
+    Q_INVOKABLE void toggleSlotMicMute(const QString& slotId);
 
     // ── Apply ────────────────────────────────────────────────────────────────
     // The one write the binding surfaces make. Terminates in exactly one

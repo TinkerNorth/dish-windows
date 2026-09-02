@@ -4,6 +4,7 @@
 // Byte-exact encoder tests for the Moonlight control-stream codec, checked
 // against the fixtures published in Wolf's input-data.adoc and testControl.cpp.
 
+#include "core/input/GamepadButtonLayouts.h"
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightCrypto.h"
 
@@ -294,4 +295,23 @@ TEST_CASE("decodeServerEvent rejects short and unknown buffers", "[moonlight][co
     const auto ev2 = decodeServerEvent(shortBody.data(), shortBody.size());
     REQUIRE(ev2.has_value());
     REQUIRE(ev2->type == ServerEventType::Unknown);
+}
+
+TEST_CASE("the Satellite-only mic-mute bit never reaches a Moonlight button word",
+          "[moonlight][control]") {
+    // XUSB and Moonlight button flags are bit-for-bit EXCEPT 0x0800, which
+    // protocol 2 spends on the DualSense mic-mute STATE. A Direct-claimed
+    // DualSense folds it into every report while muted, so the fold into
+    // buttonFlags must strip it and touch nothing else.
+    using dish::moonlight::sanitizeButtonFlags;
+    CHECK(sanitizeButtonFlags(0x0800) == 0x0000);
+    CHECK(sanitizeButtonFlags(0xFFFF) == 0xF7FF);
+    CHECK(sanitizeButtonFlags(0x0000) == 0x0000);
+    // Every assigned XUSB bit passes untouched, alone and in company.
+    for (const std::uint16_t bit : {0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
+                                    0x0100, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000, 0x8000}) {
+        CHECK(sanitizeButtonFlags(bit) == bit);
+        CHECK(sanitizeButtonFlags(static_cast<std::uint16_t>(bit | 0x0800)) == bit);
+    }
+    CHECK(dish::moonlight::kSatelliteOnlyButtonBits == dish::input::layout::kXusbMicMute);
 }

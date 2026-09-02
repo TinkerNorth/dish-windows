@@ -165,6 +165,11 @@ set(DISH_TEST_SOURCES
     test_audio_enabled_store.cpp
     test_audio_preference_repository.cpp
     test_wifi_connection_audio.cpp
+    test_pad_audio_matcher.cpp
+    test_audio_engine_policy.cpp
+    test_mic_capture_engine.cpp
+    test_speaker_playout_engine.cpp
+    test_mic_mute_store.cpp
     test_protocol_negotiation.cpp
     test_apply_binding_machine.cpp
     test_font_stacks.cpp

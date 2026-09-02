@@ -836,8 +836,10 @@ void MoonlightManager::forwardReport(const std::string& slotId, std::uint16_t bu
     }
     // The processor's button word is XUSB, which is bit-for-bit the layout
     // Moonlight's low 16 button flags use (pinned by a unit test), so the fold
-    // is the identity rather than a translation table.
-    state.buttonFlags = buttons;
+    // is the identity — minus the Satellite-only mic-mute state bit, which a
+    // Direct-claimed DualSense's decoder folds into the word and a GameStream
+    // host must never see.
+    state.buttonFlags = moonlight::sanitizeButtonFlags(buttons);
     state.leftTrigger = lt;
     state.rightTrigger = rt;
     state.leftStickX = lx;

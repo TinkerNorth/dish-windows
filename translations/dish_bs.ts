@@ -797,6 +797,14 @@
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
         <translation type="unfinished">Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
     </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Mikrofon utišan</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Mikrofon aktivan</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -1185,6 +1193,22 @@
     <message>
         <source>Direct claim couldn’t start the controller’s report stream.</source>
         <translation>Brzi način nije mogao pokrenuti tok izvještaja kontrolera.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Mikrofon utišan</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Mikrofon aktivan</translation>
+    </message>
+    <message>
+        <source>Microphone muted, click to unmute</source>
+        <translation type="unfinished">Mikrofon je utišan, kliknite da ga uključite</translation>
+    </message>
+    <message>
+        <source>Microphone live, click to mute</source>
+        <translation type="unfinished">Mikrofon je aktivan, kliknite da ga utišate</translation>
     </message>
 </context>
 <context>
@@ -3863,6 +3887,22 @@
     <message>
         <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
         <translation>Ovdje se još ništa ne čuva. Sve putuje s povezivanjem u sljedećem koraku.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">Mikrofon pada prenosi vaš glas do hosta. Isključeno ne šalje ništa.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Zvuk kontrolera</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
     </message>
 </context>
 <context>

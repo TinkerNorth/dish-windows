@@ -144,6 +144,16 @@ ConnectionHub::TouchpadSender ConnectionHub::touchpadSenderForSlot(const QString
     };
 }
 
+ConnectionHub::MicAudioSender ConnectionHub::micAudioSenderForSlot(const QString& slotId) const {
+    const auto cid = bindings_.value(slotId);
+    if (cid.isEmpty()) { return {}; }
+    auto* conn = wifi_->get(cid);
+    if (conn == nullptr) { return {}; }
+    return [conn](std::uint16_t seq, const std::uint8_t* opus, std::size_t opusLen) {
+        return conn->sendMicAudio(seq, opus, opusLen);
+    };
+}
+
 void ConnectionHub::bind(const QString& slotId, const QString& connectionId) {
     QHash<QString, QString> current = bindings_;
     QString priorSlot;

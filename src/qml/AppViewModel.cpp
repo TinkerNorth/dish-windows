@@ -1518,6 +1518,11 @@ void AppViewModel::setSpeakerEnabled(const QString& slotId, bool on) {
     model_->speakerEnabledStore()->setEnabled(slotId.toStdString(), on);
 }
 
+void AppViewModel::toggleSlotMicMute(const QString& slotId) {
+    if (slotId.isEmpty()) { return; }
+    model_->toggleSlotMicMute(slotId);
+}
+
 QString AppViewModel::discoverySourceFor(const QString& serverId) const {
     for (const auto& s : model_->wifi()->discoveredServers()) {
         if (s.id() == serverId) { return models::discoverySourceLabel(s.source); }
