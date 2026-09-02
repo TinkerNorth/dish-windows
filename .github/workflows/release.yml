@@ -187,10 +187,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path dish-windows | Out-Null
           Copy-Item build/dish.exe dish-windows/
           # windeployqt walks Qt's dependency graph only. dish.exe imports
-          # libsodium.dll and SDL2.dll directly (vcpkg staged them beside the
-          # exe at link time), so without this copy the zip ships a dish.exe
-          # that cannot start: 0xc0000135, no window, no message.
-          Copy-Item build/libsodium.dll, build/SDL2.dll dish-windows/
+          # libsodium.dll, SDL2.dll and opus.dll (controller audio) directly
+          # (vcpkg staged them beside the exe at link time), so without this
+          # copy the zip ships a dish.exe that cannot start: 0xc0000135, no
+          # window, no message.
+          Copy-Item build/libsodium.dll, build/SDL2.dll, build/opus.dll dish-windows/
           # --qmldir is required: the Quick chrome is the only UI, so a bundle
           # without the QML modules opens to a white window.
           # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.

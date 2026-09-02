@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation type="unfinished">Der Standardmodus kann das nicht ansteuern — wechsle die Verbindung zu Direkt.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Controller-Ton</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation type="unfinished">Lautsprecher</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -763,6 +779,30 @@
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 trägt bereits vier Controller, mehr nimmt eine Sitzung nicht. Trennen Sie einen, um Platz zu schaffen.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">Das Mikrofon des Pads überträgt Ihre Stimme zum Host. Aus sendet nichts.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Controller-Ton</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">Ton vom Host läuft über den Lautsprecher oder das Headset des Pads.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Mikrofon stumm</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Mikrofon aktiv</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -1143,6 +1183,22 @@
     <message>
         <source>Direct claim couldn’t start the controller’s report stream.</source>
         <translation>Die Direkt-Übernahme konnte den Report-Stream des Controllers nicht starten.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Mikrofon stumm</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Mikrofon aktiv</translation>
+    </message>
+    <message>
+        <source>Microphone muted, click to unmute</source>
+        <translation type="unfinished">Mikrofon stummgeschaltet, zum Aufheben klicken</translation>
+    </message>
+    <message>
+        <source>Microphone live, click to mute</source>
+        <translation type="unfinished">Mikrofon aktiv, zum Stummschalten klicken</translation>
     </message>
 </context>
 <context>
@@ -3811,6 +3867,22 @@
     <message>
         <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
         <translation>Hier ist noch nichts gespeichert. Alles wird im nächsten Schritt zusammen mit der Zuordnung übertragen.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">Das Mikrofon des Pads überträgt Ihre Stimme zum Host. Aus sendet nichts.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Controller-Ton</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">Ton vom Host läuft über den Lautsprecher oder das Headset des Pads.</translation>
     </message>
 </context>
 <context>

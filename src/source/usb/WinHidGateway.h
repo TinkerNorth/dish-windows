@@ -58,6 +58,7 @@ class WinHidGateway : public UsbDeviceGateway {
     bool isKnownFastLaneModel(int vendorId, int productId) const override;
     std::int64_t completionCount(int syntheticId) const override;
     bool writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) override;
+    bool setPadMicMuted(int syntheticId, bool muted) override;
 
   private:
     // The HidP-driven field map for GENERIC-HID pads, built once at claim time
@@ -83,6 +84,11 @@ class WinHidGateway : public UsbDeviceGateway {
         // the Claimed is destroyed.
         input::usbparse::HidParser parser = input::usbparse::HidParser::None;
         input::usbparse::StickAutoRangeState sticks;
+        // The DualSense mic-mute latch. Atomics, because it is the one piece
+        // of decode state a second thread touches: the read loop flips it on
+        // the button edge, setPadMicMuted overwrites it when the user toggles
+        // mute in the UI, and both must land on the wire's next report.
+        input::usbparse::MicMuteLatch micMute;
         // GENERIC-HID only: the caps-derived decode map (read-loop-thread-only).
         std::unique_ptr<HidPDecode> hidp;
         // Feature-report buffer length from HIDP_CAPS, for the Steam Controller

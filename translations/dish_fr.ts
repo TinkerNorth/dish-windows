@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation type="unfinished">Le Mode standard ne peut pas le piloter — passez la connexion en Direct.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microphone</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Son de la manette</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation type="unfinished">microphone</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation type="unfinished">haut-parleur</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -763,6 +779,30 @@
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 porte déjà quatre manettes, soit le maximum qu’une session accepte. Détachez-en une pour faire de la place.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microphone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">Le micro de la manette porte votre voix vers l’hôte. Désactivé, rien n’est envoyé.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Son de la manette</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">L’audio de l’hôte est lu sur le haut-parleur ou le casque de la manette.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Micro coupé</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Micro actif</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -1143,6 +1183,22 @@
     <message>
         <source>Direct claim couldn’t start the controller’s report stream.</source>
         <translation>L&apos;acquisition Direct n&apos;a pas pu démarrer le flux de rapports de la manette.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Micro coupé</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Micro actif</translation>
+    </message>
+    <message>
+        <source>Microphone muted, click to unmute</source>
+        <translation type="unfinished">Micro coupé, cliquez pour le réactiver</translation>
+    </message>
+    <message>
+        <source>Microphone live, click to mute</source>
+        <translation type="unfinished">Micro actif, cliquez pour le couper</translation>
     </message>
 </context>
 <context>
@@ -3811,6 +3867,22 @@
     <message>
         <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
         <translation>Rien n&apos;est encore enregistré ici. Tout part avec la liaison à l&apos;étape suivante.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microphone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">Le micro de la manette porte votre voix vers l’hôte. Désactivé, rien n’est envoyé.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Son de la manette</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">L’audio de l’hôte est lu sur le haut-parleur ou le casque de la manette.</translation>
     </message>
 </context>
 <context>

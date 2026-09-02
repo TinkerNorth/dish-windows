@@ -644,11 +644,15 @@ void WinHidGateway::readLoop(Claimed* c) {
         if (c->hidp != nullptr && c->hidp->valid) {
             decoded = c->hidp->decode(data, len, parsed);
         } else {
-            decoded = input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks);
+            decoded =
+                input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks, &c->micMute);
         }
         if (!decoded) { continue; }
         UsbReport report{};
         report.wButtons = parsed.wButtons;
+        // The latch, not the button: what the wire's kXusbMicMute bit carries,
+        // mirrored up so the driver can edge-detect it.
+        report.micMuted = c->micMute.muted.load(std::memory_order_relaxed);
         report.lt = parsed.lt;
         report.rt = parsed.rt;
         report.lx = parsed.lx;
@@ -709,6 +713,17 @@ std::int64_t WinHidGateway::completionCount(int syntheticId) const {
     return it->second->completions.load();
 }
 
+bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    if (it == claimed_.end()) { return false; }
+    if (it->second->parser != input::usbparse::HidParser::DualSense) { return false; }
+    // The latch alone, never `held`: a UI toggle is not a button press, and
+    // touching the edge tracker could swallow or double a real press racing in.
+    it->second->micMute.muted.store(muted, std::memory_order_relaxed);
+    return true;
+}
+
 bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) {
     if (data == nullptr || len == 0) { return false; }
     Claimed* c = nullptr;
@@ -736,7 +751,7 @@ bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data,
     if (want > buf.size()) { return false; }
     std::memcpy(buf.data(), data, len);
 
-    HANDLE handle = static_cast<HANDLE>(c->handle);
+    auto handle = static_cast<HANDLE>(c->handle);
     if (handle == nullptr || handle == INVALID_HANDLE_VALUE) { return false; }
     // The handle is overlapped, so the write needs its own OVERLAPPED and event
     // or it would complete into the read loop's. Waiting on the event keeps the
