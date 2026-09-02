@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation>Standard mode can’t drive it — switch the connection to Direct.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation>Controller sound</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation>microphone</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation>speaker</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -763,6 +779,30 @@
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation>The pad’s mic carries your voice to the host. Off sends nothing.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation>Controller sound</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation>Audio from the host plays on the pad’s speaker or headset.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation>Mic muted</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation>Mic live</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -1143,6 +1183,22 @@
     <message>
         <source>The device dropped during the claim — a replug is needed.</source>
         <translation>The device dropped during the claim — a replug is needed.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation>Mic muted</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation>Mic live</translation>
+    </message>
+    <message>
+        <source>Microphone muted, click to unmute</source>
+        <translation>Microphone muted, click to unmute</translation>
+    </message>
+    <message>
+        <source>Microphone live, click to mute</source>
+        <translation>Microphone live, click to mute</translation>
     </message>
 </context>
 <context>
@@ -3811,6 +3867,22 @@
     <message>
         <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
         <translation>Nothing here is saved yet. Everything travels with the bind on the next step.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microphone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">The pad’s mic carries your voice to the host. Off sends nothing.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Controller sound</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">Audio from the host plays on the pad’s speaker or headset.</translation>
     </message>
 </context>
 <context>

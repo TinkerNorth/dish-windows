@@ -149,6 +149,18 @@ struct ControllerState {
     std::int16_t rightStickY = 0;
 };
 
+// The processor's XUSB button word is bit-for-bit the layout Moonlight's low
+// 16 button flags use, EXCEPT for one bit: 0x0800 has no XINPUT assignment and
+// protocol 2 spends it on the DualSense mic-mute STATE
+// (input::layout::kXusbMicMute), a Satellite-only signal a GameStream host
+// would misread. Every buttonFlags fold goes through this so the bit can never
+// leak to a Moonlight host however it got into the word.
+inline constexpr std::uint16_t kSatelliteOnlyButtonBits = 0x0800;
+
+inline constexpr std::uint16_t sanitizeButtonFlags(std::uint16_t xusbButtons) {
+    return static_cast<std::uint16_t>(xusbButtons & ~kSatelliteOnlyButtonBits);
+}
+
 // Hot path: encode `state` into `out` at fixed offsets, zero heap allocation.
 // Returns kControllerMultiBytes. `out` must have room for kControllerMultiBytes.
 // The result is the plaintext control payload ready to hand to sealControl.

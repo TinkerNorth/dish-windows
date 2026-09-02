@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation type="unfinished">O Modo padrão não consegue acioná-lo — mude a conexão para Direto.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microfone</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Som do controle</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation type="unfinished">microfone</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation type="unfinished">alto-falante</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -763,6 +779,30 @@
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 já tem quatro controles, que é o máximo que uma sessão comporta. Desvincule um para abrir espaço.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microfone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">O microfone do controle leva sua voz ao host. Desligado não envia nada.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Som do controle</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">O áudio do host toca no alto-falante ou fone do controle.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Microfone mudo</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Microfone ativo</translation>
+    </message>
 </context>
 <context>
     <name>ConnectionsPage</name>
@@ -1143,6 +1183,22 @@
     <message>
         <source>Direct claim couldn’t start the controller’s report stream.</source>
         <translation>A aquisição direta não conseguiu iniciar o fluxo de relatórios do controle.</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation type="unfinished">Microfone mudo</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation type="unfinished">Microfone ativo</translation>
+    </message>
+    <message>
+        <source>Microphone muted, click to unmute</source>
+        <translation type="unfinished">Microfone mudo, clique para reativar</translation>
+    </message>
+    <message>
+        <source>Microphone live, click to mute</source>
+        <translation type="unfinished">Microfone ativo, clique para silenciar</translation>
     </message>
 </context>
 <context>
@@ -3811,6 +3867,22 @@
     <message>
         <source>Nothing here is saved yet. Everything travels with the bind on the next step.</source>
         <translation>Nada aqui foi salvo ainda. Tudo vai junto com o vínculo na próxima etapa.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Microfone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">O microfone do controle leva sua voz ao host. Desligado não envia nada.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Som do controle</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">O áudio do host toca no alto-falante ou fone do controle.</translation>
     </message>
 </context>
 <context>
