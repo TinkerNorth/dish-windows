@@ -99,13 +99,15 @@ jobs:
       # a 60 min Build step and pushed third-party TUs into the database for
       # the analyse step to chew on; their headers still reach the database
       # through the includes of traced first-party compiles.
+      #
+      # The flags live in CMakePresets.json (preset release), shared with
+      # windows-ci.yml and release.yml. Two deliberate deltas against the old
+      # inline configure: the tree is build-release (the preset's binaryDir)
+      # and DISH_REQUIRE_TRANSLATIONS is ON, which this lane's Qt install
+      # already satisfies (same install-qt-action as windows-ci.yml).
       - name: Configure (vcpkg dependencies build untraced)
         shell: pwsh
-        run: |
-          cmake -S . -B build -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DDISH_BUILD_TESTS=OFF `
-            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake --preset release
 
       # init and analyze come from the same repo — bump both SHAs together.
       - name: Initialize CodeQL
@@ -118,10 +120,12 @@ jobs:
           queries: security-extended
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
-      # only oversubscribes it.
+      # only oversubscribes it. Direct --build on the preset's binaryDir with
+      # an explicit --target: the tracer wants exactly Dish, not the release
+      # build preset's Dish + dish_setup_image pair.
       - name: Build (traced)
         shell: pwsh
-        run: cmake --build build --parallel 4 --target Dish
+        run: cmake --build build-release --parallel 4 --target Dish
 
       - name: Perform CodeQL analysis
         # SARIF upload needs Advanced Security, which a private repo does not
