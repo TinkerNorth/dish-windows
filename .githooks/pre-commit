@@ -34,7 +34,9 @@ fi
 # Advisory to match CI: .clang-tidy's WarningsAsErrors='' is authoritative,
 # so a stylistic finding must not block a commit.
 if command -v clang-tidy >/dev/null 2>&1; then
-    if [ -f build-debug/compile_commands.json ]; then
+    # build/ is the debug preset's binaryDir (CMakePresets.json), the same
+    # tree CI lints against.
+    if [ -f build/compile_commands.json ]; then
         cpp_files=()
         while IFS= read -r f; do
             case "$f" in
@@ -42,11 +44,11 @@ if command -v clang-tidy >/dev/null 2>&1; then
             esac
         done <<<"$staged"
         if [ "${#cpp_files[@]}" -gt 0 ]; then
-            echo "▶ clang-tidy -p build-debug (${#cpp_files[@]} file(s))"
-            clang-tidy -p build-debug --quiet "${cpp_files[@]}" || true
+            echo "▶ clang-tidy -p build (${#cpp_files[@]} file(s))"
+            clang-tidy -p build --quiet "${cpp_files[@]}" || true
         fi
     else
-        echo "⚠  build-debug/compile_commands.json missing — run scripts/build.ps1 debug"
+        echo "⚠  build/compile_commands.json missing — run scripts/build.ps1 debug"
     fi
 else
     echo "⚠  clang-tidy not installed — skipping (winget install LLVM.LLVM)"

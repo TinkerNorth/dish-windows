@@ -8,6 +8,10 @@ _deps/
 # Inno Setup output (installer.iss)
 dist/
 
+# Staged portable bundle (scripts/stage-bundle.ps1; windows-ci.yml uploads it,
+# scripts/ci-local.ps1 stages it locally for the portable smoke test)
+artifact/
+
 # vcpkg manifest-mode caches (CI restores from $env:VCPKG_ROOT)
 vcpkg_installed/
 .vcpkg-root
