@@ -2,22 +2,30 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Copyright (C) 2026 Dish contributors.
 #
-# CMake + Ninja wrapper for local dev. It finds the MSVC toolchain, Qt and
-# vcpkg itself, so it runs from any shell, not only a Developer Command Prompt.
+# Build Dish on Windows: scripts/build.ps1 [debug|release] [test]
 #
-# Usage:
-#   scripts/build.ps1                  # release, no tests
-#   scripts/build.ps1 debug            # debug, no tests
+# Thin wrapper over the CMake presets in CMakePresets.json, which are the
+# single source of configure truth (the same presets windows-ci.yml, codeql.yml
+# and release.yml run). It finds the MSVC toolchain, Qt and vcpkg itself, so it
+# runs from any shell, not only a Developer Command Prompt.
+#
+#   scripts/build.ps1                  # release preset -> build-release/
+#   scripts/build.ps1 debug            # debug preset   -> build/
 #   scripts/build.ps1 debug test       # debug + run ctest after building
-#   scripts/build.ps1 release test     # release + run ctest after building
 #
-# It writes into build-release/ or build-debug/ and nothing outside the repo.
+# Directory note: the debug preset writes to build/ (CI's name), not the
+# build-debug/ this script used before the presets existed. Tests are a Debug
+# concern (the release preset configures them OFF, exactly like CI), so
+# `release test` is refused rather than silently testing nothing.
+#
+# It writes into build/ or build-release/ and nothing outside the repo.
 
 [CmdletBinding()]
 param(
-    [ValidateSet('release','debug')]
+    [ValidateSet('release', 'debug')]
     [string]$BuildType = 'release',
-    [string]$Action    = ''
+    [ValidateSet('', 'test')]
+    [string]$Action = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,7 +60,7 @@ function Import-Vcvars {
 
 function Find-QtPrefix {
     # An explicit CMAKE_PREFIX_PATH wins; otherwise fall back to the layout
-    # install-dependencies.bat produces, newest version first.
+    # scripts/install-deps.ps1 produces, newest version first.
     if ($env:CMAKE_PREFIX_PATH -and (Test-Path (Join-Path $env:CMAKE_PREFIX_PATH 'lib/cmake/Qt6'))) {
         return $env:CMAKE_PREFIX_PATH
     }
@@ -77,11 +85,15 @@ function Find-VcpkgRoot {
     return $null
 }
 
+if ($BuildType -eq 'release' -and $Action -eq 'test') {
+    throw "The release preset configures tests OFF, exactly like CI. Run scripts/build.ps1 debug test."
+}
+
 # Skip the ~3s vcvars import when cl.exe is already on PATH.
 if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
     $vcvars = Find-VcvarsBat
     if (-not $vcvars) {
-        throw "cl.exe not on PATH and no VS install found by vswhere. Run install-dependencies.bat first."
+        throw "cl.exe not on PATH and no VS install found by vswhere. Run scripts/install-deps.ps1 first."
     }
     Import-Vcvars -VcvarsPath $vcvars
 }
@@ -99,7 +111,7 @@ if ($qtPrefix) {
         }
     }
 } else {
-    Write-Warning 'No Qt install found under C:\Qt and CMAKE_PREFIX_PATH not set. Run install-dependencies.bat.'
+    Write-Warning 'No Qt install found under C:\Qt and CMAKE_PREFIX_PATH not set. Run scripts/install-deps.ps1.'
 }
 
 $vcpkgRoot = Find-VcpkgRoot
@@ -107,31 +119,22 @@ if ($vcpkgRoot) {
     $env:VCPKG_ROOT = $vcpkgRoot
     Write-Output "==> vcpkg root: $vcpkgRoot"
 } else {
-    Write-Warning 'vcpkg not found. Run install-dependencies.bat or set $env:VCPKG_ROOT.'
+    Write-Warning 'vcpkg not found. Run scripts/install-deps.ps1 or set $env:VCPKG_ROOT.'
 }
 
-$cmakeBuildType = if ($BuildType -eq 'debug') { 'Debug' } else { 'Release' }
-$buildDir       = "build-$BuildType"
-
-$toolchain = if ($vcpkgRoot) {
-    "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake"
-} else { '' }
+$preset = $BuildType
+$buildDir = if ($BuildType -eq 'debug') { 'build' } else { 'build-release' }
 
 # Test for build.ninja, not for the directory: CMake creates the directory the
 # moment it starts, so an aborted configure leaves one behind and a directory
-# check would treat that poisoned tree as configured.
+# check would treat that poisoned tree as configured. A configured tree skips
+# the (vcpkg-manifest-checking) reconfigure for a faster loop; preset flag
+# changes land on the next fresh configure, or run `cmake --preset <name>`
+# yourself.
 $ninjaFile = Join-Path $buildDir 'build.ninja'
 if (-not (Test-Path $ninjaFile)) {
-    Write-Output "==> Configuring ($cmakeBuildType, $buildDir)"
-    $cmakeArgs = @(
-        '-S', '.',
-        '-B', $buildDir,
-        '-G', 'Ninja',
-        "-DCMAKE_BUILD_TYPE=$cmakeBuildType",
-        '-DDISH_BUILD_TESTS=ON'
-    )
-    if ($toolchain) { $cmakeArgs += $toolchain }
-    & cmake @cmakeArgs
+    Write-Output "==> Configuring (preset $preset, $buildDir)"
+    & cmake --preset $preset
     if ($LASTEXITCODE -ne 0) {
         # Wipe the half-configured tree so the next run starts clean.
         Remove-Item -Recurse -Force $buildDir -ErrorAction SilentlyContinue
@@ -139,19 +142,14 @@ if (-not (Test-Path $ninjaFile)) {
     }
 }
 
-Write-Output "==> Building $buildDir"
-& cmake --build $buildDir --parallel
+Write-Output "==> Building (preset $preset)"
+& cmake --build --preset $preset --parallel
 if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
 
 if ($Action -eq 'test') {
     Write-Output "==> Running tests"
-    Push-Location $buildDir
-    try {
-        & ctest --output-on-failure --parallel
-        if ($LASTEXITCODE -ne 0) { throw "ctest failed" }
-    } finally {
-        Pop-Location
-    }
+    & ctest --preset debug --parallel
+    if ($LASTEXITCODE -ne 0) { throw "ctest failed" }
 }
 
 Write-Output "==> Done"

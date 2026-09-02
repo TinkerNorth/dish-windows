@@ -21,26 +21,35 @@ but not checked.
 
 You need Visual Studio 2022 Build Tools (C++ workload), CMake, Ninja, LLVM
 (clang-format + clang-tidy), Qt 6.7 with the Linguist tools, and vcpkg.
-`install-dependencies.bat` installs all of it; the "Build from source" section
-of [`README.md`](README.md) lists the same set for the manual route.
+`scripts\install-deps.ps1` installs all of it (and the pinned clang-format
+22.1.4 CI checks with); the "Build from source" section of
+[`README.md`](README.md) lists the same set for the manual route.
 
 ```powershell
-scripts\build.ps1 debug test   # configure build-debug, build, run ctest
+scripts\build.ps1 debug test   # configure the debug preset (build\), build, run ctest
 scripts\setup-hooks.ps1        # point git at the in-tree pre-commit hook
+scripts\ci-local.ps1           # every windows-ci.yml gate, in CI's order
 ```
 
 `scripts\build.ps1` imports the MSVC environment itself, so it works from an
-ordinary PowerShell window. It writes to `build-debug\` or `build-release\`
-depending on the first argument, and `CMAKE_EXPORT_COMPILE_COMMANDS` is forced
-on in `CMakeLists.txt`, so `build-debug\compile_commands.json` exists after the
-first debug build.
+ordinary PowerShell window. It drives the presets in `CMakePresets.json`,
+which are the single source of configure truth for the workflows too: `debug`
+writes to `build\` (CI's tree) and `release` to `build-release\`, and
+`build\compile_commands.json` exists after the first debug build.
+
+`scripts\ci-local.ps1` runs the format gate, the action-pin lint, the debug
+build and tests, qmllint, the QML literal scanner, the translation gate,
+clang-tidy, the release build and the portable-bundle smoke test, exactly as
+CI orders them. A missing tool fails the run unless you pass `-AllowMissing`;
+`-WithInstaller` adds the Inno Setup compile and the silent install/uninstall
+round-trip (opt-in, because it really installs Dish on your machine).
 
 ### The long-form invocation
 
-`build.ps1` is a wrapper. If you need flags it does not pass, run CMake
-yourself. You must be in a shell that has the MSVC environment, which means
-either a Developer PowerShell or importing `vcvars64.bat` the way the script
-does:
+`build.ps1` is a wrapper over `cmake --preset`. If you need flags a preset
+does not pass, run CMake yourself. You must be in a shell that has the MSVC
+environment, which means either a Developer PowerShell or importing
+`vcvars64.bat` the way the script does:
 
 ```powershell
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -53,24 +62,21 @@ $vs = & $vswhere -latest -products * `
 cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" |
     ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { Set-Item "Env:$($Matches[1])" $Matches[2] } }
 
-cmake -S . -B build-debug -G Ninja `
-    -DCMAKE_BUILD_TYPE=Debug `
-    -DDISH_BUILD_TESTS=ON `
-    -DDISH_REQUIRE_TRANSLATIONS=ON `
-    "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-cmake --build build-debug --parallel
-ctest --test-dir build-debug --output-on-failure --parallel
+cmake --preset debug           # build\: Debug, tests, translations required
+cmake --build --preset debug --parallel
+ctest --preset debug --parallel
 ```
 
-That is what CI runs, modulo the build directory name. `build.ps1` leaves
-`DISH_REQUIRE_TRANSLATIONS` off, which downgrades a missing Qt Linguist
-installation from a configure error to a warning; everything else is the same.
-`CMAKE_PREFIX_PATH` must point at the Qt prefix (`C:\Qt\6.7.3\msvc2019_64` or
-similar) and `VCPKG_ROOT` at the vcpkg checkout. `install-dependencies.bat`
-persists both.
+That is exactly what CI runs. The presets set `DISH_REQUIRE_TRANSLATIONS=ON`
+(the point of a preset is local == CI), so a box without the Qt Linguist
+tools fails configure the way CI would; `cmake -S . -B <dir>` without the
+preset keeps CMakeLists' friendlier OFF default if you need a build while Qt
+Linguist is missing. `CMAKE_PREFIX_PATH` must point at the Qt prefix
+(`C:\Qt\6.7.3\msvc2019_64` or similar) and `VCPKG_ROOT` at the vcpkg
+checkout. `scripts\install-deps.ps1` persists both.
 
 The pre-commit hook (`.githooks/pre-commit`) runs `clang-format -i` on staged
-C++ files and re-stages them, then runs `clang-tidy -p build-debug` in advisory
+C++ files and re-stages them, then runs `clang-tidy -p build` in advisory
 mode. It skips whichever tool is missing rather than failing. It runs under Git
 for Windows' bundled bash; no WSL required.
 
@@ -221,21 +227,28 @@ at the end of this file is the standing backlog.
 
 ## What CI runs
 
-`windows-ci.yml`, on every pull request and every push to `main`, in order:
+`windows-ci.yml`, on every pull request and every push to `main`, in order
+(each step is a shared script or preset, so `scripts/ci-local.ps1` runs the
+same gates from the same sources):
 
-1. `clang-format --dry-run --Werror` over `src/` and `tests/`.
-2. Debug configure with `-DDISH_BUILD_TESTS=ON -DDISH_REQUIRE_TRANSLATIONS=ON`,
-   build, and `ctest --output-on-failure --parallel`.
-3. `qmllint` over every tracked `src/qml/**/*.qml`. Every category gates except
-   `unqualified`, which is downgraded to info because `App` is a runtime
-   context property the linter cannot see (see `docs/QML_CONTRACT.md`).
+1. `scripts/check-format.ps1`: `clang-format --dry-run --Werror` over `src/`
+   and `tests/`, pinned 22.1.4.
+2. The `debug` preset (`-DDISH_BUILD_TESTS=ON -DDISH_REQUIRE_TRANSLATIONS=ON`
+   into `build/`), build, and `ctest --preset debug --parallel`.
+3. `scripts/check-qml.ps1`: `qmllint` over every tracked `src/qml/**/*.qml`.
+   Every category gates except `unqualified`, which is downgraded to info
+   because `App` is a runtime context property the linter cannot see (see
+   `docs/QML_CONTRACT.md`).
 4. `scripts/qml-lint-literals.ps1 -Mode error`.
 5. `scripts/check-translations.ps1`.
-6. `clang-tidy -p build` over `src/**/*.cpp` excluding `src/UI/`, against the
-   same Debug tree step 2 produced.
-7. Release configure and build, `dish_setup_image` staging, an Inno Setup
-   compile of `installer.iss`, `scripts/test-installer-roundtrip.ps1` against
-   the freshly compiled installer, and artifact upload.
+6. `scripts/check-tidy.ps1`: `clang-tidy -p build` over `src/**/*.cpp`
+   excluding `src/UI/`, four wide, against the same Debug tree step 2
+   produced.
+7. The `release` preset build (`Dish` + `dish_setup_image` into
+   `build-release/`), `scripts/stage-bundle.ps1` (the same staging path
+   `release.yml` ships), the portable-bundle smoke test,
+   `scripts/build-installer.ps1`, `scripts/test-installer-roundtrip.ps1`
+   against the freshly compiled installer, and artifact upload.
 
 `version-consistency.yml` runs only when a version-carrying file moves
 (`CMakeLists.txt`, `packaging/dish.rc`, `vcpkg.json`, or the workflow pins): it
@@ -262,7 +275,9 @@ Security gates:
 and the CI step does not fail on findings. Everything else in the list fails
 the build.
 
-Reproduce the build and test steps locally with `scripts\build.ps1 debug test`.
+Reproduce the build and test steps locally with `scripts\build.ps1 debug
+test`, or the whole lane with `scripts\ci-local.ps1` (add `-WithInstaller`
+for steps CI runs that install things on your machine).
 
 ## Security
 

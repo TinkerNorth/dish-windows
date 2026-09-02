@@ -114,6 +114,23 @@ share a version number.
   HID), so the fold is the honest maximum rather than a shortcut. The two host
   rumble streams mix per motor by maximum, so neither can cancel the other.
 
+### Changed
+
+- **Build system: local builds and CI run the same rails.** `CMakePresets.json`
+  (new) carries the `debug` and `release` configure lines; `windows-ci.yml`,
+  `codeql.yml` and `release.yml` call the presets and the shared gate scripts
+  (`scripts/check-format.ps1`, `check-qml.ps1`, `check-tidy.ps1`,
+  `stage-bundle.ps1`) instead of inline copies; and new local scripts drive
+  the same presets: `scripts/install-deps.ps1` (the five steps
+  `install-dependencies.bat` ran, plus the pinned clang-format 22.1.4 CI
+  checks with; the .bat now forwards), `scripts/build.ps1` (rewritten onto
+  `cmake --preset`; the debug tree is now `build/`, CI's name, instead of
+  `build-debug/`), and `scripts/ci-local.ps1` (every PR gate in CI's order;
+  `-AllowMissing` downgrades a missing tool to a notice, `-WithInstaller`
+  adds the installer round-trip). The presets set
+  `DISH_REQUIRE_TRANSLATIONS=ON` like CI always did, so a preset build fails
+  where CI would instead of silently shipping English-only.
+
 ### Fixed
 
 - Moonlight accelerometer samples were sent in g where the wire wants metres per
@@ -121,6 +138,13 @@ share a version number.
 - An absent `protocolVersion` in a satellite response was read as this build's
   version rather than as 1, which would have made a pre-versioning satellite
   look like it had agreed to frames it cannot decode.
+- The released portable zip (`dish-windows.zip`) shipped without
+  `libcrypto-3-x64.dll`, which `dish.exe` imports directly for the Moonlight
+  crypto, so it could not start on a machine without its own OpenSSL copy.
+  The release smoke test never saw it because GitHub runners carry that DLL
+  on `PATH` via Strawberry Perl. Both the CI artifact and the release zip now
+  stage through the same `scripts/stage-bundle.ps1`, which also gives the CI
+  artifact the licence texts only the release zip used to carry.
 
 ## [1.1.0] - 2026-08-24
 

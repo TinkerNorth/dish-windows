@@ -106,27 +106,34 @@ handoff.
   for the translation catalogues)
 - libsodium and SDL2, resolved by vcpkg from `vcpkg.json`
 
-The bundled installer sets all of that up in five idempotent steps. From an
-elevated prompt:
+Local builds and CI run on the same rails: `CMakePresets.json` carries the
+`debug` and `release` configure lines every workflow uses, and the scripts
+under `scripts/` drive those presets. The whole story is four commands:
 
-```cmd
-install-dependencies.bat
+```powershell
+scripts\install-deps.ps1        # once: VS Build Tools, CMake+Ninja, LLVM,
+                                # pinned clang-format, Qt 6.7.3, vcpkg
+scripts\build.ps1 release       # release preset -> build-release\dish.exe
+scripts\ci-local.ps1            # every windows-ci.yml gate before pushing
+scripts\build-installer.ps1     # dist\dish-setup.exe from the staged image
 ```
 
-It installs the VS Build Tools, CMake and Ninja, LLVM, Python plus aqtinstall
-plus Qt 6.7.3 into `C:\Qt`, and clones vcpkg to `%USERPROFILE%\vcpkg`,
-persisting `VCPKG_ROOT` and `CMAKE_PREFIX_PATH`. Budget roughly 12 GB and half
-an hour on a clean machine. Then, from any PowerShell window (the build script
-finds MSVC through `vswhere` and imports `vcvars64.bat` itself):
+`scripts\install-deps.ps1` (which `install-dependencies.bat` forwards to)
+installs everything in five idempotent steps and persists `VCPKG_ROOT` and
+`CMAKE_PREFIX_PATH`; budget roughly 12 GB and half an hour on a clean
+machine. The build script finds MSVC through `vswhere` and imports
+`vcvars64.bat` itself, so any PowerShell window works:
 
 ```powershell
 scripts\build.ps1 release
 .\build-release\dish.exe
 ```
 
-`scripts\build.ps1 debug` builds into `build-debug\` instead, and a second
-`test` argument runs ctest after the build. `CONTRIBUTING.md` has the long-form
-CMake invocation and the hook, format and lint setup.
+`scripts\build.ps1 debug` builds the `debug` preset into `build\` (CI's tree:
+tests on, translations required), and a second `test` argument runs ctest
+after the build. Tests are a Debug concern, exactly as in CI, so
+`release test` is refused. `CONTRIBUTING.md` has the long-form preset
+invocation and the hook, format and lint setup.
 
 ## How it works
 
@@ -218,8 +225,8 @@ separate act from extracting it.
 
 ```powershell
 scripts\build.ps1 debug test
-# or, against an existing build tree
-ctest --test-dir build-debug --output-on-failure
+# or, against an existing debug-preset tree
+ctest --preset debug --parallel
 ```
 
 One `DishTests` executable links the `dish_core` library. It covers the pure

@@ -99,50 +99,37 @@ jobs:
       - name: Install clang-format (pinned 22.1.4)
         run: pipx install clang-format==22.1.4
 
+      # The gate itself lives in scripts/check-format.ps1 so this workflow and
+      # scripts/ci-local.ps1 cannot drift on the file set or the invocation.
       - name: clang-format (check only)
         shell: pwsh
-        run: |
-          $files = git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp' 'tests/*.h'
-          clang-format --dry-run --Werror $files
+        run: ./scripts/check-format.ps1
 
+      # The configure line lives in CMakePresets.json (preset debug: Ninja,
+      # tests, translations required, compile_commands.json for the clang-tidy
+      # step below) so this workflow and scripts/build.ps1 /
+      # scripts/ci-local.ps1 run the identical build.
       - name: Configure (Debug, tests)
         shell: pwsh
-        run: |
-          # CMAKE_EXPORT_COMPILE_COMMANDS is explicit because the clang-tidy
-          # step below lints against this tree's compile_commands.json.
-          cmake -S . -B build -G Ninja `
-            -DCMAKE_BUILD_TYPE=Debug `
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
-            -DDISH_BUILD_TESTS=ON `
-            -DDISH_REQUIRE_TRANSLATIONS=ON `
-            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake --preset debug
 
       # 4 = the windows-2022 runner's vCPU count. Ninja's cores+2 default
       # oversubscribes it and raises MSVC peak memory for no wall-clock gain.
       - name: Build
-        run: cmake --build build --parallel 4
+        run: cmake --build --preset debug --parallel 4
 
       # ctest --parallel defaults to the processor count, so it is left
       # unbounded on purpose — this is test, not compile, concurrency.
       - name: Run tests
-        working-directory: build
-        run: ctest --output-on-failure --parallel
+        run: ctest --preset debug --parallel
 
       # Must run after Build: qt_add_qml_module generates the Dish.Chrome
       # qmldir/qmltypes into build/, which importing pages resolve against.
-      # Every category gates except `unqualified`, downgraded to info because
-      # `App` is a runtime context property the linter cannot see.
+      # File set and flags live in scripts/check-qml.ps1, shared with
+      # scripts/ci-local.ps1.
       - name: qmllint (QML static analysis)
         shell: pwsh
-        run: |
-          # git's * crosses directory levels; 'src/qml/**/*.qml' would miss
-          # the top-level Main/AppShell/WindowTitleBar.
-          $files = git ls-files 'src/qml/*.qml'
-          & "$env:QT_ROOT_DIR/bin/qmllint.exe" `
-            -I build `
-            -I "$env:QT_ROOT_DIR/qml" `
-            --unqualified info `
-            $files
+        run: ./scripts/check-qml.ps1 -BuildDir build
 
       # qmllint checks a QML file RESOLVES; this checks it used the design
       # tokens. A hard-coded `#4FE3FF` or `radius: 8` still renders, it just
@@ -158,105 +145,32 @@ jobs:
         run: ./scripts/check-translations.ps1
 
       # Must run after Build: reuses that tree's compile_commands.json and
-      # needs the generated mocs to exist.
+      # needs the generated mocs to exist. File set, flags, and the four-wide
+      # parallel recipe (with its stderr-folding rationale) live in
+      # scripts/check-tidy.ps1, shared with scripts/ci-local.ps1.
       - name: clang-tidy
         shell: pwsh
-        run: |
-          # .cpp only — headers are covered transitively via HeaderFilterRegex,
-          # and passing a .h directly trips
-          # clang-diagnostic-pragma-once-outside-header.
-          # -Wno-unused-command-line-argument: compile_commands.json carries
-          # MSVC-style flags (/Zc:preprocessor, /utf-8) that the GNU-style
-          # clang driver would otherwise reject.
-          # Four at a time = the vCPU count; clang-tidy is single-threaded and
-          # a serial sweep of the same files took 17 minutes. Each worker
-          # folds BOTH its streams into data (2>&1 under an explicit EAP
-          # Continue, try/catch for the rest): native stderr that crosses the
-          # runspace boundary lands on the step's error stream, where the
-          # runner's $ErrorActionPreference = 'Stop' turns the first routine
-          # "N warnings generated." summary into a step kill. The main
-          # runspace prints the lines and collects the failures, so any
-          # failing file fails the step — the old serial loop's verdict was
-          # whichever file happened to run last.
-          $files = git ls-files 'src/*.cpp' | Where-Object { $_ -notlike 'src/UI/*' }
-          $failed = [System.Collections.Generic.List[string]]::new()
-          $files | ForEach-Object -Parallel {
-            $ErrorActionPreference = 'Continue'
-            try {
-              $out = clang-tidy -p build --quiet `
-                --extra-arg-before=-Wno-unused-command-line-argument `
-                $_ 2>&1
-              [pscustomobject]@{ File = $_; Code = $LASTEXITCODE; Out = $out }
-            } catch {
-              [pscustomobject]@{ File = $_; Code = 1; Out = @("$_") }
-            }
-          } -ThrottleLimit 4 | ForEach-Object {
-            foreach ($line in $_.Out) { "$line" }
-            if ($_.Code -ne 0) { $failed.Add($_.File) }
-          }
-          if ($failed.Count) { throw "clang-tidy failed on: $($failed -join ', ')" }
+        run: ./scripts/check-tidy.ps1 -BuildDir build
 
+      # The configure line lives in CMakePresets.json (preset release).
       - name: Configure (Release)
         shell: pwsh
-        run: |
-          cmake -S . -B build-release -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DDISH_BUILD_TESTS=OFF `
-            -DDISH_REQUIRE_TRANSLATIONS=ON `
-            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake --preset release
 
+      # The release build preset carries the Dish + dish_setup_image targets:
       # dish_setup_image stages the install image (windeployqt + the app-local
       # CRT + licences); installer.iss ships it verbatim in the iscc step below.
       - name: Build release binary
-        run: cmake --build build-release --parallel 4 --target Dish dish_setup_image
+        run: cmake --build --preset release --parallel 4
 
+      # One staging path for this artifact and release.yml's portable zip:
+      # scripts/stage-bundle.ps1 (exe, the four directly-imported DLLs
+      # libcrypto included, windeployqt, app-local CRT, Dish.Chrome qmldir,
+      # licence texts). The two lanes used to stage by hand and drifted:
+      # release.yml's zip shipped without libcrypto-3-x64.dll.
       - name: Stage release artifact (exe + Qt runtime DLLs)
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifact | Out-Null
-          Copy-Item build-release/dish.exe artifact/
-          # windeployqt walks Qt's dependency graph only. dish.exe imports
-          # libsodium.dll, SDL2.dll, opus.dll (controller audio) and (for the
-          # Moonlight crypto) libcrypto directly, so without this copy the
-          # artifact ships a dish.exe that cannot start (0xc0000135). vcpkg's
-          # applocal step drops them beside the freshly linked exe; libcrypto
-          # carries the 3-x64 soversion. libssl is NOT shipped: the Moonlight
-          # path uses only libcrypto and TLS rides Qt's Schannel backend.
-          Copy-Item build-release/libsodium.dll, build-release/SDL2.dll, build-release/opus.dll artifact/
-          Copy-Item build-release/libcrypto-3-x64.dll artifact/
-          # --qmldir is required: the Quick chrome is the only UI, so an
-          # artifact without the QML modules opens to a white window.
-          # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.
-          #
-          # --no-compiler-runtime, with the CRT staged by hand below: what
-          # windeployqt otherwise deploys is vc_redist.x64.exe, an installer
-          # rather than a runtime, which leaves the artifact unable to start on
-          # any machine that has not already had it run. Same call, and the same
-          # five files, as cmake/DishSetupImage.cmake section 6.
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --no-compiler-runtime --qmldir src/qml artifact/dish.exe
-          # dish.exe imports MSVCP140, VCRUNTIME140 and VCRUNTIME140_1 directly;
-          # Qt6Core adds MSVCP140_1 and MSVCP140_2. VCToolsRedistDir comes from
-          # the MSVC environment step, and its absence is fatal here for the
-          # reason it is fatal in the install image: the alternative is an
-          # artifact that borrows the runner's System32 and dies elsewhere.
-          if (-not $env:VCToolsRedistDir) { throw 'VCToolsRedistDir is not set: the MSVC environment step did not run, and the artifact cannot ship an app-local CRT' }
-          $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
-          foreach ($dll in 'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
-            if (-not (Test-Path (Join-Path $crt $dll))) { throw "Missing $dll in $crt" }
-            Copy-Item (Join-Path $crt $dll) artifact/
-          }
-          # The app's OWN QML module entry. windeployqt deploys the QT modules
-          # the imports resolve to, and Dish.Chrome is not one of Qt's. dish.exe
-          # carries a compiled-in copy, but Qt searches <exedir>/Dish/Chrome/qmldir
-          # BEFORE it, so the file that ships had better be the app's own. The
-          # asserts name a regression here rather than leave it to the smoke
-          # test below. Same staging as release.yml and
-          # cmake/DishSetupImage.cmake section 3.
-          $qmldir = 'build-release/Dish/Chrome/qmldir'
-          if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the staged dish.exe could not resolve its own QML module" }
-          if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }
-          New-Item -ItemType Directory -Force -Path artifact/Dish/Chrome | Out-Null
-          Copy-Item $qmldir artifact/Dish/Chrome/
+        run: ./scripts/stage-bundle.ps1 -BuildDir build-release -OutDir artifact
 
       # The one gate that runs the deployed app instead of the build tree.
       # Everything else here — ctest, qmllint, the installer round-trip — passes
@@ -271,15 +185,13 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress --yes
 
+      # scripts/build-installer.ps1 reads the version from the same
+      # project(Dish VERSION ...) line release.yml asserts the tag against,
+      # packs build-release\setup-image, and fails if dist/dish-setup.exe is
+      # not produced.
       - name: Compile installer (Inno Setup)
         shell: pwsh
-        run: |
-          # The version comes from the same project(Dish VERSION ...) line
-          # release.yml asserts the tag against.
-          $cm = Get-Content CMakeLists.txt -Raw
-          if ($cm -notmatch 'project\(\s*Dish[\s\r\n]+VERSION[\s]+(\d+\.\d+\.\d+)') { throw 'project VERSION not found in CMakeLists.txt' }
-          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$($Matches[1])" "/DImageDir=build-release\setup-image" installer.iss
-          if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
+        run: ./scripts/build-installer.ps1 -BuildDir build-release
 
       # Installs, repairs and uninstalls the compiled installer, all silent and
       # all asserted against a real disk and a real HKCU — including the
