@@ -25,5 +25,5 @@ Write-Host "  winget install LLVM.LLVM       # provides clang-format + clang-tid
 Write-Host "  winget install Kitware.CMake"
 Write-Host "  winget install Ninja-build.Ninja"
 Write-Host ""
-Write-Host "Note: clang-tidy needs build-debug/compile_commands.json — generate it with:"
+Write-Host "Note: clang-tidy needs build/compile_commands.json — generate it with:"
 Write-Host "  scripts/build.ps1 debug"

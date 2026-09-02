@@ -165,80 +165,33 @@ jobs:
         with:
           vcpkgGitCommitId: ${{ env.VCPKG_COMMITID }}
 
+      # The configure line lives in CMakePresets.json (preset release, tree
+      # build-release), shared with windows-ci.yml, codeql.yml and the local
+      # scripts.
       - name: Configure (Release)
         shell: pwsh
-        run: |
-          cmake -S . -B build -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DDISH_BUILD_TESTS=OFF `
-            -DDISH_REQUIRE_TRANSLATIONS=ON `
-            "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake --preset release
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
       # only oversubscribes it.
+      # The release build preset carries the Dish + dish_setup_image targets:
       # dish_setup_image stages the install image (windeployqt + the app-local
       # CRT + licences) that the Inno Setup step below ships verbatim.
       - name: Build
-        run: cmake --build build --parallel 4 --target Dish dish_setup_image
+        run: cmake --build --preset release --parallel 4
 
+      # One staging path for this zip payload and windows-ci.yml's artifact:
+      # scripts/stage-bundle.ps1 (exe, the four directly-imported DLLs,
+      # windeployqt, app-local CRT, Dish.Chrome qmldir, licence texts). The
+      # two lanes used to stage by hand and drifted: this zip shipped WITHOUT
+      # libcrypto-3-x64.dll, which dish.exe imports directly for the
+      # Moonlight crypto. The portable smoke test below never caught it
+      # because GitHub runners carry a libcrypto-3-x64.dll on PATH (Strawberry
+      # Perl), so the staged exe silently borrowed the runner's copy and the
+      # shipped zip could not start on a clean machine.
       - name: Bundle Qt runtime DLLs
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dish-windows | Out-Null
-          Copy-Item build/dish.exe dish-windows/
-          # windeployqt walks Qt's dependency graph only. dish.exe imports
-          # libsodium.dll, SDL2.dll and opus.dll (controller audio) directly
-          # (vcpkg staged them beside the exe at link time), so without this
-          # copy the zip ships a dish.exe that cannot start: 0xc0000135, no
-          # window, no message.
-          Copy-Item build/libsodium.dll, build/SDL2.dll, build/opus.dll dish-windows/
-          # --qmldir is required: the Quick chrome is the only UI, so a bundle
-          # without the QML modules opens to a white window.
-          # install-qt-action v4 sets QT_ROOT_DIR but not Qt6_DIR.
-          #
-          # --no-compiler-runtime, with the five CRT DLLs staged by hand below:
-          # windeployqt's idea of deploying the VC++ runtime is to drop
-          # vc_redist.x64.exe beside the app, and that is an INSTALLER, not a
-          # runtime. A "portable" zip whose exe only starts once the user has
-          # found and run a 25 MB redist buried inside it is not portable, and
-          # nothing prompts them to — the failure is a silent 0xc0000135.
-          # cmake/DishSetupImage.cmake section 6 makes the same call for the
-          # install image, with the same five files.
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" --release --no-translations --no-compiler-runtime --qmldir src/qml dish-windows/dish.exe
-          # dish.exe imports MSVCP140, VCRUNTIME140 and VCRUNTIME140_1 directly,
-          # and Qt6Core drags MSVCP140_1 and MSVCP140_2 in behind it — all five
-          # confirmed with dumpbin /DEPENDENTS and against the loaded-module list
-          # of the staged app while it ran. Deployed without them the zip works
-          # only on a machine that already has the redistributable installed,
-          # which a fresh Windows does not.
-          #
-          # VCToolsRedistDir comes from the MSVC environment step above. The
-          # install image treats its absence as fatal; so does this, because the
-          # alternative is a bundle that silently borrows System32 on the runner
-          # and dies on the first machine without it.
-          if (-not $env:VCToolsRedistDir) { throw 'VCToolsRedistDir is not set: the MSVC environment step did not run, and the bundle cannot ship an app-local CRT' }
-          $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
-          foreach ($dll in 'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
-            if (-not (Test-Path (Join-Path $crt $dll))) { throw "Missing $dll in $crt" }
-            Copy-Item (Join-Path $crt $dll) dish-windows/
-          }
-          # The app's OWN QML module entry, which windeployqt cannot know about:
-          # --qmldir scans imports and deploys the QT modules they resolve to,
-          # and Dish.Chrome is not one of Qt's. dish.exe carries a compiled-in
-          # copy, but Qt searches <exedir>/Dish/Chrome/qmldir BEFORE it, so the
-          # file that ships had better be the app's own. It is only the module
-          # ENTRY: the `prefer` line inside sends every type to the compiled-in
-          # copy, so no .qml source ships.
-          #
-          # The two asserts fail the release, named, if the build ever stops
-          # generating a qmldir that declares the app's Main type, instead of
-          # letting a bundle nobody launched go out.
-          # cmake/DishSetupImage.cmake section 3 stages and checks the same file.
-          $qmldir = 'build/Dish/Chrome/qmldir'
-          if (-not (Test-Path $qmldir)) { throw "No Dish.Chrome qmldir at $qmldir - the bundled dish.exe could not resolve its own QML module" }
-          if ((Get-Content $qmldir -Raw) -notmatch '(?m)^Main 1\.0 ') { throw "$qmldir does not declare the app's Main type, so it is the wrong Dish.Chrome qmldir (the setup kit's?)" }
-          New-Item -ItemType Directory -Force -Path dish-windows/Dish/Chrome | Out-Null
-          Copy-Item $qmldir dish-windows/Dish/Chrome/
+        run: ./scripts/stage-bundle.ps1 -BuildDir build-release -OutDir dish-windows
 
       # Nothing had ever launched the portable bundle. It shipped for two
       # releases unable to start (the Dish.Chrome qmldir above), which no unit
@@ -250,19 +203,8 @@ jobs:
         shell: pwsh
         run: ./scripts/test-portable-bundle.ps1 -Bundle dish-windows
 
-      # LGPLv3 s4(b) requires the licence to travel with the Combined Work, and
-      # Qt is linked under it. OFL-1.1 s2 requires the same for the four Inter
-      # faces compiled into the exe as Qt resources. Without these the zip is
-      # not redistributable.
-      - name: Stage licence texts
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dish-windows/licenses | Out-Null
-          Copy-Item LICENSE            dish-windows/licenses/LICENSE.LGPL-3.0.txt
-          Copy-Item COPYING.GPL3       dish-windows/licenses/LICENSE.GPL-3.0.txt
-          Copy-Item THIRD_PARTY.md     dish-windows/licenses/
-          Copy-Item packaging/fonts/Inter-LICENSE.txt dish-windows/licenses/
-          Get-ChildItem dish-windows/licenses
+      # Licence texts (LGPLv3 s4(b), OFL-1.1 s2) are staged by
+      # scripts/stage-bundle.ps1 above.
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress --yes
@@ -277,7 +219,7 @@ jobs:
         run: |
           $tag = '${{ github.event.inputs.tag || github.ref_name }}'
           $num = ($tag -replace '^v','') -replace '[-+].*$',''
-          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build\setup-image" installer.iss
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build-release\setup-image" installer.iss
           if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
           Copy-Item dist/dish-setup.exe "$PWD/dish-setup.exe"
 
