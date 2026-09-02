@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation type="unfinished">Standardni način ovo ne može pokrenuti — prebacite vezu na Brzi.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Zvuk kontrolera</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation type="unfinished">mikrofon</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation type="unfinished">zvučnik</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -764,6 +780,22 @@
     <message>
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 već nosi četiri kontrolera, što je najviše koliko sesija prima. Odvežite jedan da napravite mjesta.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Mikrofon</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">Mikrofon pada prenosi vaš glas do hosta. Isključeno ne šalje ništa.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Zvuk kontrolera</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
     </message>
 </context>
 <context>

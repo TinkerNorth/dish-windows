@@ -19,11 +19,13 @@
 #include "composer/ThemeController.h"
 #include "composer/WakeStateComposer.h"
 #include "composer/WakeStateController.h"
+#include "repository/AudioPreferenceRepository.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
 #include "core/model/Protocol.h"
 #include "core/reducer/BindingPresence.h"
 #include "core/reducer/FeedbackRouting.h"
+#include "core/reducer/HostAudioVerdict.h"
 #include "core/reducer/PollRateSampler.h"
 #include "source/input/ControllerActivitySource.h"
 #include "source/inputrate/InputRateStore.h"
@@ -32,6 +34,7 @@
 #include "source/store/CrashReportingStore.h"
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/KeepAwakePreferenceStore.h"
+#include "source/store/AudioEnabledStore.h"
 #include "source/store/MotionEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/TouchpadModeStore.h"
@@ -112,6 +115,10 @@ class AppModel : public QObject {
 
     repository::DeadzoneRepository* deadzoneRepository() { return &deadzoneRepo_; }
     source::MotionEnabledStore* motionEnabledStore() { return &motionEnabledStore_; }
+    // The controller-audio toggles, persisted per binding slot like motion.
+    // Mic defaults OFF (privacy), speaker ON; the stores own those defaults.
+    source::MicEnabledStore* micEnabledStore() { return &micEnabledStore_; }
+    source::SpeakerEnabledStore* speakerEnabledStore() { return &speakerEnabledStore_; }
     source::TouchpadModeStore* touchpadModeStore() { return &touchpadModeStore_; }
     source::JoystickRemapStore* joystickRemapStore() { return &joystickRemapStore_; }
 
@@ -172,6 +179,19 @@ class AppModel : public QObject {
     std::optional<models::CatalogTypeDto> catalogTypeFor(const QString& hostId, int type) const;
 
     QHash<QString, models::CatalogHostFeatureDto> catalogHostFeatures(const QString& hostId) const;
+
+    // The pad layer of the controller-audio fold: does this slot have a usable
+    // audio route on this machine? One owner with the descriptor caps — both
+    // read reducer::slotCarriesMicCapture over feedbackInputs(), so the
+    // capability table and the wire can never disagree. False for every slot
+    // until Wave 2 lands the pad-to-audio-device matching.
+    bool slotCarriesMicSource(const QString& slotId) const;
+    bool slotCarriesSpeakerSink(const QString& slotId) const;
+
+    // The host layer for the mic/speaker rows ONLY: the per-session probe's
+    // verdict off the connection, conservative {false,false} for an unknown or
+    // never-probed host. Every other feature keeps its catalog-fed host layer.
+    reducer::HostAudioVerdict hostControllerAudioFor(const QString& hostId) const;
 
     // Holds the last good catalog as stale across a refresh, so the picker can
     // show a spinner or an error cause over the last-known types. Main thread.
@@ -287,6 +307,12 @@ class AppModel : public QObject {
                           const std::array<std::uint8_t, proto::kTriggerEffectBlockBytes>& left,
                           const std::array<std::uint8_t, proto::kTriggerEffectBlockBytes>& right);
     void actuatePlayerLeds(const QString& slotId, std::uint8_t ledMask);
+    // MSG_MIC_LED. Routed through FeedbackRouting like every other feedback
+    // kind, but the routing answers None on every slot this wave: the USB
+    // output-report builder for the lamp is Wave 2's, so this resolves the
+    // target and stops. The seam exists so the dispatch shape is already
+    // final.
+    void actuateMicLed(const QString& slotId, std::uint8_t state);
 
     // The slot bound to a connection, or empty. Reads the hub's binding table,
     // which is what makes it callable from a receive thread.
@@ -360,6 +386,12 @@ class AppModel : public QObject {
     repository::DeadzoneRepository deadzoneRepo_;
     repository::MotionPreferenceRepository motionPrefRepo_;
     source::MotionEnabledStore motionEnabledStore_;
+    // Same repo-before-store ordering rule. One repository per direction so the
+    // two toggle lists never share a settings blob.
+    repository::AudioPreferenceRepository micPrefRepo_{QStringLiteral("mic_preferences")};
+    repository::AudioPreferenceRepository speakerPrefRepo_{QStringLiteral("speaker_preferences")};
+    source::MicEnabledStore micEnabledStore_{&micPrefRepo_};
+    source::SpeakerEnabledStore speakerEnabledStore_{&speakerPrefRepo_};
     // Absent = the ds4 pair-time default.
     repository::TouchpadModeRepository touchpadModeRepo_;
     source::TouchpadModeStore touchpadModeStore_{&touchpadModeRepo_};

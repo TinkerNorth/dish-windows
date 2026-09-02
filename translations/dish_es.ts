@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation type="unfinished">El Modo estándar no puede accionarlo — cambia la conexión a Directo.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Micrófono</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Sonido del mando</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation type="unfinished">micrófono</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation type="unfinished">altavoz</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -762,6 +778,22 @@
     <message>
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 ya tiene cuatro mandos, que es el máximo que admite una sesión. Desvincula uno para hacer sitio.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation type="unfinished">Micrófono</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation type="unfinished">El micrófono del mando lleva tu voz al host. Apagado no envía nada.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation type="unfinished">Sonido del mando</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation type="unfinished">El audio del host suena por el altavoz o los auriculares del mando.</translation>
     </message>
 </context>
 <context>

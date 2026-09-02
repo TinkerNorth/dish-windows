@@ -25,6 +25,32 @@ share a version number.
 
 ### Added
 
+- **Controller audio, wave 1: wire + capability model** `[wire-coordinated]`
+  (satellite's `MSG_MIC_AUDIO`/`MSG_SPEAKER_AUDIO`/`MSG_MIC_LED`; dish-android
+  shipped the client reference). This lands the protocol-2 audio extension's
+  plumbing without yet turning any audio on:
+  - the wire: `MSG_MIC_AUDIO` (0x0012) send path, `MSG_SPEAKER_AUDIO` (0x0013)
+    and `MSG_MIC_LED` (0x0014) dispatch, the `mic`/`speaker` descriptor caps,
+    and the datagram ceilings (1500-byte receive buffer, 1472-byte inner
+    payload guard) a full-size audio frame needs;
+  - the pure cores: the 2-frame reorder window (`core/audio/AudioJitter.h`,
+    the third mirror of satellite's — edit together) and the pinned Opus
+    formats (mic mono VOIP 32 kbps DTX, speaker stereo AUDIO 96 kbps, both
+    VBR + in-band FEC) behind `core/audio/AudioCodec.h`, libopus-backed in
+    `source/audio/OpusAudioCodec.*` (new vcpkg dependency: `opus`);
+  - the host verdict: `GET /api/server/capabilities` is now probed after every
+    session PUT for the `controllerAudio` block (per-backend `audio` fallback),
+    so the capability table's mic/speaker host layer reflects what the host
+    will actually carry — conservative "no audio" until a probe says yes;
+  - the model and UI: Microphone and Controller sound rows in the capability
+    matrix and per-binding toggles (mic defaults OFF for privacy, speaker ON),
+    persisted like the motion toggle; `wButtons` bit 0x0800 reserved as the
+    DualSense mic-mute state.
+  The pad-side audio routes answer false for every slot this wave, so no
+  descriptor advertises an audio cap yet and no audio flows; wave 2 lands the
+  audio engines, the pad-to-device routing, the DS5 mute button and the mute
+  lamp actuation.
+
 - **Protocol 2** `[wire-coordinated]` (satellite #86, #87; dish-android #174,
   #175). The version is now negotiated rather than assumed: the client offers 2,
   the satellite settles the session on that offer and echoes it back, and the

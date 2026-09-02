@@ -87,6 +87,10 @@ find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS LinguistTools)
 # port with no upstream CMake config.
 find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+# Controller audio (source/audio/OpusAudioCodec). Opus ships its own upstream
+# CMake config, so no `unofficial-` prefix: the port installs lib/cmake/Opus
+# exporting Opus::opus.
+find_package(Opus CONFIG REQUIRED)
 # OpenSSL backs the Moonlight (GameStream) path only: it needs AES-128-ECB,
 # AES-128-GCM, RSA-2048 sign/verify and X.509 generation, none of which libsodium
 # offers. The Satellite protocol-1 crypto (core/wire/SessionCrypto) stays on
@@ -206,6 +210,14 @@ set(DISH_CORE_SOURCES
     src/core/reducer/LatencyWindow.h
     src/core/reducer/CapabilitySolver.h
     src/core/reducer/CapabilitySolver.cpp
+    src/core/reducer/HostAudioVerdict.h
+    # Controller audio: the reorder window and the pure codec seam in core, the
+    # libopus-linking implementation at the source edge with the other
+    # third-party-facing code.
+    src/core/audio/AudioJitter.h
+    src/core/audio/AudioCodec.h
+    src/source/audio/OpusAudioCodec.h
+    src/source/audio/OpusAudioCodec.cpp
     src/core/reducer/ApplyBindingMachine.h
     src/core/reducer/UpdateMachine.h
     src/core/reducer/UpdateMachine.cpp
@@ -281,6 +293,8 @@ set(DISH_CORE_SOURCES
     src/source/store/ControllerTypeStore.cpp
     src/source/store/MotionEnabledStore.h
     src/source/store/MotionEnabledStore.cpp
+    src/source/store/AudioEnabledStore.h
+    src/source/store/AudioEnabledStore.cpp
     src/source/store/SatelliteMotionBackendStatusStore.h
     src/source/store/SatelliteMotionBackendStatusStore.cpp
     src/source/store/UsbPathPreferenceStore.h
@@ -344,6 +358,8 @@ set(DISH_CORE_SOURCES
     src/repository/DeadzoneRepository.cpp
     src/repository/MotionPreferenceRepository.h
     src/repository/MotionPreferenceRepository.cpp
+    src/repository/AudioPreferenceRepository.h
+    src/repository/AudioPreferenceRepository.cpp
     src/composer/ConnectionsComposer.h
     src/composer/ConnectionsComposer.cpp
     src/composer/ConnectionCoordinator.h
@@ -415,6 +431,8 @@ target_link_libraries(dish_core
         # For the theme palette (QColor + QStyleHints) and the role models.
         Qt6::Gui
         unofficial-sodium::sodium
+        # Controller audio (see the find_package comment above).
+        Opus::opus
         # Moonlight path only; see the find_package comment above. Just libcrypto:
         # the Moonlight crypto uses EVP / RSA / X.509 (all in libcrypto), and TLS
         # rides Qt's Schannel backend, so libssl is never linked or shipped.

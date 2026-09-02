@@ -9,6 +9,7 @@
   "dependencies": [
     "libsodium",
     "openssl",
+    "opus",
     "sdl2"
   ]
 }

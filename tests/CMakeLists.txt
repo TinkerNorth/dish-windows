@@ -157,6 +157,14 @@ set(DISH_TEST_SOURCES
     test_app_view_model_bind_availability.cpp
     test_capability_solver.cpp
     test_feedback_routing.cpp
+    # Controller audio.
+    test_audio_jitter.cpp
+    test_audio_codec.cpp
+    test_satellite_client_audio.cpp
+    test_host_audio_verdict.cpp
+    test_audio_enabled_store.cpp
+    test_audio_preference_repository.cpp
+    test_wifi_connection_audio.cpp
     test_protocol_negotiation.cpp
     test_apply_binding_machine.cpp
     test_font_stacks.cpp

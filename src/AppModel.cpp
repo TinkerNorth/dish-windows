@@ -233,6 +233,19 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         return reducer::slotCarriesFeedback(feedbackInputs(slotId), reducer::FeedbackKind::Rumble);
     });
 
+    // CAP_MIC / CAP_SPEAKER: the audio route (a Wave-2 seam that answers false
+    // for every slot today) gated by the per-binding toggle, same shape as
+    // CAP_MOTION above. The mic gate matters doubly — CAP_MIC is also what
+    // invites the MIC_LED return path, and a lamp for a microphone the user
+    // switched off would report a stream that cannot exist.
+    hub_->setMicCapabilityFn([this](const QString& slotId) {
+        return slotCarriesMicSource(slotId) && micEnabledStore_.isEnabled(slotId.toStdString());
+    });
+    hub_->setSpeakerCapabilityFn([this](const QString& slotId) {
+        return slotCarriesSpeakerSink(slotId) &&
+               speakerEnabledStore_.isEnabled(slotId.toStdString());
+    });
+
     // The user's Emulate override wins over the SDL hardware classification;
     // resolveControllerType applies that ladder.
     hub_->setControllerTypeFn(
@@ -400,6 +413,20 @@ void AppModel::installRumbleHandlers() {
             const QString deviceId = boundSlotForConnection(id);
             if (deviceId.isEmpty()) { return; }
             actuatePlayerLeds(deviceId, pm.ledMask);
+        });
+        // MSG_SPEAKER_AUDIO: the pass-through seam Wave 2's playback engine
+        // fills. Arrives only for a slot whose descriptor claimed CAP_SPEAKER,
+        // which nothing does until the audio routes exist, so today this is
+        // shape, not traffic. The message borrows the receive buffer; the
+        // engine must consume or copy before returning.
+        conn->setSpeakerAudioHandler([](const net::SatelliteClient::SpeakerAudioMessage&) {
+            // Wave 2: jitter window -> Opus decode -> the pad's audio device.
+        });
+        // MSG_MIC_LED: the mute lamp, routed like every other feedback kind.
+        conn->setMicLedHandler([this, id](const net::SatelliteClient::MicLedMessage& mm) {
+            const QString deviceId = boundSlotForConnection(id);
+            if (deviceId.isEmpty()) { return; }
+            actuateMicLed(deviceId, mm.state);
         });
     }
 }
@@ -934,7 +961,25 @@ reducer::SlotFeedbackInputs AppModel::feedbackInputs(const QString& slotId) cons
         in.directClaimLive = vp.has_value() && usbManager_ != nullptr &&
                              usbManager_->isDirectClaimed(vp->first, vp->second);
     }
+    // padMicLed, padMicRoute and padSpeakerRoute stay at their false defaults:
+    // the lamp needs Wave 2's output-report builder, and the audio routes need
+    // Wave 2's pad-to-audio-device matching. Flipping them HERE is Wave 2's
+    // whole entry point into the caps/dispatch fold.
     return in;
+}
+
+bool AppModel::slotCarriesMicSource(const QString& slotId) const {
+    return reducer::slotCarriesMicCapture(feedbackInputs(slotId));
+}
+
+bool AppModel::slotCarriesSpeakerSink(const QString& slotId) const {
+    return reducer::slotCarriesSpeakerPlayout(feedbackInputs(slotId));
+}
+
+reducer::HostAudioVerdict AppModel::hostControllerAudioFor(const QString& hostId) const {
+    const auto* conn = wifi_->get(hostId);
+    if (conn == nullptr) { return {}; } // conservative: no probe, no audio
+    return {conn->hostMicAvailable(), conn->hostSpeakerAvailable()};
 }
 
 void AppModel::actuateRumble(const QString& slotId, std::uint16_t strong, std::uint16_t weak,
@@ -1003,6 +1048,19 @@ void AppModel::actuatePlayerLeds(const QString& slotId, std::uint8_t ledMask) {
     if (vp.has_value() && usbManager_ != nullptr) {
         usbManager_->applyPlayerLeds(vp->first, vp->second, ledMask);
     }
+}
+
+void AppModel::actuateMicLed(const QString& slotId, std::uint8_t state) {
+    const auto in = feedbackInputs(slotId);
+    if (reducer::resolveFeedbackTarget(in, reducer::FeedbackKind::MicLed) !=
+        reducer::FeedbackTarget::DirectUsb) {
+        return;
+    }
+    // Wave 2: the UsbOutputReports builder for the DualSense mute lamp, plus
+    // the FeedbackState shadow so the write coalesces like the others. Until
+    // then padMicLed is false in feedbackInputs(), so this line is unreachable;
+    // the routing above is what this wave pins.
+    Q_UNUSED(state);
 }
 
 void AppModel::applyBindingPresence() {

@@ -331,7 +331,7 @@ The threads in the app:
 | SDL input | [`SDLGamepadBridge`](../src/Input/SDLGamepadBridge.h) | The SDL event pump, `GamepadInputProcessor::publish`, and the `sendto` that follows it |
 | USB direct | `UsbGamepadManager` per claimed device | Raw-HID URB reads, feeding the same publish path |
 | Heartbeat | [`SatelliteClient`](../src/Network/SatelliteClient.h) | Per-session keepalive sends and ping arming |
-| Receive | `SatelliteClient` | Ack decode, RTT sampling, the feedback callbacks (rumble, lightbar, trigger effects, player LEDs), close-notify |
+| Receive | `SatelliteClient` | Ack decode, RTT sampling, the feedback callbacks (rumble, lightbar, trigger effects, player LEDs, speaker audio, mic LED), close-notify |
 | `dish-update` | [`UpdateCoordinator`](../src/update/UpdateCoordinator.h) | The update payload download, its incremental hash, and every staging-directory write. Progress is marshalled back queued and throttled. Nothing here touches the input path. |
 
 **The input hot path is intentionally not routed through the kernel.** The
@@ -368,19 +368,34 @@ an actuator the satellite will never drive.
 questions from the same inputs, and both `ConnectionHub`'s capability functions
 and `AppModel::actuate*` go through it. The two paths carry different amounts:
 
-| Path | Rumble | Lightbar | Adaptive triggers | Player LEDs |
-|---|---|---|---|---|
-| Standard (SDL) | yes | yes | **no** | **no** |
-| Direct (raw HID) | yes | yes | yes | yes |
+| Path | Rumble | Lightbar | Adaptive triggers | Player LEDs | Mic-mute lamp |
+|---|---|---|---|---|---|
+| Standard (SDL) | yes | yes | **no** | **no** | **no** |
+| Direct (raw HID) | yes | yes | yes | yes | yes* |
 
-SDL has a rumble call and an LED call and nothing else, so the last two columns
-are structurally out of reach there however good the pad is. The Direct path
-reaches them because the claim writes OUT reports as well as reading IN ones;
-the bytes are built by [`UsbOutputReports`](../src/core/input/UsbOutputReports.h),
-which is pure and host-tested, and the gateway adds only the framing the
-platform itself demands. A Direct claim that has gone away carries nothing —
-there is deliberately no fallback to Standard, because a pad on the Direct path
-is not open on the SDL path at the same time.
+SDL has a rumble call and an LED call and nothing else, so the last three
+columns are structurally out of reach there however good the pad is. The Direct
+path reaches them because the claim writes OUT reports as well as reading IN
+ones; the bytes are built by
+[`UsbOutputReports`](../src/core/input/UsbOutputReports.h), which is pure and
+host-tested, and the gateway adds only the framing the platform itself demands.
+A Direct claim that has gone away carries nothing — there is deliberately no
+fallback to Standard, because a pad on the Direct path is not open on the SDL
+path at the same time.
+
+\* Routed but not yet actuated: `MSG_MIC_LED` (0x0014) resolves through the same
+router, and the lamp's OUT-report builder lands with the rest of controller
+audio's wave 2. The controller-audio caps (`mic`/`speaker`) go through the same
+"advertised iff it lands" rule but are keyed on the pad's AUDIO routes
+(`slotCarriesMicCapture` / `slotCarriesSpeakerPlayout`) rather than the HID
+path, because the streams ride the pad's own USB-audio endpoints — a separate
+interface reachable from either path. Both routes answer false until wave 2's
+pad-to-audio-device matching, so nothing advertises an audio cap yet. The
+host's own live verdict is a third layer: `WifiConnectionManager::probeHostAudio`
+reads `GET /api/server/capabilities` after every session PUT and folds it via
+[`HostAudioVerdict`](../src/core/reducer/HostAudioVerdict.h) into per-session
+connection state — conservative "no audio" until a probe answers, reset with
+the session.
 
 **Not reachable on this platform, with the reason:** the Xbox One / Series pad's
 impulse-trigger motors. XInput hides an Xbox-class pad from raw HID, so it never

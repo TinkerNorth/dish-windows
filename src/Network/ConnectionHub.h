@@ -79,6 +79,16 @@ class ConnectionHub : public QObject {
         playerLedsCapabilityFn_ = std::move(fn);
     }
 
+    // Controller audio. Unset reads as "no", same as the other actuators, so
+    // the satellite neither expects MIC_AUDIO nor sends SPEAKER_AUDIO for a
+    // slot this build cannot route. AppModel folds the audio route (a Wave-2
+    // seam, false today) with the per-binding user toggle.
+    using MicCapabilityFn = std::function<bool(const QString& slotId)>;
+    void setMicCapabilityFn(MicCapabilityFn fn) { micCapabilityFn_ = std::move(fn); }
+
+    using SpeakerCapabilityFn = std::function<bool(const QString& slotId)>;
+    void setSpeakerCapabilityFn(SpeakerCapabilityFn fn) { speakerCapabilityFn_ = std::move(fn); }
+
     // A proto CONTROLLER_TYPE_*, which is how a DualSense registers as a virtual
     // DS4 rather than an Xbox pad. Unset means CONTROLLER_TYPE_XBOX.
     using ControllerTypeFn = std::function<int(const QString& slotId)>;
@@ -110,6 +120,8 @@ class ConnectionHub : public QObject {
     RumbleCapabilityFn rumbleCapabilityFn_;
     TriggerEffectsCapabilityFn triggerEffectsCapabilityFn_;
     PlayerLedsCapabilityFn playerLedsCapabilityFn_;
+    MicCapabilityFn micCapabilityFn_;
+    SpeakerCapabilityFn speakerCapabilityFn_;
     ControllerTypeFn controllerTypeFn_;
     TouchpadModeFn touchpadModeFn_;
 };

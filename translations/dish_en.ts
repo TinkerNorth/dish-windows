@@ -221,6 +221,22 @@
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
         <translation>Standard mode can’t drive it — switch the connection to Direct.</translation>
     </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation>Controller sound</translation>
+    </message>
+    <message>
+        <source>microphone</source>
+        <translation>microphone</translation>
+    </message>
+    <message>
+        <source>speaker</source>
+        <translation>speaker</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -762,6 +778,22 @@
     <message>
         <source>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</source>
         <translation>%1 already carries four controllers, which is the most a session takes. Unbind one to make room.</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
+        <translation>The pad’s mic carries your voice to the host. Off sends nothing.</translation>
+    </message>
+    <message>
+        <source>Controller sound</source>
+        <translation>Controller sound</translation>
+    </message>
+    <message>
+        <source>Audio from the host plays on the pad’s speaker or headset.</source>
+        <translation>Audio from the host plays on the pad’s speaker or headset.</translation>
     </message>
 </context>
 <context>
