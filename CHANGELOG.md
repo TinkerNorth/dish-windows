@@ -21,7 +21,13 @@ share a version number.
 
 ---
 
-## [Unreleased]
+## [2.0.0] - Unreleased
+
+Everything below ships as 2.0.0, the release where the whole Dish and
+Satellite family aligns on one version number. Since 1.1.0 this client
+gained the Moonlight (Sunshine/Apollo/Wolf) host path, the full protocol-2
+feedback set, controller audio for Direct-claimed pads, and the unified
+build story below.
 
 ### Added
 
