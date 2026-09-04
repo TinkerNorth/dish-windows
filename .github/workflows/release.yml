@@ -170,7 +170,11 @@ jobs:
       # scripts.
       - name: Configure (Release)
         shell: pwsh
-        run: cmake --preset release
+        env:
+          # Empty for anything but a release from this repo: secrets are not
+          # exposed to forks, so a fork build carries no DSN and cannot upload.
+          DISH_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: cmake --preset release -DDISH_SENTRY_DSN="$env:DISH_SENTRY_DSN"
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
       # only oversubscribes it.

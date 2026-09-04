@@ -31,6 +31,46 @@ build story below.
 
 ### Added
 
+- **Crash reports are actually sent now.** The Settings switch has existed since
+  1.0 and, until this release, gated nothing at all: `dish::crash::install()` is
+  the first statement in `main()` and the opt-out only reached a backend whose
+  whole body was one log line. So a user reading "Share crash reports" was told
+  something that was not happening, and a user turning it off changed nothing.
+  Both halves are now true. The switch stays opt-out, matching dish-android and
+  the FAQ, and it routes through the `CrashReportingController` seam that was
+  already there.
+  - What is behind the switch is *uploading*, and only that. `UI/CrashHandler`
+    still writes `crash.dmp` and `crash.log` to `%LOCALAPPDATA%\Dish\` on every
+    crash, armed before the preference has even been read, because a crash
+    during startup still deserves a local artifact. Turning reporting off never
+    costs you those files; it stops them being sent.
+  - A build additionally has to carry a DSN before anything can transmit.
+    `DISH_SENTRY_DSN` is empty in CMake and only `release.yml` fills it in, from
+    a repository secret. Secrets are not exposed to forks, so a local build, a
+    PR build and a fork build cannot report regardless of the switch. Unlike
+    satellite there is no separate release-version flag to key an environment
+    off (the `release` preset is shared with `windows-ci.yml` and `codeql.yml`),
+    so the Sentry environment is *derived* from the DSN: `production` when one
+    is compiled in, `development` otherwise. One mechanism, so the label cannot
+    drift from the thing that decides whether anything is sent.
+  - Session tracking is turned off, because it defaults to on and would report
+    every launch and quit of a desktop app; the crash is the payload. PII is off
+    by not touching it: sentry-native does not send it by default, and the
+    setter that would change that exists only on Nintendo Switch.
+  - Disarming is immediate. Flipping the switch off calls `sentry_close()` then
+    and there rather than at the next launch, so withdrawing consent stops the
+    next crash from being sent and not the one after it.
+  - Two new runtime parts ship with the app. `sentry.dll` is a link
+    dependency, so a bundle without it will not start at all (0xc0000135).
+    `crashpad_handler.exe` is subtler: sentry-native uses the crashpad
+    backend, whose handler is a SEPARATE PROCESS that vcpkg keeps in its
+    tools directory rather than deploying beside the exe. Missing, Dish
+    starts and runs perfectly and captures nothing, so CMake stages it next
+    to the executable, `DishSetupImage` copies it into the install image by
+    name (the surrounding glob only sees DLLs), the portable bundle carries
+    it, the smoke test asserts both, and configuring with the SDK present
+    but the handler missing is a hard error rather than a quiet skip.
+
 - **Controller audio, wave 1: wire + capability model** `[wire-coordinated]`
   (satellite's `MSG_MIC_AUDIO`/`MSG_SPEAKER_AUDIO`/`MSG_MIC_LED`; dish-android
   shipped the client reference). This lands the protocol-2 audio extension's

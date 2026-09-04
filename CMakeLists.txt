@@ -430,6 +430,60 @@ set(DISH_CORE_SOURCES
     src/qml/AppSettingsMaps.h
     src/qml/AppSettingsMaps.cpp)
 
+# Crash reporting (Sentry). Two gates, and only one of them is load-bearing.
+#
+# The DSN is the real one. It is empty here and only .github/workflows/
+# release.yml fills it in, from the SENTRY_DSN repository secret. Secrets are
+# not exposed to forks, so a local build, a PR build and a build from a fork all
+# carry no DSN and cannot transmit, whatever the Settings switch says. The other
+# gate is that switch itself (source/store/CrashReportingStore.h), which is
+# opt-out to match dish-android.
+#
+# Unlike satellite there is no separate release-version flag to key an
+# environment off: the `release` preset is shared by windows-ci.yml, codeql.yml
+# and release.yml alike. So the environment is DERIVED from the DSN in
+# CrashReportingBackend.cpp ("production" when one is compiled in, else
+# "development"). One mechanism, so the label cannot drift from the thing that
+# actually decides whether anything is sent.
+#
+# The `+dev` suffix keeps a developer build that sets $SENTRY_DSN by hand from
+# filing itself against a real release and mixing unsymbolicated frames in.
+set(DISH_SENTRY_DSN "" CACHE STRING
+    "Sentry DSN. Empty (the default) disables crash uploading at compile time.")
+if(DISH_SENTRY_DSN STREQUAL "")
+    set(DISH_SENTRY_RELEASE "dish-windows@${PROJECT_VERSION}+dev")
+else()
+    set(DISH_SENTRY_RELEASE "dish-windows@${PROJECT_VERSION}")
+endif()
+
+# Optional dependency: absent means CrashReportingBackend.cpp compiles to inert
+# stubs and everything else still builds, so a source checkout needs no extra
+# package. The local crash.dmp / crash.log writer is unaffected either way.
+find_package(sentry CONFIG QUIET)
+if(sentry_FOUND)
+    message(STATUS "dish: Sentry SDK found; crash uploading compiled in (${DISH_SENTRY_RELEASE})")
+    # The vcpkg port builds sentry-native with SENTRY_BACKEND=crashpad, whose
+    # handler is a SEPARATE PROCESS. vcpkg's applocal step copies sentry.dll
+    # beside the freshly linked exe but not this, because it is a tool rather
+    # than a link dependency. Without it Dish starts perfectly and silently
+    # captures nothing, which is the worst failure this feature could have, so
+    # it is located here and staged next to the exe like any other runtime part.
+    find_program(DISH_CRASHPAD_HANDLER
+        NAMES crashpad_handler
+        HINTS "${sentry_DIR}/../../tools/sentry-native"
+        NO_DEFAULT_PATH)
+    if(NOT DISH_CRASHPAD_HANDLER)
+        message(FATAL_ERROR
+            "sentry-native was found but crashpad_handler was not, so crashes "
+            "would never be captured. Expected it under the Sentry package's "
+            "tools/sentry-native. Configure with -DDISH_SENTRY_DSN=\"\" and no "
+            "Sentry package to build without crash uploading instead.")
+    endif()
+    message(STATUS "dish: crashpad handler at ${DISH_CRASHPAD_HANDLER}")
+else()
+    message(STATUS "dish: Sentry SDK not found; crash uploading stubbed out")
+endif()
+
 add_library(dish_core STATIC ${DISH_CORE_SOURCES})
 target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # The cgutman ENet CMake adds its include dir only to its own target, so
@@ -437,6 +491,15 @@ target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(dish_core SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
 # From the project VERSION so the About screen can't drift from dish.rc.
 target_compile_definitions(dish_core PUBLIC DISH_VERSION="${PROJECT_VERSION}")
+# Crash-reporting identity. PRIVATE: only the backend needs these, and a
+# PUBLIC define would leak the DSN into every consumer's command line.
+target_compile_definitions(dish_core PRIVATE
+    DISH_SENTRY_DSN="${DISH_SENTRY_DSN}"
+    DISH_SENTRY_RELEASE="${DISH_SENTRY_RELEASE}")
+if(sentry_FOUND)
+    target_compile_definitions(dish_core PRIVATE DISH_HAS_SENTRY=1)
+    target_link_libraries(dish_core PRIVATE sentry::sentry)
+endif()
 target_link_libraries(dish_core
     PUBLIC
         Qt6::Core Qt6::Network
@@ -480,6 +543,17 @@ set(DISH_UI_SOURCES
     packaging/dish.qrc)
 
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
+
+# Beside the exe: where sentry-native is pointed at it, and where
+# DishSetupImage and stage-bundle.ps1 pick it up. No TARGET guard, because
+# this must run whenever the SDK is compiled in -- a guard here would fail
+# silently and ship a bundle that starts fine and captures nothing.
+if(sentry_FOUND)
+    add_custom_command(TARGET Dish POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${DISH_CRASHPAD_HANDLER}" "$<TARGET_FILE_DIR:Dish>"
+        COMMENT "Staging crashpad_handler beside dish.exe")
+endif()
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Gui Qt6::Svg dish_warnings dish_strict)
 # CrashHandler.cpp: dbghelp writes the minidump and symbolizes the stack;
