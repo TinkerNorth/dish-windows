@@ -60,6 +60,16 @@ build story below.
   - Disarming is immediate. Flipping the switch off calls `sentry_close()` then
     and there rather than at the next launch, so withdrawing consent stops the
     next crash from being sent and not the one after it.
+  - Two new runtime parts ship with the app. `sentry.dll` is a link
+    dependency, so a bundle without it will not start at all (0xc0000135).
+    `crashpad_handler.exe` is subtler: sentry-native uses the crashpad
+    backend, whose handler is a SEPARATE PROCESS that vcpkg keeps in its
+    tools directory rather than deploying beside the exe. Missing, Dish
+    starts and runs perfectly and captures nothing, so CMake stages it next
+    to the executable, `DishSetupImage` copies it into the install image by
+    name (the surrounding glob only sees DLLs), the portable bundle carries
+    it, the smoke test asserts both, and configuring with the SDK present
+    but the handler missing is a hard error rather than a quiet skip.
 
 - **Controller audio, wave 1: wire + capability model** `[wire-coordinated]`
   (satellite's `MSG_MIC_AUDIO`/`MSG_SPEAKER_AUDIO`/`MSG_MIC_LED`; dish-android

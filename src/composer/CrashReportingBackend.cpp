@@ -3,7 +3,9 @@
 
 #include "composer/CrashReportingBackend.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QLoggingCategory>
 #include <QStandardPaths>
 
@@ -129,6 +131,21 @@ void SentryCrashReportingBackend::setEnabled(bool enabled) {
     sentry_options_set_release(options, DISH_SENTRY_RELEASE);
     sentry_options_set_environment(options, sentryEnvironment());
     sentry_options_set_debug(options, 0);
+
+    // Named explicitly rather than left to the SDK's own lookup. The crashpad
+    // backend runs an out-of-process handler, and the default search is
+    // relative to the working directory, which Dish does not control when it
+    // is launched from a shortcut or by the updater. Beside the executable is
+    // where CMake stages it and where the installer and portable bundle put it.
+    const QString handler = QDir(QCoreApplication::applicationDirPath())
+                                .filePath(QStringLiteral("crashpad_handler.exe"));
+    if (QFileInfo::exists(handler)) {
+        sentry_options_set_handler_path(options, handler.toUtf8().constData());
+    } else {
+        // Better a loud log than a build that looks armed and captures nothing.
+        qCWarning(lcCrash) << "crashpad_handler.exe missing beside the executable;"
+                           << "crashes will not be captured";
+    }
 
     // Defaults to on, and would report every launch and quit of a desktop app.
     // The crash is the payload; the rest is telemetry nobody agreed to when

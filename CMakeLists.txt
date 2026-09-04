@@ -462,6 +462,24 @@ endif()
 find_package(sentry CONFIG QUIET)
 if(sentry_FOUND)
     message(STATUS "dish: Sentry SDK found; crash uploading compiled in (${DISH_SENTRY_RELEASE})")
+    # The vcpkg port builds sentry-native with SENTRY_BACKEND=crashpad, whose
+    # handler is a SEPARATE PROCESS. vcpkg's applocal step copies sentry.dll
+    # beside the freshly linked exe but not this, because it is a tool rather
+    # than a link dependency. Without it Dish starts perfectly and silently
+    # captures nothing, which is the worst failure this feature could have, so
+    # it is located here and staged next to the exe like any other runtime part.
+    find_program(DISH_CRASHPAD_HANDLER
+        NAMES crashpad_handler
+        HINTS "${sentry_DIR}/../../tools/sentry-native"
+        NO_DEFAULT_PATH)
+    if(NOT DISH_CRASHPAD_HANDLER)
+        message(FATAL_ERROR
+            "sentry-native was found but crashpad_handler was not, so crashes "
+            "would never be captured. Expected it under the Sentry package's "
+            "tools/sentry-native. Configure with -DDISH_SENTRY_DSN=\"\" and no "
+            "Sentry package to build without crash uploading instead.")
+    endif()
+    message(STATUS "dish: crashpad handler at ${DISH_CRASHPAD_HANDLER}")
 else()
     message(STATUS "dish: Sentry SDK not found; crash uploading stubbed out")
 endif()
@@ -525,6 +543,17 @@ set(DISH_UI_SOURCES
     packaging/dish.qrc)
 
 add_executable(Dish WIN32 ${DISH_UI_SOURCES})
+
+# Beside the exe: where sentry-native is pointed at it, and where
+# DishSetupImage and stage-bundle.ps1 pick it up. No TARGET guard, because
+# this must run whenever the SDK is compiled in -- a guard here would fail
+# silently and ship a bundle that starts fine and captures nothing.
+if(sentry_FOUND)
+    add_custom_command(TARGET Dish POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${DISH_CRASHPAD_HANDLER}" "$<TARGET_FILE_DIR:Dish>"
+        COMMENT "Staging crashpad_handler beside dish.exe")
+endif()
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Gui Qt6::Svg dish_warnings dish_strict)
 # CrashHandler.cpp: dbghelp writes the minidump and symbolizes the stack;
