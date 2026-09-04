@@ -10,6 +10,7 @@
     "libsodium",
     "openssl",
     "opus",
-    "sdl2"
+    "sdl2",
+    "sentry-native"
   ]
 }

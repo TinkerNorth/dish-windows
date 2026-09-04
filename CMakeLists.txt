@@ -430,6 +430,42 @@ set(DISH_CORE_SOURCES
     src/qml/AppSettingsMaps.h
     src/qml/AppSettingsMaps.cpp)
 
+# Crash reporting (Sentry). Two gates, and only one of them is load-bearing.
+#
+# The DSN is the real one. It is empty here and only .github/workflows/
+# release.yml fills it in, from the SENTRY_DSN repository secret. Secrets are
+# not exposed to forks, so a local build, a PR build and a build from a fork all
+# carry no DSN and cannot transmit, whatever the Settings switch says. The other
+# gate is that switch itself (source/store/CrashReportingStore.h), which is
+# opt-out to match dish-android.
+#
+# Unlike satellite there is no separate release-version flag to key an
+# environment off: the `release` preset is shared by windows-ci.yml, codeql.yml
+# and release.yml alike. So the environment is DERIVED from the DSN in
+# CrashReportingBackend.cpp ("production" when one is compiled in, else
+# "development"). One mechanism, so the label cannot drift from the thing that
+# actually decides whether anything is sent.
+#
+# The `+dev` suffix keeps a developer build that sets $SENTRY_DSN by hand from
+# filing itself against a real release and mixing unsymbolicated frames in.
+set(DISH_SENTRY_DSN "" CACHE STRING
+    "Sentry DSN. Empty (the default) disables crash uploading at compile time.")
+if(DISH_SENTRY_DSN STREQUAL "")
+    set(DISH_SENTRY_RELEASE "dish-windows@${PROJECT_VERSION}+dev")
+else()
+    set(DISH_SENTRY_RELEASE "dish-windows@${PROJECT_VERSION}")
+endif()
+
+# Optional dependency: absent means CrashReportingBackend.cpp compiles to inert
+# stubs and everything else still builds, so a source checkout needs no extra
+# package. The local crash.dmp / crash.log writer is unaffected either way.
+find_package(sentry CONFIG QUIET)
+if(sentry_FOUND)
+    message(STATUS "dish: Sentry SDK found; crash uploading compiled in (${DISH_SENTRY_RELEASE})")
+else()
+    message(STATUS "dish: Sentry SDK not found; crash uploading stubbed out")
+endif()
+
 add_library(dish_core STATIC ${DISH_CORE_SOURCES})
 target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # The cgutman ENet CMake adds its include dir only to its own target, so
@@ -437,6 +473,15 @@ target_include_directories(dish_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(dish_core SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
 # From the project VERSION so the About screen can't drift from dish.rc.
 target_compile_definitions(dish_core PUBLIC DISH_VERSION="${PROJECT_VERSION}")
+# Crash-reporting identity. PRIVATE: only the backend needs these, and a
+# PUBLIC define would leak the DSN into every consumer's command line.
+target_compile_definitions(dish_core PRIVATE
+    DISH_SENTRY_DSN="${DISH_SENTRY_DSN}"
+    DISH_SENTRY_RELEASE="${DISH_SENTRY_RELEASE}")
+if(sentry_FOUND)
+    target_compile_definitions(dish_core PRIVATE DISH_HAS_SENTRY=1)
+    target_link_libraries(dish_core PRIVATE sentry::sentry)
+endif()
 target_link_libraries(dish_core
     PUBLIC
         Qt6::Core Qt6::Network
