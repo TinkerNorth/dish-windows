@@ -556,6 +556,14 @@ if(sentry_FOUND)
 endif()
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Gui Qt6::Svg dish_warnings dish_strict)
+# Debug information for the symbol upload in release.yml. /Z7 keeps it in the
+# objects, /DEBUG:FULL writes dish.pdb beside dish.exe, and neither the install
+# image nor the portable bundle picks a .pdb up, so nothing shipped carries it.
+if(sentry_FOUND AND MSVC)
+    target_compile_options(dish_core PRIVATE /Z7)
+    target_compile_options(Dish PRIVATE /Z7)
+    target_link_options(Dish PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
+endif()
 # CrashHandler.cpp: dbghelp writes the minidump and symbolizes the stack;
 # shell32 + ole32 resolve %LOCALAPPDATA%. The latter two are already in Qt's
 # link set, but named here so the crash path never relies on transitive linkage.

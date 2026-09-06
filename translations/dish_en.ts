@@ -3087,8 +3087,8 @@
         <translation>Share crash reports</translation>
     </message>
     <message>
-        <source>Anonymous crash reports help fix bugs. Opt out any time.</source>
-        <translation>Anonymous crash reports help fix bugs. Opt out any time.</translation>
+        <source>Share anonymized crash logs and stack traces with TinkerNorth to help fix bugs. No gameplay or controller input is included.</source>
+        <translation>Share anonymized crash logs and stack traces with TinkerNorth to help fix bugs. No gameplay or controller input is included.</translation>
     </message>
     <message>
         <source>About</source>

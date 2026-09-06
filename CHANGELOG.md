@@ -39,6 +39,16 @@ build story below.
   Both halves are now true. The switch stays opt-out, matching dish-android and
   the FAQ, and it routes through the `CrashReportingController` seam that was
   already there.
+  - The switch's description is now the sentence Dish for Android shows
+    ("Share anonymized crash logs and stack traces with TinkerNorth to help
+    fix bugs. No gameplay or controller input is included."), and all six
+    catalogues carry Android's translations of it, so the three clients and
+    Satellite describe one switch in one way. `PRIVACY.md` says exactly what
+    a report contains, and the Help screen's privacy link now points at it
+    instead of a hosted page that never existed.
+  - Official builds keep debug information and upload it to Sentry at release
+    time when the `SENTRY_AUTH_TOKEN` secret exists, so native frames arrive
+    symbolicated. Nothing shipped carries the symbols.
   - What is behind the switch is *uploading*, and only that. `UI/CrashHandler`
     still writes `crash.dmp` and `crash.log` to `%LOCALAPPDATA%\Dish\` on every
     crash, armed before the preference has even been read, because a crash
