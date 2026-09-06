@@ -143,11 +143,11 @@ release. There is no moving git tag and no call to `api.github.com`.
 {
   "schema": 1,
   "product": "dish-windows",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "channel": "stable",
   "publishedAt": "2026-08-03T14:21:07Z",
   "minimumSupportedVersion": "0.1.0",
-  "releaseNotesUrl": "https://github.com/TinkerNorth/dish-windows/releases/tag/1.1.0",
+  "releaseNotesUrl": "https://github.com/TinkerNorth/dish-windows/releases/tag/2.0.0",
   "assets": {
     "dish-setup.exe":   { "url": "...", "sha256": "<64 lowercase hex>", "size": 41943040 },
     "dish-windows.zip": { "url": "...", "sha256": "<64 lowercase hex>", "size": 52428800 }

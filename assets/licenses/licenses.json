@@ -91,6 +91,32 @@
           "url": "https://openfontlicense.org/open-font-license-official-text/"
         }
       ]
+    },
+    {
+      "group": "io.sentry",
+      "artifact": "sentry-native",
+      "version": "0.16.3",
+      "name": "sentry-native",
+      "url": "https://github.com/getsentry/sentry-native",
+      "licenses": [
+        {
+          "name": "MIT License",
+          "url": "https://github.com/getsentry/sentry-native/blob/master/LICENSE"
+        }
+      ]
+    },
+    {
+      "group": "org.chromium",
+      "artifact": "crashpad",
+      "version": "as vendored by sentry-native 0.16.3",
+      "name": "Crashpad",
+      "url": "https://chromium.googlesource.com/crashpad/crashpad",
+      "licenses": [
+        {
+          "name": "Apache License 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0"
+        }
+      ]
     }
   ]
 }

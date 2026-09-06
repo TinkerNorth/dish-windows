@@ -120,6 +120,23 @@ jobs:
           echo "::warning::Stable tag ${GITHUB_REF_NAME} is being released with an UNSIGNED installer. Missing: ${missing[*]}"
           echo "::warning::SmartScreen will warn users until a certificate is configured. Set ENFORCE_RELEASE_SIGNING=true to make this a hard failure once one exists."
 
+      - name: Report crash-reporting readiness (advisory)
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "${SENTRY_DSN:-}" ]; then
+            echo "::warning::SENTRY_DSN not set; this release builds with no DSN and uploads no crash reports."
+          else
+            echo "SENTRY_DSN present; the release build carries the DSN."
+          fi
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ]; then
+            echo "::warning::SENTRY_AUTH_TOKEN not set; debug symbols will not be uploaded and native frames stay unsymbolicated."
+          else
+            echo "SENTRY_AUTH_TOKEN present; debug symbols will be uploaded."
+          fi
+
   release:
     name: Build Windows release
     needs: [gates, required-secrets]
@@ -170,7 +187,11 @@ jobs:
       # scripts.
       - name: Configure (Release)
         shell: pwsh
-        run: cmake --preset release
+        env:
+          # Empty for anything but a release from this repo: secrets are not
+          # exposed to forks, so a fork build carries no DSN and cannot upload.
+          DISH_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: cmake --preset release -DDISH_SENTRY_DSN="$env:DISH_SENTRY_DSN"
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
       # only oversubscribes it.
@@ -179,6 +200,31 @@ jobs:
       # CRT + licences) that the Inno Setup step below ships verbatim.
       - name: Build
         run: cmake --build --preset release --parallel 4
+
+      # Best effort: a symbol-upload hiccup must not fail a release. The org
+      # and project fall back to the numeric ids inside the DSN, which the
+      # Sentry API accepts in place of slugs.
+      - name: Upload debug symbols to Sentry
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          if (-not $env:SENTRY_AUTH_TOKEN -or -not $env:SENTRY_DSN) {
+            Write-Host "::notice::SENTRY_AUTH_TOKEN or SENTRY_DSN unset; skipping symbol upload."
+            exit 0
+          }
+          if (-not $env:SENTRY_ORG -and ($env:SENTRY_DSN -match '@o(\d+)\.')) { $env:SENTRY_ORG = $Matches[1] }
+          if (-not $env:SENTRY_PROJECT) { $env:SENTRY_PROJECT = ($env:SENTRY_DSN -split '/')[-1] }
+          $cli = Join-Path $env:RUNNER_TEMP 'sentry-cli.exe'
+          Invoke-WebRequest -Uri 'https://github.com/getsentry/sentry-cli/releases/download/3.7.0/sentry-cli-Windows-x86_64.exe' -OutFile $cli
+          $hash = (Get-FileHash -Algorithm SHA256 $cli).Hash.ToLowerInvariant()
+          if ($hash -ne '8643986aec8d8cf8d69cd476d67427578e5dbbda378eba506d199681082abe5a') { throw "sentry-cli checksum mismatch: $hash" }
+          & $cli debug-files upload --include-sources build-release/dish.exe build-release/dish.pdb
+          if ($LASTEXITCODE -ne 0) { throw "sentry-cli exited $LASTEXITCODE" }
 
       # One staging path for this zip payload and windows-ci.yml's artifact:
       # scripts/stage-bundle.ps1 (exe, the four directly-imported DLLs,

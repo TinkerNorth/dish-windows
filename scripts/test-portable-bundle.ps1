@@ -98,6 +98,7 @@ Assert-True ((Get-Content -LiteralPath $qmldir -Raw) -match '(?m)^Main 1\.0 ') `
 # exe at link time); the five CRT files are the set cmake/DishSetupImage.cmake
 # section 6 puts in the install image, MSVCP140_1/_2 arriving via Qt6Core.
 foreach ($dll in 'libsodium.dll', 'SDL2.dll', 'opus.dll',
+                 'sentry.dll', 'crashpad_handler.exe',
                  'msvcp140.dll', 'msvcp140_1.dll', 'msvcp140_2.dll',
                  'vcruntime140.dll', 'vcruntime140_1.dll') {
     Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot $dll)) "$dll is in the bundle"
