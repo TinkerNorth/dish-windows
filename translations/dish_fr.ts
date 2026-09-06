@@ -3032,7 +3032,7 @@
     </message>
     <message>
         <source>Share anonymized crash logs and stack traces with TinkerNorth to help fix bugs. No gameplay or controller input is included.</source>
-        <translation>Partagez avec TinkerNorth des journaux de plantage anonymisés et des traces de pile pour aider à corriger les bugs. Aucune partie ni entrée de manette n'est incluse.</translation>
+        <translation>Partagez avec TinkerNorth des journaux de plantage anonymisés et des traces de pile pour aider à corriger les bugs. Aucune partie ni entrée de manette n&apos;est incluse.</translation>
     </message>
     <message>
         <source>About</source>
