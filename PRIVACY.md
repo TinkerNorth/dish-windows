@@ -20,10 +20,10 @@ read one as describing the other.
 ## 1. Short version
 
 - Dish for Windows turns a Windows PC into a wireless gamepad for a
-  `satellite` server. Controller input goes from your PC, over your own
-  network, to your own `satellite` host. It does not stream to any
-  TinkerNorth-operated server. TinkerNorth does not operate a server for
-  Dish at all.
+  `satellite` server, or for a Moonlight host (Sunshine, Apollo, Wolf).
+  Controller input goes from your PC, over your own network, to the host you
+  paired with. It does not stream to any TinkerNorth-operated server.
+  TinkerNorth does not operate a server for Dish at all.
 - **Two things can leave your PC**, and you can turn both off: an update
   check against GitHub, described in section 2.4, and, when the app crashes,
   one crash report to Sentry, described in section 3. There is no analytics
@@ -60,6 +60,10 @@ after the table.
 | `satellite_list` | JSON array of remembered satellites: display name, IP, UDP port, HTTPS port, and the server's machine id | Reconnecting to hosts you already paired with |
 | `satellite_shared_key:<id>` | **The libsodium-derived pairing key for that satellite**, hex encoded | Deriving the per-session ChaCha20-Poly1305 key for the gamepad wire protocol. This is secret material. Anyone with read access to your user hive can read it. |
 | `satellite_cert_pin:<ip>` | SHA-256 fingerprint of the satellite's self-signed TLS certificate | Trust-on-first-use pinning, so a later HTTPS call is talking to the same box |
+| `moonlight_host_list` | JSON array of remembered Moonlight hosts: display name, IP, HTTP and HTTPS ports, the host's id, the app last launched there, and whether pairing completed | Reconnecting to Moonlight (Sunshine, Apollo, Wolf) hosts you paired with |
+| `moonlight_server_cert:<id>` | That Moonlight host's certificate, PEM | Pinning, so a later call is talking to the same host |
+| `moonlight_binding_list` | Which controller slot is bound to which Moonlight host, and as which controller type | Restoring your setup |
+| `moonlight_cert_pem`, `moonlight_key_pem`, `moonlight_uniqueid` | **This install's Moonlight client identity: a self-signed certificate, its private key, and a random client id** | Proving to a Moonlight host that this is the PC it paired with. Secret material, like the pairing key above. Sent **only** to Moonlight hosts you pair with, never to us. |
 | `deviceId` | A random UUID generated on first run, with the dashes stripped | A stable per-install identifier the satellite uses to recognise this client across restarts and IP changes. It is sent **only** to satellites you pair with, never to us. |
 | `deadzone:<deviceId>` | Per-controller stick and trigger deadzone profile | Restoring your calibration |
 | `motion_enabled:<slotId>`, `motion_preferences`, `touchpad_mode_preferences` | Per-slot motion and touchpad routing toggles | Restoring your setup |
@@ -154,6 +158,23 @@ on an address you can see in the app.
   travels over UDP). Upstream frames carry controller state, motion, battery,
   and touchpad. Downstream frames carry rumble, light-bar colour, heartbeat
   acknowledgements, and session close.
+- **Moonlight hosts.** Dish can also be the controller for a Sunshine, Apollo
+  or Wolf host, speaking the Moonlight (GameStream) protocol instead of the
+  satellite one. Hosts are found over mDNS (`_nvstream._tcp`) or added by
+  address. Pairing follows that protocol: a few HTTP requests to the host on
+  port 47989, which the protocol fixes as plain HTTP because no shared secret
+  exists yet. The PIN never travels over the wire; both sides derive a key
+  from it and prove they hold it. From then on every call is mutual TLS on
+  port 47984 with this install's client certificate, and the host's
+  certificate is pinned so a swapped host is refused. To open a controller
+  session the app launches or resumes an app on the host, then sends your
+  controller input, motion, touchpad and battery over the protocol's
+  encrypted (AES-GCM) control channel. The host also streams its screen and
+  audio at the lowest settings it allows, because the protocol needs a stream
+  to hold the session open; Dish discards those packets without decoding
+  them and never stores or shows them. The host learns this install's client
+  id, a device name and the client certificate. All of this stays on your
+  local network.
 
 Windows may prompt you once for a firewall exception so the app can send and
 receive on your local network. Granting it affects your LAN only.
@@ -300,7 +321,7 @@ apps do, so this is the equivalent list of what the app touches.
 
 | Capability | Why |
 |---|---|
-| Network sockets: UDP multicast, UDP broadcast listen, UDP unicast, TLS over TCP | Discovery, pairing, control plane, gamepad stream. All to your LAN. |
+| Network sockets: UDP multicast, UDP broadcast listen, UDP unicast, TCP, TLS over TCP | Discovery, pairing, control plane, gamepad stream, for satellites and Moonlight hosts alike. All to your LAN. |
 | HTTPS to `github.com` | The update check and, if enabled, the update download. Section 2.4. Only while *Check for updates automatically* is on. |
 | Game-controller device enumeration and IO | Reading controller input, and writing rumble and light-bar output back to the controller. Raw HID access is used for reading in USB-direct mode. |
 | `SetThreadExecutionState` | Preventing sleep while a controller is actively streaming, so input latency stays low. Released when streaming stops. |
@@ -323,6 +344,9 @@ version running. A per-user install, which is the default, never prompts.
 - **Forget a satellite.** Removing a satellite deletes its remembered row,
   its stored pairing key, and its certificate pin from the registry, and
   unpairs on the server so any live session is closed there too.
+- **Forget a Moonlight host.** Removing it deletes its row, its pinned
+  certificate and its bindings from the registry. The host keeps its own
+  list of paired clients; clear it in that host's settings.
 - **Stop crash reports being sent.** Settings, *Share crash reports*, off.
   The local files under `%LOCALAPPDATA%\Dish\` are still written; delete the
   folder whenever you like.
@@ -341,8 +365,9 @@ version running. A per-user install, which is the default, never prompts.
 - **Wipe everything.** Delete `HKEY_CURRENT_USER\Software\Dish\Dish` and
   `HKEY_CURRENT_USER\Software\TinkerNorth\Dish`, and delete
   `%LOCALAPPDATA%\Dish\`. That removes every remembered server, pairing key,
-  certificate pin, preference, update setting, and crash artifact. There is no
-  server-side record to delete, because there is no TinkerNorth server.
+  certificate pin, Moonlight identity, preference, update setting, and crash
+  artifact. There is no server-side record to delete, because there is no
+  TinkerNorth server.
 - **Verify any of this.** The client is free software under
   [LGPL-3.0-or-later](LICENSE). Every claim above is checkable in this
   repository, and you can build the binary yourself. See
@@ -353,9 +378,9 @@ version running. A per-user install, which is the default, never prompts.
 ## 6. Children's privacy
 
 Dish is suitable for general audiences. The app collects nothing from anyone,
-of any age, so there is no children's data for us to hold. If you believe
-that is wrong in some way we have not anticipated, contact
-`privacy@tinkernorth.com`.
+of any age, beyond the crash report described in section 3, so there is no
+children's data for us to hold. If you believe that is wrong in some way we
+have not anticipated, contact `privacy@tinkernorth.com`.
 
 ---
 
