@@ -3031,8 +3031,8 @@
         <translation>Diagnóstico</translation>
     </message>
     <message>
-        <source>Anonymous crash reports help fix bugs. Opt out any time.</source>
-        <translation>Relatórios de falhas anônimos ajudam a corrigir bugs. Desative quando quiser.</translation>
+        <source>Share anonymized crash logs and stack traces with TinkerNorth to help fix bugs. No gameplay or controller input is included.</source>
+        <translation>Compartilhe logs de falhas anonimizados e stack traces com a TinkerNorth para ajudar a corrigir bugs. Nenhum jogo ou entrada de controle é incluído.</translation>
     </message>
     <message>
         <source>About</source>

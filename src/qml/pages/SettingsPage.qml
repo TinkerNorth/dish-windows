@@ -310,7 +310,7 @@ Kit.Page {
                     Layout.fillWidth: true
                     contentItem: Kit.LabeledSwitch {
                         label: qsTr("Share crash reports")
-                        description: qsTr("Anonymous crash reports help fix bugs. Opt out any time.")
+                        description: qsTr("Share anonymized crash logs and stack traces with TinkerNorth to help fix bugs. No gameplay or controller input is included.")
                         checked: App.crashReportingEnabled
                         onToggled: (checked) => App.setCrashReportingEnabled(checked)
                     }

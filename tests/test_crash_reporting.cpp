@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Dish contributors.
 
 #include "composer/CrashReportingBackend.h"
+
+#include <string>
 #include "composer/CrashReportingController.h"
 #include "source/store/CrashReportingStore.h"
 
@@ -132,4 +134,65 @@ TEST_CASE("CrashReportingController: start() is idempotent (applies once)", "[cr
     // One subscription, not two.
     enabled.set(false);
     REQUIRE(backend.flips() == std::vector<bool>{true, false});
+}
+
+// ---------------------------------------------------------------------------
+// Sentry arming policy.
+//
+// This is the whole privacy property, so it is tested as a pure function rather
+// than inferred from an integration run. Two gates have to hold: the build must
+// carry a DSN, and the user must not have opted out. Neither alone is enough.
+
+TEST_CASE("shouldArmSentry: a build with no DSN cannot report, even when enabled",
+          "[crash][sentry]") {
+    // Every local build, every PR build and every build from a fork, because
+    // only release.yml injects the secret.
+    CHECK_FALSE(dish::composer::shouldArmSentry("", nullptr, true));
+    CHECK_FALSE(dish::composer::shouldArmSentry(nullptr, nullptr, true));
+    CHECK_FALSE(dish::composer::shouldArmSentry("", "", true));
+}
+
+TEST_CASE("shouldArmSentry: opting out beats any DSN", "[crash][sentry]") {
+    const char* dsn = "https://key@o1.ingest.de.sentry.io/2";
+    CHECK_FALSE(dish::composer::shouldArmSentry(dsn, nullptr, false));
+    // Including the developer escape hatch: aiming a build at your own project
+    // is not a reason to transmit from a machine that is not yours.
+    CHECK_FALSE(dish::composer::shouldArmSentry("", dsn, false));
+    CHECK_FALSE(dish::composer::shouldArmSentry(dsn, dsn, false));
+}
+
+TEST_CASE("shouldArmSentry: a compiled DSN plus consent arms", "[crash][sentry]") {
+    CHECK(dish::composer::shouldArmSentry("https://key@o1.ingest.de.sentry.io/2", nullptr, true));
+}
+
+TEST_CASE("shouldArmSentry: $SENTRY_DSN substitutes for a compiled DSN", "[crash][sentry]") {
+    const char* dsn = "https://key@o1.ingest.de.sentry.io/2";
+    CHECK(dish::composer::shouldArmSentry("", dsn, true));
+    CHECK(dish::composer::shouldArmSentry(nullptr, dsn, true));
+}
+
+TEST_CASE("the test binary itself carries no DSN and reports as development", "[crash][sentry]") {
+    // If this ever fails, a build has been configured in a way that would let
+    // the test suite transmit, which no test run should be able to do. It also
+    // pins the environment derivation: no DSN means development, always.
+    //
+    // sentrySdkAvailable() is deliberately NOT asserted either way. The test
+    // binary links dish_core, so whether the SDK is compiled in depends on
+    // whether the machine had the vcpkg package at configure time. That is a
+    // build detail; the DSN is the safety property, and an SDK with no DSN
+    // has nowhere to send anything.
+    CHECK(std::string(dish::composer::compiledSentryDsn()).empty());
+    CHECK(std::string(dish::composer::sentryEnvironment()) == "development");
+}
+
+TEST_CASE("SentryCrashReportingBackend stays inert without a DSN", "[crash][sentry]") {
+    // The switch is opt-out, so this backend is asked to arm on nearly every
+    // launch. On a build with no DSN that must be a quiet no-op, not a crash,
+    // and it must never claim to be active.
+    dish::composer::SentryCrashReportingBackend backend(std::string{});
+    CHECK_FALSE(backend.active());
+    backend.setEnabled(true);
+    CHECK_FALSE(backend.active());
+    backend.setEnabled(false);
+    CHECK_FALSE(backend.active());
 }

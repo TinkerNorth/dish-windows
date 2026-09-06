@@ -17,7 +17,8 @@
     What gets staged, and why each piece is load-bearing:
 
     * dish.exe from the build tree.
-    * libsodium.dll, SDL2.dll, opus.dll, libcrypto-3-x64.dll: windeployqt
+    * libsodium.dll, SDL2.dll, opus.dll, libcrypto-3-x64.dll, sentry.dll,
+      crashpad_handler.exe: windeployqt
       walks Qt's dependency graph only, and dish.exe imports these directly
       (vcpkg's applocal step drops them beside the freshly linked exe;
       libcrypto carries the 3-x64 soversion and serves the Moonlight crypto).
@@ -90,7 +91,8 @@ if (-not $QtBin) {
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 Copy-Item (Join-Path $BuildDir 'dish.exe') $OutDir/
 
-foreach ($dll in 'libsodium.dll', 'SDL2.dll', 'opus.dll', 'libcrypto-3-x64.dll') {
+foreach ($dll in 'libsodium.dll', 'SDL2.dll', 'opus.dll', 'libcrypto-3-x64.dll',
+                 'sentry.dll', 'crashpad_handler.exe') {
     $src = Join-Path $BuildDir $dll
     if (-not (Test-Path $src)) { throw "Missing $dll in $BuildDir (vcpkg applocal should have staged it beside dish.exe)" }
     Copy-Item $src $OutDir/

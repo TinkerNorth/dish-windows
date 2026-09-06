@@ -126,6 +126,17 @@ if(_extra_dlls)
     message(STATUS "Staged non-Qt runtime DLLs: ${_extra_dlls_text}")
 endif()
 
+# crashpad_handler.exe is the one runtime part the glob above cannot see: it
+# is an executable, not a DLL, and it is a separate PROCESS sentry-native
+# spawns to capture a crash rather than something dish.exe imports. Missing,
+# the installed app starts and runs perfectly and reports nothing at all, so
+# it is staged by name and its absence is worth failing the image build over.
+set(_crashpad "${_build_bin_dir}/crashpad_handler.exe")
+if(EXISTS "${_crashpad}")
+    file(COPY "${_crashpad}" DESTINATION "${IMAGE_DIR}")
+    message(STATUS "Staged crash reporter: crashpad_handler.exe")
+endif()
+
 # --- 5. App-local VC++ runtime -----------------------------------------------
 # "Runs on a machine where NOTHING is installed" is a hard requirement, and
 # app-local deployment is the only redistribution form that needs no installer
