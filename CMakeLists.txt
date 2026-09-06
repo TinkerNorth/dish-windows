@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(Dish
-    VERSION 1.1.0
+    VERSION 2.0.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
     # C is enabled for the vendored ENet fork (Moonlight control stream), whose
     # backend is pure C; everything first-party is C++.
