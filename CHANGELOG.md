@@ -21,7 +21,7 @@ share a version number.
 
 ---
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-09-06
 
 Everything below ships as 2.0.0, the release where the whole Dish and
 Satellite family aligns on one version number. Since 1.1.0 this client
@@ -458,6 +458,7 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/1.1.0...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.0.0...main
+[2.0.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.0.0
 [1.1.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/1.1.0
 [1.0.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/1.0.0
