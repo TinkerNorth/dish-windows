@@ -251,6 +251,13 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         return slotCarriesSpeakerSink(slotId) &&
                speakerEnabledStore_.isEnabled(slotId.toStdString());
     });
+    // CAP_HAPTIC_AUDIO rides the speaker toggle: the lanes are the same
+    // endpoint's, and a user who switched the pad's audio off wants the host
+    // to fall back to rumble, not to keep streaming a waveform nobody plays.
+    hub_->setHapticAudioCapabilityFn([this](const QString& slotId) {
+        return slotCarriesHapticSink(slotId) &&
+               speakerEnabledStore_.isEnabled(slotId.toStdString());
+    });
 
     // The user's Emulate override wins over the SDL hardware classification;
     // resolveControllerType applies that ladder.
@@ -428,9 +435,17 @@ void AppModel::installRumbleHandlers() {
         // the engine does not hold is dropped inside deliver().
         conn->setSpeakerAudioHandler(
             [this, id](const net::SatelliteClient::SpeakerAudioMessage& sm) {
-                speakerEngine_.deliver(id.toStdString(), sm.controllerIndex, sm.seq, sm.opus,
+                speakerEngine_.deliver(id.toStdString(), sm.controllerIndex,
+                                       source::audio::PlayoutLane::Speaker, sm.seq, sm.opus,
                                        sm.opusLen);
             });
+        // MSG_HAPTIC_AUDIO: the same engine, the endpoint's other lane pair.
+        // Arrives only for a slot whose descriptor claimed CAP_HAPTIC_AUDIO.
+        conn->setHapticAudioHandler([this,
+                                     id](const net::SatelliteClient::SpeakerAudioMessage& hm) {
+            speakerEngine_.deliver(id.toStdString(), hm.controllerIndex,
+                                   source::audio::PlayoutLane::Haptic, hm.seq, hm.opus, hm.opusLen);
+        });
         // MSG_MIC_LED: the mute lamp, routed like every other feedback kind.
         conn->setMicLedHandler([this, id](const net::SatelliteClient::MicLedMessage& mm) {
             const QString deviceId = boundSlotForConnection(id);
@@ -1006,6 +1021,7 @@ reducer::SlotFeedbackInputs AppModel::feedbackInputs(const QString& slotId) cons
         const auto route = audioRouteForSlot(slotId);
         in.padMicRoute = route.microphone;
         in.padSpeakerRoute = route.speaker;
+        in.padHapticRoute = route.haptics;
     }
     return in;
 }
@@ -1018,10 +1034,15 @@ bool AppModel::slotCarriesSpeakerSink(const QString& slotId) const {
     return reducer::slotCarriesSpeakerPlayout(feedbackInputs(slotId));
 }
 
+bool AppModel::slotCarriesHapticSink(const QString& slotId) const {
+    return reducer::slotCarriesHapticPlayout(feedbackInputs(slotId));
+}
+
 reducer::HostAudioVerdict AppModel::hostControllerAudioFor(const QString& hostId) const {
     const auto* conn = wifi_->get(hostId);
     if (conn == nullptr) { return {}; } // conservative: no probe, no audio
-    return {conn->hostMicAvailable(), conn->hostSpeakerAvailable()};
+    return {conn->hostMicAvailable(), conn->hostSpeakerAvailable(),
+            conn->hostHapticAudioAvailable()};
 }
 
 void AppModel::actuateRumble(const QString& slotId, std::uint16_t strong, std::uint16_t weak,
@@ -1122,10 +1143,16 @@ void AppModel::resolveAudioRoutes() {
         if (c.phase != reducer::UsbPhase::Direct || !c.syntheticId.has_value()) { continue; }
         const auto parser = input::usbparse::parserForDevice(c.vendorId, c.productId);
         pads.push_back(audio::AudioPadCandidate{c.vendorId, c.productId, c.name,
-                                                input::usbparse::parserHasUsbAudio(parser)});
+                                                input::usbparse::parserHasUsbAudio(parser),
+                                                input::usbparse::parserHasHapticLanes(parser)});
+    }
+    const auto playbackNames = audioGateway_.playbackDeviceNames();
+    std::map<std::string, int> playbackChannels;
+    for (const auto& name : playbackNames) {
+        playbackChannels[name] = audioGateway_.playbackDeviceChannels(name);
     }
     auto routes = audio::resolvePadAudioRoutes(pads, audioGateway_.captureDeviceNames(),
-                                               audioGateway_.playbackDeviceNames());
+                                               playbackNames, playbackChannels);
     {
         std::lock_guard<std::mutex> lock(audioRoutesMtx_);
         if (routes == padAudioRoutes_) { return; }
@@ -1224,12 +1251,26 @@ void AppModel::reconcileAudioEngines() {
         if (audio::speakerPlayoutEligible(speaker)) {
             const auto descriptor = conn->descriptorFor(s.id);
             if (descriptor.has_value()) {
+                // The endpoint's own width when the stack reported one, so a
+                // 4-channel pad gets its stereo on the speaker pair and not
+                // spread across the actuators.
+                const int channels = route.playbackChannels > 0 ? route.playbackChannels
+                                                                : proto::kAudioSpeakerChannels;
                 source::audio::SpeakerVoiceTarget voice;
                 voice.connectionId = s.boundConnectionId->toStdString();
                 voice.controllerIndex = descriptor->ctrlIdx;
                 voice.slotId = slotId;
                 voice.playbackDeviceName = route.playbackDeviceName;
-                speakerVoices.push_back(std::move(voice));
+                voice.lane = source::audio::PlayoutLane::Speaker;
+                voice.deviceChannels = channels;
+                speakerVoices.push_back(voice);
+                // The haptic lanes: same gate as the speaker (one toggle, one
+                // endpoint), plus the route naming the lanes and the host
+                // carrying the stream.
+                if (route.haptics && conn->hostHapticAudioAvailable()) {
+                    voice.lane = source::audio::PlayoutLane::Haptic;
+                    speakerVoices.push_back(std::move(voice));
+                }
             }
         }
     }

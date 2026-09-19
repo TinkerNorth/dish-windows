@@ -21,6 +21,31 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **DualSense HD haptics over Satellite.** `[wire-coordinated]` Protocol 3. A
+  DualSense game that vibrates through Sony's own pad library authors the
+  effect as audio on the pad's two actuator lanes and never writes a motor
+  byte, so a streamed DualSense stayed still in it while a local one shook.
+  With a DualSense on USB whose 4-channel endpoint this machine can name, the
+  client now advertises `hapticAudio` and plays `MSG_HAPTIC_AUDIO` (0x0015)
+  straight into that endpoint's actuator pair, as a second stream beside the
+  speaker one; the pad feels exactly what it would locally. Any other pad, or a
+  DualSense whose endpoint is not reachable, keeps advertising `rumble` alone
+  and a protocol-3 host reduces the lanes to motor strength for it. The haptic
+  lane rides the speaker toggle and the host's own haptics switch. Older hosts
+  never send the stream, and this client still settles on their version.
+
+### Fixed
+
+- **Speaker audio no longer buzzes the DualSense's actuators.** The speaker
+  voice opened the pad's 4-channel endpoint as stereo and SDL's stereo-to-quad
+  conversion duplicated the left/right pair onto channels 3/4, which on a
+  DualSense are the haptic lanes. The voice now opens the endpoint at its own
+  width and writes the speaker pair only.
+
 ## [2.0.0] - 2026-09-06
 
 Everything below ships as 2.0.0, the release where the whole Dish and
