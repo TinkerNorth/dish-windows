@@ -676,6 +676,9 @@ void WinHidGateway::readLoop(Claimed* c) {
         report.finger1X = parsed.finger1X;
         report.finger1Y = parsed.finger1Y;
         report.touchpadButton = parsed.touchpadButton;
+        report.batteryValid = parsed.batteryValid;
+        report.batteryLevel = parsed.batteryLevel;
+        report.batteryStatus = parsed.batteryStatus;
         if (c->onReport) { c->onReport(report); }
     }
     if (ov.hEvent != nullptr) { CloseHandle(ov.hEvent); }
