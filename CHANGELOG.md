@@ -38,6 +38,13 @@ share a version number.
   lane rides the speaker toggle and the host's own haptics switch. Older hosts
   never send the stream, and this client still settles on their version.
 
+- **Controller audio on the Standard path.** The pad's microphone, speaker
+  and (DualSense) haptics used to require Direct: the endpoint matcher only
+  looked at claimed pads. The audio function is a separate USB interface the
+  OS keeps whichever path owns HID, so a DualSense or DualShock 4 left on the
+  Standard (SDL) path now gets the same routes, caps and engines as a claimed
+  one. Bluetooth pads have no audio function and are unchanged.
+
 ### Fixed
 
 - **Speaker audio no longer buzzes the DualSense's actuators.** The speaker
