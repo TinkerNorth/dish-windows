@@ -237,6 +237,10 @@
         <source>speaker</source>
         <translation type="unfinished">haut-parleur</translation>
     </message>
+    <message>
+        <source>The driver this controller is on can’t drive it.</source>
+        <translation type="unfinished">Le pilote de cette manette ne peut pas le piloter.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>

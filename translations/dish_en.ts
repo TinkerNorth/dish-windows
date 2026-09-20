@@ -237,6 +237,10 @@
         <source>speaker</source>
         <translation>speaker</translation>
     </message>
+    <message>
+        <source>The driver this controller is on can’t drive it.</source>
+        <translation>The driver this controller is on can’t drive it.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>

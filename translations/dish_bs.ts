@@ -237,6 +237,10 @@
         <source>speaker</source>
         <translation type="unfinished">zvučnik</translation>
     </message>
+    <message>
+        <source>The driver this controller is on can’t drive it.</source>
+        <translation type="unfinished">Drajver na kojem je ovaj kontroler ovo ne može pokrenuti.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>

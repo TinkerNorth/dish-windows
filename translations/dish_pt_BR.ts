@@ -237,6 +237,10 @@
         <source>speaker</source>
         <translation type="unfinished">alto-falante</translation>
     </message>
+    <message>
+        <source>The driver this controller is on can’t drive it.</source>
+        <translation type="unfinished">O driver em que este controle está não consegue acioná-lo.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
