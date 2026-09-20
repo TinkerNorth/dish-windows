@@ -38,6 +38,24 @@ share a version number.
   lane rides the speaker toggle and the host's own haptics switch. Older hosts
   never send the stream, and this client still settles on their version.
 
+- **Adaptive triggers, player LEDs and the mic lamp on the Standard path.**
+  A DualSense left on the Standard (SDL) path, or attached over Bluetooth,
+  now takes `MSG_TRIGGER_EFFECTS`, `MSG_PLAYER_LEDS` and `MSG_MIC_LED` like a
+  Direct-claimed one: the same DualSense output report the Direct path writes
+  is built on the SDL thread and handed to `SDL_GameControllerSendEffect`,
+  which SDL's own DualSense driver frames for USB or Bluetooth. The
+  descriptor advertises the three surfaces exactly where that driver has the
+  pad (it is the driver that reports the pad's LED), and the binding table's
+  Link column now tells the same truth, with the adaptive-trigger and
+  player-LED rows finally reading the pad's hardware and the host's catalog
+  instead of a flat "no".
+- **Bluetooth Sony pads attach with everything.** SDL opens a Bluetooth
+  DualSense or DualShock 4 in its simple report mode unless asked otherwise,
+  and in that mode reports no rumble, lightbar, gyro, touchpad or effects; a
+  Bluetooth pad was buttons and sticks. The bridge now asks for enhanced
+  reports at startup, so a Bluetooth Sony pad carries the same surfaces as a
+  wired one. SDL's documented cost applies: the pad stays in that mode until
+  power-cycled, which confuses non-SDL DirectInput apps.
 - **Controller audio on the Standard path.** The pad's microphone, speaker
   and (DualSense) haptics used to require Direct: the endpoint matcher only
   looked at claimed pads. The audio function is a separate USB interface the

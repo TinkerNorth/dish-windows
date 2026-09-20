@@ -237,6 +237,10 @@
         <source>speaker</source>
         <translation type="unfinished">altavoz</translation>
     </message>
+    <message>
+        <source>The driver this controller is on can’t drive it.</source>
+        <translation type="unfinished">El controlador de dispositivo de este mando no puede accionarlo.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
