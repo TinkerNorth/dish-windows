@@ -7,6 +7,13 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "ci"
+    # One PR per week for every action bump together (the way dish-android's
+    # arrive): the bumps are independent one-liners, and with "require branches
+    # to be up to date" on main, N separate PRs cost N full CI cycles.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     ignore:
       # v11.6 defaults vcpkg binary caching to the GHA `x-gha` source, but our
       # manifest-mode install runs inside the CMake configure step, which never
