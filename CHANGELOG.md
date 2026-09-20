@@ -77,6 +77,14 @@ share a version number.
   conversion duplicated the left/right pair onto channels 3/4, which on a
   DualSense are the haptic lanes. The voice now opens the endpoint at its own
   width and writes the speaker pair only.
+- The setup wizard's stage labels (INPUT · DESTINATION · BINDING) and the
+  banner slots' sub-lines were missing at the default and minimum window
+  sizes, reappearing only once the window was made taller (in practice,
+  maximized). The banner's compact threshold read the page's content column —
+  about 150px shorter than the window it sits in (title bar, shell header,
+  page padding) — against a window-height cutoff, so compact mode was engaged
+  at sizes it was never meant for. It now measures the window itself and
+  engages only below four-fifths of the minimum window height.
 
 ## [2.0.0] - 2026-09-06
 
