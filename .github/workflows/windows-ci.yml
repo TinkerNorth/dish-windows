@@ -182,8 +182,13 @@ jobs:
 
       # Compiling the .iss on every PR is what catches a broken installer
       # before a release does. Same recipe as release.yml and satellite.
+      # Version-pinned like clang-format above: 6.7.3 renames a per-user
+      # install's ARP entry ("Dish (Current user)"), so an unpinned engine
+      # flips the round-trip's assertions the day choco's package moves.
+      # 6.7.1 is the newest the choco feed carries (2026-08); bump on purpose,
+      # not by surprise.
       - name: Install Inno Setup
-        run: choco install innosetup --no-progress --yes
+        run: choco install innosetup --version=6.7.1 --no-progress --yes
 
       # scripts/build-installer.ps1 reads the version from the same
       # project(Dish VERSION ...) line release.yml asserts the tag against,

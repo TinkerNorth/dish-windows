@@ -453,8 +453,13 @@ Kit.Page {
             subStep: wizard.subStep
             subStepCount: wizard.subStepCount
             // Below four-fifths of the minimum window the banner drops its slot
-            // sub-lines and marker labels rather than eating the body.
-            compact: root.height < Tokens.minWindowHeight * 0.8
+            // sub-lines and marker labels rather than eating the body. Measured
+            // on the WINDOW, whose minimum the threshold is 0.8 of — this column
+            // runs ~150px shorter (title bar, shell header, page padding), so
+            // reading it against the same threshold held the banner compact at
+            // the 980x640 default. Attached height is 0 until parented; that
+            // must not read as short.
+            compact: Window.height > 0 && Window.height < Tokens.minWindowHeight * 0.8
             Layout.fillWidth: true
 
             onStageClicked: function (clickedStage) { wizard.jumpToStage(clickedStage); }

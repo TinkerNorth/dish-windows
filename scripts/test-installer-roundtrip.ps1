@@ -76,7 +76,11 @@ try {
     Assert (Test-Path $arpKey) 'per-user ARP key exists'
     if (Test-Path $arpKey) {
         $arp = Get-ItemProperty $arpKey
-        Assert ($arp.DisplayName -eq 'Dish') "DisplayName is 'Dish' (got '$($arp.DisplayName)')"
+        # Inno 6.7.3 appends " (Current user)" to a per-user install's ARP name
+        # by itself; UninstallDisplayName has no say. Either spelling is the
+        # same correct install, so the contract accepts both.
+        $displayOk = $arp.DisplayName -eq 'Dish' -or $arp.DisplayName -eq 'Dish (Current user)'
+        Assert $displayOk "DisplayName is 'Dish' or 'Dish (Current user)' (got '$($arp.DisplayName)')"
         Assert ($arp.InstallLocation.TrimEnd('\') -eq $installDir) 'InstallLocation points at the sandbox install'
         Assert (-not [string]::IsNullOrWhiteSpace($arp.DisplayVersion)) 'DisplayVersion recorded'
     }
