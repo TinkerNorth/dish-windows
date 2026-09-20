@@ -342,7 +342,7 @@ inline bool decodeDualShock4(const std::uint8_t* buf, std::size_t len, ParsedRep
     // charge in tenths, bit 0x10 the cable. With the cable in, 10 is still
     // charging, 11 is full, and 12..15 are the firmware's error states.
     if (len >= 31) {
-        const std::uint8_t tenths = static_cast<std::uint8_t>(buf[30] & 0x0F);
+        const auto tenths = static_cast<std::uint8_t>(buf[30] & 0x0F);
         const bool cable = (buf[30] & 0x10) != 0;
         s.batteryValid = true;
         if (!cable) {
@@ -456,8 +456,8 @@ inline bool decodeDualSense(const std::uint8_t* buf, std::size_t len, ParsedRepo
     // charging, 2 full, 0xA/0xB a temperature or voltage fault, 0xF a
     // charging fault. A fault has no charge worth showing.
     if (len >= 54) {
-        const std::uint8_t tenths = static_cast<std::uint8_t>(buf[53] & 0x0F);
-        const std::uint8_t state = static_cast<std::uint8_t>(buf[53] >> 4);
+        const auto tenths = static_cast<std::uint8_t>(buf[53] & 0x0F);
+        const auto state = static_cast<std::uint8_t>(buf[53] >> 4);
         s.batteryValid = true;
         switch (state) {
         case 0x0:
@@ -535,7 +535,7 @@ inline bool decodeSwitchProUsb(const std::uint8_t* buf, std::size_t len, ParsedR
     // number the framework layers show for this pad.
     {
         static constexpr std::uint8_t kStepPercent[] = {5, 25, 50, 75, 100};
-        const std::uint8_t step = static_cast<std::uint8_t>(buf[2] >> 5);
+        const auto step = static_cast<std::uint8_t>(buf[2] >> 5);
         const bool charging = (buf[2] & 0x10) != 0;
         const bool hostPowered = (buf[2] & 0x01) != 0;
         s.batteryValid = true;
