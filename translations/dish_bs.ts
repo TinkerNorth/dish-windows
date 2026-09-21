@@ -75,6 +75,22 @@
         <source>Updated to Dish %1.</source>
         <translation>Ažurirano na Dish %1.</translation>
     </message>
+    <message>
+        <source>Microphone is live. Click to mute it.</source>
+        <translation>Mikrofon je uključen. Kliknite da ga utišate.</translation>
+    </message>
+    <message>
+        <source>Microphone muted. Click to unmute it.</source>
+        <translation>Mikrofon je utišan. Kliknite da ga ponovo uključite.</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation>Mikrofon aktivan</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation>Mikrofon utišan</translation>
+    </message>
 </context>
 <context>
     <name>ApplyOverlay</name>
@@ -203,43 +219,43 @@
     </message>
     <message>
         <source>Adaptive triggers</source>
-        <translation type="unfinished">Adaptivni okidači</translation>
+        <translation>Adaptivni okidači</translation>
     </message>
     <message>
         <source>Player LEDs</source>
-        <translation type="unfinished">LED indikatori igrača</translation>
+        <translation>LED indikatori igrača</translation>
     </message>
     <message>
         <source>adaptive triggers</source>
-        <translation type="unfinished">adaptivne okidače</translation>
+        <translation>adaptivne okidače</translation>
     </message>
     <message>
         <source>player LEDs</source>
-        <translation type="unfinished">LED indikatore igrača</translation>
+        <translation>LED indikatore igrača</translation>
     </message>
     <message>
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
-        <translation type="unfinished">Standardni način ovo ne može pokrenuti — prebacite vezu na Brzi.</translation>
+        <translation>Standardni način ovo ne može pokrenuti — prebacite vezu na Brzi.</translation>
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Mikrofon</translation>
+        <translation>Mikrofon</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Zvuk kontrolera</translation>
+        <translation>Zvuk kontrolera</translation>
     </message>
     <message>
         <source>microphone</source>
-        <translation type="unfinished">mikrofon</translation>
+        <translation>mikrofon</translation>
     </message>
     <message>
         <source>speaker</source>
-        <translation type="unfinished">zvučnik</translation>
+        <translation>zvučnik</translation>
     </message>
     <message>
         <source>The driver this controller is on can’t drive it.</source>
-        <translation type="unfinished">Drajver na kojem je ovaj kontroler ovo ne može pokrenuti.</translation>
+        <translation>Drajver na kojem je ovaj kontroler ovo ne može pokrenuti.</translation>
     </message>
 </context>
 <context>
@@ -298,10 +314,6 @@
 </context>
 <context>
     <name>CapabilityTable</name>
-    <message>
-        <source>Available</source>
-        <translation>Dostupno</translation>
-    </message>
     <message>
         <source>Unavailable</source>
         <translation>Nedostupno</translation>
@@ -369,6 +381,10 @@
     <message>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
+    </message>
+    <message>
+        <source>Supported</source>
+        <translation>Podržano</translation>
     </message>
 </context>
 <context>
@@ -767,7 +783,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Moonlight hostovi</translation>
+        <translation>Moonlight hostovi</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -787,27 +803,27 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Mikrofon</translation>
+        <translation>Mikrofon</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">Mikrofon pada prenosi vaš glas do hosta. Isključeno ne šalje ništa.</translation>
+        <translation>Mikrofon pada prenosi vaš glas do hosta. Isključeno ne šalje ništa.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Zvuk kontrolera</translation>
+        <translation>Zvuk kontrolera</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
+        <translation>Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
     </message>
     <message>
         <source>Mic muted</source>
-        <translation type="unfinished">Mikrofon utišan</translation>
+        <translation>Mikrofon utišan</translation>
     </message>
     <message>
         <source>Mic live</source>
-        <translation type="unfinished">Mikrofon aktivan</translation>
+        <translation>Mikrofon aktivan</translation>
     </message>
 </context>
 <context>
@@ -1200,19 +1216,19 @@
     </message>
     <message>
         <source>Mic muted</source>
-        <translation type="unfinished">Mikrofon utišan</translation>
+        <translation>Mikrofon utišan</translation>
     </message>
     <message>
         <source>Mic live</source>
-        <translation type="unfinished">Mikrofon aktivan</translation>
+        <translation>Mikrofon aktivan</translation>
     </message>
     <message>
         <source>Microphone muted, click to unmute</source>
-        <translation type="unfinished">Mikrofon je utišan, kliknite da ga uključite</translation>
+        <translation>Mikrofon je utišan, kliknite da ga uključite</translation>
     </message>
     <message>
         <source>Microphone live, click to mute</source>
-        <translation type="unfinished">Mikrofon je aktivan, kliknite da ga utišate</translation>
+        <translation>Mikrofon je aktivan, kliknite da ga utišate</translation>
     </message>
 </context>
 <context>
@@ -2660,6 +2676,33 @@
     </message>
 </context>
 <context>
+    <name>LinkVocabulary</name>
+    <message>
+        <source>Fastest</source>
+        <translation>Najbrži</translation>
+    </message>
+    <message>
+        <source>Fast</source>
+        <translation>Brz</translation>
+    </message>
+    <message>
+        <source>Basic</source>
+        <translation>Osnovni</translation>
+    </message>
+    <message>
+        <source>Satellite update recommended</source>
+        <translation>Preporučeno ažuriranje Satellitea</translation>
+    </message>
+    <message>
+        <source>Satellite update required</source>
+        <translation>Obavezno ažuriranje Satellitea</translation>
+    </message>
+    <message>
+        <source>Dish update required</source>
+        <translation>Obavezno ažuriranje Disha</translation>
+    </message>
+</context>
+<context>
     <name>Main</name>
     <message>
         <source>Dish</source>
@@ -2869,19 +2912,19 @@
     <name>MoonlightVocabulary</name>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Uparen</translation>
+        <translation>Uparen</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation type="unfinished">Zapamćeno</translation>
+        <translation>Zapamćeno</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation type="unfinished">Nije uparen</translation>
+        <translation>Nije uparen</translation>
     </message>
     <message>
         <source>Auto</source>
-        <translation type="unfinished">Automatski</translation>
+        <translation>Automatski</translation>
     </message>
 </context>
 <context>
@@ -3454,7 +3497,7 @@
     </message>
     <message>
         <source>Couldn’t apply the binding.</source>
-        <translation type="unfinished">Nije moguće primijeniti povezivanje.</translation>
+        <translation>Nije moguće primijeniti povezivanje.</translation>
     </message>
 </context>
 <context>
@@ -3803,7 +3846,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Moonlight hostovi</translation>
+        <translation>Moonlight hostovi</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -3811,7 +3854,7 @@
     </message>
     <message>
         <source>No Moonlight hosts found</source>
-        <translation type="unfinished">Nije pronađen nijedan Moonlight host</translation>
+        <translation>Nije pronađen nijedan Moonlight host</translation>
     </message>
     <message>
         <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
@@ -3819,7 +3862,7 @@
     </message>
     <message>
         <source>Get Sunshine ↗</source>
-        <translation type="unfinished">Preuzmi Sunshine ↗</translation>
+        <translation>Preuzmi Sunshine ↗</translation>
     </message>
 </context>
 <context>
@@ -3894,19 +3937,19 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Mikrofon</translation>
+        <translation>Mikrofon</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">Mikrofon pada prenosi vaš glas do hosta. Isključeno ne šalje ništa.</translation>
+        <translation>Mikrofon pada prenosi vaš glas do hosta. Isključeno ne šalje ništa.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Zvuk kontrolera</translation>
+        <translation>Zvuk kontrolera</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
+        <translation>Zvuk s hosta se reproducira na zvučniku ili slušalicama pada.</translation>
     </message>
 </context>
 <context>
@@ -4143,7 +4186,7 @@
     <name>WizardSessionPage</name>
     <message>
         <source>Continue ›</source>
-        <translation type="unfinished">Nastavi ›</translation>
+        <translation>Nastavi ›</translation>
     </message>
     <message>
         <source>Unbind a controller on this host to make room.</source>
@@ -4279,15 +4322,15 @@
     </message>
     <message>
         <source>Session</source>
-        <translation type="unfinished">Sesija</translation>
+        <translation>Sesija</translation>
     </message>
     <message>
         <source>New code</source>
-        <translation type="unfinished">Novi kod</translation>
+        <translation>Novi kod</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Otkaži</translation>
+        <translation>Otkaži</translation>
     </message>
     <message>
         <source>streaming</source>
@@ -4295,7 +4338,7 @@
     </message>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Uparen</translation>
+        <translation>Uparen</translation>
     </message>
     <message>
         <source>Close the app on %1</source>
@@ -4311,7 +4354,7 @@
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished">Pokušaj ponovo</translation>
+        <translation>Pokušaj ponovo</translation>
     </message>
     <message>
         <source>Could not read the app list from %1</source>
@@ -4351,7 +4394,7 @@
     </message>
     <message>
         <source>Reconnect</source>
-        <translation type="unfinished">Ponovo poveži</translation>
+        <translation>Ponovo poveži</translation>
     </message>
     <message>
         <source>Start a session</source>
