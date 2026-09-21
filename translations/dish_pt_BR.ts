@@ -75,6 +75,22 @@
         <source>Updated to Dish %1.</source>
         <translation>Atualizado para o Dish %1.</translation>
     </message>
+    <message>
+        <source>Microphone is live. Click to mute it.</source>
+        <translation>O microfone está ativo. Clique para silenciar.</translation>
+    </message>
+    <message>
+        <source>Microphone muted. Click to unmute it.</source>
+        <translation>Microfone mudo. Clique para reativar.</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation>Microfone ativo</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation>Microfone mudo</translation>
+    </message>
 </context>
 <context>
     <name>ApplyOverlay</name>
@@ -203,43 +219,43 @@
     </message>
     <message>
         <source>Adaptive triggers</source>
-        <translation type="unfinished">Gatilhos adaptáveis</translation>
+        <translation>Gatilhos adaptáveis</translation>
     </message>
     <message>
         <source>Player LEDs</source>
-        <translation type="unfinished">LEDs de jogador</translation>
+        <translation>LEDs de jogador</translation>
     </message>
     <message>
         <source>adaptive triggers</source>
-        <translation type="unfinished">gatilhos adaptáveis</translation>
+        <translation>gatilhos adaptáveis</translation>
     </message>
     <message>
         <source>player LEDs</source>
-        <translation type="unfinished">LEDs de jogador</translation>
+        <translation>LEDs de jogador</translation>
     </message>
     <message>
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
-        <translation type="unfinished">O Modo padrão não consegue acioná-lo — mude a conexão para Direto.</translation>
+        <translation>O Modo padrão não consegue acioná-lo — mude a conexão para Direto.</translation>
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microfone</translation>
+        <translation>Microfone</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Som do controle</translation>
+        <translation>Som do controle</translation>
     </message>
     <message>
         <source>microphone</source>
-        <translation type="unfinished">microfone</translation>
+        <translation>microfone</translation>
     </message>
     <message>
         <source>speaker</source>
-        <translation type="unfinished">alto-falante</translation>
+        <translation>alto-falante</translation>
     </message>
     <message>
         <source>The driver this controller is on can’t drive it.</source>
-        <translation type="unfinished">O driver em que este controle está não consegue acioná-lo.</translation>
+        <translation>O driver em que este controle está não consegue acioná-lo.</translation>
     </message>
 </context>
 <context>
@@ -297,10 +313,6 @@
 </context>
 <context>
     <name>CapabilityTable</name>
-    <message>
-        <source>Available</source>
-        <translation>Disponível</translation>
-    </message>
     <message>
         <source>Unavailable</source>
         <translation>Indisponível</translation>
@@ -368,6 +380,10 @@
     <message>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
+    </message>
+    <message>
+        <source>Supported</source>
+        <translation>Suportado</translation>
     </message>
 </context>
 <context>
@@ -765,7 +781,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Hosts Moonlight</translation>
+        <translation>Hosts Moonlight</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -785,27 +801,27 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microfone</translation>
+        <translation>Microfone</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">O microfone do controle leva sua voz ao host. Desligado não envia nada.</translation>
+        <translation>O microfone do controle leva sua voz ao host. Desligado não envia nada.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Som do controle</translation>
+        <translation>Som do controle</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">O áudio do host toca no alto-falante ou fone do controle.</translation>
+        <translation>O áudio do host toca no alto-falante ou fone do controle.</translation>
     </message>
     <message>
         <source>Mic muted</source>
-        <translation type="unfinished">Microfone mudo</translation>
+        <translation>Microfone mudo</translation>
     </message>
     <message>
         <source>Mic live</source>
-        <translation type="unfinished">Microfone ativo</translation>
+        <translation>Microfone ativo</translation>
     </message>
 </context>
 <context>
@@ -1190,19 +1206,19 @@
     </message>
     <message>
         <source>Mic muted</source>
-        <translation type="unfinished">Microfone mudo</translation>
+        <translation>Microfone mudo</translation>
     </message>
     <message>
         <source>Mic live</source>
-        <translation type="unfinished">Microfone ativo</translation>
+        <translation>Microfone ativo</translation>
     </message>
     <message>
         <source>Microphone muted, click to unmute</source>
-        <translation type="unfinished">Microfone mudo, clique para reativar</translation>
+        <translation>Microfone mudo, clique para reativar</translation>
     </message>
     <message>
         <source>Microphone live, click to mute</source>
-        <translation type="unfinished">Microfone ativo, clique para silenciar</translation>
+        <translation>Microfone ativo, clique para silenciar</translation>
     </message>
 </context>
 <context>
@@ -2648,6 +2664,33 @@
     </message>
 </context>
 <context>
+    <name>LinkVocabulary</name>
+    <message>
+        <source>Fastest</source>
+        <translation>Mais rápida</translation>
+    </message>
+    <message>
+        <source>Fast</source>
+        <translation>Rápida</translation>
+    </message>
+    <message>
+        <source>Basic</source>
+        <translation>Básica</translation>
+    </message>
+    <message>
+        <source>Satellite update recommended</source>
+        <translation>Atualização do Satellite recomendada</translation>
+    </message>
+    <message>
+        <source>Satellite update required</source>
+        <translation>Atualização do Satellite obrigatória</translation>
+    </message>
+    <message>
+        <source>Dish update required</source>
+        <translation>Atualização do Dish obrigatória</translation>
+    </message>
+</context>
+<context>
     <name>Main</name>
     <message>
         <source>Dish</source>
@@ -2854,19 +2897,19 @@
     <name>MoonlightVocabulary</name>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Pareado</translation>
+        <translation>Pareado</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation type="unfinished">Lembrado</translation>
+        <translation>Lembrado</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation type="unfinished">Não pareado</translation>
+        <translation>Não pareado</translation>
     </message>
     <message>
         <source>Auto</source>
-        <translation type="unfinished">Automático</translation>
+        <translation>Automático</translation>
     </message>
 </context>
 <context>
@@ -3436,7 +3479,7 @@
     </message>
     <message>
         <source>Couldn’t apply the binding.</source>
-        <translation type="unfinished">Não foi possível aplicar o vínculo.</translation>
+        <translation>Não foi possível aplicar o vínculo.</translation>
     </message>
 </context>
 <context>
@@ -3783,7 +3826,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Hosts Moonlight</translation>
+        <translation>Hosts Moonlight</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -3791,7 +3834,7 @@
     </message>
     <message>
         <source>No Moonlight hosts found</source>
-        <translation type="unfinished">Nenhum host Moonlight encontrado</translation>
+        <translation>Nenhum host Moonlight encontrado</translation>
     </message>
     <message>
         <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
@@ -3799,7 +3842,7 @@
     </message>
     <message>
         <source>Get Sunshine ↗</source>
-        <translation type="unfinished">Obter o Sunshine ↗</translation>
+        <translation>Obter o Sunshine ↗</translation>
     </message>
 </context>
 <context>
@@ -3874,19 +3917,19 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microfone</translation>
+        <translation>Microfone</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">O microfone do controle leva sua voz ao host. Desligado não envia nada.</translation>
+        <translation>O microfone do controle leva sua voz ao host. Desligado não envia nada.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Som do controle</translation>
+        <translation>Som do controle</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">O áudio do host toca no alto-falante ou fone do controle.</translation>
+        <translation>O áudio do host toca no alto-falante ou fone do controle.</translation>
     </message>
 </context>
 <context>
@@ -4123,7 +4166,7 @@
     <name>WizardSessionPage</name>
     <message>
         <source>Continue ›</source>
-        <translation type="unfinished">Continuar ›</translation>
+        <translation>Continuar ›</translation>
     </message>
     <message>
         <source>Unbind a controller on this host to make room.</source>
@@ -4259,15 +4302,15 @@
     </message>
     <message>
         <source>Session</source>
-        <translation type="unfinished">Sessão</translation>
+        <translation>Sessão</translation>
     </message>
     <message>
         <source>New code</source>
-        <translation type="unfinished">Novo código</translation>
+        <translation>Novo código</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancelar</translation>
+        <translation>Cancelar</translation>
     </message>
     <message>
         <source>streaming</source>
@@ -4275,7 +4318,7 @@
     </message>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Pareado</translation>
+        <translation>Pareado</translation>
     </message>
     <message>
         <source>Close the app on %1</source>
@@ -4291,7 +4334,7 @@
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished">Tentar novamente</translation>
+        <translation>Tentar novamente</translation>
     </message>
     <message>
         <source>Could not read the app list from %1</source>
@@ -4331,7 +4374,7 @@
     </message>
     <message>
         <source>Reconnect</source>
-        <translation type="unfinished">Reconectar</translation>
+        <translation>Reconectar</translation>
     </message>
     <message>
         <source>Start a session</source>
