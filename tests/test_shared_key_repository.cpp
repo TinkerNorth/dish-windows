@@ -3,8 +3,10 @@
 
 #include "repository/SatelliteSharedKeyRepository.h"
 
+#include "FakeSecretCipher.h"
 #include "QSettingsFixture.h"
 #include "RepositoryContract.h"
+#include "repository/SecretValue.h"
 #include "repository/SettingsKeys.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -81,4 +83,88 @@ TEST_CASE("clear removes every shared key but preserves co-tenant prefs", "[key]
     CHECK(keysRepo.all().empty());
     CHECK(store->value(QLatin1String(keys::kSatelliteListKey)).toString() ==
           QStringLiteral("preserved"));
+}
+
+// ── At rest: the value in the store is never the key ─────────────────────────
+
+TEST_CASE("a stored key is wrapped by the cipher, and reads back through it", "[key][secret]") {
+    auto store = makeSharedSettings();
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    SatelliteSharedKeyRepository keysRepo(store, cipher);
+    keysRepo.put("satellite:mid:abc", "DEADBEEF");
+
+    const QString stored =
+        store->value(QLatin1String(keys::kSharedKeyPrefix) + QStringLiteral("satellite:mid:abc"))
+            .toString();
+    CHECK(dish::repository::secret::isWrapped(stored));
+    CHECK_FALSE(stored.contains(QStringLiteral("DEADBEEF")));
+    CHECK(cipher->protects == 1);
+
+    CHECK(keysRepo.get("satellite:mid:abc") == QStringLiteral("DEADBEEF"));
+    CHECK(cipher->unprotects >= 1);
+}
+
+TEST_CASE("a plaintext key from an older build is wrapped in place on construction",
+          "[key][secret][migration]") {
+    auto store = makeSharedSettings();
+    const QString settingsKey =
+        QLatin1String(keys::kSharedKeyPrefix) + QStringLiteral("satellite:mid:old");
+    store->setValue(settingsKey, QStringLiteral("CAFEBABE"));
+
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    SatelliteSharedKeyRepository keysRepo(store, cipher);
+    const QString stored = store->value(settingsKey).toString();
+    CHECK(dish::repository::secret::isWrapped(stored));
+    CHECK_FALSE(stored.contains(QStringLiteral("CAFEBABE")));
+    // Nobody re-pairs for this: the key still reads back.
+    CHECK(keysRepo.get("satellite:mid:old") == QStringLiteral("CAFEBABE"));
+    // A second construction over the same store finds nothing left to wrap.
+    SatelliteSharedKeyRepository again(store, cipher);
+    CHECK(cipher->protects == 1);
+    CHECK(again.get("satellite:mid:old") == QStringLiteral("CAFEBABE"));
+}
+
+TEST_CASE("a wrapped key the platform will not open reads as absent, not as garbage",
+          "[key][secret]") {
+    auto store = makeSharedSettings();
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    SatelliteSharedKeyRepository keysRepo(store, cipher);
+    keysRepo.put("satellite:mid:a", "AAAA");
+    keysRepo.put("satellite:mid:b", "BBBB");
+
+    cipher->failUnprotect = true;
+    CHECK_FALSE(keysRepo.get("satellite:mid:a").has_value());
+    CHECK(keysRepo.all().empty());
+    // The value is left where it is: a re-pair overwrites it, nothing deletes it.
+    CHECK_FALSE(
+        store->value(QLatin1String(keys::kSharedKeyPrefix) + QStringLiteral("satellite:mid:a"))
+            .toString()
+            .isEmpty());
+}
+
+TEST_CASE("a protect the platform refuses stores the key unwrapped rather than losing it",
+          "[key][secret]") {
+    auto store = makeSharedSettings();
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    cipher->failProtect = true;
+    SatelliteSharedKeyRepository keysRepo(store, cipher);
+    keysRepo.put("satellite:mid:a", "AAAA");
+    const QString stored =
+        store->value(QLatin1String(keys::kSharedKeyPrefix) + QStringLiteral("satellite:mid:a"))
+            .toString();
+    CHECK_FALSE(dish::repository::secret::isWrapped(stored));
+    CHECK(keysRepo.get("satellite:mid:a") == QStringLiteral("AAAA"));
+}
+
+TEST_CASE("the real cipher is the default: a key round-trips under DPAPI", "[key][secret][dpapi]") {
+    auto store = makeSharedSettings();
+    SatelliteSharedKeyRepository keysRepo(store);
+    keysRepo.put("satellite:mid:abc", "0123456789abcdef");
+    const QString stored =
+        store->value(QLatin1String(keys::kSharedKeyPrefix) + QStringLiteral("satellite:mid:abc"))
+            .toString();
+    CHECK(dish::repository::secret::isWrapped(stored));
+    CHECK_FALSE(stored.contains(QStringLiteral("0123456789abcdef")));
+    CHECK(SatelliteSharedKeyRepository(store).get("satellite:mid:abc") ==
+          QStringLiteral("0123456789abcdef"));
 }

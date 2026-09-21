@@ -3,7 +3,9 @@
 
 #include "repository/MoonlightHostRepository.h"
 
+#include "repository/SecretValue.h"
 #include "repository/SettingsKeys.h"
+#include "source/system/DpapiSecretCipher.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -12,28 +14,48 @@
 
 namespace dish::repository {
 
-MoonlightHostRepository::MoonlightHostRepository(std::shared_ptr<QSettings> settings)
+MoonlightHostRepository::MoonlightHostRepository(std::shared_ptr<QSettings> settings,
+                                                 std::shared_ptr<source::SecretCipher> cipher)
     : settings_(settings
                     ? std::move(settings)
-                    : std::make_shared<QSettings>(QStringLiteral("Dish"), QStringLiteral("Dish"))) {
+                    : std::make_shared<QSettings>(QStringLiteral("Dish"), QStringLiteral("Dish"))),
+      cipher_(cipher ? std::move(cipher) : std::make_shared<source::DpapiSecretCipher>()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    wrapLegacyKey();
+}
+
+// One-time in-place upgrade of the plaintext PEM an older build stored.
+void MoonlightHostRepository::wrapLegacyKey() {
+    const QString stored = settings_->value(QLatin1String(keys::kMoonlightKeyKey)).toString();
+    if (stored.isEmpty() || secret::isWrapped(stored)) { return; }
+    if (const auto wrapped = secret::wrap(*cipher_, stored)) {
+        settings_->setValue(QLatin1String(keys::kMoonlightKeyKey), *wrapped);
+    }
 }
 
 std::optional<moonlight::Identity> MoonlightHostRepository::getOrCreateIdentity() {
     std::lock_guard<std::mutex> lock(mutex_);
     const QString cert = settings_->value(QLatin1String(keys::kMoonlightCertKey)).toString();
-    const QString key = settings_->value(QLatin1String(keys::kMoonlightKeyKey)).toString();
-    if (!cert.isEmpty() && !key.isEmpty()) {
-        moonlight::Identity id;
-        id.certPem = cert.toStdString();
-        id.privateKeyPem = key.toStdString();
-        return id;
+    const QString storedKey = settings_->value(QLatin1String(keys::kMoonlightKeyKey)).toString();
+    if (!cert.isEmpty() && !storedKey.isEmpty()) {
+        // A key this account cannot open is no identity at all: mint a fresh
+        // one below, which every remembered host will refuse until it is
+        // paired again. Better than presenting a certificate we cannot sign
+        // for and failing every request with no explanation.
+        if (const auto key = secret::unwrap(*cipher_, storedKey)) {
+            moonlight::Identity id;
+            id.certPem = cert.toStdString();
+            id.privateKeyPem = key->toStdString();
+            return id;
+        }
     }
     auto fresh = moonlight::generateIdentity();
     if (!fresh) { return std::nullopt; }
     settings_->setValue(QLatin1String(keys::kMoonlightCertKey),
                         QString::fromStdString(fresh->certPem));
-    settings_->setValue(QLatin1String(keys::kMoonlightKeyKey),
-                        QString::fromStdString(fresh->privateKeyPem));
+    const QString keyPem = QString::fromStdString(fresh->privateKeyPem);
+    const auto wrapped = secret::wrap(*cipher_, keyPem);
+    settings_->setValue(QLatin1String(keys::kMoonlightKeyKey), wrapped ? *wrapped : keyPem);
     return fresh;
 }
 
