@@ -3296,6 +3296,22 @@
         <source>Read the release notes for this version.</source>
         <translation>Pročitajte bilješke o izdanju za ovu verziju.</translation>
     </message>
+    <message>
+        <source>Window</source>
+        <translation>Prozor</translation>
+    </message>
+    <message>
+        <source>Keep running in the background</source>
+        <translation>Nastavi raditi u pozadini</translation>
+    </message>
+    <message>
+        <source>Closing the window keeps controllers streaming. Quit from the tray icon.</source>
+        <translation>Zatvaranje prozora ostavlja kontrolere da strimaju. Izađite preko ikone u traci.</translation>
+    </message>
+    <message>
+        <source>The notification area refused the icon, so closing the window quits Dish.</source>
+        <translation>Područje obavještenja je odbilo ikonu, pa zatvaranje prozora zatvara Dish.</translation>
+    </message>
 </context>
 <context>
     <name>SetupWizardPage</name>
@@ -4508,6 +4524,17 @@
     </message>
 </context>
 <context>
+    <name>dish::composer::BackgroundCoordinator</name>
+    <message>
+        <source>Dish is still running</source>
+        <translation>Dish i dalje radi</translation>
+    </message>
+    <message>
+        <source>Controllers keep streaming. Quit from the tray icon.</source>
+        <translation>Kontroleri nastavljaju strimati. Izađite preko ikone u traci.</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4590,6 +4617,26 @@
     <message>
         <source>System</source>
         <translation>Sustav</translation>
+    </message>
+</context>
+<context>
+    <name>dish::source::Win32TrayIcon</name>
+    <message numerus="yes">
+        <source>Dish · %n controllers streaming</source>
+        <extracomment>The tray item&apos;s tooltip while controllers stream; %n is the count.</extracomment>
+        <translation>
+            <numerusform>Dish · %n kontroler strima</numerusform>
+            <numerusform>Dish · %n kontrolera strimaju</numerusform>
+            <numerusform>Dish · %n kontrolera strima</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Show Dish</source>
+        <translation>Prikaži Dish</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Izađi</translation>
     </message>
 </context>
 </TS>

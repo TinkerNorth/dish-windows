@@ -15,6 +15,7 @@
 #include "core/reducer/UpdateMachine.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
+#include "source/store/BackgroundPreferenceStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ThemePreferenceStore.h"
@@ -71,6 +72,13 @@ class AppViewModel : public QObject {
     Q_PROPERTY(int themeMode READ themeMode WRITE setThemeMode NOTIFY themeModeChanged)
     Q_PROPERTY(bool crashReportingEnabled READ crashReportingEnabled WRITE setCrashReportingEnabled
                    NOTIFY crashReportingChanged)
+
+    // ── Settings: window ──────────────────────────────────────────────────────
+    Q_PROPERTY(bool runInBackground READ runInBackground WRITE setRunInBackground NOTIFY
+                   runInBackgroundChanged)
+    // False means the shell did not accept the tray icon, so the preference
+    // above cannot take effect and the row says so.
+    Q_PROPERTY(bool trayAvailable READ trayAvailable NOTIFY trayAvailableChanged)
 
     // ── About ─────────────────────────────────────────────────────────────────
     // CMake project VERSION, threaded in as DISH_VERSION.
@@ -210,6 +218,15 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void setThemeMode(int mode);
     bool crashReportingEnabled() const;
     Q_INVOKABLE void setCrashReportingEnabled(bool enabled);
+    bool runInBackground() const;
+    Q_INVOKABLE void setRunInBackground(bool enabled);
+    bool trayAvailable() const;
+    // True when the shell should hide the window instead of quitting. Not a
+    // query: this is what spends the one-time "still running" notice.
+    Q_INVOKABLE bool requestWindowClose();
+    // The tray item is derived from this, and the shell is the only thing that
+    // knows it.
+    Q_INVOKABLE void setWindowVisible(bool visible);
     QString appVersion() const;
     bool onboardingNeeded() const;
     QString reversePairingPhase() const;
@@ -569,6 +586,12 @@ class AppViewModel : public QObject {
     void themeModeChanged();
     void crashReportingChanged();
     void onboardingNeededChanged();
+    void runInBackgroundChanged();
+    void trayAvailableChanged();
+    // Raised by the tray item, which is the only way back to a hidden window
+    // and the only way out of the process.
+    void showWindowRequested();
+    void quitRequested();
 
     // Folds the manager's discoveredChanged AND a connection-row id-set move:
     // the FOUND list excludes ids that already have a row (the one-spot rule),
@@ -708,6 +731,7 @@ class AppViewModel : public QObject {
     // republish from reaching the Qt NOTIFYs.
     arch::Observable<source::ThemeMode>::Subscription themeSub_;
     arch::Observable<bool>::Subscription crashSub_;
+    arch::Observable<source::BackgroundPreferences>::Subscription backgroundSub_;
     arch::Observable<source::OnboardingState>::Subscription onboardingSub_;
     arch::Observable<composer::WakeState>::Subscription keepAwakeSub_;
     arch::Observable<reducer::KeepAwakePreferences>::Subscription keepAwakePrefsSub_;

@@ -74,6 +74,7 @@ after the table.
 | `onboarding_welcome_completed`, `onboarding_dashboard_hint_dismissed` | Booleans | Not showing first-run screens again |
 | `crashlytics_collection_enabled` | Boolean, default `true` | The *Share crash reports* switch; section 3. The key name is inherited from the Android client for schema continuity; this client reports to Sentry, not Crashlytics. |
 | `ui_rail_collapsed` | Boolean | Navigation-rail width |
+| `background_run_enabled`, `background_notice_shown` | Booleans, default `true` and `false` | The *Keep running in the background* switch, and whether the one-time "Dish is still running" notice has been shown |
 
 Legacy values `wifi_list` and `wifi_shared_key/<id>` from older builds are
 migrated in place on first run so you do not have to re-pair.

@@ -239,6 +239,26 @@ Kit.Page {
                 Layout.fillWidth: true
                 spacing: Tokens.s4
 
+                Kit.SectionHeader { label: qsTr("Window") }
+
+                Kit.Card {
+                    Layout.fillWidth: true
+                    contentItem: Kit.LabeledSwitch {
+                        label: qsTr("Keep running in the background")
+                        description: App.trayAvailable
+                            ? qsTr("Closing the window keeps controllers streaming. Quit from the tray icon.")
+                            : qsTr("The notification area refused the icon, so closing the window quits Dish.")
+                        enabled: App.trayAvailable
+                        checked: App.runInBackground
+                        onToggled: (checked) => App.setRunInBackground(checked)
+                    }
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Tokens.s4
+
                 Kit.SectionHeader { label: qsTr("Power") }
 
                 Kit.Card {
