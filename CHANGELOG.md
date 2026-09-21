@@ -37,6 +37,48 @@ share a version number.
 
 ### Added
 
+- **Running in the background.** Closing the window leaves Dish streaming
+  behind a notification-area icon whose menu is the way back (*Show Dish*) and
+  the way out (*Quit*); a click on the icon brings the window back, and a
+  one-time balloon says so the first time it happens. The hide is gated on the
+  shell actually accepting the icon, so a session where it refused keeps
+  quitting on close rather than stranding a running process with no window
+  and no menu; the icon comes back when Explorer restarts. *Keep running in
+  the background* in Settings turns it off. Dish for Linux has had this since
+  0.1.2; this is the same design on Win32.
+- **Sleep and resume.** A suspend (`PBT_APMSUSPEND`) closes the satellite
+  sessions before the machine goes down, and the resume rescans and re-opens
+  them instead of waiting out the ~10 s heartbeat death. Tearing down first is
+  load-bearing: a session the machine slept through comes back Faltering,
+  which slips past both reconnect guards, so nothing would ever reopen it.
+- **The link-tier cue.** Every host row (Connections, Moonlight hosts, the
+  wizard's destination step) carries the rank its link has, the same
+  three-word ladder Dish for Android draws: a Satellite link is *Fastest*, a
+  Moonlight host's control stream is *Fast*. The word says why the satellite
+  is the first pick before the user has tried both.
+- **The protocol chip.** A satellite row says when the last session negotiation
+  had something to say about versions: a soft *Satellite update recommended*
+  when the link works at an older protocol than this build speaks, and a red
+  *Satellite update required* or *Dish update required* when the two ranges do
+  not overlap and a session cannot open. A satellite that is fine, or one this
+  client has not negotiated with yet, wears no chip. The verdict is the
+  negotiation's own, so a newer satellite that still accepts this build reads
+  as fine rather than as a demand.
+- **The app-wide microphone chip.** The shell header, on every page, shows one
+  state for the whole machine's controller microphones: *Mic live* when any
+  bound pad's headset mic is delivering, *Mic muted* when every armed mic is
+  muted, nothing when no mic is armed. One click mutes every armed slot or
+  unmutes every armed slot, through the same door the slot card's mute and the
+  DualSense's own button use, so the wire latch, the pad's lamp and the
+  capture engine all follow. Before this the only place to see or silence a
+  live microphone was the Controllers page.
+
+### Changed
+
+- The capability table's verdict now reads **Supported** rather than
+  Available: the row says what the path can carry, not what is happening
+  right now, and it is the word every Dish client uses for that row.
+
 - **DualSense HD haptics over Satellite.** `[wire-coordinated]` Protocol 3. A
   DualSense game that vibrates through Sony's own pad library authors the
   effect as audio on the pad's two actuator lanes and never writes a motor

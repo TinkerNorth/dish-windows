@@ -75,6 +75,22 @@
         <source>Updated to Dish %1.</source>
         <translation>Mis à jour vers Dish %1.</translation>
     </message>
+    <message>
+        <source>Microphone is live. Click to mute it.</source>
+        <translation>Le micro est actif. Cliquez pour le couper.</translation>
+    </message>
+    <message>
+        <source>Microphone muted. Click to unmute it.</source>
+        <translation>Micro coupé. Cliquez pour le rétablir.</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation>Micro actif</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation>Micro coupé</translation>
+    </message>
 </context>
 <context>
     <name>ApplyOverlay</name>
@@ -203,43 +219,43 @@
     </message>
     <message>
         <source>Adaptive triggers</source>
-        <translation type="unfinished">Gâchettes adaptatives</translation>
+        <translation>Gâchettes adaptatives</translation>
     </message>
     <message>
         <source>Player LEDs</source>
-        <translation type="unfinished">LED de joueur</translation>
+        <translation>LED de joueur</translation>
     </message>
     <message>
         <source>adaptive triggers</source>
-        <translation type="unfinished">gâchettes adaptatives</translation>
+        <translation>gâchettes adaptatives</translation>
     </message>
     <message>
         <source>player LEDs</source>
-        <translation type="unfinished">LED de joueur</translation>
+        <translation>LED de joueur</translation>
     </message>
     <message>
         <source>Standard mode can’t drive it — switch the connection to Direct.</source>
-        <translation type="unfinished">Le Mode standard ne peut pas le piloter — passez la connexion en Direct.</translation>
+        <translation>Le Mode standard ne peut pas le piloter — passez la connexion en Direct.</translation>
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microphone</translation>
+        <translation>Microphone</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Son de la manette</translation>
+        <translation>Son de la manette</translation>
     </message>
     <message>
         <source>microphone</source>
-        <translation type="unfinished">microphone</translation>
+        <translation>microphone</translation>
     </message>
     <message>
         <source>speaker</source>
-        <translation type="unfinished">haut-parleur</translation>
+        <translation>haut-parleur</translation>
     </message>
     <message>
         <source>The driver this controller is on can’t drive it.</source>
-        <translation type="unfinished">Le pilote de cette manette ne peut pas le piloter.</translation>
+        <translation>Le pilote de cette manette ne peut pas le piloter.</translation>
     </message>
 </context>
 <context>
@@ -297,10 +313,6 @@
 </context>
 <context>
     <name>CapabilityTable</name>
-    <message>
-        <source>Available</source>
-        <translation>Disponible</translation>
-    </message>
     <message>
         <source>Unavailable</source>
         <translation>Indisponible</translation>
@@ -368,6 +380,10 @@
     <message>
         <source>%1: %2</source>
         <translation>%1 : %2</translation>
+    </message>
+    <message>
+        <source>Supported</source>
+        <translation>Pris en charge</translation>
     </message>
 </context>
 <context>
@@ -765,7 +781,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Hôtes Moonlight</translation>
+        <translation>Hôtes Moonlight</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -785,27 +801,27 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microphone</translation>
+        <translation>Microphone</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">Le micro de la manette porte votre voix vers l’hôte. Désactivé, rien n’est envoyé.</translation>
+        <translation>Le micro de la manette porte votre voix vers l’hôte. Désactivé, rien n’est envoyé.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Son de la manette</translation>
+        <translation>Son de la manette</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">L’audio de l’hôte est lu sur le haut-parleur ou le casque de la manette.</translation>
+        <translation>L’audio de l’hôte est lu sur le haut-parleur ou le casque de la manette.</translation>
     </message>
     <message>
         <source>Mic muted</source>
-        <translation type="unfinished">Micro coupé</translation>
+        <translation>Micro coupé</translation>
     </message>
     <message>
         <source>Mic live</source>
-        <translation type="unfinished">Micro actif</translation>
+        <translation>Micro actif</translation>
     </message>
 </context>
 <context>
@@ -1190,19 +1206,19 @@
     </message>
     <message>
         <source>Mic muted</source>
-        <translation type="unfinished">Micro coupé</translation>
+        <translation>Micro coupé</translation>
     </message>
     <message>
         <source>Mic live</source>
-        <translation type="unfinished">Micro actif</translation>
+        <translation>Micro actif</translation>
     </message>
     <message>
         <source>Microphone muted, click to unmute</source>
-        <translation type="unfinished">Micro coupé, cliquez pour le réactiver</translation>
+        <translation>Micro coupé, cliquez pour le réactiver</translation>
     </message>
     <message>
         <source>Microphone live, click to mute</source>
-        <translation type="unfinished">Micro actif, cliquez pour le couper</translation>
+        <translation>Micro actif, cliquez pour le couper</translation>
     </message>
 </context>
 <context>
@@ -2648,6 +2664,33 @@
     </message>
 </context>
 <context>
+    <name>LinkVocabulary</name>
+    <message>
+        <source>Fastest</source>
+        <translation>La plus rapide</translation>
+    </message>
+    <message>
+        <source>Fast</source>
+        <translation>Rapide</translation>
+    </message>
+    <message>
+        <source>Basic</source>
+        <translation>Basique</translation>
+    </message>
+    <message>
+        <source>Satellite update recommended</source>
+        <translation>Mise à jour de Satellite recommandée</translation>
+    </message>
+    <message>
+        <source>Satellite update required</source>
+        <translation>Mise à jour de Satellite requise</translation>
+    </message>
+    <message>
+        <source>Dish update required</source>
+        <translation>Mise à jour de Dish requise</translation>
+    </message>
+</context>
+<context>
     <name>Main</name>
     <message>
         <source>Dish</source>
@@ -2854,19 +2897,19 @@
     <name>MoonlightVocabulary</name>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Associé</translation>
+        <translation>Associé</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation type="unfinished">Mémorisé</translation>
+        <translation>Mémorisé</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation type="unfinished">Non appairé</translation>
+        <translation>Non appairé</translation>
     </message>
     <message>
         <source>Auto</source>
-        <translation type="unfinished">Automatique</translation>
+        <translation>Automatique</translation>
     </message>
 </context>
 <context>
@@ -3238,6 +3281,22 @@
         <source>Read the release notes for this version.</source>
         <translation>Consultez les notes de cette version.</translation>
     </message>
+    <message>
+        <source>Window</source>
+        <translation>Fenêtre</translation>
+    </message>
+    <message>
+        <source>Keep running in the background</source>
+        <translation>Continuer à s&apos;exécuter en arrière-plan</translation>
+    </message>
+    <message>
+        <source>Closing the window keeps controllers streaming. Quit from the tray icon.</source>
+        <translation>Fermer la fenêtre laisse les manettes diffuser. Quittez depuis l&apos;icône de la zone de notification.</translation>
+    </message>
+    <message>
+        <source>The notification area refused the icon, so closing the window quits Dish.</source>
+        <translation>La zone de notification a refusé l&apos;icône, donc fermer la fenêtre quitte Dish.</translation>
+    </message>
 </context>
 <context>
     <name>SetupWizardPage</name>
@@ -3436,7 +3495,7 @@
     </message>
     <message>
         <source>Couldn’t apply the binding.</source>
-        <translation type="unfinished">Impossible d&apos;appliquer la liaison.</translation>
+        <translation>Impossible d&apos;appliquer la liaison.</translation>
     </message>
 </context>
 <context>
@@ -3783,7 +3842,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Hôtes Moonlight</translation>
+        <translation>Hôtes Moonlight</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -3791,7 +3850,7 @@
     </message>
     <message>
         <source>No Moonlight hosts found</source>
-        <translation type="unfinished">Aucun hôte Moonlight trouvé</translation>
+        <translation>Aucun hôte Moonlight trouvé</translation>
     </message>
     <message>
         <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
@@ -3799,7 +3858,7 @@
     </message>
     <message>
         <source>Get Sunshine ↗</source>
-        <translation type="unfinished">Obtenir Sunshine ↗</translation>
+        <translation>Obtenir Sunshine ↗</translation>
     </message>
 </context>
 <context>
@@ -3874,19 +3933,19 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microphone</translation>
+        <translation>Microphone</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">Le micro de la manette porte votre voix vers l’hôte. Désactivé, rien n’est envoyé.</translation>
+        <translation>Le micro de la manette porte votre voix vers l’hôte. Désactivé, rien n’est envoyé.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Son de la manette</translation>
+        <translation>Son de la manette</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">L’audio de l’hôte est lu sur le haut-parleur ou le casque de la manette.</translation>
+        <translation>L’audio de l’hôte est lu sur le haut-parleur ou le casque de la manette.</translation>
     </message>
 </context>
 <context>
@@ -4123,7 +4182,7 @@
     <name>WizardSessionPage</name>
     <message>
         <source>Continue ›</source>
-        <translation type="unfinished">Continuer ›</translation>
+        <translation>Continuer ›</translation>
     </message>
     <message>
         <source>Unbind a controller on this host to make room.</source>
@@ -4259,15 +4318,15 @@
     </message>
     <message>
         <source>Session</source>
-        <translation type="unfinished">Session</translation>
+        <translation>Session</translation>
     </message>
     <message>
         <source>New code</source>
-        <translation type="unfinished">Nouveau code</translation>
+        <translation>Nouveau code</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Annuler</translation>
+        <translation>Annuler</translation>
     </message>
     <message>
         <source>streaming</source>
@@ -4275,7 +4334,7 @@
     </message>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Associé</translation>
+        <translation>Associé</translation>
     </message>
     <message>
         <source>Close the app on %1</source>
@@ -4291,7 +4350,7 @@
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished">Réessayer</translation>
+        <translation>Réessayer</translation>
     </message>
     <message>
         <source>Could not read the app list from %1</source>
@@ -4331,7 +4390,7 @@
     </message>
     <message>
         <source>Reconnect</source>
-        <translation type="unfinished">Reconnecter</translation>
+        <translation>Reconnecter</translation>
     </message>
     <message>
         <source>Start a session</source>
@@ -4445,6 +4504,17 @@
     </message>
 </context>
 <context>
+    <name>dish::composer::BackgroundCoordinator</name>
+    <message>
+        <source>Dish is still running</source>
+        <translation>Dish est toujours en cours d&apos;exécution</translation>
+    </message>
+    <message>
+        <source>Controllers keep streaming. Quit from the tray icon.</source>
+        <translation>Les manettes continuent de diffuser. Quittez depuis l&apos;icône de la zone de notification.</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4524,6 +4594,25 @@
     <message>
         <source>System</source>
         <translation>Système</translation>
+    </message>
+</context>
+<context>
+    <name>dish::source::Win32TrayIcon</name>
+    <message numerus="yes">
+        <source>Dish · %n controllers streaming</source>
+        <extracomment>The tray item&apos;s tooltip while controllers stream; %n is the count.</extracomment>
+        <translation>
+            <numerusform>Dish · %n manette diffuse</numerusform>
+            <numerusform>Dish · %n manettes diffusent</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Show Dish</source>
+        <translation>Afficher Dish</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Quitter</translation>
     </message>
 </context>
 </TS>

@@ -390,6 +390,27 @@ set(DISH_CORE_SOURCES
     src/composer/WakeStateComposer.h
     src/composer/WakeStateController.h
     src/composer/WakeStateController.cpp
+    # Running in the background: the close policy, the tray item and the
+    # suspend/resume edge (the port of dish-linux's tray and sleep handling).
+    src/core/reducer/BackgroundMode.h
+    src/core/reducer/SleepCycle.h
+    src/core/reducer/TrayPresentation.h
+    src/source/store/BackgroundPreferenceStore.h
+    src/source/notification/DesktopNotifier.h
+    src/source/system/SleepMonitor.h
+    src/source/system/SleepMonitor.cpp
+    src/source/tray/TrayIcon.h
+    src/source/tray/Win32TrayIcon.h
+    src/source/tray/Win32TrayIcon.cpp
+    src/source/tray/TrayBalloonNotifier.h
+    src/source/tray/TrayBalloonNotifier.cpp
+    src/composer/BackgroundCoordinator.h
+    src/composer/BackgroundCoordinator.cpp
+    src/composer/SleepCoordinator.h
+    src/composer/SleepCoordinator.cpp
+    src/composer/TrayComposer.h
+    src/composer/TrayController.h
+    src/composer/TrayController.cpp
     src/composer/ThemeController.h
     src/composer/ThemeController.cpp
     src/composer/CrashReportingBackend.h
@@ -534,6 +555,10 @@ target_link_libraries(dish_core
         bthprops
         # DpapiSecretCipher: CryptProtectData / CryptUnprotectData.
         crypt32
+        # The notification-area item (Shell_NotifyIcon) and its message-only
+        # window, menu and cursor calls.
+        shell32
+        user32
     PRIVATE
         dish_warnings
         dish_strict)
@@ -608,6 +633,7 @@ qt_add_qml_module(Dish
         src/qml/UpdatePopover.qml
         ${DISH_KIT_QML_FILES}
         src/qml/shared/BindingDraft.qml
+        src/qml/shared/LinkVocabulary.qml
         src/qml/shared/MoonlightVocabulary.qml
         src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml

@@ -69,11 +69,19 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
       wakeComposer_(streamingSlotCount_, controllerActivity_.state(), keepAwakeStore_.state()),
       wakeController_(wakeComposer_.state(), inhibitor_.get()),
       themeController_(themeStore_.state()), crashController_(crashStore_.state(), &crashBackend_),
-      updateCoordinator_(&updatePrefs_, this), catalogHttp_(new net::HTTPClient(this)),
-      catalogRepo_(catalogHttp_), motionEnabledStore_(&motionPrefRepo_),
-      joystickRemapStore_(&joystickRemapRepo_), catalogSnapshot_(composer::CatalogSnapshot{}),
-      catalogComposer_(catalogSnapshot_), usbPathStore_(&usbPathRepo_), usbObserver_(this),
-      usbScanTimer_(new QTimer(this)), inputRateTimer_(new QTimer(this)) {
+      tray_(source::makeSystemTrayIcon()),
+      notifier_(std::make_unique<source::TrayBalloonNotifier>(tray_.get())),
+      sleepMonitor_(std::make_unique<source::WindowsPowerSleepMonitor>()),
+      backgroundCoordinator_(new composer::BackgroundCoordinator(&backgroundStore_, tray_.get(),
+                                                                 notifier_.get(), this)),
+      sleepCoordinator_(new composer::SleepCoordinator(sleepMonitor_.get(), connections_, this)),
+      trayComposer_(backgroundCoordinator_->windowVisible(), streamingSlotCount_),
+      trayController_(trayComposer_.state(), tray_.get()), updateCoordinator_(&updatePrefs_, this),
+      catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),
+      motionEnabledStore_(&motionPrefRepo_), joystickRemapStore_(&joystickRemapRepo_),
+      catalogSnapshot_(composer::CatalogSnapshot{}), catalogComposer_(catalogSnapshot_),
+      usbPathStore_(&usbPathRepo_), usbObserver_(this), usbScanTimer_(new QTimer(this)),
+      inputRateTimer_(new QTimer(this)) {
     QObject::connect(hub_, &net::ConnectionHub::changed, this, &AppModel::onHubChanged);
     QObject::connect(bridge_, &input::SDLGamepadBridge::devicesChanged, this,
                      &AppModel::onBridgeDevicesChanged);
@@ -361,6 +369,10 @@ AppModel::~AppModel() {
     bridge_->stop();
     usbScanTimer_->stop();
     inputRateTimer_->stop();
+    // Remove the tray item and the power filter explicitly: a shell that
+    // outlives us must not keep drawing a dead icon.
+    trayController_.stop();
+    sleepMonitor_->stop();
     // Drop each subscription before its store, so no late emission races
     // teardown and pushes into a half-gone bridge.
     keepAwakePrefsSub_ = arch::Observable<reducer::KeepAwakePreferences>::Subscription{};
@@ -477,6 +489,11 @@ void AppModel::start() {
     // The first tick only baselines each tracker, so numbers appear from the
     // second tick on.
     inputRateTimer_->start();
+    // Both touch the shell, so they belong here and not in the constructor: a
+    // test that builds an AppModel must not add an icon to the notification
+    // area or filter the application's native events.
+    sleepMonitor_->start();
+    trayController_.start();
     // Last: the janitor pass and the staged-update scan are disk IO, and the
     // first check is 15 s out, so nothing here delays the first frame.
     updateCoordinator_.start();
@@ -1332,6 +1349,16 @@ void AppModel::toggleSlotMicMute(const QString& slotId) {
     setSlotMicMuted(slotId, !micMuteStore_.isMuted(slotId.toStdString()));
 }
 
+void AppModel::toggleAllMics() {
+    // The order is decided against the fold as it stands before the first
+    // write: setSlotMicMuted rebuilds, and the rebuild moves the fold.
+    const auto order = reducer::micToggleAllFor(armedMicSlotIds_, capturingMicSlots_);
+    if (!order.has_value()) { return; }
+    for (const auto& slotId : order->slotIds) {
+        setSlotMicMuted(QString::fromStdString(slotId), order->muted);
+    }
+}
+
 void AppModel::onPadMicMuteChanged(int vendorId, int productId, bool muted) {
     // The synthetic slot id IS the model key's string form.
     const QString slotId =
@@ -1345,6 +1372,8 @@ void AppModel::onPadMicMuteChanged(int vendorId, int productId, bool muted) {
 void AppModel::reconcileAudioEngines() {
     std::vector<source::audio::MicCaptureTarget> micTargets;
     std::vector<source::audio::SpeakerVoiceTarget> speakerVoices;
+    std::vector<std::string> armedMicSlotIds;
+    int capturingMicSlots = 0;
 
     for (const auto& s : state_.slotList) {
         // Any bound USB pad, Direct or Standard: the engines talk to the pad's
@@ -1368,6 +1397,14 @@ void AppModel::reconcileAudioEngines() {
         mic.routeMatched = route.microphone;
         mic.hostCarries = conn->hostMicAvailable();
         mic.muted = micMuteStore_.isMuted(slotId);
+        // The app-wide indicator folds the same facts with mute set aside: a
+        // muted slot still has a microphone the user must be able to find.
+        audio::AudioSlotFacts armed = mic;
+        armed.muted = false;
+        if (audio::micCaptureEligible(armed)) {
+            armedMicSlotIds.push_back(slotId);
+            if (audio::micCaptureEligible(mic)) { ++capturingMicSlots; }
+        }
         if (audio::micCaptureEligible(mic)) {
             source::audio::MicCaptureTarget target;
             target.slotId = slotId;
@@ -1425,6 +1462,11 @@ void AppModel::reconcileAudioEngines() {
 
     micEngine_.reconcile(micTargets);
     speakerEngine_.reconcile(speakerVoices);
+
+    armedMicSlotIds_ = std::move(armedMicSlotIds);
+    capturingMicSlots_ = capturingMicSlots;
+    micIndicator_ =
+        reducer::micIndicatorFor(static_cast<int>(armedMicSlotIds_.size()), capturingMicSlots_);
 }
 
 void AppModel::applyBindingPresence() {

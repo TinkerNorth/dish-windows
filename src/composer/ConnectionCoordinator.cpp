@@ -84,6 +84,7 @@ void ConnectionCoordinator::refreshSessions() {
         // distinct-until-changed on visible moves only.
         s.latencyOneWayMs = conn->latencyOneWayMs();
         s.latencySamples = conn->latencySamples();
+        s.compat = conn->protocolCompat();
         next.push_back(std::move(s));
         // Mark the id stale too, so a remembered row at the same id keeps
         // reading "Needs pairing" after the live row is gone.
@@ -189,5 +190,9 @@ void ConnectionCoordinator::reconnectConnection(const QString& connectionId) {
 void ConnectionCoordinator::disconnectConnection(const QString& connectionId) {
     wifi_->disconnect(connectionId);
 }
+
+void ConnectionCoordinator::prepareForSleep() { wifi_->prepareForSleep(); }
+
+void ConnectionCoordinator::resumeFromSleep() { wifi_->resumeFromSleep(); }
 
 } // namespace dish::composer

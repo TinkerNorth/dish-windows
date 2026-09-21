@@ -84,6 +84,7 @@ set(DISH_TEST_SOURCES
     test_session_reconcile.cpp
     test_satellite_link_state.cpp
     test_connection_rows.cpp
+    test_link_tier.cpp
     test_resend_pacer.cpp
     test_late_slot_converge.cpp
     test_binding_presence.cpp
@@ -109,8 +110,19 @@ set(DISH_TEST_SOURCES
     test_latency_window.cpp
     test_slot_live_stats.cpp
     test_motion_indicator_state.cpp
+    test_mic_indicator_state.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
+    test_sleep_cycle.cpp
+    test_sleep_coordinator.cpp
+    test_windows_power_sleep_monitor.cpp
+    test_tray_presentation.cpp
+    test_tray_composer.cpp
+    test_tray_controller.cpp
+    test_win32_tray_icon.cpp
+    test_background_mode.cpp
+    test_background_preference_store.cpp
+    test_background_coordinator.cpp
     test_satellite_client_rumble.cpp
     test_satellite_client_motion.cpp
     test_satellite_client_touchpad.cpp

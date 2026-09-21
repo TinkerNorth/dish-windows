@@ -572,6 +572,9 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                     scheduleRetry(server, intent);
                     return;
                 }
+                // The row keeps saying which end must update after the attempt
+                // is torn down; an unreadable 409 leaves the chip alone.
+                conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
                 conn->markDisconnected();
                 emitErrorIfUserInitiated(intent, versionMsgFor(negotiated.verdict));
                 return;
@@ -618,6 +621,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
             // shape follows the echo.
             const auto negotiated = reducer::settleAccepted(resp.protocolVersion);
             conn->setSettledProtocolVersion(negotiated.settledVersion, negotiated.satelliteBehind);
+            conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
             client->setConnectionParams(token, sessionKey, negotiated.settledVersion);
             store_->remember(server);
             retryAttempts_.remove(id);
@@ -757,6 +761,7 @@ void WifiConnectionManager::rekey(WifiConnection* conn, const models::Discovered
             // it just gave, not the one it gave at connect.
             const auto negotiated = reducer::settleAccepted(resp.protocolVersion);
             c->setSettledProtocolVersion(negotiated.settledVersion, negotiated.satelliteBehind);
+            c->setProtocolCompat(reducer::compatForOutcome(negotiated));
             client->setConnectionParams(token, sessionKey, negotiated.settledVersion);
             // Otherwise the next enriched ack would read as drift.
             c->adoptEpoch(resp.epoch);
@@ -944,6 +949,23 @@ void WifiConnectionManager::autoReconnectAll() {
             connectTo(r.toDiscovered(), ConnectIntent::AutoReconnect);
         }
     }
+}
+
+void WifiConnectionManager::prepareForSleep() {
+    // Snapshot the keys: disconnect() fans out through poolChanged into the
+    // hub's rebuild, which reshapes connections_ under a live iterator.
+    const auto ids = connections_.keys();
+    for (const auto& id : ids) { disconnect(id); }
+}
+
+void WifiConnectionManager::resumeFromSleep() {
+    // A backoff curve armed before the suspend is measuring wall clock the
+    // machine spent asleep, so the first attempt after a resume starts over.
+    retryAttempts_.clear();
+    // Rescan before reconnecting: a laptop that resumes on another network has
+    // a stale remembered IP, and only discovery can relearn it.
+    startDiscovery();
+    autoReconnectAll();
 }
 
 } // namespace dish::net

@@ -15,7 +15,11 @@
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
 #include "composer/CrashReportingBackend.h"
+#include "composer/BackgroundCoordinator.h"
 #include "composer/CrashReportingController.h"
+#include "composer/SleepCoordinator.h"
+#include "composer/TrayComposer.h"
+#include "composer/TrayController.h"
 #include "composer/ThemeController.h"
 #include "composer/WakeStateComposer.h"
 #include "composer/WakeStateController.h"
@@ -27,6 +31,7 @@
 #include "core/reducer/BatteryRouting.h"
 #include "core/reducer/FeedbackRouting.h"
 #include "core/reducer/HostAudioVerdict.h"
+#include "core/reducer/MicIndicatorState.h"
 #include "core/reducer/PollRateSampler.h"
 #include "core/audio/PadAudioMatcher.h"
 #include "source/audio/MicCaptureEngine.h"
@@ -36,6 +41,7 @@
 #include "source/inputrate/InputRateStore.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
+#include "source/store/BackgroundPreferenceStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/KeepAwakePreferenceStore.h"
@@ -47,7 +53,10 @@
 #include "source/store/ThemePreferenceStore.h"
 #include "source/store/UpdatePreferenceStore.h"
 #include "source/store/UsbPathPreferenceStore.h"
+#include "source/system/SleepMonitor.h"
 #include "source/system/WakeInhibitor.h"
+#include "source/tray/TrayBalloonNotifier.h"
+#include "source/tray/Win32TrayIcon.h"
 #include "source/usb/UsbGamepadManager.h"
 #include "source/usb/WinHidGateway.h"
 #include "update/UpdateCoordinator.h"
@@ -112,6 +121,10 @@ class AppModel : public QObject {
     source::OnboardingPreferenceStore* onboardingStore() { return &onboardingStore_; }
     source::ThemePreferenceStore* themeStore() { return &themeStore_; }
     source::CrashReportingStore* crashStore() { return &crashStore_; }
+    source::BackgroundPreferenceStore* backgroundStore() { return &backgroundStore_; }
+    // The close policy, the tray's two commands and the window-visible fact the
+    // tray item is derived from.
+    composer::BackgroundCoordinator* background() { return backgroundCoordinator_; }
 
     // The auto-updater. The store is the reactive preference slice the Settings
     // page binds to; the coordinator owns the state machine, the timers and the
@@ -137,6 +150,16 @@ class AppModel : public QObject {
     // UI keeps showing this local truth — and re-runs the engine reconcile.
     void setSlotMicMuted(const QString& slotId, bool muted);
     void toggleSlotMicMute(const QString& slotId);
+    // The app-wide microphone surface (the shell header's chip, on every page):
+    // one state folded over every bound slot's audio facts, derived inside
+    // reconcileAudioEngines so it can never disagree with the capture engine.
+    // Read after stateChanged.
+    reducer::MicIndicatorState micIndicator() const { return micIndicator_; }
+    // Mute every armed slot, or unmute every armed slot, whichever the state
+    // says (Live mutes, Muted unmutes). A no-op with nothing armed. Each slot
+    // goes through setSlotMicMuted, so the wire latch, the pad's lamp and the
+    // engine reconcile all follow, exactly as a click on the slot card would.
+    void toggleAllMics();
     source::JoystickRemapStore* joystickRemapStore() { return &joystickRemapStore_; }
 
     // The stored override if any, else the default layout.
@@ -426,6 +449,19 @@ class AppModel : public QObject {
     composer::ThemeController themeController_;
     composer::CrashReportingController crashController_;
 
+    // Declaration order matters: the coordinators borrow the store, the tray and
+    // the notifier, and the tray composer captures the coordinator's Observable.
+    // The tray is the concrete Win32 item because the notifier is its balloon;
+    // everything above it only sees source::TrayIcon.
+    std::unique_ptr<source::Win32TrayIcon> tray_;
+    std::unique_ptr<source::DesktopNotifier> notifier_;
+    std::unique_ptr<source::SleepMonitor> sleepMonitor_;
+    source::BackgroundPreferenceStore backgroundStore_;
+    composer::BackgroundCoordinator* backgroundCoordinator_;
+    composer::SleepCoordinator* sleepCoordinator_;
+    composer::TrayComposer trayComposer_;
+    composer::TrayController trayController_;
+
     // Declaration order matters: the coordinator subscribes to the store's
     // Observable, so the store must outlive it.
     source::UpdatePreferenceStore updatePrefs_;
@@ -451,6 +487,12 @@ class AppModel : public QObject {
     source::MicEnabledStore micEnabledStore_{&micPrefRepo_};
     source::SpeakerEnabledStore speakerEnabledStore_{&speakerPrefRepo_};
     source::MicMuteStore micMuteStore_;
+    // Derived in reconcileAudioEngines: the fold behind micIndicator() and the
+    // slots toggleAllMics() acts on. Armed = every fact but mute; capturing =
+    // armed and unmuted, which is the engine's own eligibility.
+    reducer::MicIndicatorState micIndicator_ = reducer::MicIndicatorState::Hidden;
+    std::vector<std::string> armedMicSlotIds_;
+    int capturingMicSlots_ = 0;
 
     // Declaration order: the gateway must outlive the engines that borrow it
     // (members destroy in reverse order, so it is declared first). The gateway
