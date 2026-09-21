@@ -75,6 +75,22 @@
         <source>Updated to Dish %1.</source>
         <translation>Updated to Dish %1.</translation>
     </message>
+    <message>
+        <source>Microphone is live. Click to mute it.</source>
+        <translation>Microphone is live. Click to mute it.</translation>
+    </message>
+    <message>
+        <source>Microphone muted. Click to unmute it.</source>
+        <translation>Microphone muted. Click to unmute it.</translation>
+    </message>
+    <message>
+        <source>Mic live</source>
+        <translation>Mic live</translation>
+    </message>
+    <message>
+        <source>Mic muted</source>
+        <translation>Mic muted</translation>
+    </message>
 </context>
 <context>
     <name>ApplyOverlay</name>
@@ -298,10 +314,6 @@
 <context>
     <name>CapabilityTable</name>
     <message>
-        <source>Available</source>
-        <translation>Available</translation>
-    </message>
-    <message>
         <source>Unavailable</source>
         <translation>Unavailable</translation>
     </message>
@@ -368,6 +380,10 @@
     <message>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
+    </message>
+    <message>
+        <source>Supported</source>
+        <translation>Supported</translation>
     </message>
 </context>
 <context>
@@ -2645,6 +2661,33 @@
     <message>
         <source>Dish %1 · TinkerNorth · LGPL-3.0</source>
         <translation>Dish %1 · TinkerNorth · LGPL-3.0</translation>
+    </message>
+</context>
+<context>
+    <name>LinkVocabulary</name>
+    <message>
+        <source>Fastest</source>
+        <translation>Fastest</translation>
+    </message>
+    <message>
+        <source>Fast</source>
+        <translation>Fast</translation>
+    </message>
+    <message>
+        <source>Basic</source>
+        <translation>Basic</translation>
+    </message>
+    <message>
+        <source>Satellite update recommended</source>
+        <translation>Satellite update recommended</translation>
+    </message>
+    <message>
+        <source>Satellite update required</source>
+        <translation>Satellite update required</translation>
+    </message>
+    <message>
+        <source>Dish update required</source>
+        <translation>Dish update required</translation>
     </message>
 </context>
 <context>
