@@ -9,6 +9,9 @@
 
 #include "core/moonlight/MoonlightSessionUi.h"
 #include "core/reducer/ConnectionRows.h"
+#include "core/reducer/LinkTier.h"
+#include "core/reducer/MicIndicatorState.h"
+#include "core/reducer/ProtocolNegotiation.h"
 #include "core/reducer/SatelliteLinkState.h"
 
 #include <QString>
@@ -153,6 +156,48 @@ inline QString moonlightTrustToken(moonlight::TrustState t) {
         return QStringLiteral("remembered");
     case moonlight::TrustState::NotPaired:
         return QStringLiteral("notPaired");
+    }
+    return {};
+}
+
+inline QString tierToken(reducer::LinkTier t) {
+    switch (t) {
+    case reducer::LinkTier::Fastest:
+        return QStringLiteral("fastest");
+    case reducer::LinkTier::Fast:
+        return QStringLiteral("fast");
+    case reducer::LinkTier::Basic:
+        return QStringLiteral("basic");
+    }
+    return {};
+}
+
+// "unknown" and "current" both render as no chip; they are distinct tokens so
+// a test can tell "never negotiated" from "negotiated and fine".
+inline QString compatToken(reducer::ProtocolCompat c) {
+    switch (c) {
+    case reducer::ProtocolCompat::Unknown:
+        return QStringLiteral("unknown");
+    case reducer::ProtocolCompat::Current:
+        return QStringLiteral("current");
+    case reducer::ProtocolCompat::SatelliteUpdateAvailable:
+        return QStringLiteral("satelliteUpdateAvailable");
+    case reducer::ProtocolCompat::SatelliteUpdateRequired:
+        return QStringLiteral("satelliteUpdateRequired");
+    case reducer::ProtocolCompat::DishUpdateRequired:
+        return QStringLiteral("dishUpdateRequired");
+    }
+    return {};
+}
+
+inline QString micIndicatorToken(reducer::MicIndicatorState s) {
+    switch (s) {
+    case reducer::MicIndicatorState::Hidden:
+        return QStringLiteral("hidden");
+    case reducer::MicIndicatorState::Live:
+        return QStringLiteral("live");
+    case reducer::MicIndicatorState::Muted:
+        return QStringLiteral("muted");
     }
     return {};
 }

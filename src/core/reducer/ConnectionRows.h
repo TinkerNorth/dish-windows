@@ -11,8 +11,10 @@
 
 namespace dish::reducer {
 
-// Only Satellite is wired: this client is physical-controllers-only.
-enum class ConnectionKind { Satellite };
+// The composer only builds Satellite rows (Moonlight hosts render through
+// MoonlightManager's own rows), but the kind names both so the link-tier
+// ladder (LinkTier.h) ranks one enum rather than two that happen to agree.
+enum class ConnectionKind { Satellite, Moonlight };
 
 // Icon keys the UI resolves to Qt resources.
 enum class ConnectionGlyph { SatelliteBase, SatelliteConnected, SatelliteOff };

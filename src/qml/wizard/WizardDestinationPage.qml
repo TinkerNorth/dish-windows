@@ -142,6 +142,7 @@ ColumnLayout {
 
     // The trust words, shared with the hosts screen and the binding editor.
     MoonlightVocabulary { id: vocab }
+    LinkVocabulary { id: linkVocab }
 
     Connections {
         target: App
@@ -233,6 +234,8 @@ ColumnLayout {
             required property string ip
             required property string chip
             required property string dotColor
+            required property string tier
+            required property string compat
 
             readonly property bool needsPin: rememberedRow.chip === "needsPairing"
                                              || rememberedRow.chip === "found"
@@ -247,6 +250,21 @@ ColumnLayout {
 
             onPicked: page.pick(rememberedRow.connectionId, rememberedRow.label,
                                 rememberedRow.needsPin)
+
+            // The rank cue, and the protocol chip when the last negotiation
+            // had something to say about this satellite.
+            Row {
+                spacing: Tokens.s2
+                Kit.CapabilityChip {
+                    text: linkVocab.tierText(rememberedRow.tier)
+                    tone: linkVocab.tierTone(rememberedRow.tier)
+                }
+                Kit.CapabilityChip {
+                    visible: text.length > 0
+                    text: linkVocab.compatText(rememberedRow.compat)
+                    tone: linkVocab.compatTone(rememberedRow.compat)
+                }
+            }
         }
     }
 
@@ -269,6 +287,11 @@ ColumnLayout {
             chipTone: Kit.CapabilityChip.Warn
 
             onPicked: page.pick(foundRow.modelData.id, foundRow.modelData.name, true)
+
+            Kit.CapabilityChip {
+                text: linkVocab.tierText(foundRow.modelData.tier)
+                tone: linkVocab.tierTone(foundRow.modelData.tier)
+            }
         }
     }
 
@@ -307,6 +330,11 @@ ColumnLayout {
             chipTone: vocab.trustTone(moonlightRow.trust)
 
             onPicked: page.pickMoonlight(moonlightRow.modelData.id, moonlightRow.modelData.name)
+
+            Kit.CapabilityChip {
+                text: linkVocab.tierText(moonlightRow.modelData.tier)
+                tone: linkVocab.tierTone(moonlightRow.modelData.tier)
+            }
         }
     }
 

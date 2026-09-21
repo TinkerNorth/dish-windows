@@ -229,6 +229,11 @@ Kit.Page {
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Kit.CapabilityChip {
+                            text: linkVocab.tierText(host.modelData.tier)
+                            tone: linkVocab.tierTone(host.modelData.tier)
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Kit.CapabilityChip {
                             text: vocab.trustText(host.trust)
                             tone: vocab.trustTone(host.trust)
                             Layout.alignment: Qt.AlignVCenter
@@ -520,4 +525,5 @@ Kit.Page {
     // Shared with the destination step and the binding editor, so the three
     // surfaces that show a trust chip cannot drift apart on what it says.
     MoonlightVocabulary { id: vocab }
+    LinkVocabulary { id: linkVocab }
 }
