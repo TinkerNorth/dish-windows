@@ -765,7 +765,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Moonlight hosts</translation>
+        <translation>Moonlight hosts</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -2690,25 +2690,25 @@
     </message>
     <message numerus="yes">
         <source>%n found</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n found</numerusform>
             <numerusform>%n found</numerusform>
         </translation>
     </message>
     <message numerus="yes">
         <source>%n paired</source>
-        <translation type="unfinished">
+        <translation>
             <numerusform>%n paired</numerusform>
             <numerusform>%n paired</numerusform>
         </translation>
     </message>
     <message>
         <source>Found</source>
-        <translation type="unfinished">Found</translation>
+        <translation>Found</translation>
     </message>
     <message>
         <source>scanning…</source>
-        <translation type="unfinished">scanning…</translation>
+        <translation>scanning…</translation>
     </message>
     <message>
         <source>Add by address…</source>
@@ -2716,11 +2716,11 @@
     </message>
     <message>
         <source>Scanning…</source>
-        <translation type="unfinished">Scanning…</translation>
+        <translation>Scanning…</translation>
     </message>
     <message>
         <source>Scan</source>
-        <translation type="unfinished">Scan</translation>
+        <translation>Scan</translation>
     </message>
     <message>
         <source>Looking for Moonlight hosts</source>
@@ -2752,23 +2752,23 @@
     </message>
     <message>
         <source>Pair…</source>
-        <translation type="unfinished">Pair…</translation>
+        <translation>Pair…</translation>
     </message>
     <message>
         <source>More actions for %1</source>
-        <translation type="unfinished">More actions for %1</translation>
+        <translation>More actions for %1</translation>
     </message>
     <message>
         <source>Forget</source>
-        <translation type="unfinished">Forget</translation>
+        <translation>Forget</translation>
     </message>
     <message>
         <source>Forget %1?</source>
-        <translation type="unfinished">Forget %1?</translation>
+        <translation>Forget %1?</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancel</translation>
+        <translation>Cancel</translation>
     </message>
     <message>
         <source>Moonlight host</source>
@@ -2796,11 +2796,11 @@
     </message>
     <message>
         <source>Pairing</source>
-        <translation type="unfinished">Pairing</translation>
+        <translation>Pairing</translation>
     </message>
     <message>
         <source>Pair with %1</source>
-        <translation type="unfinished">Pair with %1</translation>
+        <translation>Pair with %1</translation>
     </message>
     <message>
         <source>Done</source>
@@ -2820,7 +2820,7 @@
     </message>
     <message>
         <source>New code</source>
-        <translation type="unfinished">New code</translation>
+        <translation>New code</translation>
     </message>
     <message>
         <source>In use by %1</source>
@@ -2854,19 +2854,19 @@
     <name>MoonlightVocabulary</name>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Paired</translation>
+        <translation>Paired</translation>
     </message>
     <message>
         <source>Remembered</source>
-        <translation type="unfinished">Remembered</translation>
+        <translation>Remembered</translation>
     </message>
     <message>
         <source>Not paired</source>
-        <translation type="unfinished">Not paired</translation>
+        <translation>Not paired</translation>
     </message>
     <message>
         <source>Auto</source>
-        <translation type="unfinished">Auto</translation>
+        <translation>Auto</translation>
     </message>
 </context>
 <context>
@@ -3238,6 +3238,22 @@
         <source>Read the release notes for this version.</source>
         <translation>Read the release notes for this version.</translation>
     </message>
+    <message>
+        <source>Window</source>
+        <translation>Window</translation>
+    </message>
+    <message>
+        <source>Keep running in the background</source>
+        <translation>Keep running in the background</translation>
+    </message>
+    <message>
+        <source>Closing the window keeps controllers streaming. Quit from the tray icon.</source>
+        <translation>Closing the window keeps controllers streaming. Quit from the tray icon.</translation>
+    </message>
+    <message>
+        <source>The notification area refused the icon, so closing the window quits Dish.</source>
+        <translation>The notification area refused the icon, so closing the window quits Dish.</translation>
+    </message>
 </context>
 <context>
     <name>SetupWizardPage</name>
@@ -3436,7 +3452,7 @@
     </message>
     <message>
         <source>Couldn’t apply the binding.</source>
-        <translation type="unfinished">Couldn’t apply the binding.</translation>
+        <translation>Couldn’t apply the binding.</translation>
     </message>
 </context>
 <context>
@@ -3783,7 +3799,7 @@
     </message>
     <message>
         <source>Moonlight hosts</source>
-        <translation type="unfinished">Moonlight hosts</translation>
+        <translation>Moonlight hosts</translation>
     </message>
     <message>
         <source>Moonlight host · %1</source>
@@ -3791,7 +3807,7 @@
     </message>
     <message>
         <source>No Moonlight hosts found</source>
-        <translation type="unfinished">No Moonlight hosts found</translation>
+        <translation>No Moonlight hosts found</translation>
     </message>
     <message>
         <source>A PC appears here once Sunshine, Apollo or Wolf is running on it and both machines are on the same network. You can also add one by address.</source>
@@ -3799,7 +3815,7 @@
     </message>
     <message>
         <source>Get Sunshine ↗</source>
-        <translation type="unfinished">Get Sunshine ↗</translation>
+        <translation>Get Sunshine ↗</translation>
     </message>
 </context>
 <context>
@@ -3874,19 +3890,19 @@
     </message>
     <message>
         <source>Microphone</source>
-        <translation type="unfinished">Microphone</translation>
+        <translation>Microphone</translation>
     </message>
     <message>
         <source>The pad’s mic carries your voice to the host. Off sends nothing.</source>
-        <translation type="unfinished">The pad’s mic carries your voice to the host. Off sends nothing.</translation>
+        <translation>The pad’s mic carries your voice to the host. Off sends nothing.</translation>
     </message>
     <message>
         <source>Controller sound</source>
-        <translation type="unfinished">Controller sound</translation>
+        <translation>Controller sound</translation>
     </message>
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
-        <translation type="unfinished">Audio from the host plays on the pad’s speaker or headset.</translation>
+        <translation>Audio from the host plays on the pad’s speaker or headset.</translation>
     </message>
 </context>
 <context>
@@ -4123,7 +4139,7 @@
     <name>WizardSessionPage</name>
     <message>
         <source>Continue ›</source>
-        <translation type="unfinished">Continue ›</translation>
+        <translation>Continue ›</translation>
     </message>
     <message>
         <source>Unbind a controller on this host to make room.</source>
@@ -4259,15 +4275,15 @@
     </message>
     <message>
         <source>Session</source>
-        <translation type="unfinished">Session</translation>
+        <translation>Session</translation>
     </message>
     <message>
         <source>New code</source>
-        <translation type="unfinished">New code</translation>
+        <translation>New code</translation>
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="unfinished">Cancel</translation>
+        <translation>Cancel</translation>
     </message>
     <message>
         <source>streaming</source>
@@ -4275,7 +4291,7 @@
     </message>
     <message>
         <source>Paired</source>
-        <translation type="unfinished">Paired</translation>
+        <translation>Paired</translation>
     </message>
     <message>
         <source>Close the app on %1</source>
@@ -4291,7 +4307,7 @@
     </message>
     <message>
         <source>Retry</source>
-        <translation type="unfinished">Retry</translation>
+        <translation>Retry</translation>
     </message>
     <message>
         <source>Could not read the app list from %1</source>
@@ -4331,7 +4347,7 @@
     </message>
     <message>
         <source>Reconnect</source>
-        <translation type="unfinished">Reconnect</translation>
+        <translation>Reconnect</translation>
     </message>
     <message>
         <source>Start a session</source>
@@ -4445,6 +4461,17 @@
     </message>
 </context>
 <context>
+    <name>dish::composer::BackgroundCoordinator</name>
+    <message>
+        <source>Dish is still running</source>
+        <translation>Dish is still running</translation>
+    </message>
+    <message>
+        <source>Controllers keep streaming. Quit from the tray icon.</source>
+        <translation>Controllers keep streaming. Quit from the tray icon.</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4524,6 +4551,25 @@
     <message>
         <source>System</source>
         <translation>System</translation>
+    </message>
+</context>
+<context>
+    <name>dish::source::Win32TrayIcon</name>
+    <message numerus="yes">
+        <source>Dish · %n controllers streaming</source>
+        <extracomment>The tray item&apos;s tooltip while controllers stream; %n is the count.</extracomment>
+        <translation>
+            <numerusform>Dish · %n controller streaming</numerusform>
+            <numerusform>Dish · %n controllers streaming</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Show Dish</source>
+        <translation>Show Dish</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Quit</translation>
     </message>
 </context>
 </TS>
