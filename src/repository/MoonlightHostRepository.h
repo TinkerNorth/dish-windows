@@ -6,14 +6,17 @@
 // server certificate. Co-tenants the shared connection-store QSettings file,
 // kept disjoint from the Satellite keys by the prefixes in SettingsKeys.h.
 //
-// The private key is stored as PLAINTEXT PEM in the user's hive, no DPAPI wrap,
-// the same documented trade-off as the Satellite pairing key (see PRIVACY.md /
-// SECURITY.md). It only authorises input to a host the user has already paired.
+// The private key is stored wrapped by the platform cipher (DPAPI, scoped to
+// the Windows account), exactly like the Satellite pairing key; the
+// certificate beside it is public and stays as it is. A key an older build
+// wrote in plaintext is wrapped in place on construction. `cipher` is injected
+// for the tests; null means the real DPAPI.
 
 #pragma once
 
 #include "Network/MoonlightHost.h"
 #include "core/moonlight/MoonlightIdentity.h"
+#include "source/system/SecretCipher.h"
 
 #include <QList>
 #include <QSettings>
@@ -28,7 +31,8 @@ namespace dish::repository {
 class MoonlightHostRepository {
   public:
     // nullptr backs it on the shared HKCU store; tests pass a temp QSettings.
-    explicit MoonlightHostRepository(std::shared_ptr<QSettings> settings = nullptr);
+    explicit MoonlightHostRepository(std::shared_ptr<QSettings> settings = nullptr,
+                                     std::shared_ptr<source::SecretCipher> cipher = nullptr);
 
     // The client's Moonlight identity, generated and persisted on first call.
     // nullopt only if generation failed (an OpenSSL error).
@@ -71,7 +75,10 @@ class MoonlightHostRepository {
     QList<models::MoonlightBinding> readBindings() const; // assumes mutex_ held
     void writeBindings(const QList<models::MoonlightBinding>& bindings);
 
+    void wrapLegacyKey(); // assumes mutex_ held
+
     std::shared_ptr<QSettings> settings_;
+    std::shared_ptr<source::SecretCipher> cipher_;
     mutable std::mutex mutex_;
 };
 

@@ -362,6 +362,12 @@ set(DISH_CORE_SOURCES
     src/repository/SatellitePinRepository.cpp
     src/repository/SatelliteSharedKeyRepository.h
     src/repository/SatelliteSharedKeyRepository.cpp
+    # Secrets at rest: the cipher seam, its DPAPI implementation and the
+    # stored shape the two secret-holding repositories share.
+    src/repository/SecretValue.h
+    src/source/system/SecretCipher.h
+    src/source/system/DpapiSecretCipher.h
+    src/source/system/DpapiSecretCipher.cpp
     src/repository/RememberedSatelliteRepository.h
     src/repository/RememberedSatelliteRepository.cpp
     src/repository/ConnectionStore.h
@@ -526,6 +532,8 @@ target_link_libraries(dish_core
         # BluetoothRadioProbe. Its header also carries a #pragma comment(lib)
         # under MSVC; naming it here keeps the link set owned by one file.
         bthprops
+        # DpapiSecretCipher: CryptProtectData / CryptUnprotectData.
+        crypt32
     PRIVATE
         dish_warnings
         dish_strict)

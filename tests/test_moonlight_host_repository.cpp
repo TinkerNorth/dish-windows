@@ -9,6 +9,10 @@
 
 #include <utility>
 
+#include "FakeSecretCipher.h"
+#include "repository/SecretValue.h"
+#include "repository/SettingsKeys.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 using dish::models::MoonlightHost;
@@ -210,4 +214,65 @@ TEST_CASE("Forgetting a host retires the bindings that drove it", "[moonlight][r
     // Forgetting a host nothing drove is not an error and touches nothing.
     repo.forgetBindingsForHost(QStringLiteral("ml:ip:10.0.0.1"));
     REQUIRE(repo.bindings().size() == 1);
+}
+
+TEST_CASE("Moonlight identity: the private key is stored wrapped, the certificate is not",
+          "[moonlight][repo][secret]") {
+    auto settings = dish::test::makeSharedSettings();
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    MoonlightHostRepository repo(settings, cipher);
+    const auto id = repo.getOrCreateIdentity();
+    REQUIRE(id.has_value());
+
+    namespace keys = dish::repository::keys;
+    const QString storedKey = settings->value(QLatin1String(keys::kMoonlightKeyKey)).toString();
+    const QString storedCert = settings->value(QLatin1String(keys::kMoonlightCertKey)).toString();
+    CHECK(dish::repository::secret::isWrapped(storedKey));
+    CHECK_FALSE(storedKey.contains(QStringLiteral("PRIVATE KEY")));
+    CHECK_FALSE(dish::repository::secret::isWrapped(storedCert));
+    CHECK(storedCert.toStdString() == id->certPem);
+
+    // Reads back through the cipher, on a fresh repository over the same store.
+    const auto again = MoonlightHostRepository(settings, cipher).getOrCreateIdentity();
+    REQUIRE(again.has_value());
+    CHECK(again->privateKeyPem == id->privateKeyPem);
+}
+
+TEST_CASE("Moonlight identity: a plaintext key from an older build is wrapped in place",
+          "[moonlight][repo][secret][migration]") {
+    auto settings = dish::test::makeSharedSettings();
+    namespace keys = dish::repository::keys;
+    // Stand-ins, not real PEM: the repository wraps whatever the older build
+    // stored without reading it, and a PEM-shaped literal would trip the
+    // repository's own secret scan.
+    const QString legacyCert = QStringLiteral("certificate-from-an-older-build");
+    const QString legacyKey = QStringLiteral("key-material-from-an-older-build");
+    settings->setValue(QLatin1String(keys::kMoonlightCertKey), legacyCert);
+    settings->setValue(QLatin1String(keys::kMoonlightKeyKey), legacyKey);
+
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    MoonlightHostRepository repo(settings, cipher);
+    const QString storedKey = settings->value(QLatin1String(keys::kMoonlightKeyKey)).toString();
+    CHECK(dish::repository::secret::isWrapped(storedKey));
+    CHECK_FALSE(storedKey.contains(legacyKey));
+    // The same identity, not a fresh one: every paired host keeps recognising us.
+    const auto id = repo.getOrCreateIdentity();
+    REQUIRE(id.has_value());
+    CHECK(id->certPem == legacyCert.toStdString());
+    CHECK(id->privateKeyPem == legacyKey.toStdString());
+}
+
+TEST_CASE("Moonlight identity: a key this account cannot open is replaced by a fresh one",
+          "[moonlight][repo][secret]") {
+    auto settings = dish::test::makeSharedSettings();
+    auto cipher = std::make_shared<dish::test::FakeSecretCipher>();
+    const auto first = MoonlightHostRepository(settings, cipher).getOrCreateIdentity();
+    REQUIRE(first.has_value());
+
+    cipher->failUnprotect = true;
+    MoonlightHostRepository repo(settings, cipher);
+    const auto second = repo.getOrCreateIdentity();
+    REQUIRE(second.has_value());
+    CHECK(second->certPem != first->certPem);
+    CHECK(second->privateKeyPem != first->privateKeyPem);
 }
