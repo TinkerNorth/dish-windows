@@ -52,6 +52,7 @@ set(DISH_TEST_SOURCES
     test_satellite_tls_verifier.cpp
     test_pin_repository.cpp
     test_shared_key_repository.cpp
+    test_dpapi_secret_cipher.cpp
     test_remembered_satellite_repository.cpp
     test_connection_store_identity.cpp
     test_remembered_reconnect.cpp
