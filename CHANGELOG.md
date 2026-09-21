@@ -21,7 +21,7 @@ share a version number.
 
 ---
 
-## [Unreleased]
+## [2.1.0] - 2026-09-21
 
 ### Security
 
@@ -577,7 +577,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.0.0...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.1.0...main
+[2.1.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.1.0
 [2.0.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.0.0
 [1.1.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/1.1.0
 [1.0.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/1.0.0
