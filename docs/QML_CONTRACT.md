@@ -124,6 +124,8 @@ project it so the type picker can tell loading from empty from failed.
 |---|---|---|---|
 | `themeMode` | `int` (RW) | `themeModeChanged` | `0` Light, `1` Dark, `2` System. |
 | `crashReportingEnabled` | `bool` (RW) | `crashReportingChanged` | Crash-reporting opt-out. Default on. |
+| `runInBackground` | `bool` (RW) | `runInBackgroundChanged` | Whether closing the window hides it behind the tray icon instead of quitting. Default on; only takes effect while `trayAvailable`. |
+| `trayAvailable` | `bool` | `trayAvailableChanged` | The shell accepted the notification-area icon. False means a close has to quit, and the Settings row says so. |
 | `railCollapsed` | `bool` (RW) | `railCollapsedChanged` | The nav rail's persisted collapse state. The title-bar hamburger writes it. |
 | `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding: true is "Follow game", false is "Off". |
 | `keepAwakeMode` | `int` (RW) | `keepAwakePrefsChanged` | `0` Never, `1` While playing (streaming **and** a controller actuated inside the idle window), `2` While connected (streaming, however long the pad sits still). Out-of-range reads back as `1`: a bad value must never pin the machine awake. |
@@ -175,6 +177,10 @@ and how long it has been running.
 | `emulateStateChanged` | | The catalog fetch moved. |
 | `themeModeChanged` | | `themeMode` moved. |
 | `crashReportingChanged` | | `crashReportingEnabled` moved. |
+| `runInBackgroundChanged` | | `runInBackground` moved. |
+| `trayAvailableChanged` | | `trayAvailable` moved. |
+| `showWindowRequested` | | The tray item asked for the window: `show()`, `raise()`, `requestActivate()`. |
+| `quitRequested` | | The tray item's Quit: run `approveClose()`, the one real quit path. |
 | `onboardingNeededChanged` | | `onboardingNeeded` flipped. |
 | `railCollapsedChanged` | | `railCollapsed` flipped. |
 | `lightbarChanged` | | `lightbarFollowGame` flipped. |
@@ -221,6 +227,8 @@ because the slot-keyed reads vend nothing before a binding exists.
 | `startDiscovery()` | | Begin a satellite discovery scan. |
 | `isScanning()` | → `bool` | Point-in-time scan flag. Prefer the reactive `scanning` property for bindings. |
 | `discoveredServers()` | → `list` | The FOUND list as an explicit re-pull. Prefer the reactive property. |
+| `requestWindowClose()` | → `bool` | The close policy. True means hide the window and return; false means run the leave guard and the keep-awake confirm as before. Not a query: a true answer spends the one-time "still running" balloon. |
+| `setWindowVisible(visible)` | `bool` | Published from `onVisibleChanged`; the tray item's presentation is derived from it. |
 | `toggleAllMics()` | | The mic chip's click: mutes every armed slot when `micIndicator` is `live`, unmutes every armed slot when it is `muted`, a no-op when `hidden`. All-or-nothing, like the chip's one state; each slot goes through the same door as `toggleSlotMicMute`. |
 | `discoverySourceFor(serverId)` | `string` → `string` | The discovery-source label, addressable by id. |
 | `connectByServerId(serverId)` | `string` | Connect to the discovered server with that stable id. Resolved out of the live list, so it cannot act on a stale index; a no-op when not found. |

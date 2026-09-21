@@ -3281,6 +3281,22 @@
         <source>Read the release notes for this version.</source>
         <translation>Consultez les notes de cette version.</translation>
     </message>
+    <message>
+        <source>Window</source>
+        <translation>Fenêtre</translation>
+    </message>
+    <message>
+        <source>Keep running in the background</source>
+        <translation>Continuer à s&apos;exécuter en arrière-plan</translation>
+    </message>
+    <message>
+        <source>Closing the window keeps controllers streaming. Quit from the tray icon.</source>
+        <translation>Fermer la fenêtre laisse les manettes diffuser. Quittez depuis l&apos;icône de la zone de notification.</translation>
+    </message>
+    <message>
+        <source>The notification area refused the icon, so closing the window quits Dish.</source>
+        <translation>La zone de notification a refusé l&apos;icône, donc fermer la fenêtre quitte Dish.</translation>
+    </message>
 </context>
 <context>
     <name>SetupWizardPage</name>
@@ -4488,6 +4504,17 @@
     </message>
 </context>
 <context>
+    <name>dish::composer::BackgroundCoordinator</name>
+    <message>
+        <source>Dish is still running</source>
+        <translation>Dish est toujours en cours d&apos;exécution</translation>
+    </message>
+    <message>
+        <source>Controllers keep streaming. Quit from the tray icon.</source>
+        <translation>Les manettes continuent de diffuser. Quittez depuis l&apos;icône de la zone de notification.</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4567,6 +4594,25 @@
     <message>
         <source>System</source>
         <translation>Système</translation>
+    </message>
+</context>
+<context>
+    <name>dish::source::Win32TrayIcon</name>
+    <message numerus="yes">
+        <source>Dish · %n controllers streaming</source>
+        <extracomment>The tray item&apos;s tooltip while controllers stream; %n is the count.</extracomment>
+        <translation>
+            <numerusform>Dish · %n manette diffuse</numerusform>
+            <numerusform>Dish · %n manettes diffusent</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Show Dish</source>
+        <translation>Afficher Dish</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Quitter</translation>
     </message>
 </context>
 </TS>

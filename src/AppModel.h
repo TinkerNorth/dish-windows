@@ -15,7 +15,11 @@
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
 #include "composer/CrashReportingBackend.h"
+#include "composer/BackgroundCoordinator.h"
 #include "composer/CrashReportingController.h"
+#include "composer/SleepCoordinator.h"
+#include "composer/TrayComposer.h"
+#include "composer/TrayController.h"
 #include "composer/ThemeController.h"
 #include "composer/WakeStateComposer.h"
 #include "composer/WakeStateController.h"
@@ -37,6 +41,7 @@
 #include "source/inputrate/InputRateStore.h"
 #include "source/http/SatelliteCatalogRepository.h"
 #include "source/store/ControllerTypeStore.h"
+#include "source/store/BackgroundPreferenceStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/JoystickRemapStore.h"
 #include "source/store/KeepAwakePreferenceStore.h"
@@ -48,7 +53,10 @@
 #include "source/store/ThemePreferenceStore.h"
 #include "source/store/UpdatePreferenceStore.h"
 #include "source/store/UsbPathPreferenceStore.h"
+#include "source/system/SleepMonitor.h"
 #include "source/system/WakeInhibitor.h"
+#include "source/tray/TrayBalloonNotifier.h"
+#include "source/tray/Win32TrayIcon.h"
 #include "source/usb/UsbGamepadManager.h"
 #include "source/usb/WinHidGateway.h"
 #include "update/UpdateCoordinator.h"
@@ -113,6 +121,10 @@ class AppModel : public QObject {
     source::OnboardingPreferenceStore* onboardingStore() { return &onboardingStore_; }
     source::ThemePreferenceStore* themeStore() { return &themeStore_; }
     source::CrashReportingStore* crashStore() { return &crashStore_; }
+    source::BackgroundPreferenceStore* backgroundStore() { return &backgroundStore_; }
+    // The close policy, the tray's two commands and the window-visible fact the
+    // tray item is derived from.
+    composer::BackgroundCoordinator* background() { return backgroundCoordinator_; }
 
     // The auto-updater. The store is the reactive preference slice the Settings
     // page binds to; the coordinator owns the state machine, the timers and the
@@ -436,6 +448,19 @@ class AppModel : public QObject {
     composer::SentryCrashReportingBackend crashBackend_;
     composer::ThemeController themeController_;
     composer::CrashReportingController crashController_;
+
+    // Declaration order matters: the coordinators borrow the store, the tray and
+    // the notifier, and the tray composer captures the coordinator's Observable.
+    // The tray is the concrete Win32 item because the notifier is its balloon;
+    // everything above it only sees source::TrayIcon.
+    std::unique_ptr<source::Win32TrayIcon> tray_;
+    std::unique_ptr<source::DesktopNotifier> notifier_;
+    std::unique_ptr<source::SleepMonitor> sleepMonitor_;
+    source::BackgroundPreferenceStore backgroundStore_;
+    composer::BackgroundCoordinator* backgroundCoordinator_;
+    composer::SleepCoordinator* sleepCoordinator_;
+    composer::TrayComposer trayComposer_;
+    composer::TrayController trayController_;
 
     // Declaration order matters: the coordinator subscribes to the store's
     // Observable, so the store must outlive it.

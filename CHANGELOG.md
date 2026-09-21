@@ -25,6 +25,20 @@ share a version number.
 
 ### Added
 
+- **Running in the background.** Closing the window leaves Dish streaming
+  behind a notification-area icon whose menu is the way back (*Show Dish*) and
+  the way out (*Quit*); a click on the icon brings the window back, and a
+  one-time balloon says so the first time it happens. The hide is gated on the
+  shell actually accepting the icon, so a session where it refused keeps
+  quitting on close rather than stranding a running process with no window
+  and no menu; the icon comes back when Explorer restarts. *Keep running in
+  the background* in Settings turns it off. Dish for Linux has had this since
+  0.1.2; this is the same design on Win32.
+- **Sleep and resume.** A suspend (`PBT_APMSUSPEND`) closes the satellite
+  sessions before the machine goes down, and the resume rescans and re-opens
+  them instead of waiting out the ~10 s heartbeat death. Tearing down first is
+  load-bearing: a session the machine slept through comes back Faltering,
+  which slips past both reconnect guards, so nothing would ever reopen it.
 - **The link-tier cue.** Every host row (Connections, Moonlight hosts, the
   wizard's destination step) carries the rank its link has, the same
   three-word ladder Dish for Android draws: a Satellite link is *Fastest*, a

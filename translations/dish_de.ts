@@ -3281,6 +3281,22 @@
         <source>Read the release notes for this version.</source>
         <translation>Lies die Versionshinweise zu dieser Version.</translation>
     </message>
+    <message>
+        <source>Window</source>
+        <translation>Fenster</translation>
+    </message>
+    <message>
+        <source>Keep running in the background</source>
+        <translation>Im Hintergrund weiterlaufen</translation>
+    </message>
+    <message>
+        <source>Closing the window keeps controllers streaming. Quit from the tray icon.</source>
+        <translation>Beim Schließen des Fensters streamen die Controller weiter. Beenden geht über das Taskleistensymbol.</translation>
+    </message>
+    <message>
+        <source>The notification area refused the icon, so closing the window quits Dish.</source>
+        <translation>Der Infobereich hat das Symbol abgelehnt, daher beendet das Schließen des Fensters Dish.</translation>
+    </message>
 </context>
 <context>
     <name>SetupWizardPage</name>
@@ -4488,6 +4504,17 @@
     </message>
 </context>
 <context>
+    <name>dish::composer::BackgroundCoordinator</name>
+    <message>
+        <source>Dish is still running</source>
+        <translation>Dish läuft noch</translation>
+    </message>
+    <message>
+        <source>Controllers keep streaming. Quit from the tray icon.</source>
+        <translation>Controller streamen weiter. Beenden geht über das Taskleistensymbol.</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4567,6 +4594,25 @@
     <message>
         <source>System</source>
         <translation>System</translation>
+    </message>
+</context>
+<context>
+    <name>dish::source::Win32TrayIcon</name>
+    <message numerus="yes">
+        <source>Dish · %n controllers streaming</source>
+        <extracomment>The tray item&apos;s tooltip while controllers stream; %n is the count.</extracomment>
+        <translation>
+            <numerusform>Dish · %n Controller streamt</numerusform>
+            <numerusform>Dish · %n Controller streamen</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Show Dish</source>
+        <translation>Dish anzeigen</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Beenden</translation>
     </message>
 </context>
 </TS>
