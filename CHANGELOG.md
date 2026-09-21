@@ -23,6 +23,18 @@ share a version number.
 
 ## [Unreleased]
 
+### Security
+
+- **Pairing secrets are encrypted at rest.** The satellite pairing key and the
+  Moonlight client's private key were stored as plain text in the registry
+  hive, a documented trade-off that this client alone in the family made
+  (Linux keeps them in the keyring, Android in the Keystore, macOS in the
+  Keychain). They are now wrapped with the Windows Data Protection API for
+  your account: another account on the PC, or a copy of the hive taken
+  elsewhere, cannot open them, while a program running as you still can,
+  which is the same reach every sibling store has. Keys an older build stored
+  are wrapped in place on the first run, so nobody re-pairs for this.
+
 ### Added
 
 - **DualSense HD haptics over Satellite.** `[wire-coordinated]` Protocol 3. A

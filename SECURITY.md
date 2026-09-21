@@ -125,8 +125,10 @@ server spend cycles on packets that fail authentication.
   error go away without knowing which.
 - Assume the fact and the volume of your session are observable.
 - Nothing here defends against an attacker who already has code execution on
-  this PC. Configuration lives in `HKCU\Software\TinkerNorth\Dish`, and the
-  pairing key is stored there for anyone running as you.
+  this PC. Configuration lives in `HKCU\Software\TinkerNorth\Dish`. The
+  pairing key and the Moonlight private key are stored there encrypted with
+  DPAPI for your account, which keeps another account or a copied hive out
+  and does nothing against a program running as you.
 
 ## How CI keeps vulnerable code out
 
