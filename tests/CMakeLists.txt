@@ -110,6 +110,16 @@ set(DISH_TEST_SOURCES
     test_motion_indicator_state.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
+    test_sleep_cycle.cpp
+    test_sleep_coordinator.cpp
+    test_windows_power_sleep_monitor.cpp
+    test_tray_presentation.cpp
+    test_tray_composer.cpp
+    test_tray_controller.cpp
+    test_win32_tray_icon.cpp
+    test_background_mode.cpp
+    test_background_preference_store.cpp
+    test_background_coordinator.cpp
     test_satellite_client_rumble.cpp
     test_satellite_client_motion.cpp
     test_satellite_client_touchpad.cpp

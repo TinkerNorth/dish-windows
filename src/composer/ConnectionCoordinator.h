@@ -57,6 +57,12 @@ class ConnectionCoordinator : public QObject {
     // forgetConnection, which drops them.
     void disconnectConnection(const QString& connectionId);
 
+    // The suspend edge's two commands (composer/SleepCoordinator): close every
+    // session before the machine goes down, reopen from the remembered list
+    // once it is back.
+    void prepareForSleep();
+    void resumeFromSleep();
+
   signals:
     // A Qt bridge for consumers that can't hold an Observable subscription. The
     // authoritative value is always connections().value().
