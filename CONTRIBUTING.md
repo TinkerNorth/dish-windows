@@ -76,9 +76,11 @@ Linguist is missing. `CMAKE_PREFIX_PATH` must point at the Qt prefix
 checkout. `scripts\install-deps.ps1` persists both.
 
 The pre-commit hook (`.githooks/pre-commit`) runs `clang-format -i` on staged
-C++ files and re-stages them, then runs `clang-tidy -p build` in advisory
-mode. It skips whichever tool is missing rather than failing. It runs under Git
-for Windows' bundled bash; no WSL required.
+C++ files and re-stages them, then runs CI's clang-tidy gate
+(`scripts/check-tidy.ps1`) over the staged sources in its file set, so a
+finding stops the commit before it would stop the pull request. It skips
+whichever tool is missing rather than failing. It runs under Git for Windows'
+bundled bash; no WSL required.
 
 ## License headers
 
@@ -241,9 +243,9 @@ same gates from the same sources):
    `docs/QML_CONTRACT.md`).
 4. `scripts/qml-lint-literals.ps1 -Mode error`.
 5. `scripts/check-translations.ps1`.
-6. `scripts/check-tidy.ps1`: `clang-tidy -p build` over `src/**/*.cpp`
-   excluding `src/UI/`, four wide, against the same Debug tree step 2
-   produced.
+6. `scripts/check-tidy.ps1`: `clang-tidy` over `src/**/*.cpp` excluding
+   `src/UI/`, four wide, against the same Debug tree step 2 produced, with
+   `--warnings-as-errors='*'` so a finding fails the step.
 7. The `release` preset build (`Dish` + `dish_setup_image` into
    `build-release/`), `scripts/stage-bundle.ps1` (the same staging path
    `release.yml` ships), the portable-bundle smoke test,
