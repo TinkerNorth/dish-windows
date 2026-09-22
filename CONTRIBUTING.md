@@ -37,6 +37,12 @@ which are the single source of configure truth for the workflows too: `debug`
 writes to `build\` (CI's tree) and `release` to `build-release\`, and
 `build\compile_commands.json` exists after the first debug build.
 
+A tree configured before CMake 3.25 became the floor still carries `/Zi` in
+its cached Debug flags (the debug-information format is a target property
+now, CMP0141), and the configure refuses it rather than build with D9025 on
+every `dish_core` and `Dish` unit. Delete that tree's `CMakeCache.txt` and
+configure again; once per tree.
+
 `scripts\ci-local.ps1` runs the format gate, the action-pin lint, the debug
 build and tests, qmllint, the QML literal scanner, the translation gate,
 clang-tidy, the release build and the portable-bundle smoke test, exactly as

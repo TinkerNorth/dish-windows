@@ -607,6 +607,25 @@ target_link_libraries(Dish PRIVATE dish_core Qt6::Gui Qt6::Svg dish_warnings dis
 # raw /Z7, so the Debug configuration's own /Zi is replaced instead of overridden
 # on the command line (cl reports that as D9025 on every translation unit).
 if(sentry_FOUND AND MSVC)
+    # CMake fills CMAKE_<LANG>_FLAGS_<CONFIG> once, when a tree is first
+    # configured, and a tree configured before 3.25 became the floor keeps the
+    # /Zi the older default put there. The property would then add /Z7 on top of
+    # it, which is D9025 back on every unit of these two targets, so such a tree
+    # is refused with the one-time remedy instead of built with the warning.
+    foreach(_dish_config IN LISTS CMAKE_CONFIGURATION_TYPES CMAKE_BUILD_TYPE)
+        string(TOUPPER "${_dish_config}" _dish_config)
+        foreach(_dish_lang C CXX)
+            set(_dish_flags_var CMAKE_${_dish_lang}_FLAGS_${_dish_config})
+            if("${${_dish_flags_var}}" MATCHES "[-/]Z[iI]( |$)")
+                message(FATAL_ERROR
+                    "${_dish_flags_var} is \"${${_dish_flags_var}}\": its /Zi would be "
+                    "overridden by the /Z7 dish_core and Dish carry as a target property "
+                    "(D9025 on every translation unit). This build tree was configured before "
+                    "CMake 3.25 became the floor; delete ${CMAKE_BINARY_DIR}/CMakeCache.txt "
+                    "and configure again.")
+            endif()
+        endforeach()
+    endforeach()
     set_target_properties(dish_core Dish PROPERTIES MSVC_DEBUG_INFORMATION_FORMAT Embedded)
     target_link_options(Dish PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
 endif()
