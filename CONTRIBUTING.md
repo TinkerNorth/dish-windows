@@ -266,7 +266,9 @@ Security gates:
   OSV-Scanner over the worktree, and a gitleaks secret scan. All blocking. Also
   runs weekly on a schedule.
 - `dependency-review-action`, in the same workflow, on pull requests only.
-  Blocking.
+  Switched off in `security.yml` (`dependency_review_enabled: false`) until
+  the repository's Dependency graph is enabled in its settings, which the
+  action needs; blocking once it is on.
 - `codeql.yml`: CodeQL `cpp` analysis with the `security-extended` query
   pack, on a Windows runner so MSVC-only constructs are covered. Blocking, and
   the results are uploaded to code scanning.

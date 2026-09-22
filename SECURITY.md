@@ -142,7 +142,9 @@ On every pull request and every push to `main`, blocking:
 - CodeQL `cpp` analysis, `security-extended` query pack, on a Windows runner
   so MSVC-only constructs are covered; the results are uploaded to code
   scanning.
-- GitHub `dependency-review-action` on pull requests.
+- GitHub `dependency-review-action` on pull requests, once the repository's
+  Dependency graph is enabled in its settings; until then the job is switched
+  off in `security.yml`, because the action fails without the graph.
 
 `security.yml` also runs weekly on a schedule. On a release tag, `release.yml`
 re-runs the action-pin lint, allowlist expiry, OSV-Scanner, and gitleaks jobs
