@@ -36,7 +36,7 @@ std::string pemFromBio(BIO* bio) {
     BUF_MEM* mem = nullptr;
     BIO_get_mem_ptr(bio, &mem);
     if (mem == nullptr || mem->data == nullptr) { return {}; }
-    return std::string(mem->data, mem->length);
+    return {mem->data, mem->length};
 }
 
 X509Ptr parseCert(const std::string& pem) {
