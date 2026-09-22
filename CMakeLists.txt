@@ -116,7 +116,15 @@ FetchContent_Declare(
     enet
     GIT_REPOSITORY https://github.com/cgutman/enet.git
     GIT_TAG        44c85e16279553d9c052e572bcbfcd745fb74abf
-    SOURCE_SUBDIR  _dish_no_such_subdir)
+    SOURCE_SUBDIR  _dish_no_such_subdir
+    # Nine `command | flag` ORs of two different enum types, which current
+    # MSVC reports as C5287 (level 1, so at any warning level), get the
+    # explicit casts it asks for. Applied once, at fetch time; see
+    # cmake/PatchEnet.cmake and THIRD_PARTY.md.
+    PATCH_COMMAND  ${CMAKE_COMMAND}
+                   -DENET_SOURCE_DIR=<SOURCE_DIR>
+                   -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/enet-msvc-c5287.patch
+                   -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchEnet.cmake)
 FetchContent_MakeAvailable(enet)
 
 if(NOT enet_SOURCE_DIR OR NOT EXISTS "${enet_SOURCE_DIR}/callbacks.c")
