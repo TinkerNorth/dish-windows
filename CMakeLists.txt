@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 3.21)
+# 3.25 for two things the warning-free build rests on: CMP0141, which hands the
+# MSVC debug-information format to a target property instead of baking /Zi into
+# the Debug flags (so a /Z7 target no longer overrides it, D9025), and the SYSTEM
+# option of FetchContent_Declare, which keeps /W4 /WX off Catch2's headers.
+cmake_minimum_required(VERSION 3.25)
 project(Dish
     VERSION 2.1.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
@@ -6,7 +10,9 @@ project(Dish
     # backend is pure C; everything first-party is C++.
     LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# C++20, in step with dish-linux (where it retires the pedantic warning on
+# Qt's zero-argument streaming log macros).
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -37,9 +43,10 @@ if(DISH_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
     endif()
 endif()
 
-# dish_warnings is applied everywhere including tests; dish_strict adds
-# /WX (-Werror) and is applied only to first-party code, so Catch2's headers
-# can't fail the build.
+# dish_warnings carries the warning set, dish_strict adds /WX (-Werror). Both
+# apply to every first-party target, tests included; third-party headers stay
+# out of their reach as SYSTEM (external) includes, Catch2's via the SYSTEM
+# option in tests/CMakeLists.txt.
 add_library(dish_warnings INTERFACE)
 add_library(dish_strict   INTERFACE)
 
@@ -52,11 +59,7 @@ if(MSVC)
     target_compile_definitions(dish_warnings INTERFACE
         UNICODE _UNICODE
         WIN32_LEAN_AND_MEAN
-        NOMINMAX
-        # Silences the "use the secure version" nags for POSIX-style calls
-        # inside Qt and libsodium.
-        _CRT_SECURE_NO_WARNINGS
-        _WINSOCK_DEPRECATED_NO_WARNINGS)
+        NOMINMAX)
     if(DISH_ENABLE_WARNINGS)
         target_compile_options(dish_strict INTERFACE /WX)
     endif()
@@ -597,12 +600,14 @@ if(sentry_FOUND)
 endif()
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Gui Qt6::Svg dish_warnings dish_strict)
-# Debug information for the symbol upload in release.yml. /Z7 keeps it in the
-# objects, /DEBUG:FULL writes dish.pdb beside dish.exe, and neither the install
-# image nor the portable bundle picks a .pdb up, so nothing shipped carries it.
+# Debug information for the symbol upload in release.yml. Embedded (/Z7) keeps
+# it in the objects, /DEBUG:FULL writes dish.pdb beside dish.exe, and neither
+# the install image nor the portable bundle picks a .pdb up, so nothing shipped
+# carries it. The format goes through the CMP0141 target property rather than a
+# raw /Z7, so the Debug configuration's own /Zi is replaced instead of overridden
+# on the command line (cl reports that as D9025 on every translation unit).
 if(sentry_FOUND AND MSVC)
-    target_compile_options(dish_core PRIVATE /Z7)
-    target_compile_options(Dish PRIVATE /Z7)
+    set_target_properties(dish_core Dish PROPERTIES MSVC_DEBUG_INFORMATION_FORMAT Embedded)
     target_link_options(Dish PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
 endif()
 # CrashHandler.cpp: dbghelp writes the minidump and symbolizes the stack;
@@ -671,10 +676,18 @@ qt_add_qml_module(Dish
 # so their directory has to be on the include path for it to compile.
 target_include_directories(Dish PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/qml/chrome)
 
-# C4702 (unreachable code) fires inside Qt's own headers from the TUs
-# qmlcachegen generates, and dish_strict's /WX makes it fatal.
+# The AOT-compiled QML (qmlcachegen's *_qml.cpp, attached to Dish by
+# qt_add_qml_module above) instantiates Qt's own QJSEngine / QVariant templates,
+# whose `if constexpr` early returns leave code MSVC's optimizer reports as
+# unreachable (C4702) inside qjsengine.h, qvariant.h and qmetatype.h. That is a
+# back-end warning, which -external:W0 does not reach (documented under
+# /external, "Limitations"), so /wd47XX is the compiler's own remedy for it.
+# Scoped to the generated units only: every first-party unit in this target
+# keeps C4702 live.
 if(MSVC)
-    target_compile_options(Dish PRIVATE /wd4702)
+    get_target_property(_dish_qmlcache_sources Dish SOURCES)
+    list(FILTER _dish_qmlcache_sources INCLUDE REGEX "/\\.rcc/qmlcache/")
+    set_source_files_properties(${_dish_qmlcache_sources} PROPERTIES COMPILE_OPTIONS /wd4702)
 endif()
 
 target_link_libraries(Dish PRIVATE
