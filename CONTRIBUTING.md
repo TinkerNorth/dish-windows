@@ -37,6 +37,12 @@ which are the single source of configure truth for the workflows too: `debug`
 writes to `build\` (CI's tree) and `release` to `build-release\`, and
 `build\compile_commands.json` exists after the first debug build.
 
+A tree configured before CMake 3.25 became the floor still carries `/Zi` in
+its cached Debug flags (the debug-information format is a target property
+now, CMP0141), and the configure refuses it rather than build with D9025 on
+every `dish_core` and `Dish` unit. Delete that tree's `CMakeCache.txt` and
+configure again; once per tree.
+
 `scripts\ci-local.ps1` runs the format gate, the action-pin lint, the debug
 build and tests, qmllint, the QML literal scanner, the translation gate,
 clang-tidy, the release build and the portable-bundle smoke test, exactly as
@@ -76,9 +82,11 @@ Linguist is missing. `CMAKE_PREFIX_PATH` must point at the Qt prefix
 checkout. `scripts\install-deps.ps1` persists both.
 
 The pre-commit hook (`.githooks/pre-commit`) runs `clang-format -i` on staged
-C++ files and re-stages them, then runs `clang-tidy -p build` in advisory
-mode. It skips whichever tool is missing rather than failing. It runs under Git
-for Windows' bundled bash; no WSL required.
+C++ files and re-stages them, then runs CI's clang-tidy gate
+(`scripts/check-tidy.ps1`) over the staged sources in its file set, so a
+finding stops the commit before it would stop the pull request. It skips
+whichever tool is missing rather than failing. It runs under Git for Windows'
+bundled bash; no WSL required.
 
 ## License headers
 
@@ -236,14 +244,14 @@ same gates from the same sources):
 2. The `debug` preset (`-DDISH_BUILD_TESTS=ON -DDISH_REQUIRE_TRANSLATIONS=ON`
    into `build/`), build, and `ctest --preset debug --parallel`.
 3. `scripts/check-qml.ps1`: `qmllint` over every tracked `src/qml/**/*.qml`.
-   Every category gates except `unqualified`, which is downgraded to info
-   because `App` is a runtime context property the linter cannot see (see
-   `docs/QML_CONTRACT.md`).
+   Every category gates at its default level, nothing downgraded: `App`,
+   `Theme` and `Tokens` are module singletons the generated `qmltypes`
+   describes, so `unqualified` is a real error (see `docs/QML_CONTRACT.md`).
 4. `scripts/qml-lint-literals.ps1 -Mode error`.
 5. `scripts/check-translations.ps1`.
-6. `scripts/check-tidy.ps1`: `clang-tidy -p build` over `src/**/*.cpp`
-   excluding `src/UI/`, four wide, against the same Debug tree step 2
-   produced.
+6. `scripts/check-tidy.ps1`: `clang-tidy` over `src/**/*.cpp` excluding
+   `src/UI/`, four wide, against the same Debug tree step 2 produced, with
+   `--warnings-as-errors='*'` so a finding fails the step.
 7. The `release` preset build (`Dish` + `dish_setup_image` into
    `build-release/`), `scripts/stage-bundle.ps1` (the same staging path
    `release.yml` ships), the portable-bundle smoke test,
@@ -263,17 +271,18 @@ Security gates:
   (every `uses:` must be a 40-char SHA), `.security/allowlist.yaml` expiry,
   OSV-Scanner over the worktree, and a gitleaks secret scan. All blocking. Also
   runs weekly on a schedule.
-- `dependency-review-action`, in the same workflow, on pull requests only. It
-  carries `continue-on-error: true` and does not block, because the action needs
-  GitHub Advanced Security, which the repository did not have while it was
-  private.
-- `codeql.yml`: CodeQL `cpp` analysis with the `security-extended` and
-  `security-and-quality` query packs, on a Windows runner so MSVC-only
-  constructs are covered. Blocking.
+- `dependency-review-action`, in the same workflow, on pull requests only.
+  Switched off in `security.yml` (`dependency_review_enabled: false`) until
+  the repository's Dependency graph is enabled in its settings, which the
+  action needs; blocking once it is on.
+- `codeql.yml`: CodeQL `cpp` analysis with the `security-extended` query
+  pack, on a Windows runner so MSVC-only constructs are covered. Blocking, and
+  the results are uploaded to code scanning.
 
-`clang-tidy` is advisory. `.clang-tidy` sets `WarningsAsErrors: ''` on purpose,
-and the CI step does not fail on findings. Everything else in the list fails
-the build.
+`.clang-tidy` sets `WarningsAsErrors: ''` on purpose: the file is the
+fleet-canonical one, shared byte for byte with the other TinkerNorth repos.
+The gate is on the command line instead (`--warnings-as-errors='*'`, the same
+way `dish-linux` runs its sweep), so every step in the list fails the build.
 
 Reproduce the build and test steps locally with `scripts\build.ps1 debug
 test`, or the whole lane with `scripts\ci-local.ps1` (add `-WithInstaller`

@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLoggingCategory>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -23,6 +24,17 @@
 namespace dish::update {
 
 namespace {
+
+Q_LOGGING_CATEGORY(lcDishUpdateDownload, "dish.update.download")
+
+// Nothing partial is ever kept: the next attempt starts from zero. A part
+// file that will not go is worth a line, since the next attempt overwrites it
+// anyway and nothing else will ever look.
+void discardPart(const QString& partPath) {
+    if (QFile::exists(partPath) && !QFile::remove(partPath)) {
+        qCWarning(lcDishUpdateDownload) << "partial download not removed:" << partPath;
+    }
+}
 
 // A transport failure that means "this machine cannot reach the internet right
 // now" rather than "GitHub said no". The distinction only changes the copy in
@@ -280,8 +292,7 @@ void HttpDownloadGateway::fail(reducer::UpdateError error) {
     done_ = true;
     if (file_) {
         file_->close();
-        // Nothing partial is ever kept: the next attempt starts from zero.
-        (void)QFile::remove(request_.partPath);
+        discardPart(request_.partPath);
     }
     teardown();
     FinishedCallback callback;
@@ -299,7 +310,7 @@ void HttpDownloadGateway::abort() {
     finished_ = {};
     if (file_) {
         file_->close();
-        (void)QFile::remove(request_.partPath);
+        discardPart(request_.partPath);
     }
     teardown();
 }

@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLoggingCategory>
 #include <QStorageInfo>
 #include <QThread>
 
@@ -51,6 +52,24 @@ bool removeTreeRetrying(const QString& path) {
     });
 }
 
+Q_LOGGING_CATEGORY(lcDishUpdateStaging, "dish.update.staging")
+
+// Cleanup of a path this store owns, after the outcome that mattered has been
+// decided. A leftover is not a failure of that outcome, and the next sweep is
+// the only thing that will try again, so it gets a line rather than a result
+// nobody could act on.
+void removeFileOrWarn(const QString& path) {
+    if (!removeFileRetrying(path)) {
+        qCWarning(lcDishUpdateStaging) << "file still present after retries:" << path;
+    }
+}
+
+void removeTreeOrWarn(const QString& path) {
+    if (!removeTreeRetrying(path)) {
+        qCWarning(lcDishUpdateStaging) << "directory still present after retries:" << path;
+    }
+}
+
 // Write + FlushFileBuffers + MoveFileEx, so a power loss can leave the target
 // absent or complete but never half-written. Used for the ready.marker, which
 // is the commit record of the whole promote.
@@ -69,14 +88,14 @@ bool writeFileDurably(const QString& path, const QByteArray& bytes) {
     if (complete) { ::FlushFileBuffers(handle); }
     ::CloseHandle(handle);
     if (!complete) {
-        (void)removeFileRetrying(tmpPath);
+        removeFileOrWarn(tmpPath);
         return false;
     }
     const bool moved = retrying([&tmpNative, &finalNative] {
         return ::MoveFileExW(tmpNative.c_str(), finalNative.c_str(), MOVEFILE_REPLACE_EXISTING) ==
                TRUE;
     });
-    if (!moved) { (void)removeFileRetrying(tmpPath); }
+    if (!moved) { removeFileOrWarn(tmpPath); }
     return moved;
 }
 
@@ -225,26 +244,27 @@ std::optional<QString> FileStagingStore::promote(const QString& version, const Q
     // received; this proves what survived to the filesystem, which is what the
     // installer will actually execute.
     if (sha256OfFile(partPath).compare(sha256, Qt::CaseInsensitive) != 0) {
-        (void)removeFileRetrying(partPath);
+        removeFileOrWarn(partPath);
         return std::nullopt;
     }
 
-    const QString target = readyDirFor(version);
+    QString target = readyDirFor(version);
     if (!removeTreeRetrying(target)) { return std::nullopt; }
     if (!QDir().mkpath(target)) { return std::nullopt; }
 
     const QString exePath = target + QLatin1Char('/') + QLatin1String(kSetupExeName);
     const bool moved = retrying([&partPath, &exePath] { return QFile::rename(partPath, exePath); });
     if (!moved) {
-        (void)removeTreeRetrying(target);
+        removeTreeOrWarn(target);
         return std::nullopt;
     }
 
     // A byte snapshot of the manifest that described these bytes, so a support
     // request can show what the client was told at stage time.
-    if (!manifestBytes.isEmpty()) {
-        (void)writeFilePlain(target + QLatin1Char('/') + QLatin1String(kManifestSnapshotName),
-                             manifestBytes);
+    if (!manifestBytes.isEmpty() &&
+        !writeFilePlain(target + QLatin1Char('/') + QLatin1String(kManifestSnapshotName),
+                        manifestBytes)) {
+        qCWarning(lcDishUpdateStaging) << "manifest snapshot not written for" << version;
     }
 
     ReadyMarker marker;
@@ -256,7 +276,7 @@ std::optional<QString> FileStagingStore::promote(const QString& version, const Q
     // LAST, and durably: everything above is inert until this lands.
     if (!writeFileDurably(target + QLatin1Char('/') + QLatin1String(kReadyMarkerName),
                           serializeReadyMarker(marker))) {
-        (void)removeTreeRetrying(target);
+        removeTreeOrWarn(target);
         return std::nullopt;
     }
     return target;
@@ -264,8 +284,8 @@ std::optional<QString> FileStagingStore::promote(const QString& version, const Q
 
 void FileStagingStore::discard(const QString& version) {
     if (root_.isEmpty() || version.isEmpty()) { return; }
-    (void)removeTreeRetrying(readyDirFor(version));
-    (void)removeFileRetrying(partPathFor(version));
+    removeTreeOrWarn(readyDirFor(version));
+    removeFileOrWarn(partPathFor(version));
 }
 
 void FileStagingStore::sweep(const QString& currentVersion) {
@@ -279,9 +299,7 @@ void FileStagingStore::sweep(const QString& currentVersion) {
             QDateTime::currentDateTimeUtc().addMSecs(-reducer::kStagingPartMaxAgeMs);
         const QFileInfoList parts = staging.entryInfoList(QDir::Files);
         for (const QFileInfo& part : parts) {
-            if (part.lastModified().toUTC() < cutoff) {
-                (void)removeFileRetrying(part.absoluteFilePath());
-            }
+            if (part.lastModified().toUTC() < cutoff) { removeFileOrWarn(part.absoluteFilePath()); }
         }
     }
 
@@ -299,14 +317,14 @@ void FileStagingStore::sweep(const QString& currentVersion) {
         const bool obsolete =
             !isValidVersion(currentVersion) || !isStrictlyNewer(entry, currentVersion);
         if (!staged.has_value() || obsolete) {
-            (void)removeTreeRetrying(dirPath);
+            removeTreeOrWarn(dirPath);
             continue;
         }
         if (survivor.isEmpty() || isStrictlyNewer(staged->version, survivor)) {
-            if (!survivor.isEmpty()) { (void)removeTreeRetrying(readyDirFor(survivor)); }
+            if (!survivor.isEmpty()) { removeTreeOrWarn(readyDirFor(survivor)); }
             survivor = staged->version;
         } else {
-            (void)removeTreeRetrying(dirPath);
+            removeTreeOrWarn(dirPath);
         }
     }
 }

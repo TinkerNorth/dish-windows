@@ -15,6 +15,9 @@
 *.sh text eol=lf
 *.py text eol=lf
 
+# Fed to `git apply` by cmake/PatchEnet.cmake; one byte-exact form everywhere.
+*.patch text eol=lf
+
 # cmd.exe mis-parses `goto` / `call` labels in an LF-only batch file.
 # PowerShell tolerates LF, but every Windows editor and signer expects CRLF.
 *.bat  text eol=crlf

@@ -4,10 +4,14 @@
 find_package(Catch2 3 QUIET)
 if(NOT Catch2_FOUND)
     include(FetchContent)
+    # SYSTEM so Catch2's headers reach the tests as external includes, the way
+    # an installed package's would: /W4 /WX below then apply to the tests' own
+    # code and never to a third-party header.
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG        v3.5.4)
+        GIT_TAG        v3.5.4
+        SYSTEM)
     FetchContent_MakeAvailable(Catch2)
     list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 endif()
@@ -198,11 +202,14 @@ set(DISH_TEST_SOURCES
     test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
+# dish_strict too: the tests are first-party code and carry the same /WX as the
+# rest, which is what keeps a new test warning from surviving CI.
 target_link_libraries(DishTests
     PRIVATE
         dish_core
         Catch2::Catch2WithMain
-        dish_warnings)
+        dish_warnings
+        dish_strict)
 
 # The manifest is a resource of the Dish exe, not of dish_core, which is what
 # DishTests links — so the test reads the source file by absolute path instead.

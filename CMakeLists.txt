@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 3.21)
+# 3.25 for two things the warning-free build rests on: CMP0141, which hands the
+# MSVC debug-information format to a target property instead of baking /Zi into
+# the Debug flags (so a /Z7 target no longer overrides it, D9025), and the SYSTEM
+# option of FetchContent_Declare, which keeps /W4 /WX off Catch2's headers.
+cmake_minimum_required(VERSION 3.25)
 project(Dish
     VERSION 2.1.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
@@ -6,7 +10,9 @@ project(Dish
     # backend is pure C; everything first-party is C++.
     LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# C++20, in step with dish-linux (where it retires the pedantic warning on
+# Qt's zero-argument streaming log macros).
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -37,9 +43,10 @@ if(DISH_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
     endif()
 endif()
 
-# dish_warnings is applied everywhere including tests; dish_strict adds
-# /WX (-Werror) and is applied only to first-party code, so Catch2's headers
-# can't fail the build.
+# dish_warnings carries the warning set, dish_strict adds /WX (-Werror). Both
+# apply to every first-party target, tests included; third-party headers stay
+# out of their reach as SYSTEM (external) includes, Catch2's via the SYSTEM
+# option in tests/CMakeLists.txt.
 add_library(dish_warnings INTERFACE)
 add_library(dish_strict   INTERFACE)
 
@@ -52,11 +59,7 @@ if(MSVC)
     target_compile_definitions(dish_warnings INTERFACE
         UNICODE _UNICODE
         WIN32_LEAN_AND_MEAN
-        NOMINMAX
-        # Silences the "use the secure version" nags for POSIX-style calls
-        # inside Qt and libsodium.
-        _CRT_SECURE_NO_WARNINGS
-        _WINSOCK_DEPRECATED_NO_WARNINGS)
+        NOMINMAX)
     if(DISH_ENABLE_WARNINGS)
         target_compile_options(dish_strict INTERFACE /WX)
     endif()
@@ -116,7 +119,15 @@ FetchContent_Declare(
     enet
     GIT_REPOSITORY https://github.com/cgutman/enet.git
     GIT_TAG        44c85e16279553d9c052e572bcbfcd745fb74abf
-    SOURCE_SUBDIR  _dish_no_such_subdir)
+    SOURCE_SUBDIR  _dish_no_such_subdir
+    # Nine `command | flag` ORs of two different enum types, which current
+    # MSVC reports as C5287 (level 1, so at any warning level), get the
+    # explicit casts it asks for. Applied once, at fetch time; see
+    # cmake/PatchEnet.cmake and THIRD_PARTY.md.
+    PATCH_COMMAND  ${CMAKE_COMMAND}
+                   -DENET_SOURCE_DIR=<SOURCE_DIR>
+                   -DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/enet-msvc-c5287.patch
+                   -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchEnet.cmake)
 FetchContent_MakeAvailable(enet)
 
 if(NOT enet_SOURCE_DIR OR NOT EXISTS "${enet_SOURCE_DIR}/callbacks.c")
@@ -563,6 +574,15 @@ target_link_libraries(dish_core
         dish_warnings
         dish_strict)
 
+# AppViewModel and the two role models live here, but their QML identities are
+# declared from the Dish target (src/qml/chrome/ForeignTypes.h). qmltyperegistrar
+# can only expand a QML_FOREIGN declaration when it can read the foreign class's
+# meta-object, which reaches it as a --foreign-types argument: this call writes
+# dish_core's metatypes .json and puts it on Dish's SOURCES through the
+# INTERFACE_SOURCES genex that qt_add_qml_module's QT_CONSUMES_METATYPES enables.
+# Without it the App singleton lands in the qmltypes with no properties at all.
+qt_extract_metatypes(dish_core)
+
 # --- UI executable ---
 set(DISH_UI_SOURCES
     src/UI/CrashHandler.h
@@ -589,12 +609,33 @@ if(sentry_FOUND)
 endif()
 set_target_properties(Dish PROPERTIES OUTPUT_NAME dish)
 target_link_libraries(Dish PRIVATE dish_core Qt6::Gui Qt6::Svg dish_warnings dish_strict)
-# Debug information for the symbol upload in release.yml. /Z7 keeps it in the
-# objects, /DEBUG:FULL writes dish.pdb beside dish.exe, and neither the install
-# image nor the portable bundle picks a .pdb up, so nothing shipped carries it.
+# Debug information for the symbol upload in release.yml. Embedded (/Z7) keeps
+# it in the objects, /DEBUG:FULL writes dish.pdb beside dish.exe, and neither
+# the install image nor the portable bundle picks a .pdb up, so nothing shipped
+# carries it. The format goes through the CMP0141 target property rather than a
+# raw /Z7, so the Debug configuration's own /Zi is replaced instead of overridden
+# on the command line (cl reports that as D9025 on every translation unit).
 if(sentry_FOUND AND MSVC)
-    target_compile_options(dish_core PRIVATE /Z7)
-    target_compile_options(Dish PRIVATE /Z7)
+    # CMake fills CMAKE_<LANG>_FLAGS_<CONFIG> once, when a tree is first
+    # configured, and a tree configured before 3.25 became the floor keeps the
+    # /Zi the older default put there. The property would then add /Z7 on top of
+    # it, which is D9025 back on every unit of these two targets, so such a tree
+    # is refused with the one-time remedy instead of built with the warning.
+    foreach(_dish_config IN LISTS CMAKE_CONFIGURATION_TYPES CMAKE_BUILD_TYPE)
+        string(TOUPPER "${_dish_config}" _dish_config)
+        foreach(_dish_lang C CXX)
+            set(_dish_flags_var CMAKE_${_dish_lang}_FLAGS_${_dish_config})
+            if("${${_dish_flags_var}}" MATCHES "[-/]Z[iI]( |$)")
+                message(FATAL_ERROR
+                    "${_dish_flags_var} is \"${${_dish_flags_var}}\": its /Zi would be "
+                    "overridden by the /Z7 dish_core and Dish carry as a target property "
+                    "(D9025 on every translation unit). This build tree was configured before "
+                    "CMake 3.25 became the floor; delete ${CMAKE_BINARY_DIR}/CMakeCache.txt "
+                    "and configure again.")
+            endif()
+        endforeach()
+    endforeach()
+    set_target_properties(dish_core Dish PROPERTIES MSVC_DEBUG_INFORMATION_FORMAT Embedded)
     target_link_options(Dish PRIVATE /DEBUG:FULL /OPT:REF /OPT:ICF)
 endif()
 # CrashHandler.cpp: dbghelp writes the minidump and symbolizes the stack;
@@ -613,7 +654,9 @@ target_sources(Dish PRIVATE
     src/qml/chrome/ThemeBridge.h
     src/qml/chrome/ThemeBridge.cpp
     src/qml/chrome/TokensBridge.h
-    src/qml/chrome/TokensBridge.cpp)
+    src/qml/chrome/TokensBridge.cpp
+    # QML_FOREIGN declarations for dish_core's view-model types; see the header.
+    src/qml/chrome/ForeignTypes.h)
 
 # DISH_KIT_QML_FILES: the canonical design-kit file list, kept in its own
 # file so the kit reads as a unit rather than as lines lost in this one.
@@ -663,10 +706,18 @@ qt_add_qml_module(Dish
 # so their directory has to be on the include path for it to compile.
 target_include_directories(Dish PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/qml/chrome)
 
-# C4702 (unreachable code) fires inside Qt's own headers from the TUs
-# qmlcachegen generates, and dish_strict's /WX makes it fatal.
+# The AOT-compiled QML (qmlcachegen's *_qml.cpp, attached to Dish by
+# qt_add_qml_module above) instantiates Qt's own QJSEngine / QVariant templates,
+# whose `if constexpr` early returns leave code MSVC's optimizer reports as
+# unreachable (C4702) inside qjsengine.h, qvariant.h and qmetatype.h. That is a
+# back-end warning, which -external:W0 does not reach (documented under
+# /external, "Limitations"), so /wd47XX is the compiler's own remedy for it.
+# Scoped to the generated units only: every first-party unit in this target
+# keeps C4702 live.
 if(MSVC)
-    target_compile_options(Dish PRIVATE /wd4702)
+    get_target_property(_dish_qmlcache_sources Dish SOURCES)
+    list(FILTER _dish_qmlcache_sources INCLUDE REGEX "/\\.rcc/qmlcache/")
+    set_source_files_properties(${_dish_qmlcache_sources} PROPERTIES COMPILE_OPTIONS /wd4702)
 endif()
 
 target_link_libraries(Dish PRIVATE

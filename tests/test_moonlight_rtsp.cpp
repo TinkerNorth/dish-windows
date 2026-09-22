@@ -246,3 +246,44 @@ TEST_CASE("serverPortFromTransport handles decoration and absence", "[moonlight]
     REQUIRE_FALSE(serverPortFromTransport("unicast;client_port=50000").has_value());
     REQUIRE_FALSE(serverPortFromTransport("server_port=").has_value());
 }
+
+TEST_CASE("CSeq counts only as a whole integer", "[moonlight][rtsp]") {
+    auto cseqOf = [](const std::string& header) {
+        const auto resp = parseRtspResponse("RTSP/1.0 200 OK\r\n" + header + "\r\n\r\n");
+        REQUIRE(resp.has_value());
+        return resp->cseq;
+    };
+
+    // The value is trimmed before it is read, so padding around it, the way a
+    // host may write the header, still counts.
+    REQUIRE(cseqOf("CSeq: 7") == 7);
+    REQUIRE(cseqOf("CSeq:7") == 7);
+    REQUIRE(cseqOf("CSeq:   7   ") == 7);
+    REQUIRE(cseqOf("CSeq:\t7\t") == 7);
+    REQUIRE(cseqOf("CSeq: 2147483647") == 2147483647); // INT_MAX itself
+    REQUIRE(cseqOf("CSeq: -3") == -3);
+
+    // Anything that is not an integer in full leaves the default. atoi used to
+    // answer 7 for the first three and had no defined answer for the overflow.
+    REQUIRE(cseqOf("CSeq: 7abc") == 0);
+    REQUIRE(cseqOf("CSeq: 7 8") == 0);
+    REQUIRE(cseqOf("CSeq: +7") == 0);
+    REQUIRE(cseqOf("CSeq: abc") == 0);
+    REQUIRE(cseqOf("CSeq:") == 0);
+    REQUIRE(cseqOf("CSeq: 2147483648") == 0);
+}
+
+TEST_CASE("serverPortFromTransport reads the digits after the key and nothing else",
+          "[moonlight][rtsp]") {
+    // The digit run ends at the first non-digit, whatever follows it.
+    REQUIRE(*serverPortFromTransport("server_port=48010\r") == 48010);
+    REQUIRE(*serverPortFromTransport("server_port=48010 ;x=y") == 48010);
+    REQUIRE(*serverPortFromTransport("server_port=48010abc") == 48010);
+    REQUIRE(*serverPortFromTransport("server_port=0") == 0);
+    // No digit directly after the key means no port.
+    REQUIRE_FALSE(serverPortFromTransport("server_port= 48010").has_value());
+    REQUIRE_FALSE(serverPortFromTransport("server_port=+48010").has_value());
+    // A run that does not fit an int is no port either, where atoi had no
+    // defined answer.
+    REQUIRE_FALSE(serverPortFromTransport("server_port=99999999999").has_value());
+}

@@ -5,8 +5,9 @@
 .DESCRIPTION
     Must run after a debug build: qt_add_qml_module generates the Dish.Chrome
     qmldir/qmltypes into the build tree, which importing pages resolve against.
-    Every category gates except `unqualified`, downgraded to info because `App`
-    is a runtime context property the linter cannot see (docs/QML_CONTRACT.md).
+    Every category gates at its default level, `unqualified` included: App,
+    Theme and Tokens are all module singletons the generated qmltypes describe,
+    so every name a page reads resolves statically (docs/QML_CONTRACT.md).
 
 .PARAMETER BuildDir
     The configured build tree whose generated QML module output to import.
@@ -49,7 +50,6 @@ if (-not $files) { throw 'git ls-files found no QML files' }
 & (Join-Path $QtBin 'qmllint.exe') `
     -I $BuildDir `
     -I $qtQml `
-    --unqualified info `
     $files
 if ($LASTEXITCODE -ne 0) { throw 'qmllint failed' }
 Write-Output "qmllint: OK ($(@($files).Count) files)"

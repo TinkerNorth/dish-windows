@@ -37,7 +37,9 @@ struct InstallAssertHook {
     }
 };
 
-[[maybe_unused]] const InstallAssertHook g_installAssertHook;
+// Never referenced: its constructor is the point, and it runs at static
+// initialisation, before Catch2's main.
+const InstallAssertHook g_installAssertHook;
 
 } // namespace
 

@@ -64,7 +64,7 @@ QByteArray serializeReadyMarker(const ReadyMarker& marker);
 // exe exists at the recorded size. The full sha256 is verified at promote time
 // and again by the boot gate; re-hashing 40 MB on every janitor pass would buy
 // nothing the boot gate does not already guarantee.
-std::optional<StagedUpdate> readStagedDir(const QString& readyDir);
+std::optional<StagedUpdate> readStagedDir(const QString& dirPath);
 
 // Lowercase hex of the whole file, read in chunks. "" when the file cannot be
 // read. This is the ONLY hash the updater trusts: never the one a stream

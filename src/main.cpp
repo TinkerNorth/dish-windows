@@ -13,6 +13,7 @@
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLocale>
+#include <QTextStream>
 #include <QTranslator>
 
 #include <sodium.h>
@@ -41,14 +42,16 @@ int main(int argc, char* argv[]) {
     // the lifetime of `main`.
     dish::net::WinsockInit winsock;
     if (!winsock.ok()) {
-        // Discarded deliberately: this runs before any logger exists, so a
-        // failed write to stderr is unactionable. The exit code is the report.
-        (void)std::fprintf(stderr, "dish: WSAStartup failed\n");
+        // Before any logger exists, so stderr is the only channel and the exit
+        // code is the report. Qt's stream over the CRT handle writes the same
+        // bytes fprintf would, with no result to discard and no iostream
+        // failure state to answer for.
+        QTextStream(stderr) << "dish: WSAStartup failed\n";
         return 1;
     }
 
     if (sodium_init() < 0) {
-        (void)std::fprintf(stderr, "dish: libsodium initialisation failed\n");
+        QTextStream(stderr) << "dish: libsodium initialisation failed\n";
         return 1;
     }
 
@@ -87,7 +90,7 @@ int main(int argc, char* argv[]) {
     app.setFont(uiFont);
 
     // runQmlApp owns the engine and chrome, and exposes the model to QML as the
-    // `App` context property.
+    // `App` singleton.
     dish::AppModel model;
     model.start();
     return dish::qml::runQmlApp(model);

@@ -206,10 +206,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Needs Advanced Security, which a private repo does not have; the step
-      # is advisory until then. Drop continue-on-error once public.
+      # Blocking: the repository is public, so the dependency graph this
+      # action reads is available.
       - name: Review changed dependencies
-        continue-on-error: true
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high

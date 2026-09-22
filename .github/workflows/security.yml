@@ -29,6 +29,10 @@ jobs:
       osv_scan_paths: |
         .
       gitleaks_enabled: true
-      dependency_review_enabled: true
+      # Off until the repository's Dependency graph is switched on (Settings,
+      # Code security). dependency-review-action reads that graph and fails
+      # without it, so on this repository the job has never reviewed anything.
+      # Flip to true once the setting is on; the job then blocks.
+      dependency_review_enabled: false
       action_pin_lint_enabled: true
       allowlist_expiry_enabled: true

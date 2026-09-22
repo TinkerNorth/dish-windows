@@ -101,7 +101,7 @@ handoff.
 
 - Visual Studio 2022 with the Desktop development with C++ workload, or the
   standalone Build Tools
-- CMake 3.21+ and Ninja
+- CMake 3.25+ and Ninja
 - Qt 6.7+ (Core, Gui, Network, Svg, Quick, Qml, QuickControls2; Linguist tools
   for the translation catalogues)
 - libsodium and SDL2, resolved by vcpkg from `vcpkg.json`

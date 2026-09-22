@@ -44,8 +44,7 @@ struct LocalBlob {
         if (blob.pbData != nullptr) { LocalFree(blob.pbData); }
     }
     QByteArray take() const {
-        return QByteArray(reinterpret_cast<const char*>(blob.pbData),
-                          static_cast<qsizetype>(blob.cbData));
+        return {reinterpret_cast<const char*>(blob.pbData), static_cast<qsizetype>(blob.cbData)};
     }
 };
 

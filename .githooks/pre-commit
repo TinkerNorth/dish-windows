@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Reformats staged C/C++ sources in place with clang-format and re-stages
-# them, then runs clang-tidy advisory-only. Skips either tool if it is not
-# installed; CI enforces both in strict mode. Runs under Git for Windows'
-# bundled bash, no WSL needed.
+# them, then runs CI's clang-tidy gate over the staged sources in its file
+# set. Skips either tool if it is not installed; CI enforces both. Runs under
+# Git for Windows' bundled bash, no WSL needed.
 #
 # This file must stay LF-terminated: a CRLF checkout makes the kernel look
 # for an interpreter named "bash\r" and the hook silently never runs.
@@ -30,9 +30,11 @@ else
     echo "⚠  clang-format not installed — skipping (winget install LLVM.LLVM)"
 fi
 
-# ── clang-tidy (advisory) ────────────────────────────────────────────────
-# Advisory to match CI: .clang-tidy's WarningsAsErrors='' is authoritative,
-# so a stylistic finding must not block a commit.
+# ── clang-tidy ───────────────────────────────────────────────────────────
+# scripts/check-tidy.ps1 is the gate CI runs (its flags, its compile database
+# view, findings fail); here it takes only the staged files in CI's set
+# (src/**/*.cpp outside src/UI/), so a finding stops the commit before it
+# would stop the pull request.
 if command -v clang-tidy >/dev/null 2>&1; then
     # build/ is the debug preset's binaryDir (CMakePresets.json), the same
     # tree CI lints against.
@@ -40,12 +42,15 @@ if command -v clang-tidy >/dev/null 2>&1; then
         cpp_files=()
         while IFS= read -r f; do
             case "$f" in
-                *.cpp) cpp_files+=("$f") ;;
+                src/UI/*) ;;
+                src/*.cpp) cpp_files+=("$f") ;;
             esac
         done <<<"$staged"
         if [ "${#cpp_files[@]}" -gt 0 ]; then
-            echo "▶ clang-tidy -p build (${#cpp_files[@]} file(s))"
-            clang-tidy -p build --quiet "${cpp_files[@]}" || true
+            echo "▶ clang-tidy (${#cpp_files[@]} file(s))"
+            files_csv=$(IFS=,; echo "${cpp_files[*]}")
+            powershell.exe -NoProfile -ExecutionPolicy Bypass \
+                -File scripts/check-tidy.ps1 -BuildDir build -Files "$files_csv"
         fi
     else
         echo "⚠  build/compile_commands.json missing — run scripts/build.ps1 debug"

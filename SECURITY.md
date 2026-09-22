@@ -139,12 +139,12 @@ On every pull request and every push to `main`, blocking:
   `reason`, `owner`, and an unexpired `expires`.
 - OSV-Scanner over the worktree.
 - Gitleaks secret scan.
-- CodeQL `cpp` analysis, `security-extended` and `security-and-quality` query
-  packs, on a Windows runner so MSVC-only constructs are covered.
-
-Advisory, not blocking: GitHub `dependency-review-action` runs on pull requests
-with `continue-on-error: true`, because it needs Advanced Security, which the
-repository did not have while it was private.
+- CodeQL `cpp` analysis, `security-extended` query pack, on a Windows runner
+  so MSVC-only constructs are covered; the results are uploaded to code
+  scanning.
+- GitHub `dependency-review-action` on pull requests, once the repository's
+  Dependency graph is enabled in its settings; until then the job is switched
+  off in `security.yml`, because the action fails without the graph.
 
 `security.yml` also runs weekly on a schedule. On a release tag, `release.yml`
 re-runs the action-pin lint, allowlist expiry, OSV-Scanner, and gitleaks jobs
