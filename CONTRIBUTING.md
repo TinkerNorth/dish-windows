@@ -244,9 +244,9 @@ same gates from the same sources):
 2. The `debug` preset (`-DDISH_BUILD_TESTS=ON -DDISH_REQUIRE_TRANSLATIONS=ON`
    into `build/`), build, and `ctest --preset debug --parallel`.
 3. `scripts/check-qml.ps1`: `qmllint` over every tracked `src/qml/**/*.qml`.
-   Every category gates except `unqualified`, which is downgraded to info
-   because `App` is a runtime context property the linter cannot see (see
-   `docs/QML_CONTRACT.md`).
+   Every category gates at its default level, nothing downgraded: `App`,
+   `Theme` and `Tokens` are module singletons the generated `qmltypes`
+   describes, so `unqualified` is a real error (see `docs/QML_CONTRACT.md`).
 4. `scripts/qml-lint-literals.ps1 -Mode error`.
 5. `scripts/check-translations.ps1`.
 6. `scripts/check-tidy.ps1`: `clang-tidy` over `src/**/*.cpp` excluding

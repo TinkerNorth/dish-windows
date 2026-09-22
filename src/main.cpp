@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
     app.setFont(uiFont);
 
     // runQmlApp owns the engine and chrome, and exposes the model to QML as the
-    // `App` context property.
+    // `App` singleton.
     dish::AppModel model;
     model.start();
     return dish::qml::runQmlApp(model);
