@@ -43,6 +43,11 @@ jobs:
       # provider is backed by the actions/cache step below; windows-ci.yml
       # uses the same key, so the two lanes share archives.
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
+      # Overlay (incremental) analysis needs build-mode none; this lane traces
+      # a real MSVC build, so the action would try, warn that it cannot, and
+      # fall back to a full database on every run. Declaring the mode it ends
+      # up in anyway keeps the init step's log clean.
+      CODEQL_OVERLAY_DATABASE_MODE: none
 
     steps:
       - name: Checkout
@@ -89,7 +94,7 @@ jobs:
             vcpkg-bin-${{ runner.os }}-
 
       - name: Set up vcpkg
-        uses: lukka/run-vcpkg@5e0cab206a5ea620130caf672fce3e4a6b5666a1 # v11.5
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
         with:
           vcpkgGitCommitId: ${{ env.VCPKG_COMMITID }}
 
@@ -115,8 +120,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           # security-extended without security-and-quality: the quality suite
-          # tripled the query count for maintainability findings that, like
-          # everything here pre-GHAS, surface only in the logs.
+          # tripled the query count for maintainability findings.
           queries: security-extended
 
       # 4 = the windows-2022 runner's vCPU count; Ninja's cores+2 default
@@ -127,12 +131,10 @@ jobs:
         shell: pwsh
         run: cmake --build build-release --parallel 4 --target Dish
 
+      # Blocking, and the SARIF is uploaded: the repository is public, so code
+      # scanning is available and the findings land as alerts instead of only
+      # in this log.
       - name: Perform CodeQL analysis
-        # SARIF upload needs Advanced Security, which a private repo does not
-        # have. Findings still surface in the logs. Drop continue-on-error and
-        # `upload: failure-only` once the repo is public.
-        continue-on-error: true
         uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           category: "/language:${{ matrix.language }}"
-          upload: failure-only

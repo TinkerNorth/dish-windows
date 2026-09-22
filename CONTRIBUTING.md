@@ -265,17 +265,16 @@ Security gates:
   (every `uses:` must be a 40-char SHA), `.security/allowlist.yaml` expiry,
   OSV-Scanner over the worktree, and a gitleaks secret scan. All blocking. Also
   runs weekly on a schedule.
-- `dependency-review-action`, in the same workflow, on pull requests only. It
-  carries `continue-on-error: true` and does not block, because the action needs
-  GitHub Advanced Security, which the repository did not have while it was
-  private.
-- `codeql.yml`: CodeQL `cpp` analysis with the `security-extended` and
-  `security-and-quality` query packs, on a Windows runner so MSVC-only
-  constructs are covered. Blocking.
+- `dependency-review-action`, in the same workflow, on pull requests only.
+  Blocking.
+- `codeql.yml`: CodeQL `cpp` analysis with the `security-extended` query
+  pack, on a Windows runner so MSVC-only constructs are covered. Blocking, and
+  the results are uploaded to code scanning.
 
-`clang-tidy` is advisory. `.clang-tidy` sets `WarningsAsErrors: ''` on purpose,
-and the CI step does not fail on findings. Everything else in the list fails
-the build.
+`.clang-tidy` sets `WarningsAsErrors: ''` on purpose: the file is the
+fleet-canonical one, shared byte for byte with the other TinkerNorth repos.
+The gate is on the command line instead (`--warnings-as-errors='*'`, the same
+way `dish-linux` runs its sweep), so every step in the list fails the build.
 
 Reproduce the build and test steps locally with `scripts\build.ps1 debug
 test`, or the whole lane with `scripts\ci-local.ps1` (add `-WithInstaller`
