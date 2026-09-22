@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QLoggingCategory>
 #include <QNetworkInformation>
 #include <QRandomGenerator>
 #include <QThread>
@@ -26,6 +27,8 @@
 namespace dish::update {
 
 namespace {
+
+Q_LOGGING_CATEGORY(lcDishUpdate, "dish.update")
 
 // The portable/managed probe: an Inno Setup uninstaller (unins*.exe) beside
 // dish.exe. Filesystem-only on purpose — an ARP lookup would couple the
@@ -333,7 +336,9 @@ void UpdateCoordinator::onAboutToQuit() {
     }
     // Failure here is not recoverable from a quitting process; the next boot's
     // gate retries (attempt 2) or quarantines.
-    (void)UpdateHandoff::spawnStagedApply(*staged);
+    if (!UpdateHandoff::spawnStagedApply(*staged)) {
+        qCWarning(lcDishUpdate) << "staged installer did not start; the next boot retries";
+    }
 }
 
 // ── Reducer plumbing ────────────────────────────────────────────────────────

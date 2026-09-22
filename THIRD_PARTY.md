@@ -277,6 +277,16 @@ to commit `44c85e16279553d9c052e572bcbfcd745fb74abf`. SPDX `MIT`. Upstream:
 <https://github.com/cgutman/enet> (fork of <https://github.com/lsalzman/enet>).
 Statically linked into `dish.exe`.
 
+One local patch, `cmake/enet-msvc-c5287.patch`, applied by `cmake/PatchEnet.cmake`
+as the FetchContent patch step: explicit `enet_uint8` casts on the nine
+`command | flag` ORs of two different enum types, which current MSVC reports as
+C5287 (a level 1 warning, so on at any warning level). Behaviour is unchanged
+(the assigned field is an `enet_uint8` already); the cast is the one the
+compiler asks for, and it keeps the target at the compiler's default warning
+level instead of lowering it. The `.patch` is pinned to LF in `.gitattributes`,
+and `git apply` matches it against the checkout whatever line endings the clone
+gave ENet.
+
 Used for the Moonlight control stream (UDP), which the GameStream protocol
 carries over ENet. Its struct handling and connect flow were referenced while
 porting the control channel; the C library itself is vendored, not reimplemented.

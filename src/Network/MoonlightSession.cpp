@@ -10,9 +10,13 @@
 #include <QHostAddress>
 #include <QLoggingCategory>
 #include <QNetworkDatagram>
+#include <QStringView>
 #include <QTimer>
 #include <QUdpSocket>
 #include <QUrl>
+
+#include <array>
+#include <utility>
 
 namespace dish::net {
 
@@ -24,7 +28,7 @@ namespace {
 // host keys pending pairings and session ownership on the uniqueid, so the
 // Moonlight-conventional constant collides the moment two installs pair with
 // one host. The real id is minted per install by the repository.
-const QString kFallbackUniqueId = QStringLiteral("0123456789ABCDEF");
+constexpr QStringView kFallbackUniqueId = u"0123456789ABCDEF";
 
 std::array<std::uint8_t, 16> toKey16(const moonlight::crypto::Bytes& b) {
     std::array<std::uint8_t, 16> k{};
@@ -53,7 +57,7 @@ MoonlightSession::MoonlightSession(models::MoonlightHost host, moonlight::Identi
                                    repository::MoonlightHostRepository* repo, QObject* parent)
     : QObject(parent), host_(std::move(host)), identity_(std::move(identity)), repo_(repo),
       http_(new MoonlightHttpClient(this)) {
-    uniqueId_ = repo_ != nullptr ? repo_->getOrCreateUniqueId() : kFallbackUniqueId;
+    uniqueId_ = repo_ != nullptr ? repo_->getOrCreateUniqueId() : kFallbackUniqueId.toString();
     http_->setClientIdentity(identity_);
     // TOFU pin: accept-and-remember the server cert first seen, reject a change.
     http_->setPinVerifier([this](const QString&, const QByteArray& der) {
@@ -522,12 +526,15 @@ void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resumin
 
 void MoonlightSession::beginRtspAndControl() {
     if (worker_.joinable()) { worker_.join(); }
-    const QString target = rtspTarget_;
-    const std::string ip = host_.ip.toStdString();
-    const auto rikey = rikey_;
-    const DisplayMode mode = requestedDisplayMode();
+    // Captured from non-const locals, so the closure's members are non-const
+    // and std::thread moves it into place: a const std::string member would
+    // have to be copied instead, and a copy can throw where a move cannot.
+    QString target = rtspTarget_;
+    std::string ip = host_.ip.toStdString();
+    std::array<std::uint8_t, 16> rikey = rikey_;
+    DisplayMode mode = requestedDisplayMode();
 
-    worker_ = std::thread([this, target, ip, rikey, mode] {
+    worker_ = std::thread([this, target = std::move(target), ip = std::move(ip), rikey, mode] {
         // target is "ip:port".
         std::uint16_t rtspPort = 48010;
         const int colon = target.lastIndexOf(QLatin1Char(':'));
@@ -548,13 +555,14 @@ void MoonlightSession::beginRtspAndControl() {
         }
         // The media ports are pinged from this moment, not from when the ENet
         // handshake below has finished: the host counts its initial-ping
-        // deadline from its own session start.
-        const RtspHandshakeResult handshake = *result;
+        // deadline from its own session start. Each closure owns a non-const
+        // copy of the result, for the same reason as the thread's own captures.
         QMetaObject::invokeMethod(
-            this, [this, handshake] { onRtspNamedPorts(handshake); }, Qt::QueuedConnection);
+            this, [this, handshake = *result] { onRtspNamedPorts(handshake); },
+            Qt::QueuedConnection);
         const bool ok = control_.connect(ip, result->controlPort, rikey, result->connectData);
         QMetaObject::invokeMethod(
-            this, [this, ok, handshake] { onRtspFinished(true, ok, handshake); },
+            this, [this, ok, handshake = *result] { onRtspFinished(true, ok, handshake); },
             Qt::QueuedConnection);
     });
 }

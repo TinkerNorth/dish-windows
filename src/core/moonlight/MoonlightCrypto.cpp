@@ -20,7 +20,7 @@ using MdCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 using PkeyPtr = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 using BioPtr = std::unique_ptr<BIO, decltype(&BIO_free)>;
 
-CipherCtx newCipherCtx() { return CipherCtx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free); }
+CipherCtx newCipherCtx() { return {EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free}; }
 
 void putU16Le(std::uint8_t* p, std::uint16_t v) noexcept {
     p[0] = static_cast<std::uint8_t>(v & 0xFF);
@@ -116,7 +116,7 @@ std::optional<Bytes> aesEcbEncrypt(const std::array<std::uint8_t, kAesKey128>& k
     if (EVP_EncryptFinal_ex(ctx.get(), out.data() + outLen, &finalLen) != 1) {
         return std::nullopt;
     }
-    out.resize(static_cast<std::size_t>(outLen + finalLen));
+    out.resize(static_cast<std::size_t>(outLen) + static_cast<std::size_t>(finalLen));
     return out;
 }
 
@@ -139,7 +139,7 @@ std::optional<Bytes> aesEcbDecrypt(const std::array<std::uint8_t, kAesKey128>& k
     if (EVP_DecryptFinal_ex(ctx.get(), out.data() + outLen, &finalLen) != 1) {
         return std::nullopt;
     }
-    out.resize(static_cast<std::size_t>(outLen + finalLen));
+    out.resize(static_cast<std::size_t>(outLen) + static_cast<std::size_t>(finalLen));
     return out;
 }
 
@@ -170,7 +170,7 @@ std::optional<Bytes> sealControl(const std::array<std::uint8_t, kAesKey128>& key
     if (EVP_EncryptFinal_ex(ctx.get(), cipher.data() + outLen, &finalLen) != 1) {
         return std::nullopt;
     }
-    cipher.resize(static_cast<std::size_t>(outLen + finalLen));
+    cipher.resize(static_cast<std::size_t>(outLen) + static_cast<std::size_t>(finalLen));
 
     std::array<std::uint8_t, kGcmTagSize> tag{};
     if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, static_cast<int>(tag.size()),
@@ -234,7 +234,7 @@ std::optional<Bytes> openControl(const std::array<std::uint8_t, kAesKey128>& key
     if (EVP_DecryptFinal_ex(ctx.get(), plain.data() + outLen, &finalLen) != 1) {
         return std::nullopt;
     }
-    plain.resize(static_cast<std::size_t>(outLen + finalLen));
+    plain.resize(static_cast<std::size_t>(outLen) + static_cast<std::size_t>(finalLen));
     return plain;
 }
 
@@ -280,7 +280,8 @@ const std::uint8_t* ControlSealer::seal(std::uint32_t seq, const std::uint8_t* p
     }
     int finalBytes = 0;
     if (EVP_EncryptFinal_ex(ctx, cipherOut + outBytes, &finalBytes) != 1) { return nullptr; }
-    const auto cipherLen = static_cast<std::size_t>(outBytes + finalBytes);
+    const auto cipherLen =
+        static_cast<std::size_t>(outBytes) + static_cast<std::size_t>(finalBytes);
     if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, static_cast<int>(kGcmTagSize),
                             buffer_.data() + 8) != 1) {
         return nullptr;

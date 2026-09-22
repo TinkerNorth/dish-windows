@@ -5,8 +5,9 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
+#include <charconv>
 #include <sstream>
+#include <system_error>
 
 namespace dish::moonlight {
 
@@ -104,7 +105,12 @@ std::optional<RtspResponse> parseRtspResponse(const std::string& text) {
             const std::string key = trim(line.substr(0, colon));
             const std::string value = trim(line.substr(colon + 1));
             if (key == "CSeq") {
-                resp.cseq = std::atoi(value.c_str());
+                // Only a value that is an integer in full counts; anything else
+                // leaves the default rather than the digit prefix atoi guessed.
+                int cseq = 0;
+                const auto [end, ec] =
+                    std::from_chars(value.data(), value.data() + value.size(), cseq);
+                if (ec == std::errc{} && end == value.data() + value.size()) { resp.cseq = cseq; }
             } else {
                 resp.options[key] = value;
             }
@@ -214,7 +220,10 @@ std::optional<int> serverPortFromTransport(const std::string& transportValue) {
         ++p;
     }
     if (digits.empty()) { return std::nullopt; }
-    return std::atoi(digits.c_str());
+    int port = 0;
+    const auto [end, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), port);
+    if (ec != std::errc{} || end != digits.data() + digits.size()) { return std::nullopt; }
+    return port;
 }
 
 std::optional<int> setupServerPort(const RtspResponse& response) {

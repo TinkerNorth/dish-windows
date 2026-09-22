@@ -14,7 +14,7 @@
 ## CI gates
 
 `windows-ci.yml` runs these on every pull request, in this order. Tick what you
-ran locally. Everything except `clang-tidy` fails the build.
+ran locally. Every one of them fails the build.
 
 - [ ] **`clang-format --dry-run --Werror`** over `src/` and `tests/`. CI pins
       clang-format **22.1.4** from PyPI. Version 18 and version 22 disagree on
@@ -22,7 +22,7 @@ ran locally. Everything except `clang-tidy` fails the build.
       `pipx install clang-format==22.1.4`
 - [ ] **Debug build** configured with `-DDISH_BUILD_TESTS=ON
       -DDISH_REQUIRE_TRANSLATIONS=ON`, warnings clean (`/WX` is on for
-      first-party code)
+      first-party code, tests included)
 - [ ] **`ctest --output-on-failure --parallel`** passes
 - [ ] **`qmllint`** clean over every tracked `src/qml/*.qml`. Must run after the
       build, because the `Dish.Chrome` qmldir and qmltypes are generated into the
@@ -37,9 +37,10 @@ ran locally. Everything except `clang-tidy` fails the build.
       `cmake --build <build-dir> --target update_translations`, then commit the
       changed `.ts` files. A new `%n` plural also needs its singular and plural
       written into `translations/dish_en.ts` by hand.
-- [ ] **`clang-tidy -p build`** over `src/*.cpp` excluding `src/UI/*`, against the
-      same Debug tree. Advisory: `.clang-tidy` sets `WarningsAsErrors: ''` and
-      the step does not fail. Read the findings anyway.
+- [ ] **`scripts/check-tidy.ps1`** (`clang-tidy` over `src/*.cpp` excluding
+      `src/UI/*`, against the same Debug tree). Findings fail the step: it
+      passes `--warnings-as-errors='*'`, the way `dish-linux` gates its sweep,
+      while the fleet-canonical `.clang-tidy` keeps `WarningsAsErrors: ''`.
 - [ ] **Release build** configures and builds
 
 `scripts\build.ps1 debug test` reproduces the build and test steps. The security

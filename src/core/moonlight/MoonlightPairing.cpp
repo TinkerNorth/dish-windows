@@ -18,13 +18,11 @@ namespace c = crypto;
 constexpr std::size_t kRsaSigLen = 256;
 
 c::Bytes toBytes(const std::string& s) {
-    return c::Bytes(reinterpret_cast<const std::uint8_t*>(s.data()),
-                    reinterpret_cast<const std::uint8_t*>(s.data()) + s.size());
+    return {reinterpret_cast<const std::uint8_t*>(s.data()),
+            reinterpret_cast<const std::uint8_t*>(s.data()) + s.size()};
 }
 
-std::string toStr(const c::Bytes& b) {
-    return std::string(reinterpret_cast<const char*>(b.data()), b.size());
-}
+std::string toStr(const c::Bytes& b) { return {reinterpret_cast<const char*>(b.data()), b.size()}; }
 
 } // namespace
 

@@ -10,6 +10,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <string>
 
 using namespace dish::moonlight;
@@ -308,8 +309,9 @@ TEST_CASE("the Satellite-only mic-mute bit never reaches a Moonlight button word
     CHECK(sanitizeButtonFlags(0xFFFF) == 0xF7FF);
     CHECK(sanitizeButtonFlags(0x0000) == 0x0000);
     // Every assigned XUSB bit passes untouched, alone and in company.
-    for (const std::uint16_t bit : {0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
-                                    0x0100, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000, 0x8000}) {
+    for (const std::uint16_t bit : std::array<std::uint16_t, 15>{
+             0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080, 0x0100, 0x0200, 0x0400,
+             0x1000, 0x2000, 0x4000, 0x8000}) {
         CHECK(sanitizeButtonFlags(bit) == bit);
         CHECK(sanitizeButtonFlags(static_cast<std::uint16_t>(bit | 0x0800)) == bit);
     }
