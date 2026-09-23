@@ -399,4 +399,18 @@ UpdateReduction reduceUpdate(const UpdateStatus& s, const UpdateEvent& event) {
     return stay(s);
 }
 
+UpdateStatus withQuarantinedHandoff(UpdateStatus s, const QString& handoffVersion,
+                                    int handoffAttempts) {
+    // An OLDER handoff version is one this install already moved past, by any route: it is not a
+    // failure to report, it is a record nothing has cleaned up yet.
+    if (handoffVersion.isEmpty() || !dish::update::isStrictlyNewer(handoffVersion, s.currentVersion)) {
+        return s;
+    }
+    if (handoffAttempts < kMaxApplyAttemptsPerVersion) { return s; }
+    if (s.checksEnabled) { s.phase = UpdatePhase::Failed; }
+    s.error = UpdateError::ApplyFailed;
+    s.availableVersion = handoffVersion;
+    return s;
+}
+
 } // namespace dish::reducer

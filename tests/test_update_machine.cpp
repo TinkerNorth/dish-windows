@@ -27,6 +27,7 @@ using dish::reducer::kFutureSkewEscapeMs;
 using dish::reducer::kManualMinGapMs;
 using dish::reducer::kMaxApplyAttemptsPerVersion;
 using dish::reducer::kMinCheckGapMs;
+using dish::reducer::withQuarantinedHandoff;
 using dish::reducer::kOverrunAllowanceBytes;
 using dish::reducer::kPeriodicIntervalMs;
 using dish::reducer::kReconnectCheckDelayMs;
@@ -831,4 +832,78 @@ TEST_CASE("update machine: every phase-event pair is total", "[update][update-fs
             CHECK(static_cast<int>(fromPhase.next.phase) <= static_cast<int>(UpdatePhase::Failed));
         }
     }
+}
+
+// ── The startup fold for a version that failed to install ───────────────────
+//
+// The previous process wrote these two settings keys and then deleted the stage.
+// Nothing else in the app reads them, so if this fold is wrong the app comes up
+// looking idle on a version that failed to install twice, and the user is never
+// offered the manual download.
+
+namespace {
+
+UpdateStatus atVersion(const char* current, bool checksEnabled = true) {
+    UpdateStatus s;
+    s.currentVersion = QString::fromLatin1(current);
+    s.checksEnabled = checksEnabled;
+    s.phase = checksEnabled ? UpdatePhase::Idle : UpdatePhase::Disabled;
+    return s;
+}
+
+} // namespace
+
+TEST_CASE("update handoff fold: a version that burned every attempt surfaces as failed",
+          "[update][update-fsm][handoff]") {
+    const auto s = withQuarantinedHandoff(atVersion("2.1.0"), QStringLiteral("2.2.0"),
+                                          kMaxApplyAttemptsPerVersion);
+    CHECK(s.phase == UpdatePhase::Failed);
+    CHECK(s.error == UpdateError::ApplyFailed);
+    // Named, because the manual download link is for a specific version.
+    CHECK(s.availableVersion == QStringLiteral("2.2.0"));
+}
+
+TEST_CASE("update handoff fold: one attempt left is not a failure yet",
+          "[update][update-fsm][handoff]") {
+    // The stage is still on disk and the next launch may well install it, so
+    // announcing a failure here would be wrong and would also hide the update.
+    const auto s = withQuarantinedHandoff(atVersion("2.1.0"), QStringLiteral("2.2.0"),
+                                          kMaxApplyAttemptsPerVersion - 1);
+    CHECK(s.phase == UpdatePhase::Idle);
+    CHECK(s.error == UpdateError::None);
+    CHECK(s.availableVersion.isEmpty());
+}
+
+TEST_CASE("update handoff fold: a version this build already passed is stale record, not failure",
+          "[update][update-fsm][handoff]") {
+    // The user updated by some other route - the installer, a portable swap -
+    // and the keys were never cleared. Reporting that as a failed update would
+    // put an error on a build that is newer than the one that failed.
+    for (const char* v : {"2.1.0", "2.0.9", "1.0.0"}) {
+        INFO("handoff version " << v);
+        const auto s = withQuarantinedHandoff(atVersion("2.1.0"), QString::fromLatin1(v),
+                                              kMaxApplyAttemptsPerVersion);
+        CHECK(s.phase == UpdatePhase::Idle);
+        CHECK(s.error == UpdateError::None);
+        CHECK(s.availableVersion.isEmpty());
+    }
+}
+
+TEST_CASE("update handoff fold: no handoff at all changes nothing", "[update][update-fsm][handoff]") {
+    const auto s = withQuarantinedHandoff(atVersion("2.1.0"), QString(), 99);
+    CHECK(s.phase == UpdatePhase::Idle);
+    CHECK(s.error == UpdateError::None);
+    CHECK(s.availableVersion.isEmpty());
+}
+
+TEST_CASE("update handoff fold: checks off keeps Disabled but still names the failure",
+          "[update][update-fsm][handoff]") {
+    // A user who switched updates off is not shown an update failure, so the
+    // phase does not move. The error and the version are still recorded: the
+    // moment checks are switched back on, what happened is already known.
+    const auto s = withQuarantinedHandoff(atVersion("2.1.0", /*checksEnabled=*/false),
+                                          QStringLiteral("2.2.0"), kMaxApplyAttemptsPerVersion);
+    CHECK(s.phase == UpdatePhase::Disabled);
+    CHECK(s.error == UpdateError::ApplyFailed);
+    CHECK(s.availableVersion == QStringLiteral("2.2.0"));
 }

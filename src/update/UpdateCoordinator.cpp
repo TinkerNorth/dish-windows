@@ -76,14 +76,21 @@ UpdateCoordinator::UpdateCoordinator(source::UpdatePreferenceStore* prefs,
     construct();
 }
 
-void UpdateCoordinator::construct() {
+// A one-shot: every later check is scheduled by an effect, so the timer is re-armed rather than
+// left to repeat.
+void UpdateCoordinator::armCheckTimer() {
     checkTimer_ = new QTimer(this);
     checkTimer_->setSingleShot(true);
     QObject::connect(checkTimer_, &QTimer::timeout, this, [this] {
         pendingCheckDelayMs_ = -1;
         dispatch(reducer::update_event::CheckRequested{reducer::UpdateTrigger::Periodic});
     });
+}
 
+// What the app comes up holding, before any event: this build's version, whether it can apply an
+// update at all, the stored preferences, and whatever the previous process's apply attempt left
+// behind in the settings.
+reducer::UpdateStatus UpdateCoordinator::initialStatus() const {
     reducer::UpdateStatus initial;
     initial.currentVersion = QString::fromLatin1(DISH_VERSION);
     initial.portable = !detectManagedInstall();
@@ -95,32 +102,28 @@ void UpdateCoordinator::construct() {
         initial.phase =
             values.checksEnabled ? reducer::UpdatePhase::Idle : reducer::UpdatePhase::Disabled;
     }
+    return reducer::withQuarantinedHandoff(
+        std::move(initial),
+        settings_.value(QLatin1String(source::kKeyUpdatesHandoffVersion)).toString(),
+        settings_.value(QLatin1String(source::kKeyUpdatesHandoffAttempts), 0).toInt());
+}
 
-    // A version that burned both apply attempts surfaces as ApplyFailed until
-    // the next successful check replaces it. The stage itself is already gone
-    // (UpdateHandoff::quarantine deleted it and muted the version).
-    const QString handoffVersion =
-        settings_.value(QLatin1String(source::kKeyUpdatesHandoffVersion)).toString();
-    const int handoffAttempts =
-        settings_.value(QLatin1String(source::kKeyUpdatesHandoffAttempts), 0).toInt();
-    if (!handoffVersion.isEmpty() && isStrictlyNewer(handoffVersion, initial.currentVersion) &&
-        handoffAttempts >= reducer::kMaxApplyAttemptsPerVersion) {
-        initial.phase = initial.checksEnabled ? reducer::UpdatePhase::Failed : initial.phase;
-        initial.error = reducer::UpdateError::ApplyFailed;
-        initial.availableVersion = handoffVersion;
-    }
-    status_.set(initial);
+void UpdateCoordinator::subscribeToPrefs() {
+    if (prefs_ == nullptr) { return; }
+    // emitCurrent=false: the initial slice is already folded into initialStatus(), and a synthetic
+    // PrefsChanged here would re-arm the startup schedule.
+    prefsSub_ = prefs_->state().subscribe(
+        [this](const source::UpdatePreferences& values) {
+            dispatch(reducer::update_event::PrefsChanged{values.checksEnabled, values.autoDownload,
+                                                        values.skippedVersion});
+        },
+        false);
+}
 
-    if (prefs_ != nullptr) {
-        // emitCurrent=false: the initial slice is already folded in above, and
-        // a synthetic PrefsChanged here would re-arm the startup schedule.
-        prefsSub_ = prefs_->state().subscribe(
-            [this](const source::UpdatePreferences& values) {
-                dispatch(reducer::update_event::PrefsChanged{
-                    values.checksEnabled, values.autoDownload, values.skippedVersion});
-            },
-            false);
-    }
+void UpdateCoordinator::construct() {
+    armCheckTimer();
+    status_.set(initialStatus());
+    subscribeToPrefs();
 
     if (QCoreApplication::instance() != nullptr) {
         QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this,

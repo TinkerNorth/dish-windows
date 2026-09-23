@@ -115,6 +115,12 @@ class UpdateCoordinator : public QObject {
 
   private:
     void construct();
+
+    // construct's three steps: the one-shot check timer, the state the app comes up holding, and
+    // the preference subscription that must not re-emit what that state already folded in.
+    void armCheckTimer();
+    reducer::UpdateStatus initialStatus() const;
+    void subscribeToPrefs();
     void dispatch(const reducer::UpdateEvent& event);
     void execute(const reducer::UpdateEffect& effect);
 
