@@ -106,73 +106,92 @@ void MoonlightHttpClient::getHttps(const QString& host, int httpsPort, const QSt
     perform(url, /*https=*/true, std::move(cb));
 }
 
-void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb) {
+namespace {
+
+// Self-signed host cert, so trust comes from the TOFU pin rather than a CA. Never offer a ticket,
+// never share a session between sockets, never persist one: see the header. A resumed handshake is
+// the one thing a Moonlight host will not survive.
+QSslConfiguration sslConfigFor(const std::optional<moonlight::Identity>& identity) {
+    QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
+    ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
+    ssl.setSslOption(QSsl::SslOptionDisableSessionTickets, true);
+    ssl.setSslOption(QSsl::SslOptionDisableSessionSharing, true);
+    ssl.setSslOption(QSsl::SslOptionDisableSessionPersistence, true);
+    ssl.setSessionTicket(QByteArray());
+    if (identity.has_value()) {
+        const QSslCertificate cert(QByteArray::fromStdString(identity->certPem), QSsl::Pem);
+        const QSslKey key(QByteArray::fromStdString(identity->privateKeyPem), QSsl::Rsa, QSsl::Pem);
+        if (!cert.isNull()) { ssl.setLocalCertificate(cert); }
+        if (!key.isNull()) { ssl.setPrivateKey(key); }
+    }
+    return ssl;
+}
+
+// Sunshine speaks HTTP/1.1 only, and one plain request per connection is what the teardown in
+// finishReply can reason about.
+QNetworkRequest requestFor(const QString& url, bool https,
+                           const std::optional<moonlight::Identity>& identity) {
     QNetworkRequest request{QUrl(url)};
-    // Sunshine speaks HTTP/1.1 only, and one plain request per connection is
-    // what the teardown below can reason about.
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+    if (https) { request.setSslConfiguration(sslConfigFor(identity)); }
+    return request;
+}
 
-    if (https) {
-        QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-        // Self-signed host cert: trust comes from the TOFU pin below, not a CA.
-        ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
-        // Never offer a ticket, never share a session between sockets, never
-        // persist one: see the header. A resumed handshake is the one thing a
-        // Moonlight host will not survive.
-        ssl.setSslOption(QSsl::SslOptionDisableSessionTickets, true);
-        ssl.setSslOption(QSsl::SslOptionDisableSessionSharing, true);
-        ssl.setSslOption(QSsl::SslOptionDisableSessionPersistence, true);
-        ssl.setSessionTicket(QByteArray());
-        if (identity_.has_value()) {
-            const QSslCertificate cert(QByteArray::fromStdString(identity_->certPem), QSsl::Pem);
-            const QSslKey key(QByteArray::fromStdString(identity_->privateKeyPem), QSsl::Rsa,
-                              QSsl::Pem);
-            if (!cert.isNull()) { ssl.setLocalCertificate(cert); }
-            if (!key.isNull()) { ssl.setPrivateKey(key); }
+// reachable is the distinction that matters to every caller: a host that answered and refused in
+// the body is a different thing from one that did not answer at all.
+MoonlightXmlResponse readReply(QNetworkReply* reply, const QString& path) {
+    MoonlightXmlResponse resp;
+    const QVariant status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    const int httpStatus = status.isValid() ? status.toInt() : 0;
+    if (reply->error() == QNetworkReply::NoError) {
+        resp = parseMoonlightXml(reply->readAll());
+        resp.reachable = true;
+        if (resp.ok()) {
+            qCDebug(lcMoonlightHttp) << path << "answered" << resp.statusCode;
+        } else {
+            qCWarning(lcMoonlightHttp)
+                << path << "refused in the body:" << resp.statusCode << resp.statusMessage
+                << "resume available:" << resp.resumeAvailable;
         }
-        request.setSslConfiguration(ssl);
+    } else {
+        resp.reachable = false;
+        qCWarning(lcMoonlightHttp)
+            << path << "unreachable:" << reply->errorString() << "http" << httpStatus;
     }
+    resp.httpStatus = httpStatus;
+    return resp;
+}
 
-    QNetworkReply* reply = nam_->get(request);
+} // namespace
 
-    if (https && pinVerifier_) {
-        const QString host = QUrl(url).host();
-        QObject::connect(reply, &QNetworkReply::encrypted, reply, [this, reply, host] {
-            const auto chain = reply->sslConfiguration().peerCertificateChain();
-            const QByteArray der = chain.isEmpty() ? QByteArray() : chain.first().toDer();
-            if (!pinVerifier_(host, der)) { reply->abort(); }
-        });
-    }
+// The pin is checked on `encrypted`, the last moment before any request bytes go out, so a host
+// whose certificate changed never sees the request at all.
+void MoonlightHttpClient::armPinCheck(QNetworkReply* reply, const QString& host) {
+    QObject::connect(reply, &QNetworkReply::encrypted, reply, [this, reply, host] {
+        const auto chain = reply->sslConfiguration().peerCertificateChain();
+        const QByteArray der = chain.isEmpty() ? QByteArray() : chain.first().toDer();
+        if (!pinVerifier_(host, der)) { reply->abort(); }
+    });
+}
+
+void MoonlightHttpClient::finishReply(QNetworkReply* reply, const QString& path,
+                                      const ResponseCb& cb) {
+    const MoonlightXmlResponse resp = readReply(reply, path);
+    reply->deleteLater();
+    // Leave the host holding nothing of ours between calls: a pooled idle connection is a socket
+    // the host has to keep, and the next request through it would be the one offering a session to
+    // resume.
+    nam_->clearConnectionCache();
+    if (cb) { cb(resp); }
+}
+
+void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb) {
+    QNetworkReply* reply = nam_->get(requestFor(url, https, identity_));
+    if (https && pinVerifier_) { armPinCheck(reply, QUrl(url).host()); }
 
     const QString path = QUrl(url).path();
-    QObject::connect(
-        reply, &QNetworkReply::finished, this, [this, reply, path, cb = std::move(cb)] {
-            MoonlightXmlResponse resp;
-            const QVariant status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
-            const int httpStatus = status.isValid() ? status.toInt() : 0;
-            if (reply->error() == QNetworkReply::NoError) {
-                resp = parseMoonlightXml(reply->readAll());
-                resp.reachable = true;
-                if (resp.ok()) {
-                    qCDebug(lcMoonlightHttp) << path << "answered" << resp.statusCode;
-                } else {
-                    qCWarning(lcMoonlightHttp)
-                        << path << "refused in the body:" << resp.statusCode << resp.statusMessage
-                        << "resume available:" << resp.resumeAvailable;
-                }
-            } else {
-                resp.reachable = false;
-                qCWarning(lcMoonlightHttp)
-                    << path << "unreachable:" << reply->errorString() << "http" << httpStatus;
-            }
-            resp.httpStatus = httpStatus;
-            reply->deleteLater();
-            // Leave the host holding nothing of ours between calls: a pooled idle
-            // connection is a socket the host has to keep, and the next request
-            // through it would be the one offering a session to resume.
-            nam_->clearConnectionCache();
-            if (cb) { cb(resp); }
-        });
+    QObject::connect(reply, &QNetworkReply::finished, this,
+                     [this, reply, path, cb = std::move(cb)] { finishReply(reply, path, cb); });
 }
 
 } // namespace dish::net
