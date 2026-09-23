@@ -8,6 +8,8 @@
 #include <QJsonValue>
 #include <QUrl>
 
+#include <optional>
+
 namespace dish::update {
 
 namespace {
@@ -35,20 +37,9 @@ QString sanitizedNotesUrl(const QJsonObject& root) {
     return value.toString();
 }
 
-} // namespace
-
-std::variant<UpdateManifest, ManifestError> UpdateManifest::parse(const QByteArray& body) {
-    if (body.size() > kManifestMaxBytes) { return ManifestError::Oversize; }
-
-    QJsonParseError parseError{};
-    const QJsonDocument doc = QJsonDocument::fromJson(body, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        return ManifestError::BadJson;
-    }
-    const QJsonObject root = doc.object();
-
-    UpdateManifest m;
-
+// Everything that identifies the release. Ordered so the most specific refusal wins: a manifest for
+// another product is reported as that rather than as a bad version it was never going to have.
+std::optional<ManifestError> parseRelease(const QJsonObject& root, UpdateManifest& m) {
     const QJsonValue schema = root.value(QLatin1String("schema"));
     if (!schema.isDouble() || schema.toInt(-1) != 1) { return ManifestError::UnsupportedSchema; }
     m.schema = 1;
@@ -70,17 +61,21 @@ std::variant<UpdateManifest, ManifestError> UpdateManifest::parse(const QByteArr
 
     // Display only; carried verbatim, never ordered on.
     m.publishedAt = root.value(QLatin1String("publishedAt")).toString();
-
     m.releaseNotesUrl = sanitizedNotesUrl(root);
+    return std::nullopt;
+}
 
+// The file that will be downloaded and run. Every field here is checked before anything is fetched,
+// because these three are what stand between a manifest and an installer on the user's machine.
+std::optional<ManifestError> parseSetupAsset(const QJsonObject& root, UpdateManifest& m) {
     const QJsonValue assets = root.value(QLatin1String("assets"));
     const QJsonValue setup = assets.toObject().value(QLatin1String(kSetupAssetName));
     if (!setup.isObject()) { return ManifestError::MissingSetupAsset; }
     const QJsonObject setupObj = setup.toObject();
 
     m.setupAsset.url = setupObj.value(QLatin1String("url")).toString();
-    // Prefix compare on the raw string: QUrl normalization could mask a
-    // lookalike ("github.com.evil.example") that plain startsWith rejects.
+    // Prefix compare on the raw string: QUrl normalization could mask a lookalike
+    // ("github.com.evil.example") that plain startsWith rejects.
     if (!m.setupAsset.url.startsWith(QLatin1String(kAssetUrlPrefix))) {
         return ManifestError::BadAssetUrl;
     }
@@ -94,7 +89,25 @@ std::variant<UpdateManifest, ManifestError> UpdateManifest::parse(const QByteArr
     if (m.setupAsset.size <= 0 || m.setupAsset.size >= kAssetMaxBytes) {
         return ManifestError::BadSize;
     }
+    return std::nullopt;
+}
 
+} // namespace
+
+std::variant<UpdateManifest, ManifestError> UpdateManifest::parse(const QByteArray& body) {
+    // Checked before the JSON is touched: an oversize body is refused without being parsed.
+    if (body.size() > kManifestMaxBytes) { return ManifestError::Oversize; }
+
+    QJsonParseError parseError{};
+    const QJsonDocument doc = QJsonDocument::fromJson(body, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+        return ManifestError::BadJson;
+    }
+    const QJsonObject root = doc.object();
+
+    UpdateManifest m;
+    if (const auto err = parseRelease(root, m)) { return *err; }
+    if (const auto err = parseSetupAsset(root, m)) { return *err; }
     return m;
 }
 

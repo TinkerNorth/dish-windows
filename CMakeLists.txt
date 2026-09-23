@@ -301,6 +301,7 @@ set(DISH_CORE_SOURCES
     src/source/connection/LANDiscovery.cpp
     src/source/connection/MdnsDiscovery.h
     src/source/connection/MdnsDiscovery.cpp
+    src/source/connection/MdnsScan.cpp
     src/source/connection/DiscoveryGateway.h
     src/source/connection/DiscoveryGateway.cpp
     src/source/http/SatelliteTlsVerifier.h
