@@ -52,6 +52,37 @@ void stampSlotPath(models::ControllerSlot& s, int vendorId, int productId, bool 
     s.directFailure = f.failure;
 }
 
+// A key is live only while its controller is still on the Direct path. Anything else is a
+// departed pad whose entry must go, so a stale value cannot linger on a reused key. True when
+// something was dropped.
+template <typename Value>
+bool pruneDeparted(QHash<int, Value>& byKey,
+                   const std::map<int, reducer::UsbController>& controllers) {
+    bool pruned = false;
+    for (auto it = byKey.begin(); it != byKey.end();) {
+        const auto cit = controllers.find(it.key());
+        const bool live =
+            cit != controllers.end() && cit->second.phase == reducer::UsbPhase::Direct;
+        if (live) {
+            ++it;
+        } else {
+            it = byKey.erase(it);
+            pruned = true;
+        }
+    }
+    return pruned;
+}
+
+std::vector<int> directSyntheticIds(const std::map<int, reducer::UsbController>& controllers) {
+    std::vector<int> present;
+    for (const auto& [key, c] : controllers) {
+        if (c.phase == reducer::UsbPhase::Direct && c.syntheticId.has_value()) {
+            present.push_back(*c.syntheticId);
+        }
+    }
+    return present;
+}
+
 } // namespace
 
 AppModel::AppModel(QObject* parent)
@@ -636,82 +667,51 @@ void AppModel::onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice n
     if (!msg.isEmpty()) { emit errorMessage(msg); }
 }
 
+// True when a rate moved or a departed pad's rate was dropped, either of which the slot list
+// renders.
+bool AppModel::applyUsbPollRates(const std::map<int, reducer::UsbController>& controllers) {
+    source::usb::WinHidGateway* gw = usbGateway_.get();
+    const auto updates = usbPollSampler_.sampleAll(
+        steadyNowMs(), directSyntheticIds(controllers),
+        [gw](int id) -> std::int64_t { return gw != nullptr ? gw->completionCount(id) : 0; });
+    if (updates.empty()) { return false; }
+
+    // The sampler is keyed by syntheticId but the UI's slot id is the controllers() map key, so
+    // they are translated here while both are in hand. A first sample emits no update and an idle
+    // one emits 0; 0 reads as "pending".
+    QHash<int, int> bySyntheticId;
+    for (const auto& u : updates) { bySyntheticId.insert(u.deviceId, u.rateHz); }
+    bool changed = false;
+    for (const auto& [key, c] : controllers) {
+        if (c.phase != reducer::UsbPhase::Direct || !c.syntheticId.has_value()) { continue; }
+        const auto it = bySyntheticId.constFind(*c.syntheticId);
+        if (it == bySyntheticId.constEnd()) { continue; }
+        if (usbPollRateHz_.value(key, -1) != it.value()) {
+            usbPollRateHz_.insert(key, it.value());
+            changed = true;
+        }
+    }
+    return pruneDeparted(usbPollRateHz_, controllers) || changed;
+}
+
 void AppModel::pollUsbDirect() {
     if (usbManager_ == nullptr) { return; }
-    // A pad that fails to claim falls back to SDL via the FSM, so an idempotent
-    // re-enumeration never regresses a working SDL pad.
+    // A pad that fails to claim falls back to SDL via the FSM, so an idempotent re-enumeration
+    // never regresses a working SDL pad.
     usbManager_->reconcile();
 
-    // ONE snapshot for the whole pass: controllers() returns BY VALUE, so
-    // calling it per lookup would compare find()/end() iterators from two
-    // different temporaries. That is UB, and the debug CRT asserts
-    // "map/set iterators incompatible" the moment a Direct pad exists.
+    // ONE snapshot for the whole pass: controllers() returns BY VALUE, so calling it per lookup
+    // would compare find()/end() iterators from two different temporaries. That is UB, and the
+    // debug CRT asserts "map/set iterators incompatible" the moment a Direct pad exists.
     const auto controllers = usbManager_->controllers();
-    std::vector<int> present;
-    for (const auto& [key, c] : controllers) {
-        if (c.phase == reducer::UsbPhase::Direct && c.syntheticId.has_value()) {
-            present.push_back(*c.syntheticId);
-        }
-    }
-    const auto nowMs =
-        static_cast<std::int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                      std::chrono::steady_clock::now().time_since_epoch())
-                                      .count());
-    source::usb::WinHidGateway* gw = usbGateway_.get();
-    const auto updates = usbPollSampler_.sampleAll(nowMs, present, [gw](int id) -> std::int64_t {
-        return gw != nullptr ? gw->completionCount(id) : 0;
-    });
-    // The sampler is keyed by syntheticId but the UI's slot id is the
-    // controllers() map key, so translate here while both are in hand. A first
-    // sample emits no update and an idle one emits 0; 0 reads as "pending".
-    if (!updates.empty()) {
-        QHash<int, int> bySyntheticId;
-        for (const auto& u : updates) { bySyntheticId.insert(u.deviceId, u.rateHz); }
-        bool changed = false;
-        for (const auto& [key, c] : controllers) {
-            if (c.phase != reducer::UsbPhase::Direct || !c.syntheticId.has_value()) { continue; }
-            const auto it = bySyntheticId.constFind(*c.syntheticId);
-            if (it == bySyntheticId.constEnd()) { continue; }
-            if (usbPollRateHz_.value(key, -1) != it.value()) {
-                usbPollRateHz_.insert(key, it.value());
-                changed = true;
-            }
-        }
-        // Prune departed synthetics so a stale rate can't linger on a reused key.
-        for (auto it = usbPollRateHz_.begin(); it != usbPollRateHz_.end();) {
-            const auto cit = controllers.find(it.key());
-            const bool live =
-                cit != controllers.end() && cit->second.phase == reducer::UsbPhase::Direct;
-            if (live) {
-                ++it;
-            } else {
-                it = usbPollRateHz_.erase(it);
-                changed = true;
-            }
-        }
-        if (changed) { rebuild(); }
-    }
-    // The charge readings prune on the same rule, so a re-claimed pad starts
-    // from its own first report rather than the last pad's.
-    {
-        bool pruned = false;
-        for (auto it = usbPadBattery_.begin(); it != usbPadBattery_.end();) {
-            const auto cit = controllers.find(it.key());
-            const bool live =
-                cit != controllers.end() && cit->second.phase == reducer::UsbPhase::Direct;
-            if (live) {
-                ++it;
-            } else {
-                it = usbPadBattery_.erase(it);
-                pruned = true;
-            }
-        }
-        if (pruned) { rebuild(); }
-    }
+    if (applyUsbPollRates(controllers)) { rebuild(); }
+    // The charge readings prune on the same rule, so a re-claimed pad starts from its own first
+    // report rather than the last pad's.
+    if (pruneDeparted(usbPadBattery_, controllers)) { rebuild(); }
+
     heartbeatDirectBatteries();
-    // Claims move on this poll, and a claimed pad is what makes an endpoint
-    // matchable at all. Cheap when nothing moved: the resolve compares before
-    // it publishes.
+    // Claims move on this poll, and a claimed pad is what makes an endpoint matchable at all.
+    // Cheap when nothing moved: the resolve compares before it publishes.
     resolveAudioRoutes();
 }
 

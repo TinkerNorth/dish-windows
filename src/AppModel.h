@@ -304,6 +304,10 @@ class AppModel : public QObject {
     void onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice notice);
     // Main thread only — it mutates the FSM.
     void pollUsbDirect();
+
+    // The poll-rate half of pollUsbDirect: sample, translate to slot keys, prune. True when the
+    // slot list has something new to render.
+    bool applyUsbPollRates(const std::map<int, reducer::UsbController>& controllers);
     void onUsbDirectChanged();
     // The read thread's battery edge, marshalled to the main thread.
     void onPadBatteryChanged(int vendorId, int productId, std::uint8_t level, std::uint8_t status);
