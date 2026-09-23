@@ -168,6 +168,7 @@ set(DISH_TEST_SOURCES
     test_crash_reporting.cpp
     test_main_ui_state.cpp
     test_window_hit_test.cpp
+    test_list_model_roles.cpp
     test_slot_list_model.cpp
     test_slot_path_fields.cpp
     test_connection_list_model.cpp
