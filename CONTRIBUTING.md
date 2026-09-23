@@ -152,6 +152,12 @@ alike.
   that every case is handled. A guard clause is not an algorithm: do not
   invent indirection where there is only one flow.
 
+  A function that stays long because splitting it would make it worse says so
+  at the top, in one or two lines. `reduceSession` and `decodeServerEvent` are
+  the examples: one is an exhaustive protocol table the compiler checks, the
+  other is a byte-offset decoder whose arms are its documentation. A long
+  function with no such note is one nobody has looked at.
+
 - **A chain of `if`s over one byte is a table.** A per-bit or per-index
   mapping belongs in a `constexpr` array the code reads, not in a switch the
   reader has to diff against its twin. The point is that two mappings of the
@@ -181,9 +187,12 @@ alike.
   `main.cpp`'s `QTranslator`, which Qt requires to outlive the call that
   installs it.
 
-- **Member naming.** Members carry the `m_` prefix this codebase already uses;
-  it is the same "state, not scratch" signal Parchment's `m` prefix gives at
-  the point of use. Keep it, and do not mix in a trailing underscore.
+- **Member naming.** Members carry a TRAILING underscore (`host_`, `probes_`,
+  `mtx_`): that is what almost every file in `src/` uses, and it is the same
+  "state, not scratch" signal Parchment's `m` prefix gives at the point of
+  use. Two files under `src/qml/chrome/` use an `m_` prefix instead; they were
+  written against a Qt sample and are the exception, not the pattern. Follow
+  the file you are in and do not mix the two within one class.
 
 - **Prefer a test to a comment.** Behaviour that needs explaining gets a test
   named for the behaviour. A comment is the last resort for a constraint that
