@@ -121,41 +121,46 @@ Reduction reduceClaiming(const UsbController& c, const UsbEvent& event) {
     return stay(c);
 }
 
-Reduction reduceDirect(const UsbController& c, const UsbEvent& event) {
-    if (const auto* ch = as<event::Choose>(event)) {
-        if (ch->choice == PathChoice::Standard) {
-            if (!c.frameworkExpected) {
-                // No framework gamepad follows this release, so there is nothing
-                // to wait for: the device-side restore in Release is the whole
-                // hand-back.
-                UsbController n = c;
-                n.phase = UsbPhase::Routed;
-                n.desired = PathChoice::Standard;
-                n.frameworkId.reset();
-                n.syntheticId.reset();
-                n.userInitiated = ch->userInitiated;
-                n.failure.reset();
-                std::vector<UsbEffect> fx;
-                fx.push_back(effect::Release{});
-                if (c.syntheticId.has_value()) {
-                    fx.push_back(effect::RemoveSynthetic{*c.syntheticId});
-                }
-                fx.push_back(effect::SetPref{PathChoice::Standard});
-                fx.push_back(effect::ClearFailure{});
-                return Reduction{std::move(n), std::move(fx)};
-            }
-            // Keep the synthetic as a held placeholder while the framework device
-            // comes back; if it never does, RestoreStuck lets the user choose.
-            UsbController n = c;
-            n.phase = UsbPhase::AwaitingFramework;
-            n.userInitiated = ch->userInitiated;
-            n.failure.reset();
-            return Reduction{std::move(n), {effect::Release{}, effect::StartTimeout{}}};
-        }
+// No framework gamepad follows this release, so there is nothing to wait for: the device-side
+// restore in Release is the whole hand-back.
+static Reduction releaseWithNoFrameworkToWaitFor(const UsbController& c, const event::Choose& ch) {
+    UsbController n = c;
+    n.phase = UsbPhase::Routed;
+    n.desired = PathChoice::Standard;
+    n.frameworkId.reset();
+    n.syntheticId.reset();
+    n.userInitiated = ch.userInitiated;
+    n.failure.reset();
+    std::vector<UsbEffect> fx;
+    fx.push_back(effect::Release{});
+    if (c.syntheticId.has_value()) { fx.push_back(effect::RemoveSynthetic{*c.syntheticId}); }
+    fx.push_back(effect::SetPref{PathChoice::Standard});
+    fx.push_back(effect::ClearFailure{});
+    return Reduction{std::move(n), std::move(fx)};
+}
+
+// The synthetic stays as a held placeholder while the framework device comes back; if it never
+// does, RestoreStuck lets the user choose.
+static Reduction releaseAndAwaitFramework(const UsbController& c, const event::Choose& ch) {
+    UsbController n = c;
+    n.phase = UsbPhase::AwaitingFramework;
+    n.userInitiated = ch.userInitiated;
+    n.failure.reset();
+    return Reduction{std::move(n), {effect::Release{}, effect::StartTimeout{}}};
+}
+
+static Reduction directChoose(const UsbController& c, const event::Choose& ch) {
+    if (ch.choice != PathChoice::Standard) {
         UsbController n = c;
         n.desired = PathChoice::Direct;
         return stay(std::move(n));
     }
+    if (!c.frameworkExpected) { return releaseWithNoFrameworkToWaitFor(c, ch); }
+    return releaseAndAwaitFramework(c, ch);
+}
+
+Reduction reduceDirect(const UsbController& c, const UsbEvent& event) {
+    if (const auto* ch = as<event::Choose>(event)) { return directChoose(c, *ch); }
     if (const auto* up = as<event::FrameworkUp>(event)) {
         UsbController n = c;
         n.frameworkId = up->id;
@@ -218,61 +223,73 @@ Reduction reduceAwaiting(const UsbController& c, const UsbEvent& event) {
     return stay(c);
 }
 
-Reduction reduceRestoreStuck(const UsbController& c, const UsbEvent& event) {
-    if (const auto* ch = as<event::Choose>(event)) {
-        if (ch->choice == PathChoice::Direct) {
-            UsbController n = c;
-            n.desired = PathChoice::Direct;
-            n.userInitiated = ch->userInitiated;
-            return Reduction{std::move(n), {effect::Reclaim{}}};
-        }
-        // Wait for the framework once more. This rarely succeeds without a
-        // replug, but it is the user's call now.
-        UsbController n = c;
-        n.phase = UsbPhase::AwaitingFramework;
-        n.userInitiated = ch->userInitiated;
-        return Reduction{std::move(n), {effect::ClearRestoreStuck{}, effect::StartTimeout{}}};
-    }
-    if (const auto* ok = as<event::ClaimSucceeded>(event)) {
-        UsbController n = c;
-        n.phase = UsbPhase::Direct;
-        n.syntheticId = ok->syntheticId;
+// Standard waits for the framework once more. That rarely succeeds without a replug, but from
+// here it is the user's call.
+static Reduction restoreStuckChoose(const UsbController& c, const event::Choose& ch) {
+    UsbController n = c;
+    n.userInitiated = ch.userInitiated;
+    if (ch.choice == PathChoice::Direct) {
         n.desired = PathChoice::Direct;
-        n.failure.reset();
-        return Reduction{std::move(n),
-                         {effect::SetPref{PathChoice::Direct}, effect::ClearFailure{},
-                          effect::Notify{UsbNotice::RolledBackToDirect}}};
+        return Reduction{std::move(n), {effect::Reclaim{}}};
     }
-    if (as<event::ClaimFailed>(event) != nullptr) {
-        // The device is gone. The Reclaim effector already dropped the synthetic
-        // placeholder, so only the Dropped reason needs surfacing.
-        UsbController n = c;
-        n.phase = UsbPhase::NeedsReplug;
-        n.syntheticId.reset();
-        n.failure = DirectClaimFailure::Dropped;
-        return Reduction{std::move(n),
-                         {effect::MarkFailure{DirectClaimFailure::Dropped},
-                          effect::Notify{UsbNotice::RestoreFailed}}};
+    n.phase = UsbPhase::AwaitingFramework;
+    return Reduction{std::move(n), {effect::ClearRestoreStuck{}, effect::StartTimeout{}}};
+}
+
+static Reduction restoreStuckClaimSucceeded(const UsbController& c,
+                                            const event::ClaimSucceeded& ok) {
+    UsbController n = c;
+    n.phase = UsbPhase::Direct;
+    n.syntheticId = ok.syntheticId;
+    n.desired = PathChoice::Direct;
+    n.failure.reset();
+    return Reduction{std::move(n),
+                     {effect::SetPref{PathChoice::Direct}, effect::ClearFailure{},
+                      effect::Notify{UsbNotice::RolledBackToDirect}}};
+}
+
+// The device is gone. The Reclaim effector already dropped the synthetic placeholder, so only the
+// Dropped reason needs surfacing.
+static Reduction restoreStuckClaimFailed(const UsbController& c) {
+    UsbController n = c;
+    n.phase = UsbPhase::NeedsReplug;
+    n.syntheticId.reset();
+    n.failure = DirectClaimFailure::Dropped;
+    return Reduction{std::move(n),
+                     {effect::MarkFailure{DirectClaimFailure::Dropped},
+                      effect::Notify{UsbNotice::RestoreFailed}}};
+}
+
+// The framework device came back after all: whichever placeholder was standing in for it goes,
+// and the slot binds to the real one.
+static Reduction restoreStuckFrameworkUp(const UsbController& c, const event::FrameworkUp& up) {
+    std::vector<UsbEffect> fx;
+    if (c.syntheticId.has_value()) {
+        fx.push_back(effect::RemoveSynthetic{*c.syntheticId});
+    } else {
+        fx.push_back(effect::EndHold{});
     }
-    if (const auto* up = as<event::FrameworkUp>(event)) {
-        std::vector<UsbEffect> fx;
-        if (c.syntheticId.has_value()) {
-            fx.push_back(effect::RemoveSynthetic{*c.syntheticId});
-        } else {
-            fx.push_back(effect::EndHold{});
-        }
-        fx.push_back(effect::BindFramework{up->id});
-        fx.push_back(effect::SetPref{PathChoice::Standard});
-        fx.push_back(effect::ClearRestoreStuck{});
-        fx.push_back(effect::ClearFailure{});
-        UsbController n = c;
-        n.phase = UsbPhase::Routed;
-        n.frameworkId = up->id;
-        n.syntheticId.reset();
-        n.desired = PathChoice::Standard;
-        n.failure.reset();
-        return Reduction{std::move(n), std::move(fx)};
+    fx.push_back(effect::BindFramework{up.id});
+    fx.push_back(effect::SetPref{PathChoice::Standard});
+    fx.push_back(effect::ClearRestoreStuck{});
+    fx.push_back(effect::ClearFailure{});
+
+    UsbController n = c;
+    n.phase = UsbPhase::Routed;
+    n.frameworkId = up.id;
+    n.syntheticId.reset();
+    n.desired = PathChoice::Standard;
+    n.failure.reset();
+    return Reduction{std::move(n), std::move(fx)};
+}
+
+Reduction reduceRestoreStuck(const UsbController& c, const UsbEvent& event) {
+    if (const auto* ch = as<event::Choose>(event)) { return restoreStuckChoose(c, *ch); }
+    if (const auto* ok = as<event::ClaimSucceeded>(event)) {
+        return restoreStuckClaimSucceeded(c, *ok);
     }
+    if (as<event::ClaimFailed>(event) != nullptr) { return restoreStuckClaimFailed(c); }
+    if (const auto* up = as<event::FrameworkUp>(event)) { return restoreStuckFrameworkUp(c, *up); }
     if (as<event::PermissionGranted>(event) != nullptr) {
         UsbController n = c;
         n.hasPermission = true;
