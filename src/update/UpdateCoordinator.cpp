@@ -352,157 +352,173 @@ void UpdateCoordinator::dispatch(const reducer::UpdateEvent& event) {
     for (const reducer::UpdateEffect& effect : reduction.effects) { execute(effect); }
 }
 
+// `manual` only relaxes checkNow()'s rate limit, which has already been applied by the time the
+// effect reaches here; the request is identical either way.
+void UpdateCoordinator::executeFetchManifest() {
+    auto* gateway = manifestGateway();
+    if (gateway == nullptr) {
+        dispatch(reducer::update_event::CheckFailed{reducer::UpdateError::Http});
+        return;
+    }
+    gateway->fetch([this](const ManifestFetchResult& result) { onManifestFetched(result); });
+}
+
+void UpdateCoordinator::onManifestFetched(const ManifestFetchResult& result) {
+    if (!result.manifest.has_value()) {
+        dispatch(reducer::update_event::CheckFailed{result.error});
+        return;
+    }
+    manifestBody_ = result.body;
+    dispatch(reducer::update_event::ManifestArrived{*result.manifest});
+}
+
+// The failure ladder is jittered and nothing else is: the 15 s startup delay and the 4 h interval
+// are asserted verbatim, and spreading retries is what the jitter is for.
+void UpdateCoordinator::executeScheduleNextCheck(
+    const reducer::update_effect::ScheduleNextCheck& schedule) {
+    if (!status_.value().checksEnabled) { return; }
+    int delay = schedule.delayMs;
+    if (status_.value().phase == reducer::UpdatePhase::Failed) {
+        const double unit = QRandomGenerator::global()->generateDouble();
+        delay = reducer::jitteredDelayMs(delay, unit);
+    }
+    pendingCheckDelayMs_ = delay;
+    checkTimer_->start(delay);
+}
+
+// Null when there is nowhere to stage: no store, no root, no room, or no gateway. Each has its own
+// error, because the user can act on a full disk and cannot act on the others.
+std::optional<DownloadRequest>
+UpdateCoordinator::prepareDownload(const reducer::update_effect::StartDownload& request) {
+    auto* staging = stagingStore();
+    if (staging == nullptr || staging->root().isEmpty()) {
+        runOnMain(
+            [this] { dispatch(reducer::update_event::DownloadFailed{reducer::UpdateError::Io}); });
+        return std::nullopt;
+    }
+    if (!staging->hasRoomFor(static_cast<qint64>(request.size))) {
+        runOnMain([this] {
+            dispatch(reducer::update_event::DownloadFailed{reducer::UpdateError::DiskFull});
+        });
+        return std::nullopt;
+    }
+    if (downloadGateway() == nullptr) {
+        runOnMain(
+            [this] { dispatch(reducer::update_event::DownloadFailed{reducer::UpdateError::Io}); });
+        return std::nullopt;
+    }
+    DownloadRequest job;
+    job.url = request.url;
+    job.sha256 = request.sha256;
+    job.size = static_cast<qint64>(request.size);
+    job.version = request.version;
+    job.partPath = staging->partPathFor(request.version);
+    return job;
+}
+
+// Every callback hops back to the main thread before dispatching: the reducer and the status flow
+// are main-thread-only, and the gateway calls these from its own.
+void UpdateCoordinator::startDownload(const DownloadRequest& job) {
+    downloadGateway()->start(
+        job,
+        [this](qint64 total) {
+            runOnMain([this, total] {
+                dispatch(reducer::update_event::DownloadStarted{static_cast<quint64>(total)});
+            });
+        },
+        [this](qint64 receivedBytes) {
+            runOnMain([this, receivedBytes] {
+                dispatch(
+                    reducer::update_event::DownloadProgress{static_cast<quint64>(receivedBytes)});
+            });
+        },
+        [this](const DownloadOutcome& outcome) {
+            runOnMain([this, outcome] { onDownloadFinished(outcome); });
+        });
+}
+
+void UpdateCoordinator::onDownloadFinished(const DownloadOutcome& outcome) {
+    if (outcome.ok) {
+        dispatch(reducer::update_event::DownloadFinished{outcome.partPath});
+        return;
+    }
+    dispatch(reducer::update_event::DownloadFailed{outcome.error});
+}
+
+void UpdateCoordinator::executeStartDownload(const reducer::update_effect::StartDownload& request) {
+    runOnWorker([this, request] {
+        const auto job = prepareDownload(request);
+        if (!job.has_value()) { return; }
+        startDownload(*job);
+    });
+}
+
+// Deliberately NOT downloadGateway(): an abort with nothing in flight (checks turned off before
+// any download started) must not be the thing that finally constructs a QNAM.
+void UpdateCoordinator::executeAbortDownload() {
+    runOnWorker([this] {
+        DownloadGateway* gateway = ports_.download ? ports_.download.get() : downloadOwned_.get();
+        if (gateway != nullptr) { gateway->abort(); }
+    });
+}
+
+void UpdateCoordinator::executeVerifyAndPromote(
+    const reducer::update_effect::VerifyAndPromote& verify) {
+    const QString version = verify.version;
+    const QString sha256 = verify.sha256;
+    const qint64 size = static_cast<qint64>(status_.value().availableAsset.size);
+    const QByteArray body = manifestBody_;
+    runOnWorker([this, version, sha256, size, body] {
+        auto* staging = stagingStore();
+        const auto readyDir = staging != nullptr ? staging->promote(version, sha256, size, body)
+                                                 : std::optional<QString>{};
+        runOnMain([this, readyDir] {
+            if (readyDir.has_value()) {
+                dispatch(reducer::update_event::VerifyOk{*readyDir});
+            } else {
+                dispatch(reducer::update_event::VerifyFailed{});
+            }
+        });
+    });
+}
+
+// Fired once per key: a notice the user has already seen for this version is not repeated when the
+// same effect comes round again.
+void UpdateCoordinator::executeNotify(const reducer::update_effect::Notify& notifyEffect) {
+    const QString key = noticeKey(notifyEffect.notice, notifyEffect.version);
+    if (firedNotices_.contains(key)) { return; }
+    firedNotices_.append(key);
+    emit notice(notifyEffect.notice, notifyEffect.version);
+}
+
 void UpdateCoordinator::execute(const reducer::UpdateEffect& effect) {
     if (std::get_if<reducer::update_effect::FetchManifest>(&effect) != nullptr) {
-        // `manual` only relaxes checkNow()'s rate limit, which has already been
-        // applied by the time the effect reaches here; the request is identical.
-        auto* gateway = manifestGateway();
-        if (gateway == nullptr) {
-            dispatch(reducer::update_event::CheckFailed{reducer::UpdateError::Http});
-            return;
-        }
-        gateway->fetch([this](const ManifestFetchResult& result) {
-            if (!result.manifest.has_value()) {
-                dispatch(reducer::update_event::CheckFailed{result.error});
-                return;
-            }
-            manifestBody_ = result.body;
-            dispatch(reducer::update_event::ManifestArrived{*result.manifest});
-        });
-        return;
-    }
-
-    if (const auto* schedule = std::get_if<reducer::update_effect::ScheduleNextCheck>(&effect)) {
-        if (!status_.value().checksEnabled) { return; }
-        int delay = schedule->delayMs;
-        // Jitter the failure ladder only: the 15 s startup delay and the 4 h
-        // interval are asserted verbatim, and spreading retries is what the
-        // jitter is for.
-        if (status_.value().phase == reducer::UpdatePhase::Failed) {
-            const double unit = QRandomGenerator::global()->generateDouble();
-            delay = reducer::jitteredDelayMs(delay, unit);
-        }
-        pendingCheckDelayMs_ = delay;
-        checkTimer_->start(delay);
-        return;
-    }
-
-    if (const auto* download = std::get_if<reducer::update_effect::StartDownload>(&effect)) {
-        const reducer::update_effect::StartDownload request = *download;
-        runOnWorker([this, request] {
-            auto* staging = stagingStore();
-            if (staging == nullptr || staging->root().isEmpty()) {
-                runOnMain([this] {
-                    dispatch(reducer::update_event::DownloadFailed{reducer::UpdateError::Io});
-                });
-                return;
-            }
-            if (!staging->hasRoomFor(static_cast<qint64>(request.size))) {
-                runOnMain([this] {
-                    dispatch(reducer::update_event::DownloadFailed{reducer::UpdateError::DiskFull});
-                });
-                return;
-            }
-            auto* gateway = downloadGateway();
-            if (gateway == nullptr) {
-                runOnMain([this] {
-                    dispatch(reducer::update_event::DownloadFailed{reducer::UpdateError::Io});
-                });
-                return;
-            }
-            DownloadRequest job;
-            job.url = request.url;
-            job.sha256 = request.sha256;
-            job.size = static_cast<qint64>(request.size);
-            job.version = request.version;
-            job.partPath = staging->partPathFor(request.version);
-            gateway->start(
-                job,
-                [this](qint64 total) {
-                    runOnMain([this, total] {
-                        dispatch(
-                            reducer::update_event::DownloadStarted{static_cast<quint64>(total)});
-                    });
-                },
-                [this](qint64 receivedBytes) {
-                    runOnMain([this, receivedBytes] {
-                        dispatch(reducer::update_event::DownloadProgress{
-                            static_cast<quint64>(receivedBytes)});
-                    });
-                },
-                [this](const DownloadOutcome& outcome) {
-                    runOnMain([this, outcome] {
-                        if (outcome.ok) {
-                            dispatch(reducer::update_event::DownloadFinished{outcome.partPath});
-                        } else {
-                            dispatch(reducer::update_event::DownloadFailed{outcome.error});
-                        }
-                    });
-                });
-        });
-        return;
-    }
-
-    if (std::get_if<reducer::update_effect::AbortDownload>(&effect) != nullptr) {
-        runOnWorker([this] {
-            // Deliberately NOT downloadGateway(): an abort with nothing in
-            // flight (checks turned off before any download started) must not
-            // be the thing that finally constructs a QNAM.
-            DownloadGateway* gateway =
-                ports_.download ? ports_.download.get() : downloadOwned_.get();
-            if (gateway != nullptr) { gateway->abort(); }
-        });
-        return;
-    }
-
-    if (const auto* verify = std::get_if<reducer::update_effect::VerifyAndPromote>(&effect)) {
-        const QString version = verify->version;
-        const QString sha256 = verify->sha256;
-        const qint64 size = static_cast<qint64>(status_.value().availableAsset.size);
-        const QByteArray body = manifestBody_;
-        runOnWorker([this, version, sha256, size, body] {
-            auto* staging = stagingStore();
-            const auto readyDir = staging != nullptr ? staging->promote(version, sha256, size, body)
-                                                     : std::optional<QString>{};
-            runOnMain([this, readyDir] {
-                if (readyDir.has_value()) {
-                    dispatch(reducer::update_event::VerifyOk{*readyDir});
-                } else {
-                    dispatch(reducer::update_event::VerifyFailed{});
-                }
-            });
-        });
-        return;
-    }
-
-    if (const auto* discard = std::get_if<reducer::update_effect::DiscardStaged>(&effect)) {
+        executeFetchManifest();
+    } else if (const auto* schedule =
+                   std::get_if<reducer::update_effect::ScheduleNextCheck>(&effect)) {
+        executeScheduleNextCheck(*schedule);
+    } else if (const auto* download = std::get_if<reducer::update_effect::StartDownload>(&effect)) {
+        executeStartDownload(*download);
+    } else if (std::get_if<reducer::update_effect::AbortDownload>(&effect) != nullptr) {
+        executeAbortDownload();
+    } else if (const auto* verify =
+                   std::get_if<reducer::update_effect::VerifyAndPromote>(&effect)) {
+        executeVerifyAndPromote(*verify);
+    } else if (const auto* discard = std::get_if<reducer::update_effect::DiscardStaged>(&effect)) {
         const QString version = discard->version;
         runOnWorker([this, version] {
             if (auto* staging = stagingStore()) { staging->discard(version); }
         });
-        return;
-    }
-
-    if (std::get_if<reducer::update_effect::SweepStaging>(&effect) != nullptr) {
+    } else if (std::get_if<reducer::update_effect::SweepStaging>(&effect) != nullptr) {
         const QString current = status_.value().currentVersion;
         runOnWorker([this, current] {
             if (auto* staging = stagingStore()) { staging->sweep(current); }
         });
-        return;
-    }
-
-    if (std::get_if<reducer::update_effect::PersistLastCheck>(&effect) != nullptr) {
+    } else if (std::get_if<reducer::update_effect::PersistLastCheck>(&effect) != nullptr) {
         settings_.setValue(QLatin1String(source::kKeyUpdatesLastCheckUtcMs), nowMs());
         settings_.sync();
-        return;
-    }
-
-    if (const auto* notifyEffect = std::get_if<reducer::update_effect::Notify>(&effect)) {
-        const QString key = noticeKey(notifyEffect->notice, notifyEffect->version);
-        if (firedNotices_.contains(key)) { return; }
-        firedNotices_.append(key);
-        emit notice(notifyEffect->notice, notifyEffect->version);
-        return;
+    } else if (const auto* notifyEffect = std::get_if<reducer::update_effect::Notify>(&effect)) {
+        executeNotify(*notifyEffect);
     }
 }
 

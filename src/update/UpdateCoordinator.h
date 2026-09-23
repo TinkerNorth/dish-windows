@@ -118,6 +118,20 @@ class UpdateCoordinator : public QObject {
     void dispatch(const reducer::UpdateEvent& event);
     void execute(const reducer::UpdateEffect& effect);
 
+    // One executor per effect that has a body. The three one-liners (discard, sweep, persist)
+    // stay in the dispatch.
+    void executeFetchManifest();
+    void onManifestFetched(const ManifestFetchResult& result);
+    void executeScheduleNextCheck(const reducer::update_effect::ScheduleNextCheck& schedule);
+    std::optional<DownloadRequest>
+    prepareDownload(const reducer::update_effect::StartDownload& request);
+    void startDownload(const DownloadRequest& job);
+    void onDownloadFinished(const DownloadOutcome& outcome);
+    void executeStartDownload(const reducer::update_effect::StartDownload& request);
+    void executeAbortDownload();
+    void executeVerifyAndPromote(const reducer::update_effect::VerifyAndPromote& verify);
+    void executeNotify(const reducer::update_effect::Notify& notifyEffect);
+
     void reconcileAfterApply();
     void scanStaging();
     void scheduleStartupCheck();
