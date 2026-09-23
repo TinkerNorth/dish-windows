@@ -577,109 +577,144 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     return ClaimResult::success(syntheticId);
 }
 
+namespace {
+
+// Short enough that running=false is observed promptly, long enough that an idle pad does not spin
+// the read thread.
+constexpr DWORD kReadWaitMs = 100;
+
+// What one overlapped read came back with. Idle covers both a wait timeout and a zero-length
+// read: neither is an error and neither carries a report.
+enum class ReadOutcome { Report, Idle, Stop };
+
+ReadOutcome readOneReport(HANDLE handle, OVERLAPPED& ov, std::array<std::uint8_t, 128>& buf,
+                          DWORD& read) {
+    read = 0;
+    ResetEvent(ov.hEvent);
+    if (ReadFile(handle, buf.data(), static_cast<DWORD>(buf.size()), &read, &ov) == 0) {
+        if (GetLastError() != ERROR_IO_PENDING) { return ReadOutcome::Stop; }
+        if (WaitForSingleObject(ov.hEvent, kReadWaitMs) == WAIT_TIMEOUT) {
+            CancelIo(handle);
+            return ReadOutcome::Idle;
+        }
+        if (GetOverlappedResult(handle, &ov, &read, FALSE) == 0) { return ReadOutcome::Stop; }
+    }
+    if (read == 0) { return ReadOutcome::Idle; }
+    return ReadOutcome::Report;
+}
+
+// The Steam Controller's vendor collection is id-less, so Windows prepends a 0x00 report-id byte
+// the wire packet never carried; the decoders expect the packet as it left the device.
+void stripPrependedReportId(const std::uint8_t*& data, std::size_t& len) {
+    if (len > 1 && data[0] == 0x00) {
+        data += 1;
+        len -= 1;
+    }
+}
+
+// Straight field copy: ParsedReport is the decoder's shape and UsbReport is the gateway's.
+// micMuted is the latch rather than the button, mirrored up so the driver can edge-detect it.
+UsbReport toUsbReport(const input::usbparse::ParsedReport& parsed, const bool micMuted) {
+    UsbReport report{};
+    report.wButtons = parsed.wButtons;
+    report.micMuted = micMuted;
+    report.lt = parsed.lt;
+    report.rt = parsed.rt;
+    report.lx = parsed.lx;
+    report.ly = parsed.ly;
+    report.rx = parsed.rx;
+    report.ry = parsed.ry;
+    report.motionValid = parsed.motionValid;
+    report.gyroX = parsed.gyroX;
+    report.gyroY = parsed.gyroY;
+    report.gyroZ = parsed.gyroZ;
+    report.accelX = parsed.accelX;
+    report.accelY = parsed.accelY;
+    report.accelZ = parsed.accelZ;
+    report.touchpadValid = parsed.touchpadValid;
+    report.finger0Active = parsed.finger0Active;
+    report.finger0Id = parsed.finger0Id;
+    report.finger0X = parsed.finger0X;
+    report.finger0Y = parsed.finger0Y;
+    report.finger1Active = parsed.finger1Active;
+    report.finger1Id = parsed.finger1Id;
+    report.finger1X = parsed.finger1X;
+    report.finger1Y = parsed.finger1Y;
+    report.touchpadButton = parsed.touchpadButton;
+    report.batteryValid = parsed.batteryValid;
+    report.batteryLevel = parsed.batteryLevel;
+    report.batteryStatus = parsed.batteryStatus;
+    return report;
+}
+
+} // namespace
+
+// True when the packet was a dongle event rather than input, and the loop should take the next
+// report. Connect and disconnect interleave with input on the Steam dongle.
+bool WinHidGateway::handleSteamWirelessEvent(void* handle, Claimed* c, const std::uint8_t* data,
+                                             std::size_t len) {
+    const auto ev = input::usbparse::checkWirelessEvent(c->parser, data, len);
+    if (ev == input::usbparse::WirelessEvent::Connect) {
+        // A returning pad has rebooted, so its settings are gone and quiet mode is re-applied.
+        runSteamConfig(static_cast<HANDLE>(handle), c->featureReportLen,
+                       input::usbparse::SteamConfig::Quiet);
+        return true;
+    }
+    if (ev == input::usbparse::WirelessEvent::Disconnect) {
+        // A departing pad's last input must not stay latched.
+        if (c->onReport) { c->onReport(UsbReport{}); }
+        return true;
+    }
+    return false;
+}
+
+// A descriptor-driven layout wins where the device published one; everything else goes through the
+// per-model decoder chosen at claim time.
+bool WinHidGateway::decodeOneReport(Claimed* c, const std::uint8_t* data, std::size_t len,
+                                    input::usbparse::ParsedReport& parsed) {
+    if (c->hidp != nullptr && c->hidp->valid) { return c->hidp->decode(data, len, parsed); }
+    return input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks, &c->micMute);
+}
+
+// Plain C++ on its own thread: no allocation per report, no Qt. Each HID input report is decoded
+// into a normalised XUSB report via the pure core/input/UsbReportParsers decoders and handed to
+// onReport, which publishes through GamepadInputProcessor.
+//
+// Allocation discipline: the read buffer and the ParsedReport scratch live on this thread's stack
+// and are reused every iteration; the decoder is a pure function over those, mutating the device's
+// stick auto-range state in place. HidP_GetUsageValue/GetUsages walk preparsed data in user mode,
+// with no IO and no allocation. Nothing on the per-report path heap-allocates.
+//
+// NOTE: the button/stick/trigger byte offsets mirror dish-android's usb_parsers.cpp 1:1
+// (hardware-validated there). The DS4/DualSense IMU and touchpad offsets are the public
+// hid-playstation layout and need a final sign/scale check against real pads (flagged in
+// UsbReportParsers.h).
 void WinHidGateway::readLoop(Claimed* c) {
-    // The read loop is plain C++ on its own thread — no allocation per report, no
-    // Qt. It decodes each HID input report into a normalised XUSB report via the
-    // pure core/input/UsbReportParsers decoders (chosen per-model at claim time)
-    // and hands it to onReport, which publishes through GamepadInputProcessor.
-    //
-    // Allocation discipline: the read buffer + the ParsedReport scratch live on
-    // this thread's stack and are reused every iteration; the decoder is a pure
-    // function over those, mutating the device's stick auto-range state in place.
-    // HidP_GetUsageValue/GetUsages walk preparsed data in user mode — no IO, no
-    // allocation. Nothing on the per-report path heap-allocates.
-    //
-    // NOTE: the button/stick/trigger byte offsets mirror dish-android's
-    // usb_parsers.cpp 1:1 (hardware-validated there). The DS4/DualSense IMU +
-    // touchpad offsets are the public hid-playstation layout and need a final
-    // sign/scale check against real pads (flagged in UsbReportParsers.h).
     auto* handle = static_cast<HANDLE>(c->handle);
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
     ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     while (c->running.load()) {
         DWORD read = 0;
-        ResetEvent(ov.hEvent);
-        if (ReadFile(handle, buf.data(), static_cast<DWORD>(buf.size()), &read, &ov) == 0) {
-            if (GetLastError() != ERROR_IO_PENDING) { break; }
-            // Wait with a short timeout so running=false is observed promptly.
-            const DWORD w = WaitForSingleObject(ov.hEvent, 100);
-            if (w == WAIT_TIMEOUT) {
-                CancelIo(handle);
-                continue;
-            }
-            if (GetOverlappedResult(handle, &ov, &read, FALSE) == 0) { break; }
-        }
-        if (read == 0) { continue; }
+        const ReadOutcome outcome = readOneReport(handle, ov, buf, read);
+        if (outcome == ReadOutcome::Stop) { break; }
+        if (outcome == ReadOutcome::Idle) { continue; }
         c->completions.fetch_add(1);
 
         const std::uint8_t* data = buf.data();
         auto len = static_cast<std::size_t>(read);
         if (c->parser == input::usbparse::HidParser::SteamController) {
-            // The vendor collection is id-less, so Windows prepends a 0x00
-            // report-id byte the wire packet never carried; the decoders expect
-            // the packet as it left the device.
-            if (len > 1 && data[0] == 0x00) {
-                data += 1;
-                len -= 1;
-            }
-            // Dongle connect/disconnect events interleave with input. A
-            // returning pad has rebooted (settings gone), so quiet mode is
-            // re-applied; a departing pad's last input must not stay latched.
-            const auto ev = input::usbparse::checkWirelessEvent(c->parser, data, len);
-            if (ev == input::usbparse::WirelessEvent::Connect) {
-                runSteamConfig(handle, c->featureReportLen, input::usbparse::SteamConfig::Quiet);
-                continue;
-            }
-            if (ev == input::usbparse::WirelessEvent::Disconnect) {
-                if (c->onReport) { c->onReport(UsbReport{}); }
-                continue;
-            }
+            stripPrependedReportId(data, len);
+            if (handleSteamWirelessEvent(handle, c, data, len)) { continue; }
         }
 
-        // Decode into the XUSB report. A report that doesn't match the family's
-        // shape (wrong id / too short) is skipped rather than published as noise.
+        // A report that does not match the family's shape (wrong id, too short) is skipped rather
+        // than published as noise.
         input::usbparse::ParsedReport parsed{};
-        bool decoded = false;
-        if (c->hidp != nullptr && c->hidp->valid) {
-            decoded = c->hidp->decode(data, len, parsed);
-        } else {
-            decoded =
-                input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks, &c->micMute);
+        if (!decodeOneReport(c, data, len, parsed)) { continue; }
+        if (c->onReport) {
+            c->onReport(toUsbReport(parsed, c->micMute.muted.load(std::memory_order_relaxed)));
         }
-        if (!decoded) { continue; }
-        UsbReport report{};
-        report.wButtons = parsed.wButtons;
-        // The latch, not the button: what the wire's kXusbMicMute bit carries,
-        // mirrored up so the driver can edge-detect it.
-        report.micMuted = c->micMute.muted.load(std::memory_order_relaxed);
-        report.lt = parsed.lt;
-        report.rt = parsed.rt;
-        report.lx = parsed.lx;
-        report.ly = parsed.ly;
-        report.rx = parsed.rx;
-        report.ry = parsed.ry;
-        report.motionValid = parsed.motionValid;
-        report.gyroX = parsed.gyroX;
-        report.gyroY = parsed.gyroY;
-        report.gyroZ = parsed.gyroZ;
-        report.accelX = parsed.accelX;
-        report.accelY = parsed.accelY;
-        report.accelZ = parsed.accelZ;
-        report.touchpadValid = parsed.touchpadValid;
-        report.finger0Active = parsed.finger0Active;
-        report.finger0Id = parsed.finger0Id;
-        report.finger0X = parsed.finger0X;
-        report.finger0Y = parsed.finger0Y;
-        report.finger1Active = parsed.finger1Active;
-        report.finger1Id = parsed.finger1Id;
-        report.finger1X = parsed.finger1X;
-        report.finger1Y = parsed.finger1Y;
-        report.touchpadButton = parsed.touchpadButton;
-        report.batteryValid = parsed.batteryValid;
-        report.batteryLevel = parsed.batteryLevel;
-        report.batteryStatus = parsed.batteryStatus;
-        if (c->onReport) { c->onReport(report); }
     }
     if (ov.hEvent != nullptr) { CloseHandle(ov.hEvent); }
 }
