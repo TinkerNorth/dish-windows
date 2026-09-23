@@ -116,6 +116,86 @@ license.
 - Comments state non-obvious constraints: why a lock order matters, what a
   magic value encodes. They do not narrate the next line.
 
+### Shape of the code
+
+These rules are enforced in review, not by a gate. They come from the
+Parchment library and are adapted where C++ or Qt make the literal form worse
+than the thing it is meant to achieve. They apply to `src/` and `tests/`
+alike.
+
+- **As immutable and as static as possible.** `const` on every local and
+  parameter that is not reassigned, `constexpr` for a value known at compile
+  time, and file-static (or an anonymous namespace) for anything the rest of
+  the translation unit does not need. A value that never changes is a named
+  constant, never a literal in the middle of a function. A type that holds no
+  state is a set of free functions, not a class.
+
+- **Split values into simple, named steps.** One operation per line, with the
+  result in a named `const` that says what it is, even when that reads longer:
+
+  ```cpp
+  const bool isAnotherSlot = entry.first != deviceId;
+  const bool isAPlaceholder = other.transitioning || other.needsReplug;
+  const bool isTheSameModel = other.vendorId == device.vendorId &&
+                              other.productId == device.productId;
+  return isAnotherSlot && isAPlaceholder && isTheSameModel;
+  ```
+
+  not one five-term boolean. The names are the documentation, the debugger can
+  show each value, and a test can pin each step. A named `const bool` costs
+  nothing at runtime.
+
+- **One function, one flow.** When a function would hold two algorithms chosen
+  by a condition, the condition dispatches to two named things that each do
+  one thing, and the dispatcher does nothing else. A `switch` over an enum
+  with no `default` is the preferred form, because the compiler then checks
+  that every case is handled. A guard clause is not an algorithm: do not
+  invent indirection where there is only one flow.
+
+- **A chain of `if`s over one byte is a table.** A per-bit or per-index
+  mapping belongs in a `constexpr` array the code reads, not in a switch the
+  reader has to diff against its twin. The point is that two mappings of the
+  same thing cannot drift apart.
+
+- **A callback with a body gets a name.** A lambda is fine as a one-expression
+  forward, and fine as an argument to an algorithm that consumes it
+  immediately (`std::sort`, `std::find_if`, `std::visit`). A lambda that
+  carries an algorithm becomes a named function, so it can be found, read and
+  tested on its own. A callback that is *stored* rather than called
+  immediately -- a `QObject::connect` slot, a thread body, a
+  `std::function` member -- prefers a named member function and a pointer to
+  it:
+
+  ```cpp
+  connect(&m_timer, &QTimer::timeout, this, &MoonlightSession::onPingTick);
+  ```
+
+  This is Parchment's "no anonymous methods" narrowed to what C++ can
+  express.
+
+- **No singletons.** A stateless helper is a free function in the file that
+  owns it. There is no `instance()` and no `Q_GLOBAL_STATIC` in this
+  codebase, and there is no reason to add one: every collaborator is
+  constructed by `AppModel` and handed to whoever needs it, which is also
+  what makes it replaceable in a test. The one mutable static is
+  `main.cpp`'s `QTranslator`, which Qt requires to outlive the call that
+  installs it.
+
+- **Member naming.** Members carry the `m_` prefix this codebase already uses;
+  it is the same "state, not scratch" signal Parchment's `m` prefix gives at
+  the point of use. Keep it, and do not mix in a trailing underscore.
+
+- **Prefer a test to a comment.** Behaviour that needs explaining gets a test
+  named for the behaviour. A comment is the last resort for a constraint that
+  genuinely cannot be tested -- a platform quirk, a wire-format byte layout, a
+  lock order, a declaration-order dependency -- states why in one or two
+  lines, and never narrates what the next line does.
+
+  Exempt, because the constraint is untestable by construction: the pin-map
+  headers in `.github/workflows/`, the usage headers in `scripts/`, and the
+  vcpkg and installer manifests, where a comment explains what a version pin
+  is holding back.
+
 ### QML and design tokens
 
 The UI is Qt Quick only. Two documents bind it:
@@ -138,6 +218,29 @@ the kit warns, because those files predate the token surface.
 
 Every new `.qml` file must be listed in `qt_add_qml_module(... QML_FILES ...)`
 in `CMakeLists.txt` or it will not exist at runtime.
+
+### Test-driven, every flow
+
+The Catch2 suite under `tests/` is not a coverage exercise. It is how a flow
+is known to work at all.
+
+- **Red first.** Write the failing test, watch it fail for the reason you
+  expect, then write the code. A test that has never failed has not been
+  shown to test anything.
+- **Cover every flow.** Each branch a function can take gets a case named for
+  the behaviour it pins, not for the function it calls. `SECTION` is the right
+  tool when the cases share a fixture; a separate `TEST_CASE` is right when
+  they do not.
+- **Assume nothing.** Where behaviour depends on a platform, a library
+  version or the wire, prove it with a probe before writing the code that
+  assumes it, and name the probe's finding in the test.
+- **Test where the behaviour lives.** Most of `src/core/` and
+  `src/composer/` is deliberately Qt-free so it is host-testable without a
+  window. Keep it that way: a reducer that needs a `QGuiApplication` to be
+  tested is a reducer with a dependency it should not have.
+- **Tests follow the same shape rules.** A fixture is a named type, not a
+  lambda that builds one; a helper with a body gets a name; a test that is
+  longer than the thing it tests is usually two tests.
 
 ## Translations
 
@@ -224,6 +327,8 @@ A pull request is ready for review when:
 - Behaviour changes come with tests. The Catch2 suite under `tests/` is the
   place; most of `src/core/` and `src/composer/` is deliberately Qt-free so it
   is host-testable without a window.
+  [`Test-driven, every flow`](#test-driven-every-flow) under Style says what
+  "with tests" means here.
 
 This is a small project with no staffed review rotation. Expect a first
 response in days rather than hours, and bump a pull request that has gone quiet
