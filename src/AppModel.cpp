@@ -1454,12 +1454,13 @@ void AppModel::collectMicForSlot(const models::ControllerSlot& s, net::WifiConne
     out.micTargets.push_back(std::move(target));
 }
 
-// Null when the slot has no descriptor yet: it is bound but the host has not answered with the
-// controller index every audio frame is addressed by.
+// Null when the slot is unbound, and null when it is bound but the host has not yet answered with
+// the controller index every audio frame is addressed by.
 std::optional<source::audio::SpeakerVoiceTarget>
 AppModel::speakerVoiceFor(const models::ControllerSlot& s, net::WifiConnection& conn,
                           const audio::PadAudioRoute& route,
                           source::audio::PlayoutLane lane) const {
+    if (!s.boundConnectionId.has_value()) { return std::nullopt; }
     const auto descriptor = conn.descriptorFor(s.id);
     if (!descriptor.has_value()) { return std::nullopt; }
     source::audio::SpeakerVoiceTarget voice;

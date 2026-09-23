@@ -186,8 +186,8 @@ void writeExceptionCode(HANDLE log, const EXCEPTION_RECORD* rec) {
                           : (op == 8 ? "  access violation: EXEC at "
                                      : "  access violation: READ from "));
     char hexbuf[20];
-    writeStr(log,
-             hex64(static_cast<std::uint64_t>(rec->ExceptionInformation[1]), hexbuf, sizeof(hexbuf)));
+    writeStr(log, hex64(static_cast<std::uint64_t>(rec->ExceptionInformation[1]), hexbuf,
+                        sizeof(hexbuf)));
     writeStr(log, "\r\n");
 }
 

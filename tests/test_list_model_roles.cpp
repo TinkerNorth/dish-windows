@@ -159,8 +159,8 @@ TEST_CASE("every connection role is declared, named uniquely, and answered",
     model.setRows({populatedRow()});
     REQUIRE(model.rowCount() == 1);
 
-    checkRolesAreWholeAndServed<ConnectionListModel, ConnectionListModel::Roles>(
-        model, model.index(0, 0));
+    checkRolesAreWholeAndServed<ConnectionListModel, ConnectionListModel::Roles>(model,
+                                                                                 model.index(0, 0));
 }
 
 TEST_CASE("an out-of-range index answers nothing at all", "[qml][roles]") {

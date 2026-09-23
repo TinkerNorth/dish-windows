@@ -41,8 +41,7 @@ constexpr std::uint8_t kInputConst[] = {0x81, 0x01};
 
 class Descriptor {
   public:
-    template <std::size_t N>
-    Descriptor& operator<<(const std::uint8_t (&bytes)[N]) {
+    template <std::size_t N> Descriptor& operator<<(const std::uint8_t (&bytes)[N]) {
         bytes_.insert(bytes_.end(), bytes, bytes + N);
         return *this;
     }
@@ -54,9 +53,7 @@ class Descriptor {
 
     Descriptor& reportId(std::uint8_t id) { return raw({0x85, id}); }
     Descriptor& reportCount(std::uint8_t n) { return raw({0x95, n}); }
-    Descriptor& usageMinMax(std::uint8_t lo, std::uint8_t hi) {
-        return raw({0x19, lo, 0x29, hi});
-    }
+    Descriptor& usageMinMax(std::uint8_t lo, std::uint8_t hi) { return raw({0x19, lo, 0x29, hi}); }
 
     const std::uint8_t* data() const { return bytes_.data(); }
     std::size_t size() const { return bytes_.size(); }

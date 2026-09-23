@@ -62,8 +62,8 @@ void mdnsScan(const std::vector<std::uint8_t>& query, int timeoutMs,
     std::uint8_t buf[2048];
 
     while (steady_clock::now() < deadline) {
-        const int n = ::recvfrom(sock.get(), reinterpret_cast<char*>(buf), sizeof(buf), 0, nullptr,
-                                 nullptr);
+        const int n =
+            ::recvfrom(sock.get(), reinterpret_cast<char*>(buf), sizeof(buf), 0, nullptr, nullptr);
         if (n <= 0) { continue; } // timeout / transient
         if (!onDatagram(buf, static_cast<std::size_t>(n))) { continue; }
         // Never past the caller's own deadline: the grace window shortens the

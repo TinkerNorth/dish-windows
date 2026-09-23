@@ -466,7 +466,8 @@ void WifiConnectionManager::onReverseStatusReply(const models::PairResponse& sta
                                                  const models::DiscoveredServer& server) {
     reversePollInFlight_ = false;
     // A cancel or restart raced this GET, so its reply is superseded. The pin is not compared here:
-    // the poll carries no pin, and the phase and server together already say it is the same attempt.
+    // the poll carries no pin, and the phase and server together already say it is the same
+    // attempt.
     if (reversePhase_ != ReversePairingPhase::AwaitingApproval ||
         reverseServer_.id() != server.id()) {
         return;

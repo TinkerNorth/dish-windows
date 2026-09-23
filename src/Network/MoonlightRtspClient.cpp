@@ -19,13 +19,16 @@ Q_LOGGING_CATEGORY(lcMoonlightRtsp, "dish.moonlight.rtsp")
 namespace {
 namespace ml = dish::moonlight;
 
-// GFE's protocol version, as every Moonlight client sends it. A host that sees no version assumes
-// a much older client and answers a handshake this one cannot finish.
-const std::pair<std::string, std::string> kClientVersion{"X-GS-ClientVersion", "14"};
+// Built per call rather than held as a file-static: a std::pair of std::string with static storage
+// duration allocates during static initialization, where a throw has nowhere to go.
+//
+// GFE's protocol version, as every Moonlight client sends it. A host that sees no version assumes a
+// much older client and answers a handshake this one cannot finish.
+std::pair<std::string, std::string> clientVersionHeader() { return {"X-GS-ClientVersion", "14"}; }
 
 // The session id is the client's to choose and the host only echoes it, so it is a constant rather
 // than anything derived: this is the value the reference clients send.
-const std::pair<std::string, std::string> kSessionId{"Session", "DEADBEEFCAFE"};
+std::pair<std::string, std::string> sessionHeader() { return {"Session", "DEADBEEFCAFE"}; }
 
 // Line ends spelled out, so a framing bug is readable in a log line.
 QString escaped(const QByteArray& raw) {
@@ -141,20 +144,22 @@ std::optional<RtspHandshakeResult> MoonlightRtspClient::negotiateStreams() {
 std::optional<RtspHandshakeResult> MoonlightRtspClient::handshake(int width, int height, int fps) {
     const std::string target = "rtsp://" + host_ + ":" + std::to_string(rtspPort_);
 
-    if (!send("OPTIONS", target, {kClientVersion}).has_value()) { return std::nullopt; }
-    if (!send("DESCRIBE", target, {kClientVersion, {"Accept", "application/sdp"}}).has_value()) {
-        return std::nullopt;
-    }
-
-    const auto result = negotiateStreams();
-    if (!result.has_value()) { return std::nullopt; }
-
-    const std::string sdp = ml::buildAnnounceSdp(width, height, fps);
-    if (!send("ANNOUNCE", target, {{"Content-type", "application/sdp"}, kSessionId}, sdp)
+    if (!send("OPTIONS", target, {clientVersionHeader()}).has_value()) { return std::nullopt; }
+    if (!send("DESCRIBE", target, {clientVersionHeader(), {"Accept", "application/sdp"}})
              .has_value()) {
         return std::nullopt;
     }
-    if (!send("PLAY", target, {kSessionId}).has_value()) { return std::nullopt; }
+
+    // Not const: it is returned, and a const local cannot be moved out of.
+    auto result = negotiateStreams();
+    if (!result.has_value()) { return std::nullopt; }
+
+    const std::string sdp = ml::buildAnnounceSdp(width, height, fps);
+    if (!send("ANNOUNCE", target, {{"Content-type", "application/sdp"}, sessionHeader()}, sdp)
+             .has_value()) {
+        return std::nullopt;
+    }
+    if (!send("PLAY", target, {sessionHeader()}).has_value()) { return std::nullopt; }
 
     qCInfo(lcMoonlightRtsp) << "negotiated ports on" << QString::fromStdString(host_) << ": control"
                             << result->controlPort << "video" << result->videoPort << "audio"

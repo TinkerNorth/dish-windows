@@ -633,7 +633,7 @@ constexpr DWORD kReadWaitMs = 100;
 
 // What one overlapped read came back with. Idle covers both a wait timeout and a zero-length
 // read: neither is an error and neither carries a report.
-enum class ReadOutcome { Report, Idle, Stop };
+enum class ReadOutcome : std::uint8_t { Report, Idle, Stop };
 
 ReadOutcome readOneReport(HANDLE handle, OVERLAPPED& ov, std::array<std::uint8_t, 128>& buf,
                           DWORD& read) {

@@ -63,9 +63,9 @@ struct ChromeBridges {
 
 // Registered BY INSTANCE, not via QML_SINGLETON: under this target's LTCG (/GL) the generated
 // QQmlModuleRegistration static initializer is stripped, so the auto-registered names never reach
-// the engine and every `Theme.*` / `ChromeBridge.*` reference becomes a ReferenceError - leaving the
-// window at QtQuick's default white. Parented to qApp so they outlive the engine; CppOwnership so
-// QML never deletes them.
+// the engine and every `Theme.*` / `ChromeBridge.*` reference becomes a ReferenceError - leaving
+// the window at QtQuick's default white. Parented to qApp so they outlive the engine; CppOwnership
+// so QML never deletes them.
 ChromeBridges registerChromeSingletons() {
     ChromeBridges bridges{new dish::chrome::ChromeBridge(qApp),
                           new dish::chrome::ThemeBridge(qApp)};
@@ -94,7 +94,7 @@ void registerAppSingleton(dish::qml::AppViewModel& appVm) {
 // The chrome exists only once the window does, so `chromeHolder` is what the sinks below borrow it
 // through. Null until this fires.
 void wireWindowChrome(QQmlApplicationEngine& engine, ChromeBridges bridges,
-                      std::shared_ptr<dish::chrome::FramelessWindowChrome*> chromeHolder) {
+                      const std::shared_ptr<dish::chrome::FramelessWindowChrome*>& chromeHolder) {
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreated, qApp,
         [bridges, chromeHolder](QObject* obj, const QUrl&) {
@@ -124,7 +124,7 @@ void wireWindowChrome(QQmlApplicationEngine& engine, ChromeBridges bridges,
 }
 
 void wireViewModelSinks(dish::qml::AppViewModel& appVm, ChromeBridges bridges,
-                        std::shared_ptr<dish::chrome::FramelessWindowChrome*> chromeHolder) {
+                        const std::shared_ptr<dish::chrome::FramelessWindowChrome*>& chromeHolder) {
     // A false return falls through to App.errorMessage (the QML toast channel).
     appVm.setExternalOpenSink([](const QString& url) { return dish::ui::openExternalUrl(url); });
 

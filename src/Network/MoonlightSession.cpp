@@ -511,7 +511,8 @@ void MoonlightSession::requestSession(const QString& path,
 
 // A refusal arrives as HTTP 200 carrying a status_code of its own, so this runs on a reply the
 // transport called a success. `resumeAvailable` is kept because the UI states it separately from
-// the failure: a busy host that will hand the session back reads differently from one that will not.
+// the failure: a busy host that will hand the session back reads differently from one that will
+// not.
 void MoonlightSession::onSessionRefused(const MoonlightXmlResponse& r, bool resuming) {
     failureMessage_ = r.statusMessage;
     resumeAvailable_ = r.resumeAvailable;

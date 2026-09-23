@@ -27,7 +27,6 @@ using dish::reducer::kFutureSkewEscapeMs;
 using dish::reducer::kManualMinGapMs;
 using dish::reducer::kMaxApplyAttemptsPerVersion;
 using dish::reducer::kMinCheckGapMs;
-using dish::reducer::withQuarantinedHandoff;
 using dish::reducer::kOverrunAllowanceBytes;
 using dish::reducer::kPeriodicIntervalMs;
 using dish::reducer::kReconnectCheckDelayMs;
@@ -41,6 +40,7 @@ using dish::reducer::UpdateNotice;
 using dish::reducer::UpdatePhase;
 using dish::reducer::UpdateStatus;
 using dish::reducer::UpdateTrigger;
+using dish::reducer::withQuarantinedHandoff;
 using dish::update::UpdateAsset;
 using dish::update::UpdateManifest;
 namespace uev = dish::reducer::update_event;
@@ -889,7 +889,8 @@ TEST_CASE("update handoff fold: a version this build already passed is stale rec
     }
 }
 
-TEST_CASE("update handoff fold: no handoff at all changes nothing", "[update][update-fsm][handoff]") {
+TEST_CASE("update handoff fold: no handoff at all changes nothing",
+          "[update][update-fsm][handoff]") {
     const auto s = withQuarantinedHandoff(atVersion("2.1.0"), QString(), 99);
     CHECK(s.phase == UpdatePhase::Idle);
     CHECK(s.error == UpdateError::None);

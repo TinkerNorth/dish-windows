@@ -70,9 +70,9 @@ QList<models::DiscoveredServer> LANDiscovery::discover(int port, int timeoutMs) 
     while (steady_clock::now() < deadline) {
         sockaddr_in from{};
         int fl = static_cast<int>(sizeof(from));
-        const int n = ::recvfrom(sock.get(), reinterpret_cast<char*>(buf),
-                                 static_cast<int>(sizeof(buf)), 0,
-                                 reinterpret_cast<sockaddr*>(&from), &fl);
+        const int n =
+            ::recvfrom(sock.get(), reinterpret_cast<char*>(buf), static_cast<int>(sizeof(buf)), 0,
+                       reinterpret_cast<sockaddr*>(&from), &fl);
         if (n <= 0) { continue; }
         // One row per address, because a satellite repeats its beacon for as long as the scan runs.
         const QString ip = senderAddress(from);

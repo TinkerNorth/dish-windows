@@ -72,7 +72,8 @@ TEST_CASE("legacy catalog: a current-or-newer catalog passes through untouched",
     // Deliberately >= rather than a per-version case: a newer-than-current
     // catalog is additive within protocolVersion 1, so refusing it here would
     // break a client against a satellite that is ahead of it.
-    for (int v : {kCatalogVersionCurrent, kCatalogVersionCurrent + 1, kCatalogVersionCurrent + 50}) {
+    for (int v :
+         {kCatalogVersionCurrent, kCatalogVersionCurrent + 1, kCatalogVersionCurrent + 50}) {
         INFO("catalogVersion " << v);
         const auto fetched = fetchedAt(v);
         const auto out = normalizeCatalog(fetched);

@@ -127,7 +127,8 @@ TEST_CASE("touchpad gate: an absent touchpad feature offers no DS4 mode", "[cata
 
 TEST_CASE("touchpad gate: supported:false offers no DS4 mode whatever the modes say",
           "[catalog][gate]") {
-    const QString ds4 = QString::fromLatin1(proto::touchpadModeName(proto::kTouchpadModeDs4).data());
+    const QString ds4 =
+        QString::fromLatin1(proto::touchpadModeName(proto::kTouchpadModeDs4).data());
     CHECK_FALSE(typeOffersTouchpadDs4(typeWithTouchpad(false, {ds4})));
 }
 
@@ -140,7 +141,8 @@ TEST_CASE("touchpad gate: an empty mode list is a pre-modes catalog and reads as
 
 TEST_CASE("touchpad gate: a mode list that names DS4 offers it, one that does not does not",
           "[catalog][gate]") {
-    const QString ds4 = QString::fromLatin1(proto::touchpadModeName(proto::kTouchpadModeDs4).data());
+    const QString ds4 =
+        QString::fromLatin1(proto::touchpadModeName(proto::kTouchpadModeDs4).data());
     CHECK(typeOffersTouchpadDs4(typeWithTouchpad(true, {ds4})));
     CHECK(typeOffersTouchpadDs4(typeWithTouchpad(true, {QStringLiteral("mouse"), ds4})));
     CHECK_FALSE(typeOffersTouchpadDs4(typeWithTouchpad(true, {QStringLiteral("mouse")})));

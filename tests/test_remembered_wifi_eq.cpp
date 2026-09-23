@@ -56,8 +56,7 @@ TEST_CASE("remembered wifi: a row equals itself and a copy of itself", "[models]
     CHECK_FALSE(a != populated());
 }
 
-TEST_CASE("remembered wifi: every persisted field makes two rows unequal",
-          "[models][remembered]") {
+TEST_CASE("remembered wifi: every persisted field makes two rows unequal", "[models][remembered]") {
     // Driven off toJson, not off a list of fields written down here: a field
     // added to the struct and to the persisted shape is covered the moment it
     // is added, which is the case this test exists for.

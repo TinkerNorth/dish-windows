@@ -92,8 +92,7 @@ TEST_CASE("ipv6 parse: the loopback and the unspecified address are not the same
     CHECK_FALSE(isPrivateHostLiteral("::"));
 }
 
-TEST_CASE("ipv6 parse: the URL-authority brackets are stripped before the parse",
-          "[iplit][ipv6]") {
+TEST_CASE("ipv6 parse: the URL-authority brackets are stripped before the parse", "[iplit][ipv6]") {
     CHECK(isPrivateHostLiteral("[fe80::1]"));
     CHECK(isPrivateHostLiteral("[::1]"));
     // A bracket on one side only is not the authority form and must not parse.

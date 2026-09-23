@@ -115,7 +115,7 @@ void UpdateCoordinator::subscribeToPrefs() {
     prefsSub_ = prefs_->state().subscribe(
         [this](const source::UpdatePreferences& values) {
             dispatch(reducer::update_event::PrefsChanged{values.checksEnabled, values.autoDownload,
-                                                        values.skippedVersion});
+                                                         values.skippedVersion});
         },
         false);
 }

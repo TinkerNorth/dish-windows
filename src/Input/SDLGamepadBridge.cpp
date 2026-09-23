@@ -278,7 +278,6 @@ void SDLGamepadBridge::onControllerRemoved(const SDL_Event& ev) {
     effectState_.erase(iid);
     if (!deviceId.empty()) { processor_->remove(deviceId); }
     QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
-    return;
 }
 
 void SDLGamepadBridge::onJoystickAdded(const SDL_Event& ev) {
@@ -324,7 +323,6 @@ void SDLGamepadBridge::onJoystickAdded(const SDL_Event& ev) {
     processor_->setDeadzones(deviceId.toStdString(), {kDefaultStickFlat, kDefaultTriggerFlat});
     QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
     rebuildJoystickState(iid);
-    return;
 }
 
 void SDLGamepadBridge::onJoystickRemoved(const SDL_Event& ev) {
@@ -351,7 +349,6 @@ void SDLGamepadBridge::onJoystickRemoved(const SDL_Event& ev) {
     }
     if (!deviceId.empty()) { processor_->remove(deviceId); }
     QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
-    return;
 }
 
 // One raw-joystick event. The tracked state always rebuilds; the capture page is offered the event

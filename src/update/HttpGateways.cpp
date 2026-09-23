@@ -76,7 +76,6 @@ reducer::UpdateError classifyNetworkError(QNetworkReply::NetworkError error) {
     }
 }
 
-
 QString updateUserAgent() {
     return QStringLiteral("Dish/%1 (Windows; x64)").arg(QLatin1String(DISH_VERSION));
 }

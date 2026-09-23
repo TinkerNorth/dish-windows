@@ -792,8 +792,7 @@ TEST_CASE("update transport: a link that cannot reach anything reads as offline"
     }
 }
 
-TEST_CASE("update transport: a transfer that went quiet reads as stalled",
-          "[update][transport]") {
+TEST_CASE("update transport: a transfer that went quiet reads as stalled", "[update][transport]") {
     using dish::update::classifyNetworkError;
     CHECK(classifyNetworkError(QNetworkReply::TimeoutError) == dish::reducer::UpdateError::Stalled);
     // The transfer timeout aborts the reply, so a stall reaches the classifier

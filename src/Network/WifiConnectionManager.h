@@ -177,7 +177,8 @@ class WifiConnectionManager : public QObject {
     static reducer::ApprovalReply approvalReplyOf(const models::PairResponse& status);
     void onReverseStatusReply(const models::PairResponse& status,
                               const models::DiscoveredServer& server);
-    void applyReverseAction(reducer::ReversePairingAction action, const models::PairResponse& status,
+    void applyReverseAction(reducer::ReversePairingAction action,
+                            const models::PairResponse& status,
                             const models::DiscoveredServer& server);
     void setReversePhase(ReversePairingPhase phase);
     void finishReverse(ReversePairingPhase terminal);
