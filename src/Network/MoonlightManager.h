@@ -255,6 +255,13 @@ class MoonlightManager : public QObject {
     void rgbLedReceived(const QString& id, int controllerNumber, int r, int g, int b);
 
   private:
+    // forgetHost in order. Each step is what makes the next one safe, so they are named rather than
+    // run as one block: see the comment on each.
+    MoonlightSession* detachSessionFromStore(const QString& id);
+    void releaseRoutesAt(const QString& id);
+    void forgetLearnedState(const QString& id);
+    void retireSession(MoonlightSession* session);
+
     // Ensures a session exists for `host`, wiring its signals through. Lazily
     // loads the client identity on first use (RSA keygen is not paid at startup).
     MoonlightSession* ensureSession(const models::MoonlightHost& host);

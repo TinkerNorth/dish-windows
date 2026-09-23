@@ -67,6 +67,11 @@ class WinHidGateway : public UsbDeviceGateway {
     // .cpp so the Windows HID SDK types stay out of this header.
     struct HidPDecode;
 
+    // The claimed device behind an id, or null. Takes mtx_ and gives it back, so the caller holds
+    // no gateway lock while it talks to the pad.
+    struct Claimed;
+    Claimed* claimedFor(int syntheticId) const;
+
     // One claimed device's read loop + handle.
     struct Claimed {
         std::string path;       // the HID device interface path.

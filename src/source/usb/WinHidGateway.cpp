@@ -200,6 +200,35 @@ std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
     return info;
 }
 
+// The handle is overlapped, so a write needs its own OVERLAPPED and event or it would complete into
+// the read loop's. Waiting on the event keeps the call synchronous from the caller's point of view
+// without ever blocking the pending ReadFile.
+//
+// A pad that never completes must not wedge the caller (the network receive thread); after the
+// timeout the transfer is cancelled and the feedback is simply dropped, which is the right outcome
+// for a lossy telemetry return path.
+bool overlappedWrite(HANDLE handle, const std::uint8_t* buf, DWORD want) {
+    OVERLAPPED ov{};
+    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (ov.hEvent == nullptr) { return false; }
+
+    DWORD written = 0;
+    bool ok = WriteFile(handle, buf, want, &written, &ov) != 0;
+    if (!ok && GetLastError() == ERROR_IO_PENDING) {
+        if (WaitForSingleObject(ov.hEvent, kOutputWriteTimeoutMs) == WAIT_OBJECT_0) {
+            ok = GetOverlappedResult(handle, &ov, &written, FALSE) != 0;
+        } else {
+            CancelIoEx(handle, &ov);
+            GetOverlappedResult(handle, &ov, &written, TRUE);
+            ok = false;
+        }
+    }
+    CloseHandle(ov.hEvent);
+    // A short write reached the pad as a different report, which is a failure even though the call
+    // returned.
+    return ok && written == want;
+}
+
 } // namespace
 
 // The caps-derived field map for GENERIC-HID pads. Windows exposes preparsed
@@ -781,59 +810,35 @@ bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
     return true;
 }
 
+// Null when nothing claims the id. The claim map's lock is released before the caller writes: a
+// write can block on a sleeping pad, and holding mtx_ across it would stall reconcile(). Safe
+// because releaseClaim() joins the reader and erases the entry only from the owner thread, and
+// every caller here is downstream of a live binding for this device.
+WinHidGateway::Claimed* WinHidGateway::claimedFor(int syntheticId) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    return it == claimed_.end() ? nullptr : it->second.get();
+}
+
 bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) {
     if (data == nullptr || len == 0) { return false; }
-    Claimed* c = nullptr;
-    {
-        // The claim map's lock is released before the write: a write can block
-        // on a sleeping pad, and holding mtx_ across it would stall reconcile().
-        // Safe because releaseClaim() joins the reader and erases the entry only
-        // from the owner thread, and every caller here is downstream of a live
-        // binding for this device.
-        std::lock_guard<std::mutex> lock(mtx_);
-        const auto it = claimed_.find(syntheticId);
-        if (it == claimed_.end()) { return false; }
-        c = it->second.get();
-    }
-    if (c->outputReportLen <= 0) { return false; }
+    Claimed* c = claimedFor(syntheticId);
+    if (c == nullptr || c->outputReportLen <= 0) { return false; }
+
     const auto want = static_cast<std::size_t>(c->outputReportLen);
-    // A report LONGER than the collection's output length is not ours to
-    // truncate: it would reach the pad as a different report.
+    // A report LONGER than the collection's output length is not ours to truncate: it would reach
+    // the pad as a different report.
     if (len > want) { return false; }
 
     std::lock_guard<std::mutex> lock(c->writeMtx);
-    // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any
-    // other length outright.
+    // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any other length outright.
     std::array<std::uint8_t, 256> buf{};
     if (want > buf.size()) { return false; }
     std::memcpy(buf.data(), data, len);
 
     auto handle = static_cast<HANDLE>(c->handle);
     if (handle == nullptr || handle == INVALID_HANDLE_VALUE) { return false; }
-    // The handle is overlapped, so the write needs its own OVERLAPPED and event
-    // or it would complete into the read loop's. Waiting on the event keeps the
-    // call synchronous from the caller's point of view without ever blocking
-    // the pending ReadFile.
-    OVERLAPPED ov{};
-    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    if (ov.hEvent == nullptr) { return false; }
-    DWORD written = 0;
-    bool ok = WriteFile(handle, buf.data(), static_cast<DWORD>(want), &written, &ov) != 0;
-    if (!ok && GetLastError() == ERROR_IO_PENDING) {
-        // A pad that never completes the write must not wedge the caller (the
-        // network receive thread); after the timeout the transfer is cancelled
-        // and the feedback is simply dropped, which is the right outcome for a
-        // lossy telemetry return path.
-        if (WaitForSingleObject(ov.hEvent, kOutputWriteTimeoutMs) == WAIT_OBJECT_0) {
-            ok = GetOverlappedResult(handle, &ov, &written, FALSE) != 0;
-        } else {
-            CancelIoEx(handle, &ov);
-            GetOverlappedResult(handle, &ov, &written, TRUE);
-            ok = false;
-        }
-    }
-    CloseHandle(ov.hEvent);
-    return ok && written == static_cast<DWORD>(want);
+    return overlappedWrite(handle, buf.data(), static_cast<DWORD>(want));
 }
 
 } // namespace dish::source::usb

@@ -565,59 +565,70 @@ QStringList MoonlightManager::slotsRoutedTo(const QString& hostId) const {
     return out;
 }
 
-void MoonlightManager::forgetHost(const QString& id) {
-    qCInfo(lcMoonlightManager) << "forget:" << id << "dropping every piece of state it owns";
-    // THE WIRE IS CUT FIRST, and it is cut BEFORE the routes come off rather than
-    // after. Releasing the last pad is itself a teardown, the teardown sends
-    // /cancel over TLS, and that handshake runs the session's pin verifier: with
-    // the store still attached it would write the pinned certificate straight
-    // back over the forget below. Its replies also land on handlers that write
-    // probes_[id], and QHash::operator[] INSERTS, so one arriving mid-forget
-    // would re-create the cache for a host that no longer exists and the app-list
-    // handler would go on to remember its pairing as proved. Nothing after this
-    // line can make this session speak into the store.
+// STEP 1. The wire is cut first, and it is cut BEFORE the routes come off rather than after.
+// Releasing the last pad is itself a teardown, the teardown sends /cancel over TLS, and that
+// handshake runs the session's pin verifier: with the store still attached it would write the
+// pinned certificate straight back over the forget below. Its replies also land on handlers that
+// write probes_[id], and QHash::operator[] INSERTS, so one arriving mid-forget would re-create the
+// cache for a host that no longer exists and the app-list handler would go on to remember its
+// pairing as proved. Nothing after this returns can make this session speak into the store.
+//
+// Returns the session so the caller can retire it once everything below is done with it.
+MoonlightSession* MoonlightManager::detachSessionFromStore(const QString& id) {
     MoonlightSession* session = sessions_.take(id);
-    if (session != nullptr) {
-        QObject::disconnect(session, nullptr, this, nullptr);
-        // A pairing parked on the host is waiting for a PIN for a host that will
-        // not exist when it lands. Cancelling it here is what stops phase 5
-        // completing into a forget and writing the pairing back.
-        session->cancelPairing();
-        session->detachFromStore();
-    }
-    // EVERY ROUTE AT THIS HOST GOES NEXT. forwardReport reads the routing table
-    // on the input thread and dereferences the session it finds there, so a route
-    // left pointing at a session this function is about to delete is a use after
-    // free on that thread. unbindSlot also sends each pad its farewell and tears
-    // the session down once the last one is off, which is what sends the /cancel
-    // while the credentials to authenticate it still exist.
+    if (session == nullptr) { return nullptr; }
+    QObject::disconnect(session, nullptr, this, nullptr);
+    // A pairing parked on the host is waiting for a PIN for a host that will not exist when it
+    // lands. Cancelling it here is what stops phase 5 completing into a forget and writing the
+    // pairing back.
+    session->cancelPairing();
+    session->detachFromStore();
+    return session;
+}
+
+// STEP 2. forwardReport reads the routing table on the input thread and dereferences the session it
+// finds there, so a route left pointing at a session this forget is about to delete is a use after
+// free on that thread. unbindSlot also sends each pad its farewell and tears the session down once
+// the last one is off, which is what sends the /cancel while the credentials to authenticate it
+// still exist.
+void MoonlightManager::releaseRoutesAt(const QString& id) {
     for (const auto& slotId : slotsRoutedTo(id)) { unbindSlot(slotId); }
     padSlots_.remove(id);
-    // What we learned by asking this host goes with it: a host forgotten and
-    // added again is a stranger, not a paired one.
+}
+
+// STEP 3. What we learned by asking this host goes with it: a host forgotten and added again is a
+// stranger, not a paired one. A binding is an intent to drive THIS host, so forgetting the host
+// retires it, or it would keep asking to be re-attached to a pairing that is gone.
+void MoonlightManager::forgetLearnedState(const QString& id) {
     probes_.remove(id);
-    // A binding is an intent to drive THIS host. Forgetting the host retires it,
-    // or it would keep asking to be re-attached to a pairing that is gone.
     repo_->forgetBindingsForHost(id);
     bindings_ = repo_->bindings();
+}
 
-    if (session != nullptr) {
-        // A host with no pad on it was never released above, so this is what
-        // closes a session that was up without one. Already-closed is a no-op.
-        session->quit();
-        if (session->cancelInFlight()) {
-            // THE /cancel HAS TO LAND BEFORE THE SESSION GOES. Its client is a
-            // child of the session and dies with it, and a request whose client
-            // dies is aborted, so deleting on the next turn of the loop was
-            // deleting the quit it had just sent. The reply releases the object,
-            // or a bounded wait does when a host never answers.
-            QObject::connect(session, &MoonlightSession::cancelSettled, session,
-                             &QObject::deleteLater);
-            QTimer::singleShot(kForgetCancelGraceMs, session, &QObject::deleteLater);
-        } else {
-            session->deleteLater();
-        }
+// STEP 4. A host with no pad on it was never released in step 2, so this is what closes a session
+// that was up without one. Already-closed is a no-op.
+void MoonlightManager::retireSession(MoonlightSession* session) {
+    if (session == nullptr) { return; }
+    session->quit();
+    if (!session->cancelInFlight()) {
+        session->deleteLater();
+        return;
     }
+    // THE /cancel HAS TO LAND BEFORE THE SESSION GOES. Its client is a child of the session and
+    // dies with it, and a request whose client dies is aborted, so deleting on the next turn of the
+    // loop was deleting the quit it had just sent. The reply releases the object, or a bounded wait
+    // does when a host never answers.
+    QObject::connect(session, &MoonlightSession::cancelSettled, session, &QObject::deleteLater);
+    QTimer::singleShot(kForgetCancelGraceMs, session, &QObject::deleteLater);
+}
+
+// The steps run in this order for the reasons each one carries, and in no other.
+void MoonlightManager::forgetHost(const QString& id) {
+    qCInfo(lcMoonlightManager) << "forget:" << id << "dropping every piece of state it owns";
+    MoonlightSession* session = detachSessionFromStore(id);
+    releaseRoutesAt(id);
+    forgetLearnedState(id);
+    retireSession(session);
     repo_->forgetHost(id);
     emit hostsChanged();
 }
