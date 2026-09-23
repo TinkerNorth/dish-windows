@@ -1109,52 +1109,66 @@ std::optional<std::pair<int, int>> AppModel::boundPadIdentity(const QString& slo
     return std::nullopt;
 }
 
-AppModel::SlotHardware AppModel::slotHardware(const QString& slotId) const {
+// The protocol-2 actuators and the mic lamp, which the parser family answers for on BOTH paths: a
+// Direct claim decodes them from the OUT report, and a pad's USB identity names them whether it
+// arrived over USB or Bluetooth. Whether the layer can land them is the next fact, and the
+// caller's.
+void AppModel::applyOutputActuators(SlotHardware& hw, input::usbparse::HidParser parser) {
+    hw.hasTriggerEffects = input::usbout::parserHasTriggerEffects(parser);
+    hw.hasPlayerLeds = input::usbout::parserHasPlayerLeds(parser);
+    hw.hasMicLed = input::usbout::parserHasMicMuteLed(parser);
+}
+
+// A synthetic id packs its own (vid, pid), so the parser family IS the hardware truth for what the
+// claim decodes: no device list is consulted and no lock is taken.
+AppModel::SlotHardware AppModel::syntheticHardware(int vendorId, int productId) {
+    const auto parser = input::usbparse::parserForDevice(vendorId, productId);
     SlotHardware hw;
-    // A synthetic id packs its own (vid, pid); the parser family is the
-    // hardware truth for what the claim decodes. Checked first because it needs
-    // no lock and a synthetic id can never collide with an "sdl:N" id.
-    const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
-    if (vp.has_value() && reducer::isPadIdentity(vp)) {
-        const auto parser = input::usbparse::parserForDevice(vp->first, vp->second);
-        hw.usbDirect = true;
-        hw.hasMotion = input::usbparse::parserHasImu(parser);
-        hw.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
-        hw.hasRumble = input::usbparse::parserHasRumble(parser);
-        // The Direct path now has an OUT report path, so a claimed pad answers
-        // for its real actuators instead of a flat false. Whether it can drive
-        // them right now is the router's call (the claim has to be live).
-        hw.hasLightbar = input::usbout::parserHasLightbar(parser);
-        hw.hasTriggerEffects = input::usbout::parserHasTriggerEffects(parser);
-        hw.hasPlayerLeds = input::usbout::parserHasPlayerLeds(parser);
-        hw.hasMicLed = input::usbout::parserHasMicMuteLed(parser);
-        return hw;
-    }
+    hw.usbDirect = true;
+    hw.hasMotion = input::usbparse::parserHasImu(parser);
+    hw.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
+    hw.hasRumble = input::usbparse::parserHasRumble(parser);
+    // The Direct path now has an OUT report path, so a claimed pad answers for its real actuators
+    // instead of a flat false. Whether it can drive them right now is the router's call (the claim
+    // has to be live).
+    hw.hasLightbar = input::usbout::parserHasLightbar(parser);
+    applyOutputActuators(hw, parser);
+    return hw;
+}
+
+// What SDL says about a pad it opened. An id SDL does not know answers all-false, which is the
+// inert "no controller" state every caller already renders.
+AppModel::SlotHardware AppModel::sdlHardware(const QString& slotId) const {
+    SlotHardware hw;
     for (const auto& d : bridge_->devices()) {
         if (d.id != slotId) { continue; }
         hw.hasMotion = d.motionCapable;
         hw.hasLightbar = d.hasLightbar;
         hw.hasTouchpad = d.hasTouchpad;
         hw.hasRumble = d.hasRumble;
-        // The protocol-2 actuators and the mic lamp are the model's whichever
-        // path carries it, and SDL has no probe for them, so the parser family
-        // answers from the pad's USB identity (which a Bluetooth pad reports
-        // too). Whether the SDL layer can land them is the next fact.
+
         const auto parser = input::usbparse::parserForDevice(d.vendorId, d.productId);
-        hw.hasTriggerEffects = input::usbout::parserHasTriggerEffects(parser);
-        hw.hasPlayerLeds = input::usbout::parserHasPlayerLeds(parser);
-        hw.hasMicLed = input::usbout::parserHasMicMuteLed(parser);
-        // SDL_GameControllerSendEffect lands only in SDL's own HIDAPI drivers;
-        // XInput, DirectInput and evdev refuse it. SDL names no driver, but it
-        // reports a DualSense's lightbar only from that driver (the others have
-        // no LED call for it), so a DualSense with an LED is one whose driver
-        // takes the effect body -- on USB or Bluetooth alike. The family gate
-        // matters: a DualShock 4 has an LED from the same driver, but its
-        // effect body is a different report with none of these surfaces.
+        applyOutputActuators(hw, parser);
+        // SDL_GameControllerSendEffect lands only in SDL's own HIDAPI drivers; XInput, DirectInput
+        // and evdev refuse it. SDL names no driver, but it reports a DualSense's lightbar only from
+        // that driver (the others have no LED call for it), so a DualSense with an LED is one whose
+        // driver takes the effect body -- on USB or Bluetooth alike. The family gate matters: a
+        // DualShock 4 has an LED from the same driver, but its effect body is a different report
+        // with none of these surfaces.
         hw.sdlEffects = parser == input::usbparse::HidParser::DualSense && d.hasLightbar;
         return hw;
     }
     return hw;
+}
+
+AppModel::SlotHardware AppModel::slotHardware(const QString& slotId) const {
+    // The synthetic id is checked first because it needs no lock and can never collide with an
+    // "sdl:N" id.
+    const auto vp = reducer::parseSyntheticSlotId(slotId.toStdString());
+    if (vp.has_value() && reducer::isPadIdentity(vp)) {
+        return syntheticHardware(vp->first, vp->second);
+    }
+    return sdlHardware(slotId);
 }
 
 reducer::SlotFeedbackInputs AppModel::feedbackInputs(const QString& slotId) const {

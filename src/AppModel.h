@@ -26,6 +26,7 @@
 #include "repository/AudioPreferenceRepository.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
+#include "core/input/UsbReportParsers.h"
 #include "core/model/Protocol.h"
 #include "core/reducer/BindingPresence.h"
 #include "core/reducer/BatteryRouting.h"
@@ -254,6 +255,11 @@ class AppModel : public QObject {
         bool sdlEffects = false;
     };
     SlotHardware slotHardware(const QString& slotId) const;
+
+    // The two paths a slot's hardware can be known through, and the part they answer the same way.
+    static SlotHardware syntheticHardware(int vendorId, int productId);
+    SlotHardware sdlHardware(const QString& slotId) const;
+    static void applyOutputActuators(SlotHardware& hw, input::usbparse::HidParser parser);
 
     // The host layer for the mic/speaker rows ONLY: the per-session probe's
     // verdict off the connection, conservative {false,false} for an unknown or
