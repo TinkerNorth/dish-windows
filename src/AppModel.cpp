@@ -832,27 +832,18 @@ void AppModel::syncFrameworkPresence() {
     }
 }
 
-void AppModel::rebuild() {
-    QList<models::ControllerSlot> next;
-    // Every slot this pass SHOWS, with the USB identity of the pad behind it.
-    // Published before the binding cross-reference, because both the
-    // emulation-type seed and the binding-presence gate ask it which pad is
-    // actually behind a slot id. Windows seeds no virtual-controller slot.
-    std::vector<reducer::PresentSlot> presentPads;
-
-    // Twin-dedup: a pad visible to BOTH SDL/XInput and the raw-HID gateway must
-    // stream via exactly one path. The hidden set goes into the bridge so those
-    // ids never reach the wire, their slots are dropped so they get no binding,
-    // and the synthetics are added in their place.
+// Twin-dedup: a pad visible to BOTH SDL/XInput and the raw-HID gateway must stream via exactly
+// one path. The hidden set goes into the bridge so those ids never reach the wire, their slots are
+// dropped so they get no binding, and the synthetics are added in their place.
+std::set<std::string>
+AppModel::hideSdlTwinsOfClaimedPads(const std::map<int, reducer::UsbController>& controllers,
+                                    const QList<input::SDLGamepadBridge::Device>& sdlDevices) {
     std::vector<reducer::SyntheticTwin> synthetics;
-    std::map<int, reducer::UsbController> controllers;
-    if (usbManager_ != nullptr) { controllers = usbManager_->controllers(); }
     for (const auto& [key, c] : controllers) {
         if (c.phase == reducer::UsbPhase::Direct) {
             synthetics.push_back({c.vendorId, c.productId});
         }
     }
-    const auto sdlDevices = bridge_->devices();
     std::vector<reducer::RoutedDevice> routed;
     routed.reserve(static_cast<std::size_t>(sdlDevices.size()));
     for (const auto& d : sdlDevices) {
@@ -860,11 +851,16 @@ void AppModel::rebuild() {
             {d.id.toStdString(), d.vendorId, d.productId, /*disconnecting=*/false, d.bluetooth});
     }
     const std::set<std::string> hidden = reducer::suppressedRoutedIds(synthetics, routed);
-    {
-        std::unordered_set<std::string> hiddenSet(hidden.begin(), hidden.end());
-        bridge_->setSuppressedDeviceIds(hiddenSet);
-    }
+    const std::unordered_set<std::string> hiddenSet(hidden.begin(), hidden.end());
+    bridge_->setSuppressedDeviceIds(hiddenSet);
+    return hidden;
+}
 
+void AppModel::appendSdlSlots(const QList<input::SDLGamepadBridge::Device>& sdlDevices,
+                              const std::set<std::string>& hidden,
+                              const std::map<int, reducer::UsbController>& controllers,
+                              QList<models::ControllerSlot>& next,
+                              std::vector<reducer::PresentSlot>& presentPads) {
     for (const auto& d : sdlDevices) {
         // Skip the SDL twin of an active USB-direct claim — it streams via raw-HID.
         if (hidden.count(d.id.toStdString()) != 0) { continue; }
@@ -888,7 +884,11 @@ void AppModel::rebuild() {
         presentPads.push_back({d.id.toStdString(), d.vendorId, d.productId});
         next.append(s);
     }
+}
 
+void AppModel::appendDirectSlots(const std::map<int, reducer::UsbController>& controllers,
+                                 QList<models::ControllerSlot>& next,
+                                 std::vector<reducer::PresentSlot>& presentPads) {
     // One slot per USB-direct-claimed pad. Its id is the model key string the
     // read loop publishes under, so binding it routes the decoded reports
     // through the existing hub machinery.
@@ -924,7 +924,11 @@ void AppModel::rebuild() {
         presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
         next.append(s);
     }
+}
 
+void AppModel::appendAwaitingClaimSlots(const std::map<int, reducer::UsbController>& controllers,
+                                        QList<models::ControllerSlot>& next,
+                                        std::vector<reducer::PresentSlot>& presentPads) {
     // A tracked model whose stand-alone identity is not a gamepad (the Steam
     // Controller emulates a keyboard and mouse) never gets an SDL row and has
     // no synthetic until a claim succeeds — without a card of its own there
@@ -944,11 +948,9 @@ void AppModel::rebuild() {
         presentPads.push_back({s.id.toStdString(), c.vendorId, c.productId});
         next.append(s);
     }
+}
 
-    // BEFORE the cross-reference below: resolveControllerType reads this to seed
-    // the type off the pad's own USB identity.
-    presentPads_ = std::move(presentPads);
-
+void AppModel::crossReferenceBindings(QList<models::ControllerSlot>& next) {
     const auto bindings = hub_->bindings();
     for (auto& s : next) {
         // The mute control shows exactly where the descriptor claims a mic:
@@ -981,21 +983,11 @@ void AppModel::rebuild() {
             s.liveRates.directPollHz = keepPoll;
         }
     }
-    state_.slotList = std::move(next);
+}
 
-    syncInputRateDevices();
-
-    // Topology rides REST with no per-add UDP ACK poll, so "busy" is a session
-    // in its Linking handshake.
-    bool busy = false;
-    for (auto* conn : wifi_->connections()) {
-        if (conn->state() == net::SessionState::Linking) {
-            busy = true;
-            break;
-        }
-    }
-    state_.busy = busy;
-
+// One routing table per feedback kind, swapped under the lock as a set so the input threads never
+// see a half-updated map.
+void AppModel::republishRouting() {
     QHash<QString, net::ConnectionHub::ReportSender> nextRouting;
     QHash<QString, net::ConnectionHub::MotionSender> nextMotion;
     QHash<QString, net::ConnectionHub::BatterySender> nextBattery;
@@ -1021,7 +1013,9 @@ void AppModel::rebuild() {
         batteryRouting_ = std::move(nextBattery);
         touchpadRouting_ = std::move(nextTouchpad);
     }
+}
 
+void AppModel::republishStreamingCount(const QHash<QString, QString>& bindings) {
     // The composer's distinct-until-changed plus the inhibitor's idempotent
     // acquire/release keep a noisy hub feed that doesn't move the count from
     // ever touching the OS power portal.
@@ -1036,26 +1030,60 @@ void AppModel::rebuild() {
         controllerActivity_.noteActivityAt(steadyNowMs());
     }
     streamingSlotCount_.set(nextStreaming);
+}
 
-    // Mute is a live control over a present pad: a departed slot's entry is
-    // dropped so a replugged pad (which reuses its model-keyed id) comes back
-    // live, the way the hardware itself does.
-    {
-        std::set<std::string> presentIds;
-        for (const auto& s : state_.slotList) { presentIds.insert(s.id.toStdString()); }
-        micMuteStore_.retainOnly(presentIds);
+void AppModel::rebuild() {
+    QList<models::ControllerSlot> next;
+    // Every slot this pass SHOWS, with the USB identity of the pad behind it. Published before the
+    // binding cross-reference, because both the emulation-type seed and the binding-presence gate
+    // ask it which pad is actually behind a slot id. Windows seeds no virtual-controller slot.
+    std::vector<reducer::PresentSlot> presentPads;
+
+    std::map<int, reducer::UsbController> controllers;
+    if (usbManager_ != nullptr) { controllers = usbManager_->controllers(); }
+    const auto sdlDevices = bridge_->devices();
+    const std::set<std::string> hidden = hideSdlTwinsOfClaimedPads(controllers, sdlDevices);
+
+    appendSdlSlots(sdlDevices, hidden, controllers, next, presentPads);
+    appendDirectSlots(controllers, next, presentPads);
+    appendAwaitingClaimSlots(controllers, next, presentPads);
+
+    // BEFORE the cross-reference below: resolveControllerType reads this to seed the type off the
+    // pad's own USB identity.
+    presentPads_ = std::move(presentPads);
+    crossReferenceBindings(next);
+    state_.slotList = std::move(next);
+
+    syncInputRateDevices();
+
+    // Topology rides REST with no per-add UDP ACK poll, so "busy" is a session in its Linking
+    // handshake.
+    state_.busy = false;
+    for (auto* conn : wifi_->connections()) {
+        if (conn->state() == net::SessionState::Linking) {
+            state_.busy = true;
+            break;
+        }
     }
 
-    // Every input the audio eligibility rules read funnels through this
-    // function (bindings, session states, toggles via re-bind, the probe
-    // verdict via poolChanged, mute via setSlotMicMuted), so the engines
-    // converge here and nowhere else.
+    republishRouting();
+    republishStreamingCount(hub_->bindings());
+
+    // Mute is a live control over a present pad: a departed slot's entry is dropped so a replugged
+    // pad (which reuses its model-keyed id) comes back live, the way the hardware itself does.
+    std::set<std::string> presentIds;
+    for (const auto& s : state_.slotList) { presentIds.insert(s.id.toStdString()); }
+    micMuteStore_.retainOnly(presentIds);
+
+    // Every input the audio eligibility rules read funnels through this function (bindings,
+    // session states, toggles via re-bind, the probe verdict via poolChanged, mute via
+    // setSlotMicMuted), so the engines converge here and nowhere else.
     reconcileAudioEngines();
 
     emit stateChanged();
 
-    // Rides the same rebuild the Live transition triggered; the reducer's edge
-    // guard makes the steady state free.
+    // Rides the same rebuild the Live transition triggered; the reducer's edge guard makes the
+    // steady state free.
     prewarmCatalogs();
 
     // Last, because it can bind/unbind and therefore re-enter this function.

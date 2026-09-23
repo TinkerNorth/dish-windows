@@ -297,6 +297,27 @@ class AppModel : public QObject {
 
   private:
     void rebuild();
+
+    // rebuild's passes, in the order it runs them. The three append* build the slot list, the
+    // cross-reference fills in what a binding adds, and the two republish* push the result to the
+    // input threads and the power inhibitor.
+    std::set<std::string>
+    hideSdlTwinsOfClaimedPads(const std::map<int, reducer::UsbController>& controllers,
+                              const QList<input::SDLGamepadBridge::Device>& sdlDevices);
+    void appendSdlSlots(const QList<input::SDLGamepadBridge::Device>& sdlDevices,
+                        const std::set<std::string>& hidden,
+                        const std::map<int, reducer::UsbController>& controllers,
+                        QList<models::ControllerSlot>& next,
+                        std::vector<reducer::PresentSlot>& presentPads);
+    void appendDirectSlots(const std::map<int, reducer::UsbController>& controllers,
+                           QList<models::ControllerSlot>& next,
+                           std::vector<reducer::PresentSlot>& presentPads);
+    void appendAwaitingClaimSlots(const std::map<int, reducer::UsbController>& controllers,
+                                  QList<models::ControllerSlot>& next,
+                                  std::vector<reducer::PresentSlot>& presentPads);
+    void crossReferenceBindings(QList<models::ControllerSlot>& next);
+    void republishRouting();
+    void republishStreamingCount(const QHash<QString, QString>& bindings);
     void onHubChanged();
     void onBridgeDevicesChanged();
     void onWifiEvent(const net::ConnectionEvent& evt);
