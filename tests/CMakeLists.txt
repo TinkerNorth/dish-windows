@@ -51,6 +51,7 @@ set(DISH_TEST_SOURCES
     test_stable_key.cpp
     test_tofu.cpp
     test_ip_literals.cpp
+    test_ip_literals_parse.cpp
     test_mdns_mapping.cpp
     test_discovery_gateway.cpp
     test_satellite_tls_verifier.cpp
