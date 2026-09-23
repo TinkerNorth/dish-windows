@@ -162,6 +162,19 @@ class SDLGamepadBridge : public QObject {
     // game-controller rebuildState uses. Only for pads SDL does NOT recognise
     // as game controllers (see openJoysticks_).
     void rebuildJoystickState(int iid);
+
+    // Fixed caps, so the per-event read allocates nothing. A pad with more inputs than a cap is
+    // truncated, which loses nothing because the layouts reference only low indices.
+    static constexpr int kMaxJoystickAxes = 32;
+    static constexpr int kMaxJoystickButtons = 64;
+    static constexpr int kMaxJoystickHats = 8;
+
+    struct JoystickHandle;
+    JoystickHandle joystickHandleFor(int iid);
+    JoystickRemap remapFor(int vendorId, int productId);
+    static JoystickSnapshot readJoystick(SDL_Joystick* js, std::int16_t (&axes)[kMaxJoystickAxes],
+                                         bool (&buttons)[kMaxJoystickButtons],
+                                         std::uint8_t (&hats)[kMaxJoystickHats]);
     void handleSensorEvent(const SDL_ControllerSensorEvent& ev);
     void handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev);
     void pollBatteries();

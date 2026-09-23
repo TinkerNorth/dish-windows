@@ -769,45 +769,64 @@ void SDLGamepadBridge::rebuildState(int iid) {
     processor_->publish(deviceId, st);
 }
 
-void SDLGamepadBridge::rebuildJoystickState(int iid) {
+// What one raw joystick needs before it can be read at all. js is null for a device SDL opened as
+// a game controller instead, which this path does not handle.
+struct SDLGamepadBridge::JoystickHandle {
     SDL_Joystick* js = nullptr;
     std::string deviceId;
     int vendorId = 0;
     int productId = 0;
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        if (auto it = openJoysticks_.find(iid); it != openJoysticks_.end()) { js = it->second; }
-        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
-            deviceId = it->second.toStdString();
-        }
-        if (auto it = usbIdentity_.find(iid); it != usbIdentity_.end()) {
-            vendorId = it->second.vendorId;
-            productId = it->second.productId;
-        }
+};
+
+SDLGamepadBridge::JoystickHandle SDLGamepadBridge::joystickHandleFor(int iid) {
+    JoystickHandle h;
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (auto it = openJoysticks_.find(iid); it != openJoysticks_.end()) { h.js = it->second; }
+    if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+        h.deviceId = it->second.toStdString();
     }
+    if (auto it = usbIdentity_.find(iid); it != usbIdentity_.end()) {
+        h.vendorId = it->second.vendorId;
+        h.productId = it->second.productId;
+    }
+    return h;
+}
+
+// Copied under remapMtx_ so a main-thread push never stalls the hot path; the mapping itself runs
+// outside the lock. A model with no entry maps under the default layout.
+JoystickRemap SDLGamepadBridge::remapFor(int vendorId, int productId) {
+    std::lock_guard<std::mutex> lock(remapMtx_);
+    if (auto it = joystickRemaps_.find({vendorId, productId}); it != joystickRemaps_.end()) {
+        return it->second;
+    }
+    return JoystickRemap{};
+}
+
+void SDLGamepadBridge::rebuildJoystickState(int iid) {
+    const JoystickHandle h = joystickHandleFor(iid);
     // A game controller is absent from openJoysticks_, so this no-ops for it.
-    if (js == nullptr || deviceId.empty()) { return; }
-    if (isSuppressed(deviceId)) { return; }
+    if (h.js == nullptr || h.deviceId.empty()) { return; }
+    if (isSuppressed(h.deviceId)) { return; }
 
-    // Sized to the device's real counts so the mapper's bounds checks see the
-    // true extent.
-    const int numAxes = SDL_JoystickNumAxes(js);
-    const int numButtons = SDL_JoystickNumButtons(js);
-    const int numHats = SDL_JoystickNumHats(js);
+    // Fixed caps keep the hot path allocation-free, and the buffers live on this frame so the
+    // snapshot can borrow rather than own them. A pad with more inputs than a cap is truncated,
+    // which loses nothing because the layouts reference only low indices.
+    std::int16_t axes[kMaxJoystickAxes] = {0};
+    bool buttons[kMaxJoystickButtons] = {false};
+    std::uint8_t hats[kMaxJoystickHats] = {0};
+    const JoystickSnapshot snap = readJoystick(h.js, axes, buttons, hats);
 
-    // Fixed caps keep the hot path allocation-free. A pad with more inputs than
-    // the cap is truncated, which loses nothing because the layouts reference
-    // only low indices.
-    constexpr int kMaxAxes = 32;
-    constexpr int kMaxButtons = 64;
-    constexpr int kMaxHats = 8;
-    std::int16_t axes[kMaxAxes] = {0};
-    bool buttons[kMaxButtons] = {false};
-    std::uint8_t hats[kMaxHats] = {0};
+    processor_->publish(h.deviceId, mapJoystick(snap, remapFor(h.vendorId, h.productId)));
+}
 
-    const int axisCount = numAxes < kMaxAxes ? numAxes : kMaxAxes;
-    const int buttonCount = numButtons < kMaxButtons ? numButtons : kMaxButtons;
-    const int hatCount = numHats < kMaxHats ? numHats : kMaxHats;
+// Sized to the device's real counts, so the mapper's bounds checks see the true extent.
+JoystickSnapshot SDLGamepadBridge::readJoystick(SDL_Joystick* js,
+                                                std::int16_t (&axes)[kMaxJoystickAxes],
+                                                bool (&buttons)[kMaxJoystickButtons],
+                                                std::uint8_t (&hats)[kMaxJoystickHats]) {
+    const int axisCount = std::min(SDL_JoystickNumAxes(js), kMaxJoystickAxes);
+    const int buttonCount = std::min(SDL_JoystickNumButtons(js), kMaxJoystickButtons);
+    const int hatCount = std::min(SDL_JoystickNumHats(js), kMaxJoystickHats);
     for (int i = 0; i < axisCount; ++i) { axes[i] = SDL_JoystickGetAxis(js, i); }
     for (int i = 0; i < buttonCount; ++i) { buttons[i] = SDL_JoystickGetButton(js, i) != 0; }
     for (int i = 0; i < hatCount; ++i) { hats[i] = SDL_JoystickGetHat(js, i); }
@@ -819,17 +838,7 @@ void SDLGamepadBridge::rebuildJoystickState(int iid) {
     snap.buttonCount = buttonCount;
     snap.hats = hats;
     snap.hatCount = hatCount;
-
-    // Copy under remapMtx_ but map OUTSIDE the lock, so a main-thread push never
-    // stalls the hot path. A model with no entry maps under the default layout.
-    JoystickRemap remap;
-    {
-        std::lock_guard<std::mutex> lock(remapMtx_);
-        if (auto it = joystickRemaps_.find({vendorId, productId}); it != joystickRemaps_.end()) {
-            remap = it->second;
-        }
-    }
-    processor_->publish(deviceId, mapJoystick(snap, remap));
+    return snap;
 }
 
 } // namespace dish::input
