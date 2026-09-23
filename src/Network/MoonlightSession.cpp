@@ -265,6 +265,135 @@ void MoonlightSession::cancelHostApp() {
                     });
 }
 
+// What every phase of a run needs: the client whose state the phases build up, the host's two
+// ports, and the generation the run started in.
+struct MoonlightSession::PairingRun {
+    std::shared_ptr<moonlight::PairingClient> pc;
+    unsigned generation = 0;
+    QString ip;
+    int httpPort = 0;
+    int httpsPort = 0;
+};
+
+// True when a cancel landed between two phases. Without this the chain would report a refusal the
+// host never made, because the reply to the phase already in flight still arrives.
+bool MoonlightSession::pairAbandoned(const PairingRun& run, const char* phase) const {
+    if (pairGeneration_ == run.generation) { return false; }
+    qCInfo(lcMoonlightSession) << host_.ip << "pairing was cancelled; dropping the reply to"
+                               << phase;
+    return true;
+}
+
+// A /pair phase refuses the same way /launch does, with HTTP 200 and a status_code of its own, so
+// the body is what names the reason.
+void MoonlightSession::pairFailed(const char* phase, const MoonlightXmlResponse& r) {
+    failureMessage_ = r.statusMessage;
+    qCWarning(lcMoonlightSession) << host_.ip << "pairing gave up at" << phase << ": reachable"
+                                  << r.reachable << "status" << r.statusCode << r.statusMessage;
+    dispatch(moonlight::SessionEvent::PairFailed);
+    emit pairingFinished(false);
+}
+
+// `phrase=getservercert` is what marks this AS phase 1: a host that does not see it looks the
+// uniqueid up in its pending-pairing table instead, finds nothing, and answers `400 Invalid
+// uniqueid` in the body, which is what a live Sunshine host did to every attempt without it.
+void MoonlightSession::pairPhase1(const PairingRun& run) {
+    http_->getHttp(
+        run.ip, run.httpPort, QStringLiteral("/pair"),
+        {{QStringLiteral("uniqueid"), uniqueId_},
+         {QStringLiteral("devicename"), QStringLiteral("Dish")},
+         {QStringLiteral("updateState"), QStringLiteral("1")},
+         {QStringLiteral("phrase"), QStringLiteral("getservercert")},
+         {QStringLiteral("salt"), QString::fromStdString(run.pc->saltHex())},
+         {QStringLiteral("clientcert"), QString::fromStdString(run.pc->clientCertHex())}},
+        [this, run](const MoonlightXmlResponse& r) { onPairPhase1(run, r); });
+}
+
+void MoonlightSession::onPairPhase1(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 1")) { return; }
+    const std::string plaincert = r.value(QStringLiteral("plaincert")).toStdString();
+    if (!r.reachable || !r.ok() || plaincert.empty() || !run.pc->consumeServerCert(plaincert)) {
+        pairFailed("phase 1 (salt + clientcert)", r);
+        return;
+    }
+    pairPhase2(run);
+}
+
+void MoonlightSession::pairPhase2(const PairingRun& run) {
+    http_->getHttp(
+        run.ip, run.httpPort, QStringLiteral("/pair"),
+        {{QStringLiteral("uniqueid"), uniqueId_},
+         {QStringLiteral("clientchallenge"), QString::fromStdString(run.pc->clientChallengeHex())}},
+        [this, run](const MoonlightXmlResponse& r) { onPairPhase2(run, r); });
+}
+
+void MoonlightSession::onPairPhase2(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 2")) { return; }
+    const std::string cr = r.value(QStringLiteral("challengeresponse")).toStdString();
+    if (!r.reachable || !r.ok() || cr.empty() || !run.pc->consumeChallengeResponse(cr)) {
+        pairFailed("phase 2 (clientchallenge)", r);
+        return;
+    }
+    pairPhase3(run);
+}
+
+void MoonlightSession::pairPhase3(const PairingRun& run) {
+    http_->getHttp(run.ip, run.httpPort, QStringLiteral("/pair"),
+                   {{QStringLiteral("uniqueid"), uniqueId_},
+                    {QStringLiteral("serverchallengeresp"),
+                     QString::fromStdString(run.pc->serverChallengeRespHex())}},
+                   [this, run](const MoonlightXmlResponse& r) { onPairPhase3(run, r); });
+}
+
+void MoonlightSession::onPairPhase3(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 3")) { return; }
+    const std::string ps = r.value(QStringLiteral("pairingsecret")).toStdString();
+    if (!r.reachable || !r.ok() || ps.empty() || !run.pc->consumePairingSecret(ps)) {
+        pairFailed("phase 3 (serverchallengeresp)", r);
+        return;
+    }
+    pairPhase4(run);
+}
+
+void MoonlightSession::pairPhase4(const PairingRun& run) {
+    http_->getHttp(run.ip, run.httpPort, QStringLiteral("/pair"),
+                   {{QStringLiteral("uniqueid"), uniqueId_},
+                    {QStringLiteral("clientpairingsecret"),
+                     QString::fromStdString(run.pc->clientPairingSecretHex())}},
+                   [this, run](const MoonlightXmlResponse& r) { onPairPhase4(run, r); });
+}
+
+void MoonlightSession::onPairPhase4(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 4")) { return; }
+    if (!r.reachable || !r.ok() || !r.paired()) {
+        pairFailed("phase 4 (clientpairingsecret)", r);
+        return;
+    }
+    pairPhase5(run);
+}
+
+// Over TLS, presenting the client certificate: this is the phase that proves the key the first
+// four phases agreed on is the one the host will accept.
+void MoonlightSession::pairPhase5(const PairingRun& run) {
+    http_->getHttps(run.ip, run.httpsPort, QStringLiteral("/pair"),
+                    {{QStringLiteral("uniqueid"), uniqueId_},
+                     {QStringLiteral("phrase"), QStringLiteral("pairchallenge")}},
+                    [this, run](const MoonlightXmlResponse& r) { onPairPhase5(run, r); });
+}
+
+void MoonlightSession::onPairPhase5(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 5")) { return; }
+    if (!r.reachable || !r.ok() || !r.paired()) {
+        pairFailed("phase 5 (pairchallenge over TLS)", r);
+        return;
+    }
+    host_.paired = true;
+    if (repo_ != nullptr) { repo_->rememberHost(host_); }
+    qCInfo(lcMoonlightSession) << host_.ip << "paired";
+    dispatch(moonlight::SessionEvent::PairSucceeded);
+    emit pairingFinished(true);
+}
+
 void MoonlightSession::pair(const QString& pin) {
     if (repo_ == nullptr) {
         emit pairingFinished(false);
@@ -272,130 +401,20 @@ void MoonlightSession::pair(const QString& pin) {
     }
     dispatch(moonlight::SessionEvent::StartPairing);
 
-    auto pc = std::make_shared<moonlight::PairingClient>(
+    PairingRun run;
+    run.pc = std::make_shared<moonlight::PairingClient>(
         identity_, pin.toStdString(), moonlight::crypto::randomBytes(16),
         moonlight::crypto::randomBytes(16), moonlight::crypto::randomBytes(16));
-    if (!pc->valid()) {
+    if (!run.pc->valid()) {
         dispatch(moonlight::SessionEvent::PairFailed);
         emit pairingFinished(false);
         return;
     }
-
-    // Each phase chains into the next in its callback. A failure at any step
-    // routes to PairFailed, naming the phase and whatever the host said in the
-    // body: a /pair phase refuses the same way /launch does, with HTTP 200 and a
-    // status_code of its own. The lambdas capture `pc` (shared) so state
-    // survives.
-    // Every phase carries the generation it started in, so a cancel between two
-    // phases stops the chain instead of reporting a refusal the host never made.
-    const unsigned generation = pairGeneration_;
-    auto abandoned = [this, generation](const char* phase) {
-        if (pairGeneration_ == generation) { return false; }
-        qCInfo(lcMoonlightSession)
-            << host_.ip << "pairing was cancelled; dropping the reply to" << phase;
-        return true;
-    };
-
-    auto fail = [this](const char* phase, const MoonlightXmlResponse& r) {
-        failureMessage_ = r.statusMessage;
-        qCWarning(lcMoonlightSession) << host_.ip << "pairing gave up at" << phase << ": reachable"
-                                      << r.reachable << "status" << r.statusCode << r.statusMessage;
-        dispatch(moonlight::SessionEvent::PairFailed);
-        emit pairingFinished(false);
-    };
-
-    const QString ip = host_.ip;
-    const int httpPort = host_.httpPort;
-    const int httpsPort = host_.httpsPort;
-
-    // Phase 1. `phrase=getservercert` is what marks it AS phase 1: a host that
-    // does not see it looks the uniqueid up in its pending-pairing table
-    // instead, finds nothing, and answers `400 Invalid uniqueid` in the body,
-    // which is what a live Sunshine host did to every attempt without it.
-    http_->getHttp(
-        ip, httpPort, QStringLiteral("/pair"),
-        {{QStringLiteral("uniqueid"), uniqueId_},
-         {QStringLiteral("devicename"), QStringLiteral("Dish")},
-         {QStringLiteral("updateState"), QStringLiteral("1")},
-         {QStringLiteral("phrase"), QStringLiteral("getservercert")},
-         {QStringLiteral("salt"), QString::fromStdString(pc->saltHex())},
-         {QStringLiteral("clientcert"), QString::fromStdString(pc->clientCertHex())}},
-        [this, pc, fail, abandoned, ip, httpPort, httpsPort](const MoonlightXmlResponse& r1) {
-            if (abandoned("phase 1")) { return; }
-            const std::string plaincert = r1.value(QStringLiteral("plaincert")).toStdString();
-            if (!r1.reachable || !r1.ok() || plaincert.empty() ||
-                !pc->consumeServerCert(plaincert)) {
-                fail("phase 1 (salt + clientcert)", r1);
-                return;
-            }
-            // Phase 2
-            http_->getHttp(
-                ip, httpPort, QStringLiteral("/pair"),
-                {{QStringLiteral("uniqueid"), uniqueId_},
-                 {QStringLiteral("clientchallenge"),
-                  QString::fromStdString(pc->clientChallengeHex())}},
-                [this, pc, fail, abandoned, ip, httpPort,
-                 httpsPort](const MoonlightXmlResponse& r2) {
-                    if (abandoned("phase 2")) { return; }
-                    const std::string cr =
-                        r2.value(QStringLiteral("challengeresponse")).toStdString();
-                    if (!r2.reachable || !r2.ok() || cr.empty() ||
-                        !pc->consumeChallengeResponse(cr)) {
-                        fail("phase 2 (clientchallenge)", r2);
-                        return;
-                    }
-                    // Phase 3
-                    http_->getHttp(
-                        ip, httpPort, QStringLiteral("/pair"),
-                        {{QStringLiteral("uniqueid"), uniqueId_},
-                         {QStringLiteral("serverchallengeresp"),
-                          QString::fromStdString(pc->serverChallengeRespHex())}},
-                        [this, pc, fail, abandoned, ip, httpPort,
-                         httpsPort](const MoonlightXmlResponse& r3) {
-                            if (abandoned("phase 3")) { return; }
-                            const std::string ps =
-                                r3.value(QStringLiteral("pairingsecret")).toStdString();
-                            if (!r3.reachable || !r3.ok() || ps.empty() ||
-                                !pc->consumePairingSecret(ps)) {
-                                fail("phase 3 (serverchallengeresp)", r3);
-                                return;
-                            }
-                            // Phase 4
-                            http_->getHttp(
-                                ip, httpPort, QStringLiteral("/pair"),
-                                {{QStringLiteral("uniqueid"), uniqueId_},
-                                 {QStringLiteral("clientpairingsecret"),
-                                  QString::fromStdString(pc->clientPairingSecretHex())}},
-                                [this, pc, fail, abandoned, ip,
-                                 httpsPort](const MoonlightXmlResponse& r4) {
-                                    if (abandoned("phase 4")) { return; }
-                                    if (!r4.reachable || !r4.ok() || !r4.paired()) {
-                                        fail("phase 4 (clientpairingsecret)", r4);
-                                        return;
-                                    }
-                                    // Phase 5 (HTTPS, presents the client cert)
-                                    http_->getHttps(
-                                        ip, httpsPort, QStringLiteral("/pair"),
-                                        {{QStringLiteral("uniqueid"), uniqueId_},
-                                         {QStringLiteral("phrase"),
-                                          QStringLiteral("pairchallenge")}},
-                                        [this, pc, fail,
-                                         abandoned](const MoonlightXmlResponse& r5) {
-                                            if (abandoned("phase 5")) { return; }
-                                            if (!r5.reachable || !r5.ok() || !r5.paired()) {
-                                                fail("phase 5 (pairchallenge over TLS)", r5);
-                                                return;
-                                            }
-                                            host_.paired = true;
-                                            if (repo_ != nullptr) { repo_->rememberHost(host_); }
-                                            qCInfo(lcMoonlightSession) << host_.ip << "paired";
-                                            dispatch(moonlight::SessionEvent::PairSucceeded);
-                                            emit pairingFinished(true);
-                                        });
-                                });
-                        });
-                });
-        });
+    run.generation = pairGeneration_;
+    run.ip = host_.ip;
+    run.httpPort = host_.httpPort;
+    run.httpsPort = host_.httpsPort;
+    pairPhase1(run);
 }
 
 void MoonlightSession::cancelPairing() {

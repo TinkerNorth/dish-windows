@@ -82,6 +82,22 @@ class MoonlightSession : public QObject {
     // entered). Emits pairingFinished(ok).
     void pair(const QString& pin);
 
+    // The five /pair phases. Each request method starts a phase and each on* method consumes its
+    // reply and starts the next, so the chain reads down the file instead of nesting.
+    struct PairingRun;
+    bool pairAbandoned(const PairingRun& run, const char* phase) const;
+    void pairFailed(const char* phase, const MoonlightXmlResponse& r);
+    void pairPhase1(const PairingRun& run);
+    void onPairPhase1(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase2(const PairingRun& run);
+    void onPairPhase2(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase3(const PairingRun& run);
+    void onPairPhase3(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase4(const PairingRun& run);
+    void onPairPhase4(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase5(const PairingRun& run);
+    void onPairPhase5(const PairingRun& run, const MoonlightXmlResponse& r);
+
     // Abandon a pairing in flight. The five phases chain through callbacks and
     // phase 1 PARKS ON THE HOST until a human types the PIN, so there is nothing
     // here that can be aborted from this side within the user's patience. What
