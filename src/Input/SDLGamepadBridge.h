@@ -194,6 +194,19 @@ class SDLGamepadBridge : public QObject {
     void handleSensorEvent(const SDL_ControllerSensorEvent& ev);
     void handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev);
     void pollBatteries();
+
+    using TimePoint = std::chrono::steady_clock::time_point;
+
+    // One device whose charge is due to be read, with its joystick handle already resolved so the
+    // publish needs no lock of its own.
+    struct PollEntry {
+        int iid = 0;
+        std::string deviceId;
+        SDL_Joystick* js = nullptr;
+    };
+    std::vector<PollEntry> batteriesDue(TimePoint now);
+    void considerForPoll(int iid, SDL_Joystick* js, TimePoint now, std::vector<PollEntry>& due);
+    bool publishBattery(const PollEntry& e);
     // True iff `deviceId` is currently twin-suppressed (USB-direct owns the pad).
     // Cheap: a short-held read of suppressedIds_ under suppressedMtx_.
     bool isSuppressed(const std::string& deviceId) const;
@@ -330,6 +343,16 @@ class SDLGamepadBridge : public QObject {
     struct TouchState {
         TouchFinger fingers[2];
     };
+
+    // What one touchpad event leaves behind: the slot's id, the tracked finger state, and the
+    // controller handle the click is read from, outside the lock.
+    struct TouchUpdate {
+        std::string deviceId;
+        SDL_GameController* controller = nullptr;
+        TouchState state;
+    };
+    std::optional<TouchUpdate> applyTouchpadEvent(const SDL_ControllerTouchpadEvent& ev);
+    static void applyTouchFinger(TouchState& ts, const SDL_ControllerTouchpadEvent& ev);
     std::unordered_map<int, TouchState> touchState_;
 
     // SDL_GameControllerRumble / SDL_GameControllerSetLED must run on the SDL

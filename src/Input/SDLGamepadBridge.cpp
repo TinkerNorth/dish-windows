@@ -550,113 +550,118 @@ void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
     processor_->publishMotion(deviceId, sample);
 }
 
+// `finger` is the 0-based slot; the wire carries only two, so anything higher is dropped.
+//
+// Only a false-to-true DOWN edge takes a new tracking id, so a MOTION on an already-active finger
+// keeps its id. The counter wraps freely: the protocol needs the id to CHANGE on a new contact,
+// not to be globally unique.
+void SDLGamepadBridge::applyTouchFinger(TouchState& ts, const SDL_ControllerTouchpadEvent& ev) {
+    if (ev.finger < 0 || ev.finger >= 2) { return; }
+    TouchFinger& f = ts.fingers[ev.finger];
+    if (ev.type == SDL_CONTROLLERTOUCHPADUP) {
+        f.active = false;
+        return;
+    }
+    if (ev.type == SDL_CONTROLLERTOUCHPADDOWN && !f.active) { ++f.id; }
+    f.active = true;
+    f.x = touchpadCoordToInt16(ev.x);
+    f.y = touchpadCoordToInt16(ev.y);
+}
+
+// Null when the event is for a device this bridge does not hold. The controller handle comes back
+// with the state so the click can be read live outside the lock.
+std::optional<SDLGamepadBridge::TouchUpdate>
+SDLGamepadBridge::applyTouchpadEvent(const SDL_ControllerTouchpadEvent& ev) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const int iid = ev.which;
+    TouchUpdate update;
+    if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+        update.deviceId = it->second.toStdString();
+    }
+    if (update.deviceId.empty()) { return std::nullopt; }
+    if (auto it = openControllers_.find(iid); it != openControllers_.end()) {
+        update.controller = it->second;
+    }
+    TouchState& ts = touchState_[iid];
+    applyTouchFinger(ts, ev);
+    update.state = ts;
+    return update;
+}
+
 void SDLGamepadBridge::handleTouchpadEvent(const SDL_ControllerTouchpadEvent& ev) {
-    std::string deviceId;
-    SDL_GameController* gc = nullptr;
-    TouchState state;
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        const int iid = ev.which;
-        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
-            deviceId = it->second.toStdString();
-        }
-        if (deviceId.empty()) { return; }
-        if (auto it = openControllers_.find(iid); it != openControllers_.end()) { gc = it->second; }
-        // `finger` is the 0-based slot; the wire carries only two, so anything
-        // higher is dropped.
-        TouchState& ts = touchState_[iid];
-        if (ev.finger >= 0 && ev.finger < 2) {
-            TouchFinger& f = ts.fingers[ev.finger];
-            if (ev.type == SDL_CONTROLLERTOUCHPADUP) {
-                f.active = false;
-            } else {
-                // Only a false→true DOWN edge takes a new tracking id, so a
-                // MOTION on an already-active finger keeps its id. The counter
-                // wraps freely: the protocol needs the id to CHANGE on a new
-                // contact, not to be globally unique.
-                if (ev.type == SDL_CONTROLLERTOUCHPADDOWN && !f.active) { ++f.id; }
-                f.active = true;
-                f.x = touchpadCoordToInt16(ev.x);
-                f.y = touchpadCoordToInt16(ev.y);
-            }
-        }
-        state = ts;
-    }
-
-    // The clickable-pad switch is an ordinary SDL button, so read it live rather
-    // than tracking it separately.
-    bool button = false;
-    if (gc != nullptr) {
-        button = SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_TOUCHPAD) == 1;
-    }
-
-    // Twin-dedup: suppress the touchpad surface too while USB-direct owns the pad.
-    if (isSuppressed(deviceId)) { return; }
+    const auto update = applyTouchpadEvent(ev);
+    if (!update.has_value()) { return; }
+    // Twin-dedup: the touchpad surface is suppressed too while USB-direct owns the pad. The state
+    // above is still tracked, so the surface resumes mid-gesture without a stale finger.
+    if (isSuppressed(update->deviceId)) { return; }
 
     GamepadInputProcessor::TouchpadSample sample{};
-    sample.finger0Active = state.fingers[0].active;
-    sample.finger0Id = state.fingers[0].id;
-    sample.finger0X = state.fingers[0].x;
-    sample.finger0Y = state.fingers[0].y;
-    sample.finger1Active = state.fingers[1].active;
-    sample.finger1Id = state.fingers[1].id;
-    sample.finger1X = state.fingers[1].x;
-    sample.finger1Y = state.fingers[1].y;
-    sample.buttonPressed = button;
-    processor_->publishTouchpad(deviceId, sample);
+    sample.finger0Active = update->state.fingers[0].active;
+    sample.finger0Id = update->state.fingers[0].id;
+    sample.finger0X = update->state.fingers[0].x;
+    sample.finger0Y = update->state.fingers[0].y;
+    sample.finger1Active = update->state.fingers[1].active;
+    sample.finger1Id = update->state.fingers[1].id;
+    sample.finger1X = update->state.fingers[1].x;
+    sample.finger1Y = update->state.fingers[1].y;
+    // The clickable-pad switch is an ordinary SDL button, so it is read live rather than tracked.
+    sample.buttonPressed =
+        update->controller != nullptr &&
+        SDL_GameControllerGetButton(update->controller, SDL_CONTROLLER_BUTTON_TOUCHPAD) == 1;
+    processor_->publishTouchpad(update->deviceId, sample);
+}
+
+// Snapshotted under the lock and iterated outside it: holding mtx_ across the publish would block
+// applyRumble for no reason. Resolving the joystick handle here is what lets the controller and
+// raw-joystick paths share one poll.
+std::vector<SDLGamepadBridge::PollEntry> SDLGamepadBridge::batteriesDue(TimePoint now) {
+    std::vector<PollEntry> due;
+    std::lock_guard<std::mutex> lock(mtx_);
+    due.reserve(openControllers_.size() + openJoysticks_.size());
+    for (const auto& [iid, gc] : openControllers_) {
+        considerForPoll(iid, SDL_GameControllerGetJoystick(gc), now, due);
+    }
+    for (const auto& [iid, js] : openJoysticks_) { considerForPoll(iid, js, now, due); }
+    return due;
+}
+
+// Caller holds mtx_. A device polled for the first time is always due, so a pad that has just
+// attached shows a charge without waiting out the interval.
+void SDLGamepadBridge::considerForPoll(int iid, SDL_Joystick* js, TimePoint now,
+                                       std::vector<PollEntry>& due) {
+    if (js == nullptr) { return; }
+    const auto last = lastBatteryPoll_[iid];
+    const bool first = last == TimePoint{};
+    if (!first && (now - last) < kBatteryPollInterval) { return; }
+    lastBatteryPoll_[iid] = now;
+
+    std::string did;
+    if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) { did = it->second.toStdString(); }
+    if (did.empty()) { return; }
+    due.push_back({iid, std::move(did), js});
+}
+
+// Forwarded unconditionally: MSG_BATTERY is a 30 s heartbeat, so the receiver expects a packet
+// each interval even when the value is unchanged, and a lost one self-heals on the next tick.
+// True when the value moved, which is the only thing the UI needs telling about.
+bool SDLGamepadBridge::publishBattery(const PollEntry& e) {
+    const auto wire = powerLevelToWire(SDL_JoystickCurrentPowerLevel(e.js));
+    processor_->publishBattery(e.deviceId,
+                               GamepadInputProcessor::BatterySample{wire.level, wire.status});
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    BatterySnapshot& snap = lastBattery_[e.iid];
+    if (snap.level == wire.level && snap.status == wire.status) { return false; }
+    snap.level = wire.level;
+    snap.status = wire.status;
+    return true;
 }
 
 void SDLGamepadBridge::pollBatteries() {
-    const auto now = std::chrono::steady_clock::now();
-    // Snapshot under the lock, then iterate outside it: holding mtx_ across the
-    // publish would block applyRumble for no reason. Resolving the joystick
-    // handle here lets the controller and raw-joystick paths share one poll.
-    struct PollEntry {
-        int iid;
-        std::string deviceId;
-        SDL_Joystick* js;
-    };
-    std::vector<PollEntry> due;
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        due.reserve(openControllers_.size() + openJoysticks_.size());
-        auto consider = [&](int iid, SDL_Joystick* js) {
-            if (js == nullptr) { return; }
-            const auto last = lastBatteryPoll_[iid];
-            const bool first = last == std::chrono::steady_clock::time_point{};
-            if (!first && (now - last) < kBatteryPollInterval) { return; }
-            lastBatteryPoll_[iid] = now;
-            std::string did;
-            if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
-                did = it->second.toStdString();
-            }
-            if (did.empty()) { return; }
-            due.push_back({iid, std::move(did), js});
-        };
-        for (const auto& [iid, gc] : openControllers_) {
-            consider(iid, SDL_GameControllerGetJoystick(gc));
-        }
-        for (const auto& [iid, js] : openJoysticks_) { consider(iid, js); }
-    }
-
     bool anyChange = false;
-    for (const auto& e : due) {
-        SDL_Joystick* js = e.js;
-        if (js == nullptr) { continue; }
-        const auto pl = SDL_JoystickCurrentPowerLevel(js);
-        const auto wire = powerLevelToWire(pl);
-        // Forwarded unconditionally: MSG_BATTERY is a 30 s heartbeat, so the
-        // receiver expects a packet each interval even when the value is
-        // unchanged, and a lost one self-heals on the next tick.
-        GamepadInputProcessor::BatterySample sample{wire.level, wire.status};
-        processor_->publishBattery(e.deviceId, sample);
-        std::lock_guard<std::mutex> lock(mtx_);
-        BatterySnapshot& snap = lastBattery_[e.iid];
-        if (snap.level != wire.level || snap.status != wire.status) {
-            snap.level = wire.level;
-            snap.status = wire.status;
-            anyChange = true;
-        }
+    for (const auto& e : batteriesDue(std::chrono::steady_clock::now())) {
+        if (e.js == nullptr) { continue; }
+        anyChange = publishBattery(e) || anyChange;
     }
     // One signal per batch, not per device, so the UI rebuilds once.
     if (anyChange) { QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection); }
