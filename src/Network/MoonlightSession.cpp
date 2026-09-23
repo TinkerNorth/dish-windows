@@ -51,7 +51,21 @@ struct DisplayMode {
 // so the size asked for here never reaches their desktop.
 DisplayMode requestedDisplayMode() { return DisplayMode{}; }
 
+// 5.1 at 16 bits, as sent by every Moonlight client. The host uses it to pick an audio format for
+// a stream Dish never decodes; it is sent because a host that is given no number picks stereo and
+// then reconfigures its own output device, which is audible to the user sitting at it.
+constexpr QStringView kSurroundAudioInfo = u"196610";
+
 } // namespace
+
+int rtspPortFromSessionUrl(const QString& sessionUrl) {
+    const QUrl url(sessionUrl);
+    return url.port() > 0 ? url.port() : kDefaultRtspPort;
+}
+
+QString rtspTargetFor(const QString& hostIp, const QString& sessionUrl) {
+    return QStringLiteral("%1:%2").arg(hostIp).arg(rtspPortFromSessionUrl(sessionUrl));
+}
 
 MoonlightSession::MoonlightSession(models::MoonlightHost host, moonlight::Identity identity,
                                    repository::MoonlightHostRepository* repo, QObject* parent)
@@ -108,59 +122,70 @@ MoonlightSession::~MoonlightSession() {
     control_.disconnect();
 }
 
+// Mixed on THIS thread, where both rumble streams land, so the two can never interleave into a
+// torn mix. Only the result is marshalled, which keeps the UI routing off the ENet receive thread.
+void MoonlightSession::publishRumbleMix(std::uint16_t controllerNumber,
+                                        const moonlight::BodyRumble& mixed) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, n = static_cast<int>(controllerNumber), mixed] {
+            emit rumbleReceived(n, mixed.strong, mixed.weak);
+        },
+        Qt::QueuedConnection);
+}
+
+void MoonlightSession::onRumbleEvent(const moonlight::RumbleEvent& e) {
+    const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
+        return moonlight::withBodyRumble(mix, e.lowFreq, e.highFreq);
+    });
+    publishRumbleMix(e.controllerNumber, mixed);
+}
+
+// No pad this client can claim has trigger motors, so the host's trigger stream folds onto the
+// body motors instead of being dropped. The fold and the reason live in
+// core/moonlight/MoonlightTriggerRumble.h.
+void MoonlightSession::onRumbleTriggerEvent(const moonlight::RumbleTriggerEvent& e) {
+    const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
+        return moonlight::withTriggerRumble(mix, e.left, e.right);
+    });
+    publishRumbleMix(e.controllerNumber, mixed);
+}
+
+void MoonlightSession::onRgbLedEvent(const moonlight::RgbLedEvent& e) {
+    QMetaObject::invokeMethod(
+        this, [this, e] { emit rgbLedReceived(e.controllerNumber, e.r, e.g, e.b); },
+        Qt::QueuedConnection);
+}
+
+// The gate is applied on this thread, not the marshalled one: it is what stops motion going out,
+// and a queued hop would leave a window where an unsubscribe has arrived but samples still stream.
+void MoonlightSession::onMotionRequestEvent(const moonlight::MotionRequestEvent& e) {
+    motionGate_.onMotionRequest(e.controllerNumber, e.reportRateHz, e.motionType);
+    QMetaObject::invokeMethod(
+        this, [this, e] { emit motionRequested(e.controllerNumber, e.reportRateHz, e.motionType); },
+        Qt::QueuedConnection);
+}
+
+// A host that said it was ending and a link that simply went are two events, because only one of
+// them means the app on the other side is gone.
+void MoonlightSession::onControlDisconnect(bool terminated) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, terminated] {
+            dispatch(terminated ? moonlight::SessionEvent::ServerTerminated
+                                : moonlight::SessionEvent::ControlDropped);
+        },
+        Qt::QueuedConnection);
+}
+
 void MoonlightSession::wireControlHandlers() {
-    control_.setRumbleHandler([this](const moonlight::RumbleEvent& e) {
-        // Mixed on THIS thread, where both rumble streams land, so the two can
-        // never interleave into a torn mix. Marshalling only the result keeps
-        // the UI routing off the ENet receive thread.
-        const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
-            return moonlight::withBodyRumble(mix, e.lowFreq, e.highFreq);
-        });
-        QMetaObject::invokeMethod(
-            this,
-            [this, n = static_cast<int>(e.controllerNumber), mixed] {
-                emit rumbleReceived(n, mixed.strong, mixed.weak);
-            },
-            Qt::QueuedConnection);
-    });
-    // No pad this client can claim has trigger motors, so the host's trigger
-    // stream folds onto the body motors instead of being dropped. The fold and
-    // the reason live in core/moonlight/MoonlightTriggerRumble.h.
-    control_.setRumbleTriggerHandler([this](const moonlight::RumbleTriggerEvent& e) {
-        const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
-            return moonlight::withTriggerRumble(mix, e.left, e.right);
-        });
-        QMetaObject::invokeMethod(
-            this,
-            [this, n = static_cast<int>(e.controllerNumber), mixed] {
-                emit rumbleReceived(n, mixed.strong, mixed.weak);
-            },
-            Qt::QueuedConnection);
-    });
-    control_.setRgbLedHandler([this](const moonlight::RgbLedEvent& e) {
-        QMetaObject::invokeMethod(
-            this, [this, e] { emit rgbLedReceived(e.controllerNumber, e.r, e.g, e.b); },
-            Qt::QueuedConnection);
-    });
-    control_.setMotionRequestHandler([this](const moonlight::MotionRequestEvent& e) {
-        // Applied on this thread, not the marshalled one: the gate is what stops
-        // motion going out, and a queued hop would leave a window where an
-        // unsubscribe has arrived but samples still stream.
-        motionGate_.onMotionRequest(e.controllerNumber, e.reportRateHz, e.motionType);
-        QMetaObject::invokeMethod(
-            this,
-            [this, e] { emit motionRequested(e.controllerNumber, e.reportRateHz, e.motionType); },
-            Qt::QueuedConnection);
-    });
-    control_.setDisconnectHandler([this](bool terminated) {
-        QMetaObject::invokeMethod(
-            this,
-            [this, terminated] {
-                dispatch(terminated ? moonlight::SessionEvent::ServerTerminated
-                                    : moonlight::SessionEvent::ControlDropped);
-            },
-            Qt::QueuedConnection);
-    });
+    control_.setRumbleHandler([this](const moonlight::RumbleEvent& e) { onRumbleEvent(e); });
+    control_.setRumbleTriggerHandler(
+        [this](const moonlight::RumbleTriggerEvent& e) { onRumbleTriggerEvent(e); });
+    control_.setRgbLedHandler([this](const moonlight::RgbLedEvent& e) { onRgbLedEvent(e); });
+    control_.setMotionRequestHandler(
+        [this](const moonlight::MotionRequestEvent& e) { onMotionRequestEvent(e); });
+    control_.setDisconnectHandler([this](bool terminated) { onControlDisconnect(terminated); });
 }
 
 void MoonlightSession::dispatch(moonlight::SessionEvent event) {
@@ -469,7 +494,7 @@ void MoonlightSession::beginLaunch() {
          // Dish, whose user is sitting at the host using this as a pad: it would
          // silence the very machine they are listening to.
          {QStringLiteral("localAudioPlayMode"), QStringLiteral("1")},
-         {QStringLiteral("surroundAudioInfo"), QStringLiteral("196610")}});
+         {QStringLiteral("surroundAudioInfo"), kSurroundAudioInfo.toString()}});
     // No remoteControllersBitmap and no gcmap, as the other two clients send
     // none: the pads are plugged by their CONTROLLER_ARRIVAL, each with its own
     // type, and a bitmap naming one pad up front is a pad the host may build
@@ -484,50 +509,44 @@ void MoonlightSession::requestSession(const QString& path,
         [this, resuming](const MoonlightXmlResponse& r) { onLaunchReply(r, resuming); });
 }
 
-void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resuming) {
-    if (!r.reachable) {
-        qCWarning(lcMoonlightSession) << host_.ip << "session request did not reach the host";
-        dispatch(moonlight::SessionEvent::Unreachable);
+// A refusal arrives as HTTP 200 carrying a status_code of its own, so this runs on a reply the
+// transport called a success. `resumeAvailable` is kept because the UI states it separately from
+// the failure: a busy host that will hand the session back reads differently from one that will not.
+void MoonlightSession::onSessionRefused(const MoonlightXmlResponse& r, bool resuming) {
+    failureMessage_ = r.statusMessage;
+    resumeAvailable_ = r.resumeAvailable;
+    qCWarning(lcMoonlightSession) << host_.ip << "refused the session:" << r.statusCode
+                                  << r.statusMessage << "resume" << r.resumeAvailable;
+    if (resuming) {
+        // The host named this session ours to take back and then would not hand it over. There is
+        // nothing left to try but closing it.
+        qCWarning(lcMoonlightSession) << host_.ip << "refused the resume it offered";
+        dispatch(moonlight::SessionEvent::ResumeRefused);
         return;
     }
-
-    // THE HOST SAYS NO IN THE BODY. A refusal arrives as HTTP 200 carrying a
-    // status_code of its own, so the transport status proves nothing.
-    if (!r.ok()) {
-        failureMessage_ = r.statusMessage;
-        resumeAvailable_ = r.resumeAvailable;
-        qCWarning(lcMoonlightSession) << host_.ip << "refused the session:" << r.statusCode
-                                      << r.statusMessage << "resume" << r.resumeAvailable;
-        if (resuming) {
-            // The host named this session ours to take back and then would not
-            // hand it over. There is nothing left to try but closing it.
-            qCWarning(lcMoonlightSession) << host_.ip << "refused the resume it offered";
-            dispatch(moonlight::SessionEvent::ResumeRefused);
-            return;
-        }
-        if (r.appAlreadyRunning() && r.resumeAvailable) {
-            qCInfo(lcMoonlightSession) << host_.ip << "app already running and resumable, resuming";
-            requestSession(
-                QStringLiteral("/resume"),
-                {{QStringLiteral("uniqueid"), uniqueId_},
-                 {QStringLiteral("rikey"), QString::fromStdString(moonlight::crypto::hexEncode(
-                                               rikey_.data(), rikey_.size()))},
-                 {QStringLiteral("rikeyid"), QString::number(rikeyId_)},
-                 {QStringLiteral("surroundAudioInfo"), QStringLiteral("196610")}});
-            return;
-        }
-        dispatch(r.appAlreadyRunning() ? moonlight::SessionEvent::LaunchRefusedBusy
-                                       : moonlight::SessionEvent::LaunchFailed);
+    if (r.appAlreadyRunning() && r.resumeAvailable) {
+        qCInfo(lcMoonlightSession) << host_.ip << "app already running and resumable, resuming";
+        requestResume();
         return;
     }
+    dispatch(r.appAlreadyRunning() ? moonlight::SessionEvent::LaunchRefusedBusy
+                                   : moonlight::SessionEvent::LaunchFailed);
+}
 
-    const QString sessionUrl = r.value(QStringLiteral("sessionUrl0"));
-    int rtspPort = 48010;
-    if (!sessionUrl.isEmpty()) {
-        const QUrl url(sessionUrl);
-        if (url.port() > 0) { rtspPort = url.port(); }
-    }
-    rtspTarget_ = QStringLiteral("%1:%2").arg(host_.ip).arg(rtspPort);
+// The host answers a launch and a resume the same way, so this is the one reply reader for both.
+void MoonlightSession::requestResume() {
+    requestSession(QStringLiteral("/resume"),
+                   {{QStringLiteral("uniqueid"), uniqueId_},
+                    {QStringLiteral("rikey"), QString::fromStdString(moonlight::crypto::hexEncode(
+                                                  rikey_.data(), rikey_.size()))},
+                    {QStringLiteral("rikeyid"), QString::number(rikeyId_)},
+                    {QStringLiteral("surroundAudioInfo"), kSurroundAudioInfo.toString()}});
+}
+
+// A 200 that is ok() is still not a session: a host that neither started one nor handed one back
+// says so in the body, and treating that as live would leave the client talking RTSP to nothing.
+void MoonlightSession::onSessionAccepted(const MoonlightXmlResponse& r) {
+    rtspTarget_ = rtspTargetFor(host_.ip, r.value(QStringLiteral("sessionUrl0")));
     qCInfo(lcMoonlightSession) << host_.ip << "session accepted, RTSP at" << rtspTarget_
                                << "gamesession" << r.value(QStringLiteral("gamesession"))
                                << "resume" << r.value(QStringLiteral("resume"));
@@ -535,12 +554,26 @@ void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resumin
     if (r.value(QStringLiteral("gamesession")) == QLatin1String("1") ||
         r.value(QStringLiteral("resume")) == QLatin1String("1")) {
         dispatch(moonlight::SessionEvent::LaunchSucceeded);
-    } else {
-        failureMessage_ = r.statusMessage;
-        qCWarning(lcMoonlightSession)
-            << host_.ip << "session reply named neither a gamesession nor a resume";
-        dispatch(moonlight::SessionEvent::LaunchFailed);
+        return;
     }
+    failureMessage_ = r.statusMessage;
+    qCWarning(lcMoonlightSession) << host_.ip
+                                  << "session reply named neither a gamesession nor a resume";
+    dispatch(moonlight::SessionEvent::LaunchFailed);
+}
+
+void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resuming) {
+    if (!r.reachable) {
+        qCWarning(lcMoonlightSession) << host_.ip << "session request did not reach the host";
+        dispatch(moonlight::SessionEvent::Unreachable);
+        return;
+    }
+    // THE HOST SAYS NO IN THE BODY, so the transport status proves nothing.
+    if (!r.ok()) {
+        onSessionRefused(r, resuming);
+        return;
+    }
+    onSessionAccepted(r);
 }
 
 void MoonlightSession::beginRtspAndControl() {

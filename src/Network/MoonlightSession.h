@@ -46,6 +46,17 @@ class QUdpSocket;
 
 namespace dish::net {
 
+// Moonlight's well-known RTSP port, used when the host names none.
+constexpr int kDefaultRtspPort = 48010;
+
+// Where the RTSP handshake goes, from the host we asked and the `sessionUrl0` it answered with.
+// The HOST'S OWN ADDRESS WINS: sessionUrl0 routinely carries the host's idea of itself, which on a
+// machine with more than one interface is not the address that reached it. Only the port is taken.
+// A url that cannot be read is not a reason to abandon a session the host accepted, so it falls
+// back to kDefaultRtspPort rather than failing.
+int rtspPortFromSessionUrl(const QString& sessionUrl);
+QString rtspTargetFor(const QString& hostIp, const QString& sessionUrl);
+
 class MoonlightSession : public QObject {
     Q_OBJECT
   public:
@@ -219,9 +230,21 @@ class MoonlightSession : public QObject {
     void beginLaunch();
     void requestSession(const QString& path, const std::map<QString, QString>& query);
     void onLaunchReply(const MoonlightXmlResponse& r, bool resuming);
+    void onSessionRefused(const MoonlightXmlResponse& r, bool resuming);
+    void onSessionAccepted(const MoonlightXmlResponse& r);
+    void requestResume();
     void beginRtspAndControl();
     void onRtspFinished(bool rtspOk, bool controlOk, const RtspHandshakeResult& rtsp);
     void wireControlHandlers();
+
+    // The five streams the control channel delivers, each on the ENet receive thread. The two
+    // rumble streams share publishRumbleMix, which is the only thing that leaves that thread.
+    void publishRumbleMix(std::uint16_t controllerNumber, const moonlight::BodyRumble& mixed);
+    void onRumbleEvent(const moonlight::RumbleEvent& e);
+    void onRumbleTriggerEvent(const moonlight::RumbleTriggerEvent& e);
+    void onRgbLedEvent(const moonlight::RgbLedEvent& e);
+    void onMotionRequestEvent(const moonlight::MotionRequestEvent& e);
+    void onControlDisconnect(bool terminated);
     void sendPendingArrivals();
     // The first CONTROLLER_MULTI a pad sends, right behind its arrival: zeroed,
     // carrying the active mask, so a bound pad nobody has touched yet is a pad

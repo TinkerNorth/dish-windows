@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Dish contributors.
 
 #include "Network/MoonlightHttpClient.h"
+#include "Network/MoonlightSession.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -133,4 +134,34 @@ TEST_CASE("parseMoonlightXml on garbage is unreachable-safe", "[moonlight][http]
     const auto resp = parseMoonlightXml(QByteArray("not xml <<<"));
     // A parse error still yields an object; callers gate on reachable / values.
     REQUIRE(resp.values.empty());
+}
+
+TEST_CASE("the RTSP target keeps the address that reached the host", "[moonlight][http][rtsp]") {
+    // A host with more than one interface answers with ITS idea of itself, which is regularly not
+    // the address the client just spoke to. Taking that address would send the handshake to a
+    // network this machine cannot route to, on a host that is sitting right there.
+    REQUIRE(rtspTargetFor(QStringLiteral("192.0.2.11"),
+                          QStringLiteral("rtsp://10.9.9.9:48010")) ==
+            QStringLiteral("192.0.2.11:48010"));
+    // Including when the address it names is one this machine could reach, but is not the one it
+    // used: a second host on the same LAN must not be handed the session.
+    REQUIRE(rtspTargetFor(QStringLiteral("192.0.2.11"),
+                          QStringLiteral("rtsp://192.0.2.12:48010")) ==
+            QStringLiteral("192.0.2.11:48010"));
+}
+
+TEST_CASE("the RTSP port is the host's, and 48010 when it names none", "[moonlight][http][rtsp]") {
+    REQUIRE(rtspPortFromSessionUrl(QStringLiteral("rtsp://192.0.2.11:47999")) == 47999);
+    // A host that moved its RTSP port is the whole reason sessionUrl0 is read at all.
+    REQUIRE(rtspTargetFor(QStringLiteral("192.0.2.11"),
+                          QStringLiteral("rtsp://192.0.2.11:47999")) ==
+            QStringLiteral("192.0.2.11:47999"));
+
+    // No url, no port in the url, and a url that is not one: each falls back rather than failing,
+    // because the host has already accepted the session and the default is what it almost always is.
+    REQUIRE(rtspPortFromSessionUrl(QString()) == kDefaultRtspPort);
+    REQUIRE(rtspPortFromSessionUrl(QStringLiteral("rtsp://192.0.2.11")) == kDefaultRtspPort);
+    REQUIRE(rtspPortFromSessionUrl(QStringLiteral("not a url at all")) == kDefaultRtspPort);
+    REQUIRE(rtspPortFromSessionUrl(QStringLiteral("rtsp://192.0.2.11:0")) == kDefaultRtspPort);
+    REQUIRE(kDefaultRtspPort == 48010);
 }
