@@ -164,74 +164,91 @@ bool SDLGamepadBridge::initSdl() {
     return true;
 }
 
+// What SDL says a freshly opened pad can do. SDL's enable call returns success even for a device
+// with no such sensor, so Has and Set must both agree before a sensor is marked capable.
+struct SDLGamepadBridge::ControllerCaps {
+    bool hasGyro = false;
+    bool hasAccel = false;
+    bool hasLed = false;
+    bool hasTouchpad = false;
+    bool hasRumble = false;
+    bool bluetooth = false;
+    int vendorId = 0;
+    int productId = 0;
+};
+
+SDLGamepadBridge::ControllerCaps SDLGamepadBridge::probeControllerCaps(SDL_GameController* gc) {
+    ControllerCaps caps;
+    caps.hasGyro = SDL_GameControllerHasSensor(gc, SDL_SENSOR_GYRO) == SDL_TRUE &&
+                   SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_GYRO, SDL_TRUE) == 0;
+    caps.hasAccel = SDL_GameControllerHasSensor(gc, SDL_SENSOR_ACCEL) == SDL_TRUE &&
+                    SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_ACCEL, SDL_TRUE) == 0;
+    caps.hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
+    caps.hasTouchpad = SDL_GameControllerGetNumTouchpads(gc) > 0;
+    caps.hasRumble = SDL_GameControllerHasRumble(gc) == SDL_TRUE;
+    // SDL returns 0 when it cannot read the descriptor, which the twin-dedup pairing treats as
+    // "no identity".
+    caps.vendorId = SDL_GameControllerGetVendor(gc);
+    caps.productId = SDL_GameControllerGetProduct(gc);
+    // SDL's device path is the Win32 HID interface path for HIDAPI and RawInput pads, so the
+    // marker check spots a Bluetooth link. A null path (the XInput fallback) reads as
+    // not-Bluetooth, which fails safe to the wired presentation.
+    const char* devPath = SDL_GameControllerPath(gc);
+    caps.bluetooth = devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
+    return caps;
+}
+
+void SDLGamepadBridge::registerController(int iid, SDL_GameController* gc, const QString& deviceId,
+                                          const QString& deviceName, const ControllerCaps& caps) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    openControllers_[iid] = gc;
+    deviceIds_[iid] = deviceId;
+    deviceNames_[iid] = deviceName;
+    if (caps.hasGyro || caps.hasAccel) { motionCapable_.insert(iid); }
+    if (caps.hasLed) { lightbarCapable_.insert(iid); }
+    if (caps.hasTouchpad) { touchpadCapable_.insert(iid); }
+    if (caps.hasRumble) { rumbleCapable_.insert(iid); }
+    if (caps.bluetooth) { bluetoothIids_.insert(iid); }
+    usbIdentity_[iid] = {caps.vendorId, caps.productId};
+    lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
+}
+
+// One-shot capability dump: type, ids and GUID together pin which mapping SDL applied, so a "my
+// pad doesn't work" report is diagnosable without a debugger.
+void SDLGamepadBridge::logControllerCaps(SDL_GameController* gc, SDL_Joystick* js,
+                                         const QString& deviceId, const QString& deviceName,
+                                         const ControllerCaps& caps) {
+    char guidBuf[64] = {0};
+    SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
+    qCInfo(lcDishInput) << "DEVCAPS id=" << deviceId << "name=" << deviceName
+                        << "type=" << static_cast<int>(SDL_GameControllerGetType(gc))
+                        << "vid=" << QString::number(caps.vendorId, 16)
+                        << "pid=" << QString::number(caps.productId, 16) << "guid=" << guidBuf
+                        << "gyro=" << caps.hasGyro << "accel=" << caps.hasAccel
+                        << "led=" << caps.hasLed << "rumble=" << caps.hasRumble
+                        << "bt=" << caps.bluetooth;
+}
+
 void SDLGamepadBridge::onControllerAdded(const SDL_Event& ev) {
     if (isDishVirtualDevice(SDL_GameControllerNameForIndex(ev.cdevice.which))) { return; }
     SDL_GameController* gc = SDL_GameControllerOpen(ev.cdevice.which);
     if (gc == nullptr) { return; }
+
     SDL_Joystick* js = SDL_GameControllerGetJoystick(gc);
     const int iid = SDL_JoystickInstanceID(js);
     const auto* name = SDL_GameControllerName(gc);
     const QString deviceId = QStringLiteral("sdl:%1").arg(iid);
     const QString deviceName = QString::fromUtf8(name != nullptr ? name : "Gamepad");
 
-    // SDL's enable call returns success even for a device with no such
-    // sensor, so Has and Set must both agree before marking it capable.
-    bool hasGyro = SDL_GameControllerHasSensor(gc, SDL_SENSOR_GYRO) == SDL_TRUE;
-    bool hasAccel = SDL_GameControllerHasSensor(gc, SDL_SENSOR_ACCEL) == SDL_TRUE;
-    if (hasGyro) {
-        if (SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_GYRO, SDL_TRUE) != 0) {
-            hasGyro = false;
-        }
-    }
-    if (hasAccel) {
-        if (SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_ACCEL, SDL_TRUE) != 0) {
-            hasAccel = false;
-        }
-    }
-    const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
-    const bool hasTouchpad = SDL_GameControllerGetNumTouchpads(gc) > 0;
-    const bool hasRumble = SDL_GameControllerHasRumble(gc) == SDL_TRUE;
-    const auto type = SDL_GameControllerGetType(gc); // DEVCAPS log only
-    // SDL returns 0 when it cannot read the descriptor, which the
-    // twin-dedup pairing treats as "no identity".
-    const int vendorId = SDL_GameControllerGetVendor(gc);
-    const int productId = SDL_GameControllerGetProduct(gc);
-    // SDL's device path is the Win32 HID interface path for HIDAPI and
-    // RawInput pads, so the marker check spots a Bluetooth link. A null
-    // path (the XInput fallback) reads as not-Bluetooth, which fails safe
-    // to the wired presentation.
-    const char* devPath = SDL_GameControllerPath(gc);
-    const bool bluetooth = devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        openControllers_[iid] = gc;
-        deviceIds_[iid] = deviceId;
-        deviceNames_[iid] = deviceName;
-        if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
-        if (hasLed) { lightbarCapable_.insert(iid); }
-        if (hasTouchpad) { touchpadCapable_.insert(iid); }
-        if (hasRumble) { rumbleCapable_.insert(iid); }
-        if (bluetooth) { bluetoothIids_.insert(iid); }
-        usbIdentity_[iid] = {vendorId, productId};
-        lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
-    }
-    // One-shot capability dump: type, ids and GUID together pin which
-    // mapping SDL applied, so a "my pad doesn't work" report is
-    // diagnosable without a debugger.
-    char guidBuf[64] = {0};
-    SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
-    qCInfo(lcDishInput) << "DEVCAPS id=" << deviceId << "name=" << deviceName
-                        << "type=" << static_cast<int>(type)
-                        << "vid=" << QString::number(vendorId, 16)
-                        << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
-                        << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed
-                        << "rumble=" << hasRumble << "bt=" << bluetooth;
-    // Pushed from here rather than owned by the processor because the
-    // bridge is the only thing that knows when a device shows up.
+    const ControllerCaps caps = probeControllerCaps(gc);
+    registerController(iid, gc, deviceId, deviceName, caps);
+    logControllerCaps(gc, js, deviceId, deviceName, caps);
+
+    // Pushed from here rather than owned by the processor because the bridge is the only thing
+    // that knows when a device shows up.
     processor_->setDeadzones(deviceId.toStdString(), {kDefaultStickFlat, kDefaultTriggerFlat});
     QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
     rebuildState(iid);
-    return;
 }
 
 void SDLGamepadBridge::onControllerRemoved(const SDL_Event& ev) {

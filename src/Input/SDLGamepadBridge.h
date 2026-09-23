@@ -155,6 +155,12 @@ class SDLGamepadBridge : public QObject {
     void applySdlHints();
     bool initSdl();
     void onControllerAdded(const SDL_Event& ev);
+    struct ControllerCaps;
+    static ControllerCaps probeControllerCaps(SDL_GameController* gc);
+    void registerController(int iid, SDL_GameController* gc, const QString& deviceId,
+                            const QString& deviceName, const ControllerCaps& caps);
+    static void logControllerCaps(SDL_GameController* gc, SDL_Joystick* js, const QString& deviceId,
+                                  const QString& deviceName, const ControllerCaps& caps);
     void onControllerRemoved(const SDL_Event& ev);
     void onJoystickAdded(const SDL_Event& ev);
     void onJoystickRemoved(const SDL_Event& ev);
