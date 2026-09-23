@@ -126,7 +126,7 @@ QList<SDLGamepadBridge::Device> SDLGamepadBridge::devices() const {
     return out;
 }
 
-void SDLGamepadBridge::runLoop() {
+void SDLGamepadBridge::applySdlHints() {
     // Positional (Xbox-layout) buttons, not label-based, because the USB-direct
     // decoders map by physical position. Without this hint a Switch Pro would
     // disagree with itself across the SDL and Direct paths.
@@ -151,120 +151,215 @@ void SDLGamepadBridge::runLoop() {
     // are not SDL; a pad attached to Dish is being forwarded, not shared.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
-    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) != 0) {
+}
+
+// False when SDL will not start at all, which leaves the bridge with no devices rather than a
+// half-initialised one.
+bool SDLGamepadBridge::initSdl() {
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) != 0) { return false; }
+    SDL_GameControllerEventState(SDL_ENABLE);
+    // Joystick event delivery is a separate opt-in even though SDL_INIT_JOYSTICK is already up.
+    // Needed so generic pads SDL does not recognise as game controllers still surface.
+    SDL_JoystickEventState(SDL_ENABLE);
+    return true;
+}
+
+void SDLGamepadBridge::onControllerAdded(const SDL_Event& ev) {
+    if (isDishVirtualDevice(SDL_GameControllerNameForIndex(ev.cdevice.which))) { return; }
+    SDL_GameController* gc = SDL_GameControllerOpen(ev.cdevice.which);
+    if (gc == nullptr) { return; }
+    SDL_Joystick* js = SDL_GameControllerGetJoystick(gc);
+    const int iid = SDL_JoystickInstanceID(js);
+    const auto* name = SDL_GameControllerName(gc);
+    const QString deviceId = QStringLiteral("sdl:%1").arg(iid);
+    const QString deviceName = QString::fromUtf8(name != nullptr ? name : "Gamepad");
+
+    // SDL's enable call returns success even for a device with no such
+    // sensor, so Has and Set must both agree before marking it capable.
+    bool hasGyro = SDL_GameControllerHasSensor(gc, SDL_SENSOR_GYRO) == SDL_TRUE;
+    bool hasAccel = SDL_GameControllerHasSensor(gc, SDL_SENSOR_ACCEL) == SDL_TRUE;
+    if (hasGyro) {
+        if (SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_GYRO, SDL_TRUE) != 0) {
+            hasGyro = false;
+        }
+    }
+    if (hasAccel) {
+        if (SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_ACCEL, SDL_TRUE) != 0) {
+            hasAccel = false;
+        }
+    }
+    const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
+    const bool hasTouchpad = SDL_GameControllerGetNumTouchpads(gc) > 0;
+    const bool hasRumble = SDL_GameControllerHasRumble(gc) == SDL_TRUE;
+    const auto type = SDL_GameControllerGetType(gc); // DEVCAPS log only
+    // SDL returns 0 when it cannot read the descriptor, which the
+    // twin-dedup pairing treats as "no identity".
+    const int vendorId = SDL_GameControllerGetVendor(gc);
+    const int productId = SDL_GameControllerGetProduct(gc);
+    // SDL's device path is the Win32 HID interface path for HIDAPI and
+    // RawInput pads, so the marker check spots a Bluetooth link. A null
+    // path (the XInput fallback) reads as not-Bluetooth, which fails safe
+    // to the wired presentation.
+    const char* devPath = SDL_GameControllerPath(gc);
+    const bool bluetooth = devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        openControllers_[iid] = gc;
+        deviceIds_[iid] = deviceId;
+        deviceNames_[iid] = deviceName;
+        if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
+        if (hasLed) { lightbarCapable_.insert(iid); }
+        if (hasTouchpad) { touchpadCapable_.insert(iid); }
+        if (hasRumble) { rumbleCapable_.insert(iid); }
+        if (bluetooth) { bluetoothIids_.insert(iid); }
+        usbIdentity_[iid] = {vendorId, productId};
+        lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
+    }
+    // One-shot capability dump: type, ids and GUID together pin which
+    // mapping SDL applied, so a "my pad doesn't work" report is
+    // diagnosable without a debugger.
+    char guidBuf[64] = {0};
+    SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
+    qCInfo(lcDishInput) << "DEVCAPS id=" << deviceId << "name=" << deviceName
+                        << "type=" << static_cast<int>(type)
+                        << "vid=" << QString::number(vendorId, 16)
+                        << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
+                        << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed
+                        << "rumble=" << hasRumble << "bt=" << bluetooth;
+    // Pushed from here rather than owned by the processor because the
+    // bridge is the only thing that knows when a device shows up.
+    processor_->setDeadzones(deviceId.toStdString(), {kDefaultStickFlat, kDefaultTriggerFlat});
+    QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+    rebuildState(iid);
+    return;
+}
+
+void SDLGamepadBridge::onControllerRemoved(const SDL_Event& ev) {
+    const int iid = ev.cdevice.which;
+    std::string deviceId;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (auto it = openControllers_.find(iid); it != openControllers_.end()) {
+            SDL_GameControllerClose(it->second);
+            openControllers_.erase(it);
+        }
+        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+            deviceId = it->second.toStdString();
+            deviceIds_.erase(it);
+        }
+        deviceNames_.erase(iid);
+        motionCapable_.erase(iid);
+        lightbarCapable_.erase(iid);
+        touchpadCapable_.erase(iid);
+        rumbleCapable_.erase(iid);
+        bluetoothIids_.erase(iid);
+        usbIdentity_.erase(iid);
+        lastBatteryPoll_.erase(iid);
+        lastBattery_.erase(iid);
+        touchState_.erase(iid);
+    }
+    effectState_.erase(iid);
+    if (!deviceId.empty()) { processor_->remove(deviceId); }
+    QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+    return;
+}
+
+void SDLGamepadBridge::onJoystickAdded(const SDL_Event& ev) {
+    // Unlike every other event here, this `which` is a device INDEX, not
+    // an instance id — it matches SDL_JoystickOpen's argument.
+    const int which = ev.jdevice.which;
+    // A game controller ALSO emits joystick events, and the controller
+    // path owns recognised pads. Opening one here would double it.
+    if (SDL_IsGameController(which) == SDL_TRUE) { return; }
+    if (isDishVirtualDevice(SDL_JoystickNameForIndex(which))) { return; }
+    SDL_Joystick* js = SDL_JoystickOpen(which);
+    if (js == nullptr) { return; }
+    const int iid = SDL_JoystickInstanceID(js);
+    const auto* name = SDL_JoystickName(js);
+    const QString deviceId = QStringLiteral("sdl:%1").arg(iid);
+    const QString deviceName = QString::fromUtf8(name != nullptr ? name : "Joystick");
+    // SDL's joystick API exposes no IMU, LED or controller type, so a raw
+    // joystick surfaces as a plain Xbox-kind pad with neither.
+    const int vendorId = SDL_JoystickGetVendor(js);
+    const int productId = SDL_JoystickGetProduct(js);
+    const char* devPath = SDL_JoystickPath(js);
+    const bool bluetooth = devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
+    const bool hasRumble = SDL_JoystickHasRumble(js) == SDL_TRUE;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        openJoysticks_[iid] = js;
+        deviceIds_[iid] = deviceId;
+        deviceNames_[iid] = deviceName;
+        if (hasRumble) { rumbleCapable_.insert(iid); }
+        if (bluetooth) { bluetoothIids_.insert(iid); }
+        usbIdentity_[iid] = {vendorId, productId};
+        lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
+    }
+    char guidBuf[64] = {0};
+    SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
+    qCInfo(lcDishInput) << "DEVCAPS(joystick) id=" << deviceId << "name=" << deviceName
+                        << "axes=" << SDL_JoystickNumAxes(js)
+                        << "buttons=" << SDL_JoystickNumButtons(js)
+                        << "hats=" << SDL_JoystickNumHats(js)
+                        << "vid=" << QString::number(vendorId, 16)
+                        << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
+                        << "bt=" << bluetooth;
+    processor_->setDeadzones(deviceId.toStdString(), {kDefaultStickFlat, kDefaultTriggerFlat});
+    QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+    rebuildJoystickState(iid);
+    return;
+}
+
+void SDLGamepadBridge::onJoystickRemoved(const SDL_Event& ev) {
+    const int iid = ev.jdevice.which;
+    std::string deviceId;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        // Absent for a controller-path device, so this only acts on raw
+        // joysticks we actually opened.
+        auto jit = openJoysticks_.find(iid);
+        if (jit == openJoysticks_.end()) { return; }
+        SDL_JoystickClose(jit->second);
+        openJoysticks_.erase(jit);
+        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+            deviceId = it->second.toStdString();
+            deviceIds_.erase(it);
+        }
+        deviceNames_.erase(iid);
+        rumbleCapable_.erase(iid);
+        bluetoothIids_.erase(iid);
+        usbIdentity_.erase(iid);
+        lastBatteryPoll_.erase(iid);
+        lastBattery_.erase(iid);
+    }
+    if (!deviceId.empty()) { processor_->remove(deviceId); }
+    QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+    return;
+}
+
+void SDLGamepadBridge::runLoop() {
+    applySdlHints();
+    if (!initSdl()) {
         running_.store(false);
         return;
     }
-    SDL_GameControllerEventState(SDL_ENABLE);
-    // Joystick event delivery is a separate opt-in even though SDL_INIT_JOYSTICK
-    // is already up. Needed so generic pads SDL does not recognise as game
-    // controllers still surface.
-    SDL_JoystickEventState(SDL_ENABLE);
 
     while (running_.load(std::memory_order_relaxed)) {
         SDL_Event ev;
-        if (SDL_WaitEventTimeout(&ev, 100) == 0) { continue; }
+        if (SDL_WaitEventTimeout(&ev, kSdlWaitMs) == 0) { continue; }
         switch (ev.type) {
-        case SDL_CONTROLLERDEVICEADDED: {
-            if (isDishVirtualDevice(SDL_GameControllerNameForIndex(ev.cdevice.which))) { break; }
-            SDL_GameController* gc = SDL_GameControllerOpen(ev.cdevice.which);
-            if (gc == nullptr) { break; }
-            SDL_Joystick* js = SDL_GameControllerGetJoystick(gc);
-            const int iid = SDL_JoystickInstanceID(js);
-            const auto* name = SDL_GameControllerName(gc);
-            const QString deviceId = QStringLiteral("sdl:%1").arg(iid);
-            const QString deviceName = QString::fromUtf8(name != nullptr ? name : "Gamepad");
-
-            // SDL's enable call returns success even for a device with no such
-            // sensor, so Has and Set must both agree before marking it capable.
-            bool hasGyro = SDL_GameControllerHasSensor(gc, SDL_SENSOR_GYRO) == SDL_TRUE;
-            bool hasAccel = SDL_GameControllerHasSensor(gc, SDL_SENSOR_ACCEL) == SDL_TRUE;
-            if (hasGyro) {
-                if (SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_GYRO, SDL_TRUE) != 0) {
-                    hasGyro = false;
-                }
-            }
-            if (hasAccel) {
-                if (SDL_GameControllerSetSensorEnabled(gc, SDL_SENSOR_ACCEL, SDL_TRUE) != 0) {
-                    hasAccel = false;
-                }
-            }
-            const bool hasLed = SDL_GameControllerHasLED(gc) == SDL_TRUE;
-            const bool hasTouchpad = SDL_GameControllerGetNumTouchpads(gc) > 0;
-            const bool hasRumble = SDL_GameControllerHasRumble(gc) == SDL_TRUE;
-            const auto type = SDL_GameControllerGetType(gc); // DEVCAPS log only
-            // SDL returns 0 when it cannot read the descriptor, which the
-            // twin-dedup pairing treats as "no identity".
-            const int vendorId = SDL_GameControllerGetVendor(gc);
-            const int productId = SDL_GameControllerGetProduct(gc);
-            // SDL's device path is the Win32 HID interface path for HIDAPI and
-            // RawInput pads, so the marker check spots a Bluetooth link. A null
-            // path (the XInput fallback) reads as not-Bluetooth, which fails safe
-            // to the wired presentation.
-            const char* devPath = SDL_GameControllerPath(gc);
-            const bool bluetooth =
-                devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
-            {
-                std::lock_guard<std::mutex> lock(mtx_);
-                openControllers_[iid] = gc;
-                deviceIds_[iid] = deviceId;
-                deviceNames_[iid] = deviceName;
-                if (hasGyro || hasAccel) { motionCapable_.insert(iid); }
-                if (hasLed) { lightbarCapable_.insert(iid); }
-                if (hasTouchpad) { touchpadCapable_.insert(iid); }
-                if (hasRumble) { rumbleCapable_.insert(iid); }
-                if (bluetooth) { bluetoothIids_.insert(iid); }
-                usbIdentity_[iid] = {vendorId, productId};
-                lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
-            }
-            // One-shot capability dump: type, ids and GUID together pin which
-            // mapping SDL applied, so a "my pad doesn't work" report is
-            // diagnosable without a debugger.
-            char guidBuf[64] = {0};
-            SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
-            qCInfo(lcDishInput) << "DEVCAPS id=" << deviceId << "name=" << deviceName
-                                << "type=" << static_cast<int>(type)
-                                << "vid=" << QString::number(vendorId, 16)
-                                << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
-                                << "gyro=" << hasGyro << "accel=" << hasAccel << "led=" << hasLed
-                                << "rumble=" << hasRumble << "bt=" << bluetooth;
-            // Pushed from here rather than owned by the processor because the
-            // bridge is the only thing that knows when a device shows up.
-            processor_->setDeadzones(deviceId.toStdString(),
-                                     {kDefaultStickFlat, kDefaultTriggerFlat});
-            QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
-            rebuildState(iid);
+        case SDL_CONTROLLERDEVICEADDED:
+            onControllerAdded(ev);
             break;
-        }
-        case SDL_CONTROLLERDEVICEREMOVED: {
-            const int iid = ev.cdevice.which;
-            std::string deviceId;
-            {
-                std::lock_guard<std::mutex> lock(mtx_);
-                if (auto it = openControllers_.find(iid); it != openControllers_.end()) {
-                    SDL_GameControllerClose(it->second);
-                    openControllers_.erase(it);
-                }
-                if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
-                    deviceId = it->second.toStdString();
-                    deviceIds_.erase(it);
-                }
-                deviceNames_.erase(iid);
-                motionCapable_.erase(iid);
-                lightbarCapable_.erase(iid);
-                touchpadCapable_.erase(iid);
-                rumbleCapable_.erase(iid);
-                bluetoothIids_.erase(iid);
-                usbIdentity_.erase(iid);
-                lastBatteryPoll_.erase(iid);
-                lastBattery_.erase(iid);
-                touchState_.erase(iid);
-            }
-            effectState_.erase(iid);
-            if (!deviceId.empty()) { processor_->remove(deviceId); }
-            QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
+        case SDL_CONTROLLERDEVICEREMOVED:
+            onControllerRemoved(ev);
             break;
-        }
+        case SDL_JOYDEVICEADDED:
+            onJoystickAdded(ev);
+            break;
+        case SDL_JOYDEVICEREMOVED:
+            onJoystickRemoved(ev);
+            break;
         case SDL_CONTROLLERAXISMOTION:
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
@@ -272,85 +367,12 @@ void SDLGamepadBridge::runLoop() {
             break;
         case SDL_AUDIODEVICEADDED:
         case SDL_AUDIODEVICEREMOVED:
-            // Delivered here because this loop is the process's one SDL event
-            // pump; the audio subsystem itself is SdlAudioGateway's (see the
-            // signal's comment). A pad's own endpoints appear a beat after its
-            // HID interface, so this edge is what re-runs the route matcher.
+            // Delivered here because this loop is the process's one SDL event pump; the audio
+            // subsystem itself is SdlAudioGateway's (see the signal's comment). A pad's own
+            // endpoints appear a beat after its HID interface, so this edge is what re-runs the
+            // route matcher.
             QMetaObject::invokeMethod(this, "audioDevicesChanged", Qt::QueuedConnection);
             break;
-        case SDL_JOYDEVICEADDED: {
-            // Unlike every other event here, this `which` is a device INDEX, not
-            // an instance id — it matches SDL_JoystickOpen's argument.
-            const int which = ev.jdevice.which;
-            // A game controller ALSO emits joystick events, and the controller
-            // path owns recognised pads. Opening one here would double it.
-            if (SDL_IsGameController(which) == SDL_TRUE) { break; }
-            if (isDishVirtualDevice(SDL_JoystickNameForIndex(which))) { break; }
-            SDL_Joystick* js = SDL_JoystickOpen(which);
-            if (js == nullptr) { break; }
-            const int iid = SDL_JoystickInstanceID(js);
-            const auto* name = SDL_JoystickName(js);
-            const QString deviceId = QStringLiteral("sdl:%1").arg(iid);
-            const QString deviceName = QString::fromUtf8(name != nullptr ? name : "Joystick");
-            // SDL's joystick API exposes no IMU, LED or controller type, so a raw
-            // joystick surfaces as a plain Xbox-kind pad with neither.
-            const int vendorId = SDL_JoystickGetVendor(js);
-            const int productId = SDL_JoystickGetProduct(js);
-            const char* devPath = SDL_JoystickPath(js);
-            const bool bluetooth =
-                devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
-            const bool hasRumble = SDL_JoystickHasRumble(js) == SDL_TRUE;
-            {
-                std::lock_guard<std::mutex> lock(mtx_);
-                openJoysticks_[iid] = js;
-                deviceIds_[iid] = deviceId;
-                deviceNames_[iid] = deviceName;
-                if (hasRumble) { rumbleCapable_.insert(iid); }
-                if (bluetooth) { bluetoothIids_.insert(iid); }
-                usbIdentity_[iid] = {vendorId, productId};
-                lastBatteryPoll_[iid] = std::chrono::steady_clock::time_point{};
-            }
-            char guidBuf[64] = {0};
-            SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guidBuf, sizeof(guidBuf));
-            qCInfo(lcDishInput) << "DEVCAPS(joystick) id=" << deviceId << "name=" << deviceName
-                                << "axes=" << SDL_JoystickNumAxes(js)
-                                << "buttons=" << SDL_JoystickNumButtons(js)
-                                << "hats=" << SDL_JoystickNumHats(js)
-                                << "vid=" << QString::number(vendorId, 16)
-                                << "pid=" << QString::number(productId, 16) << "guid=" << guidBuf
-                                << "bt=" << bluetooth;
-            processor_->setDeadzones(deviceId.toStdString(),
-                                     {kDefaultStickFlat, kDefaultTriggerFlat});
-            QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
-            rebuildJoystickState(iid);
-            break;
-        }
-        case SDL_JOYDEVICEREMOVED: {
-            const int iid = ev.jdevice.which;
-            std::string deviceId;
-            {
-                std::lock_guard<std::mutex> lock(mtx_);
-                // Absent for a controller-path device, so this only acts on raw
-                // joysticks we actually opened.
-                auto jit = openJoysticks_.find(iid);
-                if (jit == openJoysticks_.end()) { break; }
-                SDL_JoystickClose(jit->second);
-                openJoysticks_.erase(jit);
-                if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
-                    deviceId = it->second.toStdString();
-                    deviceIds_.erase(it);
-                }
-                deviceNames_.erase(iid);
-                rumbleCapable_.erase(iid);
-                bluetoothIids_.erase(iid);
-                usbIdentity_.erase(iid);
-                lastBatteryPoll_.erase(iid);
-                lastBattery_.erase(iid);
-            }
-            if (!deviceId.empty()) { processor_->remove(deviceId); }
-            QMetaObject::invokeMethod(this, "devicesChanged", Qt::QueuedConnection);
-            break;
-        }
         case SDL_JOYAXISMOTION:
             // A game controller's joystick events also land here, but its iid is
             // in openControllers_ and never openJoysticks_, so this no-ops for it.

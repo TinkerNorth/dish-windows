@@ -148,6 +148,16 @@ class SDLGamepadBridge : public QObject {
 
   private:
     void runLoop();
+
+    // Long enough that an idle pump does not spin, short enough that a stop is observed promptly.
+    static constexpr int kSdlWaitMs = 100;
+
+    void applySdlHints();
+    bool initSdl();
+    void onControllerAdded(const SDL_Event& ev);
+    void onControllerRemoved(const SDL_Event& ev);
+    void onJoystickAdded(const SDL_Event& ev);
+    void onJoystickRemoved(const SDL_Event& ev);
     // Drain the pending-command queue and execute each SDL output call
     // (rumble / SetLED / SendEffect) on the SDL thread. Called once per
     // runLoop iteration.
