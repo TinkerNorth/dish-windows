@@ -209,47 +209,123 @@ void MoonlightManager::rememberProvenTrust(const QString& id) {
     emit hostsChanged();
 }
 
-MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& host) {
-    const QString id = host.id();
-    if (auto* existing = sessions_.value(id, nullptr)) { return existing; }
-    if (!identity_.has_value()) {
-        identity_ = repo_->getOrCreateIdentity();
-        if (!identity_.has_value()) {
-            // The one failure that makes every Moonlight command impossible, and
-            // the one nobody would ever guess at from the outside.
-            qCCritical(lcMoonlightManager)
-                << "no client identity: generating or loading the Moonlight certificate failed."
-                << "Nothing can pair, probe or bind until that succeeds.";
-            return nullptr;
-        }
+// A host that accepted our /launch ran its verify callback against our certificate to do it, so
+// reaching the handshake is the same proof the app list gives, and the second path a trust can be
+// established on without anyone typing a PIN.
+void MoonlightManager::onSessionPhaseChanged(const QString& id, MoonlightSession* session) {
+    if (session->phase() == moonlight::SessionPhase::RtspHandshake) { rememberProvenTrust(id); }
+    emit sessionPhaseChanged(id);
+    emit hostsChanged();
+}
+
+// The pairing that just landed is proof of trust on its own; nothing has to ask the host again to
+// draw it.
+void MoonlightManager::onSessionPairingFinished(const QString& id, bool ok) {
+    auto& probe = probes_[id];
+    probe.pairingActive = false;
+    probe.pairingRefused = !ok;
+    if (ok) {
+        probe.answered = true;
+        probe.timedOut = false;
+        probe.mtlsVerified = true;
+        probe.unauthorized = false;
+        probe.uniqueIdChanged = false;
     }
-    auto* session = new MoonlightSession(host, *identity_, repo_.get(), this);
-    sessions_.insert(id, session);
-    QObject::connect(session, &MoonlightSession::phaseChanged, this, [this, id, session] {
-        // A host that accepted our /launch ran its verify callback against our
-        // certificate to do it, so reaching the handshake is the same proof the
-        // app list gives and the second path a trust can be established on
-        // without anyone typing a PIN.
-        if (session->phase() == moonlight::SessionPhase::RtspHandshake) { rememberProvenTrust(id); }
-        emit sessionPhaseChanged(id);
-        emit hostsChanged();
-    });
-    QObject::connect(session, &MoonlightSession::pairingFinished, this, [this, id](bool ok) {
-        auto& probe = probes_[id];
-        probe.pairingActive = false;
-        probe.pairingRefused = !ok;
-        if (ok) {
-            // The pairing that just landed is proof of trust on its own; nothing
-            // has to ask the host again to draw it.
-            probe.answered = true;
-            probe.timedOut = false;
-            probe.mtlsVerified = true;
-            probe.unauthorized = false;
-            probe.uniqueIdChanged = false;
-        }
-        emit pairingFinished(id, ok);
-        emit hostsChanged();
-    });
+    emit pairingFinished(id, ok);
+    emit hostsChanged();
+}
+
+// A readable mutual-TLS reply IS the proof of trust: the host ran its verify callback and let us
+// in, whatever a plaintext probe said about PairStatus.
+void MoonlightManager::recordAppListProbe(const QString& id, int appCount, bool ok,
+                                          bool unauthorized) {
+    auto& probe = probes_[id];
+    probe.appsInFlight = false;
+    probe.appsFetched = ok;
+    probe.appsFailed = !ok;
+    probe.appCount = ok ? appCount : 0;
+    probe.unauthorized = unauthorized;
+    if (ok) {
+        probe.answered = true;
+        probe.timedOut = false;
+        probe.mtlsVerified = true;
+    }
+    if (unauthorized) { probe.mtlsVerified = false; }
+}
+
+void MoonlightManager::onSessionAppListReady(const QString& id, const QStringList& ids,
+                                             const QStringList& titles, bool ok,
+                                             bool unauthorized) {
+    recordAppListProbe(id, static_cast<int>(ids.size()), ok, unauthorized);
+    // recordAppListProbe holds its reference into probes_ and this does not: the emit below runs
+    // handlers, and one that probes some other host would insert into probes_ and leave that
+    // reference dangling mid-update.
+    if (ok) { rememberProvenTrust(id); }
+    emit appListReady(id, ids, titles);
+    emit hostsChanged();
+}
+
+// True when the host came back as a different host. The old pairing cannot work, and the user has
+// to be told rather than shown a failure later.
+bool MoonlightManager::recordProbeIdentity(const QString& id, bool answered,
+                                           const QString& uniqueId) {
+    auto& probe = probes_[id];
+    probe.inFlight = false;
+    probe.answered = answered;
+    probe.timedOut = !answered;
+
+    const auto known = rememberedHost(id);
+    probe.uniqueIdChanged = answered && !uniqueId.isEmpty() && known.has_value() &&
+                            !known->uuid.isEmpty() && known->uuid != uniqueId;
+    if (probe.uniqueIdChanged) {
+        qCWarning(lcMoonlightManager)
+            << id << "answered with uniqueid" << uniqueId << "but was remembered as" << known->uuid
+            << ": this is a different host and the old pairing is dead";
+    }
+    // Learned once and kept, or the comparison above has nothing to compare against and M8 can
+    // never render. It is a witness and NOT the id: see MoonlightHost::id.
+    if (answered && !uniqueId.isEmpty() && known.has_value() && known->uuid.isEmpty()) {
+        auto learned = *known;
+        learned.uuid = uniqueId;
+        repo_->rememberHost(learned);
+        qCInfo(lcMoonlightManager) << id << "identified itself as" << uniqueId;
+    }
+    return probe.uniqueIdChanged;
+}
+
+// THE PROBE IS ONLY HALF AN ANSWER, and the half it gives is about reachability. Whether this
+// pairing still stands can only be asked over mutual TLS, so a host we hold one with is asked
+// again on that route: without it the trust word is derived from a plaintext PairStatus that reads
+// 0 on a live host for the device it is holding a pairing for, and a paired host can never render
+// as paired. A host we hold nothing for is not asked, because that handshake is refused and we
+// already know the answer.
+void MoonlightManager::onSessionProbeFinished(const QString& id, bool answered,
+                                              const QString& uniqueId) {
+    const bool identityMoved = recordProbeIdentity(id, answered, uniqueId);
+    // recordProbeIdentity holds its reference into probes_ and this does not: see
+    // onSessionAppListReady.
+    if (answered && !identityMoved && holdsPairing(id)) { refreshApps(id); }
+    emit hostsChanged();
+}
+
+// False when the client identity cannot be had, which is the one failure that makes every
+// Moonlight command impossible and the one nobody would guess at from the outside.
+bool MoonlightManager::ensureIdentity() {
+    if (identity_.has_value()) { return true; }
+    identity_ = repo_->getOrCreateIdentity();
+    if (identity_.has_value()) { return true; }
+    qCCritical(lcMoonlightManager)
+        << "no client identity: generating or loading the Moonlight certificate failed."
+        << "Nothing can pair, probe or bind until that succeeds.";
+    return false;
+}
+
+// Each lambda exists only to bind the host id, which the signal does not carry.
+void MoonlightManager::wireSession(const QString& id, MoonlightSession* session) {
+    QObject::connect(session, &MoonlightSession::phaseChanged, this,
+                     [this, id, session] { onSessionPhaseChanged(id, session); });
+    QObject::connect(session, &MoonlightSession::pairingFinished, this,
+                     [this, id](bool ok) { onSessionPairingFinished(id, ok); });
     QObject::connect(session, &MoonlightSession::rumbleReceived, this,
                      [this, id](int n, int lo, int hi) { emit rumbleReceived(id, n, lo, hi); });
     QObject::connect(
@@ -258,76 +334,22 @@ MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& h
     QObject::connect(
         session, &MoonlightSession::appListReady, this,
         [this, id](const QStringList& ids, const QStringList& titles, bool ok, bool unauthorized) {
-            {
-                auto& probe = probes_[id];
-                probe.appsInFlight = false;
-                probe.appsFetched = ok;
-                probe.appsFailed = !ok;
-                probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
-                probe.unauthorized = unauthorized;
-                if (ok) {
-                    // A readable mutual-TLS reply IS the proof of trust: the host
-                    // ran its verify callback and let us in, whatever a plaintext
-                    // probe said about PairStatus.
-                    probe.answered = true;
-                    probe.timedOut = false;
-                    probe.mtlsVerified = true;
-                }
-                if (unauthorized) { probe.mtlsVerified = false; }
-            }
-            // Scoped above and called here: this emits, and a handler that probes
-            // some other host would insert into probes_ and leave a reference into
-            // it dangling mid-update.
-            if (ok) { rememberProvenTrust(id); }
-            emit appListReady(id, ids, titles);
-            emit hostsChanged();
+            onSessionAppListReady(id, ids, titles, ok, unauthorized);
         });
-    QObject::connect(
-        session, &MoonlightSession::probeFinished, this,
-        [this, id](bool answered, const QString& uniqueId) {
-            bool identityMoved = false;
-            {
-                auto& probe = probes_[id];
-                probe.inFlight = false;
-                probe.answered = answered;
-                probe.timedOut = !answered;
-                // A host that came back with a different identity is a
-                // different host: the old pairing cannot work and the
-                // user has to be told rather than shown a failure later.
-                const auto known = rememberedHost(id);
-                probe.uniqueIdChanged = answered && !uniqueId.isEmpty() && known.has_value() &&
-                                        !known->uuid.isEmpty() && known->uuid != uniqueId;
-                identityMoved = probe.uniqueIdChanged;
-                if (probe.uniqueIdChanged) {
-                    qCWarning(lcMoonlightManager)
-                        << id << "answered with uniqueid" << uniqueId << "but was remembered as"
-                        << known->uuid << ": this is a different host and the old pairing is dead";
-                }
-                // Learned once and kept, or the comparison above has
-                // nothing to compare against and M8 can never render.
-                // It is a witness and NOT the id: see MoonlightHost::id.
-                if (answered && !uniqueId.isEmpty() && known.has_value() && known->uuid.isEmpty()) {
-                    auto learned = *known;
-                    learned.uuid = uniqueId;
-                    repo_->rememberHost(learned);
-                    qCInfo(lcMoonlightManager) << id << "identified itself as" << uniqueId;
-                }
-            }
-            // THE PROBE IS ONLY HALF AN ANSWER, and the half it gives is about
-            // reachability. Whether this pairing still stands can only be asked
-            // over mutual TLS, so a host we hold one with is asked again on that
-            // route: without it the trust word is derived from a plaintext
-            // PairStatus that reads 0 on a live host for the device it is holding
-            // a pairing for, and a paired host can never render as paired. A host
-            // we hold nothing for is not asked, because that handshake is refused
-            // and we already know the answer.
-            //
-            // Scoped above and called here: this emits, and a handler that probes
-            // some other host would insert into probes_ and leave a reference into
-            // it dangling mid-update.
-            if (answered && !identityMoved && holdsPairing(id)) { refreshApps(id); }
-            emit hostsChanged();
-        });
+    QObject::connect(session, &MoonlightSession::probeFinished, this,
+                     [this, id](bool answered, const QString& uniqueId) {
+                         onSessionProbeFinished(id, answered, uniqueId);
+                     });
+}
+
+MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& host) {
+    const QString id = host.id();
+    if (auto* existing = sessions_.value(id, nullptr)) { return existing; }
+    if (!ensureIdentity()) { return nullptr; }
+
+    auto* session = new MoonlightSession(host, *identity_, repo_.get(), this);
+    sessions_.insert(id, session);
+    wireSession(id, session);
     return session;
 }
 

@@ -258,6 +258,18 @@ class MoonlightManager : public QObject {
     // Ensures a session exists for `host`, wiring its signals through. Lazily
     // loads the client identity on first use (RSA keygen is not paid at startup).
     MoonlightSession* ensureSession(const models::MoonlightHost& host);
+
+    // The session's six signals, each with a name. The record* pair hold their reference into
+    // probes_ and emit nothing, so the emitting half cannot leave it dangling.
+    bool ensureIdentity();
+    void wireSession(const QString& id, MoonlightSession* session);
+    void onSessionPhaseChanged(const QString& id, MoonlightSession* session);
+    void onSessionPairingFinished(const QString& id, bool ok);
+    void recordAppListProbe(const QString& id, int appCount, bool ok, bool unauthorized);
+    void onSessionAppListReady(const QString& id, const QStringList& ids, const QStringList& titles,
+                               bool ok, bool unauthorized);
+    bool recordProbeIdentity(const QString& id, bool answered, const QString& uniqueId);
+    void onSessionProbeFinished(const QString& id, bool answered, const QString& uniqueId);
     std::optional<models::MoonlightHost> hostById(const QString& id) const;
     // Only the PERSISTED list, which is what separates a host the user keeps from
     // one that happens to be answering an mDNS sweep right now.
