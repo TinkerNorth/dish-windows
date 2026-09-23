@@ -388,87 +388,108 @@ void AppModel::installRumbleHandlers() {
         const QString id = conn->id();
         if (rumbleWiredConnections_.contains(id)) { continue; }
         rumbleWiredConnections_.insert(id);
-        // The handler runs on the SatelliteClient receive thread, so it only
-        // reads structures protected by their own locks.
-        conn->setRumbleHandler([this, id](const net::SatelliteClient::RumbleMessage& rm) {
-            // Snapshot the bindings ONCE, then decide with a pure function, so
-            // the receive thread never reads a half-updated table. slot.id is
-            // the SDL bridge device id, so the resolved target is what to
-            // actuate.
-            const auto bindings = hub_->bindings();
-            std::vector<reducer::RumbleConnectionSnapshot> snapshot;
-            for (auto* c : wifi_->connections()) {
-                reducer::RumbleConnectionSnapshot s;
-                s.connId = c->id();
-                s.connected = c->state() == net::SessionState::Live;
-                for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
-                    if (it.value() == s.connId) {
-                        s.boundDeviceId = it.key();
-                        break;
-                    }
-                }
-                snapshot.push_back(std::move(s));
-            }
-            const auto target = reducer::resolveRumble(snapshot, id);
-            if (!target.valid()) { return; }
-            // Vibration only: the light bar has its own return path via
-            // MSG_LIGHTBAR. actuateRumble picks the path the slot is actually
-            // on, so a Direct-claimed pad rumbles over its own OUT endpoint.
-            actuateRumble(target.deviceId, rm.strongMagnitude, rm.weakMagnitude, rm.durationMs);
-        });
-        // The MSG_LIGHTBAR stream, independent of rumble. Gated by the light-bar
-        // setting: "Off" suppresses the colour entirely.
-        conn->setLightbarHandler([this, id](const net::SatelliteClient::LightbarMessage& lm) {
-            const auto color =
-                lightbarColorFromLightbarMessage(lm, featureSettings_->lightbarFollowGame());
-            if (!color) { return; }
-            const QString deviceId = boundSlotForConnection(id);
-            if (deviceId.isEmpty()) { return; }
-            actuateLightbar(deviceId, color->r, color->g, color->b);
-        });
-        // MSG_TRIGGER_EFFECTS: the game's own DualSense effect blocks, replayed
-        // verbatim. Arrives only for a slot whose descriptor advertised the
-        // actuator, so there is nothing to gate here beyond finding the slot.
-        conn->setTriggerEffectsHandler(
-            [this, id](const net::SatelliteClient::TriggerEffectsMessage& tm) {
-                const QString deviceId = boundSlotForConnection(id);
-                if (deviceId.isEmpty()) { return; }
-                actuateTriggerEffects(deviceId, tm.left, tm.right);
-            });
-        // MSG_PLAYER_LEDS: the indicator bar. Deliberately NOT gated on the
-        // light-bar setting — that switch is about the RGB colour following the
-        // game, and a player number is not a colour.
-        conn->setPlayerLedsHandler([this, id](const net::SatelliteClient::PlayerLedsMessage& pm) {
-            const QString deviceId = boundSlotForConnection(id);
-            if (deviceId.isEmpty()) { return; }
-            actuatePlayerLeds(deviceId, pm.ledMask);
-        });
-        // MSG_SPEAKER_AUDIO: straight into the playout engine on the receive
-        // thread — reorder window, Opus decode, the pad's own endpoint. The
-        // message borrows the receive buffer and the engine consumes it before
-        // returning, which is the SpeakerAudioMessage contract. Arrives only
-        // for a slot whose descriptor claimed CAP_SPEAKER; a frame for a voice
-        // the engine does not hold is dropped inside deliver().
-        conn->setSpeakerAudioHandler(
-            [this, id](const net::SatelliteClient::SpeakerAudioMessage& sm) {
-                speakerEngine_.deliver(id.toStdString(), sm.controllerIndex,
-                                       source::audio::PlayoutLane::Speaker, sm.seq, sm.opus,
-                                       sm.opusLen);
-            });
-        // MSG_HAPTIC_AUDIO: the same engine, the endpoint's other lane pair.
-        // Arrives only for a slot whose descriptor claimed CAP_HAPTIC_AUDIO.
-        conn->setHapticAudioHandler([this,
-                                     id](const net::SatelliteClient::SpeakerAudioMessage& hm) {
-            speakerEngine_.deliver(id.toStdString(), hm.controllerIndex,
-                                   source::audio::PlayoutLane::Haptic, hm.seq, hm.opus, hm.opusLen);
-        });
-        // MSG_MIC_LED: the mute lamp, routed like every other feedback kind.
-        conn->setMicLedHandler([this, id](const net::SatelliteClient::MicLedMessage& mm) {
-            const QString deviceId = boundSlotForConnection(id);
-            if (deviceId.isEmpty()) { return; }
-            actuateMicLed(deviceId, mm.state);
-        });
+        installFeedbackHandlers(*conn, id);
     }
+}
+
+// Every one of these runs on the SatelliteClient receive thread, so each only reads structures
+// protected by their own locks. The lambdas carry no algorithm: they exist to bind the connection
+// id, which the message itself does not carry.
+void AppModel::installFeedbackHandlers(net::WifiConnection& conn, const QString& id) {
+    conn.setRumbleHandler(
+        [this, id](const net::SatelliteClient::RumbleMessage& rm) { onRumbleMessage(id, rm); });
+    conn.setLightbarHandler(
+        [this, id](const net::SatelliteClient::LightbarMessage& lm) { onLightbarMessage(id, lm); });
+    conn.setTriggerEffectsHandler(
+        [this, id](const net::SatelliteClient::TriggerEffectsMessage& tm) {
+            onTriggerEffectsMessage(id, tm);
+        });
+    conn.setPlayerLedsHandler([this, id](const net::SatelliteClient::PlayerLedsMessage& pm) {
+        onPlayerLedsMessage(id, pm);
+    });
+    conn.setSpeakerAudioHandler([this, id](const net::SatelliteClient::SpeakerAudioMessage& sm) {
+        onPlayoutMessage(id, sm, source::audio::PlayoutLane::Speaker);
+    });
+    conn.setHapticAudioHandler([this, id](const net::SatelliteClient::SpeakerAudioMessage& hm) {
+        onPlayoutMessage(id, hm, source::audio::PlayoutLane::Haptic);
+    });
+    conn.setMicLedHandler(
+        [this, id](const net::SatelliteClient::MicLedMessage& mm) { onMicLedMessage(id, mm); });
+}
+
+// Pure over its two arguments, which is the point: the caller snapshots the bindings ONCE and
+// decides from the snapshot, so the receive thread never reads a half-updated table.
+static std::vector<reducer::RumbleConnectionSnapshot>
+rumbleSnapshotOf(const QHash<QString, QString>& bindings,
+                 const QHash<QString, net::WifiConnection*>& connections) {
+    std::vector<reducer::RumbleConnectionSnapshot> snapshot;
+    for (auto* c : connections) {
+        reducer::RumbleConnectionSnapshot s;
+        s.connId = c->id();
+        s.connected = c->state() == net::SessionState::Live;
+        for (auto it = bindings.cbegin(); it != bindings.cend(); ++it) {
+            if (it.value() == s.connId) {
+                s.boundDeviceId = it.key();
+                break;
+            }
+        }
+        snapshot.push_back(std::move(s));
+    }
+    return snapshot;
+}
+
+// Vibration only: the light bar has its own return path via MSG_LIGHTBAR. actuateRumble picks the
+// path the slot is actually on, so a Direct-claimed pad rumbles over its own OUT endpoint.
+void AppModel::onRumbleMessage(const QString& id, const net::SatelliteClient::RumbleMessage& rm) {
+    const auto snapshot = rumbleSnapshotOf(hub_->bindings(), wifi_->connections());
+    const auto target = reducer::resolveRumble(snapshot, id);
+    if (!target.valid()) { return; }
+    actuateRumble(target.deviceId, rm.strongMagnitude, rm.weakMagnitude, rm.durationMs);
+}
+
+// Gated by the light-bar setting: "Off" suppresses the colour entirely.
+void AppModel::onLightbarMessage(const QString& id,
+                                 const net::SatelliteClient::LightbarMessage& lm) {
+    const auto color = lightbarColorFromLightbarMessage(lm, featureSettings_->lightbarFollowGame());
+    if (!color) { return; }
+    const QString deviceId = boundSlotForConnection(id);
+    if (deviceId.isEmpty()) { return; }
+    actuateLightbar(deviceId, color->r, color->g, color->b);
+}
+
+// The game's own DualSense effect blocks, replayed verbatim. Arrives only for a slot whose
+// descriptor advertised the actuator, so there is nothing to gate beyond finding the slot.
+void AppModel::onTriggerEffectsMessage(const QString& id,
+                                       const net::SatelliteClient::TriggerEffectsMessage& tm) {
+    const QString deviceId = boundSlotForConnection(id);
+    if (deviceId.isEmpty()) { return; }
+    actuateTriggerEffects(deviceId, tm.left, tm.right);
+}
+
+// The indicator bar. Deliberately NOT gated on the light-bar setting: that switch is about the RGB
+// colour following the game, and a player number is not a colour.
+void AppModel::onPlayerLedsMessage(const QString& id,
+                                   const net::SatelliteClient::PlayerLedsMessage& pm) {
+    const QString deviceId = boundSlotForConnection(id);
+    if (deviceId.isEmpty()) { return; }
+    actuatePlayerLeds(deviceId, pm.ledMask);
+}
+
+// Straight into the playout engine on the receive thread: reorder window, Opus decode, the pad's
+// own endpoint. The message borrows the receive buffer and the engine consumes it before
+// returning, which is the SpeakerAudioMessage contract. A frame for a voice the engine does not
+// hold is dropped inside deliver().
+void AppModel::onPlayoutMessage(const QString& id,
+                                const net::SatelliteClient::SpeakerAudioMessage& sm,
+                                source::audio::PlayoutLane lane) {
+    speakerEngine_.deliver(id.toStdString(), sm.controllerIndex, lane, sm.seq, sm.opus, sm.opusLen);
+}
+
+// The mute lamp, routed like every other feedback kind.
+void AppModel::onMicLedMessage(const QString& id, const net::SatelliteClient::MicLedMessage& mm) {
+    const QString deviceId = boundSlotForConnection(id);
+    if (deviceId.isEmpty()) { return; }
+    actuateMicLed(deviceId, mm.state);
 }
 
 QString AppModel::boundSlotForConnection(const QString& connectionId) const {
@@ -1369,102 +1390,117 @@ void AppModel::onPadMicMuteChanged(int vendorId, int productId, bool muted) {
     setSlotMicMuted(slotId, muted);
 }
 
-void AppModel::reconcileAudioEngines() {
-    std::vector<source::audio::MicCaptureTarget> micTargets;
-    std::vector<source::audio::SpeakerVoiceTarget> speakerVoices;
-    std::vector<std::string> armedMicSlotIds;
-    int capturingMicSlots = 0;
+// Faltering counts as streaming: it is a session riding out missed acks, and tearing audio down
+// two seconds before the input stream would flap on every blip.
+static bool audioIsStreaming(const net::SessionState state) {
+    return state == net::SessionState::Live || state == net::SessionState::Faltering;
+}
 
-    for (const auto& s : state_.slotList) {
-        // Any bound USB pad, Direct or Standard: the engines talk to the pad's
-        // audio endpoints, which the OS presents whichever path owns HID. A
-        // Bluetooth pad has no route to find, so it is skipped before the
-        // lookup rather than after.
-        if (s.bluetooth || !s.boundConnectionId.has_value()) { continue; }
-        auto* conn = wifi_->get(*s.boundConnectionId);
-        if (conn == nullptr) { continue; }
-        const auto route = audioRouteForSlot(s.id);
-        const std::string slotId = s.id.toStdString();
-        // Faltering counts as streaming: it is a session riding out missed
-        // acks, and tearing audio down two seconds before the input stream
-        // would flap on every blip.
-        const bool streaming = conn->state() == net::SessionState::Live ||
-                               conn->state() == net::SessionState::Faltering;
+void AppModel::collectMicForSlot(const models::ControllerSlot& s, net::WifiConnection& conn,
+                                 const audio::PadAudioRoute& route, AudioReconcile& out) const {
+    const std::string slotId = s.id.toStdString();
+    audio::AudioSlotFacts mic;
+    mic.streaming = audioIsStreaming(conn.state());
+    mic.toggleOn = micEnabledStore_.isEnabled(slotId);
+    mic.routeMatched = route.microphone;
+    mic.hostCarries = conn.hostMicAvailable();
+    mic.muted = micMuteStore_.isMuted(slotId);
 
-        audio::AudioSlotFacts mic;
-        mic.streaming = streaming;
-        mic.toggleOn = micEnabledStore_.isEnabled(slotId);
-        mic.routeMatched = route.microphone;
-        mic.hostCarries = conn->hostMicAvailable();
-        mic.muted = micMuteStore_.isMuted(slotId);
-        // The app-wide indicator folds the same facts with mute set aside: a
-        // muted slot still has a microphone the user must be able to find.
-        audio::AudioSlotFacts armed = mic;
-        armed.muted = false;
-        if (audio::micCaptureEligible(armed)) {
-            armedMicSlotIds.push_back(slotId);
-            if (audio::micCaptureEligible(mic)) { ++capturingMicSlots; }
-        }
-        if (audio::micCaptureEligible(mic)) {
-            source::audio::MicCaptureTarget target;
-            target.slotId = slotId;
-            target.captureDeviceName = route.captureDeviceName;
-            if (auto sender = hub_->micAudioSenderForSlot(s.id)) {
-                target.send = std::move(sender);
-                micTargets.push_back(std::move(target));
-            }
-        }
+    // The app-wide indicator folds the same facts with mute set aside: a muted slot still has a
+    // microphone the user must be able to find.
+    audio::AudioSlotFacts armed = mic;
+    armed.muted = false;
+    const bool isCapturing = audio::micCaptureEligible(mic);
+    if (audio::micCaptureEligible(armed)) {
+        out.armedMicSlotIds.push_back(slotId);
+        if (isCapturing) { ++out.capturingMicSlots; }
+    }
+    if (!isCapturing) { return; }
 
-        // The endpoint's own width when the stack reported one, so a 4-channel
-        // pad gets its stereo on the speaker pair and not spread across the
-        // actuators.
-        const int channels =
-            route.playbackChannels > 0 ? route.playbackChannels : proto::kAudioSpeakerChannels;
-        const auto voiceFor = [&](source::audio::PlayoutLane lane)
-            -> std::optional<source::audio::SpeakerVoiceTarget> {
-            const auto descriptor = conn->descriptorFor(s.id);
-            if (!descriptor.has_value()) { return std::nullopt; }
-            source::audio::SpeakerVoiceTarget voice;
-            voice.connectionId = s.boundConnectionId->toStdString();
-            voice.controllerIndex = descriptor->ctrlIdx;
-            voice.slotId = slotId;
-            voice.playbackDeviceName = route.playbackDeviceName;
-            voice.lane = lane;
-            voice.deviceChannels = channels;
-            return voice;
-        };
+    source::audio::MicCaptureTarget target;
+    target.slotId = slotId;
+    target.captureDeviceName = route.captureDeviceName;
+    auto sender = hub_->micAudioSenderForSlot(s.id);
+    if (!sender) { return; }
+    target.send = std::move(sender);
+    out.micTargets.push_back(std::move(target));
+}
 
-        audio::AudioSlotFacts speaker;
-        speaker.streaming = streaming;
-        speaker.toggleOn = speakerEnabledStore_.isEnabled(slotId);
-        speaker.routeMatched = route.speaker;
-        speaker.hostCarries = conn->hostSpeakerAvailable();
-        if (audio::speakerPlayoutEligible(speaker)) {
-            if (auto voice = voiceFor(source::audio::PlayoutLane::Speaker)) {
-                speakerVoices.push_back(std::move(*voice));
-            }
-        }
+// Null when the slot has no descriptor yet: it is bound but the host has not answered with the
+// controller index every audio frame is addressed by.
+std::optional<source::audio::SpeakerVoiceTarget>
+AppModel::speakerVoiceFor(const models::ControllerSlot& s, net::WifiConnection& conn,
+                          const audio::PadAudioRoute& route,
+                          source::audio::PlayoutLane lane) const {
+    const auto descriptor = conn.descriptorFor(s.id);
+    if (!descriptor.has_value()) { return std::nullopt; }
+    source::audio::SpeakerVoiceTarget voice;
+    voice.connectionId = s.boundConnectionId->toStdString();
+    voice.controllerIndex = descriptor->ctrlIdx;
+    voice.slotId = s.id.toStdString();
+    voice.playbackDeviceName = route.playbackDeviceName;
+    voice.lane = lane;
+    // The endpoint's own width when the stack reported one, so a 4-channel pad gets its stereo on
+    // the speaker pair and not spread across the actuators.
+    voice.deviceChannels =
+        route.playbackChannels > 0 ? route.playbackChannels : proto::kAudioSpeakerChannels;
+    return voice;
+}
 
-        // The haptic lanes share the speaker's toggle (one endpoint, one
-        // switch) but have their own route fact and their own host verdict:
-        // a host with the speaker off and haptics on still streams them.
-        audio::AudioSlotFacts haptic;
-        haptic.streaming = streaming;
-        haptic.toggleOn = speakerEnabledStore_.isEnabled(slotId);
-        haptic.routeMatched = route.haptics;
-        haptic.hostCarries = conn->hostHapticAudioAvailable();
-        if (audio::speakerPlayoutEligible(haptic)) {
-            if (auto voice = voiceFor(source::audio::PlayoutLane::Haptic)) {
-                speakerVoices.push_back(std::move(*voice));
-            }
+// The haptic lanes share the speaker's toggle (one endpoint, one switch) but have their own route
+// fact and their own host verdict: a host with the speaker off and haptics on still streams them.
+void AppModel::collectSpeakerForSlot(const models::ControllerSlot& s, net::WifiConnection& conn,
+                                     const audio::PadAudioRoute& route, AudioReconcile& out) const {
+    const std::string slotId = s.id.toStdString();
+    const bool streaming = audioIsStreaming(conn.state());
+    const bool toggleOn = speakerEnabledStore_.isEnabled(slotId);
+
+    audio::AudioSlotFacts speaker;
+    speaker.streaming = streaming;
+    speaker.toggleOn = toggleOn;
+    speaker.routeMatched = route.speaker;
+    speaker.hostCarries = conn.hostSpeakerAvailable();
+    if (audio::speakerPlayoutEligible(speaker)) {
+        if (auto voice = speakerVoiceFor(s, conn, route, source::audio::PlayoutLane::Speaker)) {
+            out.speakerVoices.push_back(std::move(*voice));
         }
     }
 
-    micEngine_.reconcile(micTargets);
-    speakerEngine_.reconcile(speakerVoices);
+    audio::AudioSlotFacts haptic;
+    haptic.streaming = streaming;
+    haptic.toggleOn = toggleOn;
+    haptic.routeMatched = route.haptics;
+    haptic.hostCarries = conn.hostHapticAudioAvailable();
+    if (audio::speakerPlayoutEligible(haptic)) {
+        if (auto voice = speakerVoiceFor(s, conn, route, source::audio::PlayoutLane::Haptic)) {
+            out.speakerVoices.push_back(std::move(*voice));
+        }
+    }
+}
 
-    armedMicSlotIds_ = std::move(armedMicSlotIds);
-    capturingMicSlots_ = capturingMicSlots;
+// Any bound USB pad, Direct or Standard: the engines talk to the pad's audio endpoints, which the
+// OS presents whichever path owns HID. A Bluetooth pad has no route to find, so it is skipped
+// before the lookup rather than after.
+net::WifiConnection* AppModel::audioConnectionFor(const models::ControllerSlot& s) const {
+    if (s.bluetooth || !s.boundConnectionId.has_value()) { return nullptr; }
+    return wifi_->get(*s.boundConnectionId);
+}
+
+void AppModel::reconcileAudioEngines() {
+    AudioReconcile out;
+    for (const auto& s : state_.slotList) {
+        auto* conn = audioConnectionFor(s);
+        if (conn == nullptr) { continue; }
+        const auto route = audioRouteForSlot(s.id);
+        collectMicForSlot(s, *conn, route, out);
+        collectSpeakerForSlot(s, *conn, route, out);
+    }
+
+    micEngine_.reconcile(out.micTargets);
+    speakerEngine_.reconcile(out.speakerVoices);
+
+    armedMicSlotIds_ = std::move(out.armedMicSlotIds);
+    capturingMicSlots_ = out.capturingMicSlots;
     micIndicator_ =
         reducer::micIndicatorFor(static_cast<int>(armedMicSlotIds_.size()), capturingMicSlots_);
 }

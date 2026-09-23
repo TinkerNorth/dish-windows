@@ -328,6 +328,18 @@ class AppModel : public QObject {
     // Idempotent: invoked on every poolChanged so new connections get wired.
     void installRumbleHandlers();
 
+    // The seven feedback streams a satellite connection can send back. Each runs on that
+    // connection's receive thread.
+    void installFeedbackHandlers(net::WifiConnection& conn, const QString& id);
+    void onRumbleMessage(const QString& id, const net::SatelliteClient::RumbleMessage& rm);
+    void onLightbarMessage(const QString& id, const net::SatelliteClient::LightbarMessage& lm);
+    void onTriggerEffectsMessage(const QString& id,
+                                 const net::SatelliteClient::TriggerEffectsMessage& tm);
+    void onPlayerLedsMessage(const QString& id, const net::SatelliteClient::PlayerLedsMessage& pm);
+    void onPlayoutMessage(const QString& id, const net::SatelliteClient::SpeakerAudioMessage& sm,
+                          source::audio::PlayoutLane lane);
+    void onMicLedMessage(const QString& id, const net::SatelliteClient::MicLedMessage& mm);
+
     void syncInputRateDevices();
     // Emits stateChanged() only when a visible number moved, so a quiet 1 Hz
     // tick doesn't thrash the UI.
@@ -380,6 +392,29 @@ class AppModel : public QObject {
     // slot's binding, toggles, route, host verdict and mute. Runs at the end
     // of every rebuild(), which every relevant change funnels into.
     void reconcileAudioEngines();
+
+    // What one pass over the slots accumulates for the two engines, plus the two counts the
+    // app-wide microphone indicator folds.
+    struct AudioReconcile {
+        std::vector<source::audio::MicCaptureTarget> micTargets;
+        std::vector<source::audio::SpeakerVoiceTarget> speakerVoices;
+        std::vector<std::string> armedMicSlotIds;
+        int capturingMicSlots = 0;
+    };
+
+    // Null for a slot the engines have nothing to do with: unbound, Bluetooth, or bound to a
+    // connection that has since gone.
+    net::WifiConnection* audioConnectionFor(const models::ControllerSlot& s) const;
+
+    void collectMicForSlot(const models::ControllerSlot& s, net::WifiConnection& conn,
+                           const audio::PadAudioRoute& route, AudioReconcile& out) const;
+
+    void collectSpeakerForSlot(const models::ControllerSlot& s, net::WifiConnection& conn,
+                               const audio::PadAudioRoute& route, AudioReconcile& out) const;
+
+    std::optional<source::audio::SpeakerVoiceTarget>
+    speakerVoiceFor(const models::ControllerSlot& s, net::WifiConnection& conn,
+                    const audio::PadAudioRoute& route, source::audio::PlayoutLane lane) const;
 
     // Re-attach a bound slot so its descriptor re-folds and re-PUTs (the hub's
     // capability fns re-run on bind). No-op for an unbound slot.
