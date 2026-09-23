@@ -120,6 +120,86 @@ bool runSteamConfig(HANDLE h, int featureLen, input::usbparse::SteamConfig stage
     return true;
 }
 
+// The interface's wide device path, or empty when the two-call size query does not produce one.
+// Wide because CreateFileW wants it that way; the utf8 form is only for the admission checks.
+std::wstring interfacePathOf(HDEVINFO devInfo, SP_DEVICE_INTERFACE_DATA& ifData) {
+    DWORD needed = 0;
+    SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
+    if (needed == 0) { return {}; }
+    std::vector<std::uint8_t> detailBuf(needed);
+    auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
+    detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+    if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) == 0) {
+        return {};
+    }
+    return detail->DevicePath;
+}
+
+// Admission is per model family: the collection the model's parser actually decodes. Everything
+// without a table row has to stay "gamepad-shaped"; the Steam Controller's game interface is
+// admitted by model despite its vendor usage page.
+bool isClaimCandidate(HANDLE h, HIDD_ATTRIBUTES& attrs, HIDP_CAPS& caps) {
+    if (HidD_GetAttributes(h, &attrs) == 0) { return false; }
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    if (HidD_GetPreparsedData(h, &preparsed) == 0) { return false; }
+    bool accepted = false;
+    if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
+        const auto parser = input::usbparse::parserForDevice(attrs.VendorID, attrs.ProductID);
+        accepted = collectionMatchesParser(caps, parser);
+    }
+    HidD_FreePreparsedData(preparsed);
+    return accepted;
+}
+
+// What the claim machinery needs to know about a device it has not opened for reading yet.
+UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const HIDD_ATTRIBUTES& attrs,
+                             const HIDP_CAPS& caps) {
+    UsbDeviceInfo info;
+    info.vendorId = attrs.VendorID;
+    info.productId = attrs.ProductID;
+    // The catalog name is deterministic where one exists; it also names models whose own product
+    // string is generic or empty.
+    const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
+    info.name = model != nullptr ? model->name : productName(h, path);
+    info.interfaceNumber = 0;
+    // The input report length is the max-packet proxy; bInterval is not exposed by the HID class
+    // API, so it defaults to 1 ms (the common gamepad case) and the poll-rate sampler measures the
+    // real rate.
+    info.endpointInMaxPacket = caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
+    info.endpointInInterval = 1;
+    info.hasOutEndpoint = caps.OutputReportByteLength > 0;
+    // Derived from the per-model decoder family so it tracks the parser selection rather than a
+    // hard-coded VID list.
+    info.hasImu = input::usbparse::parserHasImu(
+        input::usbparse::parserForDevice(info.vendorId, info.productId));
+    return info;
+}
+
+// Null for an interface that is not a claim candidate at all.
+std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
+    const std::string path = wideToUtf8(widePath.c_str());
+    // A Bluetooth-connected pad is a HID device too (same VID:PID as its USB identity) but is NOT
+    // a USB-direct claim candidate: the raw-HID claim is a USB feature, the per-model decoders
+    // parse the USB report layout (the BT layout differs, since a DS4 streams the short 0x01
+    // report until a feature-report handshake), and tracking it would grow a bogus "USB PATH"
+    // control on a wireless pad. Skipped before probing.
+    if (input::isBluetoothHidDevicePath(path)) { return std::nullopt; }
+
+    // Opened for query only, with no read/write share, so probing does not disturb other readers.
+    // The actual claim re-opens with read access.
+    HANDLE h = CreateFileW(widePath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) { return std::nullopt; }
+
+    HIDD_ATTRIBUTES attrs{};
+    attrs.Size = sizeof(attrs);
+    HIDP_CAPS caps{};
+    std::optional<UsbDeviceInfo> info;
+    if (isClaimCandidate(h, attrs, caps)) { info = describeDevice(h, path, attrs, caps); }
+    CloseHandle(h);
+    return info;
+}
+
 } // namespace
 
 // The caps-derived field map for GENERIC-HID pads. Windows exposes preparsed
@@ -378,75 +458,14 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
     ifData.cbSize = sizeof(ifData);
     for (DWORD i = 0; SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
          ++i) {
-        DWORD needed = 0;
-        SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
-        if (needed == 0) { continue; }
-        std::vector<std::uint8_t> detailBuf(needed);
-        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
-        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-        if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) ==
-            0) {
-            continue;
-        }
-        const std::string path = wideToUtf8(detail->DevicePath);
-
-        // A Bluetooth-connected pad is a HID device too (same VID:PID as its
-        // USB identity) but is NOT a USB-direct claim candidate: the raw-HID
-        // claim is a USB feature, the per-model decoders parse the USB report
-        // layout (the BT layout differs — a DS4 streams the short 0x01 report
-        // until a feature-report handshake), and tracking it would grow a bogus
-        // "USB PATH" control on a wireless pad. Skip it before probing.
-        if (input::isBluetoothHidDevicePath(path)) { continue; }
-
-        // Open for query only (no read/write share so we don't disturb other
-        // readers while probing). The actual claim re-opens with read access.
-        HANDLE h = CreateFileW(detail->DevicePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                               OPEN_EXISTING, 0, nullptr);
-        if (h == INVALID_HANDLE_VALUE) { continue; }
-
-        HIDD_ATTRIBUTES attrs{};
-        attrs.Size = sizeof(attrs);
-        PHIDP_PREPARSED_DATA preparsed = nullptr;
-        HIDP_CAPS caps{};
-        bool accepted = false;
-        UsbDeviceInfo info;
-        if (HidD_GetAttributes(h, &attrs) != 0 && HidD_GetPreparsedData(h, &preparsed) != 0) {
-            if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
-                // Admission is per model family: the collection the model's
-                // parser actually decodes. For everything without a table row
-                // that stays "gamepad-shaped"; the Steam Controller's game
-                // interface is admitted by model despite its vendor usage page.
-                const auto parser =
-                    input::usbparse::parserForDevice(attrs.VendorID, attrs.ProductID);
-                accepted = collectionMatchesParser(caps, parser);
-            }
-            HidD_FreePreparsedData(preparsed);
-        }
-        if (accepted) {
-            info.vendorId = attrs.VendorID;
-            info.productId = attrs.ProductID;
-            // The catalog name is deterministic where one exists (it also names
-            // models whose own product string is generic or empty).
-            const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
-            info.name = model != nullptr ? model->name : productName(h, path);
-            info.interfaceNumber = 0;
-            // The input report length is our max-packet proxy; bInterval is not
-            // exposed by the HID class API, so default it to 1ms (the common
-            // gamepad case) — the poll-rate sampler measures the real rate.
-            info.endpointInMaxPacket =
-                caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
-            info.endpointInInterval = 1;
-            info.hasOutEndpoint = caps.OutputReportByteLength > 0;
-            // Derive the IMU from the per-model decoder family so it tracks the
-            // parser selection rather than a hard-coded VID list.
-            info.hasImu = input::usbparse::parserHasImu(
-                input::usbparse::parserForDevice(info.vendorId, info.productId));
-        }
-        CloseHandle(h);
-
-        // Skip Microsoft-VID gamepad collections: Xbox pads belong to XInput, not
-        // this raw-HID path, and shouldn't be fought over.
-        if (accepted && info.vendorId != kVidMicrosoft) { out.push_back(std::move(info)); }
+        const std::wstring widePath = interfacePathOf(devInfo, ifData);
+        if (widePath.empty()) { continue; }
+        auto info = probeInterface(widePath);
+        if (!info.has_value()) { continue; }
+        // Microsoft-VID gamepad collections are skipped: Xbox pads belong to XInput, not this
+        // raw-HID path, and should not be fought over.
+        if (info->vendorId == kVidMicrosoft) { continue; }
+        out.push_back(std::move(*info));
     }
 
     SetupDiDestroyDeviceInfoList(devInfo);
