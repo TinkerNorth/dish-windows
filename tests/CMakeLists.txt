@@ -60,6 +60,7 @@ set(DISH_TEST_SOURCES
     test_shared_key_repository.cpp
     test_dpapi_secret_cipher.cpp
     test_remembered_satellite_repository.cpp
+    test_remembered_wifi_eq.cpp
     test_connection_store_identity.cpp
     test_remembered_reconnect.cpp
     test_gamepad_input_processor.cpp

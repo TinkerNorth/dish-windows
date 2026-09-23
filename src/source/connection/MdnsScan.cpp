@@ -3,6 +3,8 @@
 
 #include "MdnsScan.h"
 
+#include "Network/ScopedSocket.h"
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -12,26 +14,6 @@
 namespace dish::net {
 
 namespace {
-
-// Closes on every way out, including the two early returns below, where a
-// hand-written closesocket had to be repeated once per path.
-class ScopedSocket {
-  public:
-    ScopedSocket() : sock_(::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) {}
-    ~ScopedSocket() {
-        if (sock_ != INVALID_SOCKET) { ::closesocket(sock_); }
-    }
-    ScopedSocket(const ScopedSocket&) = delete;
-    ScopedSocket& operator=(const ScopedSocket&) = delete;
-    ScopedSocket(ScopedSocket&&) = delete;
-    ScopedSocket& operator=(ScopedSocket&&) = delete;
-
-    bool valid() const { return sock_ != INVALID_SOCKET; }
-    SOCKET get() const { return sock_; }
-
-  private:
-    SOCKET sock_;
-};
 
 // An ephemeral local port, which is what makes the responders unicast their
 // answers back here rather than to the group.
