@@ -71,9 +71,93 @@ int SlotListModel::rowCount(const QModelIndex& parent) const {
     return static_cast<int>(slots_.size());
 }
 
+// Null for a role this group does not answer, which is how data() walks its groups in turn.
+std::optional<QVariant> SlotListModel::rateChipFor(const models::ControllerSlot& s, int role) {
+    switch (role) {
+    // Which rate chips render is the pure SlotLiveStats mapper's decision, not
+    // the delegate's.
+    case GamepadHzRole: {
+        const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
+        return chip.hz;
+    }
+    case GamepadHzLiveRole: {
+        const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
+        return chip.kind == ui::RateChipKind::Live;
+    }
+    case GamepadHzShownRole: {
+        const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
+        return chip.kind != ui::RateChipKind::Hidden;
+    }
+    case MotionHzRole: {
+        const auto chip =
+            s.capabilities.hasMotion ? ui::motionRateChip(s.liveRates) : ui::RateChip{};
+        return chip.hz;
+    }
+    case MotionHzShownRole: {
+        const auto chip =
+            s.capabilities.hasMotion ? ui::motionRateChip(s.liveRates) : ui::RateChip{};
+        return chip.kind != ui::RateChipKind::Hidden;
+    }
+    case PollHzRole: {
+        const auto chip = ui::pollRateChip(s.liveRates, s.usbDirect);
+        return chip.hz;
+    }
+    case PollHzShownRole: {
+        const auto chip = ui::pollRateChip(s.liveRates, s.usbDirect);
+        return chip.kind != ui::RateChipKind::Hidden;
+    }
+    default:
+        return std::nullopt;
+    }
+}
+
+// The bound satellite's own row, or an empty answer when this slot has none.
+std::optional<QVariant> SlotListModel::satelliteFieldFor(const models::ControllerSlot& s,
+                                                         int role) const {
+    switch (role) {
+    case SatIpRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? QString::fromStdString(row->ip) : QString();
+    }
+    case SatLinkStateRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::linkStateToken(row->live) : QString();
+    }
+    case SatChipRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::chipToken(row->chip) : QString();
+    }
+    case SatDotColorRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::dotToken(row->dotColor) : QString();
+    }
+    case SatGlyphRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? tokens::glyphToken(row->glyph) : QString();
+    }
+    case SatLatencyTextRole: {
+        // Same formatter and samples gate as ConnectionListModel, so the Home
+        // wire label and the Connections row can never disagree.
+        const auto* row = rowForSlot(s);
+        return row != nullptr && row->latencySamples > 0
+                   ? QString::fromStdString(reducer::formatLatencyMs(row->latencyOneWayMs))
+                   : QString();
+    }
+    case SatLatencySamplesRole: {
+        const auto* row = rowForSlot(s);
+        return row != nullptr ? row->latencySamples : 0;
+    }
+    default:
+        return std::nullopt;
+    }
+}
+
 QVariant SlotListModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= slots_.size()) { return {}; }
     const auto& s = slots_.at(index.row());
+
+    if (const auto v = rateChipFor(s, role)) { return *v; }
+    if (const auto v = satelliteFieldFor(s, role)) { return *v; }
 
     switch (role) {
     case IdRole:
@@ -121,72 +205,6 @@ QVariant SlotListModel::data(const QModelIndex& index, int role) const {
         return static_cast<int>(s.capabilities.batteryStatus);
     case BatteryKnownRole:
         return s.capabilities.batteryLevel != kBatteryLevelUnknown;
-
-    // Which rate chips render is the pure SlotLiveStats mapper's decision, not
-    // the delegate's.
-    case GamepadHzRole: {
-        const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
-        return chip.hz;
-    }
-    case GamepadHzLiveRole: {
-        const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
-        return chip.kind == ui::RateChipKind::Live;
-    }
-    case GamepadHzShownRole: {
-        const auto chip = ui::gamepadRateChip(s.liveRates, s.usbDirect);
-        return chip.kind != ui::RateChipKind::Hidden;
-    }
-    case MotionHzRole: {
-        const auto chip =
-            s.capabilities.hasMotion ? ui::motionRateChip(s.liveRates) : ui::RateChip{};
-        return chip.hz;
-    }
-    case MotionHzShownRole: {
-        const auto chip =
-            s.capabilities.hasMotion ? ui::motionRateChip(s.liveRates) : ui::RateChip{};
-        return chip.kind != ui::RateChipKind::Hidden;
-    }
-    case PollHzRole: {
-        const auto chip = ui::pollRateChip(s.liveRates, s.usbDirect);
-        return chip.hz;
-    }
-    case PollHzShownRole: {
-        const auto chip = ui::pollRateChip(s.liveRates, s.usbDirect);
-        return chip.kind != ui::RateChipKind::Hidden;
-    }
-
-    case SatIpRole: {
-        const auto* row = rowForSlot(s);
-        return row != nullptr ? QString::fromStdString(row->ip) : QString();
-    }
-    case SatLinkStateRole: {
-        const auto* row = rowForSlot(s);
-        return row != nullptr ? tokens::linkStateToken(row->live) : QString();
-    }
-    case SatChipRole: {
-        const auto* row = rowForSlot(s);
-        return row != nullptr ? tokens::chipToken(row->chip) : QString();
-    }
-    case SatDotColorRole: {
-        const auto* row = rowForSlot(s);
-        return row != nullptr ? tokens::dotToken(row->dotColor) : QString();
-    }
-    case SatGlyphRole: {
-        const auto* row = rowForSlot(s);
-        return row != nullptr ? tokens::glyphToken(row->glyph) : QString();
-    }
-    case SatLatencyTextRole: {
-        // Same formatter and samples gate as ConnectionListModel, so the Home
-        // wire label and the Connections row can never disagree.
-        const auto* row = rowForSlot(s);
-        return row != nullptr && row->latencySamples > 0
-                   ? QString::fromStdString(reducer::formatLatencyMs(row->latencyOneWayMs))
-                   : QString();
-    }
-    case SatLatencySamplesRole: {
-        const auto* row = rowForSlot(s);
-        return row != nullptr ? row->latencySamples : 0;
-    }
 
     case PathPhaseRole:
         return pathPhaseToken(s.pathPhase);

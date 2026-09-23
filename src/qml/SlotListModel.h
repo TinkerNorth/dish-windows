@@ -108,6 +108,11 @@ class SlotListModel : public QAbstractListModel {
     // are a handful of entries.
     const composer::ConnectionRow* rowForSlot(const models::ControllerSlot& slot) const;
 
+    // data()'s two computed role groups. Null means "not one of mine", which is how data() walks
+    // its groups in turn before falling through to the flat field reads.
+    static std::optional<QVariant> rateChipFor(const models::ControllerSlot& s, int role);
+    std::optional<QVariant> satelliteFieldFor(const models::ControllerSlot& s, int role) const;
+
     QList<models::ControllerSlot> slots_;
     std::vector<composer::ConnectionRow> connectionRows_;
 };
