@@ -53,6 +53,7 @@ class HttpManifestGateway : public QObject, public ManifestGateway {
     void setUrl(const QString& url) { url_ = url; }
 
   private:
+    void onManifestReply(QNetworkReply* reply);
     void finish(const ManifestFetchResult& result);
 
     QNetworkAccessManager* nam_ = nullptr;

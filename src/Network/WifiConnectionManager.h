@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "core/reducer/RestOutcome.h"
+#include "core/reducer/ReversePairing.h"
+#include "core/wire/SessionCrypto.h"
 #include "ConnectionStore.h"
 #include "HTTPClient.h"
 #include "Models/Models.h"
@@ -67,6 +70,17 @@ class WifiConnectionManager : public QObject {
     // Untestable in the unit suite since it drives real network; the decision core
     // it leans on, reducer::nextReversePairingAction, is exhaustively tested.
     void requestReversePairing(const models::DiscoveredServer& server);
+
+    // Path B's steps: draw the PIN, arm the attempt, then classify whatever the POST comes back
+    // with against the attempt that is still on screen.
+    static QString drawReversePin();
+    void armReverseAttempt(const models::DiscoveredServer& server);
+    bool reverseAttemptIsCurrent(const models::DiscoveredServer& server, const QString& pin) const;
+    void startReversePoll();
+    void applyReverseOutcome(WifiConnection* conn, const models::DiscoveredServer& server,
+                             const models::PairResponse& pair);
+    void onReversePairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+                            const QString& pin, const models::PairResponse& pair);
     void cancelReversePairing();
 
     ReversePairingPhase reversePairingPhase() const { return reversePhase_; }
@@ -120,6 +134,22 @@ class WifiConnectionManager : public QObject {
     // Re-PUT for a fresh token/salt/key on the SAME socket, so there is no state
     // blip visible to the UI.
     void rekey(WifiConnection* conn, const models::DiscoveredServer& server);
+
+    // The rekey PUT's reply, in three steps: is this still the session that asked, does the reply
+    // carry material, and adopt it.
+    struct RekeyMaterial {
+        std::array<std::uint8_t, 4> token{};
+        std::array<std::uint8_t, wire::kSessionSaltSize> salt{};
+        std::uint32_t tokenBe = 0;
+    };
+    static std::optional<RekeyMaterial> rekeyMaterialFrom(const models::SessionResponse& resp);
+    void onRekeyReply(const QString& id, const std::shared_ptr<SatelliteClient>& client,
+                      const std::array<std::uint8_t, 32>& pairingKey,
+                      const models::SessionResponse& resp);
+    void adoptRekey(WifiConnection* c, const QString& id,
+                    const std::shared_ptr<SatelliteClient>& client,
+                    const std::array<std::uint8_t, 32>& pairingKey,
+                    const models::SessionResponse& resp, const RekeyMaterial& material);
     // Reads GET /api/server/capabilities for the host's controller-audio
     // verdict and folds it into the connection (reducer/HostAudioVerdict.h).
     // Fired after EVERY successful session PUT — connect, reconnect-after-death
@@ -142,6 +172,14 @@ class WifiConnectionManager : public QObject {
     // One pairStatus round-trip off the thread pool, fed with the elapsed clock
     // through reducer::nextReversePairingAction to decide re-arm / open / abort.
     void pollReverseStatus();
+
+    // One approval poll, in order: what the reply says, and what that answer means.
+    static reducer::ApprovalReply approvalReplyOf(const models::PairResponse& status);
+    void onReverseStatusReply(const models::PairResponse& status,
+                              const models::DiscoveredServer& server);
+    void applyReverseAction(reducer::ReversePairingAction action,
+                            const models::PairResponse& status,
+                            const models::DiscoveredServer& server);
     void setReversePhase(ReversePairingPhase phase);
     void finishReverse(ReversePairingPhase terminal);
 

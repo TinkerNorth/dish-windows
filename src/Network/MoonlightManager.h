@@ -255,9 +255,32 @@ class MoonlightManager : public QObject {
     void rgbLedReceived(const QString& id, int controllerNumber, int r, int g, int b);
 
   private:
+    // forgetHost in order. Each step is what makes the next one safe, so they are named rather than
+    // run as one block: see the comment on each.
+    // What a fresh pairing has to undo first: an attempt parked on the host, and a pinned
+    // certificate that belongs to a host this one has replaced. Answers whether the identity moved.
+    bool clearForNewPairing(const QString& id, MoonlightSession* session);
+
+    MoonlightSession* detachSessionFromStore(const QString& id);
+    void releaseRoutesAt(const QString& id);
+    void forgetLearnedState(const QString& id);
+    void retireSession(MoonlightSession* session);
+
     // Ensures a session exists for `host`, wiring its signals through. Lazily
     // loads the client identity on first use (RSA keygen is not paid at startup).
     MoonlightSession* ensureSession(const models::MoonlightHost& host);
+
+    // The session's six signals, each with a name. The record* pair hold their reference into
+    // probes_ and emit nothing, so the emitting half cannot leave it dangling.
+    bool ensureIdentity();
+    void wireSession(const QString& id, MoonlightSession* session);
+    void onSessionPhaseChanged(const QString& id, MoonlightSession* session);
+    void onSessionPairingFinished(const QString& id, bool ok);
+    void recordAppListProbe(const QString& id, int appCount, bool ok, bool unauthorized);
+    void onSessionAppListReady(const QString& id, const QStringList& ids, const QStringList& titles,
+                               bool ok, bool unauthorized);
+    bool recordProbeIdentity(const QString& id, bool answered, const QString& uniqueId);
+    void onSessionProbeFinished(const QString& id, bool answered, const QString& uniqueId);
     std::optional<models::MoonlightHost> hostById(const QString& id) const;
     // Only the PERSISTED list, which is what separates a host the user keeps from
     // one that happens to be answering an mDNS sweep right now.

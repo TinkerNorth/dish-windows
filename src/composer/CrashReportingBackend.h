@@ -67,6 +67,10 @@ class SentryCrashReportingBackend : public CrashReportingBackend {
     // bugprone-exception-escape correctly objects to.
     void disarm() noexcept;
 
+    // The on half of setEnabled: the DSN gate, then the SDK. Separate because the gate refuses on
+    // most builds and the SDK work below it is the part that only a release build ever runs.
+    void arm();
+
     std::string databaseDir_;
     bool active_ = false;
 };

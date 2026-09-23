@@ -31,6 +31,8 @@
 
 struct _ENetHost;
 struct _ENetPeer;
+struct _ENetEvent;
+struct _ENetPacket;
 
 namespace dish::net {
 
@@ -97,6 +99,12 @@ class MoonlightControlChannel {
     // sendMtx_ because the seq counter and the ENet host are single-writer.
     void sealAndSend(const std::uint8_t* plaintext, std::size_t len);
     void receiveLoop();
+
+    // The loop's three parts: what it takes the send lock for, what it does with a packet, and
+    // where an event goes. All on the ENet receive thread.
+    int serviceEnet(_ENetEvent& event);
+    void onPacket(const _ENetPacket& packet);
+    void dispatchServerEvent(const moonlight::ServerEvent& ev);
 
     _ENetHost* host_ = nullptr;
     _ENetPeer* peer_ = nullptr;

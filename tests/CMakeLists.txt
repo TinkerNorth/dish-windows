@@ -39,6 +39,7 @@ set(DISH_TEST_SOURCES
     test_moonlight_http_xml.cpp
     test_moonlight_manager_rows.cpp
     test_moonlight_manager_flow.cpp
+    test_legacy_catalog.cpp
     test_moonlight_behaviour.cpp
     test_moonlight_pad_slots.cpp
     test_nvstream_discovery.cpp
@@ -51,6 +52,7 @@ set(DISH_TEST_SOURCES
     test_stable_key.cpp
     test_tofu.cpp
     test_ip_literals.cpp
+    test_ip_literals_parse.cpp
     test_mdns_mapping.cpp
     test_discovery_gateway.cpp
     test_satellite_tls_verifier.cpp
@@ -58,6 +60,7 @@ set(DISH_TEST_SOURCES
     test_shared_key_repository.cpp
     test_dpapi_secret_cipher.cpp
     test_remembered_satellite_repository.cpp
+    test_remembered_wifi_eq.cpp
     test_connection_store_identity.cpp
     test_remembered_reconnect.cpp
     test_gamepad_input_processor.cpp
@@ -156,6 +159,7 @@ set(DISH_TEST_SOURCES
     test_usb_report_parsers.cpp
     test_usb_output_reports.cpp
     test_usb_gamepad_manager_feedback.cpp
+    test_usb_hid_items.cpp
     test_usb_hid_layout.cpp
     test_usb_twin_dedup.cpp
     test_hid_transport.cpp
@@ -166,6 +170,7 @@ set(DISH_TEST_SOURCES
     test_crash_reporting.cpp
     test_main_ui_state.cpp
     test_window_hit_test.cpp
+    test_list_model_roles.cpp
     test_slot_list_model.cpp
     test_slot_path_fields.cpp
     test_connection_list_model.cpp
@@ -173,6 +178,7 @@ set(DISH_TEST_SOURCES
     test_app_view_model_connections.cpp
     test_app_view_model_bind_availability.cpp
     test_capability_solver.cpp
+    test_catalog_feature_gate.cpp
     test_feedback_routing.cpp
     # Controller audio.
     test_audio_jitter.cpp
@@ -198,6 +204,7 @@ set(DISH_TEST_SOURCES
     test_update_staging_store.cpp
     test_update_coordinator.cpp
     test_update_handoff.cpp
+    test_ui_preference_store.cpp
     test_update_preference_store.cpp
     test_translations.cpp)
 

@@ -36,6 +36,7 @@
 #include <optional>
 
 class QNetworkAccessManager;
+class QNetworkReply;
 
 namespace dish::net {
 
@@ -110,6 +111,12 @@ class MoonlightHttpClient : public QObject {
 
   private:
     void perform(const QString& url, bool https, ResponseCb cb);
+
+    // perform's two halves that need this object: arming the pin check, and handing the reply
+    // back. Building the request and reading the reply are free functions in the .cpp, so the Qt
+    // Network types stay out of this header.
+    void armPinCheck(QNetworkReply* reply, const QString& host);
+    void finishReply(QNetworkReply* reply, const QString& path, const ResponseCb& cb);
 
     QNetworkAccessManager* nam_;
     std::optional<moonlight::Identity> identity_;

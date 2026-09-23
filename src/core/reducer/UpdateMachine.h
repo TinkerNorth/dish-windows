@@ -305,4 +305,18 @@ struct UpdateReduction {
 
 UpdateReduction reduceUpdate(const UpdateStatus& s, const UpdateEvent& event);
 
+// The startup fold for a version that burned every apply attempt it was allowed. The stage itself
+// is already gone (UpdateHandoff::quarantine deleted it and muted the version), so without this the
+// app would come up as though nothing had been tried, on a version that failed to install twice.
+//
+// It surfaces as Failed{ApplyFailed}, which is what puts the manual download link in front of the
+// user. The phase moves only when checks are ON: a user who switched updates off is not shown an
+// update failure. The available version is named either way, because the error is about a specific
+// version and an unnamed one is not actionable.
+//
+// Not an event, because it is read once at startup before any reducer runs, from two settings keys
+// the handoff wrote in a previous process.
+UpdateStatus withQuarantinedHandoff(UpdateStatus s, const QString& handoffVersion,
+                                    int handoffAttempts);
+
 } // namespace dish::reducer
