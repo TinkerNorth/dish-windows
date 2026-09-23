@@ -20,32 +20,74 @@
 
 #include <cstdio>
 
+namespace {
+
+// What Qt keys the settings store and the per-user data directory on. Set before anything reads a
+// QSettings, or the first reader creates the store under a different name.
+void applyApplicationIdentity() {
+    QCoreApplication::setOrganizationName(QStringLiteral("TinkerNorth"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.com"));
+    QCoreApplication::setApplicationName(QStringLiteral("Dish"));
+}
+
+// loadCatalog walks QLocale::uiLanguages(), so Windows' preferred UI language wins over the
+// regional format setting - two settings that routinely disagree. English is a real catalogue
+// rather than the untranslated fallback, because %n plural forms have to come from somewhere and a
+// source string can only carry one of them.
+//
+// The `static` is the one mutable static in this program: QCoreApplication holds the translator by
+// pointer for as long as it lives, so it has to outlive the call that installs it.
+void installUiTranslator() {
+    static QTranslator translator;
+    if (dish::i18n::loadCatalog(translator, QLocale::system())) {
+        QCoreApplication::installTranslator(&translator);
+    }
+}
+
+// The icon and the font ladder, neither of which Qt can find on its own here.
+void applyUiAppearance(QGuiApplication& app) {
+    // dish.rc embeds the icon into the PE resource section, which Qt cannot see: without this the
+    // window shows Qt's generic icon in Alt-Tab and the running taskbar. QIcon picks the best size
+    // per DPI from the same .ico.
+    app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
+
+    // Inter is bundled (SIL OFL, see packaging/fonts/) because Windows does not ship it, and
+    // without the load every Text falls back to Segoe UI. The four faces give the weight ladder the
+    // tokens use.
+    for (const char* face : {":/fonts/Inter-Regular.ttf", ":/fonts/Inter-Medium.ttf",
+                             ":/fonts/Inter-SemiBold.ttf", ":/fonts/Inter-Bold.ttf"}) {
+        QFontDatabase::addApplicationFont(QLatin1String(face));
+    }
+    QFont uiFont(QStringLiteral("Inter"));
+    uiFont.setPixelSize(13); // the token base; pages override per role
+    app.setFont(uiFont);
+}
+
+} // namespace
+
 int main(int argc, char* argv[]) {
-    // FIRST, before any other subsystem can fault, so a crash still leaves a
-    // minidump behind.
+    // FIRST, before any other subsystem can fault, so a crash still leaves a minidump behind.
     dish::crash::install();
 
-    // The auto-update boot gate, deliberately here: before Winsock, libsodium
-    // and QGuiApplication, so a staged installer is handed the machine while
-    // this process still owns nothing but a crash handler. A true return means
-    // the installer is running and waiting for this pid, so main must leave
-    // immediately and quietly. Every failure path inside returns false and
-    // continues a completely normal startup.
+    // The auto-update boot gate, deliberately here: before Winsock, libsodium and QGuiApplication,
+    // so a staged installer is handed the machine while this process still owns nothing but a crash
+    // handler. A true return means the installer is running and waiting for this pid, so main must
+    // leave immediately and quietly. Every failure path inside returns false and continues a
+    // completely normal startup.
     if (dish::update::UpdateHandoff::runStartupHandoff(argc, argv)) { return 0; }
 
-    // Held for the process lifetime. A second instance's boot gate probes this
-    // and declines to hand off, so exactly one instance ever owns an apply.
-    // It is a presence beacon, NOT single-instancing: the second instance runs.
+    // Held for the process lifetime. A second instance's boot gate probes this and declines to hand
+    // off, so exactly one instance ever owns an apply. It is a presence beacon, NOT
+    // single-instancing: the second instance runs.
     const dish::update::RunningInstanceMutex runningInstance;
 
-    // Every network call assumes Winsock is up; this RAII guard holds it for
-    // the lifetime of `main`.
+    // Every network call assumes Winsock is up; this RAII guard holds it for the lifetime of
+    // `main`, which is why it is not tucked into a helper.
     dish::net::WinsockInit winsock;
     if (!winsock.ok()) {
-        // Before any logger exists, so stderr is the only channel and the exit
-        // code is the report. Qt's stream over the CRT handle writes the same
-        // bytes fprintf would, with no result to discard and no iostream
-        // failure state to answer for.
+        // Before any logger exists, so stderr is the only channel and the exit code is the report.
+        // Qt's stream over the CRT handle writes the same bytes fprintf would, with no result to
+        // discard and no iostream failure state to answer for.
         QTextStream(stderr) << "dish: WSAStartup failed\n";
         return 1;
     }
@@ -55,42 +97,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // QGuiApplication, not QApplication: no QWidget is ever constructed, so the
-    // widgets module stays out of the process.
+    // QGuiApplication, not QApplication: no QWidget is ever constructed, so the widgets module
+    // stays out of the process.
     QGuiApplication app(argc, argv);
-    QCoreApplication::setOrganizationName(QStringLiteral("TinkerNorth"));
-    QCoreApplication::setOrganizationDomain(QStringLiteral("tinkernorth.com"));
-    QCoreApplication::setApplicationName(QStringLiteral("Dish"));
+    applyApplicationIdentity();
+    installUiTranslator();
+    applyUiAppearance(app);
 
-    // loadCatalog walks QLocale::uiLanguages(), so Windows' preferred UI
-    // language wins over the regional format setting — two settings that
-    // routinely disagree. English is a real catalogue rather than the
-    // untranslated fallback, because %n plural forms have to come from
-    // somewhere and a source string can only carry one of them. `static` keeps
-    // the translator alive for the lifetime of the app.
-    static QTranslator translator;
-    if (dish::i18n::loadCatalog(translator, QLocale::system())) {
-        QCoreApplication::installTranslator(&translator);
-    }
-
-    // dish.rc embeds the icon into the PE resource section, which Qt cannot
-    // see: without this the window shows Qt's generic icon in Alt-Tab and the
-    // running taskbar. QIcon picks the best size per DPI from the same .ico.
-    app.setWindowIcon(QIcon(QStringLiteral(":/dish.ico")));
-
-    // Inter is bundled (SIL OFL, see packaging/fonts/) because Windows does not
-    // ship it, and without the load every Text falls back to Segoe UI. The four
-    // statics give the weight ladder the tokens use.
-    for (const char* face : {":/fonts/Inter-Regular.ttf", ":/fonts/Inter-Medium.ttf",
-                             ":/fonts/Inter-SemiBold.ttf", ":/fonts/Inter-Bold.ttf"}) {
-        QFontDatabase::addApplicationFont(QLatin1String(face));
-    }
-    QFont uiFont(QStringLiteral("Inter"));
-    uiFont.setPixelSize(13); // the token base; pages override per role
-    app.setFont(uiFont);
-
-    // runQmlApp owns the engine and chrome, and exposes the model to QML as the
-    // `App` singleton.
+    // runQmlApp owns the engine and chrome, and exposes the model to QML as the `App` singleton.
     dish::AppModel model;
     model.start();
     return dish::qml::runQmlApp(model);
