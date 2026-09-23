@@ -175,6 +175,7 @@ set(DISH_TEST_SOURCES
     test_app_view_model_connections.cpp
     test_app_view_model_bind_availability.cpp
     test_capability_solver.cpp
+    test_catalog_feature_gate.cpp
     test_feedback_routing.cpp
     # Controller audio.
     test_audio_jitter.cpp
