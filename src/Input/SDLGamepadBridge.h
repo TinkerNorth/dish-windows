@@ -149,6 +149,12 @@ class SDLGamepadBridge : public QObject {
   private:
     void runLoop();
 
+    // What one SDL event means, what a raw-joystick event means in particular, and what the loop
+    // closes on its way out. All on the SDL thread.
+    void dispatchSdlEvent(const SDL_Event& ev);
+    void onRawJoystickInput(int iid, CaptureKind kind, int index, int value, bool deliberate);
+    void closeAllDevices();
+
     // Long enough that an idle pump does not spin, short enough that a stop is observed promptly.
     static constexpr int kSdlWaitMs = 100;
 
@@ -310,6 +316,14 @@ class SDLGamepadBridge : public QObject {
         float az = 0.0f;
     };
     std::unordered_map<int, AccelCache> lastAccel_;
+
+    // What one sensor event leaves behind, when it leaves anything: the slot's id and the accel
+    // triple the gyro sample is paired with.
+    struct MotionUpdate {
+        std::string deviceId;
+        AccelCache accel{};
+    };
+    std::optional<MotionUpdate> applySensorEvent(const SDL_ControllerSensorEvent& ev);
 
     // Per-device last battery poll wall-clock. The runLoop polls battery on
     // every iteration but the per-device gate collapses it to 30 s.

@@ -354,6 +354,90 @@ void SDLGamepadBridge::onJoystickRemoved(const SDL_Event& ev) {
     return;
 }
 
+// One raw-joystick event. The tracked state always rebuilds; the capture page is offered the event
+// only when it is listening AND the event was deliberate, which is the gate that keeps idle stick
+// jitter and button releases from being read as an assignment. The four call sites differ only in
+// what "deliberate" means for their kind.
+void SDLGamepadBridge::onRawJoystickInput(int iid, CaptureKind kind, int index, int value,
+                                          bool deliberate) {
+    rebuildJoystickState(iid);
+    if (!deliberate) { return; }
+    // Checked second: the flag keeps capture free when off, and it is read per event rather than
+    // held, because the page can be left at any point in this loop.
+    if (!captureEnabled_.load(std::memory_order_relaxed)) { return; }
+    maybeEmitCapture(iid, static_cast<int>(kind), index, value);
+}
+
+void SDLGamepadBridge::dispatchSdlEvent(const SDL_Event& ev) {
+    switch (ev.type) {
+    case SDL_CONTROLLERDEVICEADDED:
+        onControllerAdded(ev);
+        break;
+    case SDL_CONTROLLERDEVICEREMOVED:
+        onControllerRemoved(ev);
+        break;
+    case SDL_JOYDEVICEADDED:
+        onJoystickAdded(ev);
+        break;
+    case SDL_JOYDEVICEREMOVED:
+        onJoystickRemoved(ev);
+        break;
+    case SDL_CONTROLLERAXISMOTION:
+    case SDL_CONTROLLERBUTTONDOWN:
+    case SDL_CONTROLLERBUTTONUP:
+        rebuildState(ev.cdevice.which);
+        break;
+    case SDL_AUDIODEVICEADDED:
+    case SDL_AUDIODEVICEREMOVED:
+        // Delivered here because this loop is the process's one SDL event pump; the audio subsystem
+        // itself is SdlAudioGateway's (see the signal's comment). A pad's own endpoints appear a
+        // beat after its HID interface, so this edge is what re-runs the route matcher.
+        QMetaObject::invokeMethod(this, "audioDevicesChanged", Qt::QueuedConnection);
+        break;
+    case SDL_JOYAXISMOTION:
+        // A game controller's joystick events also land here, but its iid is in openControllers_
+        // and never openJoysticks_, so this no-ops for it.
+        onRawJoystickInput(ev.jaxis.which, CaptureKind::Axis, ev.jaxis.axis, ev.jaxis.value,
+                           captureAxisPasses(ev.jaxis.value));
+        break;
+    case SDL_JOYBUTTONDOWN:
+        onRawJoystickInput(ev.jbutton.which, CaptureKind::Button, ev.jbutton.button, 1,
+                           captureButtonPasses());
+        break;
+    case SDL_JOYBUTTONUP:
+        // A release is not an assignment, so it rebuilds and offers nothing.
+        onRawJoystickInput(ev.jbutton.which, CaptureKind::Button, ev.jbutton.button, 0,
+                           /*deliberate=*/false);
+        break;
+    case SDL_JOYHATMOTION:
+        onRawJoystickInput(ev.jhat.which, CaptureKind::Hat, ev.jhat.hat, ev.jhat.value,
+                           captureHatPasses(ev.jhat.value));
+        break;
+    case SDL_CONTROLLERSENSORUPDATE:
+        handleSensorEvent(ev.csensor);
+        break;
+    case SDL_CONTROLLERTOUCHPADDOWN:
+    case SDL_CONTROLLERTOUCHPADMOTION:
+    case SDL_CONTROLLERTOUCHPADUP:
+        handleTouchpadEvent(ev.ctouchpad);
+        break;
+    default:
+        break;
+    }
+}
+
+// On the SDL thread, where every handle was opened: SDL's own documentation is explicit that a
+// device must be closed from the thread that pumps its events.
+void SDLGamepadBridge::closeAllDevices() {
+    std::lock_guard<std::mutex> lock(mtx_);
+    for (auto& [iid, gc] : openControllers_) { SDL_GameControllerClose(gc); }
+    openControllers_.clear();
+    for (auto& [iid, js] : openJoysticks_) { SDL_JoystickClose(js); }
+    openJoysticks_.clear();
+    deviceIds_.clear();
+    deviceNames_.clear();
+}
+
 void SDLGamepadBridge::runLoop() {
     applySdlHints();
     if (!initSdl()) {
@@ -364,94 +448,17 @@ void SDLGamepadBridge::runLoop() {
     while (running_.load(std::memory_order_relaxed)) {
         SDL_Event ev;
         if (SDL_WaitEventTimeout(&ev, kSdlWaitMs) == 0) { continue; }
-        switch (ev.type) {
-        case SDL_CONTROLLERDEVICEADDED:
-            onControllerAdded(ev);
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            onControllerRemoved(ev);
-            break;
-        case SDL_JOYDEVICEADDED:
-            onJoystickAdded(ev);
-            break;
-        case SDL_JOYDEVICEREMOVED:
-            onJoystickRemoved(ev);
-            break;
-        case SDL_CONTROLLERAXISMOTION:
-        case SDL_CONTROLLERBUTTONDOWN:
-        case SDL_CONTROLLERBUTTONUP:
-            rebuildState(ev.cdevice.which);
-            break;
-        case SDL_AUDIODEVICEADDED:
-        case SDL_AUDIODEVICEREMOVED:
-            // Delivered here because this loop is the process's one SDL event pump; the audio
-            // subsystem itself is SdlAudioGateway's (see the signal's comment). A pad's own
-            // endpoints appear a beat after its HID interface, so this edge is what re-runs the
-            // route matcher.
-            QMetaObject::invokeMethod(this, "audioDevicesChanged", Qt::QueuedConnection);
-            break;
-        case SDL_JOYAXISMOTION:
-            // A game controller's joystick events also land here, but its iid is
-            // in openControllers_ and never openJoysticks_, so this no-ops for it.
-            rebuildJoystickState(ev.jaxis.which);
-            // The magnitude gate rejects idle jitter, and the flag check keeps
-            // capture free when off.
-            if (captureEnabled_.load(std::memory_order_relaxed) &&
-                captureAxisPasses(ev.jaxis.value)) {
-                maybeEmitCapture(ev.jaxis.which, static_cast<int>(CaptureKind::Axis), ev.jaxis.axis,
-                                 ev.jaxis.value);
-            }
-            break;
-        case SDL_JOYBUTTONDOWN:
-            rebuildJoystickState(ev.jbutton.which);
-            // Press only; a release is not an assignment.
-            if (captureEnabled_.load(std::memory_order_relaxed) && captureButtonPasses()) {
-                maybeEmitCapture(ev.jbutton.which, static_cast<int>(CaptureKind::Button),
-                                 ev.jbutton.button, 1);
-            }
-            break;
-        case SDL_JOYBUTTONUP:
-            rebuildJoystickState(ev.jbutton.which);
-            break;
-        case SDL_JOYHATMOTION:
-            rebuildJoystickState(ev.jhat.which);
-            // Non-centered directions only, for the same reason.
-            if (captureEnabled_.load(std::memory_order_relaxed) &&
-                captureHatPasses(ev.jhat.value)) {
-                maybeEmitCapture(ev.jhat.which, static_cast<int>(CaptureKind::Hat), ev.jhat.hat,
-                                 ev.jhat.value);
-            }
-            break;
-        case SDL_CONTROLLERSENSORUPDATE:
-            handleSensorEvent(ev.csensor);
-            break;
-        case SDL_CONTROLLERTOUCHPADDOWN:
-        case SDL_CONTROLLERTOUCHPADMOTION:
-        case SDL_CONTROLLERTOUCHPADUP:
-            handleTouchpadEvent(ev.ctouchpad);
-            break;
-        default:
-            break;
-        }
+        dispatchSdlEvent(ev);
 
-        // Here, so every SDL_GameController* is resolved and used only on the SDL
-        // thread.
+        // Here, so every SDL_GameController* is resolved and used only on the SDL thread.
         drainOutputCommands();
 
-        // Cheap despite running every iteration: the per-device gate inside
-        // collapses it to a 30 s cadence.
+        // Cheap despite running every iteration: the per-device gate inside collapses it to a 30 s
+        // cadence.
         pollBatteries();
     }
 
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        for (auto& [iid, gc] : openControllers_) { SDL_GameControllerClose(gc); }
-        openControllers_.clear();
-        for (auto& [iid, js] : openJoysticks_) { SDL_JoystickClose(js); }
-        openJoysticks_.clear();
-        deviceIds_.clear();
-        deviceNames_.clear();
-    }
+    closeAllDevices();
     SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK);
 }
 
@@ -501,53 +508,58 @@ void SDLGamepadBridge::maybeEmitCapture(int iid, int kind, int index, int value)
                               Q_ARG(int, value));
 }
 
-void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
-    // Deliberately no rotation here: SDL applies the per-model matrix internally
-    // for HIDAPI controllers, so samples already arrive in the satellite's
-    // right-handed frame and only the units need converting.
-    std::string deviceId;
-    AccelCache accel{};
-    bool motionCap = false;
-    bool isGyro = (ev.sensor == SDL_SENSOR_GYRO);
-    bool isAccel = (ev.sensor == SDL_SENSOR_ACCEL);
-    if (!isGyro && !isAccel) { return; }
+// Null unless this event is a GYRO sample from a motion-capable pad that already has an accel to
+// pair with. Accel piggy-backs on the next gyro event so the rate limiter sees one stream, not two;
+// a gyro-less pad therefore never drives MSG_MOTION, which is fine since it cannot do gyro aim
+// anyway.
+//
+// Deliberately no rotation here: SDL applies the per-model matrix internally for HIDAPI
+// controllers, so samples already arrive in the satellite's right-handed frame and only the units
+// need converting.
+std::optional<SDLGamepadBridge::MotionUpdate>
+SDLGamepadBridge::applySensorEvent(const SDL_ControllerSensorEvent& ev) {
+    const bool isGyro = ev.sensor == SDL_SENSOR_GYRO;
+    const bool isAccel = ev.sensor == SDL_SENSOR_ACCEL;
+    if (!isGyro && !isAccel) { return std::nullopt; }
 
-    {
-        std::lock_guard<std::mutex> lock(mtx_);
-        const int iid = ev.which;
-        motionCap = motionCapable_.count(iid) != 0;
-        if (!motionCap) { return; }
-        if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
-            deviceId = it->second.toStdString();
-        }
-        if (deviceId.empty()) { return; }
-        if (isAccel) {
-            AccelCache c{ev.data[0], ev.data[1], ev.data[2]};
-            lastAccel_[iid] = c;
-            // Accel piggy-backs on the next gyro event so the rate limiter sees
-            // one stream, not two. A gyro-less pad therefore never drives
-            // MSG_MOTION, which is fine since it cannot do gyro aim anyway.
-            return;
-        }
-        // Skip until an accel sample exists: publishing accel{0,0,0} would ship a
-        // spurious zero-gravity triple.
-        auto accelIt = lastAccel_.find(iid);
-        if (accelIt == lastAccel_.end()) { return; }
-        accel = accelIt->second;
+    std::lock_guard<std::mutex> lock(mtx_);
+    const int iid = ev.which;
+    if (motionCapable_.count(iid) == 0) { return std::nullopt; }
+
+    MotionUpdate update;
+    if (auto it = deviceIds_.find(iid); it != deviceIds_.end()) {
+        update.deviceId = it->second.toStdString();
     }
+    if (update.deviceId.empty()) { return std::nullopt; }
 
-    // Twin-dedup: suppress motion too while USB-direct owns this pad.
-    if (isSuppressed(deviceId)) { return; }
+    if (isAccel) {
+        lastAccel_[iid] = AccelCache{ev.data[0], ev.data[1], ev.data[2]};
+        return std::nullopt;
+    }
+    // Skip until an accel sample exists: publishing accel{0,0,0} would ship a spurious
+    // zero-gravity triple.
+    const auto accelIt = lastAccel_.find(iid);
+    if (accelIt == lastAccel_.end()) { return std::nullopt; }
+    update.accel = accelIt->second;
+    return update;
+}
+
+void SDLGamepadBridge::handleSensorEvent(const SDL_ControllerSensorEvent& ev) {
+    const auto update = applySensorEvent(ev);
+    if (!update.has_value()) { return; }
+    // Twin-dedup: suppress motion too while USB-direct owns this pad. The accel above is still
+    // cached, so the stream resumes on the first gyro sample after the claim is released.
+    if (isSuppressed(update->deviceId)) { return; }
 
     GamepadInputProcessor::MotionSample sample{};
     sample.gyroX = gyroRadPerSecToInt16(ev.data[0]);
     sample.gyroY = gyroRadPerSecToInt16(ev.data[1]);
     sample.gyroZ = gyroRadPerSecToInt16(ev.data[2]);
-    sample.accelX = accelMps2ToInt16(accel.ax);
-    sample.accelY = accelMps2ToInt16(accel.ay);
-    sample.accelZ = accelMps2ToInt16(accel.az);
+    sample.accelX = accelMps2ToInt16(update->accel.ax);
+    sample.accelY = accelMps2ToInt16(update->accel.ay);
+    sample.accelZ = accelMps2ToInt16(update->accel.az);
 
-    processor_->publishMotion(deviceId, sample);
+    processor_->publishMotion(update->deviceId, sample);
 }
 
 // `finger` is the 0-based slot; the wire carries only two, so anything higher is dropped.
