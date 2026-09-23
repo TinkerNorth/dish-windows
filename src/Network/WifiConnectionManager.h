@@ -67,6 +67,17 @@ class WifiConnectionManager : public QObject {
     // Untestable in the unit suite since it drives real network; the decision core
     // it leans on, reducer::nextReversePairingAction, is exhaustively tested.
     void requestReversePairing(const models::DiscoveredServer& server);
+
+    // Path B's steps: draw the PIN, arm the attempt, then classify whatever the POST comes back
+    // with against the attempt that is still on screen.
+    static QString drawReversePin();
+    void armReverseAttempt(const models::DiscoveredServer& server);
+    bool reverseAttemptIsCurrent(const models::DiscoveredServer& server, const QString& pin) const;
+    void startReversePoll();
+    void applyReverseOutcome(WifiConnection* conn, const models::DiscoveredServer& server,
+                             const models::PairResponse& pair);
+    void onReversePairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+                            const QString& pin, const models::PairResponse& pair);
     void cancelReversePairing();
 
     ReversePairingPhase reversePairingPhase() const { return reversePhase_; }

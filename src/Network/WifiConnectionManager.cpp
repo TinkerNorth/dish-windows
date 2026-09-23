@@ -319,27 +319,87 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
     }));
 }
 
-void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer& server) {
-    // A fresh request supersedes any in-flight one and clears a previous
-    // attempt's terminal arm.
-    cancelReversePairing();
-
-    auto* conn = ensureConnection(server);
-    retryAttempts_.remove(conn->id());
-    conn->updateServer(server);
-
-    // The value is random but the shape is fixed by the pure formatter, so the
-    // displayed PIN is always exactly 4 digits. Randomness stays out of the
-    // tested decision core.
+// The value is random but the shape is fixed by the pure formatter, so the displayed PIN is always
+// exactly 4 digits. Randomness stays out of the tested decision core.
+QString WifiConnectionManager::drawReversePin() {
     std::random_device rd;
-    const std::uint32_t draw = rd();
-    reversePin_ = QString::fromStdString(reducer::formatReversePin(draw));
+    return QString::fromStdString(reducer::formatReversePin(rd()));
+}
+
+void WifiConnectionManager::armReverseAttempt(const models::DiscoveredServer& server) {
+    reversePin_ = drawReversePin();
     reverseServer_ = server;
     reverseServerName_ = server.name.isEmpty() ? server.ip : server.name;
     reverseElapsedMs_ = 0;
     reverseDeadlineMs_ = kReverseDeadlineMs;
     reverseSawPending_ = false;
     setReversePhase(ReversePairingPhase::AwaitingApproval);
+}
+
+// True while this reply still belongs to the attempt that is on screen. A cancel or a restart
+// landing while the POST was in flight makes it a late reply for a superseded request, which must
+// not start a poll loop of its own.
+bool WifiConnectionManager::reverseAttemptIsCurrent(const models::DiscoveredServer& server,
+                                                    const QString& pin) const {
+    return reversePhase_ == ReversePairingPhase::AwaitingApproval &&
+           reverseServer_.id() == server.id() && reversePin_ == pin;
+}
+
+// The expected arm: the operator has not answered yet, so the approval poll starts.
+void WifiConnectionManager::startReversePoll() {
+    if (reverseTimer_ == nullptr) {
+        reverseTimer_ = new QTimer(this);
+        reverseTimer_->setInterval(kReversePollIntervalMs);
+        QObject::connect(reverseTimer_, &QTimer::timeout, this,
+                         &WifiConnectionManager::pollReverseStatus);
+    }
+    reverseTimer_->start();
+}
+
+void WifiConnectionManager::applyReverseOutcome(WifiConnection* conn,
+                                                const models::DiscoveredServer& server,
+                                                const models::PairResponse& pair) {
+    std::visit(
+        [&](auto&& arm) {
+            using T = std::decay_t<decltype(arm)>;
+            if constexpr (std::is_same_v<T, PairingClient::Success>) {
+                // Approved synchronously, with no operator step.
+                conn->markConnecting();
+                store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                setReversePhase(ReversePairingPhase::Approved);
+                openSession(conn, server, ConnectIntent::UserInitiated);
+            } else if constexpr (std::is_same_v<T, PairingClient::Pending>) {
+                startReversePoll();
+            } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
+                emit connectionEvent(makeError(versionMsg()));
+                finishReverse(ReversePairingPhase::Declined);
+            } else {
+                // AuthRequired or Unreachable: no pending grant was staged.
+                emit connectionEvent(makeError(pair.error.value_or(unreachableMsg())));
+                finishReverse(ReversePairingPhase::TimedOut);
+            }
+        },
+        PairingClient::classify(pair));
+}
+
+void WifiConnectionManager::onReversePairReply(WifiConnection* conn,
+                                               const models::DiscoveredServer& server,
+                                               const QString& pin,
+                                               const models::PairResponse& pair) {
+    pairingInFlight_.remove(conn->id());
+    emit pairingInFlightChanged();
+    if (!reverseAttemptIsCurrent(server, pin)) { return; }
+    applyReverseOutcome(conn, server, pair);
+}
+
+void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer& server) {
+    // A fresh request supersedes any in-flight one and clears a previous attempt's terminal arm.
+    cancelReversePairing();
+
+    auto* conn = ensureConnection(server);
+    retryAttempts_.remove(conn->id());
+    conn->updateServer(server);
+    armReverseAttempt(server);
 
     const QString did = deviceId_;
     const QString dname = deviceName_;
@@ -347,52 +407,17 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     // The happy-path reply is {ok:false, pending:true}, which then gets polled.
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
+
     auto* watcher = new QFutureWatcher<models::PairResponse>(this);
-    QObject::connect(
-        watcher, &QFutureWatcherBase::finished, this, [this, watcher, conn, server, pin] {
-            const auto pair = watcher->result();
-            watcher->deleteLater();
-            pairingInFlight_.remove(conn->id());
-            emit pairingInFlightChanged();
-            // A cancel or restart landed while this POST was in flight; drop the
-            // late reply rather than polling for a superseded request.
-            if (reversePhase_ != ReversePairingPhase::AwaitingApproval ||
-                reverseServer_.id() != server.id() || reversePin_ != pin) {
-                return;
-            }
-            const auto outcome = PairingClient::classify(pair);
-            std::visit(
-                [&](auto&& arm) {
-                    using T = std::decay_t<decltype(arm)>;
-                    if constexpr (std::is_same_v<T, PairingClient::Success>) {
-                        // Approved synchronously, with no operator step.
-                        conn->markConnecting();
-                        store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
-                        setReversePhase(ReversePairingPhase::Approved);
-                        openSession(conn, server, ConnectIntent::UserInitiated);
-                    } else if constexpr (std::is_same_v<T, PairingClient::Pending>) {
-                        // The expected arm: start the approval poll loop.
-                        if (reverseTimer_ == nullptr) {
-                            reverseTimer_ = new QTimer(this);
-                            reverseTimer_->setInterval(kReversePollIntervalMs);
-                            QObject::connect(reverseTimer_, &QTimer::timeout, this,
-                                             &WifiConnectionManager::pollReverseStatus);
-                        }
-                        reverseTimer_->start();
-                    } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
-                        emit connectionEvent(makeError(versionMsg()));
-                        finishReverse(ReversePairingPhase::Declined);
-                    } else {
-                        // AuthRequired or Unreachable: no pending grant was staged.
-                        emit connectionEvent(makeError(pair.error.value_or(unreachableMsg())));
-                        finishReverse(ReversePairingPhase::TimedOut);
-                    }
-                },
-                outcome);
-        });
+    QObject::connect(watcher, &QFutureWatcherBase::finished, this,
+                     [this, watcher, conn, server, pin] {
+                         const auto pair = watcher->result();
+                         watcher->deleteLater();
+                         onReversePairReply(conn, server, pin, pair);
+                     });
     watcher->setFuture(QtConcurrent::run([server, did, dname, pin] {
-        // Empty operator pin, displayed pin as clientPin: that is what selects
-        // Path B server-side.
+        // Empty operator pin, displayed pin as clientPin: that is what selects Path B
+        // server-side.
         return PairingClient::pair(server.ip, server.pairPort, did, dname, QString(), pin);
     }));
 }
