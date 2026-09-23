@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "core/reducer/RestOutcome.h"
+#include "core/reducer/ReversePairing.h"
 #include "core/wire/SessionCrypto.h"
 #include "ConnectionStore.h"
 #include "HTTPClient.h"
@@ -170,6 +172,13 @@ class WifiConnectionManager : public QObject {
     // One pairStatus round-trip off the thread pool, fed with the elapsed clock
     // through reducer::nextReversePairingAction to decide re-arm / open / abort.
     void pollReverseStatus();
+
+    // One approval poll, in order: what the reply says, and what that answer means.
+    static reducer::ApprovalReply approvalReplyOf(const models::PairResponse& status);
+    void onReverseStatusReply(const models::PairResponse& status,
+                              const models::DiscoveredServer& server);
+    void applyReverseAction(reducer::ReversePairingAction action, const models::PairResponse& status,
+                            const models::DiscoveredServer& server);
     void setReversePhase(ReversePairingPhase phase);
     void finishReverse(ReversePairingPhase terminal);
 

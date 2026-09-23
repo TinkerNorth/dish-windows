@@ -422,6 +422,64 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     }));
 }
 
+// What the reducer needs to know about one /pairstatus answer.
+reducer::ApprovalReply WifiConnectionManager::approvalReplyOf(const models::PairResponse& status) {
+    reducer::ApprovalReply ar;
+    ar.status = status.httpStatus;
+    ar.bodyParsed = status.reachable;
+    ar.statusStr = status.status.value_or(QString()).toStdString();
+    ar.hasSharedKey = status.sharedKey.has_value() && !status.sharedKey->isEmpty();
+    return ar;
+}
+
+// `status` carries the shared key the Approve arm needs, which is why the reply is passed on rather
+// than reduced to the action alone.
+void WifiConnectionManager::applyReverseAction(reducer::ReversePairingAction action,
+                                               const models::PairResponse& status,
+                                               const models::DiscoveredServer& server) {
+    switch (action) {
+    case reducer::ReversePairingAction::Approve: {
+        auto* conn = ensureConnection(server);
+        conn->markConnecting();
+        store_->setSharedKey(*status.sharedKey, WifiConnection::idFor(server));
+        if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
+        setReversePhase(ReversePairingPhase::Approved);
+        openSession(conn, server, ConnectIntent::UserInitiated);
+        break;
+    }
+    case reducer::ReversePairingAction::Decline:
+        emit connectionEvent(makeError(reverseDeclinedMsg()));
+        finishReverse(ReversePairingPhase::Declined);
+        break;
+    case reducer::ReversePairingAction::TimeOut:
+        emit connectionEvent(makeError(reverseTimedOutMsg()));
+        finishReverse(ReversePairingPhase::TimedOut);
+        break;
+    case reducer::ReversePairingAction::KeepPolling:
+        break; // the timer re-fires on its own
+    }
+}
+
+// The poll slot is free again the moment a reply lands, whether or not the reply is still wanted:
+// a superseded GET that left the flag set would stall every later poll of the next attempt.
+void WifiConnectionManager::onReverseStatusReply(const models::PairResponse& status,
+                                                 const models::DiscoveredServer& server) {
+    reversePollInFlight_ = false;
+    // A cancel or restart raced this GET, so its reply is superseded. The pin is not compared here:
+    // the poll carries no pin, and the phase and server together already say it is the same attempt.
+    if (reversePhase_ != ReversePairingPhase::AwaitingApproval ||
+        reverseServer_.id() != server.id()) {
+        return;
+    }
+    const auto reply = approvalReplyOf(status);
+    const auto approval = reducer::classifyApproval(reply, reverseSawPending_);
+    // Latched AFTER classifying, so the first pending answer is classified as the first one.
+    if (reply.statusStr == "pending") { reverseSawPending_ = true; }
+    applyReverseAction(
+        reducer::nextReversePairingAction(approval, reverseElapsedMs_, reverseDeadlineMs_), status,
+        server);
+}
+
 void WifiConnectionManager::pollReverseStatus() {
     if (reversePhase_ != ReversePairingPhase::AwaitingApproval) { return; }
     // A slow GET must not stack behind the 1 s timer.
@@ -435,41 +493,7 @@ void WifiConnectionManager::pollReverseStatus() {
     QObject::connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, server] {
         const auto status = watcher->result();
         watcher->deleteLater();
-        reversePollInFlight_ = false;
-        // A cancel or restart raced this GET, so its reply is superseded.
-        if (reversePhase_ != ReversePairingPhase::AwaitingApproval ||
-            reverseServer_.id() != server.id()) {
-            return;
-        }
-        reducer::ApprovalReply ar;
-        ar.status = status.httpStatus;
-        ar.bodyParsed = status.reachable;
-        ar.statusStr = status.status.value_or(QString()).toStdString();
-        ar.hasSharedKey = status.sharedKey.has_value() && !status.sharedKey->isEmpty();
-        const auto approval = reducer::classifyApproval(ar, reverseSawPending_);
-        if (ar.statusStr == "pending") { reverseSawPending_ = true; }
-        switch (
-            reducer::nextReversePairingAction(approval, reverseElapsedMs_, reverseDeadlineMs_)) {
-        case reducer::ReversePairingAction::Approve: {
-            auto* conn = ensureConnection(server);
-            conn->markConnecting();
-            store_->setSharedKey(*status.sharedKey, WifiConnection::idFor(server));
-            if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
-            setReversePhase(ReversePairingPhase::Approved);
-            openSession(conn, server, ConnectIntent::UserInitiated);
-            break;
-        }
-        case reducer::ReversePairingAction::Decline:
-            emit connectionEvent(makeError(reverseDeclinedMsg()));
-            finishReverse(ReversePairingPhase::Declined);
-            break;
-        case reducer::ReversePairingAction::TimeOut:
-            emit connectionEvent(makeError(reverseTimedOutMsg()));
-            finishReverse(ReversePairingPhase::TimedOut);
-            break;
-        case reducer::ReversePairingAction::KeepPolling:
-            break; // the timer re-fires on its own
-        }
+        onReverseStatusReply(status, server);
     });
     watcher->setFuture(QtConcurrent::run(
         [server, did] { return PairingClient::pairStatus(server.ip, server.pairPort, did); }));
