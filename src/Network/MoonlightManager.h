@@ -257,6 +257,10 @@ class MoonlightManager : public QObject {
   private:
     // forgetHost in order. Each step is what makes the next one safe, so they are named rather than
     // run as one block: see the comment on each.
+    // What a fresh pairing has to undo first: an attempt parked on the host, and a pinned
+    // certificate that belongs to a host this one has replaced. Answers whether the identity moved.
+    bool clearForNewPairing(const QString& id, MoonlightSession* session);
+
     MoonlightSession* detachSessionFromStore(const QString& id);
     void releaseRoutesAt(const QString& id);
     void forgetLearnedState(const QString& id);

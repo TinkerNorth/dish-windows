@@ -358,6 +358,37 @@ bool MoonlightManager::holdsPairing(const QString& id) const {
     return remembered.has_value() && remembered->paired && repo_->serverCert(id).has_value();
 }
 
+// "New code" is pressed while a pairing is already parked on the host waiting for a PIN nobody is
+// going to type. Racing a second exchange against it would leave two chains reporting into one row.
+//
+// AND: a host that announced a new identity has already supplied the evidence. The pin we hold
+// belongs to the host it replaced, so keeping it protects nothing and refuses phase 5 before the
+// host ever answers, which leaves the user with no way back in from inside the app. Asking to pair
+// again IS the decision to trust what this host presents next.
+//
+// Returns whether the identity moved, because the probe entry below has to record that it is no
+// longer pending.
+bool MoonlightManager::clearForNewPairing(const QString& id, MoonlightSession* session) {
+    // Read, never held: cancelPairing and pair below both emit, and a handler that probes some
+    // other host would insert into probes_ and invalidate a reference taken across the call.
+    const bool wasPairing = probes_[id].pairingActive;
+    const bool identityMoved = probes_[id].uniqueIdChanged || session->serverCertMismatch();
+
+    if (wasPairing) {
+        qCInfo(lcMoonlightManager)
+            << "pair:" << id << "restarting; the previous attempt is dropped";
+        session->cancelPairing();
+    }
+    if (identityMoved) {
+        qCWarning(lcMoonlightManager)
+            << "pair:" << id << "announced an identity that is not the remembered one;"
+            << "dropping the pinned certificate so this pairing can pin the new one";
+        repo_->clearServerCert(id);
+        session->clearServerCertMismatch();
+    }
+    return identityMoved;
+}
+
 void MoonlightManager::pairHost(const QString& id, const QString& pin) {
     const auto host = hostById(id);
     if (!host.has_value()) {
@@ -372,32 +403,8 @@ void MoonlightManager::pairHost(const QString& id, const QString& pin) {
         emit pairingFinished(id, false);
         return;
     }
-    // Read, never held: cancelPairing and pair below both emit, and a handler that
-    // probes some other host would insert into probes_ and invalidate a reference
-    // taken across the call.
-    const bool wasPairing = probes_[id].pairingActive;
-    const bool identityMoved = probes_[id].uniqueIdChanged || session->serverCertMismatch();
 
-    // "New code" is pressed while a pairing is already parked on the host waiting
-    // for a PIN nobody is going to type. Racing a second exchange against it would
-    // leave two chains reporting into one row.
-    if (wasPairing) {
-        qCInfo(lcMoonlightManager)
-            << "pair:" << id << "restarting; the previous attempt is dropped";
-        session->cancelPairing();
-    }
-    // A HOST THAT ANNOUNCED A NEW IDENTITY HAS ALREADY SUPPLIED THE EVIDENCE. The
-    // pin we hold belongs to the host it replaced, so keeping it protects nothing
-    // and refuses phase 5 before the host ever answers, which leaves the user with
-    // no way back in from inside the app. Asking to pair again IS the decision to
-    // trust what this host presents next.
-    if (identityMoved) {
-        qCWarning(lcMoonlightManager)
-            << "pair:" << id << "announced an identity that is not the remembered one;"
-            << "dropping the pinned certificate so this pairing can pin the new one";
-        repo_->clearServerCert(id);
-        session->clearServerCertMismatch();
-    }
+    const bool identityMoved = clearForNewPairing(id, session);
     qCInfo(lcMoonlightManager) << "pair:" << id << "starting the five HTTP phases";
     {
         auto& probe = probes_[id];
