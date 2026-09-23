@@ -204,6 +204,7 @@ set(DISH_TEST_SOURCES
     test_update_staging_store.cpp
     test_update_coordinator.cpp
     test_update_handoff.cpp
+    test_ui_preference_store.cpp
     test_update_preference_store.cpp
     test_translations.cpp)
 

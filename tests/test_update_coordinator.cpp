@@ -24,6 +24,7 @@
 #include "core/reducer/UpdateMachine.h"
 #include "core/update/UpdateManifest.h"
 #include "source/store/UpdatePreferenceStore.h"
+#include "update/UpdateTransportError.h"
 #include "update/UpdatePorts.h"
 
 #include "StateSourceProbe.h"
@@ -771,4 +772,45 @@ TEST_CASE("update coordinator: a lastCheck that was never written is invalid",
     Harness harness;
     harness.build(prefs.get(), kNow);
     CHECK_FALSE(harness.coordinator->lastCheck().isValid());
+}
+
+// ── How a transport failure is named ────────────────────────────────────────
+//
+// Offline and Stalled and Http all back off identically, so nothing about the
+// updater's behaviour depends on this. What depends on it is the sentence the
+// user reads in Settings: getting it wrong tells someone their machine is
+// offline when the host answered, which sends them to look at the wrong thing.
+
+TEST_CASE("update transport: a link that cannot reach anything reads as offline",
+          "[update][transport]") {
+    using dish::update::classifyNetworkError;
+    for (auto e : {QNetworkReply::ConnectionRefusedError, QNetworkReply::HostNotFoundError,
+                   QNetworkReply::TemporaryNetworkFailureError,
+                   QNetworkReply::NetworkSessionFailedError, QNetworkReply::UnknownNetworkError}) {
+        INFO("QNetworkReply error " << static_cast<int>(e));
+        CHECK(classifyNetworkError(e) == dish::reducer::UpdateError::Offline);
+    }
+}
+
+TEST_CASE("update transport: a transfer that went quiet reads as stalled",
+          "[update][transport]") {
+    using dish::update::classifyNetworkError;
+    CHECK(classifyNetworkError(QNetworkReply::TimeoutError) == dish::reducer::UpdateError::Stalled);
+    // The transfer timeout aborts the reply, so a stall reaches the classifier
+    // as a cancellation and must not be reported as the user cancelling.
+    CHECK(classifyNetworkError(QNetworkReply::OperationCanceledError) ==
+          dish::reducer::UpdateError::Stalled);
+}
+
+TEST_CASE("update transport: anything the host said reads as an HTTP failure",
+          "[update][transport]") {
+    using dish::update::classifyNetworkError;
+    // A reply that arrived is not an offline machine, whatever it said.
+    for (auto e : {QNetworkReply::NoError, QNetworkReply::ContentNotFoundError,
+                   QNetworkReply::InternalServerError, QNetworkReply::AuthenticationRequiredError,
+                   QNetworkReply::SslHandshakeFailedError, QNetworkReply::ProtocolFailure,
+                   QNetworkReply::TooManyRedirectsError}) {
+        INFO("QNetworkReply error " << static_cast<int>(e));
+        CHECK(classifyNetworkError(e) == dish::reducer::UpdateError::Http);
+    }
 }
