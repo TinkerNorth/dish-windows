@@ -80,6 +80,7 @@ enhanced mode since the 2026-09-20 wave and nobody has paired one against it.
 | DualSense (+Edge on desktop) | ✅ | ✅ | ✅ |
 | Switch Pro | ✅ | ✅ | ✅ |
 | Generic PDP Switch pads | ✅ | ✅ | ✅ |
+| 8BitDo | ✅ known XInput models | ✅ generic HID parser | ✅ generic HID parser |
 | Xbox 360 / One / Series wired | ✅ | ❌ Standard only (XUSB owns it) | ❌ Standard only (xpad owns it) |
 | Stadia | ✅ | ⚠️ generic HID parser, manual pick | ⚠️ generic HID parser, manual pick |
 | Steam Controller | ✅ | ⚠️ never verified | ⚠️ never verified |
