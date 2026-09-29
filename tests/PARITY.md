@@ -12,9 +12,8 @@
 > android-test-file map claimed 0 missing rows and said nothing a green suite
 > does not.
 >
-> Legend: ✅ works · ⚠️ shipped, not yet verified on real hardware · 📱 works
-> through the phone's own mic/speaker, not the pad's (Android only) · ❌ not
-> available · – not applicable. Verified against the code on 2026-09-20.
+> Legend: ✅ works · ⚠️ shipped, not yet verified on real hardware · ❌ not
+> available · – not applicable. Verified against the code on 2026-09-29.
 
 ## 1. What works, per client
 
@@ -28,16 +27,16 @@
 | Adaptive triggers, player LEDs, mic lamp | ✅ | ✅ | ✅ |
 | Lightbar, motion, touchpad, battery | ✅ | ✅ | ✅ |
 | Crash reports (opt-out) | ✅ Crashlytics | ✅ Sentry | ✅ Sentry |
-| Update notice | ✅ Play · ❌ GitHub build | ✅ | ✅ |
-| Runs in the background / window closed | ✅ | ❌ (closing quits) | ✅ tray |
-| Survives PC sleep and resume | – | ❌ | ✅ |
+| Update notice | – Play (the store updates it) · ✅ GitHub build | ✅ | ✅ |
+| Runs in the background / window closed | ❌ (streaming stops when the app leaves the screen) | ✅ tray | ✅ tray |
+| Survives PC sleep and resume | – | ✅ Satellite · ❌ Moonlight | ✅ Satellite · ❌ Moonlight |
 | Keep-awake is user-configurable | ❌ (always on while streaming) | ✅ | ✅ |
 | Diagnostics screen | ✅ | ❌ | ❌ |
-| Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ | ✅ | ✅ |
+| Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ (on the section header) | ✅ | ✅ |
 | Protocol chip ("Satellite update recommended / required", "Dish update required") | ✅ | ✅ | ✅ |
 | App-wide microphone chip with mute-all | ✅ | ✅ | ✅ |
 | Capability verdict word "Supported" | ✅ | ✅ | ✅ |
-| Pairing secrets stored encrypted | ✅ Keystore | ❌ plaintext (documented) | ✅ SecretService |
+| Pairing secrets stored encrypted | ✅ Moonlight key (Keystore) · ❌ Satellite key (app-private prefs) | ✅ DPAPI (older builds' `wifi_shared_key/` copies stay plaintext) | ✅ Satellite key (Secret Service, else a 0600 file) · ❌ Moonlight key (0600 file) |
 | Six languages (en, bs, de, es, fr, pt-BR) | ✅ | ✅ | ✅ |
 
 ## 2. Input, pad → host, by path (cell = USB Direct · USB Standard · Bluetooth)
@@ -48,7 +47,13 @@
 | Motion | ✅ · ✅ · ✅ | ✅ · ✅ · ⚠️ | ✅ · ✅ · ⚠️ |
 | Touchpad | ✅ · ⚠️ · ⚠️ | ✅ · ✅ · ⚠️ | ✅ · ✅ · ⚠️ |
 | Battery | ⚠️ · ✅ · ✅ | ⚠️ · ✅ · ⚠️ | ⚠️ · ✅ · ⚠️ |
-| Controller mic | ✅ · ✅ · 📱 | ✅ · ⚠️ · ❌ | ✅ · ⚠️ · ❌ |
+| Controller mic | ✅ · ✅ · ❌ | ✅ · ⚠️ · ❌ | ✅ · ⚠️ · ❌ |
+
+The Battery row is what the host is sent. Over USB that is the phone's or PC's
+own battery, which a wired pad draws on; the desktops' Standard path sends
+SDL's coarse pad level instead whenever SDL reports one. Over Bluetooth the
+desktops send SDL's coarse pad level (the PC's battery when SDL has none), and
+Android the lower of the pad's and the phone's.
 
 ## 3. Receiving, host → pad, by path (cell = USB Direct · USB Standard · Bluetooth)
 
@@ -58,8 +63,8 @@
 | Lightbar | ✅ · ❌ · ⚠️ | ✅ · ✅ · ⚠️ | ✅ · ✅ · ⚠️ |
 | Adaptive triggers | ✅ · ❌ · ❌ | ✅ · ⚠️ · ⚠️ | ✅ · ⚠️ · ⚠️ |
 | Player LEDs | ✅ · ❌ · ❌ | ✅ · ⚠️ · ⚠️ | ✅ · ⚠️ · ⚠️ |
-| Mic lamp | ✅ · ❌ · ❌ | ✅ · ⚠️ · ⚠️ | ✅ · ⚠️ · ⚠️ |
-| Controller speaker | ✅ · ✅ · 📱 | ✅ · ⚠️ · ❌ | ✅ · ⚠️ · ❌ |
+| Mic lamp | ✅ · ❌ · ❌ | ✅ · ⚠️ · ❌ | ✅ · ⚠️ · ❌ |
+| Controller speaker | ✅ · ✅ · ❌ | ✅ · ⚠️ · ❌ | ✅ · ⚠️ · ❌ |
 | HD haptics | ⚠️ · ⚠️ · ❌ | ⚠️ · ⚠️ · ❌ | ⚠️ · ⚠️ · ❌ |
 
 The Android Standard column is ❌ for lightbar, triggers, LEDs and the lamp
@@ -76,15 +81,15 @@ enhanced mode since the 2026-09-20 wave and nobody has paired one against it.
 | Switch Pro | ✅ | ✅ | ✅ |
 | Generic PDP Switch pads | ✅ | ✅ | ✅ |
 | Xbox 360 / One / Series wired | ✅ | ❌ Standard only (XUSB owns it) | ❌ Standard only (xpad owns it) |
-| Stadia | ✅ | ❌ | ❌ |
+| Stadia | ✅ | ⚠️ generic HID parser, manual pick | ⚠️ generic HID parser, manual pick |
 | Steam Controller | ✅ | ⚠️ never verified | ⚠️ never verified |
 
 ## 5. Decisions, not gaps
 
-- Android routes controller audio to the phone's own mic/speaker for any
-  emulated DualSense / DualShock 4 v2; this client routes only to the pad's own
-  endpoints and refuses on ambiguity. Deliberate.
-- Xbox and Stadia Direct exist only on Android: XUSB owns those pads here.
+- Android's on-screen pad takes controller audio from the phone's own mic and
+  speaker. A physical pad, on every client, uses only its own USB endpoints and
+  refuses on ambiguity; a Bluetooth pad gets none.
+- Xbox Direct exists only on Android: XUSB owns those pads here.
 - Virtual-pad skins, lightbar wash, cutout theme, Play billing, store
   screenshots: phone-only by nature.
 - Android's keep-awake is fixed (screen and wake lock while streaming); the
@@ -107,7 +112,7 @@ enhanced mode since the 2026-09-20 wave and nobody has paired one against it.
 | #174 per-type skins (+ protocol chip) | this wave (chip) | skins N/A, chip ported |
 | #175 protocol 2 | #61 | ported |
 | #176 lightbar wash | – | N/A |
-| #177 input-path-honest capabilities | this wave ("Supported") | ported; the Unknown state cannot arise here (Direct only on known models) |
+| #177 input-path-honest capabilities | this wave ("Supported") | ported; this client's capability solver has no Unknown state |
 | #178 controller audio (+ app-wide mic chip) | #66 + this wave | ported |
 | #182, #183, #186, #190, #197 changelog / notes | – | N/A |
 | #184 privacy policy | #73 | ported |
@@ -120,6 +125,5 @@ enhanced mode since the 2026-09-20 wave and nobody has paired one against it.
 | #214 to #218 Crashlytics-driven fixes | checked: not needed here | Android-only |
 
 Desktop PRs with no Android counterpart and no action needed: keep-awake modes
-(#53), release hardening (#54, #77), the shared build story (#67). Linux-only
-features this client still lacks: tray and close-to-tray, sleep/resume
-survival, keyring-backed secrets.
+(#53), release hardening (#54, #77), the shared build story (#67), tray and
+suspend survival (#86), DPAPI-encrypted secrets (#87).
