@@ -562,10 +562,13 @@ void MoonlightManager::cancelHostApp(const QString& id) {
     if (moonlight::sessionAttemptInFlight(session->phase())) {
         qCInfo(lcMoonlightManager) << "quit session:" << id << "closing the session we started";
         session->quit();
-        return;
+    } else {
+        qCInfo(lcMoonlightManager) << "quit session:" << id << "asking the host to close its app";
+        session->cancelHostApp();
     }
-    qCInfo(lcMoonlightManager) << "quit session:" << id << "asking the host to close its app";
-    session->cancelHostApp();
+    // A host answers /cancel with success whether or not anything was running, so the reply
+    // proves nothing: only asking again says what the quit did.
+    probeHost(id);
 }
 
 QStringList MoonlightManager::slotsRoutedTo(const QString& hostId) const {

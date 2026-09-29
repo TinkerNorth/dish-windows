@@ -965,12 +965,7 @@ QString AppViewModel::moonlightRefusalMessage(const QString& id) const {
     return model_->moonlight()->refusalMessage(id);
 }
 
-void AppViewModel::quitMoonlightApp(const QString& id) {
-    model_->moonlight()->cancelHostApp(id);
-    // A successful cancel proves nothing: the host answers 200 whether or not
-    // anything was running, so the only honest next step is to ask again.
-    model_->moonlight()->probeHost(id);
-}
+void AppViewModel::quitMoonlightApp(const QString& id) { model_->moonlight()->cancelHostApp(id); }
 
 QVariantList AppViewModel::moonlightTypeOptions() const {
     const std::pair<int, const char*> options[] = {

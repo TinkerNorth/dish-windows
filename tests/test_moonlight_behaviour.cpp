@@ -1012,11 +1012,11 @@ TEST_CASE("An explicit quit closes our own session as well as the host's app",
     REQUIRE(session->phase() == SessionPhase::Closed);
 }
 
-TEST_CASE("Closing an app another device left running is the bare call and nothing else",
+TEST_CASE("Closing an app another device left running tears down nothing of ours",
           "[moonlight][behaviour][b16]") {
     // The state that offers this has no session of ours at all: the host refused
     // us because somebody else is on it. There is nothing local to tear down, so
-    // the /cancel is the whole of the action.
+    // the /cancel is all that closes it.
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
     auto* session = fx.sessionFor(kIpA);
@@ -1029,6 +1029,32 @@ TEST_CASE("Closing an app another device left running is the bare call and nothi
 
     REQUIRE(log.count(kCancel) == 1);
     REQUIRE(session->phase() == SessionPhase::Failed);
+}
+
+TEST_CASE("A quit asks the host again, because the answer to /cancel proves nothing",
+          "[moonlight][behaviour][b16][h2]") {
+    // A host answers /cancel with success whether or not anything was running
+    // (Wolf: HTTP 200 and <cancel>1</cancel> either way), so the reply cannot say
+    // what the quit did. Asking the host again can, for our own session and for
+    // an app another device left running alike.
+    const std::pair<SessionPhase, SessionFailure> sessions[] = {
+        {SessionPhase::Streaming, SessionFailure::None},
+        {SessionPhase::Failed, SessionFailure::AppAlreadyRunning},
+    };
+    for (const auto& [phase, failure] : sessions) {
+        Fixture fx;
+        // Found rather than typed in, so no probe is already out when the quit asks.
+        fx.manager->applyDiscoverySweep({host(QStringLiteral("PC"), kIpA)});
+        REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
+        auto* session = fx.sessionFor(kIpA);
+        REQUIRE(session != nullptr);
+        MoonlightSessionTestAccess::settle(*session, phase, failure);
+        MoonlightRequestLog log(*fx.manager);
+
+        fx.manager->cancelHostApp(kIdA);
+
+        CHECK(log.paths() == QStringList({kCancel, kServerInfo}));
+    }
 }
 
 // ── B17, B18 · dropped and ended are never the same thing ───────────────────

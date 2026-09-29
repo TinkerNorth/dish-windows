@@ -160,9 +160,10 @@ class MoonlightManager : public QObject {
 
     void disconnectHost(const QString& id);
 
-    // Stop whatever app the host is running, without a session of ours to tear
-    // down. The answer to a host that refused /launch because an app is already
-    // running and offered no resumable session.
+    // Stop whatever app the host is running: our own session with it, or the bare
+    // /cancel for an app another device left running, which is the answer to a
+    // host that refused /launch and offered no resumable session. Then asks the
+    // host again, because the reply to /cancel proves nothing.
     void cancelHostApp(const QString& id);
 
     void forgetHost(const QString& id);
