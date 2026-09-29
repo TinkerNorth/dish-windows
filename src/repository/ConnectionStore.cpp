@@ -25,7 +25,7 @@ bool isBlank(const QString& s) { return s.trimmed().isEmpty(); }
 // One-time in-place upgrade: older installs kept the remembered list under
 // "wifi_list" and pairing keys under "wifi_shared_key/<id>". Copying them into
 // the current namespaces is what spares those users a forced re-pair.
-// Idempotent: skips once the new keys exist.
+// Idempotent: a value already under its current name is never overwritten.
 void migrateLegacyNamespaces(QSettings& settings) {
     if (!settings.contains(QLatin1String(keys::kSatelliteListKey)) &&
         settings.contains(QLatin1String(keys::kLegacyWifiListKey))) {
@@ -41,6 +41,10 @@ void migrateLegacyNamespaces(QSettings& settings) {
         const QString id = legacyKey.mid(legacyPrefix.size());
         const QString newKey = QLatin1String(keys::kSharedKeyPrefix) + id;
         if (!settings.contains(newKey)) { settings.setValue(newKey, settings.value(legacyKey)); }
+        // Dropped once the current name holds the key. The key repository wraps that one with
+        // DPAPI, so a copy left here is the same secret in plaintext beside it, and the next
+        // launch would carry it back after a Forget.
+        settings.remove(legacyKey);
     }
 }
 

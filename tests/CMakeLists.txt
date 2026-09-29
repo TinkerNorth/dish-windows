@@ -64,6 +64,7 @@ set(DISH_TEST_SOURCES
     test_remembered_satellite_repository.cpp
     test_remembered_wifi_eq.cpp
     test_connection_store_identity.cpp
+    test_connection_store_migration.cpp
     test_remembered_reconnect.cpp
     test_gamepad_input_processor.cpp
     test_sdl_motion_convert.cpp
