@@ -35,8 +35,8 @@ void applyApplicationIdentity() {
 // rather than the untranslated fallback, because %n plural forms have to come from somewhere and a
 // source string can only carry one of them.
 //
-// The `static` is the one mutable static in this program: QCoreApplication holds the translator by
-// pointer for as long as it lives, so it has to outlive the call that installs it.
+// The `static` is deliberate: QCoreApplication holds the translator by pointer for as long as it
+// lives, so it has to outlive the call that installs it.
 void installUiTranslator() {
     static QTranslator translator;
     if (dish::i18n::loadCatalog(translator, QLocale::system())) {

@@ -173,7 +173,7 @@ alike.
   it:
 
   ```cpp
-  connect(&m_timer, &QTimer::timeout, this, &MoonlightSession::onPingTick);
+  QObject::connect(pingTimer_, &QTimer::timeout, this, &MoonlightSession::onPingTick);
   ```
 
   This is Parchment's "no anonymous methods" narrowed to what C++ can
@@ -183,9 +183,24 @@ alike.
   owns it. There is no `instance()` and no `Q_GLOBAL_STATIC` in this
   codebase, and there is no reason to add one: every collaborator is
   constructed by `AppModel` and handed to whoever needs it, which is also
-  what makes it replaceable in a test. The one mutable static is
-  `main.cpp`'s `QTranslator`, which Qt requires to outlive the call that
-  installs it.
+  what makes it replaceable in a test. The mutable statics that remain are
+  process-wide by definition, and each is there because something outside
+  this code demands it:
+
+  - `main.cpp`'s `QTranslator`, which `QCoreApplication` holds by pointer;
+  - the hand-off pointer in `src/qml/chrome/ForeignTypes.h`, because a
+    `QML_SINGLETON`'s factory is a static function Qt calls, and it can only
+    return what was published to it;
+  - the active palette in `src/UI/Theme.cpp` (the `Theme` colour tokens and
+    the appearance they came from), because the `Theme` QML singleton that
+    reads it is constructed by the engine and cannot be handed it;
+  - the crash handler's state in `src/UI/CrashHandler.cpp`, because the
+    exception filter Windows calls takes no context and must not allocate;
+  - the ENet reference count in `src/Network/MoonlightControlChannel.cpp`,
+    because `enet_initialize` is process-wide.
+
+  A function-local `static` of any other kind is a singleton with the
+  constructor hidden, and does not belong here.
 
 - **Member naming.** Members carry a TRAILING underscore (`host_`, `probes_`,
   `mtx_`): that is what almost every file in `src/` uses, and it is the same
