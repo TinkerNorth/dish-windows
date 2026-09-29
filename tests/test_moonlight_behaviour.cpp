@@ -30,6 +30,7 @@
 #include "MoonlightFakeHost.h"
 #include "MoonlightRequestLog.h"
 #include "MoonlightSessionTestAccess.h"
+#include "MoonlightWolfControlHost.h"
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -37,9 +38,12 @@
 #include <QCoreApplication>
 #include <QDeadlineTimer>
 #include <QElapsedTimer>
+#include <QHostAddress>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QTcpServer>
+#include <QTcpSocket>
 
 #include <memory>
 #include <optional>
@@ -52,6 +56,7 @@ using dish::moonlight::SessionEvent;
 using dish::moonlight::SessionFailure;
 using dish::moonlight::SessionPhase;
 using dish::moonlight::SessionUiState;
+using dish::moonlight::TrustState;
 using dish::net::MoonlightManager;
 using dish::net::MoonlightSession;
 using dish::net::MoonlightSessionTestAccess;
@@ -59,6 +64,7 @@ using dish::repository::MoonlightHostRepository;
 using dish::test::makeSharedSettings;
 using dish::test::MoonlightFakeHost;
 using dish::test::MoonlightRequestLog;
+using dish::test::MoonlightWolfControlHost;
 
 namespace {
 
@@ -190,6 +196,42 @@ dish::net::MoonlightXmlResponse acceptedReply() {
         QByteArrayLiteral("<root status_code=\"200\"><gamesession>1</gamesession>"
                           "<sessionUrl0>rtsp://192.0.2.11:48010</sessionUrl0></root>"));
 }
+
+// The rikey a /launch would have carried: the control stream is sealed with it.
+const MoonlightWolfControlHost::Key kRikey = {0x10, 0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87,
+                                              0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0xFE, 0x0F};
+
+// A remembered host the client holds a pairing with, answering the plaintext probe from `plain`
+// and taking its mutual-TLS calls on `tlsPort`.
+MoonlightHost pairedHostAt(const MoonlightFakeHost& plain, int tlsPort) {
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = plain.port();
+    h.httpsPort = tlsPort;
+    h.paired = true;
+    return h;
+}
+
+// A port that takes a connection and hangs up at once, so a mutual-TLS call made to it fails in
+// its handshake, with no status line at all.
+class HangUpPort : public QObject {
+  public:
+    HangUpPort() {
+        server_.listen(QHostAddress::LocalHost, 0);
+        QObject::connect(&server_, &QTcpServer::newConnection, this, &HangUpPort::hangUp);
+    }
+    bool listening() const { return server_.isListening(); }
+    int port() const { return static_cast<int>(server_.serverPort()); }
+
+  private:
+    void hangUp() {
+        while (auto* socket = server_.nextPendingConnection()) {
+            socket->close();
+            socket->deleteLater();
+        }
+    }
+
+    QTcpServer server_;
+};
 
 // Collects what the app actually logged, which is where "name the phase that
 // failed" is answered: the copy the user sees is fixed by the UX spec, so the
@@ -418,9 +460,116 @@ TEST_CASE("The pairing question is asked on the one route that can answer it",
     manager.probeHost(h.id());
     MoonlightRequestLog log(manager);
 
-    REQUIRE(pumpUntil([&] { return manager.sessionUiInputs(h.id(), QString()).probeAnswered; }));
-    // The plaintext answer is followed by the mutual-TLS question.
+    // The plaintext answer is followed by the mutual-TLS question, which only an
+    // answered plaintext probe asks.
     REQUIRE(pumpUntil([&] { return log.sawAny(QStringLiteral("/applist")); }));
+}
+
+// ── H1 · trust is the mutual-TLS answer's to give ───────────────────────────
+
+TEST_CASE("A paired host is not called unpaired while its mutual-TLS answer is still out",
+          "[moonlight][behaviour][h1]") {
+    // The plaintext half of a probe says the host is there. Its PairStatus is 0
+    // for every caller on Sunshine and on Wolf alike, so that half cannot say
+    // whether the pairing stands, and the row must not offer Pair over a host
+    // it has not heard from yet.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    // Takes the mutual-TLS call and never answers it.
+    QTcpServer silentTls;
+    REQUIRE(silentTls.listen(QHostAddress::LocalHost, 0));
+    const MoonlightHost h = pairedHostAt(plain, static_cast<int>(silentTls.serverPort()));
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+
+    manager.probeHost(h.id());
+    MoonlightRequestLog log(manager);
+    REQUIRE(pumpUntil([&] { return log.sawAny(QStringLiteral("/applist")); }));
+
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK(dish::moonlight::trustFor(in) == TrustState::Remembered);
+    CHECK(dish::moonlight::sessionUiState(in) == SessionUiState::Checking);
+}
+
+TEST_CASE("A probe asked again while its mutual-TLS answer is out asks nothing twice",
+          "[moonlight][behaviour][h1]") {
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    QTcpServer silentTls;
+    REQUIRE(silentTls.listen(QHostAddress::LocalHost, 0));
+    const MoonlightHost h = pairedHostAt(plain, static_cast<int>(silentTls.serverPort()));
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+    manager.probeHost(h.id());
+    MoonlightRequestLog log(manager);
+    REQUIRE(pumpUntil([&] { return log.sawAny(QStringLiteral("/applist")); }));
+
+    manager.probeHost(h.id());
+
+    CHECK(log.count(kServerInfo) == 0);
+    CHECK(log.count(QStringLiteral("/applist")) == 1);
+}
+
+TEST_CASE("A paired host whose mutual-TLS call fails has lost the trust",
+          "[moonlight][behaviour][h1]") {
+    // The same host once the mutual-TLS half is over: a call the host would
+    // not complete is its verdict, and the pairing we hold is not confirmed.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    HangUpPort refusingTls;
+    REQUIRE(refusingTls.listening());
+    const MoonlightHost h = pairedHostAt(plain, refusingTls.port());
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+
+    int apps = 0;
+    QObject::connect(&manager, &MoonlightManager::appListReady,
+                     [&apps](const QString&, const QStringList&, const QStringList&) { ++apps; });
+    manager.probeHost(h.id());
+    REQUIRE(pumpUntil([&apps] { return apps > 0; }));
+
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK(dish::moonlight::trustFor(in) == TrustState::NotPaired);
+    CHECK(dish::moonlight::sessionUiState(in) == SessionUiState::TrustLost);
+}
+
+// ── H4 · the uniqueid comes from /serverinfo ────────────────────────────────
+
+TEST_CASE("A host's uniqueid is learned from its /serverinfo and the id stays its address",
+          "[moonlight][behaviour][h4]") {
+    // Neither Sunshine nor Wolf publishes a uniqueid over mDNS (Wolf publishes
+    // no TXT record at all), so the plaintext /serverinfo is where it comes
+    // from. It is kept as the witness for a host that later answers as another
+    // machine.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("0000"));
+    REQUIRE(fake.listening());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.port();
+    store.rememberHost(h);
+
+    manager.probeHost(h.id());
+    REQUIRE(pumpUntil([&] { return manager.sessionUiInputs(h.id(), QString()).probeAnswered; }));
+
+    REQUIRE(store.hosts().size() == 1);
+    CHECK(store.hosts().first().uuid == QStringLiteral("FAKEHOST-0001"));
+    CHECK(store.hosts().first().id() == h.id());
 }
 
 // ── B5 · a pairing that stops ───────────────────────────────────────────────

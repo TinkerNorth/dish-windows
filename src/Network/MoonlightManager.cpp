@@ -240,6 +240,7 @@ void MoonlightManager::onSessionPairingFinished(const QString& id, bool ok) {
 void MoonlightManager::recordAppListProbe(const QString& id, int appCount, bool ok,
                                           bool unauthorized) {
     auto& probe = probes_[id];
+    probe.trustInFlight = false;
     probe.appsInFlight = false;
     probe.appsFetched = ok;
     probe.appsFailed = !ok;
@@ -304,7 +305,11 @@ void MoonlightManager::onSessionProbeFinished(const QString& id, bool answered,
     const bool identityMoved = recordProbeIdentity(id, answered, uniqueId);
     // recordProbeIdentity holds its reference into probes_ and this does not: see
     // onSessionAppListReady.
-    if (answered && !identityMoved && holdsPairing(id)) { refreshApps(id); }
+    const bool asksTrust = answered && !identityMoved && holdsPairing(id);
+    if (asksTrust) {
+        probes_[id].trustInFlight = true;
+        refreshApps(id);
+    }
     emit hostsChanged();
 }
 
@@ -444,7 +449,7 @@ void MoonlightManager::probeHost(const QString& id) {
         return;
     }
     auto& probe = probes_[id];
-    if (probe.inFlight) {
+    if (probe.inFlight || probe.trustInFlight) {
         qCDebug(lcMoonlightManager) << "probe:" << id << "already in flight, not asking twice";
         return;
     }
@@ -853,8 +858,9 @@ moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& host
                                                              const QString& slotId) const {
     moonlight::SessionUiInputs in;
     const auto probe = probes_.value(hostId);
-    in.probeInFlight = probe.inFlight;
-    in.probeAnswered = probe.answered;
+    // A probe whose mutual-TLS half is still out has answered only that the host is there.
+    in.probeInFlight = probe.inFlight || probe.trustInFlight;
+    in.probeAnswered = probe.answered && !probe.trustInFlight;
     in.probeTimedOut = probe.timedOut;
     // ONLY a mutual-TLS answer. A plaintext PairStatus is not an answer about
     // pairing at all: the live Sunshine host reports 0 over plaintext to the very

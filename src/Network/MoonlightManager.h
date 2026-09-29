@@ -152,9 +152,10 @@ class MoonlightManager : public QObject {
     // come from the host's body.
     QString refusalMessage(const QString& id) const;
 
-    // Re-verify remembered trust: a plaintext /serverinfo for PairStatus and the
-    // host's uniqueid. Never polled; run on entering a screen and before a
-    // session starts. The answer lands on hostsChanged().
+    // Re-verify remembered trust: a plaintext /serverinfo for reachability and the
+    // host's uniqueid, then, for a host we hold a pairing with, the mutual-TLS
+    // question that says whether it still stands. Never polled; run on entering a
+    // screen and before a session starts. The answer lands on hostsChanged().
     void probeHost(const QString& id);
 
     void disconnectHost(const QString& id);
@@ -334,6 +335,9 @@ class MoonlightManager : public QObject {
         // whoever is asking, so a field holding it is a field somebody will gate
         // on, and gating on it is what makes a paired host unable to look paired.
         bool mtlsVerified = false;
+        // The plaintext half answered and the mutual-TLS question it asks next is
+        // still out, so the probe has not answered whether the pairing stands.
+        bool trustInFlight = false;
         int appCount = 0;
         bool pairingActive = false;
         bool pairingRefused = false;
