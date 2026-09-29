@@ -33,16 +33,16 @@ inline constexpr int kDefaultPairPort = 9443;
 enum class DiscoverySource { Broadcast, Mdns, Both };
 
 // Routed through translate() even though these are protocol acronyms, so the
-// i18n pipeline stays complete and a translator can override.
+// i18n pipeline stays complete and a translator can override. The context is
+// spelled out each time because lupdate reads only a literal.
 inline QString discoverySourceLabel(DiscoverySource source) {
-    constexpr const char* ctx = "dish::models::DiscoverySource";
     switch (source) {
     case DiscoverySource::Broadcast:
-        return QCoreApplication::translate(ctx, "UDP broadcast");
+        return QCoreApplication::translate("dish::models::DiscoverySource", "UDP broadcast");
     case DiscoverySource::Mdns:
-        return QCoreApplication::translate(ctx, "mDNS");
+        return QCoreApplication::translate("dish::models::DiscoverySource", "mDNS");
     case DiscoverySource::Both:
-        return QCoreApplication::translate(ctx, "mDNS + broadcast");
+        return QCoreApplication::translate("dish::models::DiscoverySource", "mDNS + broadcast");
     }
     return {};
 }

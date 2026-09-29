@@ -7,6 +7,8 @@
 #include "Models/Models.h"
 #include "Network/PairingClient.h"
 
+#include "InstalledCatalog.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <QCoreApplication>
@@ -89,4 +91,21 @@ TEST_CASE("PairResponse::fromJson sets reachable=true on a parsed body", "[pairi
     REQUIRE(r.ok);
     REQUIRE(r.reachable);
     REQUIRE(*r.sharedKey == "deadbeef");
+}
+
+TEST_CASE("classify: the unreachable fallback reads in the user's language", "[pairing][i18n]") {
+    if (!dish::test::catalogsBuilt()) { SKIP("built without Qt LinguistTools"); }
+    const dish::test::InstalledCatalog german(QStringLiteral("de_DE"));
+    REQUIRE(german.loaded);
+    const QString inGerman =
+        german.lookup("dish::net::PairingClient", QStringLiteral("Server unreachable"));
+    REQUIRE_FALSE(inGerman.isEmpty());
+    PairResponse r;
+    r.httpStatus = 0;
+    r.reachable = false;
+
+    const auto o = PairingClient::classify(r);
+
+    REQUIRE(std::get<PairingClient::Unreachable>(o).message.toStdString() ==
+            inGerman.toStdString());
 }

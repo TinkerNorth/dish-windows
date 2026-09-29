@@ -10,6 +10,7 @@
 #include "HTTPClient.h"
 #include "Models/Models.h"
 #include "WifiConnection.h"
+#include "WifiManagerEffects.h"
 
 #include <QHash>
 #include <QObject>
@@ -49,8 +50,10 @@ class WifiConnectionManager : public QObject {
     Q_OBJECT
   public:
     explicit WifiConnectionManager(ConnectionStore* store, QObject* parent = nullptr);
-    // Takes ownership of `http`, which is how a test puts the satellite's REST API in-process.
-    WifiConnectionManager(ConnectionStore* store, HTTPClient* http, QObject* parent);
+    // Takes ownership of `http`. A test hands in an in-process REST API and its own effects, so
+    // the manager runs on virtual time with no network.
+    WifiConnectionManager(ConnectionStore* store, HTTPClient* http, WifiManagerEffects effects,
+                          QObject* parent);
     ~WifiConnectionManager() override;
 
     bool isScanning() const { return scanning_; }
@@ -89,6 +92,8 @@ class WifiConnectionManager : public QObject {
     QString reversePairingPin() const { return reversePin_; }
     QString reversePairingServerName() const { return reverseServerName_; }
 
+    // The user's Disconnect: the session closes, and no background intent reconnects this
+    // satellite until the user connects it again (or forgets it). Session-scoped, not persisted.
     void disconnect(const QString& id);
     void forget(const QString& id);
     void autoReconnectAll();
@@ -123,6 +128,13 @@ class WifiConnectionManager : public QObject {
     void pairingFailed(const QString& connectionId, const QString& reasonToken);
 
   private:
+    bool refusesHost(const models::DiscoveredServer& server, ConnectIntent intent);
+    bool heldByUser(const QString& id, ConnectIntent intent);
+    // Closes the local side and releases the session, without the user's hold.
+    void closeSession(const QString& id);
+    void onVersionRejected(WifiConnection* conn, const models::DiscoveredServer& server,
+                           ConnectIntent intent, const models::SessionResponse& resp);
+    void onDiscoveryFinished(const QList<models::DiscoveredServer>& found);
     WifiConnection* ensureConnection(const models::DiscoveredServer& server);
     void wireSlotSync(WifiConnection* conn);
     void pairAndConnect(WifiConnection* conn, const models::DiscoveredServer& server,
@@ -213,6 +225,7 @@ class WifiConnectionManager : public QObject {
 
     ConnectionStore* store_;
     HTTPClient* http_;
+    WifiManagerEffects effects_;
     QString deviceId_;
     QString deviceName_;
 
@@ -225,6 +238,8 @@ class WifiConnectionManager : public QObject {
     // Per satellite, the context every pending silent retry is armed under. Children of this
     // manager; a user's disconnect deletes one to cancel its retries.
     QHash<QString, QObject*> retryScopes_;
+    // Satellites the user disconnected, which only a user connect or a forget releases.
+    QSet<QString> userDisconnected_;
     // Single-flight guard: the ack ticks every second but the GET can take longer.
     QSet<QString> reconcileInFlight_;
 

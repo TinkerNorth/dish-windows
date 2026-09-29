@@ -4515,6 +4515,28 @@
     </message>
 </context>
 <context>
+    <name>dish::models::DiscoverySource</name>
+    <message>
+        <source>UDP broadcast</source>
+        <translation>Difusión UDP</translation>
+    </message>
+    <message>
+        <source>mDNS</source>
+        <translation>mDNS</translation>
+    </message>
+    <message>
+        <source>mDNS + broadcast</source>
+        <translation>mDNS + difusión</translation>
+    </message>
+</context>
+<context>
+    <name>dish::net::PairingClient</name>
+    <message>
+        <source>Server unreachable</source>
+        <translation>Servidor inaccesible</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4559,6 +4581,10 @@
     <message>
         <source>The satellite accepted, but the controller link would not open. Try again.</source>
         <translation>El satélite aceptó, pero el enlace del mando no se abrió. Inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>Satellite can only be reached over IPv4, and this address (%1) is IPv6. Scan again to find its IPv4 address.</source>
+        <translation>Satellite solo es accesible por IPv4, y esta dirección (%1) es IPv6. Vuelve a buscar para encontrar su dirección IPv4.</translation>
     </message>
 </context>
 <context>

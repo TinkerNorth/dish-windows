@@ -5,9 +5,6 @@
 
 #include "PairingClient.h"
 #include "core/net/IpLiterals.h"
-#include "source/connection/DiscoveryGateway.h"
-#include "source/connection/LANDiscovery.h"
-#include "source/connection/MdnsDiscovery.h"
 #include "source/http/SatelliteTlsVerifier.h"
 #include "Util/Hex.h"
 #include "core/reducer/Backoff.h"
@@ -28,6 +25,7 @@
 
 #include <random>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace dish::net {
@@ -96,6 +94,11 @@ QString reverseDeclinedMsg() {
 QString reverseTimedOutMsg() {
     return WifiConnectionManager::tr("Timed out waiting for approval on the satellite. Try again.");
 }
+QString ipv6Msg(const QString& ip) {
+    return WifiConnectionManager::tr("Satellite can only be reached over IPv4, and this address "
+                                     "(%1) is IPv6. Scan again to find its IPv4 address.")
+        .arg(ip);
+}
 QString wireFailedMsg() {
     return WifiConnectionManager::tr(
         "The satellite accepted, but the controller link would not open. Try again.");
@@ -110,11 +113,11 @@ constexpr std::int64_t kReverseDeadlineMs = 120'000;
 } // namespace
 
 WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* parent)
-    : WifiConnectionManager(store, new HTTPClient, parent) {}
+    : WifiConnectionManager(store, new HTTPClient, realWifiManagerEffects(), parent) {}
 
 WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, HTTPClient* http,
-                                             QObject* parent)
-    : QObject(parent), store_(store), http_(http) {
+                                             WifiManagerEffects effects, QObject* parent)
+    : QObject(parent), store_(store), http_(http), effects_(std::move(effects)) {
     http_->setParent(this);
     deviceId_ = store_->getOrCreateDeviceId();
     deviceName_ = QHostInfo::localHostName();
@@ -161,45 +164,35 @@ void WifiConnectionManager::startDiscovery() {
     if (scanning_) { return; }
     scanning_ = true;
     emit scanningChanged();
-    auto* watcher = new QFutureWatcher<QList<models::DiscoveredServer>>(this);
-    QObject::connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
-        discovered_ = watcher->result();
-        scanning_ = false;
-        // Persist a moved satellite's new IP BEFORE anything else, so the next
-        // launch's autoReconnectAll and any in-flight backoff retry (which
-        // re-reads store_->remembered()) target the current address. The only
-        // other path that writes a fresh IP is a successful session PUT, which
-        // cannot happen while the IP is wrong: that is the "must rescan, then
-        // reconnect" trap.
-        store_->refreshFromDiscovery(discovered_);
-        // The same relearn for the in-memory connection.
-        for (const auto& server : discovered_) {
-            if (auto* conn = connections_.value(server.id(), nullptr)) {
-                if (conn->state() == SessionState::Idle || conn->state() == SessionState::Stale) {
-                    conn->updateServer(server);
-                }
+    effects_.scan(
+        this, [this](const QList<models::DiscoveredServer>& found) { onDiscoveryFinished(found); });
+}
+
+void WifiConnectionManager::onDiscoveryFinished(const QList<models::DiscoveredServer>& found) {
+    discovered_ = found;
+    scanning_ = false;
+    // Persist a moved satellite's new IP BEFORE anything else, so the next
+    // launch's autoReconnectAll and any in-flight backoff retry (which
+    // re-reads store_->remembered()) target the current address. The only
+    // other path that writes a fresh IP is a successful session PUT, which
+    // cannot happen while the IP is wrong: that is the "must rescan, then
+    // reconnect" trap.
+    store_->refreshFromDiscovery(discovered_);
+    // The same relearn for the in-memory connection.
+    for (const auto& server : discovered_) {
+        if (auto* conn = connections_.value(server.id(), nullptr)) {
+            if (conn->state() == SessionState::Idle || conn->state() == SessionState::Stale) {
+                conn->updateServer(server);
             }
         }
-        // So a moved box reconnects on its own once the scan finds it, with no
-        // manual Connect.
-        autoReconnectAll();
-        emit discoveredChanged();
-        emit scanningChanged();
-        // No "found nothing" event is emitted: an empty discovered_ with
-        // scanning_ false IS that state, and the page binds it directly.
-        watcher->deleteLater();
-    });
-    watcher->setFuture(QtConcurrent::run([] {
-        auto mdnsFuture = QtConcurrent::run([] { return MdnsDiscovery::discover(); });
-        const QList<models::DiscoveredServer> beacon = LANDiscovery::discover();
-        const QList<models::DiscoveredServer> mdns = mdnsFuture.result();
-        const QList<models::DiscoveredServer> merged =
-            DiscoveryGateway::mergeDiscovered(beacon, mdns);
-        qInfo("discovery scan: broadcast=%lld mdns=%lld merged=%lld",
-              static_cast<long long>(beacon.size()), static_cast<long long>(mdns.size()),
-              static_cast<long long>(merged.size()));
-        return merged;
-    }));
+    }
+    // So a moved box reconnects on its own once the scan finds it, with no
+    // manual Connect.
+    autoReconnectAll();
+    emit discoveredChanged();
+    emit scanningChanged();
+    // No "found nothing" event is emitted: an empty discovered_ with
+    // scanning_ false IS that state, and the page binds it directly.
 }
 
 void WifiConnectionManager::wireSlotSync(WifiConnection* conn) {
@@ -240,16 +233,39 @@ WifiConnectionManager::credentialsFor(const QString& id) const {
     return creds;
 }
 
-void WifiConnectionManager::connectTo(const models::DiscoveredServer& server,
-                                      ConnectIntent intent) {
-    // Satellites are LAN-only by definition, so a public literal here means a
-    // spoofed beacon or a poisoned remembered entry. Dialing it would leak the
-    // deviceId and hmacProof to an arbitrary internet host.
-    if (!isPrivateHostLiteral(server.ip.toStdString())) {
+// Satellites are LAN-only by definition, so a public literal here means a spoofed beacon or a
+// poisoned remembered entry, and dialing it would leak the deviceId and hmacProof to an arbitrary
+// internet host. A private IPv6 literal is local, but the satellite listens on IPv4 alone.
+bool WifiConnectionManager::refusesHost(const models::DiscoveredServer& server,
+                                        ConnectIntent intent) {
+    switch (classifySatelliteHost(server.ip.toStdString())) {
+    case SatelliteHostVerdict::Reachable:
+        return false;
+    case SatelliteHostVerdict::NotLocal:
         emit connectionEvent(
             makeError(tr("Refusing to connect to a non-local address (%1).").arg(server.ip)));
-        return;
+        return true;
+    case SatelliteHostVerdict::NotIpv4:
+        emitErrorIfUserInitiated(intent, ipv6Msg(server.ip));
+        return true;
     }
+    return true;
+}
+
+// A user's Disconnect holds until the user connects again: the periodic reconnect, a finished
+// scan and a silent retry are all background intents, and none of them may undo it.
+bool WifiConnectionManager::heldByUser(const QString& id, ConnectIntent intent) {
+    if (intent == ConnectIntent::UserInitiated) {
+        userDisconnected_.remove(id);
+        return false;
+    }
+    return userDisconnected_.contains(id);
+}
+
+void WifiConnectionManager::connectTo(const models::DiscoveredServer& server,
+                                      ConnectIntent intent) {
+    if (refusesHost(server, intent)) { return; }
+    if (heldByUser(WifiConnection::idFor(server), intent)) { return; }
     auto* conn = ensureConnection(server);
     if (intent == ConnectIntent::UserInitiated) { retryAttempts_.remove(conn->id()); }
     if (conn->state() == SessionState::Live || conn->state() == SessionState::Linking) {
@@ -270,6 +286,11 @@ void WifiConnectionManager::connectTo(const models::DiscoveredServer& server,
 
 void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
                                         const QString& pin) {
+    if (refusesHost(server, ConnectIntent::UserInitiated)) {
+        emit pairingFailed(WifiConnection::idFor(server), QStringLiteral("unreachable"));
+        return;
+    }
+    heldByUser(WifiConnection::idFor(server), ConnectIntent::UserInitiated);
     auto* conn = ensureConnection(server);
     retryAttempts_.remove(conn->id());
     if (conn->state() == SessionState::Live) { return; }
@@ -398,6 +419,8 @@ void WifiConnectionManager::onReversePairReply(WifiConnection* conn,
 void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer& server) {
     // A fresh request supersedes any in-flight one and clears a previous attempt's terminal arm.
     cancelReversePairing();
+    if (refusesHost(server, ConnectIntent::UserInitiated)) { return; }
+    heldByUser(WifiConnection::idFor(server), ConnectIntent::UserInitiated);
 
     auto* conn = ensureConnection(server);
     retryAttempts_.remove(conn->id());
@@ -612,24 +635,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 return;
             }
             if (verdict == RestVerdict::VersionMismatch) {
-                const auto negotiated =
-                    reducer::settleRejected(resp.supportedProtocol, resp.supportedProtocolMin);
-                if (negotiated.verdict == reducer::ProtocolVerdict::RetryLower) {
-                    // The ranges still overlap: re-offer the satellite's ceiling
-                    // rather than dead-ending the user on "update something".
-                    // The retry path re-PUTs, and the lowered offer sticks to
-                    // this connection so the next attempt does not repeat the
-                    // rejected number.
-                    conn->setOfferedProtocolVersion(negotiated.settledVersion);
-                    conn->markStale();
-                    scheduleRetry(server, intent);
-                    return;
-                }
-                // The row keeps saying which end must update after the attempt
-                // is torn down; an unreadable 409 leaves the chip alone.
-                conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
-                conn->markDisconnected();
-                emitErrorIfUserInitiated(intent, versionMsgFor(negotiated.verdict));
+                onVersionRejected(conn, server, intent, resp);
                 return;
             }
             if (verdict != RestVerdict::Ok || !resp.connectionId || !resp.token ||
@@ -655,8 +661,8 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
             wire::deriveSessionKey(pairingKey.data(), material->salt.data(), material->tokenBe,
                                    sessionKey.data());
 
-            auto client = std::make_shared<SatelliteClient>();
-            if (!client->openSocket(server.ip.toStdString(), server.udpPort)) {
+            const auto client = effects_.openLink(server.ip.toStdString(), server.udpPort);
+            if (!client) {
                 releaseUnusableGrant(conn, server, *resp.connectionId, proof, intent);
                 return;
             }
@@ -674,7 +680,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 client, *resp.connectionId, resp.epoch, resp.mouseControl.granted,
                 /*onDead=*/
                 [this, id, server] {
-                    disconnect(id);
+                    closeSession(id);
                     scheduleRetry(server, ConnectIntent::RetryAfterDeath);
                 },
                 /*onClose=*/
@@ -701,6 +707,31 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 if (!slotId.isEmpty()) { syncSlot(id, slotId); }
             }
         });
+}
+
+void WifiConnectionManager::onVersionRejected(WifiConnection* conn,
+                                              const models::DiscoveredServer& server,
+                                              ConnectIntent intent,
+                                              const models::SessionResponse& resp) {
+    // A user's Disconnect landed while the 409 was in flight and already ended this attempt.
+    if (conn->state() != SessionState::Linking) { return; }
+    const auto negotiated =
+        reducer::settleRejected(resp.supportedProtocol, resp.supportedProtocolMin);
+    const bool rangesOverlap = negotiated.verdict == reducer::ProtocolVerdict::RetryLower;
+    // Strictly lower, so a satellite that rejects its own ceiling ends the attempt, not loops.
+    const bool offersSomethingNew = negotiated.settledVersion < conn->offeredProtocolVersion();
+    if (rangesOverlap && offersSomethingNew) {
+        // Re-offered at once, for every intent, as dish-android does: the answer is already
+        // known, so a backoff would only delay it. The lowered offer sticks to this connection.
+        conn->setOfferedProtocolVersion(negotiated.settledVersion);
+        openSession(conn, server, intent);
+        return;
+    }
+    // The row keeps saying which end must update after the attempt is torn down; an unreadable
+    // 409 leaves the chip alone.
+    conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
+    conn->markDisconnected();
+    emitErrorIfUserInitiated(intent, versionMsgFor(negotiated.verdict));
 }
 
 void WifiConnectionManager::reconcile(WifiConnection* conn,
@@ -931,8 +962,8 @@ void WifiConnectionManager::scheduleRetry(const models::DiscoveredServer& server
     const int attempt = retryAttempts_.value(id, 0) + 1;
     retryAttempts_.insert(id, attempt);
     const auto delay = reducer::backoffDelayMs(attempt);
-    QTimer::singleShot(static_cast<int>(delay), retryScopeFor(id),
-                       [this, id, server] { onRetryDue(id, server); });
+    effects_.after(static_cast<int>(delay), retryScopeFor(id),
+                   [this, id, server] { onRetryDue(id, server); });
 }
 
 void WifiConnectionManager::onRetryDue(const QString& id, const models::DiscoveredServer& server) {
@@ -992,6 +1023,11 @@ void WifiConnectionManager::markStale(const QString& id) {
 }
 
 void WifiConnectionManager::disconnect(const QString& id) {
+    userDisconnected_.insert(id);
+    closeSession(id);
+}
+
+void WifiConnectionManager::closeSession(const QString& id) {
     // First, since a silent retry that fired afterwards would dial the satellite straight back.
     // A death's own retry is scheduled after this call returns, so it survives.
     cancelPendingRetries(id);
@@ -1031,9 +1067,10 @@ void WifiConnectionManager::forget(const QString& id) {
                           [](int, bool, const QString&) {});
         }
     }
-    disconnect(id);
+    closeSession(id);
     store_->forget(id);
     retryAttempts_.remove(id);
+    userDisconnected_.remove(id);
     reconcileInFlight_.remove(id);
     if (auto* taken = connections_.take(id)) {
         taken->deleteLater();
@@ -1051,10 +1088,11 @@ void WifiConnectionManager::autoReconnectAll() {
 }
 
 void WifiConnectionManager::prepareForSleep() {
-    // Snapshot the keys: disconnect() fans out through poolChanged into the
-    // hub's rebuild, which reshapes connections_ under a live iterator.
+    // Snapshot the keys: closeSession() fans out through poolChanged into the
+    // hub's rebuild, which reshapes connections_ under a live iterator. Not
+    // disconnect(): a sleep is not the user asking a satellite to stay down.
     const auto ids = connections_.keys();
-    for (const auto& id : ids) { disconnect(id); }
+    for (const auto& id : ids) { closeSession(id); }
 }
 
 void WifiConnectionManager::resumeFromSleep() {

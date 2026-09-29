@@ -275,6 +275,8 @@ set(DISH_CORE_SOURCES
     src/Network/WifiConnection.cpp
     src/Network/WifiConnectionManager.h
     src/Network/WifiConnectionManager.cpp
+    src/Network/WifiManagerEffects.h
+    src/Network/WifiManagerEffects.cpp
     src/Network/ConnectionHub.h
     src/Network/ConnectionHub.cpp
     src/Network/ConnectionStore.h

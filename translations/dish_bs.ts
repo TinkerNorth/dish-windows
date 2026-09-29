@@ -4535,6 +4535,28 @@
     </message>
 </context>
 <context>
+    <name>dish::models::DiscoverySource</name>
+    <message>
+        <source>UDP broadcast</source>
+        <translation>UDP emitovanje</translation>
+    </message>
+    <message>
+        <source>mDNS</source>
+        <translation>mDNS</translation>
+    </message>
+    <message>
+        <source>mDNS + broadcast</source>
+        <translation>mDNS + emitovanje</translation>
+    </message>
+</context>
+<context>
+    <name>dish::net::PairingClient</name>
+    <message>
+        <source>Server unreachable</source>
+        <translation>Server nije dostupan</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
@@ -4579,6 +4601,10 @@
     <message>
         <source>The satellite accepted, but the controller link would not open. Try again.</source>
         <translation>Satelit je prihvatio, ali veza kontrolera se nije otvorila. Pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>Satellite can only be reached over IPv4, and this address (%1) is IPv6. Scan again to find its IPv4 address.</source>
+        <translation>Satellite je dostupan samo preko IPv4, a ova adresa (%1) je IPv6. Skenirajte ponovo da pronađete njegovu IPv4 adresu.</translation>
     </message>
 </context>
 <context>

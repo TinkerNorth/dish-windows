@@ -24,8 +24,6 @@ namespace dish::net {
 
 namespace {
 
-constexpr const char* kTrContext = "dish::net::PairingClient";
-
 constexpr int kTimeoutMs = 5000;
 
 models::PairResponse makeError(const char* msg) {
@@ -130,7 +128,9 @@ PairingClient::Outcome PairingClient::classify(const models::PairResponse& respo
         break;
     }
     return Unreachable{
-        response.error.value_or(QCoreApplication::translate(kTrContext, "Server unreachable"))};
+        // The context is spelled out, not held in a variable: lupdate reads only a literal.
+        response.error.value_or(
+            QCoreApplication::translate("dish::net::PairingClient", "Server unreachable"))};
 }
 
 models::PairResponse PairingClient::pair(const QString& ip, int port, const QString& deviceId,

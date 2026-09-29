@@ -5,8 +5,9 @@
 // the WifiConnectionManager under test makes its real HTTPClient calls, with
 // their real URLs, headers and JSON decoding, and nothing reaches a socket.
 // Every request is recorded; each is answered from the script a test sets up,
-// on a later event-loop turn the way a real reply lands. A route with no script
-// is answered the way a dead transport answers: no status, no body.
+// on a later event-loop turn the way a real reply lands. A one-shot answer is
+// used before the route's standing one; a route with neither is answered the
+// way a dead transport answers: no status, no body.
 
 #pragma once
 
@@ -33,6 +34,7 @@ struct CannedAnswer {
 
 struct RecordedRequest {
     QByteArray verb;
+    QString host;
     QString path;
     QByteArray deviceId;
     QByteArray hmacProof;
@@ -41,9 +43,11 @@ struct RecordedRequest {
 
 class CannedReply : public QNetworkReply {
   public:
+    // `delivered` is counted up as the reply lands; it belongs to the manager
+    // that parents this reply, so it outlives it.
     CannedReply(const QNetworkRequest& request, QNetworkAccessManager::Operation op,
-                const CannedAnswer& answer, QObject* parent)
-        : QNetworkReply(parent), body_(answer.body) {
+                const CannedAnswer& answer, long long* delivered, QObject* parent)
+        : QNetworkReply(parent), body_(answer.body), delivered_(delivered) {
         setRequest(request);
         setUrl(request.url());
         setOperation(op);
@@ -72,6 +76,7 @@ class CannedReply : public QNetworkReply {
 
   private:
     void deliver() {
+        ++*delivered_;
         setFinished(true);
         emit metaDataChanged();
         emit readyRead();
@@ -80,6 +85,7 @@ class CannedReply : public QNetworkReply {
 
     QByteArray body_;
     qint64 offset_ = 0;
+    long long* delivered_;
 };
 
 class FakeSatelliteRest : public QNetworkAccessManager {
@@ -88,7 +94,14 @@ class FakeSatelliteRest : public QNetworkAccessManager {
         script_.insert(routeKey(verb, path), reply);
     }
 
+    void answerOnce(const QByteArray& verb, const QString& path, const CannedAnswer& reply) {
+        onceScript_[routeKey(verb, path)].push_back(reply);
+    }
+
     const std::vector<RecordedRequest>& requests() const { return requests_; }
+
+    // True once every request made so far has had its reply delivered.
+    bool allAnswered() const { return delivered_ == static_cast<long long>(requests_.size()); }
 
     long long count(const QByteArray& verb, const QString& path) const {
         return std::count_if(requests_.begin(), requests_.end(), [&](const RecordedRequest& r) {
@@ -101,16 +114,25 @@ class FakeSatelliteRest : public QNetworkAccessManager {
                                  QIODevice* outgoingData) override {
         RecordedRequest recorded;
         recorded.verb = verbOf(op, request);
+        recorded.host = request.url().host();
         recorded.path = request.url().path();
         recorded.deviceId = request.rawHeader("X-Device-Id");
         recorded.hmacProof = request.rawHeader("X-Hmac-Proof");
         recorded.body = outgoingData != nullptr ? outgoingData->readAll() : QByteArray();
         requests_.push_back(recorded);
-        const CannedAnswer reply = script_.value(routeKey(recorded.verb, recorded.path));
-        return new CannedReply(request, op, reply, this);
+        const CannedAnswer reply = nextAnswer(routeKey(recorded.verb, recorded.path));
+        return new CannedReply(request, op, reply, &delivered_, this);
     }
 
   private:
+    CannedAnswer nextAnswer(const QByteArray& key) {
+        auto& once = onceScript_[key];
+        if (once.empty()) { return script_.value(key); }
+        const CannedAnswer reply = once.front();
+        once.erase(once.begin());
+        return reply;
+    }
+
     static QByteArray routeKey(const QByteArray& verb, const QString& path) {
         return verb + ' ' + path.toUtf8();
     }
@@ -136,7 +158,9 @@ class FakeSatelliteRest : public QNetworkAccessManager {
     }
 
     QHash<QByteArray, CannedAnswer> script_;
+    QHash<QByteArray, std::vector<CannedAnswer>> onceScript_;
     std::vector<RecordedRequest> requests_;
+    long long delivered_ = 0;
 };
 
 } // namespace dish::test

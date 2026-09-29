@@ -184,4 +184,11 @@ bool isPrivateHostLiteral(const std::string& host) {
     return false; // not a literal -> not private
 }
 
+SatelliteHostVerdict classifySatelliteHost(const std::string& host) {
+    const bool isLocal = isPrivateHostLiteral(host);
+    if (!isLocal) { return SatelliteHostVerdict::NotLocal; }
+    const bool isIpv4 = parseIpv4(host).has_value();
+    return isIpv4 ? SatelliteHostVerdict::Reachable : SatelliteHostVerdict::NotIpv4;
+}
+
 } // namespace dish::net
