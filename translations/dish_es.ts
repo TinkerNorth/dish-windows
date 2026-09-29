@@ -257,6 +257,10 @@
         <source>The driver this controller is on can’t drive it.</source>
         <translation>El controlador de dispositivo de este mando no puede accionarlo.</translation>
     </message>
+    <message>
+        <source>Dish can’t use the touchpad as a mouse.</source>
+        <translation>Dish no puede usar el panel táctil como ratón.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -3934,6 +3938,10 @@
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
         <translation>El audio del host suena por el altavoz o los auriculares del mando.</translation>
+    </message>
+    <message>
+        <source>Forwards this pad’s touchpad to the game as a touchpad.</source>
+        <translation>Reenvía el panel táctil de este mando al juego como panel táctil.</translation>
     </message>
 </context>
 <context>

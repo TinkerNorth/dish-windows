@@ -257,6 +257,10 @@
         <source>The driver this controller is on can’t drive it.</source>
         <translation>The driver this controller is on can’t drive it.</translation>
     </message>
+    <message>
+        <source>Dish can’t use the touchpad as a mouse.</source>
+        <translation>Dish can’t use the touchpad as a mouse.</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -3934,6 +3938,10 @@
     <message>
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
         <translation>Audio from the host plays on the pad’s speaker or headset.</translation>
+    </message>
+    <message>
+        <source>Forwards this pad’s touchpad to the game as a touchpad.</source>
+        <translation>Forwards this pad’s touchpad to the game as a touchpad.</translation>
     </message>
 </context>
 <context>

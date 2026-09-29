@@ -1308,6 +1308,7 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
                                                   bool rumbleOn, int touchpadMode, bool micOn,
                                                   bool speakerOn) const {
     reducer::CapabilityInputs in;
+    in.linkRoutesMouse = reducer::kClientRoutesTouchpadAsMouse;
 
     // An unknown slot leaves the input layer at its defaults rather than
     // inventing capabilities.
@@ -1336,8 +1337,8 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
     // emulated pads carry, and it picks the device from what the client declares.
     // So the type layer is the client-side table in MoonlightPadSlots, the host
     // layer carries everything (crossing out a row we cannot verify would mark
-    // every Moonlight binding degraded), and the link layer carries everything
-    // because the control stream does.
+    // every Moonlight binding degraded), and the link layer carries what the
+    // control stream does: everything but the mouse routing this client lacks.
     if (hostKind == QLatin1String("moonlight")) {
         in.linkDirect = false;
         in.hostIsBluetooth = false;
@@ -1382,8 +1383,7 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
 
     if (!hostIsBluetooth && in.hostResolved) {
         const auto hostFeatures = model_->catalogHostFeatures(hostId);
-        const auto mouse = hostFeatures.constFind(QStringLiteral("mouseControl"));
-        in.hostMouseControl = mouse != hostFeatures.constEnd() && mouse->supported;
+        in.hostMouseControl = reducer::hostAdvertisesMouseControl(hostFeatures);
         const auto rumble = hostFeatures.constFind(catalog::kFeatureRumble);
         // The rumble return path predates the host block, so a satellite that
         // advertises no block at all still carries it.
@@ -1527,7 +1527,9 @@ bool AppViewModel::isVerifiedModel(const QString& slotId) const {
 
 QString AppViewModel::touchpadModeFor(const QString& connectionId) const {
     const auto pick = model_->touchpadModeStore()->modeFor(connectionId.toStdString());
-    return touchpadChoiceForPick(pick);
+    const bool hostAdvertisesMouse =
+        reducer::hostAdvertisesMouseControl(model_->catalogHostFeatures(connectionId));
+    return touchpadChoiceForPick(pick, reducer::mouseModeAvailable(hostAdvertisesMouse));
 }
 
 void AppViewModel::setTouchpadMode(const QString& connectionId, const QString& mode) {
