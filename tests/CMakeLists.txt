@@ -213,6 +213,11 @@ set(DISH_TEST_SOURCES
     test_update_handoff.cpp
     test_ui_preference_store.cpp
     test_update_preference_store.cpp
+    # Diagnostics page.
+    test_session_diagnostics.cpp
+    test_input_readout.cpp
+    test_stick_health.cpp
+    test_diagnostics_log.cpp
     test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
