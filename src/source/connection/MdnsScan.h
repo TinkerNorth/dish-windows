@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// One multicast-DNS query and the answers to it. Windows exposes no COM-free
-// mDNS browse API, so both discoverers speak the protocol directly, and this is
-// the part of that they share: the socket, the query, and the receive window.
+// One multicast-DNS query and the answers to it. Both discoverers speak the
+// protocol directly rather than through a platform service, and this is the
+// part of that they share: the socket, the query, and the receive window.
 //
 // What they do NOT share is the query bytes, the record parse, and what counts
 // as the same responder twice. Those stay with each discoverer, which is why
 // this takes a callback rather than a record type.
 //
-// No winsock in this header on purpose: it is included from the two discoverers
-// and nothing else should have to see windows.h to call a scan.
+// No socket headers in this one on purpose: the discoverers include it, and
+// nothing that calls a scan should need to see a sockaddr or windows.h.
 
 #pragma once
 
