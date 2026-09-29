@@ -62,7 +62,7 @@ jobs:
         run: choco install ninja --no-progress --yes
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb # v4.4.0
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: ${{ env.QT_VERSION }}
           host: windows
@@ -116,7 +116,7 @@ jobs:
 
       # init and analyze come from the same repo — bump both SHAs together.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           languages: ${{ matrix.language }}
           # security-extended without security-and-quality: the quality suite
@@ -135,6 +135,6 @@ jobs:
       # scanning is available and the findings land as alerts instead of only
       # in this log.
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           category: "/language:${{ matrix.language }}"
