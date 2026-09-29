@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The item's event dispatch and tooltip, pinned without adding anything to the
-// notification area: constructing the item only creates its message-only
-// window, and no test here calls show().
+// The item's event dispatch, tooltip and shell traffic, pinned without adding
+// anything to the notification area: every item here speaks to a recording
+// shell, never to Explorer.
 
 #include "core/reducer/TrayPresentation.h"
+#include "source/tray/NotifyIconShell.h"
 #include "source/tray/Win32TrayIcon.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -23,8 +24,14 @@
 
 #include <shellapi.h>
 
+#include <algorithm>
+#include <cstddef>
+#include <memory>
+#include <vector>
+
 using dish::reducer::TrayActivity;
 using dish::reducer::TrayPresentation;
+using dish::source::NotifyIconShell;
 using dish::source::Win32TrayIcon;
 
 namespace {
@@ -37,6 +44,54 @@ struct CommandSpy {
         QObject::connect(tray, &Win32TrayIcon::quitRequested, [this]() { ++quits; });
     }
 };
+
+struct AvailabilitySpy {
+    std::vector<bool> changes;
+    explicit AvailabilitySpy(Win32TrayIcon* tray) {
+        QObject::connect(tray, &Win32TrayIcon::availabilityChanged,
+                         [this](bool available) { changes.push_back(available); });
+    }
+};
+
+// What the item asked of the shell, verb by verb, and the window it named: the
+// shell learns where to send the item's messages from the same field.
+struct ShellLog {
+    std::vector<DWORD> verbs;
+    HWND window = nullptr;
+    bool accepts = true;
+};
+
+// Stands in for Explorer: records every call and answers as the log says.
+class RecordingShell final : public NotifyIconShell {
+  public:
+    explicit RecordingShell(ShellLog& log) : log_(log) {}
+
+    bool notify(DWORD message, NOTIFYICONDATAW& data) override {
+        log_.verbs.push_back(message);
+        log_.window = data.hWnd;
+        return log_.accepts;
+    }
+
+  private:
+    ShellLog& log_;
+};
+
+// An item wired to the recording shell. The log is declared first so that it
+// outlives the item, whose destructor still speaks to the shell.
+struct RecordedTray {
+    ShellLog shell;
+    Win32TrayIcon tray{std::make_unique<RecordingShell>(shell)};
+};
+
+std::ptrdiff_t timesAsked(const ShellLog& shell, DWORD verb) {
+    return std::count(shell.verbs.begin(), shell.verbs.end(), verb);
+}
+
+// Explorer's restart announcement, sent to the item's own window only:
+// broadcast, it would make every app on the desktop re-add its icons.
+void explorerComesBack(const ShellLog& shell) {
+    SendMessageW(shell.window, RegisterWindowMessageW(L"TaskbarCreated"), 0, 0);
+}
 
 } // namespace
 
@@ -64,26 +119,58 @@ TEST_CASE("tray dispatch: only the context-menu request opens the menu", "[tray]
 }
 
 TEST_CASE("tray commands: show and quit surface as the TrayIcon signals", "[tray][windows]") {
-    Win32TrayIcon tray;
-    CommandSpy spy(&tray);
-    tray.runCommand(Win32TrayIcon::CommandShowWindow);
+    RecordedTray fixture;
+    CommandSpy spy(&fixture.tray);
+    fixture.tray.runCommand(Win32TrayIcon::CommandShowWindow);
     REQUIRE(spy.shows == 1);
     REQUIRE(spy.quits == 0);
-    tray.runCommand(Win32TrayIcon::CommandQuit);
+    fixture.tray.runCommand(Win32TrayIcon::CommandQuit);
     REQUIRE(spy.shows == 1);
     REQUIRE(spy.quits == 1);
-    tray.runCommand(Win32TrayIcon::CommandNone);
+    fixture.tray.runCommand(Win32TrayIcon::CommandNone);
     REQUIRE(spy.shows == 1);
     REQUIRE(spy.quits == 1);
 }
 
 TEST_CASE("tray item: not shown and not available until show() adds it", "[tray][windows]") {
-    Win32TrayIcon tray;
-    REQUIRE_FALSE(tray.isShown());
-    REQUIRE_FALSE(tray.isAvailable());
+    RecordedTray fixture;
+    REQUIRE_FALSE(fixture.tray.isShown());
+    REQUIRE_FALSE(fixture.tray.isAvailable());
     // A presentation before show() is remembered, not applied.
-    tray.setPresentation(TrayPresentation{TrayActivity::Streaming, 2, false});
-    REQUIRE_FALSE(tray.isShown());
+    fixture.tray.setPresentation(TrayPresentation{TrayActivity::Streaming, 2, false});
+    REQUIRE_FALSE(fixture.tray.isShown());
+    REQUIRE(fixture.shell.verbs.empty());
+}
+
+TEST_CASE("tray item: Explorer coming back puts a shown item back", "[tray][windows]") {
+    RecordedTray fixture;
+    fixture.tray.show();
+    REQUIRE(timesAsked(fixture.shell, NIM_ADD) == 1);
+    explorerComesBack(fixture.shell);
+    REQUIRE(timesAsked(fixture.shell, NIM_ADD) == 2);
+    REQUIRE(fixture.tray.isAvailable());
+}
+
+TEST_CASE("tray item: Explorer coming back leaves a hidden item out", "[tray][windows]") {
+    RecordedTray fixture;
+    fixture.tray.show();
+    fixture.tray.hide();
+    explorerComesBack(fixture.shell);
+    REQUIRE(timesAsked(fixture.shell, NIM_ADD) == 1);
+    REQUIRE_FALSE(fixture.tray.isAvailable());
+}
+
+TEST_CASE("tray item: an icon the shell refused at logon arrives when Explorer comes up",
+          "[tray][windows]") {
+    RecordedTray fixture;
+    AvailabilitySpy spy(&fixture.tray);
+    fixture.shell.accepts = false;
+    fixture.tray.show();
+    REQUIRE_FALSE(fixture.tray.isAvailable());
+    fixture.shell.accepts = true;
+    explorerComesBack(fixture.shell);
+    REQUIRE(fixture.tray.isAvailable());
+    REQUIRE(spy.changes == std::vector<bool>{true});
 }
 
 TEST_CASE("tray tooltip: the app name idle, the streaming count otherwise", "[tray][windows]") {

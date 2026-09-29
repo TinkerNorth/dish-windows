@@ -28,10 +28,12 @@
 
 namespace dish::source {
 
+class NotifyIconShell;
+
 class Win32TrayIcon final : public TrayIcon {
     Q_OBJECT
   public:
-    explicit Win32TrayIcon(QObject* parent = nullptr);
+    explicit Win32TrayIcon(std::unique_ptr<NotifyIconShell> shell, QObject* parent = nullptr);
     ~Win32TrayIcon() override;
 
     void show() override;

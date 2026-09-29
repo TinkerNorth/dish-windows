@@ -418,6 +418,7 @@ set(DISH_CORE_SOURCES
     src/source/system/SleepMonitor.h
     src/source/system/SleepMonitor.cpp
     src/source/tray/TrayIcon.h
+    src/source/tray/NotifyIconShell.h
     src/source/tray/Win32TrayIcon.h
     src/source/tray/Win32TrayIcon.cpp
     src/source/tray/TrayBalloonNotifier.h

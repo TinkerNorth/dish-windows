@@ -3,6 +3,8 @@
 
 #include "source/tray/Win32TrayIcon.h"
 
+#include "source/tray/NotifyIconShell.h"
+
 #include <QImage>
 #include <QImageReader>
 #include <QLoggingCategory>
@@ -19,6 +21,7 @@
 #include <shellapi.h>
 
 #include <cstring>
+#include <utility>
 
 namespace dish::source {
 
@@ -64,6 +67,7 @@ struct Win32TrayIcon::Native {
     HICON streamingIcon = nullptr;
     UINT taskbarCreated = 0;
     Win32TrayIcon* owner = nullptr;
+    std::unique_ptr<NotifyIconShell> shell;
 
     static LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
         auto* self = reinterpret_cast<Win32TrayIcon*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -97,8 +101,10 @@ struct Win32TrayIcon::Native {
     }
 };
 
-Win32TrayIcon::Win32TrayIcon(QObject* parent) : TrayIcon(parent), native_(new Native) {
+Win32TrayIcon::Win32TrayIcon(std::unique_ptr<NotifyIconShell> shell, QObject* parent)
+    : TrayIcon(parent), native_(new Native) {
     native_->owner = this;
+    native_->shell = std::move(shell);
     const HINSTANCE instance = GetModuleHandleW(nullptr);
     WNDCLASSEXW wc;
     std::memset(&wc, 0, sizeof(wc));
@@ -169,7 +175,7 @@ void Win32TrayIcon::showBalloon(const QString& title, const QString& body) {
     const std::wstring wbody = body.toStdWString();
     wcsncpy_s(nid.szInfoTitle, wtitle.c_str(), _TRUNCATE);
     wcsncpy_s(nid.szInfo, wbody.c_str(), _TRUNCATE);
-    if (Shell_NotifyIconW(NIM_MODIFY, &nid) == FALSE) {
+    if (!native_->shell->notify(NIM_MODIFY, nid)) {
         qCDebug(lcDishTray) << "balloon refused:" << GetLastError();
     }
 }
@@ -219,14 +225,15 @@ bool Win32TrayIcon::addIcon() {
     wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
     // NIM_ADD fails when the icon is already there (a re-add on TaskbarCreated
     // that raced the shell's own restore); a modify is the same outcome then.
-    if (Shell_NotifyIconW(NIM_ADD, &nid) == FALSE && Shell_NotifyIconW(NIM_MODIFY, &nid) == FALSE) {
+    NotifyIconShell& shell = *native_->shell;
+    if (!shell.notify(NIM_ADD, nid) && !shell.notify(NIM_MODIFY, nid)) {
         qCWarning(lcDishTray) << "Shell_NotifyIcon add failed:" << GetLastError();
         return false;
     }
     // Version 4: a click arrives as NIN_SELECT and the context menu request
     // as WM_CONTEXTMENU, with the coordinates on wParam rather than the cursor.
     nid.uVersion = NOTIFYICON_VERSION_4;
-    if (Shell_NotifyIconW(NIM_SETVERSION, &nid) == FALSE) {
+    if (!shell.notify(NIM_SETVERSION, nid)) {
         qCWarning(lcDishTray) << "Shell_NotifyIcon set-version failed:" << GetLastError();
     }
     return true;
@@ -234,7 +241,7 @@ bool Win32TrayIcon::addIcon() {
 
 void Win32TrayIcon::deleteIcon() {
     NOTIFYICONDATAW nid = native_->data();
-    Shell_NotifyIconW(NIM_DELETE, &nid);
+    native_->shell->notify(NIM_DELETE, nid);
 }
 
 void Win32TrayIcon::applyPresentation() {
@@ -246,7 +253,7 @@ void Win32TrayIcon::applyPresentation() {
                     : native_->idleIcon;
     const std::wstring tip = tooltipFor(presentation_).toStdWString();
     wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
-    if (Shell_NotifyIconW(NIM_MODIFY, &nid) == FALSE) {
+    if (!native_->shell->notify(NIM_MODIFY, nid)) {
         qCDebug(lcDishTray) << "Shell_NotifyIcon modify failed:" << GetLastError();
     }
 }
@@ -276,6 +283,8 @@ void Win32TrayIcon::setAvailable(bool available) {
     emit availabilityChanged(available);
 }
 
-std::unique_ptr<Win32TrayIcon> makeSystemTrayIcon() { return std::make_unique<Win32TrayIcon>(); }
+std::unique_ptr<Win32TrayIcon> makeSystemTrayIcon() {
+    return std::make_unique<Win32TrayIcon>(std::make_unique<Win32NotifyIconShell>());
+}
 
 } // namespace dish::source
