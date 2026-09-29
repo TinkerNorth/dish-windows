@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Dish contributors.
 //
 // A Moonlight host on loopback, speaking the four PLAINTEXT pairing phases for
-// real.
+// real, and with serveTls() the fifth over TLS.
 //
 // Pairing is the one flow where nothing can be concluded from a single call: the
 // PIN derives an AES key, each phase verifies the last, and a client that gets
@@ -33,6 +33,11 @@
 #include <QHostAddress>
 #include <QList>
 #include <QObject>
+#include <QSslCertificate>
+#include <QSslConfiguration>
+#include <QSslKey>
+#include <QSslServer>
+#include <QSslSocket>
 #include <QString>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -41,6 +46,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -63,9 +69,9 @@ struct PairingServer {
     std::string clientCertPem;
     bool paired = false;
 
-    void begin(const std::string& saltHex, const std::string& clientCertHex,
-               const std::string& pin) {
-        id = *dish::moonlight::generateIdentity();
+    void begin(const std::string& saltHex, const std::string& clientCertHex, const std::string& pin,
+               const dish::moonlight::Identity& hostIdentity) {
+        id = hostIdentity;
         const auto salt = *mlc::hexDecode(saltHex);
         aesKey = mlc::genAesKey(salt.data(), salt.size(), pin);
         const auto pem = *mlc::hexDecode(clientCertHex);
@@ -150,6 +156,27 @@ class MoonlightFakeHost : public QObject {
         answeredBody_ = std::move(body);
     }
 
+    // Listen for TLS as well, presenting the certificate phase 1 hands out, the way a host does,
+    // so phase 5 can complete. False when the TLS backend cannot serve.
+    bool serveTls() {
+        const auto& identity = hostIdentity();
+        const auto certs = QSslCertificate::fromData(QByteArray::fromStdString(identity.certPem));
+        const QSslKey key(QByteArray::fromStdString(identity.privateKeyPem), QSsl::Rsa, QSsl::Pem);
+        if (certs.isEmpty() || key.isNull()) { return false; }
+        QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
+        ssl.setLocalCertificate(certs.first());
+        ssl.setPrivateKey(key);
+        // The client presents its own certificate; asking for it back would only add a way for
+        // the fixture to refuse a valid call.
+        ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
+        tls_.setSslConfiguration(ssl);
+        QObject::connect(&tls_, &QTcpServer::pendingConnectionAvailable, this, [this] {
+            while (auto* socket = tls_.nextPendingConnection()) { accept(socket); }
+        });
+        return tls_.listen(QHostAddress::LocalHost, 0);
+    }
+    int tlsPort() const { return static_cast<int>(tls_.serverPort()); }
+
     // Which phase numbers were served, in order, so a refused exchange can be
     // shown to have STOPPED rather than merely to have failed at the end.
     const QList<int>& phasesServed() const { return phasesServed_; }
@@ -220,7 +247,7 @@ class MoonlightFakeHost : public QObject {
         case 1:
             pairing_.begin(query.queryItemValue(QStringLiteral("salt")).toStdString(),
                            query.queryItemValue(QStringLiteral("clientcert")).toStdString(),
-                           pin_.toStdString());
+                           pin_.toStdString(), hostIdentity());
             return ok(QStringLiteral("plaincert"), pairing_.plaincertHex());
         case 2:
             return ok(QStringLiteral("challengeresponse"),
@@ -231,12 +258,13 @@ class MoonlightFakeHost : public QObject {
                 QStringLiteral("pairingsecret"),
                 pairing_.pairingSecret(
                     query.queryItemValue(QStringLiteral("serverchallengeresp")).toStdString()));
-        default:
+        case 4:
             pairing_.verifyClient(
                 query.queryItemValue(QStringLiteral("clientpairingsecret")).toStdString());
-            return QStringLiteral("<root status_code=\"200\"><paired>%1</paired></root>")
-                .arg(pairing_.paired ? 1 : 0)
-                .toUtf8();
+            return pairedBody();
+        default:
+            // Phase 5 arrives only over TLS: reaching it at all is what it proves.
+            return pairedBody();
         }
     }
 
@@ -248,19 +276,34 @@ class MoonlightFakeHost : public QObject {
         return refusing ? refusalStatus_ : kHttpOk;
     }
 
+    QByteArray pairedBody() const {
+        return QStringLiteral("<root status_code=\"200\"><paired>%1</paired></root>")
+            .arg(pairing_.paired ? 1 : 0)
+            .toUtf8();
+    }
+
     static int phaseOf(const QUrlQuery& query) {
-        if (query.queryItemValue(QStringLiteral("phrase")) == QLatin1String("getservercert")) {
-            return 1;
-        }
+        const QString phrase = query.queryItemValue(QStringLiteral("phrase"));
+        if (phrase == QLatin1String("getservercert")) { return 1; }
         if (query.hasQueryItem(QStringLiteral("clientchallenge"))) { return 2; }
         if (query.hasQueryItem(QStringLiteral("serverchallengeresp"))) { return 3; }
         if (query.hasQueryItem(QStringLiteral("clientpairingsecret"))) { return 4; }
+        if (phrase == QLatin1String("pairchallenge")) { return 5; }
         return 0;
     }
 
     static constexpr int kHttpOk = 200;
 
+    // One identity for the host, made the first time something needs it: the certificate phase 1
+    // hands out is the one its TLS port presents.
+    const dish::moonlight::Identity& hostIdentity() {
+        if (!hostIdentity_.has_value()) { hostIdentity_ = dish::moonlight::generateIdentity(); }
+        return *hostIdentity_;
+    }
+
     QTcpServer server_;
+    QSslServer tls_;
+    std::optional<dish::moonlight::Identity> hostIdentity_;
     QString pin_;
     int refusePhase_;
     // Unless refuseWith says otherwise, the refusal rides an HTTP 200.

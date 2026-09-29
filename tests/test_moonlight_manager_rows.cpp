@@ -65,3 +65,19 @@ TEST_CASE("mergeMoonlightRows falls back to IP for a nameless host", "[moonlight
     REQUIRE(rows.size() == 1);
     REQUIRE(rows[0].name == QStringLiteral("192.168.1.9"));
 }
+
+TEST_CASE("A pairing PIN is four digits, a leading zero kept", "[moonlight][manager][b3]") {
+    // The code a person reads off this screen and types into the host. Four
+    // characters every time, or a 0-leading code is shown as three digits and
+    // the host refuses what the person types.
+    bool sawLeadingZero = false;
+    for (int i = 0; i < 2000; ++i) {
+        const QString pin = generateMoonlightPin();
+        REQUIRE(pin.size() == 4);
+        for (const QChar c : pin) { REQUIRE(c.isDigit()); }
+        sawLeadingZero = sawLeadingZero || pin.startsWith(QLatin1Char('0'));
+    }
+    // One in ten codes starts with a zero, so two thousand without one is a
+    // generator that cannot produce them.
+    CHECK(sawLeadingZero);
+}
