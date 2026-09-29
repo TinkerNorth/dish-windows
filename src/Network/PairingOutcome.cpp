@@ -9,13 +9,15 @@
 
 namespace dish::net {
 
-PairingOutcome::Arm PairingOutcome::classify(const models::PairResponse& response) {
+PairingOutcome::Arm PairingOutcome::classify(const models::PairResponse& response,
+                                             bool pinMismatch) {
     reducer::PairReply r;
     r.status = response.httpStatus;
     r.bodyParsed = response.reachable;
     r.ok = response.ok;
     r.pending = response.pending;
     r.hasSharedKey = response.sharedKey.has_value() && !response.sharedKey->isEmpty();
+    r.pinMismatch = pinMismatch;
     switch (reducer::classifyPair(r)) {
     case reducer::PairVerdict::Success:
         // classifyPair only says Success when hasSharedKey, which is exactly
@@ -28,6 +30,8 @@ PairingOutcome::Arm PairingOutcome::classify(const models::PairResponse& respons
         return AuthRequired{};
     case reducer::PairVerdict::VersionMismatch:
         return VersionMismatch{};
+    case reducer::PairVerdict::IdentityChanged:
+        return IdentityChanged{};
     case reducer::PairVerdict::Unreachable:
         break;
     }

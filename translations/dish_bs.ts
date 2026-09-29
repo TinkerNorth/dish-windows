@@ -4606,6 +4606,10 @@
         <source>Satellite can only be reached over IPv4, and this address (%1) is IPv6. Scan again to find its IPv4 address.</source>
         <translation>Satellite je dostupan samo preko IPv4, a ova adresa (%1) je IPv6. Skenirajte ponovo da pronađete njegovu IPv4 adresu.</translation>
     </message>
+    <message>
+        <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
+        <translation>Sigurnosni identitet ovog satelita se promijenio. Ako je ponovo instaliran, zaboravite ga ovdje i uparite ponovo.</translation>
+    </message>
 </context>
 <context>
     <name>dish::qml::AppViewModel</name>

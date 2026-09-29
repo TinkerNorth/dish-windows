@@ -29,4 +29,11 @@ namespace dish::http {
 bool verifyPeerCertificate(const QString& satelliteId, repository::SatellitePinRepository& pins,
                            const QByteArray& certDer, const std::function<void()>& onMismatch = {});
 
+// The check above over `pins`, in the shape HTTPClient runs on every handshake: one long-lived
+// verifier handed a fresh flag per request, raised only for a changed cert. That flag is all that
+// tells a changed identity from a dead link once the abort has erased the status and the body.
+// `pins` must outlive the verifier.
+std::function<bool(const QString& host, const QByteArray& certDer, bool& pinMismatch)>
+pinVerifierOver(repository::SatellitePinRepository& pins);
+
 } // namespace dish::http

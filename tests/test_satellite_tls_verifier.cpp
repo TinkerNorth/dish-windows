@@ -14,6 +14,7 @@
 #include <QByteArray>
 #include <QString>
 
+using dish::http::pinVerifierOver;
 using dish::http::verifyPeerCertificate;
 using dish::repository::SatellitePinRepository;
 using dish::test::makeSharedSettings;
@@ -88,4 +89,47 @@ TEST_CASE("pins are kept per satellite id", "[tlsverify]") {
     CHECK(mismatches == 0); // a first use for each id, not a mismatch
     CHECK(pins.pinnedFingerprint(QStringLiteral("a")).value().size() == 64);
     CHECK(pins.pinnedFingerprint(QStringLiteral("b")).value().size() == 64);
+}
+
+// The verifier the manager installs on its HTTPClient: one long-lived verifier over a shared pin
+// store, handed a FRESH flag per request. The flag is the only thing that separates a changed
+// identity from a dropped link once the abort has erased the status and the body.
+
+TEST_CASE("the installed verifier raises its flag only for a changed cert", "[tlsverify]") {
+    SatellitePinRepository pins(makeSharedSettings());
+    const auto verify = pinVerifierOver(pins);
+
+    bool firstUse = false;
+    CHECK(verify(kSat, der({1, 2, 3}), firstUse));
+    CHECK_FALSE(firstUse);
+
+    bool match = false;
+    CHECK(verify(kSat, der({1, 2, 3}), match));
+    CHECK_FALSE(match);
+
+    bool noCert = false;
+    CHECK_FALSE(verify(kSat, QByteArray(), noCert));
+    CHECK_FALSE(noCert); // a refusal, but not an identity change
+
+    bool changed = false;
+    CHECK_FALSE(verify(kSat, der({9, 9, 9}), changed));
+    CHECK(changed);
+}
+
+TEST_CASE("the installed verifier's raised flag does not leak into the next request",
+          "[tlsverify]") {
+    SatellitePinRepository pins(makeSharedSettings());
+    const auto verify = pinVerifierOver(pins);
+    bool firstUse = false;
+    CHECK(verify(kSat, der({1, 2, 3}), firstUse));
+
+    bool changed = false;
+    CHECK_FALSE(verify(kSat, der({9, 9, 9}), changed));
+    CHECK(changed);
+
+    // Same verifier, same store: the pin survived the rejection, so the honest
+    // cert is accepted again and the fresh flag stays down.
+    bool again = false;
+    CHECK(verify(kSat, der({1, 2, 3}), again));
+    CHECK_FALSE(again);
 }

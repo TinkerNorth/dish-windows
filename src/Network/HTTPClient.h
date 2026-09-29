@@ -33,10 +33,15 @@ class HTTPClient : public QObject {
 
     // Returning false aborts the request. Pins on first contact and rejects a
     // later cert whose fingerprint differs. See source/http/SatelliteTlsVerifier.
-    using PinVerifier = std::function<bool(const QString& host, const QByteArray& certDer)>;
+    // `pinMismatch` is set only for that CHANGED-cert case, never for a missing
+    // cert, so the caller can tell an identity change from a dead link.
+    using PinVerifier =
+        std::function<bool(const QString& host, const QByteArray& certDer, bool& pinMismatch)>;
     void setPinVerifier(PinVerifier verifier) { pinVerifier_ = std::move(verifier); }
 
-    using SessionCb = std::function<void(const models::SessionResponse&)>;
+    // The mismatch rides beside the DTO because an aborted handshake leaves no
+    // body to carry it.
+    using SessionCb = std::function<void(const models::SessionResponse&, bool pinMismatch)>;
     using ControllerCb = std::function<void(const models::ControllerPutResponse&)>;
     using ViewCb = std::function<void(const models::SessionViewDto&)>;
     using CapabilitiesCb = std::function<void(const models::CapabilitiesDto&)>;
@@ -44,7 +49,8 @@ class HTTPClient : public QObject {
     // For routes the caller does not decode; `reachable` distinguishes a real
     // 401 from a dead transport.
     using AckCb = std::function<void(int httpStatus, bool reachable, const QString& code)>;
-    using PairCb = std::function<void(const models::PairResponse&)>;
+    // A pairing reply, with the mismatch beside it for the same reason as SessionCb's.
+    using PairCb = std::function<void(const models::PairResponse&, bool pinMismatch)>;
 
     // Declarative upsert: `controllers` must be the WHOLE desired set, not a
     // delta. `mouseControl` is always false today (no touchpad-mouse UI) but the
@@ -85,7 +91,7 @@ class HTTPClient : public QObject {
     void pair(const QString& ip, int port, const QString& deviceId, const QString& deviceName,
               const QString& pin, const QString& clientPin, PairCb cb);
 
-    // GET /api/pair/status?deviceId= — the Path B approval poll.
+    // GET /api/pair/status?deviceId=, the Path B approval poll.
     void pairStatus(const QString& ip, int port, const QString& deviceId, PairCb cb);
 
     // DELETE /api/pair — client self-unpair (X-Device-Id + X-Hmac-Proof).
@@ -106,6 +112,7 @@ class HTTPClient : public QObject {
         bool reachable = false; // the server answered, even if with an error
         QByteArray body;
         QString etag;
+        bool pinMismatch = false;
     };
 
     void perform(const QString& url, const QByteArray& method, const QByteArray& body,

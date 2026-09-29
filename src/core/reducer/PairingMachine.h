@@ -15,23 +15,27 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <cstdint>
 
 namespace dish::reducer {
 
-enum class PairPhase {
+enum class PairPhase : std::uint8_t {
     Idle,
     Submitting, // a classified Success stays here until SessionConfirmedLive
     Succeeded,
     Failed, // retryable via a fresh Submit
 };
 
-enum class PairFailure {
+enum class PairFailure : std::uint8_t {
     WrongPin,        // reachable and parsed, but no usable key adopted
     VersionMismatch, // 409 protocol skew
     Unreachable,     // transport failure or an empty body
     // No PairVerdict arm maps here yet. Carried so the forward and reverse
     // pairing vocabularies match.
     Declined,
+    // The pinned certificate changed. Terminal, and not a PIN problem: only an
+    // explicit Forget can clear the pin, so a retry cannot succeed.
+    IdentityChanged,
 };
 
 struct PairingState {
@@ -117,6 +121,7 @@ using PairEvent = std::variant<pair_event::Submit, pair_event::ReplyClassified,
 //
 // Anything not named above is a no-op for that phase (returns the state
 // unchanged), making every combination explicit.
+
 // Start or restart an attempt, from any phase. A new attempt clears any prior reason and carries
 // the PIN for as long as it is submitting.
 inline PairingState onPairSubmit(const pair_event::Submit& e) {
@@ -151,6 +156,8 @@ inline PairingState onPairReply(const PairingState& s, const pair_event::ReplyCl
         return pairFailure(s, PairFailure::VersionMismatch);
     case PairVerdict::Unreachable:
         return pairFailure(s, PairFailure::Unreachable);
+    case PairVerdict::IdentityChanged:
+        return pairFailure(s, PairFailure::IdentityChanged);
     }
     // A bogus verdict cast lands here. The switch is exhaustive over the enum, so this is
     // unreachable in practice; an unknown verdict keeps waiting rather than throws.

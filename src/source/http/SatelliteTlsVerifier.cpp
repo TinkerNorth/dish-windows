@@ -33,4 +33,11 @@ bool verifyPeerCertificate(const QString& satelliteId, repository::SatellitePinR
     return false;
 }
 
+std::function<bool(const QString& host, const QByteArray& certDer, bool& pinMismatch)>
+pinVerifierOver(repository::SatellitePinRepository& pins) {
+    return [&pins](const QString& host, const QByteArray& certDer, bool& pinMismatch) {
+        return verifyPeerCertificate(host, pins, certDer, [&pinMismatch] { pinMismatch = true; });
+    };
+}
+
 } // namespace dish::http

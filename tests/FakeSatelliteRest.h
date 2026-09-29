@@ -24,6 +24,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QVariant>
 
 #include <algorithm>
 #include <cstring>
@@ -49,10 +50,11 @@ struct RecordedRequest {
 class CannedReply : public QNetworkReply {
   public:
     // `delivered` is counted up as the reply lands; it belongs to the manager
-    // that parents this reply, so it outlives it.
+    // that parents this reply, so it outlives it. With `handshake`, the reply
+    // first passes the TLS edge its client's pin verifier runs on.
     CannedReply(const QNetworkRequest& request, QNetworkAccessManager::Operation op,
-                const CannedAnswer& answer, long long* delivered, QObject* parent)
-        : QNetworkReply(parent), body_(answer.body), delivered_(delivered) {
+                const CannedAnswer& answer, bool handshake, long long* delivered, QObject* parent)
+        : QNetworkReply(parent), body_(answer.body), handshake_(handshake), delivered_(delivered) {
         setRequest(request);
         setUrl(request.url());
         setOperation(op);
@@ -64,7 +66,17 @@ class CannedReply : public QNetworkReply {
 
     void deliverLater() { QTimer::singleShot(0, this, &CannedReply::deliver); }
 
-    void abort() override {}
+    // What a real reply does when its client hangs up: it ends at once, with no
+    // status and no body.
+    void abort() override {
+        ++*delivered_;
+        body_.clear();
+        setAttribute(QNetworkRequest::HttpStatusCodeAttribute, QVariant());
+        setError(OperationCanceledError, QStringLiteral("Operation canceled"));
+        setFinished(true);
+        emit errorOccurred(OperationCanceledError);
+        emit finished();
+    }
     bool isSequential() const override { return true; }
     qint64 bytesAvailable() const override {
         const qint64 unread = body_.size() - offset_;
@@ -82,6 +94,9 @@ class CannedReply : public QNetworkReply {
 
   private:
     void deliver() {
+        if (handshake_) { emit encrypted(); }
+        // A verifier that refused on the TLS edge has already aborted the reply.
+        if (isFinished()) { return; }
         ++*delivered_;
         setFinished(true);
         emit metaDataChanged();
@@ -91,6 +106,7 @@ class CannedReply : public QNetworkReply {
 
     QByteArray body_;
     qint64 offset_ = 0;
+    bool handshake_ = false;
     long long* delivered_;
 };
 
@@ -103,6 +119,9 @@ class FakeSatelliteRest : public QNetworkAccessManager {
     void answerOnce(const QByteArray& verb, const QString& path, const CannedAnswer& reply) {
         onceScript_[routeKey(verb, path)].push_back(reply);
     }
+
+    // From here on, every reply passes the TLS edge first, where its client's pin verifier runs.
+    void handshakeEveryReply() { handshaking_ = true; }
 
     void hold() { holding_ = true; }
     void release() {
@@ -137,7 +156,7 @@ class FakeSatelliteRest : public QNetworkAccessManager {
         recorded.body = outgoingData != nullptr ? outgoingData->readAll() : QByteArray();
         requests_.push_back(recorded);
         const CannedAnswer answer = nextAnswer(routeKey(recorded.verb, recorded.path));
-        auto* reply = new CannedReply(request, op, answer, &delivered_, this);
+        auto* reply = new CannedReply(request, op, answer, handshaking_, &delivered_, this);
         if (holding_) {
             held_.emplace_back(reply);
         } else {
@@ -183,6 +202,7 @@ class FakeSatelliteRest : public QNetworkAccessManager {
     QHash<QByteArray, std::vector<CannedAnswer>> onceScript_;
     std::vector<RecordedRequest> requests_;
     long long delivered_ = 0;
+    bool handshaking_ = false;
     bool holding_ = false;
     std::vector<QPointer<CannedReply>> held_;
 };

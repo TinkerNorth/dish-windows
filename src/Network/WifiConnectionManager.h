@@ -86,9 +86,9 @@ class WifiConnectionManager : public QObject {
     bool reverseAttemptIsCurrent(const models::DiscoveredServer& server, const QString& pin) const;
     void startReversePoll();
     void applyReverseOutcome(const models::DiscoveredServer& server,
-                             const models::PairResponse& pair);
+                             const models::PairResponse& pair, bool pinMismatch);
     void onReversePairReply(const QString& id, const models::DiscoveredServer& server,
-                            const QString& pin, const models::PairResponse& pair);
+                            const QString& pin, const models::PairResponse& pair, bool pinMismatch);
     void cancelReversePairing();
 
     ReversePairingPhase reversePairingPhase() const { return reversePhase_; }
@@ -178,7 +178,7 @@ class WifiConnectionManager : public QObject {
     void onSessionReply(const QString& id, const models::DiscoveredServer& server,
                         ConnectIntent intent, const Credentials& sent,
                         const std::vector<reducer::DesiredSlot>& sentDescriptors,
-                        const models::SessionResponse& resp);
+                        const models::SessionResponse& resp, bool pinMismatch);
     void onSessionRefused(WifiConnection* conn, const models::DiscoveredServer& server,
                           ConnectIntent intent, reducer::RestVerdict verdict,
                           const models::SessionResponse& resp);
@@ -208,7 +208,7 @@ class WifiConnectionManager : public QObject {
     // carry material, and adopt it.
     void onRekeyReply(const QString& id, const std::shared_ptr<SatelliteClient>& client,
                       const std::array<std::uint8_t, 32>& pairingKey,
-                      const models::SessionResponse& resp);
+                      const models::SessionResponse& resp, bool pinMismatch);
     void adoptRekey(WifiConnection* c, const QString& id,
                     const std::shared_ptr<SatelliteClient>& client,
                     const models::SessionResponse& resp, const SessionMaterial& material);
@@ -240,7 +240,7 @@ class WifiConnectionManager : public QObject {
 
     // One approval poll, in order: what the reply says, and what that answer means.
     static reducer::ApprovalReply approvalReplyOf(const models::PairResponse& status);
-    void onReverseStatusReply(const models::PairResponse& status,
+    void onReverseStatusReply(const models::PairResponse& status, bool pinMismatch,
                               const models::DiscoveredServer& server);
     void applyReverseAction(reducer::ReversePairingAction action,
                             const models::PairResponse& status,

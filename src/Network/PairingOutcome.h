@@ -25,12 +25,17 @@ struct PairingOutcome {
     struct Pending {};         // Path B accepted - poll /api/pair/status
     struct AuthRequired {};    // reachable, no key - first-time pair, or it forgot us
     struct VersionMismatch {}; // 409 - protocol skew, terminal
+    struct IdentityChanged {}; // TOFU pin mismatch - terminal, forget and pair again
     struct Unreachable {
         QString message;
     };
-    using Arm = std::variant<Success, Pending, AuthRequired, VersionMismatch, Unreachable>;
+    using Arm =
+        std::variant<Success, Pending, AuthRequired, VersionMismatch, Unreachable, IdentityChanged>;
 
-    static Arm classify(const models::PairResponse& response);
+    // `pinMismatch` rides beside the reply because the TOFU gate aborts before any
+    // body arrives: a changed certificate and a dead link would otherwise read
+    // the same.
+    static Arm classify(const models::PairResponse& response, bool pinMismatch = false);
 };
 
 } // namespace dish::net

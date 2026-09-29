@@ -62,6 +62,7 @@ constexpr int kOneBehind = dish::proto::kProtocolVersion - 1;
 
 const QString kSessionsPath = QStringLiteral("/api/connections");
 const QString kPairPath = QStringLiteral("/api/pair");
+const QString kStatusPath = QStringLiteral("/api/pair/status");
 const QString kGrantedSessionPath = QStringLiteral("/api/connections/conn_1");
 const QString kPrivateIp = QStringLiteral("10.0.0.5");
 const QString kOtherPrivateIp = QStringLiteral("10.0.0.6");
@@ -76,6 +77,9 @@ const QString kUnreachableMsg =
     QStringLiteral("Server unreachable — check it's powered on and on the same Wi-Fi.");
 const QString kVersionMsg =
     QStringLiteral("This app and the satellite speak different protocol versions.");
+const QString kIdentityChangedMsg =
+    QStringLiteral("This satellite's security identity changed. If it was reinstalled, forget it "
+                   "here and pair again.");
 
 const QByteArray kGrant = R"({"connectionId":"conn_1","token":"00000001",)"
                           R"("sessionSalt":"0102030405060708","epoch":1})";
@@ -114,6 +118,16 @@ bool pumpUntil(const std::function<bool()>& done) {
     return true;
 }
 
+// What the manager's own verifier answers for a satellite whose certificate is not the one pinned
+// for its address: it flags the change and refuses the handshake.
+bool refusesAsChanged(const QString&, const QByteArray&, bool& pinMismatch) {
+    pinMismatch = true;
+    return false;
+}
+
+// The same satellite's own certificate, back again.
+bool acceptsTheCertificate(const QString&, const QByteArray&, bool&) { return true; }
+
 int offeredVersionOf(const dish::test::RecordedRequest& put) {
     return QJsonDocument::fromJson(put.body)
         .object()
@@ -131,7 +145,8 @@ struct ManagerFixture {
     std::shared_ptr<QSettings> settings;
     std::unique_ptr<dish::net::ConnectionStore> store;
     FakeWifiEffects effects;
-    FakeSatelliteRest* rest = nullptr; // owned by the manager's HTTPClient
+    FakeSatelliteRest* rest = nullptr;     // owned by the manager's HTTPClient
+    dish::net::HTTPClient* http = nullptr; // owned by the manager
     std::unique_ptr<dish::net::WifiConnectionManager> manager;
     std::vector<ConnectionEvent> events;
     std::vector<QString> pairingFailures;
@@ -146,8 +161,9 @@ struct ManagerFixture {
         pair(server);
         pair(other);
         rest = new FakeSatelliteRest;
-        manager = std::make_unique<dish::net::WifiConnectionManager>(
-            store.get(), new dish::net::HTTPClient(rest, nullptr), effects.effects(), nullptr);
+        http = new dish::net::HTTPClient(rest, nullptr);
+        manager = std::make_unique<dish::net::WifiConnectionManager>(store.get(), http,
+                                                                     effects.effects(), nullptr);
         QObject::connect(manager.get(), &dish::net::WifiConnectionManager::connectionEvent,
                          manager.get(), [this](const ConnectionEvent& e) { events.push_back(e); });
         QObject::connect(
@@ -181,6 +197,13 @@ struct ManagerFixture {
             if (r.verb == "PUT" && r.path == kSessionsPath) { puts.push_back(r); }
         }
         return puts;
+    }
+
+    // The satellite answers from here on with a certificate other than the one pinned for it, as a
+    // reinstalled machine at a remembered address does.
+    void presentChangedCertificate() {
+        rest->handshakeEveryReply();
+        http->setPinVerifier(&refusesAsChanged);
     }
 
     bool remembers(const DiscoveredServer& s) const {
@@ -419,6 +442,131 @@ TEST_CASE("wifi manager: an approval request's reply that lands after a forget i
     REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
     REQUIRE(f.manager->get(f.id) == nullptr);
     REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+}
+
+// ---- A satellite whose certificate changed ----
+
+TEST_CASE("wifi manager: a PIN pair with a satellite whose certificate changed says so, and does "
+          "not blame the PIN",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.presentChangedCertificate();
+
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    REQUIRE(f.state() == SessionState::Idle);
+    // Every reason the sheet can mark its field with would blame the PIN or the network.
+    REQUIRE(f.pairingFailures.empty());
+    requireOneError(f, kIdentityChangedMsg);
+}
+
+TEST_CASE("wifi manager: a user connect whose pair meets a changed certificate says so",
+          "[manager][identity]") {
+    ManagerFixture f;
+    // No key on file, so the connect starts with a pair.
+    f.store->forgetKey(f.id);
+    f.presentChangedCertificate();
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    REQUIRE(f.state() == SessionState::Idle);
+    requireOneError(f, kIdentityChangedMsg);
+}
+
+TEST_CASE("wifi manager: a silent connect whose pair meets a changed certificate stops without a "
+          "word",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.store->forgetKey(f.id);
+    f.presentChangedCertificate();
+
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    // Idle, not Stale: Stale reads "Needs pairing", and no PIN gets past a changed certificate.
+    REQUIRE(f.state() == SessionState::Idle);
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: a user connect to a satellite whose certificate changed says so and does "
+          "not retry",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.presentChangedCertificate();
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(f.settles());
+    REQUIRE(f.state() == SessionState::Idle);
+    requireOneError(f, kIdentityChangedMsg);
+    requireNoRetry(f);
+}
+
+TEST_CASE("wifi manager: a silent reconnect to a satellite whose certificate changed stops without "
+          "a word or a retry",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.presentChangedCertificate();
+
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+
+    REQUIRE(f.settles());
+    REQUIRE(f.state() == SessionState::Idle);
+    REQUIRE(f.events.empty());
+    requireNoRetry(f);
+}
+
+TEST_CASE("wifi manager: a changed certificate ends the backoff, so a later failure starts it over",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.failSilently();
+    // The first silent retry meets the changed certificate.
+    f.presentChangedCertificate();
+    f.effects.advance(kPastFirstBackoffMs);
+    REQUIRE(f.settles());
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 2);
+    // The satellite has its own certificate back, and is turning connections away.
+    f.http->setPinVerifier(&acceptsTheCertificate);
+    f.rest->answerOnce("PUT", kSessionsPath, CannedAnswer{503, kShuttingDown});
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(f.settles());
+
+    // Due after the first step of the curve, not the second.
+    f.effects.advance(kPastFirstBackoffMs);
+
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 4);
+}
+
+TEST_CASE("wifi manager: an approval request to a satellite whose certificate changed is declined, "
+          "not timed out",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.presentChangedCertificate();
+
+    f.manager->requestReversePairing(f.server);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Declined);
+    requireOneError(f, kIdentityChangedMsg);
+}
+
+TEST_CASE("wifi manager: an approval poll that meets a changed certificate ends the attempt",
+          "[manager][identity]") {
+    ManagerFixture f;
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, R"({"ok":false,"pending":true})"});
+    f.manager->requestReversePairing(f.server);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::AwaitingApproval);
+    f.presentChangedCertificate();
+
+    // The poll runs on the manager's own one-second timer.
+    REQUIRE(pumpUntil([&f] { return f.rest->count("GET", kStatusPath) == 1; }));
+    REQUIRE(pumpUntil([&f] { return f.rest->allAnswered(); }));
+
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Declined);
+    requireOneError(f, kIdentityChangedMsg);
 }
 
 // ---- Silent retries ----
@@ -667,6 +815,22 @@ TEST_CASE("wifi manager: the grant failure a user is told of reads in their lang
     REQUIRE_FALSE(inGerman.isEmpty());
     ManagerFixture f;
     f.rest->answer("PUT", kSessionsPath, CannedAnswer{200, kGrant});
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(f.settles());
+    requireOneError(f, inGerman);
+}
+
+TEST_CASE("wifi manager: the changed-certificate message reads in the user's language",
+          "[manager][identity][i18n]") {
+    if (!dish::test::catalogsBuilt()) { SKIP("built without Qt LinguistTools"); }
+    const InstalledCatalog german(QStringLiteral("de_DE"));
+    REQUIRE(german.loaded);
+    const QString inGerman = german.lookup(kManagerContext, kIdentityChangedMsg);
+    REQUIRE_FALSE(inGerman.isEmpty());
+    ManagerFixture f;
+    f.presentChangedCertificate();
 
     f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
 

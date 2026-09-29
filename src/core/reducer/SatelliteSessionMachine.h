@@ -45,11 +45,12 @@ enum class SessionFailure {
     Declined,           // reachable, but the satellite refused the pair; terminal
     ServerShuttingDown, // 503, kept distinct from Unreachable so the UI can say why
     ServerError,        // any other non-2xx; usually retryable
+    IdentityChanged,    // the pinned certificate changed; terminal until Forget
 };
 
 inline bool sessionFailureTerminal(SessionFailure f) {
     return f == SessionFailure::VersionMismatch || f == SessionFailure::AuthRejected ||
-           f == SessionFailure::Declined;
+           f == SessionFailure::Declined || f == SessionFailure::IdentityChanged;
 }
 
 // Gates whether a failure toasts. Every non-user origin is silent, so
@@ -347,6 +348,10 @@ inline SessionReduction onPairClassified(const SessionModel& s, const PairClassi
         return toFailed(s, SessionFailure::VersionMismatch, /*dropKey=*/false);
     case PairVerdict::Unreachable:
         return toReconnecting(s, SessionFailure::Unreachable, /*emitNotify=*/true);
+    case PairVerdict::IdentityChanged:
+        // The key is fine; the pin is what no longer matches, and only Forget clears that.
+        // Retrying would hammer a box we cannot authenticate.
+        return toFailed(s, SessionFailure::IdentityChanged, /*dropKey=*/false);
     }
     return SessionReduction{s, {}};
 }
@@ -369,6 +374,8 @@ inline SessionReduction onRestClassified(const SessionModel& s, const RestClassi
         return toReconnecting(s, SessionFailure::ServerError, /*emitNotify=*/true);
     case RestVerdict::Unreachable:
         return toReconnecting(s, SessionFailure::Unreachable, /*emitNotify=*/true);
+    case RestVerdict::IdentityChanged:
+        return toFailed(s, SessionFailure::IdentityChanged, /*dropKey=*/false);
     }
     return SessionReduction{s, {}};
 }
