@@ -710,6 +710,8 @@ qt_add_qml_module(Dish
         src/qml/pages/LicensesPage.qml
         src/qml/pages/ControlsRemapPage.qml
         src/qml/pages/ConfigureBindingPage.qml
+        src/qml/pages/DiagnosticsPage.qml
+        src/qml/pages/InputInspectorPage.qml
         src/qml/pages/PairingDialog.qml
         src/qml/onboarding/OnboardingFlow.qml
         src/qml/onboarding/WelcomeScreen.qml
