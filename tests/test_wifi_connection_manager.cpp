@@ -254,6 +254,21 @@ TEST_CASE("wifi manager: a silent connect with unusable material releases the se
     REQUIRE(f.rest->count("PUT", kSessionsPath) == 1);
 }
 
+TEST_CASE("wifi manager: a user disconnect cancels the silent retry still waiting out its backoff",
+          "[manager][retry]") {
+    ManagerFixture f(QStringLiteral("10.0.0.5"));
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{503, R"({"code":"SHUTTING_DOWN"})"});
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(f.settles());
+    REQUIRE(f.state() == SessionState::Stale);
+
+    f.manager->disconnect(f.id);
+    pumpFor(kPastFirstBackoffMs);
+
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 1);
+    REQUIRE(f.state() == SessionState::Idle);
+}
+
 TEST_CASE("wifi manager: the grant failure a user is told of reads in their language",
           "[manager][grant][i18n]") {
     if (!QFile::exists(QStringLiteral(DISH_QM_DIR "/dish_de.qm"))) {

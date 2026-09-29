@@ -931,28 +931,46 @@ void WifiConnectionManager::scheduleRetry(const models::DiscoveredServer& server
     const int attempt = retryAttempts_.value(id, 0) + 1;
     retryAttempts_.insert(id, attempt);
     const auto delay = reducer::backoffDelayMs(attempt);
-    QTimer::singleShot(static_cast<int>(delay), this, [this, id, server] {
-        auto* c = connections_.value(id, nullptr);
-        if (c == nullptr) { return; }
-        // Retry only from a settled state: a user-driven reconnect or forget in
-        // the interim moved it out, and clobbering that would fight the user.
-        if (c->state() != SessionState::Idle && c->state() != SessionState::Stale) { return; }
-        // Idempotent, and on completion it persists any new IP and re-runs
-        // autoReconnectAll, so a box that moved DHCP leases reconnects on its own
-        // without the user opening Manage and pressing Scan.
-        startDiscovery();
-        // The direct attempt below still runs, so a satellite discovery cannot
-        // reach (mDNS and broadcast blocked on the segment) is not left waiting on
-        // a scan that may find nothing.
-        models::DiscoveredServer target = server;
-        for (const auto& r : store_->remembered()) {
-            if (r.id == id) {
-                target = r.toDiscovered();
-                break;
-            }
+    QTimer::singleShot(static_cast<int>(delay), retryScopeFor(id),
+                       [this, id, server] { onRetryDue(id, server); });
+}
+
+void WifiConnectionManager::onRetryDue(const QString& id, const models::DiscoveredServer& server) {
+    auto* c = connections_.value(id, nullptr);
+    if (c == nullptr) { return; }
+    // Retry only from a settled state: a user-driven reconnect or forget in
+    // the interim moved it out, and clobbering that would fight the user.
+    if (c->state() != SessionState::Idle && c->state() != SessionState::Stale) { return; }
+    // Idempotent, and on completion it persists any new IP and re-runs
+    // autoReconnectAll, so a box that moved DHCP leases reconnects on its own
+    // without the user opening Manage and pressing Scan.
+    startDiscovery();
+    // The direct attempt below still runs, so a satellite discovery cannot
+    // reach (mDNS and broadcast blocked on the segment) is not left waiting on
+    // a scan that may find nothing.
+    models::DiscoveredServer target = server;
+    for (const auto& r : store_->remembered()) {
+        if (r.id == id) {
+            target = r.toDiscovered();
+            break;
         }
-        connectTo(target, ConnectIntent::RetryAfterDeath);
-    });
+    }
+    connectTo(target, ConnectIntent::RetryAfterDeath);
+}
+
+QObject* WifiConnectionManager::retryScopeFor(const QString& id) {
+    auto* scope = retryScopes_.value(id, nullptr);
+    if (scope == nullptr) {
+        scope = new QObject(this);
+        retryScopes_.insert(id, scope);
+    }
+    return scope;
+}
+
+// A retry is armed with its satellite's scope as the timer's context, and Qt drops a single-shot
+// whose context is gone, so deleting the scope cancels every retry still waiting under it.
+void WifiConnectionManager::cancelPendingRetries(const QString& id) {
+    delete retryScopes_.take(id);
 }
 
 void WifiConnectionManager::onTerminalAuthFailure(WifiConnection* conn, const QString& id,
@@ -974,6 +992,9 @@ void WifiConnectionManager::markStale(const QString& id) {
 }
 
 void WifiConnectionManager::disconnect(const QString& id) {
+    // First, since a silent retry that fired afterwards would dial the satellite straight back.
+    // A death's own retry is scheduled after this call returns, so it survives.
+    cancelPendingRetries(id);
     auto* conn = connections_.value(id, nullptr);
     if (conn == nullptr) { return; }
     const auto server = conn->server();

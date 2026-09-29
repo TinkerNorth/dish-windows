@@ -179,6 +179,9 @@ class WifiConnectionManager : public QObject {
                            std::uint8_t reason);
     // Never runs for UserInitiated; a user tap resets the curve.
     void scheduleRetry(const models::DiscoveredServer& server, ConnectIntent intent);
+    void onRetryDue(const QString& id, const models::DiscoveredServer& server);
+    QObject* retryScopeFor(const QString& id);
+    void cancelPendingRetries(const QString& id);
 
     void emitErrorIfUserInitiated(ConnectIntent intent, const QString& message);
     void markStale(const QString& id);
@@ -219,6 +222,9 @@ class WifiConnectionManager : public QObject {
     QSet<QString> pairingInFlight_;
     // Drives the backoff. Reset on a successful session or any user action.
     QHash<QString, int> retryAttempts_;
+    // Per satellite, the context every pending silent retry is armed under. Children of this
+    // manager; a user's disconnect deletes one to cancel its retries.
+    QHash<QString, QObject*> retryScopes_;
     // Single-flight guard: the ack ticks every second but the GET can take longer.
     QSet<QString> reconcileInFlight_;
 
