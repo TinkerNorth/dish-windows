@@ -180,7 +180,8 @@ class MoonlightManager : public QObject {
     // Allocates a controller number, sends CONTROLLER_ARRIVAL with
     // THIS BINDING's emulated-device pick and the pad's real capabilities, and
     // adds the pad to the active mask. `hasRumble` and friends are the pad's
-    // detected hardware.
+    // detected hardware. A slot already riding this host keeps its number and is
+    // replugged only where the host would build another pad for it.
     //
     // THE SESSION IS REFERENCE COUNTED PER HOST, never one per binding: a host
     // carries one session for up to four controllers, so the first pad on a host
@@ -297,6 +298,13 @@ class MoonlightManager : public QObject {
     // Every slot currently routed at one host, snapshotted under routeMtx_ so
     // the caller can act on it without holding the lock.
     QStringList slotsRoutedTo(const QString& hostId) const;
+
+    // bindSlot's second flow, for a slot that already rides the session it is bound to again.
+    std::optional<std::uint8_t> numberOnSession(const QString& slotId,
+                                                const MoonlightSession* session) const;
+    void forgetTouchFrame(const QString& slotId);
+    void reannounceInPlace(const QString& slotId, std::uint8_t number, MoonlightSession& session,
+                           const moonlight::AnnouncedPad& wanted);
 
     // Resolves a slot to its live session + controller number under routeMtx_.
     struct Route {

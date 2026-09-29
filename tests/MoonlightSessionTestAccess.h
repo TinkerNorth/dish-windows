@@ -62,6 +62,10 @@ class MoonlightSessionTestAccess {
         if (connected) { feed(session, moonlight::SessionEvent::ControlConnected); }
         return connected;
     }
+
+    // The session's own control link, so a case can connect it to a host on loopback and read
+    // what the session puts on the wire. Setup only, like settle.
+    static MoonlightControlChannel& control(MoonlightSession& session) { return session.control_; }
 };
 
 } // namespace dish::net

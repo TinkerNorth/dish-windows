@@ -758,6 +758,30 @@ void MoonlightSession::sendInitialState(std::uint8_t number) {
 
 void MoonlightSession::forgetControllerArrival(std::uint8_t number) { arrivals_.erase(number); }
 
+std::optional<moonlight::AnnouncedPad> MoonlightSession::announcedPad(std::uint8_t number) const {
+    const auto it = arrivals_.find(number);
+    if (it == arrivals_.end()) { return std::nullopt; }
+    return moonlight::AnnouncedPad{it->second.type, it->second.capabilities};
+}
+
+// The pad the host builds next starts from nothing, so it has to ask for motion again before any
+// goes out: a subscription the old pad made is not one the new pad made.
+void MoonlightSession::sendControllerReplug(std::uint8_t number, std::uint8_t type,
+                                            std::uint8_t caps, std::uint32_t supportedButtons) {
+    arrivals_[number] = PadArrival{type, caps, supportedButtons};
+    forgetMotionSubscriptions(number);
+    if (!streaming()) {
+        qCInfo(lcMoonlightSession)
+            << host_.ip << "pad" << number << "announced again before the stream is live; held";
+        return;
+    }
+    qCInfo(lcMoonlightSession) << host_.ip << "replugging pad" << number << "as type" << type
+                               << "caps" << caps;
+    const auto otherPads = static_cast<std::uint16_t>(presentMask() & ~(1U << number));
+    control_.sendControllerReplug(number, otherPads, type, caps, supportedButtons);
+    sendInitialState(number);
+}
+
 void MoonlightSession::sendPendingArrivals() {
     for (const auto& [number, pad] : arrivals_) {
         qCInfo(lcMoonlightSession)

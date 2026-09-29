@@ -24,6 +24,7 @@
 #include "Network/MoonlightRtspClient.h"
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightIdentity.h"
+#include "core/moonlight/MoonlightPadSlots.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
 #include "core/moonlight/MoonlightTelemetry.h"
 #include "core/moonlight/MoonlightTouchDiffer.h"
@@ -35,6 +36,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <optional>
 #include <thread>
 
 namespace dish::repository {
@@ -162,6 +164,16 @@ class MoonlightSession : public QObject {
     // Drop a pad from the remembered set, so a later reconnect does not announce
     // a controller nobody is bound to any more.
     void forgetControllerArrival(std::uint8_t number);
+
+    // What the host has been told, or will be told when the stream comes up, about the pad under
+    // `number`. Empty when no pad is announced there.
+    std::optional<moonlight::AnnouncedPad> announcedPad(std::uint8_t number) const;
+
+    // Announce the pad under `number` again as another pad. A host keeps a number it holds and
+    // skips a second arrival for it, so on a live stream this unplugs the number and plugs the new
+    // pad in; before one, only the remembered arrival changes.
+    void sendControllerReplug(std::uint8_t number, std::uint8_t type, std::uint8_t caps,
+                              std::uint32_t supportedButtons);
 
     // Forward a motion sample / battery report for a bound pad. No-ops unless
     // streaming, like sendControllerState.

@@ -158,6 +158,10 @@ void MoonlightControlChannel::sealAndSend(const std::uint8_t* plaintext, std::si
     if (!connected_.load(std::memory_order_acquire)) { return; }
     std::lock_guard<std::mutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
+    sealAndSendLocked(plaintext, len);
+}
+
+void MoonlightControlChannel::sealAndSendLocked(const std::uint8_t* plaintext, std::size_t len) {
     std::size_t outLen = 0;
     const std::uint8_t* pkt = sealer_->seal(seq_, plaintext, len, &outLen);
     if (pkt == nullptr) { return; }
@@ -198,6 +202,24 @@ void MoonlightControlChannel::sendControllerArrival(std::uint8_t controllerNumbe
     const auto p = moonlight::encodeControllerArrival(controllerNumber, controllerType,
                                                       capabilities, supportedButtons);
     sealAndSend(p.data(), p.size());
+}
+
+void MoonlightControlChannel::sendControllerReplug(std::uint8_t controllerNumber,
+                                                   std::uint16_t otherPadsMask,
+                                                   std::uint8_t controllerType,
+                                                   std::uint8_t capabilities,
+                                                   std::uint32_t supportedButtons) {
+    moonlight::ControllerState unplug;
+    unplug.controllerNumber = controllerNumber;
+    unplug.activeGamepadMask = otherPadsMask;
+    const auto arrival = moonlight::encodeControllerArrival(controllerNumber, controllerType,
+                                                            capabilities, supportedButtons);
+    if (!connected_.load(std::memory_order_acquire)) { return; }
+    std::lock_guard<std::mutex> lock(sendMtx_);
+    if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
+    const std::size_t unplugLen = moonlight::encodeControllerMulti(unplug, multiScratch_.data());
+    sealAndSendLocked(multiScratch_.data(), unplugLen);
+    sealAndSendLocked(arrival.data(), arrival.size());
 }
 
 void MoonlightControlChannel::sendControllerMotion(std::uint8_t controllerNumber,

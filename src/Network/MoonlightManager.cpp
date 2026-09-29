@@ -662,6 +662,19 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
     auto* session = ensureSession(*host);
     if (session == nullptr) { return moonlight::BindOutcome::NoIdentity; }
 
+    // The type is THIS BINDING's pick with Auto already resolved, and the capabilities are that
+    // type's ceiling intersected with the pad's real hardware, so the host is never told about
+    // something that will not arrive.
+    const auto arrival = moonlight::arrivalForBinding(controllerType, hasRumble, hasMotion,
+                                                      hasTouchpad, hasBattery, hasLightbar);
+    if (const auto held = numberOnSession(slotId, session)) {
+        reannounceInPlace(slotId, *held, *session, arrival);
+        // A session that is down is started again, as the first bind on a host starts one; one
+        // that is up or on its way up reduces this to nothing.
+        session->launch(host->lastAppId);
+        return moonlight::BindOutcome::Bound;
+    }
+
     // Re-binding the same slot elsewhere releases the old assignment first.
     unbindSlot(slotId);
 
@@ -691,12 +704,6 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
         anyBound_.store(true, std::memory_order_relaxed);
     }
 
-    // Announce the pad. The type is THIS BINDING's pick with Auto already
-    // resolved, and the capabilities are that type's ceiling intersected with the
-    // pad's real hardware, so the host is never told about something that will
-    // not arrive.
-    const auto arrival = moonlight::arrivalForBinding(controllerType, hasRumble, hasMotion,
-                                                      hasTouchpad, hasBattery, hasLightbar);
     session->sendControllerArrival(*number, arrival.type, arrival.capabilities,
                                    moonlight::declaredButtonFlags(arrival.capabilities));
 
@@ -749,6 +756,43 @@ void MoonlightManager::unbindSlot(const QString& slotId) {
         // the next /launch.
         if (moonlight::unbindEndsSession(padSet)) { route.session->quit(); }
     }
+}
+
+std::optional<std::uint8_t>
+MoonlightManager::numberOnSession(const QString& slotId, const MoonlightSession* session) const {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    const auto it = routes_.find(slotId.toStdString());
+    if (it == routes_.end() || it->second.session != session) { return std::nullopt; }
+    return it->second.controllerNumber;
+}
+
+// The pad the host builds next holds no contact, so the next frame is diffed from nothing.
+void MoonlightManager::forgetTouchFrame(const QString& slotId) {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    const auto it = routes_.find(slotId.toStdString());
+    if (it != routes_.end()) { it->second.touchDiffer.reset(); }
+}
+
+// Unbinding and binding again would release the number, and the LAST pad off a live session
+// closes the app the user is playing. So the pad keeps its number and is replugged only where the
+// host would build another pad for what the binding now asks.
+void MoonlightManager::reannounceInPlace(const QString& slotId, std::uint8_t number,
+                                         MoonlightSession& session,
+                                         const moonlight::AnnouncedPad& wanted) {
+    const auto held = session.announcedPad(number);
+    const bool anotherPad = !held.has_value() || moonlight::hostBuildsAnotherPad(*held, wanted);
+    if (!anotherPad) {
+        qCInfo(lcMoonlightManager)
+            << "bind:" << slotId << "already rides" << session.host().id() << "as controller"
+            << static_cast<int>(number) << "as the pad it asks for";
+        return;
+    }
+    qCInfo(lcMoonlightManager) << "bind:" << slotId << "stays controller"
+                               << static_cast<int>(number) << "on" << session.host().id()
+                               << "and is replugged as type" << static_cast<int>(wanted.type);
+    forgetTouchFrame(slotId);
+    session.sendControllerReplug(number, wanted.type, wanted.capabilities,
+                                 moonlight::declaredButtonFlags(wanted.capabilities));
 }
 
 int MoonlightManager::boundSlotCount(const QString& hostId) const {

@@ -85,6 +85,13 @@ class MoonlightControlChannel {
     // Cold-path control messages (arrival, motion forward, termination).
     void sendControllerArrival(std::uint8_t controllerNumber, std::uint8_t controllerType,
                                std::uint8_t capabilities, std::uint32_t supportedButtons);
+    // The CONTROLLER_MULTI that names `controllerNumber` with its bit cleared (the unplug), then
+    // the arrival that plugs it back in as another pad. One hold of the send lock covers both: an
+    // input frame for the number sent between them would make Wolf plug a default Xbox pad there
+    // and skip the arrival.
+    void sendControllerReplug(std::uint8_t controllerNumber, std::uint16_t otherPadsMask,
+                              std::uint8_t controllerType, std::uint8_t capabilities,
+                              std::uint32_t supportedButtons);
     void sendControllerMotion(std::uint8_t controllerNumber, std::uint8_t motionType, float x,
                               float y, float z);
     // One CONTROLLER_TOUCH event. Already diffed by the caller: the wire wants
@@ -98,6 +105,8 @@ class MoonlightControlChannel {
     // Seals `plaintext` under the next seq and reliably sends it. Serialised by
     // sendMtx_ because the seq counter and the ENet host are single-writer.
     void sealAndSend(const std::uint8_t* plaintext, std::size_t len);
+    // sealAndSend's body, for a caller that already holds sendMtx_ over a live link.
+    void sealAndSendLocked(const std::uint8_t* plaintext, std::size_t len);
     void receiveLoop();
 
     // The loop's parts: the keepalive it owes the host, what it takes the send lock for, what it
