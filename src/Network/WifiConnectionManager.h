@@ -9,6 +9,7 @@
 #include "ConnectionStore.h"
 #include "HTTPClient.h"
 #include "Models/Models.h"
+#include "PairingOutcome.h"
 #include "WifiConnection.h"
 #include "WifiManagerEffects.h"
 
@@ -72,8 +73,8 @@ class WifiConnectionManager : public QObject {
     // Posts a generated clientPin, then polls /api/pair/status until the operator
     // approves. On approval it adopts the key and opens the session exactly like
     // a forward pair. A second request while one is live cancels the first.
-    // Untestable in the unit suite since it drives real network; the decision core
-    // it leans on, reducer::nextReversePairingAction, is exhaustively tested.
+    // The decision core it leans on, reducer::nextReversePairingAction, is tested
+    // on its own.
     void requestReversePairing(const models::DiscoveredServer& server);
 
     // Path B's steps: draw the PIN, arm the attempt, then classify whatever the POST comes back
@@ -139,6 +140,11 @@ class WifiConnectionManager : public QObject {
     void wireSlotSync(WifiConnection* conn);
     void pairAndConnect(WifiConnection* conn, const models::DiscoveredServer& server,
                         ConnectIntent intent);
+    // The forward pairs' replies: a connect's PIN-less one, and the operator's PIN from the sheet.
+    void onConnectPairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+                            ConnectIntent intent, const PairingOutcome::Arm& outcome);
+    void onPinPairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+                        const PairingOutcome::Arm& outcome);
     // One PUT /api/connections carrying identity, the key proof and the FULL
     // topology, which is what drives the session live.
     void openSession(WifiConnection* conn, const models::DiscoveredServer& server,
@@ -198,8 +204,8 @@ class WifiConnectionManager : public QObject {
     void emitErrorIfUserInitiated(ConnectIntent intent, const QString& message);
     void markStale(const QString& id);
 
-    // One pairStatus round-trip off the thread pool, fed with the elapsed clock
-    // through reducer::nextReversePairingAction to decide re-arm / open / abort.
+    // One pairStatus round-trip, fed with the elapsed clock through
+    // reducer::nextReversePairingAction to decide re-arm / open / abort.
     void pollReverseStatus();
 
     // One approval poll, in order: what the reply says, and what that answer means.

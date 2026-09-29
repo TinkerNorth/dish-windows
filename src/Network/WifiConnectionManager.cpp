@@ -3,7 +3,7 @@
 
 #include "WifiConnectionManager.h"
 
-#include "PairingClient.h"
+#include "PairingOutcome.h"
 #include "core/net/IpLiterals.h"
 #include "source/http/SatelliteTlsVerifier.h"
 #include "Util/Hex.h"
@@ -20,7 +20,6 @@
 #include <QSet>
 #include <QSignalBlocker>
 #include <QTimer>
-#include <QtConcurrent/QtConcurrent>
 #include <QtGlobal>
 
 #include <random>
@@ -122,16 +121,12 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, HTTPClient*
     deviceId_ = store_->getOrCreateDeviceId();
     deviceName_ = QHostInfo::localHostName();
     if (deviceName_.isEmpty()) { deviceName_ = QStringLiteral("Windows"); }
-    // TOFU on every HTTPS call, keyed by host to match the ConnectionStore
-    // pin-migration convention. `pins` is captured by reference below, so the
-    // store must outlive this manager.
+    // TOFU on every HTTPS call, pairing included, keyed by host to match the
+    // ConnectionStore pin-migration convention: the first pair pins, and every
+    // later call must present the pinned cert. `pins` is captured by reference
+    // below, so the store must outlive this manager.
     auto& pins = store_->facade().pins();
     http_->setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
-        return http::verifyPeerCertificate(host, pins, certDer);
-    });
-    // The same gate over the same store, so the first pair pins and every later
-    // pairing or rotation must present the pinned cert.
-    PairingClient::setPinVerifier([&pins](const QString& host, const QByteArray& certDer) {
         return http::verifyPeerCertificate(host, pins, certDer);
     });
 }
@@ -297,50 +292,48 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
     conn->updateServer(server);
     conn->markConnecting();
 
-    const QString did = deviceId_;
-    const QString dname = deviceName_;
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
-    auto* watcher = new QFutureWatcher<models::PairResponse>(this);
-    QObject::connect(
-        watcher, &QFutureWatcherBase::finished, this, [this, watcher, conn, server, pin] {
-            const auto pair = watcher->result();
-            watcher->deleteLater();
-            pairingInFlight_.remove(conn->id());
-            emit pairingInFlightChanged();
-            const auto outcome = PairingClient::classify(pair);
-            std::visit(
-                [&](auto&& arm) {
-                    using T = std::decay_t<decltype(arm)>;
-                    if constexpr (std::is_same_v<T, PairingClient::Success>) {
-                        store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
-                        openSession(conn, server, ConnectIntent::UserInitiated);
-                    } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
-                        conn->markDisconnected();
-                        emit connectionEvent(makeError(versionMsg()));
-                        emit pairingFailed(conn->id(), QStringLiteral("versionMismatch"));
-                    } else if constexpr (std::is_same_v<T, PairingClient::AuthRequired>) {
-                        // Reachable and parsed but no key granted, so the PIN was
-                        // wrong or expired.
-                        conn->markDisconnected();
-                        emit connectionEvent(makeError(wrongPinMsg()));
-                        emit pairingFailed(conn->id(), QStringLiteral("wrongPin"));
-                    } else if constexpr (std::is_same_v<T, PairingClient::Unreachable>) {
-                        conn->markDisconnected();
-                        emit connectionEvent(makeError(unreachableMsg()));
-                        emit pairingFailed(conn->id(), QStringLiteral("unreachable"));
-                    } else {
-                        // Pending: staged but not granted, rare on a direct submit.
-                        conn->markDisconnected();
-                        emit connectionEvent(makeError(pairPendingMsg()));
-                        emit pairingFailed(conn->id(), QStringLiteral("pending"));
-                    }
-                },
-                outcome);
-        });
-    watcher->setFuture(QtConcurrent::run([server, did, dname, pin] {
-        return PairingClient::pair(server.ip, server.pairPort, did, dname, pin);
-    }));
+    http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, pin, QString(),
+                [this, conn, server](const models::PairResponse& response) {
+                    onPinPairReply(conn, server, PairingOutcome::classify(response));
+                });
+}
+
+// Path A: the PIN the operator read off the satellite, typed into the sheet here.
+void WifiConnectionManager::onPinPairReply(WifiConnection* conn,
+                                           const models::DiscoveredServer& server,
+                                           const PairingOutcome::Arm& outcome) {
+    pairingInFlight_.remove(conn->id());
+    emit pairingInFlightChanged();
+    std::visit(
+        [&](auto&& arm) {
+            using T = std::decay_t<decltype(arm)>;
+            if constexpr (std::is_same_v<T, PairingOutcome::Success>) {
+                store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                openSession(conn, server, ConnectIntent::UserInitiated);
+            } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
+                conn->markDisconnected();
+                emit connectionEvent(makeError(versionMsg()));
+                emit pairingFailed(conn->id(), QStringLiteral("versionMismatch"));
+            } else if constexpr (std::is_same_v<T, PairingOutcome::AuthRequired>) {
+                // Reachable and parsed but no key granted, so the PIN was
+                // wrong or expired.
+                conn->markDisconnected();
+                emit connectionEvent(makeError(wrongPinMsg()));
+                emit pairingFailed(conn->id(), QStringLiteral("wrongPin"));
+            } else if constexpr (std::is_same_v<T, PairingOutcome::Unreachable>) {
+                conn->markDisconnected();
+                emit connectionEvent(makeError(unreachableMsg()));
+                emit pairingFailed(conn->id(), QStringLiteral("unreachable"));
+            } else {
+                // Pending: staged but not granted, rare on a direct submit.
+                conn->markDisconnected();
+                emit connectionEvent(makeError(pairPendingMsg()));
+                emit pairingFailed(conn->id(), QStringLiteral("pending"));
+            }
+        },
+        outcome);
 }
 
 // The value is random but the shape is fixed by the pure formatter, so the displayed PIN is always
@@ -386,15 +379,15 @@ void WifiConnectionManager::applyReverseOutcome(WifiConnection* conn,
     std::visit(
         [&](auto&& arm) {
             using T = std::decay_t<decltype(arm)>;
-            if constexpr (std::is_same_v<T, PairingClient::Success>) {
+            if constexpr (std::is_same_v<T, PairingOutcome::Success>) {
                 // Approved synchronously, with no operator step.
                 conn->markConnecting();
                 store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
                 setReversePhase(ReversePairingPhase::Approved);
                 openSession(conn, server, ConnectIntent::UserInitiated);
-            } else if constexpr (std::is_same_v<T, PairingClient::Pending>) {
+            } else if constexpr (std::is_same_v<T, PairingOutcome::Pending>) {
                 startReversePoll();
-            } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
+            } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
                 emit connectionEvent(makeError(versionMsg()));
                 finishReverse(ReversePairingPhase::Declined);
             } else {
@@ -403,7 +396,7 @@ void WifiConnectionManager::applyReverseOutcome(WifiConnection* conn,
                 finishReverse(ReversePairingPhase::TimedOut);
             }
         },
-        PairingClient::classify(pair));
+        PairingOutcome::classify(pair));
 }
 
 void WifiConnectionManager::onReversePairReply(WifiConnection* conn,
@@ -427,25 +420,15 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     conn->updateServer(server);
     armReverseAttempt(server);
 
-    const QString did = deviceId_;
-    const QString dname = deviceName_;
     const QString pin = reversePin_;
     // The happy-path reply is {ok:false, pending:true}, which then gets polled.
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
-
-    auto* watcher = new QFutureWatcher<models::PairResponse>(this);
-    QObject::connect(watcher, &QFutureWatcherBase::finished, this,
-                     [this, watcher, conn, server, pin] {
-                         const auto pair = watcher->result();
-                         watcher->deleteLater();
-                         onReversePairReply(conn, server, pin, pair);
-                     });
-    watcher->setFuture(QtConcurrent::run([server, did, dname, pin] {
-        // Empty operator pin, displayed pin as clientPin: that is what selects Path B
-        // server-side.
-        return PairingClient::pair(server.ip, server.pairPort, did, dname, QString(), pin);
-    }));
+    // Empty operator pin, displayed pin as clientPin: that is what selects Path B server-side.
+    http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, QString(), pin,
+                [this, conn, server, pin](const models::PairResponse& response) {
+                    onReversePairReply(conn, server, pin, response);
+                });
 }
 
 // What the reducer needs to know about one /pairstatus answer.
@@ -514,16 +497,11 @@ void WifiConnectionManager::pollReverseStatus() {
     reversePollInFlight_ = true;
     reverseElapsedMs_ += kReversePollIntervalMs;
 
-    const QString did = deviceId_;
     const models::DiscoveredServer server = reverseServer_;
-    auto* watcher = new QFutureWatcher<models::PairResponse>(this);
-    QObject::connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, server] {
-        const auto status = watcher->result();
-        watcher->deleteLater();
-        onReverseStatusReply(status, server);
-    });
-    watcher->setFuture(QtConcurrent::run(
-        [server, did] { return PairingClient::pairStatus(server.ip, server.pairPort, did); }));
+    http_->pairStatus(server.ip, server.pairPort, deviceId_,
+                      [this, server](const models::PairResponse& status) {
+                          onReverseStatusReply(status, server);
+                      });
 }
 
 void WifiConnectionManager::cancelReversePairing() {
@@ -554,51 +532,50 @@ void WifiConnectionManager::setReversePhase(ReversePairingPhase phase) {
 void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
                                            const models::DiscoveredServer& server,
                                            ConnectIntent intent) {
-    const QString did = deviceId_;
-    const QString dname = deviceName_;
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
-    auto* watcher = new QFutureWatcher<models::PairResponse>(this);
-    QObject::connect(
-        watcher, &QFutureWatcherBase::finished, this, [this, watcher, conn, server, intent] {
-            const auto pair = watcher->result();
-            watcher->deleteLater();
-            pairingInFlight_.remove(conn->id());
-            emit pairingInFlightChanged();
-            const auto outcome = PairingClient::classify(pair);
-            std::visit(
-                [&](auto&& arm) {
-                    using T = std::decay_t<decltype(arm)>;
-                    if constexpr (std::is_same_v<T, PairingClient::Success>) {
-                        store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
-                        openSession(conn, server, intent);
-                    } else if constexpr (std::is_same_v<T, PairingClient::AuthRequired> ||
-                                         std::is_same_v<T, PairingClient::Pending>) {
-                        // First-time pair, or the server forgot us. Silent intents
-                        // park in Stale so the next user tap gets the dialog.
-                        if (intent == ConnectIntent::UserInitiated) {
-                            conn->markDisconnected();
-                            emit connectionEvent(pairingRequired(server));
-                        } else {
-                            conn->markStale();
-                        }
-                    } else if constexpr (std::is_same_v<T, PairingClient::VersionMismatch>) {
-                        conn->markDisconnected();
-                        emitErrorIfUserInitiated(intent, versionMsg());
-                    } else {
-                        if (intent == ConnectIntent::UserInitiated) {
-                            conn->markDisconnected();
-                            emit connectionEvent(makeError(unreachableMsg()));
-                        } else {
-                            conn->markStale();
-                        }
-                    }
-                },
-                outcome);
-        });
-    watcher->setFuture(QtConcurrent::run([server, did, dname] {
-        return PairingClient::pair(server.ip, server.pairPort, did, dname, QString());
-    }));
+    http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, QString(), QString(),
+                [this, conn, server, intent](const models::PairResponse& response) {
+                    onConnectPairReply(conn, server, intent, PairingOutcome::classify(response));
+                });
+}
+
+// The pair a connect starts with when no key is on file, sent without a PIN.
+void WifiConnectionManager::onConnectPairReply(WifiConnection* conn,
+                                               const models::DiscoveredServer& server,
+                                               ConnectIntent intent,
+                                               const PairingOutcome::Arm& outcome) {
+    pairingInFlight_.remove(conn->id());
+    emit pairingInFlightChanged();
+    std::visit(
+        [&](auto&& arm) {
+            using T = std::decay_t<decltype(arm)>;
+            if constexpr (std::is_same_v<T, PairingOutcome::Success>) {
+                store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                openSession(conn, server, intent);
+            } else if constexpr (std::is_same_v<T, PairingOutcome::AuthRequired> ||
+                                 std::is_same_v<T, PairingOutcome::Pending>) {
+                // First-time pair, or the server forgot us. Silent intents
+                // park in Stale so the next user tap gets the dialog.
+                if (intent == ConnectIntent::UserInitiated) {
+                    conn->markDisconnected();
+                    emit connectionEvent(pairingRequired(server));
+                } else {
+                    conn->markStale();
+                }
+            } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
+                conn->markDisconnected();
+                emitErrorIfUserInitiated(intent, versionMsg());
+            } else {
+                if (intent == ConnectIntent::UserInitiated) {
+                    conn->markDisconnected();
+                    emit connectionEvent(makeError(unreachableMsg()));
+                } else {
+                    conn->markStale();
+                }
+            }
+        },
+        outcome);
 }
 
 void WifiConnectionManager::openSession(WifiConnection* conn,

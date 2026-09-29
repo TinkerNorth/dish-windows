@@ -183,9 +183,9 @@ connectivity returns. A metered connection defers the automatic download but
 never a manual one.
 
 Both `QNetworkAccessManager` instances are dedicated and use Qt's **default**
-certificate validation against the Windows system roots. `net::HTTPClient` and
-`PairingClient` use `QSslSocket::VerifyNone` with trust-on-first-use pinning,
-because a satellite presents a self-signed certificate. Those two must never
+certificate validation against the Windows system roots. `net::HTTPClient`,
+which carries pairing too, uses `QSslSocket::VerifyNone` with trust-on-first-use
+pinning, because a satellite presents a self-signed certificate. It must never
 carry updater traffic, and `src/update/HttpGateways.cpp` says so at the point
 of use.
 

@@ -20,6 +20,7 @@
 #include <QString>
 #include <QTimer>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
 #include <cstring>
@@ -36,6 +37,7 @@ struct RecordedRequest {
     QByteArray verb;
     QString host;
     QString path;
+    QUrlQuery query;
     QByteArray deviceId;
     QByteArray hmacProof;
     QByteArray body;
@@ -116,6 +118,7 @@ class FakeSatelliteRest : public QNetworkAccessManager {
         recorded.verb = verbOf(op, request);
         recorded.host = request.url().host();
         recorded.path = request.url().path();
+        recorded.query = QUrlQuery(request.url());
         recorded.deviceId = request.rawHeader("X-Device-Id");
         recorded.hmacProof = request.rawHeader("X-Hmac-Proof");
         recorded.body = outgoingData != nullptr ? outgoingData->readAll() : QByteArray();

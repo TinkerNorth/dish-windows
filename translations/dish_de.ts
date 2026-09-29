@@ -4530,7 +4530,7 @@
     </message>
 </context>
 <context>
-    <name>dish::net::PairingClient</name>
+    <name>dish::net::PairingOutcome</name>
     <message>
         <source>Server unreachable</source>
         <translation>Server nicht erreichbar</translation>

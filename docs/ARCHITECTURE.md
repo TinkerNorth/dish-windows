@@ -80,7 +80,7 @@ layer together.
 | `src/Util/` | Leaf helpers with no domain state: endian, hex, host battery, locale install | nothing | mixed |
 | `src/UI/` | The design-token palette (`Theme`), the font-family probes (`FontStacks`), crash handling, the `SlotLiveStats` mapper, `common/ExternalLink`, `licenses/LicenseManifest` | `core/` | yes (Gui) |
 | `src/Input/` | The SDL bridge, the input processor, joystick mapping, the output command queue | `core/` | yes |
-| `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingClient` | `core/` | yes |
+| `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingOutcome` | `core/` | yes |
 | `src/update/` | The updater's IO edge: the manifest and download gateways (dedicated QNAMs), the staging store, `UpdateCoordinator`, and the pre-`main` boot handoff | `core/`, `source/` | yes |
 
 `src/Input/` and `src/Network/` predate the layer model and keep their
