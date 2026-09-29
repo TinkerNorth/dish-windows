@@ -2790,10 +2790,6 @@
         <translation>%1, host de Moonlight, %2</translation>
     </message>
     <message>
-        <source>Moonlight host (Sunshine/Apollo)</source>
-        <translation>Host de Moonlight (Sunshine/Apollo)</translation>
-    </message>
-    <message>
         <source>Pair…</source>
         <translation>Emparejar…</translation>
     </message>
@@ -2891,6 +2887,10 @@
     <message>
         <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
         <translation>Dish borra su emparejamiento. El anfitrión conserva su propio registro hasta que alguien elimine Dish allí, y necesitarás el PIN de nuevo.</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
+        <translation>Host de Moonlight (Sunshine, Apollo o Wolf)</translation>
     </message>
 </context>
 <context>
