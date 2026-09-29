@@ -12,6 +12,8 @@
 #include "architecture/Observable.h"
 #include "composer/WakeStateComposer.h"
 #include "core/reducer/ApplyBindingMachine.h"
+#include "core/input/StickHealth.h"
+#include "core/reducer/DiagnosticsLog.h"
 #include "core/reducer/UpdateMachine.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
@@ -192,6 +194,12 @@ class AppViewModel : public QObject {
                    updatePrefsChanged)
     Q_PROPERTY(bool updateAutoDownload READ updateAutoDownload WRITE setUpdateAutoDownload NOTIFY
                    updatePrefsChanged)
+
+    // ── Diagnostics: the input inspector ─────────────────────────────────────
+    // Republished at the poll rate while an inspection is armed; the shapes are
+    // qml/DiagnosticsMaps.h's inputSnapshotRow and stickTestRow.
+    Q_PROPERTY(QVariantMap inputSnapshot READ inputSnapshot NOTIFY inputSnapshotChanged)
+    Q_PROPERTY(QVariantMap stickTest READ stickTest NOTIFY stickTestChanged)
 
   public:
     explicit AppViewModel(dish::AppModel* model, QObject* parent = nullptr);
@@ -581,6 +589,27 @@ class AppViewModel : public QObject {
     Q_INVOKABLE void openReleaseNotes();
     Q_INVOKABLE void acknowledgeUpdated();
 
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+    // One card per remembered or live satellite, keyed and named by its
+    // Connections row, with its session's own account of itself. Re-pull on
+    // telemetryChanged, which ticks once a second.
+    Q_INVOKABLE QVariantList diagnosticsHosts() const;
+    // The slot's binding: where it goes, its side of the wire, and the
+    // capability rows its own stored settings produce. `bound` is false while
+    // it goes nowhere.
+    Q_INVOKABLE QVariantMap bindingDiagnostics(const QString& slotId) const;
+    // The flight recorder, oldest first. Re-pull on diagnosticsLogChanged.
+    Q_INVOKABLE QVariantList diagnosticsLog() const;
+    Q_INVOKABLE void copyToClipboard(const QString& text) const;
+    // Arms the inspector on one slot until stopInputInspection. Arming another
+    // slot re-points it and drops the last one's stick test.
+    Q_INVOKABLE void startInputInspection(const QString& slotId);
+    Q_INVOKABLE void stopInputInspection();
+    // "drift" or "range"; ignored while no inspection is armed.
+    Q_INVOKABLE void startStickTest(const QString& kind);
+    QVariantMap inputSnapshot() const { return inputSnapshot_; }
+    QVariantMap stickTest() const { return stickTest_; }
+
   signals:
     // Folds AppModel's stateChanged and the coordinator's connectionsChanged.
     void stateChanged();
@@ -650,6 +679,10 @@ class AppViewModel : public QObject {
     // in the coordinator, so it fires once per version per session. Periodic
     // check FAILURES never reach here: they live in Settings.
     void updateNotice(const QString& token, const QString& version);
+
+    void diagnosticsLogChanged();
+    void inputSnapshotChanged();
+    void stickTestChanged();
 
   private:
     void onStateChanged();
@@ -776,6 +809,22 @@ class AppViewModel : public QObject {
     QString moonlightAppsHostId_;
     QStringList moonlightAppIds_;
     QStringList moonlightAppTitles_;
+
+    // ── Diagnostics internals ────────────────────────────────────────────────
+    QVariantMap satelliteBindingDiagnostics(const models::ControllerSlot& slot) const;
+    QVariantMap moonlightBindingDiagnostics(const models::ControllerSlot& slot,
+                                            const QString& hostId) const;
+    // One poll: the snapshot, and the stick test's sample and clock.
+    void onInspectionTick();
+    void publishInputSnapshot(const QVariantMap& snapshot);
+    void publishStickTest(std::int64_t nowMs);
+
+    QTimer* inspectionTimer_ = nullptr;
+    QString inspectedSlotId_;
+    input::StickBench stickBench_;
+    QVariantMap inputSnapshot_;
+    QVariantMap stickTest_;
+    arch::Observable<std::vector<reducer::DiagnosticsEvent>>::Subscription diagnosticsLogSub_;
 };
 
 } // namespace dish::qml

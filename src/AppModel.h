@@ -15,6 +15,7 @@
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
 #include "composer/CrashReportingBackend.h"
+#include "composer/DiagnosticsRecorder.h"
 #include "composer/BackgroundCoordinator.h"
 #include "composer/CrashReportingController.h"
 #include "composer/SleepCoordinator.h"
@@ -109,6 +110,11 @@ class AppModel : public QObject {
     // The reactive/command surface the UI binds to. Hot-path binding and
     // routing still live on hub().
     composer::ConnectionCoordinator* connections() { return connections_; }
+    // The flight recorder behind the Diagnostics page: link and pad events,
+    // oldest first and bounded, for this run only.
+    const arch::Observable<std::vector<reducer::DiagnosticsEvent>>& diagnosticsLog() const {
+        return diagnosticsLog_.state();
+    }
     // The Moonlight (GameStream) subsystem, a sibling of the Satellite manager.
     // Owns the host list, pairing and sessions for Sunshine/Apollo/Wolf hosts.
     net::MoonlightManager* moonlight() { return &moonlight_; }
@@ -496,6 +502,10 @@ class AppModel : public QObject {
     net::WifiConnectionManager* wifi_;
     net::ConnectionHub* hub_;
     composer::ConnectionCoordinator* connections_;
+    // Declaration order: the recorder subscribes to the coordinator's rows and
+    // writes into the store, so it comes after both and is destroyed first.
+    source::DiagnosticsLogStore diagnosticsLog_;
+    composer::DiagnosticsRecorder diagnosticsRecorder_;
     // Self-contained: owns its own repo/identity/sessions and shares nothing with
     // the Satellite hot path, so the Moonlight path can never regress it.
     net::MoonlightManager moonlight_;
