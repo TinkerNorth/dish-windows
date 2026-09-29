@@ -434,7 +434,7 @@ TEST_CASE("A certificate pinned by a handshake is not on its own a pairing",
 }
 
 TEST_CASE("The pairing question is asked on the one route that can answer it",
-          "[moonlight][behaviour][b4]") {
+          "[moonlight][behaviour][b4][h1]") {
     // A live Sunshine host answers PairStatus 0 over plaintext to every caller,
     // measured against the host at 192.168.68.98 for the very uniqueid this
     // client sends. So a plaintext probe alone can never make a paired host look
@@ -617,6 +617,46 @@ TEST_CASE("A refused pairing stops at the phase that refused it and writes nothi
     REQUIRE(session.phase() == SessionPhase::Pairing);
 }
 
+// ── B6 · forget ─────────────────────────────────────────────────────────────
+
+TEST_CASE("A probe answered after the forget writes nothing back", "[moonlight][behaviour][b6]") {
+    // A forget with a session up sends /cancel and keeps the session alive to
+    // hear its answer, so a reply to a question asked BEFORE the forget can still
+    // land on it. Nothing that reply carries may reach the manager: it would put
+    // a verdict back on a host that no longer exists.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    // Takes the /cancel and never answers it, so the session waits out its grace.
+    QTcpServer silentTls;
+    REQUIRE(silentTls.listen(QHostAddress::LocalHost, 0));
+    const MoonlightHost h = pairedHostAt(plain, static_cast<int>(silentTls.serverPort()));
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+    REQUIRE(manager.bindSlot(QStringLiteral("sdl:1"), h.id(), dish::models::kMoonlightDeviceAuto,
+                             false, false, false, false, false) == BindOutcome::Bound);
+    auto* session = manager.findChild<MoonlightSession*>();
+    REQUIRE(session != nullptr);
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::Streaming);
+    bool landed = false;
+    QObject::connect(session, &MoonlightSession::probeFinished,
+                     [&landed](bool, const QString&) { landed = true; });
+
+    manager.probeHost(h.id());
+    manager.forgetHost(h.id());
+    REQUIRE(session->cancelInFlight());
+    REQUIRE(pumpUntil([&landed] { return landed; }));
+
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK_FALSE(in.probeAnswered);
+    CHECK_FALSE(in.probeInFlight);
+    CHECK(store.hosts().isEmpty());
+    CHECK_FALSE(store.serverCert(h.id()).has_value());
+}
+
 // ── B7, B8, B22, B23 · one session per host ─────────────────────────────────
 
 TEST_CASE("The first pad on a host launches and the second makes no call at all",
@@ -647,6 +687,47 @@ TEST_CASE("The first pad on a host launches and the second makes no call at all"
     REQUIRE(log.paths() == before);
     REQUIRE(fx.manager->boundSlotCount(kIdA) == 2);
     REQUIRE(*fx.manager->sessionPhase(kIdA) == SessionPhase::Launching);
+}
+
+TEST_CASE("A bound pad on a stream that came up is Live under its controller number",
+          "[moonlight][behaviour][b7]") {
+    Fixture fx;
+    fx.establishPairing(kIpA);
+    REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
+    auto* session = fx.sessionFor(kIpA);
+    REQUIRE(session != nullptr);
+
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::Streaming);
+
+    CHECK(fx.uiStateAnswered(kIdA, QStringLiteral("sdl:1")) == SessionUiState::Live);
+    CHECK(fx.manager->slotForController(kIdA, 0) == QStringLiteral("sdl:1"));
+    // A pad that is not on the stream is offered the session instead.
+    CHECK(fx.uiStateAnswered(kIdA, QStringLiteral("sdl:2")) == SessionUiState::Joining);
+}
+
+TEST_CASE("A pad joining a live session is plugged in on the stream and asks the host nothing",
+          "[moonlight][behaviour][b8]") {
+    // The host that holds the stream, declared first so it outlives the session.
+    MoonlightWolfControlHost wolf(kRikey);
+    REQUIRE(wolf.listening());
+    Fixture fx;
+    fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
+    REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
+    auto* session = fx.sessionFor(kIpA);
+    REQUIRE(session != nullptr);
+    REQUIRE(MoonlightSessionTestAccess::control(*session).connect("127.0.0.1", wolf.port(), kRikey,
+                                                                  0, 2000));
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::ControlConnecting);
+    MoonlightSessionTestAccess::feed(*session, SessionEvent::ControlConnected);
+    REQUIRE(pumpUntil([&wolf] { return wolf.padType(0).has_value(); }));
+    MoonlightRequestLog log(*fx.manager);
+
+    REQUIRE(fx.bind(QStringLiteral("sdl:2"), kIdA) == BindOutcome::Bound);
+
+    CHECK(pumpUntil([&wolf] { return wolf.padType(1).has_value(); }));
+    CHECK(wolf.padType(0).has_value());
+    CHECK(log.paths().isEmpty());
+    CHECK(session->phase() == SessionPhase::Streaming);
 }
 
 TEST_CASE("Four pads ride one session and only the last one off cancels it",
