@@ -1527,8 +1527,6 @@ bool AppViewModel::isVerifiedModel(const QString& slotId) const {
 
 QString AppViewModel::touchpadModeFor(const QString& connectionId) const {
     const auto pick = model_->touchpadModeStore()->modeFor(connectionId.toStdString());
-    // No invented default: an unpicked host reads "off" and the resolve ladder
-    // owns any richer behaviour on the wire.
     return touchpadChoiceForPick(pick);
 }
 
