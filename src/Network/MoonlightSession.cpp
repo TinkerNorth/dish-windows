@@ -16,6 +16,7 @@
 #include <QUrl>
 
 #include <array>
+#include <cstdint>
 #include <utility>
 
 namespace dish::net {
@@ -51,10 +52,16 @@ struct DisplayMode {
 // so the size asked for here never reaches their desktop.
 DisplayMode requestedDisplayMode() { return DisplayMode{}; }
 
-// 5.1 at 16 bits, as sent by every Moonlight client. The host uses it to pick an audio format for
-// a stream Dish never decodes; it is sent because a host that is given no number picks stereo and
-// then reconfigures its own output device, which is audible to the user sitting at it.
-constexpr QStringView kSurroundAudioInfo = u"196610";
+constexpr std::uint32_t kSpeakerFrontLeft = 0x1;
+constexpr std::uint32_t kSpeakerFrontRight = 0x2;
+constexpr std::uint32_t kStereoChannelCount = 2;
+
+constexpr std::uint32_t surroundAudioInfo(std::uint32_t channelMask, std::uint32_t channelCount) {
+    return (channelMask << 16) | channelCount;
+}
+
+constexpr std::uint32_t kStereoAudio =
+    surroundAudioInfo(kSpeakerFrontLeft | kSpeakerFrontRight, kStereoChannelCount);
 
 } // namespace
 
@@ -493,7 +500,7 @@ void MoonlightSession::beginLaunch() {
          // Dish, whose user is sitting at the host using this as a pad: it would
          // silence the very machine they are listening to.
          {QStringLiteral("localAudioPlayMode"), QStringLiteral("1")},
-         {QStringLiteral("surroundAudioInfo"), kSurroundAudioInfo.toString()}});
+         {QStringLiteral("surroundAudioInfo"), QString::number(kStereoAudio)}});
     // No remoteControllersBitmap and no gcmap, as the other two clients send
     // none: the pads are plugged by their CONTROLLER_ARRIVAL, each with its own
     // type, and a bitmap naming one pad up front is a pad the host may build
@@ -540,7 +547,7 @@ void MoonlightSession::requestResume() {
                     {QStringLiteral("rikey"), QString::fromStdString(moonlight::crypto::hexEncode(
                                                   rikey_.data(), rikey_.size()))},
                     {QStringLiteral("rikeyid"), QString::number(rikeyId_)},
-                    {QStringLiteral("surroundAudioInfo"), kSurroundAudioInfo.toString()}});
+                    {QStringLiteral("surroundAudioInfo"), QString::number(kStereoAudio)}});
 }
 
 // A 200 that is ok() is still not a session: a host that neither started one nor handed one back
