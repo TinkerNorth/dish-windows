@@ -31,7 +31,10 @@ QJsonObject parseObject(const QByteArray& body) {
 
 } // namespace
 
-HTTPClient::HTTPClient(QObject* parent) : QObject(parent), nam_(new QNetworkAccessManager(this)) {
+HTTPClient::HTTPClient(QObject* parent) : HTTPClient(new QNetworkAccessManager, parent) {}
+
+HTTPClient::HTTPClient(QNetworkAccessManager* nam, QObject* parent) : QObject(parent), nam_(nam) {
+    nam_->setParent(this);
     nam_->setTransferTimeout(kTimeoutMs);
 }
 

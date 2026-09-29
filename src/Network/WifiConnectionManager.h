@@ -49,6 +49,8 @@ class WifiConnectionManager : public QObject {
     Q_OBJECT
   public:
     explicit WifiConnectionManager(ConnectionStore* store, QObject* parent = nullptr);
+    // Takes ownership of `http`, which is how a test puts the satellite's REST API in-process.
+    WifiConnectionManager(ConnectionStore* store, HTTPClient* http, QObject* parent);
     ~WifiConnectionManager() override;
 
     bool isScanning() const { return scanning_; }
@@ -135,21 +137,33 @@ class WifiConnectionManager : public QObject {
     // blip visible to the UI.
     void rekey(WifiConnection* conn, const models::DiscoveredServer& server);
 
-    // The rekey PUT's reply, in three steps: is this still the session that asked, does the reply
-    // carry material, and adopt it.
-    struct RekeyMaterial {
+    // What a session PUT grants, read once for the connect and the rekey alike.
+    struct SessionMaterial {
         std::array<std::uint8_t, 4> token{};
         std::array<std::uint8_t, wire::kSessionSaltSize> salt{};
         std::uint32_t tokenBe = 0;
     };
-    static std::optional<RekeyMaterial> rekeyMaterialFrom(const models::SessionResponse& resp);
+    static std::optional<SessionMaterial> sessionMaterialFrom(const models::SessionResponse& resp);
+    // The satellite granted a session the link here cannot use (unusable material, or a socket
+    // that will not open). It is handed back rather than left holding a slot until the
+    // satellite's own timeout, a user's connect is told, and nothing retries: the same grant
+    // would fail the same way.
+    void releaseUnusableGrant(WifiConnection* conn, const models::DiscoveredServer& server,
+                              const QString& connectionId, const QString& proof,
+                              ConnectIntent intent);
+    // DELETE /api/connections/{id}, best-effort: the local side already treats it as gone.
+    void releaseSession(const models::DiscoveredServer& server, const QString& connectionId,
+                        const QString& proof);
+
+    // The rekey PUT's reply, in three steps: is this still the session that asked, does the reply
+    // carry material, and adopt it.
     void onRekeyReply(const QString& id, const std::shared_ptr<SatelliteClient>& client,
                       const std::array<std::uint8_t, 32>& pairingKey,
                       const models::SessionResponse& resp);
     void adoptRekey(WifiConnection* c, const QString& id,
                     const std::shared_ptr<SatelliteClient>& client,
                     const std::array<std::uint8_t, 32>& pairingKey,
-                    const models::SessionResponse& resp, const RekeyMaterial& material);
+                    const models::SessionResponse& resp, const SessionMaterial& material);
     // Reads GET /api/server/capabilities for the host's controller-audio
     // verdict and folds it into the connection (reducer/HostAudioVerdict.h).
     // Fired after EVERY successful session PUT — connect, reconnect-after-death

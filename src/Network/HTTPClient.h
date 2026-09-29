@@ -27,6 +27,8 @@ class HTTPClient : public QObject {
     Q_OBJECT
   public:
     explicit HTTPClient(QObject* parent = nullptr);
+    // Takes ownership of `nam`: the seam a test answers the satellite's routes through.
+    HTTPClient(QNetworkAccessManager* nam, QObject* parent);
     ~HTTPClient() override;
 
     // Returning false aborts the request. Pins on first contact and rejects a

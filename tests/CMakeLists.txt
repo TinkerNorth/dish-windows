@@ -101,6 +101,7 @@ set(DISH_TEST_SOURCES
     test_found_visibility.cpp
     test_session_lifecycle.cpp
     test_session_manager.cpp
+    test_wifi_connection_manager.cpp
     test_catalog_repository.cpp
     test_catalog_dto.cpp
     test_controller_type_store.cpp

@@ -4540,6 +4540,46 @@
         <source>Refusing to connect to a non-local address (%1).</source>
         <translation>Odbijeno povezivanje na nelokalnu adresu (%1).</translation>
     </message>
+    <message>
+        <source>Server unreachable — check it&apos;s powered on and on the same Wi-Fi.</source>
+        <translation>Server nije dostupan. Provjerite je li uključen i na istoj Wi-Fi mreži.</translation>
+    </message>
+    <message>
+        <source>This satellite no longer recognizes this device. Re-pair needed.</source>
+        <translation>Ovaj satelit više ne prepoznaje ovaj uređaj. Potrebno je ponovo upariti.</translation>
+    </message>
+    <message>
+        <source>This app and the satellite speak different protocol versions.</source>
+        <translation>Ova aplikacija i satelit koriste različite verzije protokola.</translation>
+    </message>
+    <message>
+        <source>This satellite needs a newer version of Dish. Update the app and retry.</source>
+        <translation>Ovaj satelit traži noviju verziju aplikacije Dish. Ažurirajte aplikaciju i pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>This satellite is too old for this version of Dish. Update the satellite.</source>
+        <translation>Ovaj satelit je prestar za ovu verziju aplikacije Dish. Ažurirajte satelit.</translation>
+    </message>
+    <message>
+        <source>That PIN wasn&apos;t accepted. Check the code on the satellite and try again.</source>
+        <translation>Taj PIN nije prihvaćen. Provjerite kod na satelitu i pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>The satellite hasn&apos;t confirmed pairing yet. Try again in a moment.</source>
+        <translation>Satelit još nije potvrdio uparivanje. Pokušajte ponovo za trenutak.</translation>
+    </message>
+    <message>
+        <source>The satellite declined this device. Pairing was not approved.</source>
+        <translation>Satelit je odbio ovaj uređaj. Uparivanje nije odobreno.</translation>
+    </message>
+    <message>
+        <source>Timed out waiting for approval on the satellite. Try again.</source>
+        <translation>Isteklo je vrijeme čekanja na odobrenje na satelitu. Pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>The satellite accepted, but the controller link would not open. Try again.</source>
+        <translation>Satelit je prihvatio, ali veza kontrolera se nije otvorila. Pokušajte ponovo.</translation>
+    </message>
 </context>
 <context>
     <name>dish::qml::AppViewModel</name>

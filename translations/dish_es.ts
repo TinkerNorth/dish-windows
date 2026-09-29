@@ -4520,6 +4520,46 @@
         <source>Refusing to connect to a non-local address (%1).</source>
         <translation>Se rechaza la conexión a una dirección no local (%1).</translation>
     </message>
+    <message>
+        <source>Server unreachable — check it&apos;s powered on and on the same Wi-Fi.</source>
+        <translation>Servidor inaccesible. Comprueba que esté encendido y en la misma Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>This satellite no longer recognizes this device. Re-pair needed.</source>
+        <translation>Este satélite ya no reconoce este dispositivo. Hay que volver a emparejarlo.</translation>
+    </message>
+    <message>
+        <source>This app and the satellite speak different protocol versions.</source>
+        <translation>Esta app y el satélite usan versiones de protocolo distintas.</translation>
+    </message>
+    <message>
+        <source>This satellite needs a newer version of Dish. Update the app and retry.</source>
+        <translation>Este satélite necesita una versión más reciente de Dish. Actualiza la app y vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>This satellite is too old for this version of Dish. Update the satellite.</source>
+        <translation>Este satélite es demasiado antiguo para esta versión de Dish. Actualiza el satélite.</translation>
+    </message>
+    <message>
+        <source>That PIN wasn&apos;t accepted. Check the code on the satellite and try again.</source>
+        <translation>Ese PIN no se aceptó. Comprueba el código en el satélite y vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>The satellite hasn&apos;t confirmed pairing yet. Try again in a moment.</source>
+        <translation>El satélite aún no ha confirmado el emparejamiento. Vuelve a intentarlo en un momento.</translation>
+    </message>
+    <message>
+        <source>The satellite declined this device. Pairing was not approved.</source>
+        <translation>El satélite rechazó este dispositivo. El emparejamiento no se aprobó.</translation>
+    </message>
+    <message>
+        <source>Timed out waiting for approval on the satellite. Try again.</source>
+        <translation>Se agotó el tiempo de espera de la aprobación en el satélite. Inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>The satellite accepted, but the controller link would not open. Try again.</source>
+        <translation>El satélite aceptó, pero el enlace del mando no se abrió. Inténtalo de nuevo.</translation>
+    </message>
 </context>
 <context>
     <name>dish::qml::AppViewModel</name>

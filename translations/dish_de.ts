@@ -4520,6 +4520,46 @@
         <source>Refusing to connect to a non-local address (%1).</source>
         <translation>Verbindung zu einer nicht lokalen Adresse (%1) wird verweigert.</translation>
     </message>
+    <message>
+        <source>Server unreachable — check it&apos;s powered on and on the same Wi-Fi.</source>
+        <translation>Server nicht erreichbar. Prüfe, ob er eingeschaltet und im selben WLAN ist.</translation>
+    </message>
+    <message>
+        <source>This satellite no longer recognizes this device. Re-pair needed.</source>
+        <translation>Dieser Satellit erkennt dieses Gerät nicht mehr. Bitte neu koppeln.</translation>
+    </message>
+    <message>
+        <source>This app and the satellite speak different protocol versions.</source>
+        <translation>Diese App und der Satellit sprechen unterschiedliche Protokollversionen.</translation>
+    </message>
+    <message>
+        <source>This satellite needs a newer version of Dish. Update the app and retry.</source>
+        <translation>Dieser Satellit braucht eine neuere Version von Dish. Aktualisiere die App und versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>This satellite is too old for this version of Dish. Update the satellite.</source>
+        <translation>Dieser Satellit ist zu alt für diese Version von Dish. Aktualisiere den Satelliten.</translation>
+    </message>
+    <message>
+        <source>That PIN wasn&apos;t accepted. Check the code on the satellite and try again.</source>
+        <translation>Diese PIN wurde nicht akzeptiert. Prüfe den Code auf dem Satelliten und versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>The satellite hasn&apos;t confirmed pairing yet. Try again in a moment.</source>
+        <translation>Der Satellit hat die Kopplung noch nicht bestätigt. Versuche es gleich noch einmal.</translation>
+    </message>
+    <message>
+        <source>The satellite declined this device. Pairing was not approved.</source>
+        <translation>Der Satellit hat dieses Gerät abgelehnt. Die Kopplung wurde nicht bestätigt.</translation>
+    </message>
+    <message>
+        <source>Timed out waiting for approval on the satellite. Try again.</source>
+        <translation>Zeitüberschreitung beim Warten auf die Bestätigung am Satelliten. Versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>The satellite accepted, but the controller link would not open. Try again.</source>
+        <translation>Der Satellit hat zugestimmt, aber die Controller-Verbindung ließ sich nicht öffnen. Versuche es erneut.</translation>
+    </message>
 </context>
 <context>
     <name>dish::qml::AppViewModel</name>

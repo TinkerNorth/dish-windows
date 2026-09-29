@@ -19,7 +19,6 @@
 #include "core/reducer/ReversePairing.h"
 #include "core/wire/SessionCrypto.h"
 
-#include <QCoreApplication>
 #include <QHostInfo>
 #include <QSet>
 #include <QSignalBlocker>
@@ -34,9 +33,6 @@
 namespace dish::net {
 
 namespace {
-
-// Pins every user-facing string in this file to one .ts <context> entry.
-constexpr const char* kTrContext = "dish::net::WifiConnectionManager";
 
 ConnectionEvent makeError(const QString& msg) { return {ConnectionEventKind::Error, {}, msg}; }
 
@@ -56,16 +52,16 @@ descriptorsToDesired(const QList<models::ControllerDescriptor>& descriptors) {
 }
 
 QString unreachableMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "Server unreachable — check it's powered on and on the same Wi-Fi.");
+    return WifiConnectionManager::tr(
+        "Server unreachable — check it's powered on and on the same Wi-Fi.");
 }
 QString rePairMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "This satellite no longer recognizes this device. Re-pair needed.");
+    return WifiConnectionManager::tr(
+        "This satellite no longer recognizes this device. Re-pair needed.");
 }
 QString versionMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "This app and the satellite speak different protocol versions.");
+    return WifiConnectionManager::tr(
+        "This app and the satellite speak different protocol versions.");
 }
 // The 409 body names the satellite's range, so the message can say which end is
 // behind instead of leaving the user to guess. An unusable body falls back to
@@ -73,11 +69,10 @@ QString versionMsg() {
 QString versionMsgFor(reducer::ProtocolVerdict verdict) {
     switch (verdict) {
     case reducer::ProtocolVerdict::UpdateDish:
-        return QCoreApplication::translate(
-            kTrContext, "This satellite needs a newer version of Dish. Update the app and retry.");
+        return WifiConnectionManager::tr(
+            "This satellite needs a newer version of Dish. Update the app and retry.");
     case reducer::ProtocolVerdict::UpdateSatellite:
-        return QCoreApplication::translate(
-            kTrContext,
+        return WifiConnectionManager::tr(
             "This satellite is too old for this version of Dish. Update the satellite.");
     case reducer::ProtocolVerdict::Settled:
     case reducer::ProtocolVerdict::RetryLower:
@@ -87,20 +82,23 @@ QString versionMsgFor(reducer::ProtocolVerdict verdict) {
     return versionMsg();
 }
 QString wrongPinMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "That PIN wasn't accepted. Check the code on the satellite and try again.");
+    return WifiConnectionManager::tr(
+        "That PIN wasn't accepted. Check the code on the satellite and try again.");
 }
 QString pairPendingMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "The satellite hasn't confirmed pairing yet. Try again in a moment.");
+    return WifiConnectionManager::tr(
+        "The satellite hasn't confirmed pairing yet. Try again in a moment.");
 }
 QString reverseDeclinedMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "The satellite declined this device. Pairing was not approved.");
+    return WifiConnectionManager::tr(
+        "The satellite declined this device. Pairing was not approved.");
 }
 QString reverseTimedOutMsg() {
-    return QCoreApplication::translate(
-        kTrContext, "Timed out waiting for approval on the satellite. Try again.");
+    return WifiConnectionManager::tr("Timed out waiting for approval on the satellite. Try again.");
+}
+QString wireFailedMsg() {
+    return WifiConnectionManager::tr(
+        "The satellite accepted, but the controller link would not open. Try again.");
 }
 
 // The window an operator needs to read the PIN and approve on the satellite. The
@@ -112,7 +110,12 @@ constexpr std::int64_t kReverseDeadlineMs = 120'000;
 } // namespace
 
 WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, QObject* parent)
-    : QObject(parent), store_(store), http_(new HTTPClient(this)) {
+    : WifiConnectionManager(store, new HTTPClient, parent) {}
+
+WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, HTTPClient* http,
+                                             QObject* parent)
+    : QObject(parent), store_(store), http_(http) {
+    http_->setParent(this);
     deviceId_ = store_->getOrCreateDeviceId();
     deviceName_ = QHostInfo::localHostName();
     if (deviceName_.isEmpty()) { deviceName_ = QStringLiteral("Windows"); }
@@ -596,7 +599,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
     http_->putSession(
         server.ip, server.httpPort, deviceId_, deviceName_, proof, descriptors, wantsMouse,
         conn->offeredProtocolVersion(),
-        [this, conn, server, intent, id, pairingKey,
+        [this, conn, server, intent, id, pairingKey, proof,
          sentDescriptors](const models::SessionResponse& resp) {
             using reducer::RestVerdict;
             reducer::RestReply rr;
@@ -641,29 +644,20 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                 scheduleRetry(server, intent);
                 return;
             }
-            // Malformed material degrades like a refused connect, never a crash.
-            const auto tok = util::fromHex(resp.token->toStdString());
-            const auto salt = util::fromHex(resp.sessionSalt->toStdString());
-            if (!tok || tok->size() != 4 || !salt || salt->size() != 8) {
-                conn->markDisconnected();
+            const auto material = sessionMaterialFrom(resp);
+            if (!material.has_value()) {
+                releaseUnusableGrant(conn, server, *resp.connectionId, proof, intent);
                 return;
             }
-            std::array<std::uint8_t, 4> token{};
-            std::copy_n(tok->begin(), 4, token.begin());
-            std::array<std::uint8_t, 8> saltArr{};
-            std::copy_n(salt->begin(), 8, saltArr.begin());
             // The pairing key itself never reaches the UDP path; only this
             // derived per-session key does.
-            const std::uint32_t tokenBe = (static_cast<std::uint32_t>(token[0]) << 24) |
-                                          (static_cast<std::uint32_t>(token[1]) << 16) |
-                                          (static_cast<std::uint32_t>(token[2]) << 8) |
-                                          static_cast<std::uint32_t>(token[3]);
             std::array<std::uint8_t, 32> sessionKey{};
-            wire::deriveSessionKey(pairingKey.data(), saltArr.data(), tokenBe, sessionKey.data());
+            wire::deriveSessionKey(pairingKey.data(), material->salt.data(), material->tokenBe,
+                                   sessionKey.data());
 
             auto client = std::make_shared<SatelliteClient>();
             if (!client->openSocket(server.ip.toStdString(), server.udpPort)) {
-                conn->markDisconnected();
+                releaseUnusableGrant(conn, server, *resp.connectionId, proof, intent);
                 return;
             }
             // The SETTLED version, not the offered one: a pre-versioning
@@ -672,7 +666,7 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
             const auto negotiated = reducer::settleAccepted(resp.protocolVersion);
             conn->setSettledProtocolVersion(negotiated.settledVersion, negotiated.satelliteBehind);
             conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
-            client->setConnectionParams(token, sessionKey, negotiated.settledVersion);
+            client->setConnectionParams(material->token, sessionKey, negotiated.settledVersion);
             store_->remember(server);
             retryAttempts_.remove(id);
 
@@ -754,18 +748,17 @@ void WifiConnectionManager::reconcile(WifiConnection* conn,
                       });
 }
 
-// The token and salt a rekey PUT must both carry, in the sizes the wire fixes. Null for a reply
-// that is missing either, or carries one at the wrong length: there is nothing to adopt, and the
-// death retry is what heals a session that truly exhausts.
-std::optional<WifiConnectionManager::RekeyMaterial>
-WifiConnectionManager::rekeyMaterialFrom(const models::SessionResponse& resp) {
+// The token and salt a session PUT must both carry, in the sizes the wire fixes. Null for a reply
+// that is missing either, or carries one at the wrong length: there is nothing to adopt.
+std::optional<WifiConnectionManager::SessionMaterial>
+WifiConnectionManager::sessionMaterialFrom(const models::SessionResponse& resp) {
     if (!resp.token.has_value() || !resp.sessionSalt.has_value()) { return std::nullopt; }
     const auto tok = util::fromHex(resp.token->toStdString());
     const auto salt = util::fromHex(resp.sessionSalt->toStdString());
     if (!tok || tok->size() != 4 || !salt || salt->size() != wire::kSessionSaltSize) {
         return std::nullopt;
     }
-    RekeyMaterial m;
+    SessionMaterial m;
     std::copy_n(tok->begin(), 4, m.token.begin());
     std::copy_n(salt->begin(), wire::kSessionSaltSize, m.salt.begin());
     m.tokenBe = (static_cast<std::uint32_t>(m.token[0]) << 24) |
@@ -781,7 +774,7 @@ void WifiConnectionManager::adoptRekey(WifiConnection* c, const QString& id,
                                        const std::shared_ptr<SatelliteClient>& client,
                                        const std::array<std::uint8_t, 32>& pairingKey,
                                        const models::SessionResponse& resp,
-                                       const RekeyMaterial& material) {
+                                       const SessionMaterial& material) {
     std::array<std::uint8_t, 32> sessionKey{};
     wire::deriveSessionKey(pairingKey.data(), material.salt.data(), material.tokenBe,
                            sessionKey.data());
@@ -822,7 +815,8 @@ void WifiConnectionManager::onRekeyReply(const QString& id,
     if (c->state() != SessionState::Live || c->client() != client) { return; }
     if (verdict != RestVerdict::Ok) { return; }
 
-    const auto material = rekeyMaterialFrom(resp);
+    // Nothing to adopt; the death retry is what heals a session that truly exhausts.
+    const auto material = sessionMaterialFrom(resp);
     if (!material.has_value()) { return; }
     adoptRekey(c, id, client, pairingKey, resp, *material);
 }
@@ -986,11 +980,22 @@ void WifiConnectionManager::disconnect(const QString& id) {
     const auto cid = conn->connectionId();
     const auto creds = credentialsFor(id);
     conn->markDisconnected();
-    // Best-effort only: the local side already treats the session as gone.
-    if (cid.has_value() && creds.has_value()) {
-        http_->deleteSession(server.ip, server.httpPort, *cid, deviceId_, creds->proof,
-                             [](int, bool, const QString&) {});
-    }
+    if (cid.has_value() && creds.has_value()) { releaseSession(server, *cid, creds->proof); }
+}
+
+void WifiConnectionManager::releaseSession(const models::DiscoveredServer& server,
+                                           const QString& connectionId, const QString& proof) {
+    http_->deleteSession(server.ip, server.httpPort, connectionId, deviceId_, proof,
+                         [](int, bool, const QString&) {});
+}
+
+void WifiConnectionManager::releaseUnusableGrant(WifiConnection* conn,
+                                                 const models::DiscoveredServer& server,
+                                                 const QString& connectionId, const QString& proof,
+                                                 ConnectIntent intent) {
+    conn->markDisconnected();
+    releaseSession(server, connectionId, proof);
+    emitErrorIfUserInitiated(intent, wireFailedMsg());
 }
 
 void WifiConnectionManager::forget(const QString& id) {
