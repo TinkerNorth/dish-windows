@@ -220,6 +220,7 @@ set(DISH_TEST_SOURCES
     test_diagnostics_log.cpp
     test_diagnostics_recorder.cpp
     test_diagnostics_maps.cpp
+    test_feedback_bench.cpp
     test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
