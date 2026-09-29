@@ -259,10 +259,10 @@ class MoonlightSession : public QObject {
     void onRtspNamedPorts(const RtspHandshakeResult& rtsp);
     void startPinging();
     bool streaming() const;
-    // One tick of both keepalives: the encrypted PERIODIC_PING on the control
-    // stream and the RTP client pings on the negotiated video/audio UDP ports.
-    // The host gates media startup on the RTP pings; their incoming payloads are
-    // read and discarded (we never decode media).
+    // One tick of the RTP client pings on the negotiated video/audio UDP ports.
+    // The host gates media startup on them; their incoming payloads are read and
+    // discarded (we never decode media). The control stream's PERIODIC_PING is
+    // the control channel's own, on its receive thread.
     void onPingTick();
 
     // The parsed /launch rikey material.

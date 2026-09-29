@@ -217,8 +217,7 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             break;
         case moonlight::SessionEffect::StartPinging:
             // Normally already running since SETUP named the ports; this is the
-            // control ping joining in, and a start for the path that never
-            // heard the ports named first.
+            // start for the path that never heard them named first.
             startPinging();
             break;
         case moonlight::SessionEffect::StopPinging:
@@ -640,15 +639,11 @@ void MoonlightSession::onRtspFinished(bool rtspOk, bool controlOk,
 }
 
 void MoonlightSession::onPingTick() {
-    // 1) The encrypted control-stream keepalive.
-    control_.sendPeriodicPing();
-
-    // 2) The RTP client pings. Sunshine and Wolf both learn the client's media
-    //    address from these datagrams and will not start (or will time out) a
-    //    stream whose ports never saw one, so they are re-sent every tick rather
-    //    than only once. Failing this ends the session ten seconds after PLAY
-    //    with `Initial Ping Timeout`. We never decode media: anything the host
-    //    sends back is drained and dropped below.
+    // Sunshine and Wolf both learn the client's media address from these
+    // datagrams and will not start (or will time out) a stream whose ports never
+    // saw one, so they are re-sent every tick rather than only once. Failing this
+    // ends the session ten seconds after PLAY with `Initial Ping Timeout`. We
+    // never decode media: anything the host sends back is drained and dropped.
     if (rtsp_.videoPort == 0 && rtsp_.audioPort == 0) { return; }
 
     const QHostAddress dest(host_.ip);

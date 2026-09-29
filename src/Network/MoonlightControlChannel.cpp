@@ -17,6 +17,9 @@ namespace {
 std::mutex g_enetMtx;
 int g_enetRefs = 0;
 
+// The PERIODIC_PING cadence every Moonlight client keeps.
+constexpr std::chrono::milliseconds kKeepaliveInterval{500};
+
 } // namespace
 
 void moonlightEnetRef() {
@@ -103,6 +106,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
             // up sees the host and peer it was published with.
             connected_.store(true, std::memory_order_release);
             running_.store(true, std::memory_order_relaxed);
+            lastKeepalive_ = {};
             rxThread_ = std::thread([this] { receiveLoop(); });
             return true;
         }
@@ -149,8 +153,8 @@ void MoonlightControlChannel::disconnect() {
 }
 
 void MoonlightControlChannel::sealAndSend(const std::uint8_t* plaintext, std::size_t len) {
-    // Before the lock: a keepalive tick during the handshake must not wait on
-    // it, and until the link is published there is nothing here to send on.
+    // Before the lock: a send during the handshake must not wait on it, and
+    // until the link is published there is nothing here to send on.
     if (!connected_.load(std::memory_order_acquire)) { return; }
     std::lock_guard<std::mutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
@@ -218,9 +222,15 @@ void MoonlightControlChannel::sendControllerBattery(std::uint8_t controllerNumbe
     sealAndSend(p.data(), p.size());
 }
 
-void MoonlightControlChannel::sendPeriodicPing() {
-    const auto p = moonlight::encodePeriodicPing();
-    sealAndSend(p.data(), p.size());
+// On this thread's clock, not the owner's: a host ends a session whose control stream is silent for
+// its ping timeout (Sunshine's is ten seconds), and the owner is the UI thread, which can stall.
+void MoonlightControlChannel::keepAliveIfDue() {
+    const auto now = std::chrono::steady_clock::now();
+    const bool due = now - lastKeepalive_ >= kKeepaliveInterval;
+    if (!due) { return; }
+    lastKeepalive_ = now;
+    const auto ping = moonlight::encodePeriodicPing();
+    sealAndSend(ping.data(), ping.size());
 }
 
 // Serviced without waiting: this lock is the one every hot-path send takes, and a 16 ms wait held
@@ -272,6 +282,7 @@ void MoonlightControlChannel::onPacket(const _ENetPacket& packet) {
 
 void MoonlightControlChannel::receiveLoop() {
     while (running_.load(std::memory_order_relaxed)) {
+        keepAliveIfDue();
         ENetEvent event;
         const int rc = serviceEnet(event);
         if (rc < 0) { break; }

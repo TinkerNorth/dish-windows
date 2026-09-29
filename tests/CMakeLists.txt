@@ -41,6 +41,7 @@ set(DISH_TEST_SOURCES
     test_moonlight_manager_flow.cpp
     test_legacy_catalog.cpp
     test_moonlight_behaviour.cpp
+    test_moonlight_keepalive.cpp
     test_moonlight_pad_slots.cpp
     test_nvstream_discovery.cpp
     test_atomic_counter.cpp
