@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include "core/reducer/Reconcile.h"
 #include "core/reducer/RestOutcome.h"
 #include "core/reducer/ReversePairing.h"
-#include "core/wire/SessionCrypto.h"
 #include "ConnectionStore.h"
 #include "HTTPClient.h"
 #include "Models/Models.h"
@@ -20,7 +20,9 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
+#include <vector>
 
 class QTimer;
 
@@ -83,9 +85,9 @@ class WifiConnectionManager : public QObject {
     void armReverseAttempt(const models::DiscoveredServer& server);
     bool reverseAttemptIsCurrent(const models::DiscoveredServer& server, const QString& pin) const;
     void startReversePoll();
-    void applyReverseOutcome(WifiConnection* conn, const models::DiscoveredServer& server,
+    void applyReverseOutcome(const models::DiscoveredServer& server,
                              const models::PairResponse& pair);
-    void onReversePairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+    void onReversePairReply(const QString& id, const models::DiscoveredServer& server,
                             const QString& pin, const models::PairResponse& pair);
     void cancelReversePairing();
 
@@ -141,27 +143,56 @@ class WifiConnectionManager : public QObject {
     void pairAndConnect(WifiConnection* conn, const models::DiscoveredServer& server,
                         ConnectIntent intent);
     // The forward pairs' replies: a connect's PIN-less one, and the operator's PIN from the sheet.
-    void onConnectPairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+    void onConnectPairReply(const QString& id, const models::DiscoveredServer& server,
                             ConnectIntent intent, const PairingOutcome::Arm& outcome);
-    void onPinPairReply(WifiConnection* conn, const models::DiscoveredServer& server,
+    void onPinPairReply(const QString& id, const models::DiscoveredServer& server,
                         const PairingOutcome::Arm& outcome);
+    void adoptReverseGrant(const models::DiscoveredServer& server, const QString& sharedKeyHex);
+
+    // nullopt when the stored key is absent or undecodable, both of which mean
+    // re-pair.
+    struct Credentials {
+        std::array<std::uint8_t, 32> pairingKey{};
+        QString proof;
+    };
+    std::optional<Credentials> credentialsFor(const QString& id) const;
+
     // One PUT /api/connections carrying identity, the key proof and the FULL
     // topology, which is what drives the session live.
     void openSession(WifiConnection* conn, const models::DiscoveredServer& server,
                      ConnectIntent intent);
+    // What a granted PUT carries to key the session with: the token the satellite assigned, and
+    // the per-session key derived from it, the salt and the pairing key. The pairing key itself
+    // never reaches the UDP path; only this derived key does. Null when the token or the salt is
+    // missing or malformed. The connect and the rekey read it the same way.
+    struct SessionMaterial {
+        std::array<std::uint8_t, 4> token{};
+        std::array<std::uint8_t, 32> sessionKey{};
+    };
+    static std::optional<SessionMaterial>
+    sessionMaterialFrom(const models::SessionResponse& resp,
+                        const std::array<std::uint8_t, 32>& pairingKey);
+    // The connect PUT's reply, in steps: a refusal settles itself, a grant this end cannot carry is
+    // handed back, and a usable one starts the session and then converges the slot changes that
+    // raced the round trip. `sent` is what the PUT was sent with.
+    void onSessionReply(const QString& id, const models::DiscoveredServer& server,
+                        ConnectIntent intent, const Credentials& sent,
+                        const std::vector<reducer::DesiredSlot>& sentDescriptors,
+                        const models::SessionResponse& resp);
+    void onSessionRefused(WifiConnection* conn, const models::DiscoveredServer& server,
+                          ConnectIntent intent, reducer::RestVerdict verdict,
+                          const models::SessionResponse& resp);
+    // `connectionId` rides beside `resp` because onSessionReply is where its presence is checked.
+    void startSession(WifiConnection* conn, const models::DiscoveredServer& server,
+                      const std::shared_ptr<SatelliteClient>& client, const QString& connectionId,
+                      const models::SessionResponse& resp, const SessionMaterial& material);
+    void convergeLateSlots(WifiConnection* conn, const std::vector<reducer::DesiredSlot>& sent);
     // GET-then-maybe-rePUT, fired when the enriched ack drifts.
     void reconcile(WifiConnection* conn, const models::DiscoveredServer& server);
     // Re-PUT for a fresh token/salt/key on the SAME socket, so there is no state
     // blip visible to the UI.
     void rekey(WifiConnection* conn, const models::DiscoveredServer& server);
 
-    // What a session PUT grants, read once for the connect and the rekey alike.
-    struct SessionMaterial {
-        std::array<std::uint8_t, 4> token{};
-        std::array<std::uint8_t, wire::kSessionSaltSize> salt{};
-        std::uint32_t tokenBe = 0;
-    };
-    static std::optional<SessionMaterial> sessionMaterialFrom(const models::SessionResponse& resp);
     // The satellite granted a session the link here cannot use (unusable material, or a socket
     // that will not open). It is handed back rather than left holding a slot until the
     // satellite's own timeout, a user's connect is told, and nothing retries: the same grant
@@ -180,7 +211,6 @@ class WifiConnectionManager : public QObject {
                       const models::SessionResponse& resp);
     void adoptRekey(WifiConnection* c, const QString& id,
                     const std::shared_ptr<SatelliteClient>& client,
-                    const std::array<std::uint8_t, 32>& pairingKey,
                     const models::SessionResponse& resp, const SessionMaterial& material);
     // Reads GET /api/server/capabilities for the host's controller-audio
     // verdict and folds it into the connection (reducer/HostAudioVerdict.h).
@@ -218,13 +248,6 @@ class WifiConnectionManager : public QObject {
     void setReversePhase(ReversePairingPhase phase);
     void finishReverse(ReversePairingPhase terminal);
 
-    // nullopt when the stored key is absent or undecodable, both of which mean
-    // re-pair.
-    struct Credentials {
-        std::array<std::uint8_t, 32> pairingKey{};
-        QString proof;
-    };
-    std::optional<Credentials> credentialsFor(const QString& id) const;
     // Drops the key, parks Stale and stops retrying. Centralised so every REST
     // path treats a terminal auth failure identically.
     void onTerminalAuthFailure(WifiConnection* conn, const QString& id, ConnectIntent intent);
@@ -235,6 +258,9 @@ class WifiConnectionManager : public QObject {
     QString deviceId_;
     QString deviceName_;
 
+    // A reply looks its connection up here by id rather than keeping the pointer it was sent with:
+    // forget() hands the object to deleteLater, so a pointer held across a round trip can dangle,
+    // and a reply for a satellite the user removed has nothing left to act on.
     QHash<QString, WifiConnection*> connections_;
     QList<models::DiscoveredServer> discovered_;
     bool scanning_ = false;

@@ -22,8 +22,10 @@
 
 #include <QCoreApplication>
 #include <QDeadlineTimer>
+#include <QEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPointer>
 #include <QSettings>
 #include <QString>
 
@@ -59,6 +61,7 @@ constexpr int kPastFirstBackoffMs = 1100;
 constexpr int kOneBehind = dish::proto::kProtocolVersion - 1;
 
 const QString kSessionsPath = QStringLiteral("/api/connections");
+const QString kPairPath = QStringLiteral("/api/pair");
 const QString kGrantedSessionPath = QStringLiteral("/api/connections/conn_1");
 const QString kPrivateIp = QStringLiteral("10.0.0.5");
 const QString kOtherPrivateIp = QStringLiteral("10.0.0.6");
@@ -81,6 +84,10 @@ const QByteArray kGrantWithShortToken = R"({"connectionId":"conn_1","token":"000
 const QByteArray kGrantWithShortSalt = R"({"connectionId":"conn_1","token":"00000001",)"
                                        R"("sessionSalt":"0102","epoch":1})";
 const QByteArray kShuttingDown = R"({"code":"SHUTTING_DOWN"})";
+// A pair the satellite grants outright, with a key in the shape the store accepts.
+const QByteArray kPairGranted = R"({"ok":true,"sharedKey":")" +
+                                QByteArray(static_cast<qsizetype>(kPairingKeySize * 2), '2') +
+                                R"("})";
 
 QByteArray versionConflict(int supported) {
     return QStringLiteral(R"({"supported":%1,"supportedMin":1})").arg(supported).toUtf8();
@@ -174,6 +181,41 @@ struct ManagerFixture {
             if (r.verb == "PUT" && r.path == kSessionsPath) { puts.push_back(r); }
         }
         return puts;
+    }
+
+    bool remembers(const DiscoveredServer& s) const {
+        const QString sid = dish::net::WifiConnection::idFor(s);
+        for (const auto& r : store->remembered()) {
+            if (r.id == sid) { return true; }
+        }
+        return false;
+    }
+
+    // Forgets the satellite while its request waits on the satellite, and lets the reply land
+    // before the deferred delete forget() asked for has run: a reply already queued when the user
+    // pressed Forget. The connection is gone by the time this returns.
+    void forgetThenReleaseBeforeTheDelete() {
+        const QPointer<dish::net::WifiConnection> conn = manager->get(id);
+        REQUIRE(conn);
+        manager->forget(id);
+        releaseAndDeliver();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        REQUIRE(conn.isNull());
+    }
+
+    // The same, with the reply landing once the forgotten connection has been deleted.
+    void forgetThenReleaseAfterTheDelete() {
+        const QPointer<dish::net::WifiConnection> conn = manager->get(id);
+        REQUIRE(conn);
+        manager->forget(id);
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        REQUIRE(conn.isNull());
+        releaseAndDeliver();
+    }
+
+    void releaseAndDeliver() {
+        rest->release();
+        REQUIRE(pumpUntil([this] { return rest->allAnswered(); }));
     }
 
     std::string expectedProof() const {
@@ -286,6 +328,97 @@ TEST_CASE("wifi manager: a silent connect with unusable material releases the se
     requireGrantReleased(f);
     REQUIRE(f.events.empty());
     requireNoRetry(f);
+}
+
+// ---- A reply that lands after a forget ----
+
+TEST_CASE("wifi manager: a session granted after a forget does not reach the forgotten satellite",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{200, kGrant});
+    f.rest->hold();
+
+    // A key on file, so the connect goes straight to the session PUT.
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    SECTION("landing before the forgotten connection is deleted") {
+        f.forgetThenReleaseBeforeTheDelete();
+    }
+    SECTION("landing after the forgotten connection is deleted") {
+        f.forgetThenReleaseAfterTheDelete();
+    }
+
+    REQUIRE(f.effects.linkAttempts() == 0);
+    REQUIRE(f.manager->get(f.id) == nullptr);
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE_FALSE(f.remembers(f.server));
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: a PIN pair's key that lands after a forget is not kept",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{200, kGrant});
+    f.rest->hold();
+
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+    SECTION("landing before the forgotten connection is deleted") {
+        f.forgetThenReleaseBeforeTheDelete();
+    }
+    SECTION("landing after the forgotten connection is deleted") {
+        f.forgetThenReleaseAfterTheDelete();
+    }
+
+    REQUIRE_FALSE(f.manager->isPairingInFlight(f.id));
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.manager->get(f.id) == nullptr);
+    // Keyed, it would have gone straight on to open a session.
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+    REQUIRE(f.pairingFailures.empty());
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: a connect's pair that lands after a forget does not key the satellite "
+          "again",
+          "[manager][forget]") {
+    ManagerFixture f;
+    // No key on file, so the connect starts with a PIN-less pair.
+    f.store->forgetKey(f.id);
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{200, kGrant});
+    f.rest->hold();
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    SECTION("landing before the forgotten connection is deleted") {
+        f.forgetThenReleaseBeforeTheDelete();
+    }
+    SECTION("landing after the forgotten connection is deleted") {
+        f.forgetThenReleaseAfterTheDelete();
+    }
+
+    REQUIRE_FALSE(f.manager->isPairingInFlight(f.id));
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.manager->get(f.id) == nullptr);
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: an approval request's reply that lands after a forget is dropped",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->hold();
+
+    f.manager->requestReversePairing(f.server);
+    // Closing the sheet cancels the attempt, and only then can the user reach Forget.
+    f.manager->cancelReversePairing();
+    f.forgetThenReleaseAfterTheDelete();
+
+    REQUIRE_FALSE(f.manager->isPairingInFlight(f.id));
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Idle);
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.manager->get(f.id) == nullptr);
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
 }
 
 // ---- Silent retries ----

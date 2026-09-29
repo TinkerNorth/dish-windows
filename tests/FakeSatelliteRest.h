@@ -7,7 +7,9 @@
 // Every request is recorded; each is answered from the script a test sets up,
 // on a later event-loop turn the way a real reply lands. A one-shot answer is
 // used before the route's standing one; a route with neither is answered the
-// way a dead transport answers: no status, no body.
+// way a dead transport answers: no status, no body. Between hold() and
+// release(), replies wait: the window a test needs to act while a reply is
+// still on its way.
 
 #pragma once
 
@@ -17,6 +19,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPointer>
 #include <QString>
 #include <QTimer>
 #include <QUrl>
@@ -57,8 +60,9 @@ class CannedReply : public QNetworkReply {
             setAttribute(QNetworkRequest::HttpStatusCodeAttribute, answer.status);
         }
         open(QIODevice::ReadOnly);
-        QTimer::singleShot(0, this, &CannedReply::deliver);
     }
+
+    void deliverLater() { QTimer::singleShot(0, this, &CannedReply::deliver); }
 
     void abort() override {}
     bool isSequential() const override { return true; }
@@ -100,6 +104,15 @@ class FakeSatelliteRest : public QNetworkAccessManager {
         onceScript_[routeKey(verb, path)].push_back(reply);
     }
 
+    void hold() { holding_ = true; }
+    void release() {
+        holding_ = false;
+        for (const auto& reply : held_) {
+            if (!reply.isNull()) { reply->deliverLater(); }
+        }
+        held_.clear();
+    }
+
     const std::vector<RecordedRequest>& requests() const { return requests_; }
 
     // True once every request made so far has had its reply delivered.
@@ -123,8 +136,14 @@ class FakeSatelliteRest : public QNetworkAccessManager {
         recorded.hmacProof = request.rawHeader("X-Hmac-Proof");
         recorded.body = outgoingData != nullptr ? outgoingData->readAll() : QByteArray();
         requests_.push_back(recorded);
-        const CannedAnswer reply = nextAnswer(routeKey(recorded.verb, recorded.path));
-        return new CannedReply(request, op, reply, &delivered_, this);
+        const CannedAnswer answer = nextAnswer(routeKey(recorded.verb, recorded.path));
+        auto* reply = new CannedReply(request, op, answer, &delivered_, this);
+        if (holding_) {
+            held_.emplace_back(reply);
+        } else {
+            reply->deliverLater();
+        }
+        return reply;
     }
 
   private:
@@ -164,6 +183,8 @@ class FakeSatelliteRest : public QNetworkAccessManager {
     QHash<QByteArray, std::vector<CannedAnswer>> onceScript_;
     std::vector<RecordedRequest> requests_;
     long long delivered_ = 0;
+    bool holding_ = false;
+    std::vector<QPointer<CannedReply>> held_;
 };
 
 } // namespace dish::test

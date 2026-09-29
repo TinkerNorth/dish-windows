@@ -48,6 +48,15 @@ descriptorsToDesired(const QList<models::ControllerDescriptor>& descriptors) {
     return out;
 }
 
+// What the verdict needs to know about one session PUT's reply, the connect's or the rekey's.
+reducer::RestReply restReplyOf(const models::SessionResponse& resp) {
+    reducer::RestReply rr;
+    rr.status = resp.httpStatus;
+    rr.bodyParsed = resp.reachable;
+    rr.code = resp.code.value_or(QString()).toStdString();
+    return rr;
+}
+
 QString unreachableMsg() {
     return WifiConnectionManager::tr(
         "Server unreachable — check it's powered on and on the same Wi-Fi.");
@@ -295,42 +304,45 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
     http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, pin, QString(),
-                [this, conn, server](const models::PairResponse& response) {
-                    onPinPairReply(conn, server, PairingOutcome::classify(response));
+                [this, id = conn->id(), server](const models::PairResponse& response) {
+                    onPinPairReply(id, server, PairingOutcome::classify(response));
                 });
 }
 
 // Path A: the PIN the operator read off the satellite, typed into the sheet here.
-void WifiConnectionManager::onPinPairReply(WifiConnection* conn,
+void WifiConnectionManager::onPinPairReply(const QString& id,
                                            const models::DiscoveredServer& server,
                                            const PairingOutcome::Arm& outcome) {
-    pairingInFlight_.remove(conn->id());
+    pairingInFlight_.remove(id);
     emit pairingInFlightChanged();
+    // Forgotten while the POST was out: keeping the key would pair a satellite the user removed.
+    auto* conn = connections_.value(id, nullptr);
+    if (conn == nullptr) { return; }
     std::visit(
         [&](auto&& arm) {
             using T = std::decay_t<decltype(arm)>;
             if constexpr (std::is_same_v<T, PairingOutcome::Success>) {
-                store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                store_->setSharedKey(arm.sharedKeyHex, id);
                 openSession(conn, server, ConnectIntent::UserInitiated);
             } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
                 conn->markDisconnected();
                 emit connectionEvent(makeError(versionMsg()));
-                emit pairingFailed(conn->id(), QStringLiteral("versionMismatch"));
+                emit pairingFailed(id, QStringLiteral("versionMismatch"));
             } else if constexpr (std::is_same_v<T, PairingOutcome::AuthRequired>) {
                 // Reachable and parsed but no key granted, so the PIN was
                 // wrong or expired.
                 conn->markDisconnected();
                 emit connectionEvent(makeError(wrongPinMsg()));
-                emit pairingFailed(conn->id(), QStringLiteral("wrongPin"));
+                emit pairingFailed(id, QStringLiteral("wrongPin"));
             } else if constexpr (std::is_same_v<T, PairingOutcome::Unreachable>) {
                 conn->markDisconnected();
                 emit connectionEvent(makeError(unreachableMsg()));
-                emit pairingFailed(conn->id(), QStringLiteral("unreachable"));
+                emit pairingFailed(id, QStringLiteral("unreachable"));
             } else {
                 // Pending: staged but not granted, rare on a direct submit.
                 conn->markDisconnected();
                 emit connectionEvent(makeError(pairPendingMsg()));
-                emit pairingFailed(conn->id(), QStringLiteral("pending"));
+                emit pairingFailed(id, QStringLiteral("pending"));
             }
         },
         outcome);
@@ -373,18 +385,26 @@ void WifiConnectionManager::startReversePoll() {
     reverseTimer_->start();
 }
 
-void WifiConnectionManager::applyReverseOutcome(WifiConnection* conn,
-                                                const models::DiscoveredServer& server,
+// The operator approved on the satellite, or it granted outright: key the connection and open it.
+// Found or made by server rather than carried over, since a round trip lies behind either arm.
+void WifiConnectionManager::adoptReverseGrant(const models::DiscoveredServer& server,
+                                              const QString& sharedKeyHex) {
+    auto* conn = ensureConnection(server);
+    conn->markConnecting();
+    store_->setSharedKey(sharedKeyHex, WifiConnection::idFor(server));
+    if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
+    setReversePhase(ReversePairingPhase::Approved);
+    openSession(conn, server, ConnectIntent::UserInitiated);
+}
+
+void WifiConnectionManager::applyReverseOutcome(const models::DiscoveredServer& server,
                                                 const models::PairResponse& pair) {
     std::visit(
         [&](auto&& arm) {
             using T = std::decay_t<decltype(arm)>;
             if constexpr (std::is_same_v<T, PairingOutcome::Success>) {
                 // Approved synchronously, with no operator step.
-                conn->markConnecting();
-                store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
-                setReversePhase(ReversePairingPhase::Approved);
-                openSession(conn, server, ConnectIntent::UserInitiated);
+                adoptReverseGrant(server, arm.sharedKeyHex);
             } else if constexpr (std::is_same_v<T, PairingOutcome::Pending>) {
                 startReversePoll();
             } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
@@ -399,14 +419,14 @@ void WifiConnectionManager::applyReverseOutcome(WifiConnection* conn,
         PairingOutcome::classify(pair));
 }
 
-void WifiConnectionManager::onReversePairReply(WifiConnection* conn,
+void WifiConnectionManager::onReversePairReply(const QString& id,
                                                const models::DiscoveredServer& server,
                                                const QString& pin,
                                                const models::PairResponse& pair) {
-    pairingInFlight_.remove(conn->id());
+    pairingInFlight_.remove(id);
     emit pairingInFlightChanged();
     if (!reverseAttemptIsCurrent(server, pin)) { return; }
-    applyReverseOutcome(conn, server, pair);
+    applyReverseOutcome(server, pair);
 }
 
 void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer& server) {
@@ -426,8 +446,8 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     emit pairingInFlightChanged();
     // Empty operator pin, displayed pin as clientPin: that is what selects Path B server-side.
     http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, QString(), pin,
-                [this, conn, server, pin](const models::PairResponse& response) {
-                    onReversePairReply(conn, server, pin, response);
+                [this, id = conn->id(), server, pin](const models::PairResponse& response) {
+                    onReversePairReply(id, server, pin, response);
                 });
 }
 
@@ -442,20 +462,15 @@ reducer::ApprovalReply WifiConnectionManager::approvalReplyOf(const models::Pair
 }
 
 // `status` carries the shared key the Approve arm needs, which is why the reply is passed on rather
-// than reduced to the action alone.
+// than reduced to the action alone. The reducer only says Approve when the reply carried one, and
+// value_or keeps that invariant local rather than asking a reader to carry it across two files.
 void WifiConnectionManager::applyReverseAction(reducer::ReversePairingAction action,
                                                const models::PairResponse& status,
                                                const models::DiscoveredServer& server) {
     switch (action) {
-    case reducer::ReversePairingAction::Approve: {
-        auto* conn = ensureConnection(server);
-        conn->markConnecting();
-        store_->setSharedKey(*status.sharedKey, WifiConnection::idFor(server));
-        if (reverseTimer_ != nullptr) { reverseTimer_->stop(); }
-        setReversePhase(ReversePairingPhase::Approved);
-        openSession(conn, server, ConnectIntent::UserInitiated);
+    case reducer::ReversePairingAction::Approve:
+        adoptReverseGrant(server, status.sharedKey.value_or(QString()));
         break;
-    }
     case reducer::ReversePairingAction::Decline:
         emit connectionEvent(makeError(reverseDeclinedMsg()));
         finishReverse(ReversePairingPhase::Declined);
@@ -535,23 +550,25 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
     http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, QString(), QString(),
-                [this, conn, server, intent](const models::PairResponse& response) {
-                    onConnectPairReply(conn, server, intent, PairingOutcome::classify(response));
+                [this, id = conn->id(), server, intent](const models::PairResponse& response) {
+                    onConnectPairReply(id, server, intent, PairingOutcome::classify(response));
                 });
 }
 
 // The pair a connect starts with when no key is on file, sent without a PIN.
-void WifiConnectionManager::onConnectPairReply(WifiConnection* conn,
+void WifiConnectionManager::onConnectPairReply(const QString& id,
                                                const models::DiscoveredServer& server,
                                                ConnectIntent intent,
                                                const PairingOutcome::Arm& outcome) {
-    pairingInFlight_.remove(conn->id());
+    pairingInFlight_.remove(id);
     emit pairingInFlightChanged();
+    auto* conn = connections_.value(id, nullptr);
+    if (conn == nullptr) { return; }
     std::visit(
         [&](auto&& arm) {
             using T = std::decay_t<decltype(arm)>;
             if constexpr (std::is_same_v<T, PairingOutcome::Success>) {
-                store_->setSharedKey(arm.sharedKeyHex, WifiConnection::idFor(server));
+                store_->setSharedKey(arm.sharedKeyHex, id);
                 openSession(conn, server, intent);
             } else if constexpr (std::is_same_v<T, PairingOutcome::AuthRequired> ||
                                  std::is_same_v<T, PairingOutcome::Pending>) {
@@ -582,108 +599,134 @@ void WifiConnectionManager::openSession(WifiConnection* conn,
                                         const models::DiscoveredServer& server,
                                         ConnectIntent intent) {
     const QString id = conn->id();
-    auto creds = credentialsFor(id);
+    const auto creds = credentialsFor(id);
     if (!creds.has_value()) {
         onTerminalAuthFailure(conn, id, intent);
         return;
     }
-    const QString proof = creds->proof;
     const auto descriptors = conn->desiredDescriptors();
-    const bool wantsMouse = conn->wantsMouseControl();
-    const auto pairingKey = creds->pairingKey;
-    // Lets the response callback converge slot changes that raced the round-trip.
+    // Lets the reply converge slot changes that raced the round-trip.
     // NOT const: a const capture is copied rather than moved into the
     // std::function, and that copy can throw out of the closure's move ctor.
     auto sentDescriptors = descriptorsToDesired(descriptors);
 
-    http_->putSession(
-        server.ip, server.httpPort, deviceId_, deviceName_, proof, descriptors, wantsMouse,
-        conn->offeredProtocolVersion(),
-        [this, conn, server, intent, id, pairingKey, proof,
-         sentDescriptors](const models::SessionResponse& resp) {
-            using reducer::RestVerdict;
-            reducer::RestReply rr;
-            rr.status = resp.httpStatus;
-            rr.bodyParsed = resp.reachable;
-            rr.code = resp.code.value_or(QString()).toStdString();
-            const RestVerdict verdict = classifyRest(rr);
-            if (verdict == RestVerdict::Unauthorized) {
-                onTerminalAuthFailure(conn, id, intent);
-                return;
-            }
-            if (verdict == RestVerdict::VersionMismatch) {
-                onVersionRejected(conn, server, intent, resp);
-                return;
-            }
-            if (verdict != RestVerdict::Ok || !resp.connectionId || !resp.token ||
-                !resp.sessionSalt) {
-                // Unreachable, 503 or malformed: park and back off.
-                if (intent == ConnectIntent::UserInitiated) {
-                    conn->markDisconnected();
-                    emit connectionEvent(makeError(unreachableMsg()));
-                } else {
-                    conn->markStale();
-                }
-                scheduleRetry(server, intent);
-                return;
-            }
-            const auto material = sessionMaterialFrom(resp);
-            if (!material.has_value()) {
-                releaseUnusableGrant(conn, server, *resp.connectionId, proof, intent);
-                return;
-            }
-            // The pairing key itself never reaches the UDP path; only this
-            // derived per-session key does.
-            std::array<std::uint8_t, 32> sessionKey{};
-            wire::deriveSessionKey(pairingKey.data(), material->salt.data(), material->tokenBe,
-                                   sessionKey.data());
+    http_->putSession(server.ip, server.httpPort, deviceId_, deviceName_, creds->proof, descriptors,
+                      conn->wantsMouseControl(), conn->offeredProtocolVersion(),
+                      [this, id, server, intent, sent = *creds,
+                       sentDescriptors](const models::SessionResponse& resp) {
+                          onSessionReply(id, server, intent, sent, sentDescriptors, resp);
+                      });
+}
 
-            const auto client = effects_.openLink(server.ip.toStdString(), server.udpPort);
-            if (!client) {
-                releaseUnusableGrant(conn, server, *resp.connectionId, proof, intent);
-                return;
-            }
-            // The SETTLED version, not the offered one: a pre-versioning
-            // satellite echoes 1 whatever we asked for, and the 0x000C frame
-            // shape follows the echo.
-            const auto negotiated = reducer::settleAccepted(resp.protocolVersion);
-            conn->setSettledProtocolVersion(negotiated.settledVersion, negotiated.satelliteBehind);
-            conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
-            client->setConnectionParams(material->token, sessionKey, negotiated.settledVersion);
-            store_->remember(server);
-            retryAttempts_.remove(id);
+void WifiConnectionManager::onSessionReply(const QString& id,
+                                           const models::DiscoveredServer& server,
+                                           ConnectIntent intent, const Credentials& sent,
+                                           const std::vector<reducer::DesiredSlot>& sentDescriptors,
+                                           const models::SessionResponse& resp) {
+    // Forgotten while the PUT was out: a session started now would bring back what the user
+    // removed.
+    auto* conn = connections_.value(id, nullptr);
+    if (conn == nullptr) { return; }
+    const auto verdict = reducer::classifyRest(restReplyOf(resp));
+    if (verdict != reducer::RestVerdict::Ok || !resp.connectionId || !resp.token ||
+        !resp.sessionSalt) {
+        onSessionRefused(conn, server, intent, verdict, resp);
+        return;
+    }
+    const auto material = sessionMaterialFrom(resp, sent.pairingKey);
+    if (!material.has_value()) {
+        releaseUnusableGrant(conn, server, *resp.connectionId, sent.proof, intent);
+        return;
+    }
+    const auto client = effects_.openLink(server.ip.toStdString(), server.udpPort);
+    if (!client) {
+        releaseUnusableGrant(conn, server, *resp.connectionId, sent.proof, intent);
+        return;
+    }
+    startSession(conn, server, client, *resp.connectionId, resp, *material);
+    convergeLateSlots(conn, sentDescriptors);
+}
 
-            conn->markConnected(
-                client, *resp.connectionId, resp.epoch, resp.mouseControl.granted,
-                /*onDead=*/
-                [this, id, server] {
-                    closeSession(id);
-                    scheduleRetry(server, ConnectIntent::RetryAfterDeath);
-                },
-                /*onClose=*/
-                [this, id, server](std::uint8_t reason) {
-                    if (auto* c = connections_.value(id, nullptr)) {
-                        handleServerClose(c, server, reason);
-                    }
-                },
-                /*onReconcile=*/
-                [this, id, server] {
-                    if (auto* c = connections_.value(id, nullptr)) { reconcile(c, server); }
-                },
-                /*onRekey=*/
-                [this, id, server] {
-                    if (auto* c = connections_.value(id, nullptr)) { rekey(c, server); }
-                });
-            conn->applyResults(resp.controllers);
-            probeHostAudio(id, server);
-            const auto converge = reducer::lateSlotConverge(
-                sentDescriptors, descriptorsToDesired(conn->desiredDescriptors()));
-            for (std::uint8_t ctrlIdx : converge.removes) { deleteSlot(id, ctrlIdx); }
-            for (std::uint8_t ctrlIdx : converge.resyncs) {
-                const QString slotId = conn->slotIdForIndex(ctrlIdx);
-                if (!slotId.isEmpty()) { syncSlot(id, slotId); }
-            }
+// Each refusal has its own way out. An Ok arrives here only when it is missing part of the session.
+void WifiConnectionManager::onSessionRefused(WifiConnection* conn,
+                                             const models::DiscoveredServer& server,
+                                             ConnectIntent intent, reducer::RestVerdict verdict,
+                                             const models::SessionResponse& resp) {
+    switch (verdict) {
+    case reducer::RestVerdict::Unauthorized:
+        onTerminalAuthFailure(conn, conn->id(), intent);
+        return;
+    case reducer::RestVerdict::VersionMismatch:
+        onVersionRejected(conn, server, intent, resp);
+        return;
+    case reducer::RestVerdict::Ok:
+    case reducer::RestVerdict::ShuttingDown:
+    case reducer::RestVerdict::Unreachable:
+    case reducer::RestVerdict::ServerError:
+        // Unreachable, 503 or malformed: park and back off.
+        if (intent == ConnectIntent::UserInitiated) {
+            conn->markDisconnected();
+            emit connectionEvent(makeError(unreachableMsg()));
+        } else {
+            conn->markStale();
+        }
+        scheduleRetry(server, intent);
+        return;
+    }
+}
+
+void WifiConnectionManager::startSession(WifiConnection* conn,
+                                         const models::DiscoveredServer& server,
+                                         const std::shared_ptr<SatelliteClient>& client,
+                                         const QString& connectionId,
+                                         const models::SessionResponse& resp,
+                                         const SessionMaterial& material) {
+    const QString id = conn->id();
+    // The SETTLED version, not the offered one: a pre-versioning
+    // satellite echoes 1 whatever we asked for, and the 0x000C frame
+    // shape follows the echo.
+    const auto negotiated = reducer::settleAccepted(resp.protocolVersion);
+    conn->setSettledProtocolVersion(negotiated.settledVersion, negotiated.satelliteBehind);
+    conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
+    client->setConnectionParams(material.token, material.sessionKey, negotiated.settledVersion);
+    store_->remember(server);
+    retryAttempts_.remove(id);
+
+    conn->markConnected(
+        client, connectionId, resp.epoch, resp.mouseControl.granted,
+        /*onDead=*/
+        [this, id, server] {
+            closeSession(id);
+            scheduleRetry(server, ConnectIntent::RetryAfterDeath);
+        },
+        /*onClose=*/
+        [this, id, server](std::uint8_t reason) {
+            if (auto* c = connections_.value(id, nullptr)) { handleServerClose(c, server, reason); }
+        },
+        /*onReconcile=*/
+        [this, id, server] {
+            if (auto* c = connections_.value(id, nullptr)) { reconcile(c, server); }
+        },
+        /*onRekey=*/
+        [this, id, server] {
+            if (auto* c = connections_.value(id, nullptr)) { rekey(c, server); }
         });
+    conn->applyResults(resp.controllers);
+    probeHostAudio(id, server);
+}
+
+// The reply applied what was SENT, so a slot the user changed during the round trip is removed or
+// re-sent on its own route.
+void WifiConnectionManager::convergeLateSlots(WifiConnection* conn,
+                                              const std::vector<reducer::DesiredSlot>& sent) {
+    const QString id = conn->id();
+    const auto converge =
+        reducer::lateSlotConverge(sent, descriptorsToDesired(conn->desiredDescriptors()));
+    for (std::uint8_t ctrlIdx : converge.removes) { deleteSlot(id, ctrlIdx); }
+    for (std::uint8_t ctrlIdx : converge.resyncs) {
+        const QString slotId = conn->slotIdForIndex(ctrlIdx);
+        if (!slotId.isEmpty()) { syncSlot(id, slotId); }
+    }
 }
 
 void WifiConnectionManager::onVersionRejected(WifiConnection* conn,
@@ -759,7 +802,8 @@ void WifiConnectionManager::reconcile(WifiConnection* conn,
 // The token and salt a session PUT must both carry, in the sizes the wire fixes. Null for a reply
 // that is missing either, or carries one at the wrong length: there is nothing to adopt.
 std::optional<WifiConnectionManager::SessionMaterial>
-WifiConnectionManager::sessionMaterialFrom(const models::SessionResponse& resp) {
+WifiConnectionManager::sessionMaterialFrom(const models::SessionResponse& resp,
+                                           const std::array<std::uint8_t, 32>& pairingKey) {
     if (!resp.token.has_value() || !resp.sessionSalt.has_value()) { return std::nullopt; }
     const auto tok = util::fromHex(resp.token->toStdString());
     const auto salt = util::fromHex(resp.sessionSalt->toStdString());
@@ -768,11 +812,11 @@ WifiConnectionManager::sessionMaterialFrom(const models::SessionResponse& resp) 
     }
     SessionMaterial m;
     std::copy_n(tok->begin(), 4, m.token.begin());
-    std::copy_n(salt->begin(), wire::kSessionSaltSize, m.salt.begin());
-    m.tokenBe = (static_cast<std::uint32_t>(m.token[0]) << 24) |
-                (static_cast<std::uint32_t>(m.token[1]) << 16) |
-                (static_cast<std::uint32_t>(m.token[2]) << 8) |
-                static_cast<std::uint32_t>(m.token[3]);
+    const std::uint32_t tokenBe = (static_cast<std::uint32_t>(m.token[0]) << 24) |
+                                  (static_cast<std::uint32_t>(m.token[1]) << 16) |
+                                  (static_cast<std::uint32_t>(m.token[2]) << 8) |
+                                  static_cast<std::uint32_t>(m.token[3]);
+    wire::deriveSessionKey(pairingKey.data(), salt->data(), tokenBe, m.sessionKey.data());
     return m;
 }
 
@@ -780,19 +824,14 @@ WifiConnectionManager::sessionMaterialFrom(const models::SessionResponse& resp) 
 // connectionId is stable across PUTs, so the id and slot state carry over.
 void WifiConnectionManager::adoptRekey(WifiConnection* c, const QString& id,
                                        const std::shared_ptr<SatelliteClient>& client,
-                                       const std::array<std::uint8_t, 32>& pairingKey,
                                        const models::SessionResponse& resp,
                                        const SessionMaterial& material) {
-    std::array<std::uint8_t, 32> sessionKey{};
-    wire::deriveSessionKey(pairingKey.data(), material.salt.data(), material.tokenBe,
-                           sessionKey.data());
-
     // A re-PUT settles again: the satellite could have been upgraded under a live session, and
     // the frame shape must follow the answer it just gave, not the one it gave at connect.
     const auto negotiated = reducer::settleAccepted(resp.protocolVersion);
     c->setSettledProtocolVersion(negotiated.settledVersion, negotiated.satelliteBehind);
     c->setProtocolCompat(reducer::compatForOutcome(negotiated));
-    client->setConnectionParams(material.token, sessionKey, negotiated.settledVersion);
+    client->setConnectionParams(material.token, material.sessionKey, negotiated.settledVersion);
     // Otherwise the next enriched ack would read as drift.
     c->adoptEpoch(resp.epoch);
     // The satellite could have been upgraded or re-switched under the live session, same reason
@@ -809,11 +848,7 @@ void WifiConnectionManager::onRekeyReply(const QString& id,
     if (c == nullptr) { return; }
 
     using reducer::RestVerdict;
-    reducer::RestReply rr;
-    rr.status = resp.httpStatus;
-    rr.bodyParsed = resp.reachable;
-    rr.code = resp.code.value_or(QString()).toStdString();
-    const RestVerdict verdict = classifyRest(rr);
+    const RestVerdict verdict = reducer::classifyRest(restReplyOf(resp));
     if (verdict == RestVerdict::Unauthorized) {
         onTerminalAuthFailure(c, id, ConnectIntent::RetryAfterDeath);
         return;
@@ -824,9 +859,9 @@ void WifiConnectionManager::onRekeyReply(const QString& id,
     if (verdict != RestVerdict::Ok) { return; }
 
     // Nothing to adopt; the death retry is what heals a session that truly exhausts.
-    const auto material = sessionMaterialFrom(resp);
+    const auto material = sessionMaterialFrom(resp, pairingKey);
     if (!material.has_value()) { return; }
-    adoptRekey(c, id, client, pairingKey, resp, *material);
+    adoptRekey(c, id, client, resp, *material);
 }
 
 void WifiConnectionManager::rekey(WifiConnection* conn, const models::DiscoveredServer& server) {
