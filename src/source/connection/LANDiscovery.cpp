@@ -77,9 +77,13 @@ QList<models::DiscoveredServer> LANDiscovery::discover(int port, int timeoutMs) 
         // One row per address, because a satellite repeats its beacon for as long as the scan runs.
         const QString ip = senderAddress(from);
         if (ip.isEmpty() || seen.contains(ip)) { continue; }
-        seen.insert(ip);
         const auto json = QString::fromUtf8(reinterpret_cast<const char*>(buf), n);
-        if (auto server = parseBeacon(json, ip)) { result.append(*server); }
+        // Seen only once a beacon parses: anything else arriving on this port from the satellite's
+        // address would otherwise hide it for the rest of the scan.
+        if (auto server = parseBeacon(json, ip)) {
+            seen.insert(ip);
+            result.append(*server);
+        }
     }
     return result;
 }
