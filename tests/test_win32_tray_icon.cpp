@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The item's event dispatch, tooltip and shell traffic, pinned without adding
-// anything to the notification area: every item here speaks to a recording
-// shell, never to Explorer.
+// The item's event dispatch, tooltip, shell traffic and window, pinned without
+// adding anything to the notification area: every item here speaks to a
+// recording shell, never to Explorer.
 
 #include "core/reducer/TrayPresentation.h"
 #include "source/tray/NotifyIconShell.h"
@@ -93,6 +93,50 @@ void explorerComesBack(const ShellLog& shell) {
     SendMessageW(shell.window, RegisterWindowMessageW(L"TaskbarCreated"), 0, 0);
 }
 
+// A message only this test registers, so broadcasting it asks nothing of any
+// other window on the desktop.
+constexpr const wchar_t* kBroadcastProbeName =
+    L"DishTests.TrayBroadcastProbe.{87E623F7-1182-448A-9FEE-1D9BCD76BC98}";
+constexpr UINT kBroadcastTimeoutPerWindowMs = 200;
+constexpr const wchar_t* kMessageWatchProperty = L"DishTests.MessageWatch";
+
+// Counts one message's deliveries to one window by standing in front of the
+// window's procedure for as long as the watch lives, passing everything on.
+// Only deliveries carrying `sender` count: another test process broadcasting
+// the same probe at the same moment reaches this window too.
+class MessageWatch {
+  public:
+    MessageWatch(HWND window, UINT message, WPARAM sender)
+        : window_(window), message_(message), sender_(sender) {
+        SetPropW(window_, kMessageWatchProperty, this);
+        original_ = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
+            window_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&MessageWatch::procedure)));
+    }
+    ~MessageWatch() {
+        SetWindowLongPtrW(window_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(original_));
+        RemovePropW(window_, kMessageWatchProperty);
+    }
+    MessageWatch(const MessageWatch&) = delete;
+    MessageWatch& operator=(const MessageWatch&) = delete;
+
+    int deliveries() const { return deliveries_; }
+
+  private:
+    static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+        auto* watch = static_cast<MessageWatch*>(GetPropW(window, kMessageWatchProperty));
+        const bool isTheWatchedMessage = message == watch->message_;
+        const bool isFromThisSender = wParam == watch->sender_;
+        if (isTheWatchedMessage && isFromThisSender) { ++watch->deliveries_; }
+        return CallWindowProcW(watch->original_, window, message, wParam, lParam);
+    }
+
+    HWND window_;
+    UINT message_;
+    WPARAM sender_;
+    WNDPROC original_ = nullptr;
+    int deliveries_ = 0;
+};
+
 } // namespace
 
 TEST_CASE("tray dispatch: a select (click or keyboard) is the way back to the window",
@@ -171,6 +215,43 @@ TEST_CASE("tray item: an icon the shell refused at logon arrives when Explorer c
     explorerComesBack(fixture.shell);
     REQUIRE(fixture.tray.isAvailable());
     REQUIRE(spy.changes == std::vector<bool>{true});
+}
+
+// Explorer announces its restart to every top-level window at once; a
+// message-only window is not one and never hears it.
+TEST_CASE("tray window: a broadcast reaches it, as Explorer's TaskbarCreated has to",
+          "[tray][windows]") {
+    RecordedTray fixture;
+    fixture.tray.show();
+    const UINT probe = RegisterWindowMessageW(kBroadcastProbeName);
+    const WPARAM thisProcess = GetCurrentProcessId();
+    MessageWatch watch(fixture.shell.window, probe, thisProcess);
+    SendMessageTimeoutW(HWND_BROADCAST, probe, thisProcess, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL,
+                        kBroadcastTimeoutPerWindowMs, nullptr);
+    REQUIRE(watch.deliveries() == 1);
+}
+
+TEST_CASE("tray window: never shown, and a tool window, so it gets no taskbar button",
+          "[tray][windows]") {
+    RecordedTray fixture;
+    fixture.tray.show();
+    const HWND window = fixture.shell.window;
+    const bool isAToolWindow = (GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0;
+    const bool isVisible = IsWindowVisible(window) != FALSE;
+    REQUIRE(isAToolWindow);
+    REQUIRE_FALSE(isVisible);
+}
+
+// taskkill without /F posts WM_CLOSE to every top-level window of the process,
+// the item's among them; the main window is the one that answers it.
+TEST_CASE("tray window: a close sent to every window of the process keeps the way back",
+          "[tray][windows]") {
+    RecordedTray fixture;
+    fixture.tray.show();
+    SendMessageW(fixture.shell.window, WM_CLOSE, 0, 0);
+    REQUIRE(IsWindow(fixture.shell.window) != FALSE);
+    explorerComesBack(fixture.shell);
+    REQUIRE(timesAsked(fixture.shell, NIM_ADD) == 2);
 }
 
 TEST_CASE("tray tooltip: the app name idle, the streaming count otherwise", "[tray][windows]") {

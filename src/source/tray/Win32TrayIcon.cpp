@@ -70,6 +70,9 @@ struct Win32TrayIcon::Native {
     std::unique_ptr<NotifyIconShell> shell;
 
     static LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+        // A close sent to every top-level window (taskkill without /F) is the
+        // main window's to answer; this one lives exactly as long as the item.
+        if (message == WM_CLOSE) { return 0; }
         auto* self = reinterpret_cast<Win32TrayIcon*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
         if (self != nullptr && self->native_ != nullptr) {
             if (message == kTrayCallbackMessage) {
@@ -118,8 +121,8 @@ Win32TrayIcon::Win32TrayIcon(std::unique_ptr<NotifyIconShell> shell, QObject* pa
         qCWarning(lcDishTray) << "tray window class registration failed:" << GetLastError();
         return;
     }
-    native_->hwnd = CreateWindowExW(0, kWindowClassName, L"Dish", 0, 0, 0, 0, 0, HWND_MESSAGE,
-                                    nullptr, instance, nullptr);
+    native_->hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, kWindowClassName, L"Dish", 0, 0, 0, 0, 0,
+                                    nullptr, nullptr, instance, nullptr);
     if (native_->hwnd == nullptr) {
         qCWarning(lcDishTray) << "tray message window creation failed:" << GetLastError();
         return;

@@ -574,7 +574,7 @@ target_link_libraries(dish_core
         bthprops
         # DpapiSecretCipher: CryptProtectData / CryptUnprotectData.
         crypt32
-        # The notification-area item (Shell_NotifyIcon) and its message-only
+        # The notification-area item (Shell_NotifyIcon) and its hidden
         # window, menu and cursor calls.
         shell32
         user32
