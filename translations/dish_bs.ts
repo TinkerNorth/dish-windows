@@ -260,6 +260,8 @@
     <message>
         <source>Dish can’t use the touchpad as a mouse.</source>
         <translation>Dish ne može koristiti dodirnu ploču kao miš.</translation>
+    </message>
+    <message>
         <source>Haptics</source>
         <translation>Haptika</translation>
     </message>

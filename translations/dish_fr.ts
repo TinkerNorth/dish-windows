@@ -260,6 +260,8 @@
     <message>
         <source>Dish can’t use the touchpad as a mouse.</source>
         <translation>Dish ne peut pas utiliser le pavé tactile comme souris.</translation>
+    </message>
+    <message>
         <source>Haptics</source>
         <translation>Retour haptique</translation>
     </message>

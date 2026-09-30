@@ -260,6 +260,8 @@
     <message>
         <source>Dish can’t use the touchpad as a mouse.</source>
         <translation>Dish no puede usar el panel táctil como ratón.</translation>
+    </message>
+    <message>
         <source>Haptics</source>
         <translation>Háptica</translation>
     </message>
