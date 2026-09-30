@@ -23,6 +23,7 @@
 #include <QDeadlineTimer>
 #include <QString>
 
+#include <algorithm>
 #include <memory>
 
 using dish::moonlight::BindOutcome;
@@ -198,9 +199,11 @@ TEST_CASE("A pad whose Motion switch is off still arrives with its sensors",
     REQUIRE(fx.bindLive() != nullptr);
 
     const auto packets = fx.host.packets();
-    REQUIRE_FALSE(packets.empty());
-    CHECK(packets.front().inputType == kInputControllerArrival);
-    CHECK((packets.front().capabilities & dish::moonlight::kCapsReadAtArrival) ==
+    const auto arrival = std::find_if(packets.cbegin(), packets.cend(), [](const auto& packet) {
+        return packet.inputType == kInputControllerArrival;
+    });
+    REQUIRE(arrival != packets.cend());
+    CHECK((arrival->capabilities & dish::moonlight::kCapsReadAtArrival) ==
           dish::moonlight::kCapsReadAtArrival);
     CHECK(fx.host.padType(0) == dish::moonlight::kPadTypePlayStation);
 }

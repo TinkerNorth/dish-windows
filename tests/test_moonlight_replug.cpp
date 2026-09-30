@@ -30,6 +30,7 @@
 #include <QString>
 
 #include <memory>
+#include <vector>
 
 using dish::moonlight::BindOutcome;
 using dish::moonlight::SessionEvent;
@@ -86,14 +87,24 @@ using dish::moonlight::kInputControllerMulti;
 using dish::moonlight::kPadTypePlayStation;
 using dish::moonlight::kPadTypeXbox;
 
+bool namesAPad(const MoonlightWolfControlHost::Packet& packet) {
+    return packet.inputType == kInputControllerArrival || packet.inputType == kInputControllerMulti;
+}
+
 // The packets that name a pad, which leaves out the keepalive a live stream sends on its own.
+std::vector<MoonlightWolfControlHost::Packet> padPackets(const MoonlightWolfControlHost& host) {
+    std::vector<MoonlightWolfControlHost::Packet> named;
+    for (const auto& packet : host.packets()) {
+        if (namesAPad(packet)) { named.push_back(packet); }
+    }
+    return named;
+}
+
 int padPacketsAfter(const MoonlightWolfControlHost& host, std::size_t seen) {
     int count = 0;
     const auto packets = host.packets();
     for (std::size_t i = seen; i < packets.size(); ++i) {
-        const bool namesAPad = packets[i].inputType == kInputControllerArrival ||
-                               packets[i].inputType == kInputControllerMulti;
-        if (namesAPad) { ++count; }
+        if (namesAPad(packets[i])) { ++count; }
     }
     return count;
 }
@@ -183,7 +194,7 @@ TEST_CASE("A replug unplugs the number and plugs the new pad in, back to back",
     REQUIRE(pumpUntil([&host] { return host.padType(0) == kPadTypePlayStation; }));
     // The pad beside it was never named, so it is exactly where it was.
     CHECK(host.padType(1) == kPadTypeXbox);
-    const auto packets = host.packets();
+    const auto packets = padPackets(host);
     REQUIRE(packets.size() == 4);
     const auto& unplug = packets[2];
     const auto& arrival = packets[3];
