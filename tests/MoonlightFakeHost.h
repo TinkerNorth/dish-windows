@@ -158,23 +158,19 @@ class MoonlightFakeHost : public QObject {
 
     // Listen for TLS as well, presenting the certificate phase 1 hands out, the way a host does,
     // so phase 5 can complete. False when the TLS backend cannot serve.
-    bool serveTls() {
-        const auto& identity = hostIdentity();
-        const auto certs = QSslCertificate::fromData(QByteArray::fromStdString(identity.certPem));
-        const QSslKey key(QByteArray::fromStdString(identity.privateKeyPem), QSsl::Rsa, QSsl::Pem);
-        if (certs.isEmpty() || key.isNull()) { return false; }
-        QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-        ssl.setLocalCertificate(certs.first());
-        ssl.setPrivateKey(key);
-        // The client presents its own certificate; asking for it back would only add a way for
-        // the fixture to refuse a valid call.
-        ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
-        tls_.setSslConfiguration(ssl);
-        QObject::connect(&tls_, &QTcpServer::pendingConnectionAvailable, this, [this] {
-            while (auto* socket = tls_.nextPendingConnection()) { accept(socket); }
-        });
-        return tls_.listen(QHostAddress::LocalHost, 0);
+    bool serveTls() { return serveTlsWith(hostIdentity()); }
+
+    // Listen for TLS presenting a certificate other than the one phase 1 hands out: what a machine
+    // between the client and its host, or another one answering on the host's port, looks like.
+    bool serveTlsAsAnotherMachine() { return serveTlsWith(anotherIdentity()); }
+
+    // The certificate phase 1 hands out and serveTls() presents, as DER.
+    QByteArray certDer() {
+        return QSslCertificate::fromData(QByteArray::fromStdString(hostIdentity().certPem))
+            .value(0)
+            .toDer();
     }
+
     int tlsPort() const { return static_cast<int>(tls_.serverPort()); }
 
     // Which phase numbers were served, in order, so a refused exchange can be
@@ -301,9 +297,34 @@ class MoonlightFakeHost : public QObject {
         return *hostIdentity_;
     }
 
+    const dish::moonlight::Identity& anotherIdentity() {
+        if (!anotherIdentity_.has_value()) {
+            anotherIdentity_ = dish::moonlight::generateIdentity();
+        }
+        return *anotherIdentity_;
+    }
+
+    bool serveTlsWith(const dish::moonlight::Identity& identity) {
+        const auto certs = QSslCertificate::fromData(QByteArray::fromStdString(identity.certPem));
+        const QSslKey key(QByteArray::fromStdString(identity.privateKeyPem), QSsl::Rsa, QSsl::Pem);
+        if (certs.isEmpty() || key.isNull()) { return false; }
+        QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
+        ssl.setLocalCertificate(certs.first());
+        ssl.setPrivateKey(key);
+        // The client presents its own certificate; asking for it back would only add a way for
+        // the fixture to refuse a valid call.
+        ssl.setPeerVerifyMode(QSslSocket::VerifyNone);
+        tls_.setSslConfiguration(ssl);
+        QObject::connect(&tls_, &QTcpServer::pendingConnectionAvailable, this, [this] {
+            while (auto* socket = tls_.nextPendingConnection()) { accept(socket); }
+        });
+        return tls_.listen(QHostAddress::LocalHost, 0);
+    }
+
     QTcpServer server_;
     QSslServer tls_;
     std::optional<dish::moonlight::Identity> hostIdentity_;
+    std::optional<dish::moonlight::Identity> anotherIdentity_;
     QString pin_;
     int refusePhase_;
     // Unless refuseWith says otherwise, the refusal rides an HTTP 200.

@@ -432,6 +432,66 @@ TEST_CASE("A pairing that completes is written down and the host is Paired",
     CHECK(*manager.sessionPhase(h.id()) == SessionPhase::Paired);
 }
 
+TEST_CASE("Phase 5 trusts the certificate phase 1 handed out, and no other",
+          "[moonlight][behaviour][b4]") {
+    // Phases 1 to 4 prove the peer holds the PIN-derived key and signed with the
+    // certificate it handed out. Whatever answers on the TLS port with another
+    // certificate is not that host; it used to be pinned on first sight and
+    // paired with.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("4271"));
+    REQUIRE(fake.listening());
+    REQUIRE(fake.serveTlsAsAnotherMachine());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.tlsPort();
+    store.rememberHost(h);
+    std::optional<bool> result;
+    QObject::connect(&manager, &MoonlightManager::pairingFinished,
+                     [&result](const QString&, bool ok) { result = ok; });
+
+    manager.pairHost(h.id(), QStringLiteral("4271"));
+
+    REQUIRE(pumpUntil([&result] { return result.has_value(); }, 15000));
+    CHECK_FALSE(*result);
+    CHECK(fake.phasesServed() == QList<int>({1, 2, 3, 4}));
+    REQUIRE(store.hosts().size() == 1);
+    CHECK_FALSE(store.hosts().first().paired);
+    CHECK_FALSE(store.serverCert(h.id()).has_value());
+}
+
+TEST_CASE("A completed pairing pins the certificate phase 1 handed out, over an older pin",
+          "[moonlight][behaviour][b4]") {
+    // A host rebuilt since its certificate was pinned refuses every call over
+    // that pin until it is forgotten, and the pairing that proves its new
+    // certificate used to fail on the old pin too.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("4271"));
+    REQUIRE(fake.listening());
+    REQUIRE(fake.serveTls());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.tlsPort();
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QString(64, QLatin1Char('0')));
+    std::optional<bool> result;
+    QObject::connect(&manager, &MoonlightManager::pairingFinished,
+                     [&result](const QString&, bool ok) { result = ok; });
+
+    manager.pairHost(h.id(), QStringLiteral("4271"));
+
+    REQUIRE(pumpUntil([&result] { return result.has_value(); }, 15000));
+    CHECK(*result);
+    CHECK(fake.phasesServed() == QList<int>({1, 2, 3, 4, 5}));
+    CHECK(store.serverCert(h.id()) == QString::fromUtf8(fake.certDer().toHex()));
+}
+
 // ── B4 · trust that is proved is trust that is written down ─────────────────
 
 TEST_CASE("A certificate pinned by a handshake is not on its own a pairing",

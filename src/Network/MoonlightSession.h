@@ -109,6 +109,8 @@ class MoonlightSession : public QObject {
     void pairPhase4(const PairingRun& run);
     void onPairPhase4(const PairingRun& run, const MoonlightXmlResponse& r);
     void pairPhase5(const PairingRun& run);
+    // The host certificate phases 1 to 4 proved, as DER: what phase 5 trusts and a pairing pins.
+    static QByteArray provenCertificateOf(const PairingRun& run);
     void onPairPhase5(const PairingRun& run, const MoonlightXmlResponse& r);
 
     // Abandon a pairing in flight. The five phases chain through callbacks and

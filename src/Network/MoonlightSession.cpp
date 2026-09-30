@@ -10,6 +10,7 @@
 #include <QHostAddress>
 #include <QLoggingCategory>
 #include <QNetworkDatagram>
+#include <QSslCertificate>
 #include <QStringView>
 #include <QTimer>
 #include <QUdpSocket>
@@ -404,12 +405,20 @@ void MoonlightSession::onPairPhase4(const PairingRun& run, const MoonlightXmlRes
 }
 
 // Over TLS, presenting the client certificate: this is the phase that proves the key the first
-// four phases agreed on is the one the host will accept.
+// four phases agreed on is the one the host will accept. Those phases proved the peer holds the
+// PIN-derived key and signed with the certificate it handed out in phase 1, so this one trusts
+// that certificate and no other, whatever is pinned: the pin of a host since rebuilt would refuse
+// it, and any other certificate is not the host that paired.
 void MoonlightSession::pairPhase5(const PairingRun& run) {
-    http_->getHttps(run.ip, run.httpsPort, QStringLiteral("/pair"),
-                    {{QStringLiteral("uniqueid"), uniqueId_},
-                     {QStringLiteral("phrase"), QStringLiteral("pairchallenge")}},
-                    [this, run](const MoonlightXmlResponse& r) { onPairPhase5(run, r); });
+    http_->getHttpsTrusting(run.ip, run.httpsPort, QStringLiteral("/pair"),
+                            {{QStringLiteral("uniqueid"), uniqueId_},
+                             {QStringLiteral("phrase"), QStringLiteral("pairchallenge")}},
+                            provenCertificateOf(run),
+                            [this, run](const MoonlightXmlResponse& r) { onPairPhase5(run, r); });
+}
+
+QByteArray MoonlightSession::provenCertificateOf(const PairingRun& run) {
+    return QSslCertificate(QByteArray::fromStdString(run.pc->serverCertPem()), QSsl::Pem).toDer();
 }
 
 void MoonlightSession::onPairPhase5(const PairingRun& run, const MoonlightXmlResponse& r) {
@@ -419,7 +428,13 @@ void MoonlightSession::onPairPhase5(const PairingRun& run, const MoonlightXmlRes
         return;
     }
     host_.paired = true;
-    if (repo_ != nullptr) { repo_->rememberHost(host_); }
+    if (repo_ != nullptr) {
+        // The pairing proved this certificate, which outranks a pin written on first sight for a
+        // host since rebuilt.
+        repo_->setServerCert(host_.id(), QString::fromUtf8(provenCertificateOf(run).toHex()));
+        serverCertMismatch_ = false;
+        repo_->rememberHost(host_);
+    }
     qCInfo(lcMoonlightSession) << host_.ip << "paired";
     dispatch(moonlight::SessionEvent::PairSucceeded);
     emit pairingFinished(true);

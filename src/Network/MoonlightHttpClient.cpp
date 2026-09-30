@@ -98,7 +98,7 @@ void MoonlightHttpClient::getHttp(const QString& host, int httpPort, const QStri
     QString url = QStringLiteral("http://%1:%2%3").arg(host).arg(httpPort).arg(path);
     const QString qs = buildMoonlightQuery(query);
     if (!qs.isEmpty()) { url += QLatin1Char('?') + qs; }
-    perform(url, /*https=*/false, std::move(cb));
+    perform(url, /*https=*/false, pinVerifier_, std::move(cb));
 }
 
 void MoonlightHttpClient::getHttps(const QString& host, int httpsPort, const QString& path,
@@ -106,7 +106,7 @@ void MoonlightHttpClient::getHttps(const QString& host, int httpsPort, const QSt
     QString url = QStringLiteral("https://%1:%2%3").arg(host).arg(httpsPort).arg(path);
     const QString qs = buildMoonlightQuery(query);
     if (!qs.isEmpty()) { url += QLatin1Char('?') + qs; }
-    perform(url, /*https=*/true, std::move(cb));
+    perform(url, /*https=*/true, pinVerifier_, std::move(cb));
 }
 
 namespace {
@@ -172,14 +172,29 @@ void handOver(const QString& path, const MoonlightHttpClient::ResponseCb& cb,
 // whose certificate changed never sees the request at all. The verifier is the one in force when
 // the call was made: a store detaches it with calls still in flight. No call carries a deadline:
 // pairing phase 1 waits on a human typing the PIN into the host.
-void MoonlightHttpClient::perform(const QString& url, bool https, ResponseCb cb) {
+void MoonlightHttpClient::getHttpsTrusting(const QString& host, int httpsPort, const QString& path,
+                                           const std::map<QString, QString>& query,
+                                           QByteArray certDer, ResponseCb cb) {
+    QString url = QStringLiteral("https://%1:%2%3").arg(host).arg(httpsPort).arg(path);
+    const QString qs = buildMoonlightQuery(query);
+    if (!qs.isEmpty()) { url += QLatin1Char('?') + qs; }
+    perform(
+        url, /*https=*/true,
+        [trusted = std::move(certDer)](const QString&, const QByteArray& der) {
+            return der == trusted;
+        },
+        std::move(cb));
+}
+
+void MoonlightHttpClient::perform(const QString& url, bool https, const PinVerifier& verifier,
+                                  ResponseCb cb) {
     http::HttpRequest request;
     request.url = QUrl(url);
     request.method = QByteArrayLiteral("GET");
     request.tls = https ? std::optional(sslConfigFor(identity_)) : std::nullopt;
     http::PeerCheck peerCheck;
-    if (pinVerifier_) {
-        peerCheck = [verifier = pinVerifier_, host = request.url.host()](const QByteArray& der) {
+    if (verifier) {
+        peerCheck = [verifier, host = request.url.host()](const QByteArray& der) {
             return verifier(host, der);
         };
     }

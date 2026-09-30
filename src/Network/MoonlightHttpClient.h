@@ -113,8 +113,15 @@ class MoonlightHttpClient : public QObject {
     void getHttps(const QString& host, int httpsPort, const QString& path,
                   const std::map<QString, QString>& query, ResponseCb cb);
 
+    // The same, trusting `certDer` and no other certificate, whatever the pin
+    // gate holds: the pairing's phase 5, which only the certificate phases 1 to
+    // 4 proved may answer.
+    void getHttpsTrusting(const QString& host, int httpsPort, const QString& path,
+                          const std::map<QString, QString>& query, QByteArray certDer,
+                          ResponseCb cb);
+
   private:
-    void perform(const QString& url, bool https, ResponseCb cb);
+    void perform(const QString& url, bool https, const PinVerifier& verifier, ResponseCb cb);
 
     http::HttpTransport* transport_;
     std::optional<moonlight::Identity> identity_;
