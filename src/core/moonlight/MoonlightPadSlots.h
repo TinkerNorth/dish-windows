@@ -214,12 +214,6 @@ inline AnnouncedPad arrivalForBinding(int devicePick, bool hasRumble, bool hasMo
     return {type, capabilities};
 }
 
-// The arrival carries the pad's touchpad as CONTROLLER_TOUCH or not at all:
-// Moonlight has no routing of it as a mouse.
-inline bool arrivalRendersTouchpad(const AnnouncedPad& arrival) {
-    return (arrival.capabilities & kPadCapTouchpad) != 0;
-}
-
 // The whole low sixteen, which every type carries, plus the touchpad click only
 // when a touchpad is in the declared set.
 inline constexpr std::uint32_t kSupportedButtonsBase = 0x0000FFFFu;

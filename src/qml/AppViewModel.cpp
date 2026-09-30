@@ -353,13 +353,15 @@ MoonlightPadFacts moonlightPadFactsOf(const models::ControllerSlot* slot) {
     return facts;
 }
 
-// What a Moonlight binding's touchpad reads as: the arrival the host was told,
-// from the binding's pick and the pad.
-QString moonlightTouchpadRoutingOf(const models::ControllerSlot* slot, int devicePick) {
+// What a Moonlight binding's touchpad reads as: whether the pad's touches reach
+// the host, from the host's pick, the pad, and the arrival the binding declares.
+QString moonlightTouchpadRoutingOf(const models::ControllerSlot* slot, int devicePick,
+                                   const std::optional<std::string>& hostPick) {
     const MoonlightPadFacts pad = moonlightPadFactsOf(slot);
     const auto arrival = moonlight::arrivalForBinding(devicePick, pad.rumble, pad.motion,
                                                       pad.touchpad, pad.battery, pad.lightbar);
-    return touchpadChoiceForArrival(moonlight::arrivalRendersTouchpad(arrival));
+    return touchpadChoiceForMoonlight(
+        moonlight::touchReachesHost(hostPick, pad.touchpad, arrival.type));
 }
 
 } // namespace
@@ -1577,9 +1579,10 @@ QString AppViewModel::touchpadRoutingFor(const QString& slotId) const {
     const bool boundToSatellite = model_->hub()->bindings().contains(slotId);
     const auto moonlightBinding = model_->moonlight()->binding(slotId);
     const bool boundToMoonlight = !boundToSatellite && moonlightBinding.has_value();
-    return boundToMoonlight
-               ? moonlightTouchpadRoutingOf(slotById(slotId), moonlightBinding->controllerType)
-               : touchpadChoiceForMode(model_->declaredTouchpadMode(slotId));
+    if (!boundToMoonlight) { return touchpadChoiceForMode(model_->declaredTouchpadMode(slotId)); }
+    const auto hostPick =
+        model_->touchpadModeStore()->modeFor(moonlightBinding->hostId.toStdString());
+    return moonlightTouchpadRoutingOf(slotById(slotId), moonlightBinding->controllerType, hostPick);
 }
 
 bool AppViewModel::motionEnabledFor(const QString& slotId) const {
