@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <vector>
 
 using dish::reducer::TrayActivity;
@@ -137,6 +138,76 @@ class MessageWatch {
     int deliveries_ = 0;
 };
 
+using OwnedHandle = std::unique_ptr<void, decltype(&CloseHandle)>;
+
+constexpr DWORD kLoweredTokenAccess =
+    TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_ASSIGN_PRIMARY;
+constexpr DWORD kSenderTimeoutMs = 10000;
+constexpr DWORD kPostedWithoutError = 0;
+
+// This process's own token, lowered to Low integrity. CreateProcessAsUserW
+// takes a lowered copy of the caller's own token without any privilege, so an
+// ordinary test run can start a process below itself.
+OwnedHandle lowIntegrityToken() {
+    HANDLE own = nullptr;
+    const bool opened = OpenProcessToken(GetCurrentProcess(), kLoweredTokenAccess, &own) != FALSE;
+    REQUIRE(opened);
+    const OwnedHandle ownToken(own, &CloseHandle);
+    HANDLE copy = nullptr;
+    const bool duplicated = DuplicateTokenEx(ownToken.get(), 0, nullptr, SecurityImpersonation,
+                                             TokenPrimary, &copy) != FALSE;
+    REQUIRE(duplicated);
+    OwnedHandle token(copy, &CloseHandle);
+    SID_IDENTIFIER_AUTHORITY mandatoryLabel = SECURITY_MANDATORY_LABEL_AUTHORITY;
+    PSID lowLevel = nullptr;
+    const bool built = AllocateAndInitializeSid(&mandatoryLabel, 1, SECURITY_MANDATORY_LOW_RID, 0,
+                                                0, 0, 0, 0, 0, 0, &lowLevel) != FALSE;
+    REQUIRE(built);
+    TOKEN_MANDATORY_LABEL label{};
+    label.Label.Attributes = SE_GROUP_INTEGRITY;
+    label.Label.Sid = lowLevel;
+    const DWORD labelSize = static_cast<DWORD>(sizeof(label)) + GetLengthSid(lowLevel);
+    const bool lowered =
+        SetTokenInformation(token.get(), TokenIntegrityLevel, &label, labelSize) != FALSE;
+    FreeSid(lowLevel);
+    REQUIRE(lowered);
+    return token;
+}
+
+// The command line that has tests/TaskbarCreatedSender.cpp post to `window`.
+std::wstring senderCommandLine(HWND window) {
+    const std::wstring sender = QStringLiteral(DISH_TASKBAR_CREATED_SENDER).toStdWString();
+    const auto handleValue = reinterpret_cast<ULONG_PTR>(window);
+    return L"\"" + sender + L"\" " + std::to_wstring(handleValue);
+}
+
+// Starts the sender at Low integrity, below this process the way Explorer sits
+// below an elevated Dish, and returns the error its PostMessageW reported.
+DWORD postTaskbarCreatedFromBelow(HWND window) {
+    const OwnedHandle token = lowIntegrityToken();
+    std::wstring commandLine = senderCommandLine(window);
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    const bool started =
+        CreateProcessAsUserW(token.get(), nullptr, commandLine.data(), nullptr, nullptr, FALSE,
+                             CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process) != FALSE;
+    REQUIRE(started);
+    const OwnedHandle sender(process.hProcess, &CloseHandle);
+    const OwnedHandle senderThread(process.hThread, &CloseHandle);
+    const bool finished = WaitForSingleObject(sender.get(), kSenderTimeoutMs) == WAIT_OBJECT_0;
+    REQUIRE(finished);
+    DWORD error = 0;
+    GetExitCodeProcess(sender.get(), &error);
+    return error;
+}
+
+// Runs what was posted to the window, as the app's event loop would.
+void dispatchPostedTo(HWND window) {
+    MSG message{};
+    while (PeekMessageW(&message, window, 0, 0, PM_REMOVE) != FALSE) { DispatchMessageW(&message); }
+}
+
 } // namespace
 
 TEST_CASE("tray dispatch: a select (click or keyboard) is the way back to the window",
@@ -215,6 +286,19 @@ TEST_CASE("tray item: an icon the shell refused at logon arrives when Explorer c
     explorerComesBack(fixture.shell);
     REQUIRE(fixture.tray.isAvailable());
     REQUIRE(spy.changes == std::vector<bool>{true});
+}
+
+// An elevated Dish sits above Explorer, and UIPI drops what a lower process
+// posts unless the window lets that message through. A sender at Low
+// integrity stands below this test process the same way.
+TEST_CASE("tray item: Explorer coming back from a lower integrity level puts it back",
+          "[tray][windows]") {
+    RecordedTray fixture;
+    fixture.tray.show();
+    const DWORD senderError = postTaskbarCreatedFromBelow(fixture.shell.window);
+    REQUIRE(senderError == kPostedWithoutError);
+    dispatchPostedTo(fixture.shell.window);
+    REQUIRE(timesAsked(fixture.shell, NIM_ADD) == 2);
 }
 
 // Explorer announces its restart to every top-level window at once; a

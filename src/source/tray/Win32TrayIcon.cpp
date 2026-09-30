@@ -129,6 +129,9 @@ Win32TrayIcon::Win32TrayIcon(std::unique_ptr<NotifyIconShell> shell, QObject* pa
     }
     SetWindowLongPtrW(native_->hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
     native_->taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+    // An elevated Dish sits above Explorer, and UIPI drops what a lower process
+    // posts unless the window lets that message through.
+    ChangeWindowMessageFilterEx(native_->hwnd, native_->taskbarCreated, MSGFLT_ALLOW, nullptr);
 
     const int cx = GetSystemMetrics(SM_CXSMICON);
     const int cy = GetSystemMetrics(SM_CYSMICON);

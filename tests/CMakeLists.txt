@@ -248,6 +248,14 @@ target_compile_definitions(DishTests PRIVATE
 # The `release_translations` dependency is wired from the TOP-LEVEL CMakeLists:
 # that target does not exist until this directory scope is finalized.
 
+# The process the tray test starts below its own integrity level, to post
+# Explorer's TaskbarCreated the way Explorer reaches an elevated Dish.
+add_executable(TaskbarCreatedSender TaskbarCreatedSender.cpp)
+target_link_libraries(TaskbarCreatedSender PRIVATE user32 dish_warnings dish_strict)
+add_dependencies(DishTests TaskbarCreatedSender)
+target_compile_definitions(DishTests PRIVATE
+    DISH_TASKBAR_CREATED_SENDER="$<TARGET_FILE:TaskbarCreatedSender>")
+
 # The TLS tests run on Qt's OpenSSL backend (tests/FakeHttpsListener.h says why
 # not Schannel), and Qt loads libssl at run time. dish_core links libcrypto
 # alone, so vcpkg's applocal step never puts libssl beside the exe; this copies
