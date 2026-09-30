@@ -173,6 +173,15 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
                             static_cast<std::uint8_t>(b));
         });
 
+    // A pad's Motion switch, for the slots bound to a Moonlight host: read when a slot binds and
+    // again whenever the store moves, whoever moved it.
+    moonlight_.setMotionSwitch([this](const QString& slotId) {
+        return motionEnabledStore_.isEnabled(slotId.toStdString());
+    });
+    motionSwitchSub_ = motionEnabledStore_.state().subscribe(
+        [this](const source::MotionEnabledMap&) { moonlight_.refreshMotionSwitches(); },
+        /*emitCurrent=*/false);
+
     autoReconnectTimer_->setInterval(15'000);
     QObject::connect(autoReconnectTimer_, &QTimer::timeout, this,
                      [this] { wifi_->autoReconnectAll(); });
@@ -393,6 +402,7 @@ AppModel::~AppModel() {
     inputRatesSub_ = arch::Observable<source::SlotInputRatesMap>::Subscription{};
     inputRateStore_.reset();
     joystickRemapSub_ = arch::Observable<source::JoystickRemapMap>::Subscription{};
+    motionSwitchSub_ = arch::Observable<source::MotionEnabledMap>::Subscription{};
     usbManager_.reset();
     usbGateway_.reset();
 }

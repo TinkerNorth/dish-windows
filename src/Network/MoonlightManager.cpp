@@ -701,6 +701,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
     const auto arrival = moonlight::arrivalForBinding(controllerType, hasRumble, hasMotion,
                                                       hasTouchpad, hasBattery, hasLightbar);
     if (const auto held = numberOnSession(slotId, session)) {
+        readMotionSwitch(slotId);
         reannounceInPlace(slotId, *held, *session, arrival);
         // A session that is down is started again, as the first bind on a host starts one; one
         // that is up or on its way up reduces this to nothing.
@@ -724,6 +725,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
         return moonlight::BindOutcome::HostFull;
     }
 
+    const bool userMotionOn = motionSwitchAllows(slotId);
     {
         std::lock_guard<std::mutex> lock(routeMtx_);
         // Named rather than braced-aggregate: the differ is default-constructed
@@ -733,6 +735,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
         route.session = session;
         route.controllerNumber = *number;
         route.hostId = hostId;
+        route.userMotionOn = userMotionOn;
         routes_[key] = std::move(route);
         anyBound_.store(true, std::memory_order_relaxed);
     }
@@ -977,7 +980,7 @@ void MoonlightManager::forwardMotion(const std::string& slotId, std::int16_t gyr
     {
         std::lock_guard<std::mutex> lock(routeMtx_);
         const auto it = routes_.find(slotId);
-        if (it == routes_.end()) { return; }
+        if (it == routes_.end() || !it->second.userMotionOn) { return; }
         session = it->second.session;
         number = it->second.controllerNumber;
     }
@@ -1044,6 +1047,31 @@ void MoonlightManager::forwardBattery(const std::string& slotId, std::uint8_t le
     if (session == nullptr) { return; }
     session->sendControllerBattery(
         number, moonlight::batteryStateFromSatelliteStatus(satelliteStatus), level);
+}
+
+void MoonlightManager::setMotionSwitch(MotionSwitch motionSwitch) {
+    motionSwitch_ = std::move(motionSwitch);
+}
+
+void MoonlightManager::refreshMotionSwitches() {
+    QStringList routed;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        for (const auto& entry : routes_) { routed.append(QString::fromStdString(entry.first)); }
+    }
+    for (const auto& slotId : routed) { readMotionSwitch(slotId); }
+}
+
+bool MoonlightManager::motionSwitchAllows(const QString& slotId) const {
+    return !motionSwitch_ || motionSwitch_(slotId);
+}
+
+// Asked outside routeMtx_, because the switch reads a store the input thread must never wait on.
+void MoonlightManager::readMotionSwitch(const QString& slotId) {
+    const bool on = motionSwitchAllows(slotId);
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    const auto it = routes_.find(slotId.toStdString());
+    if (it != routes_.end()) { it->second.userMotionOn = on; }
 }
 
 } // namespace dish::net

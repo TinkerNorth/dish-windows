@@ -27,6 +27,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -248,6 +249,16 @@ class MoonlightManager : public QObject {
     // True while at least one slot is bound to a Moonlight host.
     bool hasBoundSlots() const { return anyBound_.load(std::memory_order_relaxed); }
 
+    // The pad's Motion switch: whether the user lets a slot's motion reach its host. Asked on the
+    // main thread when the slot is bound and again by refreshMotionSwitches, and kept with the
+    // slot's route, so the input thread never reads the store behind it. The arrival still
+    // declares the pad's sensors, as dish-android's does: the switch stops the samples, and
+    // turning it back on costs the pad no replug. With no switch set, motion goes out.
+    using MotionSwitch = std::function<bool(const QString& slotId)>;
+    void setMotionSwitch(MotionSwitch motionSwitch);
+    // Main thread. Asks the switch again for every bound slot, after the user turned one.
+    void refreshMotionSwitches();
+
   signals:
     void hostsChanged();
     void scanningChanged();
@@ -314,11 +325,17 @@ class MoonlightManager : public QObject {
     void reannounceInPlace(const QString& slotId, std::uint8_t number, MoonlightSession& session,
                            const moonlight::AnnouncedPad& wanted);
 
+    // What the Motion switch answers for a slot: yes with no switch set.
+    bool motionSwitchAllows(const QString& slotId) const;
+    // Main thread. Keeps the switch's answer with the slot's route, where forwardMotion reads it.
+    void readMotionSwitch(const QString& slotId);
+
     // Resolves a slot to its live session + controller number under routeMtx_.
     struct Route {
         MoonlightSession* session = nullptr;
         std::uint8_t controllerNumber = 0;
         QString hostId;
+        bool userMotionOn = true;
         // Per bound pad: the last touch frame, so the event stream is the
         // difference between frames. Dies with the route, which is exactly when
         // the host forgets the pad's contacts too.
@@ -371,6 +388,7 @@ class MoonlightManager : public QObject {
     // Per host: which controller numbers are in use and the active mask.
     QHash<QString, moonlight::PadSlots> padSlots_;
     std::atomic<bool> anyBound_{false};
+    MotionSwitch motionSwitch_;
 };
 
 } // namespace dish::net
