@@ -3570,6 +3570,10 @@
         <source>Pairing PIN, 6 digits</source>
         <translation>PIN de pareamento, 6 dígitos</translation>
     </message>
+    <message>
+        <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
+        <translation>A identidade de segurança deste satélite mudou. Se ele foi reinstalado, esqueça-o aqui e pareie de novo.</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

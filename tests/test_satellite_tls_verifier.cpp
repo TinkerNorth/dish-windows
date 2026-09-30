@@ -30,6 +30,10 @@ QByteArray der(std::initializer_list<char> bytes) {
     for (const char b : bytes) { out.append(b); }
     return out;
 }
+
+// Every address has a pairing behind its pin, or none has.
+bool pairedEverywhere(const QString&) { return true; }
+bool pairedNowhere(const QString&) { return false; }
 } // namespace
 
 TEST_CASE("first contact pins and accepts", "[tlsverify]") {
@@ -97,7 +101,7 @@ TEST_CASE("pins are kept per satellite id", "[tlsverify]") {
 
 TEST_CASE("the installed verifier raises its flag only for a changed cert", "[tlsverify]") {
     SatellitePinRepository pins(makeSharedSettings());
-    const auto verify = pinVerifierOver(pins);
+    const auto verify = pinVerifierOver(pins, &pairedEverywhere);
 
     bool firstUse = false;
     CHECK(verify(kSat, der({1, 2, 3}), firstUse));
@@ -119,7 +123,7 @@ TEST_CASE("the installed verifier raises its flag only for a changed cert", "[tl
 TEST_CASE("the installed verifier's raised flag does not leak into the next request",
           "[tlsverify]") {
     SatellitePinRepository pins(makeSharedSettings());
-    const auto verify = pinVerifierOver(pins);
+    const auto verify = pinVerifierOver(pins, &pairedEverywhere);
     bool firstUse = false;
     CHECK(verify(kSat, der({1, 2, 3}), firstUse));
 
@@ -132,4 +136,37 @@ TEST_CASE("the installed verifier's raised flag does not leak into the next requ
     bool again = false;
     CHECK(verify(kSat, der({1, 2, 3}), again));
     CHECK_FALSE(again);
+}
+
+// A pin with no pairing behind it protects nothing: it was set by a handshake that never led to a
+// key, typically an approval request the operator never answered. A satellite reinstalled since
+// then must still be able to pair.
+
+TEST_CASE("a changed cert at an address nothing is paired with is trusted as a first use",
+          "[tlsverify]") {
+    SatellitePinRepository pins(makeSharedSettings());
+    const auto verify = pinVerifierOver(pins, &pairedNowhere);
+    bool firstUse = false;
+    CHECK(verify(kSat, der({1, 2, 3}), firstUse));
+
+    bool changed = false;
+    CHECK(verify(kSat, der({9, 9, 9}), changed));
+
+    CHECK_FALSE(changed);
+    // Pinned in the old one's place.
+    CHECK(pins.pinnedFingerprint(kSat).has_value());
+    CHECK(pins.pinnedFingerprint(kSat) != kFp123);
+}
+
+TEST_CASE("a changed cert at an address with a pairing behind it is still refused", "[tlsverify]") {
+    SatellitePinRepository pins(makeSharedSettings());
+    const auto verify = pinVerifierOver(pins, &pairedEverywhere);
+    bool firstUse = false;
+    CHECK(verify(kSat, der({1, 2, 3}), firstUse));
+
+    bool changed = false;
+    CHECK_FALSE(verify(kSat, der({9, 9, 9}), changed));
+
+    CHECK(changed);
+    CHECK(pins.pinnedFingerprint(kSat) == kFp123);
 }

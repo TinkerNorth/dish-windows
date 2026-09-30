@@ -92,7 +92,8 @@ class AppViewModel : public QObject {
     Q_PROPERTY(bool scanning READ isScanning NOTIFY scanningChanged)
 
     // ── Reverse (host-initiated) pairing ─────────────────────────────────────
-    // Phase is "idle" | "awaiting" | "approved" | "declined" | "timedout".
+    // Phase is "idle" | "awaiting" | "approved" | "declined" | "timedout" |
+    // "identitychanged" | "versionmismatch" (qml/AppSettingsMaps: reversePairingPhaseToken).
     Q_PROPERTY(QString reversePairingPhase READ reversePairingPhase NOTIFY reversePairingChanged)
     Q_PROPERTY(QString reversePairingPin READ reversePairingPin NOTIFY reversePairingChanged)
     Q_PROPERTY(

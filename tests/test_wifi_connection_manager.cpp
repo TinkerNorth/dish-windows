@@ -11,8 +11,10 @@
 #include "Network/WifiConnection.h"
 #include "Network/WifiConnectionManager.h"
 #include "core/model/Protocol.h"
+#include "core/net/Tofu.h"
 #include "core/wire/SessionCrypto.h"
 
+#include "FakeHttpsListener.h"
 #include "FakeSatelliteRest.h"
 #include "FakeWifiEffects.h"
 #include "InstalledCatalog.h"
@@ -29,6 +31,7 @@
 #include <QSettings>
 #include <QString>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -426,7 +429,8 @@ TEST_CASE("wifi manager: a connect's pair that lands after a forget does not key
     REQUIRE(f.events.empty());
 }
 
-TEST_CASE("wifi manager: an approval request's reply that lands after a forget is dropped",
+TEST_CASE("wifi manager: an approval request's reply that lands after the sheet closed and a "
+          "Forget is dropped",
           "[manager][forget]") {
     ManagerFixture f;
     f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
@@ -442,6 +446,173 @@ TEST_CASE("wifi manager: an approval request's reply that lands after a forget i
     REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
     REQUIRE(f.manager->get(f.id) == nullptr);
     REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+    REQUIRE_FALSE(f.remembers(f.server));
+}
+
+TEST_CASE("wifi manager: forgetting a satellite ends the approval request aimed at it",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->hold();
+
+    f.manager->requestReversePairing(f.server);
+    f.forgetThenReleaseAfterTheDelete();
+
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Idle);
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.manager->get(f.id) == nullptr);
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+    REQUIRE_FALSE(f.remembers(f.server));
+}
+
+TEST_CASE("wifi manager: forgetting a satellite drops the pin its address was given, remembered or "
+          "not",
+          "[manager][forget][identity]") {
+    ManagerFixture f;
+    // Pinned by an approval request's first handshake, for a satellite that never paired.
+    f.store->facade().pins().pin(f.server.ip, QString(64, QLatin1Char('0')));
+    f.manager->requestReversePairing(f.server);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+    REQUIRE_FALSE(f.remembers(f.server));
+
+    f.manager->forget(f.id);
+
+    REQUIRE_FALSE(f.store->facade().pins().pinnedFingerprint(f.server.ip).has_value());
+}
+
+// ---- A reply from before a Forget, landing on the connection a fresh pair made ----
+
+TEST_CASE(
+    "wifi manager: a session PUT sent before a Forget leaves the connection a fresh pair made "
+    "alone",
+    "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{503, kShuttingDown});
+    f.rest->hold();
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    f.manager->forget(f.id);
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+
+    f.rest->releaseFirst("PUT", kSessionsPath);
+    REQUIRE(pumpUntil([&f] { return f.rest->delivered() == 1; }));
+
+    REQUIRE(f.state() == SessionState::Linking);
+    REQUIRE(f.manager->isPairingInFlight(f.id));
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: a PIN pair's key from before a Forget does not key the connection a "
+          "fresh pair made",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->hold();
+    f.manager->pairWithPin(f.server, QStringLiteral("1111"));
+    f.manager->forget(f.id);
+    f.manager->pairWithPin(f.server, QStringLiteral("2222"));
+
+    f.rest->releaseFirst("POST", kPairPath);
+    REQUIRE(pumpUntil([&f] { return f.rest->delivered() == 1; }));
+
+    // The fresh pair is still out, and the old answer neither ended it nor keyed it.
+    REQUIRE(f.manager->isPairingInFlight(f.id));
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+    REQUIRE(f.state() == SessionState::Linking);
+}
+
+TEST_CASE("wifi manager: a connect's pair from before a Forget does not key the connection a "
+          "fresh pair made",
+          "[manager][forget]") {
+    ManagerFixture f;
+    // No key on file, so the connect starts with a PIN-less pair.
+    f.store->forgetKey(f.id);
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->hold();
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    f.manager->forget(f.id);
+    f.manager->pairWithPin(f.server, QStringLiteral("2222"));
+
+    f.rest->releaseFirst("POST", kPairPath);
+    REQUIRE(pumpUntil([&f] { return f.rest->delivered() == 1; }));
+
+    REQUIRE(f.manager->isPairingInFlight(f.id));
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 0);
+    REQUIRE(f.state() == SessionState::Linking);
+}
+
+TEST_CASE("wifi manager: an approval request's reply from before a Forget leaves a fresh pair in "
+          "flight",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->hold();
+    f.manager->requestReversePairing(f.server);
+    f.manager->forget(f.id);
+    f.manager->pairWithPin(f.server, QStringLiteral("2222"));
+
+    f.rest->releaseFirst("POST", kPairPath);
+    REQUIRE(pumpUntil([&f] { return f.rest->delivered() == 1; }));
+
+    REQUIRE(f.manager->isPairingInFlight(f.id));
+    REQUIRE_FALSE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.state() == SessionState::Linking);
+}
+
+TEST_CASE("wifi manager: a 401 from before a Forget does not erase the key a fresh pair stored",
+          "[manager][forget]") {
+    ManagerFixture f;
+    f.rest->answerOnce("PUT", kSessionsPath, CannedAnswer{401, R"({"code":"NOT_PAIRED"})"});
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->hold();
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    f.manager->forget(f.id);
+    f.manager->pairWithPin(f.server, QStringLiteral("2222"));
+    f.rest->releaseFirst("POST", kPairPath);
+    REQUIRE(pumpUntil([&f] { return f.store->sharedKey(f.id).has_value(); }));
+
+    f.rest->releaseFirst("PUT", kSessionsPath);
+    REQUIRE(pumpUntil([&f] { return f.rest->delivered() == 2; }));
+
+    REQUIRE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.events.empty());
+}
+
+// ---- A reply that lands after the user's Disconnect ----
+
+TEST_CASE("wifi manager: a grant that lands after a user's Disconnect is handed back, not "
+          "adopted",
+          "[manager][disconnect]") {
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{200, kGrant});
+    f.rest->hold();
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    f.manager->disconnect(f.id);
+    f.releaseAndDeliver();
+
+    REQUIRE(f.effects.linkAttempts() == 0);
+    REQUIRE(f.state() == SessionState::Idle);
+    REQUIRE(f.rest->count("DELETE", kGrantedSessionPath) == 1);
+    REQUIRE_FALSE(f.remembers(f.server));
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: a refusal that lands after a user's Disconnect leaves the row as the user "
+          "left it",
+          "[manager][disconnect]") {
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{503, kShuttingDown});
+    f.rest->hold();
+
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    f.manager->disconnect(f.id);
+    f.releaseAndDeliver();
+
+    REQUIRE(f.state() == SessionState::Idle);
+    REQUIRE(f.effects.pendingCalls() == 0);
+    REQUIRE(f.events.empty());
 }
 
 // ---- A satellite whose certificate changed ----
@@ -539,8 +710,8 @@ TEST_CASE("wifi manager: a changed certificate ends the backoff, so a later fail
     REQUIRE(f.rest->count("PUT", kSessionsPath) == 4);
 }
 
-TEST_CASE("wifi manager: an approval request to a satellite whose certificate changed is declined, "
-          "not timed out",
+TEST_CASE("wifi manager: an approval request to a satellite whose certificate changed ends on the "
+          "changed identity, not a decline",
           "[manager][identity]") {
     ManagerFixture f;
     f.presentChangedCertificate();
@@ -548,8 +719,32 @@ TEST_CASE("wifi manager: an approval request to a satellite whose certificate ch
     f.manager->requestReversePairing(f.server);
     REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
 
-    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Declined);
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::IdentityChanged);
     requireOneError(f, kIdentityChangedMsg);
+}
+
+TEST_CASE("wifi manager: an approval request to a satellite on another protocol version ends on "
+          "the version, not a decline",
+          "[manager][protocol]") {
+    ManagerFixture f;
+    f.rest->answer("POST", kPairPath, CannedAnswer{409, R"({"ok":false,"error":"protocol"})"});
+
+    f.manager->requestReversePairing(f.server);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::VersionMismatch);
+    requireOneError(f, kVersionMsg);
+}
+
+TEST_CASE("wifi manager: an approval request nobody answers says the satellite is unreachable",
+          "[manager][reverse]") {
+    ManagerFixture f;
+
+    f.manager->requestReversePairing(f.server);
+    REQUIRE(pumpUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::TimedOut);
+    requireOneError(f, kUnreachableMsg);
 }
 
 TEST_CASE("wifi manager: an approval poll that meets a changed certificate ends the attempt",
@@ -565,7 +760,7 @@ TEST_CASE("wifi manager: an approval poll that meets a changed certificate ends 
     REQUIRE(pumpUntil([&f] { return f.rest->count("GET", kStatusPath) == 1; }));
     REQUIRE(pumpUntil([&f] { return f.rest->allAnswered(); }));
 
-    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Declined);
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::IdentityChanged);
     requireOneError(f, kIdentityChangedMsg);
 }
 
@@ -849,4 +1044,96 @@ TEST_CASE("wifi manager: the IPv6 refusal reads in the user's language", "[manag
     f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
 
     requireOneError(f, inGerman.arg(kIpv6Ip));
+}
+
+// ---- A pin with no pairing behind it ----
+
+namespace {
+
+const QString kLoopback = QStringLiteral("127.0.0.1");
+
+QString fingerprintOf(const QByteArray& certDer) {
+    return QString::fromStdString(
+        dish::net::sha256FingerprintHex(reinterpret_cast<const std::uint8_t*>(certDer.constData()),
+                                        static_cast<std::size_t>(certDer.size())));
+}
+
+// The satellite's answers: a pair gets a key, and anything else is turned away.
+dish::test::HttpsAnswer grantingThePair(const dish::test::SeenRequest& r) {
+    if (r.path == kPairPath) { return dish::test::HttpsAnswer{200, kPairGranted}; }
+    return dish::test::HttpsAnswer{503, kShuttingDown};
+}
+
+// The manager over a real HTTPClient, dialling a satellite that answers HTTPS on loopback, so the
+// manager's own pin verifier meets a real certificate.
+struct TlsManagerFixture {
+    dish::test::FakeHttpsListener listener;
+    DiscoveredServer server = satelliteAt(kLoopback, QStringLiteral("m-tls"));
+    QString id = dish::net::WifiConnection::idFor(server);
+    std::shared_ptr<QSettings> settings = dish::test::makeSharedSettings();
+    std::unique_ptr<dish::net::ConnectionStore> store;
+    FakeWifiEffects effects;
+    std::unique_ptr<dish::net::WifiConnectionManager> manager;
+    std::vector<ConnectionEvent> events;
+
+    TlsManagerFixture() {
+        listener.respond = &grantingThePair;
+        server.pairPort = listener.port();
+        server.httpPort = listener.port();
+        store = std::make_unique<dish::net::ConnectionStore>(
+            std::make_unique<QSettings>(settings->fileName(), QSettings::IniFormat));
+        manager = std::make_unique<dish::net::WifiConnectionManager>(
+            store.get(), new dish::net::HTTPClient(nullptr), effects.effects(), nullptr);
+        QObject::connect(manager.get(), &dish::net::WifiConnectionManager::connectionEvent,
+                         manager.get(), [this](const ConnectionEvent& e) { events.push_back(e); });
+    }
+
+    // What an older install of this satellite presented, pinned for its address.
+    void pinAnOlderCertificate() {
+        store->facade().pins().pin(kLoopback, QString(64, QLatin1Char('0')));
+    }
+
+    QString pinnedFingerprint() const {
+        return store->facade().pins().pinnedFingerprint(kLoopback).value_or(QString());
+    }
+
+    bool toldTheIdentityChanged() const {
+        return std::any_of(events.begin(), events.end(), [](const ConnectionEvent& e) {
+            return e.message == kIdentityChangedMsg;
+        });
+    }
+};
+
+} // namespace
+
+TEST_CASE("wifi manager: a satellite pinned before it ever paired, then reinstalled, pairs again",
+          "[manager][identity][tls]") {
+    REQUIRE(dish::test::useTestTlsBackend());
+    TlsManagerFixture f;
+    REQUIRE(f.listener.listening());
+    f.pinAnOlderCertificate();
+
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+    REQUIRE(dish::test::spinUntil([&f] { return !f.manager->isPairingInFlight(f.id); }));
+
+    REQUIRE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(f.pinnedFingerprint() == fingerprintOf(f.listener.certDer()));
+    REQUIRE_FALSE(f.toldTheIdentityChanged());
+}
+
+TEST_CASE("wifi manager: a satellite with a key on file whose certificate changed is still refused",
+          "[manager][identity][tls]") {
+    REQUIRE(dish::test::useTestTlsBackend());
+    TlsManagerFixture f;
+    REQUIRE(f.listener.listening());
+    f.store->setSharedKey(QString(static_cast<int>(kPairingKeySize) * 2, QLatin1Char('1')), f.id);
+    f.pinAnOlderCertificate();
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    REQUIRE(dish::test::spinUntil(
+        [&f] { return f.manager->get(f.id)->state() != SessionState::Linking; }));
+
+    REQUIRE(f.listener.requests().empty());
+    REQUIRE(f.pinnedFingerprint() == QString(64, QLatin1Char('0')));
+    REQUIRE(f.toldTheIdentityChanged());
 }

@@ -3587,6 +3587,10 @@
         <source>Pairing PIN, 6 digits</source>
         <translation>PIN za uparivanje, 6 cifara</translation>
     </message>
+    <message>
+        <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
+        <translation>Sigurnosni identitet ovog satelita se promijenio. Ako je ponovo instaliran, zaboravite ga ovdje i uparite ponovo.</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

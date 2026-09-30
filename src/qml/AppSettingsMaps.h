@@ -22,6 +22,10 @@ namespace dish::ui {
 struct LicenseManifest;
 }
 
+namespace dish::net {
+enum class ReversePairingPhase;
+}
+
 namespace dish::input {
 class SDLGamepadBridge;
 }
@@ -48,6 +52,10 @@ reducer::KeepAwakeMode keepAwakeModeFromInt(int value);
 
 // "off" | "system" | "display": how far the hold currently reaches.
 QString keepAwakeReachToken(reducer::KeepAwakeReach reach);
+
+// The token the pairing sheet switches on for an approval request's phase: "idle" | "awaiting" |
+// "approved" | "declined" | "timedout" | "identitychanged" | "versionmismatch".
+QString reversePairingPhaseToken(net::ReversePairingPhase phase);
 
 // The Off / Pad / Mouse choice QML shows ("off" | "pad" | "mouse") for the pick
 // the per-satellite store holds, which is a wire name ("off" | "ds4" | "mouse").

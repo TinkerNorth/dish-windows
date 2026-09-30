@@ -3570,6 +3570,10 @@
         <source>~2 min</source>
         <translation>~2 min</translation>
     </message>
+    <message>
+        <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
+        <translation>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</translation>
+    </message>
 </context>
 <context>
     <name>SettingsPage</name>

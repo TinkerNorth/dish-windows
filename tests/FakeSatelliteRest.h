@@ -107,16 +107,29 @@ class FakeSatelliteRest : public dish::http::HttpTransport {
     void hold() { holding_ = true; }
     void release() {
         holding_ = false;
-        for (const auto& reply : held_) {
+        for (const auto& [route, reply] : held_) {
             if (!reply.isNull()) { reply->deliverLater(); }
         }
         held_.clear();
+    }
+
+    // Lets the oldest held reply on one route through and keeps holding the rest: how a test lands
+    // an old reply while a newer request's reply is still on its way.
+    void releaseFirst(const QByteArray& verb, const QString& path) {
+        const QByteArray key = routeKey(verb, path);
+        const auto held = std::find_if(held_.begin(), held_.end(),
+                                       [&key](const HeldReply& h) { return h.first == key; });
+        if (held == held_.end()) { return; }
+        if (!held->second.isNull()) { held->second->deliverLater(); }
+        held_.erase(held);
     }
 
     const std::vector<RecordedRequest>& requests() const { return requests_; }
 
     // True once every request made so far has had its reply delivered.
     bool allAnswered() const { return delivered_ == static_cast<long long>(requests_.size()); }
+
+    long long delivered() const { return delivered_; }
 
     long long count(const QByteArray& verb, const QString& path) const {
         return std::count_if(requests_.begin(), requests_.end(), [&](const RecordedRequest& r) {
@@ -135,17 +148,20 @@ class FakeSatelliteRest : public dish::http::HttpTransport {
         recorded.hmacProof = headerOf(request, "X-Hmac-Proof");
         recorded.body = request.body;
         requests_.push_back(recorded);
-        const CannedAnswer answer = nextAnswer(routeKey(recorded.verb, recorded.path));
+        const QByteArray key = routeKey(recorded.verb, recorded.path);
+        const CannedAnswer answer = nextAnswer(key);
         auto* reply = new CannedReply(answer, handshaking_, std::move(peerCheck), std::move(done),
                                       &delivered_, this);
         if (holding_) {
-            held_.emplace_back(reply);
+            held_.emplace_back(key, reply);
         } else {
             reply->deliverLater();
         }
     }
 
   private:
+    using HeldReply = std::pair<QByteArray, QPointer<CannedReply>>;
+
     CannedAnswer nextAnswer(const QByteArray& key) {
         auto& once = onceScript_[key];
         if (once.empty()) { return script_.value(key); }
@@ -164,7 +180,7 @@ class FakeSatelliteRest : public dish::http::HttpTransport {
     long long delivered_ = 0;
     bool handshaking_ = false;
     bool holding_ = false;
-    std::vector<QPointer<CannedReply>> held_;
+    std::vector<HeldReply> held_;
 };
 
 } // namespace dish::test

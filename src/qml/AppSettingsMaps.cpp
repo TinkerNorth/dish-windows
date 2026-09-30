@@ -4,6 +4,7 @@
 #include "qml/AppSettingsMaps.h"
 
 #include "Input/SDLGamepadBridge.h"
+#include "Network/WifiConnectionManager.h"
 #include "core/model/Protocol.h"
 #include "core/reducer/TouchpadModeResolve.h"
 #include "repository/DeadzoneRepository.h"
@@ -92,6 +93,26 @@ reducer::KeepAwakeMode keepAwakeModeFromInt(int value) {
         // a bad value must never pin the machine awake.
         return reducer::KeepAwakeMode::WhileControllerActive;
     }
+}
+
+QString reversePairingPhaseToken(net::ReversePairingPhase phase) {
+    switch (phase) {
+    case net::ReversePairingPhase::Idle:
+        return QStringLiteral("idle");
+    case net::ReversePairingPhase::AwaitingApproval:
+        return QStringLiteral("awaiting");
+    case net::ReversePairingPhase::Approved:
+        return QStringLiteral("approved");
+    case net::ReversePairingPhase::Declined:
+        return QStringLiteral("declined");
+    case net::ReversePairingPhase::TimedOut:
+        return QStringLiteral("timedout");
+    case net::ReversePairingPhase::IdentityChanged:
+        return QStringLiteral("identitychanged");
+    case net::ReversePairingPhase::VersionMismatch:
+        return QStringLiteral("versionmismatch");
+    }
+    return QStringLiteral("idle");
 }
 
 QString keepAwakeReachToken(reducer::KeepAwakeReach reach) {
