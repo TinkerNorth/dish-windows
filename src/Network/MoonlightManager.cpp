@@ -695,13 +695,14 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
     // resolved, and the capabilities are that type's ceiling intersected with the
     // pad's real hardware, so the host is never told about something that will
     // not arrive.
-    const std::uint8_t type = moonlight::arrivalTypeForBinding(controllerType, hasMotion);
-    const std::uint8_t caps = moonlight::declaredCapabilities(type, hasRumble, hasMotion,
-                                                              hasTouchpad, hasBattery, hasLightbar);
-    session->sendControllerArrival(*number, type, caps, moonlight::declaredButtonFlags(caps));
+    const auto arrival = moonlight::arrivalForBinding(controllerType, hasRumble, hasMotion,
+                                                      hasTouchpad, hasBattery, hasLightbar);
+    session->sendControllerArrival(*number, arrival.type, arrival.capabilities,
+                                   moonlight::declaredButtonFlags(arrival.capabilities));
 
     qCInfo(lcMoonlightManager) << "bind:" << slotId << "->" << hostId << "as controller"
-                               << static_cast<int>(*number) << "type" << static_cast<int>(type)
+                               << static_cast<int>(*number) << "type"
+                               << static_cast<int>(arrival.type)
                                << (firstOnHost ? "(starting the session)" : "(joining a session)");
 
     // The arrival is remembered and replayed when the stream comes up, so the

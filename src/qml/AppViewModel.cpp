@@ -331,6 +331,37 @@ QString moonlightHostLabel(dish::AppModel* model, const QString& hostId) {
     return hostId;
 }
 
+// The pad facts a Moonlight arrival is declared from, read by the announcement
+// and by the binding strip alike. An unknown slot has none.
+struct MoonlightPadFacts {
+    bool rumble = false;
+    bool motion = false;
+    bool touchpad = false;
+    bool battery = false;
+    bool lightbar = false;
+};
+
+MoonlightPadFacts moonlightPadFactsOf(const models::ControllerSlot* slot) {
+    MoonlightPadFacts facts;
+    if (slot == nullptr) { return facts; }
+    facts.rumble = slot->capabilities.hasRumble;
+    facts.motion = slot->capabilities.hasMotion;
+    facts.touchpad = slot->capabilities.hasTouchpad;
+    facts.lightbar = slot->capabilities.hasLightbar;
+    // A pad reporting any level at all has a battery to report.
+    facts.battery = slot->capabilities.batteryLevel != 0xFF;
+    return facts;
+}
+
+// What a Moonlight binding's touchpad reads as: the arrival the host was told,
+// from the binding's pick and the pad.
+QString moonlightTouchpadRoutingOf(const models::ControllerSlot* slot, int devicePick) {
+    const MoonlightPadFacts pad = moonlightPadFactsOf(slot);
+    const auto arrival = moonlight::arrivalForBinding(devicePick, pad.rumble, pad.motion,
+                                                      pad.touchpad, pad.battery, pad.lightbar);
+    return touchpadChoiceForArrival(moonlight::arrivalRendersTouchpad(arrival));
+}
+
 } // namespace
 
 AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
@@ -874,16 +905,10 @@ QString AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& ho
                                         int controllerType) {
     // The pad's detected hardware decides the advertised CONTROLLER_ARRIVAL
     // capabilities, so the host is never told about a feature the pad lacks.
-    const models::ControllerSlot* slot = slotById(slotId);
-    const bool hasRumble = slot != nullptr && slot->capabilities.hasRumble;
-    const bool hasMotion = slot != nullptr && slot->capabilities.hasMotion;
-    const bool hasTouchpad = slot != nullptr && slot->capabilities.hasTouchpad;
-    const bool hasLightbar = slot != nullptr && slot->capabilities.hasLightbar;
-    // A pad reporting any level at all has a battery to report.
-    const bool hasBattery = slot != nullptr && slot->capabilities.batteryLevel != 0xFF;
+    const MoonlightPadFacts pad = moonlightPadFactsOf(slotById(slotId));
     return tokens::moonlightBindOutcomeToken(
-        model_->moonlight()->bindSlot(slotId, hostId, controllerType, hasRumble, hasMotion,
-                                      hasTouchpad, hasBattery, hasLightbar));
+        model_->moonlight()->bindSlot(slotId, hostId, controllerType, pad.rumble, pad.motion,
+                                      pad.touchpad, pad.battery, pad.lightbar));
 }
 
 void AppViewModel::unbindMoonlightSlot(const QString& slotId) {
@@ -1572,7 +1597,14 @@ void AppViewModel::setTouchpadMode(const QString& connectionId, const QString& m
 }
 
 QString AppViewModel::touchpadRoutingFor(const QString& slotId) const {
-    return touchpadChoiceForMode(model_->declaredTouchpadMode(slotId));
+    // The satellite table wins, as it does for the Home rows: a Moonlight record
+    // can outlive a later satellite bind.
+    const bool boundToSatellite = model_->hub()->bindings().contains(slotId);
+    const auto moonlightBinding = model_->moonlight()->binding(slotId);
+    const bool boundToMoonlight = !boundToSatellite && moonlightBinding.has_value();
+    return boundToMoonlight
+               ? moonlightTouchpadRoutingOf(slotById(slotId), moonlightBinding->controllerType)
+               : touchpadChoiceForMode(model_->declaredTouchpadMode(slotId));
 }
 
 bool AppViewModel::motionEnabledFor(const QString& slotId) const {

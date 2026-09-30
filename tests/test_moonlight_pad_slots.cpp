@@ -315,3 +315,39 @@ TEST_CASE("Auto sends the resolved type own capability set", "[moonlight][padslo
     REQUIRE(plain == kPadTypeXbox);
     REQUIRE(declaredCapabilities(plain, true, false, true, false, false) == 0x03);
 }
+
+TEST_CASE("a binding's arrival is the type it resolves to and what that type declares",
+          "[moonlight][padslots]") {
+    // The one computation the announcement and the binding strip both read.
+    const auto arrival = arrivalForBinding(dish::models::kMoonlightDevicePlayStation, true, true,
+                                           true, false, false);
+    CHECK(arrival.type == kPadTypePlayStation);
+    CHECK(arrival.capabilities ==
+          declaredCapabilities(kPadTypePlayStation, true, true, true, false, false));
+
+    const auto autoPlain =
+        arrivalForBinding(dish::models::kMoonlightDeviceAuto, true, false, true, false, false);
+    CHECK(autoPlain.type == kPadTypeXbox);
+}
+
+TEST_CASE("a PlayStation arrival carries the touchpad a pad has, and only then",
+          "[moonlight][padslots]") {
+    const int playstation = dish::models::kMoonlightDevicePlayStation;
+    CHECK(arrivalRendersTouchpad(arrivalForBinding(playstation, true, false, true, false, false)));
+    CHECK_FALSE(
+        arrivalRendersTouchpad(arrivalForBinding(playstation, true, false, false, false, false)));
+}
+
+TEST_CASE("an Xbox arrival never carries the touchpad, whatever the pad has",
+          "[moonlight][padslots]") {
+    const int xbox = dish::models::kMoonlightDeviceXbox;
+    CHECK_FALSE(arrivalRendersTouchpad(arrivalForBinding(xbox, true, true, true, true, true)));
+}
+
+TEST_CASE("Auto carries the touchpad only where the pad's motion resolves it to PlayStation",
+          "[moonlight][padslots]") {
+    const int autoPick = dish::models::kMoonlightDeviceAuto;
+    CHECK(arrivalRendersTouchpad(arrivalForBinding(autoPick, true, true, true, false, false)));
+    CHECK_FALSE(
+        arrivalRendersTouchpad(arrivalForBinding(autoPick, true, false, true, false, false)));
+}

@@ -196,6 +196,28 @@ inline std::uint8_t declaredCapabilities(std::uint8_t arrivalType, bool hasRumbl
     return static_cast<std::uint8_t>(source & typeCapabilityCeiling(arrivalType));
 }
 
+// One binding's CONTROLLER_ARRIVAL: its wire type and the capabilities it
+// declares. The announcement and anything that shows the binding read this one
+// computation, so what is shown cannot drift from what the host was told.
+struct ArrivalDeclaration {
+    std::uint8_t type = kPadTypeUnknown;
+    std::uint8_t capabilities = 0;
+};
+
+inline ArrivalDeclaration arrivalForBinding(int devicePick, bool hasRumble, bool hasMotion,
+                                            bool hasTouchpad, bool hasBattery, bool hasLightbar) {
+    const std::uint8_t type = arrivalTypeForBinding(devicePick, hasMotion);
+    const std::uint8_t capabilities =
+        declaredCapabilities(type, hasRumble, hasMotion, hasTouchpad, hasBattery, hasLightbar);
+    return {type, capabilities};
+}
+
+// The arrival carries the pad's touchpad as CONTROLLER_TOUCH or not at all:
+// Moonlight has no routing of it as a mouse.
+inline bool arrivalRendersTouchpad(const ArrivalDeclaration& arrival) {
+    return (arrival.capabilities & kPadCapTouchpad) != 0;
+}
+
 // The whole low sixteen, which every type carries, plus the touchpad click only
 // when a touchpad is in the declared set.
 inline constexpr std::uint32_t kSupportedButtonsBase = 0x0000FFFFu;
