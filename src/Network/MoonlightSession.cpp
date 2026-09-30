@@ -716,7 +716,9 @@ void MoonlightSession::probe() {
                        qCInfo(lcMoonlightSession)
                            << host_.ip << "/serverinfo reachable" << r.reachable << "PairStatus"
                            << r.value(QStringLiteral("PairStatus")) << "uniqueid" << uniqueId;
-                       emit probeFinished(r.reachable, uniqueId);
+                       // An error from whatever holds the port is not the host answering.
+                       const bool hostAnswered = r.reachable && r.ok();
+                       emit probeFinished(hostAnswered, uniqueId);
                    });
 }
 

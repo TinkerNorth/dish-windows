@@ -8,34 +8,32 @@
 // the effect list, the coordinator that executes it and the HTTP client that
 // carries it are three separate pieces, and a claim is only pinned if all three
 // are exercised. Nothing here is a stub. The session makes its real request
-// through its real QNetworkAccessManager; the address is simply one that goes
-// nowhere (RFC 5737 TEST-NET) or a loopback socket under the test's control, so
-// what is observed is that the call was MADE.
+// through its real transport; the address is simply one that goes nowhere
+// (RFC 5737 TEST-NET) or a loopback socket under the test's control, so what is
+// observed is that the call was MADE.
 //
-// The seam is Qt's own: a QNetworkReply is parented to the access manager as it
-// is constructed, and ChildAdded is delivered SYNCHRONOUSLY. That matters twice
+// The seam is Qt's own: an exchange is parented to the transport as it is
+// constructed, and ChildAdded is delivered SYNCHRONOUSLY. That matters twice
 // over. It means a test can read the log the instant the call under test
 // returns, without turning an event loop and without waiting out a connect
 // timeout. And it means `witness` runs at the exact moment the request goes out,
 // which is the only way to assert that something else had, or had not, already
 // happened by then.
 //
-// Nothing is DECIDED at ChildAdded time, because two things are not true yet.
-// The reply's URL is not set, and neither is its dynamic type: the event is sent
-// from inside QObject's own constructor, where a qobject_cast to QNetworkReply
-// still fails because the vtable has not reached the derived class. So each
+// Nothing is DECIDED at ChildAdded time, because the exchange is not yet named
+// for its URL: the event is sent from inside QObject's own constructor. So each
 // child is recorded and read twice over - by a queued call that lands on the
 // next turn of the event loop, and by a sweep on every read, for a test that
 // never turns one at all. Between them no request goes unrecorded, and once
-// recorded it outlives the reply that a finished request deleteLater's away.
+// recorded it outlives the exchange that a finished request deleteLater's away.
 
 #pragma once
+
+#include "source/http/HttpTransport.h"
 
 #include <QChildEvent>
 #include <QEvent>
 #include <QList>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -54,13 +52,13 @@ class MoonlightRequestLog : public QObject {
     using Witness = std::function<QString()>;
 
     // `owner` is anything the session hangs under: the session itself, or the
-    // manager that owns it. Every access manager already beneath it is watched.
+    // manager that owns it. Every transport already beneath it is watched.
     // Sessions are built lazily, so a manager must have made its session before
     // this is constructed; adding or probing the host first is the usual way.
     explicit MoonlightRequestLog(QObject& owner, Witness witness = {})
         : witness_(std::move(witness)) {
-        for (auto* nam : owner.findChildren<QNetworkAccessManager*>()) {
-            nam->installEventFilter(this);
+        for (auto* transport : owner.findChildren<dish::http::HttpTransport*>()) {
+            transport->installEventFilter(this);
         }
     }
 
@@ -113,7 +111,7 @@ class MoonlightRequestLog : public QObject {
     bool eventFilter(QObject* watched, QEvent* event) override {
         if (event->type() == QEvent::ChildAdded) {
             auto* child = static_cast<QChildEvent*>(event)->child();
-            entries_.append(Entry{child, witness_ ? witness_() : QString()});
+            entries_.append(Entry{child, witness_ ? witness_() : QString(), QUrl(), false});
             // The next turn of the loop is the earliest moment the child is
             // fully itself, and it comes before the deleteLater a finished reply
             // posts, so a request is always read before it is thrown away.
@@ -133,8 +131,9 @@ class MoonlightRequestLog : public QObject {
     void harvest() {
         for (auto& entry : entries_) {
             if (entry.isRequest || entry.child.isNull()) { continue; }
-            if (auto* reply = qobject_cast<QNetworkReply*>(entry.child.data())) {
-                entry.url = reply->url();
+            const QUrl url(entry.child->objectName());
+            if (!url.isEmpty()) {
+                entry.url = url;
                 entry.isRequest = true;
             }
         }

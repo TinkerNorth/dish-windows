@@ -28,7 +28,7 @@ using dish::test::MoonlightRequestLog;
 
 namespace {
 
-// MoonlightSession builds a QNetworkAccessManager, whose app-static factory
+// MoonlightSession's calls open QSslSockets, whose app-static TLS backend loader
 // asserts unless a QCoreApplication exists, and Catch2WithMain creates none.
 void ensureApp() {
     if (QCoreApplication::instance() != nullptr) { return; }

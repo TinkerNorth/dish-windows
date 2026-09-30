@@ -43,7 +43,7 @@ using dish::test::makeSharedSettings;
 
 namespace {
 
-// MoonlightSession builds a QNetworkAccessManager, whose app-static factory
+// MoonlightSession's calls open QSslSockets, whose app-static TLS backend loader
 // asserts unless a QCoreApplication exists, and Catch2WithMain creates none. Same
 // function-local static with a leaked argv that test_connection_coordinator uses.
 void ensureApp() {

@@ -15,9 +15,9 @@
 // callback never runs, and a Moonlight host cannot survive that: Sunshine
 // answers a resumed handshake with a fatal internal_error alert (RFC 8446 alert
 // 80) and logs nothing at all. Every HTTPS request therefore disables ticket
-// reuse, session sharing and session persistence, and the connection cache is
-// dropped once the reply is in so the host is left holding nothing of ours
-// between calls.
+// reuse, session sharing and session persistence, and dials a connection of its
+// own that is closed once the reply is in, so the host is left holding nothing
+// of ours between calls.
 //
 // Responses are the small Moonlight XML documents; a minimal tag reader pulls
 // out the fields we need rather than pulling in a full XML dependency.
@@ -35,8 +35,9 @@
 #include <map>
 #include <optional>
 
-class QNetworkAccessManager;
-class QNetworkReply;
+namespace dish::http {
+class HttpTransport;
+} // namespace dish::http
 
 namespace dish::net {
 
@@ -56,8 +57,9 @@ inline constexpr int kMoonlightStatusOk = 200;
 // `ok()`, never through the transport status.
 struct MoonlightXmlResponse {
     bool reachable = false;
-    int statusCode = kMoonlightStatusOk; // root status_code attribute
-    QString statusMessage;               // root status_message attribute
+    // The root status_code attribute, or the status line's when the body names none.
+    int statusCode = kMoonlightStatusOk;
+    QString statusMessage; // root status_message attribute
     // The transport's own status line, which a body-level refusal does NOT
     // report. Only one value is load-bearing: 401 is a host saying it does not
     // know this client, which is trust lost rather than a call that failed.
@@ -112,20 +114,15 @@ class MoonlightHttpClient : public QObject {
   private:
     void perform(const QString& url, bool https, ResponseCb cb);
 
-    // perform's two halves that need this object: arming the pin check, and handing the reply
-    // back. Building the request and reading the reply are free functions in the .cpp, so the Qt
-    // Network types stay out of this header.
-    void armPinCheck(QNetworkReply* reply, const QString& host);
-    void finishReply(QNetworkReply* reply, const QString& path, const ResponseCb& cb);
-
-    QNetworkAccessManager* nam_;
+    http::HttpTransport* transport_;
     std::optional<moonlight::Identity> identity_;
     PinVerifier pinVerifier_;
 };
 
-// Parse a Moonlight XML document (flat, one level of leaf tags under <root>).
-// Exposed for unit testing without a live server.
-MoonlightXmlResponse parseMoonlightXml(const QByteArray& body);
+// Parse a Moonlight XML document (flat, one level of leaf tags under <root>). A
+// body that names no status_code carries `httpStatus`, the status line it came
+// under. Exposed for unit testing without a live server.
+MoonlightXmlResponse parseMoonlightXml(const QByteArray& body, int httpStatus = kMoonlightStatusOk);
 
 // One /applist entry.
 struct MoonlightApp {
