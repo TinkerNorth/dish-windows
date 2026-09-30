@@ -32,7 +32,7 @@ Q_LOGGING_CATEGORY(lcDishTray, "dish.tray")
 // The callback the shell posts for every interaction with the item.
 constexpr UINT kTrayCallbackMessage = WM_APP + 1;
 constexpr UINT kTrayIconId = 1;
-constexpr const wchar_t* kWindowClassName = L"DishTrayMessageWindow";
+constexpr const wchar_t* kWindowClassName = L"DishTrayWindow";
 // The icon the exe's resource script embeds (packaging/dish.rc), addressed by
 // its name: the script defines no numeric id, so the resource compiler keeps
 // the identifier as a string.
@@ -124,7 +124,7 @@ Win32TrayIcon::Win32TrayIcon(std::unique_ptr<NotifyIconShell> shell, QObject* pa
     native_->hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, kWindowClassName, L"Dish", 0, 0, 0, 0, 0,
                                     nullptr, nullptr, instance, nullptr);
     if (native_->hwnd == nullptr) {
-        qCWarning(lcDishTray) << "tray message window creation failed:" << GetLastError();
+        qCWarning(lcDishTray) << "tray window creation failed:" << GetLastError();
         return;
     }
     SetWindowLongPtrW(native_->hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
