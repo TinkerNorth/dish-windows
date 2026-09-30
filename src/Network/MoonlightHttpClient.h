@@ -96,8 +96,9 @@ class MoonlightHttpClient : public QObject {
     // Present this identity on every HTTPS request. Set before any HTTPS call.
     void setClientIdentity(const moonlight::Identity& identity) { identity_ = identity; }
 
-    // TOFU pin gate. Returning false aborts the TLS handshake. `certDer` is the
-    // peer cert DER. Mirrors HTTPClient::setPinVerifier.
+    // The pin gate: shown the peer's certificate (DER) once the TLS handshake
+    // completes, and returning false hangs up before a byte of the request is
+    // written. Unset, any certificate is accepted.
     using PinVerifier = std::function<bool(const QString& host, const QByteArray& certDer)>;
     void setPinVerifier(PinVerifier v) { pinVerifier_ = std::move(v); }
 

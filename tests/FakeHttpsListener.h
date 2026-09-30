@@ -45,12 +45,14 @@
 namespace dish::test {
 
 // The TLS backend these tests run on, for every TLS object this process makes from now on: OpenSSL,
-// from the libssl the build puts beside the test binary. Not the Schannel the app ships with,
-// because Qt 6.7.3's debug build asserts inside its own certificate date parser on Schannel
-// (QDateTimeParser, "maximum.date().toJulianDay() == 5373484"), and a debug abort on Windows waits
-// on a dialog. Nothing under test depends on the backend: every ordering the exchange relies on is
-// its own. It has to run before anything in the process touches TLS, and after the application
-// exists, because Qt loads its TLS backends through an application static.
+// from the libssl the build keeps in build/test-tls, which ctest puts on the test's PATH (a run by
+// hand needs it there too; tests/CMakeLists.txt says why it is not beside the test binary). Not
+// the Schannel the app ships with, because Qt 6.7.3's debug build asserts inside its own
+// certificate date parser on Schannel (QDateTimeParser, "maximum.date().toJulianDay() ==
+// 5373484"), and a debug abort on Windows waits on a dialog. Nothing under test depends on the
+// backend: every ordering the exchange relies on is its own. It has to run before anything in the
+// process touches TLS, and after the application exists, because Qt loads its TLS backends
+// through an application static.
 inline bool useTestTlsBackend() {
     ensureApp();
     const bool selected = QSslSocket::setActiveBackend(QStringLiteral("openssl"));

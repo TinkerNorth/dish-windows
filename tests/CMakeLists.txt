@@ -89,6 +89,7 @@ set(DISH_TEST_SOURCES
     test_pairing_outcome.cpp
     test_pairing_wire.cpp
     test_http_client_wire.cpp
+    test_http_exchange.cpp
     test_rest_control_plane.cpp
     test_reverse_pairing.cpp
     test_battery_ui.cpp
@@ -261,22 +262,32 @@ target_compile_definitions(DishTests PRIVATE
 
 # The TLS tests run on Qt's OpenSSL backend (tests/FakeHttpsListener.h says why
 # not Schannel), and Qt loads libssl at run time. dish_core links libcrypto
-# alone, so vcpkg's applocal step never puts libssl beside the exe; this copies
-# the one vcpkg built beside the libcrypto it did.
+# alone, so vcpkg's applocal step never puts libssl beside the exe, and this
+# does not either: DishTests.exe shares its directory with dish.exe, and Qt
+# takes OpenSSL over Schannel whenever it can load it, so a libssl there would
+# move the developer's dish.exe off the Schannel it ships with, and into any
+# install image staged from this tree. It gets a directory of its own, which
+# only the test runs below put on PATH; libssl finds its libcrypto already
+# loaded by then.
+set(DISH_TEST_TLS_DIR "${CMAKE_BINARY_DIR}/test-tls")
 add_custom_command(TARGET DishTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${DISH_TEST_TLS_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/$<$<CONFIG:Debug>:debug/>bin/libssl-3-x64.dll"
-        "$<TARGET_FILE_DIR:DishTests>")
+        "${DISH_TEST_TLS_DIR}")
 
 # Catch2's discovery step launches DishTests.exe, which needs Qt6's DLLs. vcpkg
 # drops libsodium/SDL2 beside the exe at link time, but Qt is not vcpkg-managed,
 # so without DL_PATHS discovery exits with STATUS_DLL_NOT_FOUND (0xc0000135).
+# DL_PATHS holds for every test run as well as for discovery, which is how the
+# TLS tests reach their libssl.
 if(WIN32)
     catch_discover_tests(DishTests
         DL_PATHS
             $<TARGET_FILE_DIR:Qt6::Core>
             $<TARGET_FILE_DIR:Qt6::Network>
-            $<TARGET_FILE_DIR:Qt6::Gui>)
+            $<TARGET_FILE_DIR:Qt6::Gui>
+            "${DISH_TEST_TLS_DIR}")
 else()
     catch_discover_tests(DishTests)
 endif()

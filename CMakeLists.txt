@@ -764,9 +764,10 @@ target_link_libraries(Dish PRIVATE
 # whole contribution is this staging target. installer.iss ships
 # ${CMAKE_BINARY_DIR}/setup-image verbatim, and cmake/DishSetupImage.cmake is
 # the ONE place that decides what an installed Dish consists of (dish.exe, the
-# windeployqt output, libsodium/SDL2, the five app-local CRT DLLs, the
-# Dish.Chrome module entry, licenses/). Outside ALL because it re-runs
-# windeployqt over ~100 MB, which is a release chore, not a build chore.
+# windeployqt output, the vcpkg DLLs dish.exe imports, named one by one, the
+# five app-local CRT DLLs, the Dish.Chrome module entry, licenses/, and never
+# libssl). Outside ALL because it re-runs windeployqt over ~100 MB, which is a
+# release chore, not a build chore.
 get_target_property(_dish_image_qmake Qt6::qmake IMPORTED_LOCATION)
 get_filename_component(_dish_image_qt_bin "${_dish_image_qmake}" DIRECTORY)
 add_custom_target(dish_setup_image
