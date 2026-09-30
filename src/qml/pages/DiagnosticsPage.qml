@@ -53,6 +53,7 @@ Kit.Page {
     readonly property var recentEvents: page.events.slice(-page.shownEvents).reverse()
 
     LinkVocabulary { id: linkWords }
+    MoonlightVocabulary { id: moonWords }
     // The capability words, so a pad's advertised caps read as its table rows do.
     BindingDraft { id: featureWords }
     // LiveStat owns the one rate and latency formatter in the app.
@@ -146,6 +147,15 @@ Kit.Page {
     }
 
     // ── Controllers ──────────────────────────────────────────────────────────
+
+    // A binding's type as its reasons name it, the way the binding editor names
+    // it: a satellite type by its catalog name, a Moonlight type by the table.
+    function typeNameOf(binding) {
+        if (binding.hostKind !== "moonlight")
+            return binding.typeName;
+        return moonWords.typeName(moonWords.tokenForType(binding.solvedType,
+                                                         App.moonlightTypeOptions()));
+    }
 
     function transportText(pad) {
         if (pad.usbDirect)
@@ -487,7 +497,6 @@ Kit.Page {
 
                     required property string slotId
                     required property string name
-                    required property string emulateName
                     required property bool usbDirect
                     required property bool bluetooth
                     required property int gamepadHz
@@ -520,7 +529,7 @@ Kit.Page {
                         touchpadMode: pad.bound ? pad.binding.touchpadPick : 0
                         padName: pad.name
                         hostName: pad.bound ? pad.binding.hostLabel : ""
-                        typeName: pad.emulateName
+                        typeName: pad.bound ? page.typeNameOf(pad.binding) : ""
                         padClaimable: pad.pathSupported && !pad.bluetooth
                     }
 

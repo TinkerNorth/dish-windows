@@ -1941,6 +1941,9 @@ QVariantMap AppViewModel::satelliteBindingDiagnostics(const models::ControllerSl
     row[QStringLiteral("hostId")] = hostId;
     row[QStringLiteral("hostLabel")] = composer::boundHostLabelOf(slot);
     row[QStringLiteral("touchpadPick")] = touchpadPick;
+    row[QStringLiteral("solvedType")] = type;
+    row[QStringLiteral("typeName")] =
+        catalogTypeName(model_->pickableTypesForConnection(hostId), type);
     row[QStringLiteral("capabilities")] =
         capabilityForCandidate(slot.id, type, QStringLiteral("satellite"), hostId,
                                tokens::desiredPathToken(slot.desiredPath),
@@ -1950,18 +1953,21 @@ QVariantMap AppViewModel::satelliteBindingDiagnostics(const models::ControllerSl
 }
 
 // No descriptor and no ack on this path: GameStream declares a pad on arrival
-// and reports nothing back, so the wire side stays undeclared. The touchpad
-// pick reads off, the binding editor's own default for a Moonlight host.
+// and reports nothing back, so the wire side stays undeclared. The type is the
+// binding's own, the one its bind sends, and the touchpad pick reads off, the
+// binding editor's own default for a Moonlight host.
 QVariantMap AppViewModel::moonlightBindingDiagnostics(const models::ControllerSlot& slot,
                                                       const QString& hostId) const {
+    const int type = moonlightBindingType(slot.id);
     QVariantMap row = bindingWireRow(BindingWireFacts{});
     row[QStringLiteral("bound")] = true;
     row[QStringLiteral("hostKind")] = QStringLiteral("moonlight");
     row[QStringLiteral("hostId")] = hostId;
     row[QStringLiteral("hostLabel")] = moonlightHostLabel(model_, hostId);
     row[QStringLiteral("touchpadPick")] = kTouchpadPickOff;
+    row[QStringLiteral("solvedType")] = type;
     row[QStringLiteral("capabilities")] = capabilityForCandidate(
-        slot.id, moonlightBindingType(slot.id), QStringLiteral("moonlight"), hostId,
+        slot.id, type, QStringLiteral("moonlight"), hostId,
         tokens::desiredPathToken(slot.desiredPath), motionEnabledFor(slot.id),
         rumbleEnabledFor(slot.id), kTouchpadPickOff, micEnabledFor(slot.id),
         speakerEnabledFor(slot.id));
