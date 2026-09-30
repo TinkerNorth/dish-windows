@@ -118,6 +118,16 @@ QtObject {
         return true;
     }
 
+    // The draft's number for a choice the host's pick reads as ("off" | "pad" |
+    // "mouse"): the inverse of the numbering Apply reads back.
+    function touchpadModeForChoice(choice) {
+        if (choice === "pad")
+            return 1;
+        if (choice === "mouse")
+            return 2;
+        return 0;
+    }
+
     // The pick is the host's, shared by every pad bound there, so a binding
     // that carries neither the touchpad nor the mouse keeps it rather than
     // writing the Off its draft collapsed to.
@@ -292,6 +302,11 @@ QtObject {
         // start is not this host's to inherit.
         draft.appId = "";
         draft.appName = "";
+        // A satellite's touchpad pick is its own, so the draft starts from what
+        // the host already forwards: starting from Off would quietly turn its
+        // touch off on Apply.
+        if (kind === "satellite")
+            draft.touchpadMode = draft.touchpadModeForChoice(App.touchpadModeFor(id));
         draft.sanitize();
     }
 
