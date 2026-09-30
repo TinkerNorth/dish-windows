@@ -28,6 +28,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QMap>
 #include <QObject>
 #include <QString>
 
@@ -67,15 +68,14 @@ struct MoonlightXmlResponse {
     // <resume>1</resume>: the refused session can be joined with /resume rather
     // than cancelled.
     bool resumeAvailable = false;
-    std::map<QString, QString> values;
+    // A QMap, whose move cannot throw: MSVC's std::map allocates when it is moved, and every reply
+    // is moved on its way to the caller.
+    QMap<QString, QString> values;
     // The raw document, for list-shaped responses (/applist) whose repeated
     // nodes the flat map cannot carry.
     QByteArray rawBody;
 
-    QString value(const QString& tag) const {
-        const auto it = values.find(tag);
-        return it == values.end() ? QString() : it->second;
-    }
+    QString value(const QString& tag) const { return values.value(tag); }
     bool paired() const { return value(QStringLiteral("paired")) == QLatin1String("1"); }
     bool ok() const { return statusCode >= 200 && statusCode <= 299; }
     // The host already has an app running and will not start another. Either
