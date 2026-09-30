@@ -11,14 +11,16 @@
 
 #include <functional>
 
-class QNetworkAccessManager;
-class QNetworkReply;
+namespace dish::http {
+class HttpTransport;
+struct HttpResult;
+} // namespace dish::http
 
 namespace dish::net {
 
 // Async gateway to the satellite's REST API (HTTPS :9443). The caller computes
-// the `hmacProof` argument via core/wire/SessionCrypto. Callbacks fire on the
-// network manager's home thread, which is the Qt main thread.
+// the `hmacProof` argument via core/wire/SessionCrypto. Callbacks fire from the
+// event loop of the thread the client lives on, which is the Qt main thread.
 //
 // The satellite's cert is self-signed, so there is no CA chain and peer
 // verification stays VerifyNone; trust comes entirely from the TOFU pin verifier
@@ -27,8 +29,8 @@ class HTTPClient : public QObject {
     Q_OBJECT
   public:
     explicit HTTPClient(QObject* parent = nullptr);
-    // Takes ownership of `nam`: the seam a test answers the satellite's routes through.
-    HTTPClient(QNetworkAccessManager* nam, QObject* parent);
+    // Takes ownership of `transport`: the seam a test answers the satellite's routes through.
+    HTTPClient(http::HttpTransport* transport, QObject* parent);
     ~HTTPClient() override;
 
     // Returning false aborts the request. Pins on first contact and rejects a
@@ -115,11 +117,13 @@ class HTTPClient : public QObject {
         bool pinMismatch = false;
     };
 
+    static RawReply rawReplyOf(const http::HttpResult& result, bool pinMismatch);
+
     void perform(const QString& url, const QByteArray& method, const QByteArray& body,
                  const QString& deviceId, const QString& hmacProof, const QString& acceptLanguage,
                  const QString& ifNoneMatch, std::function<void(const RawReply&)> done);
 
-    QNetworkAccessManager* nam_;
+    http::HttpTransport* transport_;
     PinVerifier pinVerifier_;
 };
 

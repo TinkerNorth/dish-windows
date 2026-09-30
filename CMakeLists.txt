@@ -315,6 +315,12 @@ set(DISH_CORE_SOURCES
     src/source/connection/MdnsScan.cpp
     src/source/connection/DiscoveryGateway.h
     src/source/connection/DiscoveryGateway.cpp
+    # The HTTP/1.1 transport both REST clients ride: one socket per call, on
+    # the caller's thread, behind a seam a test answers through in-process.
+    src/source/http/HttpExchange.h
+    src/source/http/HttpExchange.cpp
+    src/source/http/HttpTransport.h
+    src/source/http/HttpTransport.cpp
     src/source/http/SatelliteTlsVerifier.h
     src/source/http/SatelliteTlsVerifier.cpp
     # An ETag cache over HTTPClient::getCatalog, not a durable Repository,

@@ -85,6 +85,7 @@ set(DISH_TEST_SOURCES
     test_physical_motion_source.cpp
     test_pairing_outcome.cpp
     test_pairing_wire.cpp
+    test_http_client_wire.cpp
     test_rest_control_plane.cpp
     test_reverse_pairing.cpp
     test_battery_ui.cpp
@@ -245,6 +246,15 @@ target_compile_definitions(DishTests PRIVATE
     DISH_TS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../translations")
 # The `release_translations` dependency is wired from the TOP-LEVEL CMakeLists:
 # that target does not exist until this directory scope is finalized.
+
+# The TLS tests run on Qt's OpenSSL backend (tests/FakeHttpsListener.h says why
+# not Schannel), and Qt loads libssl at run time. dish_core links libcrypto
+# alone, so vcpkg's applocal step never puts libssl beside the exe; this copies
+# the one vcpkg built beside the libcrypto it did.
+add_custom_command(TARGET DishTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/$<$<CONFIG:Debug>:debug/>bin/libssl-3-x64.dll"
+        "$<TARGET_FILE_DIR:DishTests>")
 
 # Catch2's discovery step launches DishTests.exe, which needs Qt6's DLLs. vcpkg
 # drops libsodium/SDL2 beside the exe at link time, but Qt is not vcpkg-managed,
