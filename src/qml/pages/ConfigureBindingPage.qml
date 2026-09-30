@@ -583,7 +583,7 @@ Kit.Page {
             App.setMoonlightApp(draft.hostId, draft.appId, draft.appName);
         }
         App.applyBinding(page.slotId, draft.hostId, draft.type, draft.desiredPath,
-                         draft.motionOn, draft.rumbleOn, draft.touchpadMode,
+                         draft.motionOn, draft.rumbleOn, draft.touchpadModeToApply(),
                          draft.micOn, draft.speakerOn);
     }
 
