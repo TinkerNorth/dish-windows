@@ -30,6 +30,7 @@
 #include "MoonlightFakeHost.h"
 #include "MoonlightRequestLog.h"
 #include "MoonlightSessionTestAccess.h"
+#include "MoonlightWolfControlHost.h"
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -37,11 +38,16 @@
 #include <QCoreApplication>
 #include <QDeadlineTimer>
 #include <QElapsedTimer>
+#include <QHostAddress>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QTcpServer>
+#include <QTcpSocket>
 
 #include <memory>
+#include <optional>
+#include <utility>
 
 using dish::models::MoonlightBinding;
 using dish::models::MoonlightHost;
@@ -50,6 +56,7 @@ using dish::moonlight::SessionEvent;
 using dish::moonlight::SessionFailure;
 using dish::moonlight::SessionPhase;
 using dish::moonlight::SessionUiState;
+using dish::moonlight::TrustState;
 using dish::net::MoonlightManager;
 using dish::net::MoonlightSession;
 using dish::net::MoonlightSessionTestAccess;
@@ -57,10 +64,11 @@ using dish::repository::MoonlightHostRepository;
 using dish::test::makeSharedSettings;
 using dish::test::MoonlightFakeHost;
 using dish::test::MoonlightRequestLog;
+using dish::test::MoonlightWolfControlHost;
 
 namespace {
 
-// MoonlightSession builds a QNetworkAccessManager, whose app-static factory
+// MoonlightSession's calls open QSslSockets, whose app-static TLS backend loader
 // asserts unless a QCoreApplication exists, and Catch2WithMain creates none.
 void ensureApp() {
     if (QCoreApplication::instance() != nullptr) { return; }
@@ -188,6 +196,42 @@ dish::net::MoonlightXmlResponse acceptedReply() {
         QByteArrayLiteral("<root status_code=\"200\"><gamesession>1</gamesession>"
                           "<sessionUrl0>rtsp://192.0.2.11:48010</sessionUrl0></root>"));
 }
+
+// The rikey a /launch would have carried: the control stream is sealed with it.
+const MoonlightWolfControlHost::Key kRikey = {0x10, 0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87,
+                                              0x98, 0xA9, 0xBA, 0xCB, 0xDC, 0xED, 0xFE, 0x0F};
+
+// A remembered host the client holds a pairing with, answering the plaintext probe from `plain`
+// and taking its mutual-TLS calls on `tlsPort`.
+MoonlightHost pairedHostAt(const MoonlightFakeHost& plain, int tlsPort) {
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = plain.port();
+    h.httpsPort = tlsPort;
+    h.paired = true;
+    return h;
+}
+
+// A port that takes a connection and hangs up at once, so a mutual-TLS call made to it fails in
+// its handshake, with no status line at all.
+class HangUpPort : public QObject {
+  public:
+    HangUpPort() {
+        server_.listen(QHostAddress::LocalHost, 0);
+        QObject::connect(&server_, &QTcpServer::newConnection, this, &HangUpPort::hangUp);
+    }
+    bool listening() const { return server_.isListening(); }
+    int port() const { return static_cast<int>(server_.serverPort()); }
+
+  private:
+    void hangUp() {
+        while (auto* socket = server_.nextPendingConnection()) {
+            socket->close();
+            socket->deleteLater();
+        }
+    }
+
+    QTcpServer server_;
+};
 
 // Collects what the app actually logged, which is where "name the phase that
 // failed" is answered: the copy the user sees is fixed by the UX spec, so the
@@ -354,6 +398,100 @@ TEST_CASE("A pairing holds its request open rather than giving up on the human",
     REQUIRE(session.phase() != SessionPhase::Pairing);
 }
 
+TEST_CASE("A pairing that completes is written down and the host is Paired",
+          "[moonlight][behaviour][b3][b4]") {
+    // All five phases, the last over TLS against the certificate phase 1 handed
+    // out, through the manager a user drives. Announcing success is not a
+    // pairing: the record and the pinned certificate are.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("4271"));
+    REQUIRE(fake.listening());
+    REQUIRE(fake.serveTls());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.tlsPort();
+    store.rememberHost(h);
+    std::optional<bool> result;
+    QObject::connect(&manager, &MoonlightManager::pairingFinished,
+                     [&result](const QString&, bool ok) { result = ok; });
+
+    manager.pairHost(h.id(), QStringLiteral("4271"));
+
+    REQUIRE(pumpUntil([&result] { return result.has_value(); }, 15000));
+    CHECK(*result);
+    CHECK(fake.phasesServed() == QList<int>({1, 2, 3, 4, 5}));
+    REQUIRE(store.hosts().size() == 1);
+    CHECK(store.hosts().first().paired);
+    CHECK(store.serverCert(h.id()).has_value());
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK(in.pairingHeld);
+    CHECK(dish::moonlight::trustFor(in) == TrustState::Paired);
+    CHECK(*manager.sessionPhase(h.id()) == SessionPhase::Paired);
+}
+
+TEST_CASE("Phase 5 trusts the certificate phase 1 handed out, and no other",
+          "[moonlight][behaviour][b4]") {
+    // Phases 1 to 4 prove the peer holds the PIN-derived key and signed with the
+    // certificate it handed out. Whatever answers on the TLS port with another
+    // certificate is not that host; it used to be pinned on first sight and
+    // paired with.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("4271"));
+    REQUIRE(fake.listening());
+    REQUIRE(fake.serveTlsAsAnotherMachine());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.tlsPort();
+    store.rememberHost(h);
+    std::optional<bool> result;
+    QObject::connect(&manager, &MoonlightManager::pairingFinished,
+                     [&result](const QString&, bool ok) { result = ok; });
+
+    manager.pairHost(h.id(), QStringLiteral("4271"));
+
+    REQUIRE(pumpUntil([&result] { return result.has_value(); }, 15000));
+    CHECK_FALSE(*result);
+    CHECK(fake.phasesServed() == QList<int>({1, 2, 3, 4}));
+    REQUIRE(store.hosts().size() == 1);
+    CHECK_FALSE(store.hosts().first().paired);
+    CHECK_FALSE(store.serverCert(h.id()).has_value());
+}
+
+TEST_CASE("A completed pairing pins the certificate phase 1 handed out, over an older pin",
+          "[moonlight][behaviour][b4]") {
+    // A host rebuilt since its certificate was pinned refuses every call over
+    // that pin until it is forgotten, and the pairing that proves its new
+    // certificate used to fail on the old pin too.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("4271"));
+    REQUIRE(fake.listening());
+    REQUIRE(fake.serveTls());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.tlsPort();
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QString(64, QLatin1Char('0')));
+    std::optional<bool> result;
+    QObject::connect(&manager, &MoonlightManager::pairingFinished,
+                     [&result](const QString&, bool ok) { result = ok; });
+
+    manager.pairHost(h.id(), QStringLiteral("4271"));
+
+    REQUIRE(pumpUntil([&result] { return result.has_value(); }, 15000));
+    CHECK(*result);
+    CHECK(fake.phasesServed() == QList<int>({1, 2, 3, 4, 5}));
+    CHECK(store.serverCert(h.id()) == QString::fromUtf8(fake.certDer().toHex()));
+}
+
 // ── B4 · trust that is proved is trust that is written down ─────────────────
 
 TEST_CASE("A certificate pinned by a handshake is not on its own a pairing",
@@ -390,7 +528,7 @@ TEST_CASE("A certificate pinned by a handshake is not on its own a pairing",
 }
 
 TEST_CASE("The pairing question is asked on the one route that can answer it",
-          "[moonlight][behaviour][b4]") {
+          "[moonlight][behaviour][b4][h1]") {
     // A live Sunshine host answers PairStatus 0 over plaintext to every caller,
     // measured against the host at 192.168.68.98 for the very uniqueid this
     // client sends. So a plaintext probe alone can never make a paired host look
@@ -416,9 +554,116 @@ TEST_CASE("The pairing question is asked on the one route that can answer it",
     manager.probeHost(h.id());
     MoonlightRequestLog log(manager);
 
-    REQUIRE(pumpUntil([&] { return manager.sessionUiInputs(h.id(), QString()).probeAnswered; }));
-    // The plaintext answer is followed by the mutual-TLS question.
+    // The plaintext answer is followed by the mutual-TLS question, which only an
+    // answered plaintext probe asks.
     REQUIRE(pumpUntil([&] { return log.sawAny(QStringLiteral("/applist")); }));
+}
+
+// ── H1 · trust is the mutual-TLS answer's to give ───────────────────────────
+
+TEST_CASE("A paired host is not called unpaired while its mutual-TLS answer is still out",
+          "[moonlight][behaviour][h1]") {
+    // The plaintext half of a probe says the host is there. Its PairStatus is 0
+    // for every caller on Sunshine and on Wolf alike, so that half cannot say
+    // whether the pairing stands, and the row must not offer Pair over a host
+    // it has not heard from yet.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    // Takes the mutual-TLS call and never answers it.
+    QTcpServer silentTls;
+    REQUIRE(silentTls.listen(QHostAddress::LocalHost, 0));
+    const MoonlightHost h = pairedHostAt(plain, static_cast<int>(silentTls.serverPort()));
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+
+    manager.probeHost(h.id());
+    MoonlightRequestLog log(manager);
+    REQUIRE(pumpUntil([&] { return log.sawAny(QStringLiteral("/applist")); }));
+
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK(dish::moonlight::trustFor(in) == TrustState::Remembered);
+    CHECK(dish::moonlight::sessionUiState(in) == SessionUiState::Checking);
+}
+
+TEST_CASE("A probe asked again while its mutual-TLS answer is out asks nothing twice",
+          "[moonlight][behaviour][h1]") {
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    QTcpServer silentTls;
+    REQUIRE(silentTls.listen(QHostAddress::LocalHost, 0));
+    const MoonlightHost h = pairedHostAt(plain, static_cast<int>(silentTls.serverPort()));
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+    manager.probeHost(h.id());
+    MoonlightRequestLog log(manager);
+    REQUIRE(pumpUntil([&] { return log.sawAny(QStringLiteral("/applist")); }));
+
+    manager.probeHost(h.id());
+
+    CHECK(log.count(kServerInfo) == 0);
+    CHECK(log.count(QStringLiteral("/applist")) == 1);
+}
+
+TEST_CASE("A paired host whose mutual-TLS call fails has lost the trust",
+          "[moonlight][behaviour][h1]") {
+    // The same host once the mutual-TLS half is over: a call the host would
+    // not complete is its verdict, and the pairing we hold is not confirmed.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    HangUpPort refusingTls;
+    REQUIRE(refusingTls.listening());
+    const MoonlightHost h = pairedHostAt(plain, refusingTls.port());
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+
+    int apps = 0;
+    QObject::connect(&manager, &MoonlightManager::appListReady,
+                     [&apps](const QString&, const QStringList&, const QStringList&) { ++apps; });
+    manager.probeHost(h.id());
+    REQUIRE(pumpUntil([&apps] { return apps > 0; }));
+
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK(dish::moonlight::trustFor(in) == TrustState::NotPaired);
+    CHECK(dish::moonlight::sessionUiState(in) == SessionUiState::TrustLost);
+}
+
+// ── H4 · the uniqueid comes from /serverinfo ────────────────────────────────
+
+TEST_CASE("A host's uniqueid is learned from its /serverinfo and the id stays its address",
+          "[moonlight][behaviour][h4]") {
+    // Neither Sunshine nor Wolf publishes a uniqueid over mDNS (Wolf publishes
+    // no TXT record at all), so the plaintext /serverinfo is where it comes
+    // from. It is kept as the witness for a host that later answers as another
+    // machine.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost fake(QStringLiteral("0000"));
+    REQUIRE(fake.listening());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = fake.port();
+    h.httpsPort = fake.port();
+    store.rememberHost(h);
+
+    manager.probeHost(h.id());
+    REQUIRE(pumpUntil([&] { return manager.sessionUiInputs(h.id(), QString()).probeAnswered; }));
+
+    REQUIRE(store.hosts().size() == 1);
+    CHECK(store.hosts().first().uuid == QStringLiteral("FAKEHOST-0001"));
+    CHECK(store.hosts().first().id() == h.id());
 }
 
 // ── B5 · a pairing that stops ───────────────────────────────────────────────
@@ -466,6 +711,46 @@ TEST_CASE("A refused pairing stops at the phase that refused it and writes nothi
     REQUIRE(session.phase() == SessionPhase::Pairing);
 }
 
+// ── B6 · forget ─────────────────────────────────────────────────────────────
+
+TEST_CASE("A probe answered after the forget writes nothing back", "[moonlight][behaviour][b6]") {
+    // A forget with a session up sends /cancel and keeps the session alive to
+    // hear its answer, so a reply to a question asked BEFORE the forget can still
+    // land on it. Nothing that reply carries may reach the manager: it would put
+    // a verdict back on a host that no longer exists.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightManager manager(settings);
+    MoonlightHostRepository store(settings);
+    MoonlightFakeHost plain(QStringLiteral("0000"));
+    REQUIRE(plain.listening());
+    // Takes the /cancel and never answers it, so the session waits out its grace.
+    QTcpServer silentTls;
+    REQUIRE(silentTls.listen(QHostAddress::LocalHost, 0));
+    const MoonlightHost h = pairedHostAt(plain, static_cast<int>(silentTls.serverPort()));
+    store.rememberHost(h);
+    store.setServerCert(h.id(), QStringLiteral("deadbeef"));
+    REQUIRE(manager.bindSlot(QStringLiteral("sdl:1"), h.id(), dish::models::kMoonlightDeviceAuto,
+                             false, false, false, false, false) == BindOutcome::Bound);
+    auto* session = manager.findChild<MoonlightSession*>();
+    REQUIRE(session != nullptr);
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::Streaming);
+    bool landed = false;
+    QObject::connect(session, &MoonlightSession::probeFinished,
+                     [&landed](bool, const QString&) { landed = true; });
+
+    manager.probeHost(h.id());
+    manager.forgetHost(h.id());
+    REQUIRE(session->cancelInFlight());
+    REQUIRE(pumpUntil([&landed] { return landed; }));
+
+    const auto in = manager.sessionUiInputs(h.id(), QString());
+    CHECK_FALSE(in.probeAnswered);
+    CHECK_FALSE(in.probeInFlight);
+    CHECK(store.hosts().isEmpty());
+    CHECK_FALSE(store.serverCert(h.id()).has_value());
+}
+
 // ── B7, B8, B22, B23 · one session per host ─────────────────────────────────
 
 TEST_CASE("The first pad on a host launches and the second makes no call at all",
@@ -496,6 +781,47 @@ TEST_CASE("The first pad on a host launches and the second makes no call at all"
     REQUIRE(log.paths() == before);
     REQUIRE(fx.manager->boundSlotCount(kIdA) == 2);
     REQUIRE(*fx.manager->sessionPhase(kIdA) == SessionPhase::Launching);
+}
+
+TEST_CASE("A bound pad on a stream that came up is Live under its controller number",
+          "[moonlight][behaviour][b7]") {
+    Fixture fx;
+    fx.establishPairing(kIpA);
+    REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
+    auto* session = fx.sessionFor(kIpA);
+    REQUIRE(session != nullptr);
+
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::Streaming);
+
+    CHECK(fx.uiStateAnswered(kIdA, QStringLiteral("sdl:1")) == SessionUiState::Live);
+    CHECK(fx.manager->slotForController(kIdA, 0) == QStringLiteral("sdl:1"));
+    // A pad that is not on the stream is offered the session instead.
+    CHECK(fx.uiStateAnswered(kIdA, QStringLiteral("sdl:2")) == SessionUiState::Joining);
+}
+
+TEST_CASE("A pad joining a live session is plugged in on the stream and asks the host nothing",
+          "[moonlight][behaviour][b8]") {
+    // The host that holds the stream, declared first so it outlives the session.
+    MoonlightWolfControlHost wolf(kRikey);
+    REQUIRE(wolf.listening());
+    Fixture fx;
+    fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
+    REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
+    auto* session = fx.sessionFor(kIpA);
+    REQUIRE(session != nullptr);
+    REQUIRE(MoonlightSessionTestAccess::control(*session).connect("127.0.0.1", wolf.port(), kRikey,
+                                                                  0, 2000));
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::ControlConnecting);
+    MoonlightSessionTestAccess::feed(*session, SessionEvent::ControlConnected);
+    REQUIRE(pumpUntil([&wolf] { return wolf.padType(0).has_value(); }));
+    MoonlightRequestLog log(*fx.manager);
+
+    REQUIRE(fx.bind(QStringLiteral("sdl:2"), kIdA) == BindOutcome::Bound);
+
+    CHECK(pumpUntil([&wolf] { return wolf.padType(1).has_value(); }));
+    CHECK(wolf.padType(0).has_value());
+    CHECK(log.paths().isEmpty());
+    CHECK(session->phase() == SessionPhase::Streaming);
 }
 
 TEST_CASE("Four pads ride one session and only the last one off cancels it",
@@ -625,6 +951,190 @@ TEST_CASE("A resume the host offered and then refused is its own answer",
     REQUIRE(session->failure() == SessionFailure::ResumeRejected);
     REQUIRE(fx.uiStateAnswered(kIdA) == SessionUiState::ResumeFailed);
     REQUIRE(dish::moonlight::sessionUiOffersQuit(fx.uiStateAnswered(kIdA)));
+}
+
+// ── H3 · a refusal in the status line is still an answer ────────────────────
+
+TEST_CASE("A launch refused in the status line is a refusal, not a host that never answered",
+          "[moonlight][behaviour][h3]") {
+    // Wolf answers a /launch for an app it does not know with HTTP 400 and
+    // <root status_code="400"/>, where Sunshine refuses inside a 200 (the busy
+    // cases above). Read as a transport failure, the host that said no rendered
+    // as a host nobody could reach.
+    ensureApp();
+    MoonlightFakeHost wolf(QStringLiteral("0000"));
+    REQUIRE(wolf.listening());
+    wolf.answerWith(kLaunch, 400, QByteArrayLiteral("<root status_code=\"400\"/>"));
+
+    // The reply as the client's own transport reads it. /launch rides TLS and
+    // this host is plaintext, but both routes hand their reply to one reader.
+    dish::net::MoonlightHttpClient client;
+    std::optional<dish::net::MoonlightXmlResponse> reply;
+    client.getHttp(QStringLiteral("127.0.0.1"), wolf.port(), kLaunch, {},
+                   [&reply](const dish::net::MoonlightXmlResponse& r) { reply = r; });
+    REQUIRE(pumpUntil([&reply] { return reply.has_value(); }));
+    CHECK(reply->reachable);
+    CHECK(reply->statusCode == 400);
+
+    Fixture fx;
+    fx.establishPairing(kIpA);
+    auto* session = fx.sessionFor(kIpA);
+    REQUIRE(session != nullptr);
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::Launching);
+    MoonlightRequestLog log(*fx.manager);
+
+    MoonlightSessionTestAccess::feedLaunchReply(*session, *reply, /*resuming=*/false);
+
+    CHECK(session->failure() == SessionFailure::LaunchRejected);
+    CHECK(fx.uiStateAnswered(kIdA) == SessionUiState::Refused);
+    // A refused launch started nothing of ours, so there is nothing to close.
+    CHECK(log.count(kCancel) == 0);
+}
+
+TEST_CASE("A refusal whose body names no status of its own takes the status line's",
+          "[moonlight][behaviour][h3]") {
+    ensureApp();
+    MoonlightFakeHost host(QStringLiteral("0000"));
+    REQUIRE(host.listening());
+    host.answerWith(kLaunch, 404, QByteArrayLiteral("<html>Not Found</html>"));
+
+    dish::net::MoonlightHttpClient client;
+    std::optional<dish::net::MoonlightXmlResponse> reply;
+    client.getHttp(QStringLiteral("127.0.0.1"), host.port(), kLaunch, {},
+                   [&reply](const dish::net::MoonlightXmlResponse& r) { reply = r; });
+    REQUIRE(pumpUntil([&reply] { return reply.has_value(); }));
+
+    CHECK(reply->reachable);
+    CHECK_FALSE(reply->ok());
+    CHECK(reply->statusCode == 404);
+}
+
+// ── The app a launch asks for ───────────────────────────────────────────────
+
+// Made before any member, so the fixture host below is built inside an application.
+struct InsideAnApp {
+    InsideAnApp() { ensureApp(); }
+};
+
+// A host whose app list is `listed` on its TLS port, remembered with `pick` as the app to start.
+struct AppListHost : InsideAnApp {
+    std::shared_ptr<QSettings> settings = makeSharedSettings();
+    MoonlightFakeHost fake{QStringLiteral("0000")};
+    std::unique_ptr<MoonlightManager> manager;
+    std::unique_ptr<MoonlightHostRepository> store;
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    bool listening = false;
+
+    AppListHost(const QString& pick, int status, const QByteArray& listed) {
+        manager = std::make_unique<MoonlightManager>(settings);
+        store = std::make_unique<MoonlightHostRepository>(settings);
+        listening = fake.listening() && fake.serveTls();
+        fake.answerWith(QStringLiteral("/applist"), status, listed);
+        h.httpPort = fake.port();
+        h.httpsPort = fake.tlsPort();
+        h.lastAppId = pick;
+        h.lastAppName = pick.isEmpty() ? QString() : QStringLiteral("Picked");
+        store->rememberHost(h);
+    }
+
+    // Reads the host's app list the way entering a screen does, and waits for the answer.
+    bool readAppList() const {
+        bool answered = false;
+        const auto token = QObject::connect(manager.get(), &MoonlightManager::appListReady,
+                                            [&answered](const QString&, const QStringList&,
+                                                        const QStringList&) { answered = true; });
+        manager->refreshApps(h.id());
+        const bool settled = pumpUntil([&answered] { return answered; });
+        QObject::disconnect(token);
+        return settled;
+    }
+
+    QString storedPick() const { return store->hosts().first().lastAppId; }
+};
+
+const QByteArray kTwoApps = QByteArrayLiteral(
+    "<root status_code=\"200\"><App><AppTitle>Desktop</AppTitle><ID>881448767</ID></App>"
+    "<App><AppTitle>Steam</AppTitle><ID>1234</ID></App></root>");
+
+TEST_CASE("An app the host no longer lists is forgotten as the pick when its list is read",
+          "[moonlight][behaviour][b7][h3]") {
+    // Launched, it is refused every time (Wolf answers an unknown app with HTTP
+    // 400), and the refusal hides the picker it could be changed in.
+    AppListHost at(QStringLiteral("9"), 200, kTwoApps);
+    REQUIRE(at.listening);
+
+    REQUIRE(at.readAppList());
+
+    CHECK(at.storedPick().isEmpty());
+    CHECK(at.store->hosts().first().lastAppName.isEmpty());
+}
+
+TEST_CASE("An app the host still lists stays the pick", "[moonlight][behaviour][b7]") {
+    AppListHost at(QStringLiteral("1234"), 200, kTwoApps);
+    REQUIRE(at.listening);
+
+    REQUIRE(at.readAppList());
+
+    CHECK(at.storedPick() == QStringLiteral("1234"));
+}
+
+TEST_CASE("A pick stays when the host's app list cannot be read", "[moonlight][behaviour][b7]") {
+    // A list that did not come back says nothing about what the host can start.
+    AppListHost at(QStringLiteral("9"), 401, QByteArrayLiteral("<root status_code=\"401\"/>"));
+    REQUIRE(at.listening);
+
+    REQUIRE(at.readAppList());
+
+    CHECK(at.storedPick() == QStringLiteral("9"));
+}
+
+TEST_CASE("A session on a host with no pick starts the first app the host lists",
+          "[moonlight][behaviour][b7]") {
+    // What the binding flow promises for a host with no pick. Wolf's app ids are
+    // hashes of each app's title and icon, so a fixed default names nothing it
+    // has, and a launch of it is refused.
+    AppListHost at(QStringLiteral("9"), 200, kTwoApps);
+    REQUIRE(at.listening);
+    REQUIRE(at.readAppList());
+    MoonlightRequestLog log(*at.manager);
+
+    REQUIRE(at.manager->bindSlot(QStringLiteral("sdl:1"), at.h.id(),
+                                 dish::models::kMoonlightDeviceAuto, false, false, false, false,
+                                 false) == BindOutcome::Bound);
+
+    REQUIRE(log.count(kLaunch) == 1);
+    CHECK(log.query(0).contains(QStringLiteral("appid=881448767")));
+}
+
+TEST_CASE("A launch the host turns into a resume brings the session up",
+          "[moonlight][behaviour][h3][b9]") {
+    // A /launch from a client that already holds a session on Wolf is answered
+    // as a resume: HTTP 200, a sessionUrl0 and <resume>1</resume>, and no
+    // <gamesession>. It is the session this client already holds, coming back.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightHostRepository repo(settings);
+    const auto identity = repo.getOrCreateIdentity();
+    REQUIRE(identity.has_value());
+    // The RTSP handshake the accepted launch starts dials this host, which
+    // answers it at once rather than leaving a worker waiting on a timeout.
+    MoonlightFakeHost rtsp(QStringLiteral("0000"));
+    REQUIRE(rtsp.listening());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = rtsp.port();
+    h.httpsPort = rtsp.port();
+    MoonlightSession session(h, *identity, &repo);
+    MoonlightSessionTestAccess::settle(session, SessionPhase::Launching);
+
+    const auto resumed = dish::net::parseMoonlightXml(
+        QStringLiteral("<root status_code=\"200\"><sessionUrl0>rtsp://127.0.0.1:%1</sessionUrl0>"
+                       "<resume>1</resume></root>")
+            .arg(rtsp.port())
+            .toUtf8());
+    MoonlightSessionTestAccess::feedLaunchReply(session, resumed, /*resuming=*/false);
+
+    CHECK(session.phase() == SessionPhase::RtspHandshake);
+    CHECK(session.failure() == SessionFailure::None);
 }
 
 // ── B11, B12, B21 · nothing about a host may block a binding ────────────────
@@ -774,11 +1284,11 @@ TEST_CASE("An explicit quit closes our own session as well as the host's app",
     REQUIRE(session->phase() == SessionPhase::Closed);
 }
 
-TEST_CASE("Closing an app another device left running is the bare call and nothing else",
+TEST_CASE("Closing an app another device left running tears down nothing of ours",
           "[moonlight][behaviour][b16]") {
     // The state that offers this has no session of ours at all: the host refused
     // us because somebody else is on it. There is nothing local to tear down, so
-    // the /cancel is the whole of the action.
+    // the /cancel is all that closes it.
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
     auto* session = fx.sessionFor(kIpA);
@@ -791,6 +1301,32 @@ TEST_CASE("Closing an app another device left running is the bare call and nothi
 
     REQUIRE(log.count(kCancel) == 1);
     REQUIRE(session->phase() == SessionPhase::Failed);
+}
+
+TEST_CASE("A quit asks the host again, because the answer to /cancel proves nothing",
+          "[moonlight][behaviour][b16][h2]") {
+    // A host answers /cancel with success whether or not anything was running
+    // (Wolf: HTTP 200 and <cancel>1</cancel> either way), so the reply cannot say
+    // what the quit did. Asking the host again can, for our own session and for
+    // an app another device left running alike.
+    const std::pair<SessionPhase, SessionFailure> sessions[] = {
+        {SessionPhase::Streaming, SessionFailure::None},
+        {SessionPhase::Failed, SessionFailure::AppAlreadyRunning},
+    };
+    for (const auto& [phase, failure] : sessions) {
+        Fixture fx;
+        // Found rather than typed in, so no probe is already out when the quit asks.
+        fx.manager->applyDiscoverySweep({host(QStringLiteral("PC"), kIpA)});
+        REQUIRE(fx.bind(QStringLiteral("sdl:1"), kIdA) == BindOutcome::Bound);
+        auto* session = fx.sessionFor(kIpA);
+        REQUIRE(session != nullptr);
+        MoonlightSessionTestAccess::settle(*session, phase, failure);
+        MoonlightRequestLog log(*fx.manager);
+
+        fx.manager->cancelHostApp(kIdA);
+
+        CHECK(log.paths() == QStringList({kCancel, kServerInfo}));
+    }
 }
 
 // ── B17, B18 · dropped and ended are never the same thing ───────────────────

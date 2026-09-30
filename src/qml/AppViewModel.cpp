@@ -12,8 +12,10 @@
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
+#include "composer/DiagnosticsRecorder.h"
 #include "composer/StreamingSlotCount.h"
 #include "core/catalog/BundledCatalog.h"
+#include "core/input/InputReadout.h"
 #include "core/input/Deadzones.h"
 #include "core/reducer/CapabilitySolver.h"
 #include "core/reducer/CatalogFeatureGate.h"
@@ -24,11 +26,13 @@
 #include "core/reducer/SlotPathFields.h"
 #include "source/usb/UsbGamepadManager.h"
 #include "qml/AppSettingsMaps.h"
+#include "qml/DiagnosticsMaps.h"
 #include "qml/RenderTokens.h"
 #include "repository/DeadzoneRepository.h"
 #include "source/store/AudioEnabledStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/MotionEnabledStore.h"
+#include "source/store/RumbleEnabledStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/ControllerTypeStore.h"
 #include "source/store/ThemePreferenceStore.h"
@@ -36,6 +40,7 @@
 #include "UI/Theme.h"
 #include "UI/licenses/LicenseManifest.h"
 
+#include <QClipboard>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QGuiApplication>
@@ -46,6 +51,7 @@
 #include <QVariantMap>
 #include <QWindow>
 
+#include <chrono>
 #include <map>
 #include <optional>
 
@@ -307,6 +313,57 @@ constexpr int kPathBudgetMs = 20'000;
 constexpr int kBindBudgetMs = 8'000;
 constexpr int kApplyTickMs = 250;
 
+// The input inspector's poll: about thirty readings a second, the rate
+// dish-android's inspector draws at.
+constexpr int kInspectionPollMs = 33;
+
+// The stick tests' clock. Monotonic, so a wall-clock step cannot end a capture.
+std::int64_t steadyNowMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+QString moonlightHostLabel(dish::AppModel* model, const QString& hostId) {
+    for (const auto& row : model->moonlight()->hostRows()) {
+        if (row.id == hostId) { return row.name.isEmpty() ? row.ip : row.name; }
+    }
+    return hostId;
+}
+
+// The pad facts a Moonlight arrival is declared from, read by the announcement
+// and by the binding strip alike. An unknown slot has none.
+struct MoonlightPadFacts {
+    bool rumble = false;
+    bool motion = false;
+    bool touchpad = false;
+    bool battery = false;
+    bool lightbar = false;
+};
+
+MoonlightPadFacts moonlightPadFactsOf(const models::ControllerSlot* slot) {
+    MoonlightPadFacts facts;
+    if (slot == nullptr) { return facts; }
+    facts.rumble = slot->capabilities.hasRumble;
+    facts.motion = slot->capabilities.hasMotion;
+    facts.touchpad = slot->capabilities.hasTouchpad;
+    facts.lightbar = slot->capabilities.hasLightbar;
+    // A pad reporting any level at all has a battery to report.
+    facts.battery = slot->capabilities.batteryLevel != 0xFF;
+    return facts;
+}
+
+// What a Moonlight binding's touchpad reads as: whether the pad's touches reach
+// the host, from the host's pick, the pad, and the arrival the binding declares.
+QString moonlightTouchpadRoutingOf(const models::ControllerSlot* slot, int devicePick,
+                                   const std::optional<std::string>& hostPick) {
+    const MoonlightPadFacts pad = moonlightPadFactsOf(slot);
+    const auto arrival = moonlight::arrivalForBinding(devicePick, pad.rumble, pad.motion,
+                                                      pad.touchpad, pad.battery, pad.lightbar);
+    return touchpadChoiceForMoonlight(
+        moonlight::touchReachesHost(hostPick, pad.touchpad, arrival.type));
+}
+
 } // namespace
 
 AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
@@ -461,85 +518,104 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     QObject::connect(telemetryTimer_, &QTimer::timeout, this, &AppViewModel::onTelemetryTick);
     telemetryTimer_->start();
 
+    // The recorder writes on the main thread, so the relay needs no hop.
+    diagnosticsLogSub_ = model_->diagnosticsLog().subscribe(
+        [this](const std::vector<reducer::DiagnosticsEvent>&) { emit diagnosticsLogChanged(); },
+        false);
+    // Idle until a page arms an inspection.
+    inspectionTimer_ = new QTimer(this);
+    inspectionTimer_->setInterval(kInspectionPollMs);
+    QObject::connect(inspectionTimer_, &QTimer::timeout, this, &AppViewModel::onInspectionTick);
+
     onStateChanged();
     onConnectionsChanged();
     onTelemetryTick();
 }
 
-void AppViewModel::onStateChanged() {
-    const auto& st = model_->state();
-
-    const auto& conns = st.connections;
-    int live = 0;
-    QString firstLabel;
+// What the header strip reads off the connection list: how many are live, how many exist, and the
+// name of the first live one, which is the label a single connection is shown by.
+AppViewModel::ConnectionTally
+AppViewModel::tallyConnections(const QList<models::ConnectionSummary>& conns) {
+    ConnectionTally tally;
     for (const auto& c : conns) {
-        if (c.live == models::LinkState::Connected) {
-            ++live;
-            if (firstLabel.isEmpty()) { firstLabel = c.label; }
-        }
+        if (c.live != models::LinkState::Connected) { continue; }
+        ++tally.live;
+        if (tally.firstLabel.isEmpty()) { tally.firstLabel = c.label; }
     }
-    const int total = static_cast<int>(conns.size());
-    onlineCount_ = live;
-    connectionCount_ = total;
+    tally.total = static_cast<int>(conns.size());
+    return tally;
+}
 
-    if (live == 0 && total == 0) {
-        statusText_ = tr("No connections yet");
-    } else if (live == 0) {
-        statusText_ = tr("%n paired", "", total);
-    } else if (live == 1) {
-        statusText_ = firstLabel;
-    } else {
-        statusText_ = tr("%n online", "", live);
+// One live connection is shown by its own name rather than a count, because the count would say
+// less than the label does.
+QString AppViewModel::statusTextFor(const ConnectionTally& tally) const {
+    if (tally.live == 0 && tally.total == 0) { return tr("No connections yet"); }
+    if (tally.live == 0) { return tr("%n paired", "", tally.total); }
+    if (tally.live == 1) { return tally.firstLabel; }
+    return tr("%n online", "", tally.live);
+}
+
+// The plural rides the TOTAL, matching Android's status_connected_of: "1 of 1 online" reads
+// singular, "2 of 5 online" plural.
+QString AppViewModel::summaryTextFor(const ConnectionTally& tally) const {
+    if (tally.live == 0 && tally.total == 0) { return tr("Open Connections to add one"); }
+    if (tally.live == 0) { return tr("%n paired", "", tally.total); }
+    return tr("%1 of %n online", "", tally.total).arg(tally.live);
+}
+
+// The same pure composer::streamingSlotCount the wake controller keys the display on, fed from
+// this slice's bindings against its links.
+int AppViewModel::streamingSlotCountFor(const MainUiState& st) {
+    QHash<QString, QString> bindings;
+    for (const auto& s : st.slotList) {
+        if (s.boundConnectionId.has_value()) { bindings.insert(s.id, *s.boundConnectionId); }
     }
+    QHash<QString, models::LinkState> links;
+    for (const auto& c : st.connections) { links.insert(c.id, c.live); }
+    return composer::streamingSlotCount(bindings, links);
+}
 
-    if (live == 0 && total == 0) {
-        summaryText_ = tr("Open Connections to add one");
-    } else if (live == 0) {
-        summaryText_ = tr("%n paired", "", total);
-    } else {
-        // The plural rides the TOTAL, matching Android's status_connected_of:
-        // "1 of 1 online" reads singular, "2 of 5 online" plural.
-        summaryText_ = tr("%1 of %n online", "", total).arg(live);
-    }
-
-    busy_ = st.busy;
-
+void AppViewModel::publishSlotCounts(const MainUiState& st) {
     slotCount_ = static_cast<int>(st.slotList.size());
     int bound = 0;
     for (const auto& s : st.slotList) {
         if (s.boundConnectionId.has_value()) { ++bound; }
     }
     boundSlotCount_ = bound;
-    firstOnlineName_ = firstLabel;
+    streamingSlotCount_ = streamingSlotCountFor(st);
+}
 
-    // The same pure composer::streamingSlotCount the wake controller keys the
-    // display on, fed from this slice's bindings against its links.
-    {
-        QHash<QString, QString> bindings;
-        for (const auto& s : st.slotList) {
-            if (s.boundConnectionId.has_value()) { bindings.insert(s.id, *s.boundConnectionId); }
-        }
-        QHash<QString, models::LinkState> links;
-        for (const auto& c : conns) { links.insert(c.id, c.live); }
-        streamingSlotCount_ = composer::streamingSlotCount(bindings, links);
-    }
-
+void AppViewModel::publishPairingTarget(const MainUiState& st) {
     pairingActive_ = st.pairingTarget.has_value();
     pairingServerName_ = pairingActive_ ? st.pairingTarget->name : QString();
     pairingServerId_ = pairingActive_ ? st.pairingTarget->id() : QString();
+}
 
+void AppViewModel::onStateChanged() {
+    const auto& st = model_->state();
+
+    const ConnectionTally tally = tallyConnections(st.connections);
+    onlineCount_ = tally.live;
+    connectionCount_ = tally.total;
+    firstOnlineName_ = tally.firstLabel;
+    statusText_ = statusTextFor(tally);
+    summaryText_ = summaryTextFor(tally);
+    busy_ = st.busy;
+
+    publishSlotCounts(st);
+    publishPairingTarget(st);
     slotModel_.setState(st.slotList);
 
     // Best-effort: the sheet reads a rising online count as "a pair just landed".
-    if (live > lastOnlineCount_) { emit pairingSucceeded(); }
-    lastOnlineCount_ = live;
+    if (tally.live > lastOnlineCount_) { emit pairingSucceeded(); }
+    lastOnlineCount_ = tally.live;
 
-    // A device attach or detach also moves the slot list, so the deadzone rows
-    // may have changed with it.
+    // A device attach or detach also moves the slot list, so the deadzone rows may have changed
+    // with it.
     emit deadzonesChanged();
 
-    // And a pad that has just appeared may already carry a standing Moonlight
-    // binding, which is what starts its session.
+    // And a pad that has just appeared may already carry a standing Moonlight binding, which is
+    // what starts its session.
     reattachMoonlightBindings();
 
     emit stateChanged();
@@ -831,16 +907,10 @@ QString AppViewModel::bindMoonlightSlot(const QString& slotId, const QString& ho
                                         int controllerType) {
     // The pad's detected hardware decides the advertised CONTROLLER_ARRIVAL
     // capabilities, so the host is never told about a feature the pad lacks.
-    const models::ControllerSlot* slot = slotById(slotId);
-    const bool hasRumble = slot != nullptr && slot->capabilities.hasRumble;
-    const bool hasMotion = slot != nullptr && slot->capabilities.hasMotion;
-    const bool hasTouchpad = slot != nullptr && slot->capabilities.hasTouchpad;
-    const bool hasLightbar = slot != nullptr && slot->capabilities.hasLightbar;
-    // A pad reporting any level at all has a battery to report.
-    const bool hasBattery = slot != nullptr && slot->capabilities.batteryLevel != 0xFF;
+    const MoonlightPadFacts pad = moonlightPadFactsOf(slotById(slotId));
     return tokens::moonlightBindOutcomeToken(
-        model_->moonlight()->bindSlot(slotId, hostId, controllerType, hasRumble, hasMotion,
-                                      hasTouchpad, hasBattery, hasLightbar));
+        model_->moonlight()->bindSlot(slotId, hostId, controllerType, pad.rumble, pad.motion,
+                                      pad.touchpad, pad.battery, pad.lightbar));
 }
 
 void AppViewModel::unbindMoonlightSlot(const QString& slotId) {
@@ -897,12 +967,7 @@ QString AppViewModel::moonlightRefusalMessage(const QString& id) const {
     return model_->moonlight()->refusalMessage(id);
 }
 
-void AppViewModel::quitMoonlightApp(const QString& id) {
-    model_->moonlight()->cancelHostApp(id);
-    // A successful cancel proves nothing: the host answers 200 whether or not
-    // anything was running, so the only honest next step is to ask again.
-    model_->moonlight()->probeHost(id);
-}
+void AppViewModel::quitMoonlightApp(const QString& id) { model_->moonlight()->cancelHostApp(id); }
 
 QVariantList AppViewModel::moonlightTypeOptions() const {
     const std::pair<int, const char*> options[] = {
@@ -1037,28 +1102,8 @@ void AppViewModel::clearPairingTarget() { model_->clearPairingTarget(); }
 
 // ── Reverse (host-initiated) pairing ─────────────────────────────────────────
 
-namespace {
-// Kept out of the manager so the token the QML sheet switches on stays a
-// view-model concern.
-QString reversePhaseString(net::ReversePairingPhase phase) {
-    switch (phase) {
-    case net::ReversePairingPhase::Idle:
-        return QStringLiteral("idle");
-    case net::ReversePairingPhase::AwaitingApproval:
-        return QStringLiteral("awaiting");
-    case net::ReversePairingPhase::Approved:
-        return QStringLiteral("approved");
-    case net::ReversePairingPhase::Declined:
-        return QStringLiteral("declined");
-    case net::ReversePairingPhase::TimedOut:
-        return QStringLiteral("timedout");
-    }
-    return QStringLiteral("idle");
-}
-} // namespace
-
 QString AppViewModel::reversePairingPhase() const {
-    return reversePhaseString(model_->wifi()->reversePairingPhase());
+    return reversePairingPhaseToken(model_->wifi()->reversePairingPhase());
 }
 
 QString AppViewModel::reversePairingPin() const { return model_->wifi()->reversePairingPin(); }
@@ -1297,6 +1342,7 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
                                                   bool rumbleOn, int touchpadMode, bool micOn,
                                                   bool speakerOn) const {
     reducer::CapabilityInputs in;
+    in.linkRoutesMouse = reducer::kClientRoutesTouchpadAsMouse;
 
     // An unknown slot leaves the input layer at its defaults rather than
     // inventing capabilities.
@@ -1325,8 +1371,8 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
     // emulated pads carry, and it picks the device from what the client declares.
     // So the type layer is the client-side table in MoonlightPadSlots, the host
     // layer carries everything (crossing out a row we cannot verify would mark
-    // every Moonlight binding degraded), and the link layer carries everything
-    // because the control stream does.
+    // every Moonlight binding degraded), and the link layer carries what the
+    // control stream does: everything but the mouse routing this client lacks.
     if (hostKind == QLatin1String("moonlight")) {
         in.linkDirect = false;
         in.hostIsBluetooth = false;
@@ -1371,8 +1417,7 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
 
     if (!hostIsBluetooth && in.hostResolved) {
         const auto hostFeatures = model_->catalogHostFeatures(hostId);
-        const auto mouse = hostFeatures.constFind(QStringLiteral("mouseControl"));
-        in.hostMouseControl = mouse != hostFeatures.constEnd() && mouse->supported;
+        in.hostMouseControl = reducer::hostAdvertisesMouseControl(hostFeatures);
         const auto rumble = hostFeatures.constFind(catalog::kFeatureRumble);
         // The rumble return path predates the host block, so a satellite that
         // advertises no block at all still carries it.
@@ -1398,8 +1443,8 @@ QVariantList AppViewModel::capabilityForCandidate(const QString& slotId, int typ
         in.typeRumble = reducer::isFeatureOffered(*typeDto, catalog::kFeatureRumble, known);
         in.typeLightbar = reducer::isFeatureOffered(*typeDto, catalog::kFeatureLightbar, known);
         // The audio slugs ride their own whitelist: they are protocol-2
-        // vocabulary and deliberately not in knownFeatureSlugs(), which the
-        // protocol-1 caps gate owns (see BundledCatalog.h).
+        // vocabulary and deliberately not in knownFeatureSlugs(), the
+        // protocol-1 vocabulary (see BundledCatalog.h).
         const auto audioSlugs = catalog::audioFeatureSlugs();
         in.typeMic = reducer::isFeatureOffered(*typeDto, catalog::kFeatureMic, audioSlugs);
         in.typeSpeaker = reducer::isFeatureOffered(*typeDto, catalog::kFeatureSpeaker, audioSlugs);
@@ -1516,18 +1561,28 @@ bool AppViewModel::isVerifiedModel(const QString& slotId) const {
 
 QString AppViewModel::touchpadModeFor(const QString& connectionId) const {
     const auto pick = model_->touchpadModeStore()->modeFor(connectionId.toStdString());
-    // No invented default: an unpicked host reads "off" and the resolve ladder
-    // owns any richer behaviour on the wire.
-    return pick.has_value() ? QString::fromStdString(*pick) : QStringLiteral("off");
+    const bool hostAdvertisesMouse =
+        reducer::hostAdvertisesMouseControl(model_->catalogHostFeatures(connectionId));
+    return touchpadChoiceForPick(pick, reducer::mouseModeAvailable(hostAdvertisesMouse));
 }
 
 void AppViewModel::setTouchpadMode(const QString& connectionId, const QString& mode) {
     if (connectionId.isEmpty()) { return; }
-    if (mode != QLatin1String("off") && mode != QLatin1String("pad") &&
-        mode != QLatin1String("mouse")) {
-        return; // unrecognised mode, forward-compat no-op
-    }
-    model_->touchpadModeStore()->setMode(connectionId.toStdString(), mode.toStdString());
+    const auto pick = touchpadPickForChoice(mode);
+    if (!pick.has_value()) { return; } // unrecognised mode, forward-compat no-op
+    model_->touchpadModeStore()->setMode(connectionId.toStdString(), *pick);
+}
+
+QString AppViewModel::touchpadRoutingFor(const QString& slotId) const {
+    // The satellite table wins, as it does for the Home rows: a Moonlight record
+    // can outlive a later satellite bind.
+    const bool boundToSatellite = model_->hub()->bindings().contains(slotId);
+    const auto moonlightBinding = model_->moonlight()->binding(slotId);
+    const bool boundToMoonlight = !boundToSatellite && moonlightBinding.has_value();
+    if (!boundToMoonlight) { return touchpadChoiceForMode(model_->declaredTouchpadMode(slotId)); }
+    const auto hostPick =
+        model_->touchpadModeStore()->modeFor(moonlightBinding->hostId.toStdString());
+    return moonlightTouchpadRoutingOf(slotById(slotId), moonlightBinding->controllerType, hostPick);
 }
 
 bool AppViewModel::motionEnabledFor(const QString& slotId) const {
@@ -1535,12 +1590,15 @@ bool AppViewModel::motionEnabledFor(const QString& slotId) const {
     return model_->motionEnabledStore()->isEnabled(slotId.toStdString());
 }
 
-// TODO: rumble rides the descriptor caps because no per-binding rumble store
-// exists yet. A RumbleEnabledStore mirroring MotionEnabledStore is what these
-// two need to become real.
-bool AppViewModel::rumbleEnabledFor(const QString& /*slotId*/) const { return true; }
+bool AppViewModel::rumbleEnabledFor(const QString& slotId) const {
+    if (slotId.isEmpty()) { return source::RumbleEnabledStore::kDefaultEnabled; }
+    return model_->rumbleEnabledStore()->isEnabled(slotId);
+}
 
-void AppViewModel::setRumbleEnabled(const QString& /*slotId*/, bool /*on*/) {}
+void AppViewModel::setRumbleEnabled(const QString& slotId, bool on) {
+    if (slotId.isEmpty()) { return; }
+    model_->rumbleEnabledStore()->setEnabled(slotId, on);
+}
 
 bool AppViewModel::micEnabledFor(const QString& slotId) const {
     if (slotId.isEmpty()) { return source::MicEnabledStore::kDefaultEnabled; }
@@ -1604,6 +1662,8 @@ void AppViewModel::applyBinding(const QString& slotId, const QString& connection
     }
 
     if (isMoonlightHost(connectionId)) {
+        // A Moonlight host's rumble reaches the pad through the same switch.
+        setRumbleEnabled(resolved, rumbleOn);
         applyMoonlightBinding(resolved, connectionId, type);
         return;
     }
@@ -1650,9 +1710,9 @@ void AppViewModel::beginApplyBind() {
                                      applyType_);
     }
     setMotionEnabled(applySlotId_, applyMotionOn_);
-    setTouchpadMode(applyConnectionId_, applyTouchpadMode_ == 2   ? QStringLiteral("mouse")
-                                        : applyTouchpadMode_ == 1 ? QStringLiteral("pad")
-                                                                  : QStringLiteral("off"));
+    if (const auto choice = touchpadChoiceForDraftMode(applyTouchpadMode_)) {
+        setTouchpadMode(applyConnectionId_, *choice);
+    }
     setRumbleEnabled(applySlotId_, applyRumbleOn_);
     setMicEnabled(applySlotId_, applyMicOn_);
     setSpeakerEnabled(applySlotId_, applySpeakerOn_);
@@ -1850,6 +1910,146 @@ void AppViewModel::openReleaseNotes() {
 void AppViewModel::acknowledgeUpdated() {
     model_->updates()->acknowledgeUpdated();
     emit updateChanged();
+}
+
+// ── Diagnostics ─────────────────────────────────────────────────────────────
+
+QVariantList AppViewModel::diagnosticsHosts() const {
+    QVariantList out;
+    for (const auto& link : model_->connections()->connections().value()) {
+        const auto* conn = model_->wifi()->get(QString::fromStdString(link.id));
+        const HostSessionFacts facts =
+            conn != nullptr ? hostSessionFactsOf(*conn) : HostSessionFacts{};
+        out.append(hostCardRow(link, facts));
+    }
+    return out;
+}
+
+// A slot drives one destination at a time, and the two host kinds keep separate
+// tables, so the Moonlight side is asked first and the satellite side after.
+QVariantMap AppViewModel::bindingDiagnostics(const QString& slotId) const {
+    const auto* slot = slotById(slotId);
+    if (slot == nullptr) { return {}; }
+    const QString moonlightHost = model_->moonlight()->boundHostFor(slotId);
+    if (!moonlightHost.isEmpty()) { return moonlightBindingDiagnostics(*slot, moonlightHost); }
+    if (slot->boundConnectionId.has_value()) {
+        return satelliteBindingDiagnostics(*slot, *slot->boundConnectionId);
+    }
+    return {{QStringLiteral("bound"), false}};
+}
+
+QVariantMap AppViewModel::satelliteBindingDiagnostics(const models::ControllerSlot& slot,
+                                                      const QString& hostId) const {
+    const auto* conn = model_->wifi()->get(hostId);
+    const BindingWireFacts wire =
+        conn != nullptr ? bindingWireFactsOf(*conn, slot.id) : BindingWireFacts{};
+    const int type = bindingTypeOf(wire, model_->currentTypeForConnection(hostId, slot.id));
+    const int touchpadPick = touchpadPickIndex(touchpadModeFor(hostId));
+    QVariantMap row = bindingWireRow(wire);
+    row[QStringLiteral("bound")] = true;
+    row[QStringLiteral("hostKind")] = QStringLiteral("satellite");
+    row[QStringLiteral("hostId")] = hostId;
+    row[QStringLiteral("hostLabel")] = composer::boundHostLabelOf(slot);
+    row[QStringLiteral("touchpadPick")] = touchpadPick;
+    row[QStringLiteral("solvedType")] = type;
+    row[QStringLiteral("typeName")] =
+        catalogTypeName(model_->pickableTypesForConnection(hostId), type);
+    row[QStringLiteral("capabilities")] =
+        capabilityForCandidate(slot.id, type, QStringLiteral("satellite"), hostId,
+                               tokens::desiredPathToken(slot.desiredPath),
+                               motionEnabledFor(slot.id), rumbleEnabledFor(slot.id), touchpadPick,
+                               micEnabledFor(slot.id), speakerEnabledFor(slot.id));
+    return row;
+}
+
+// No descriptor and no ack on this path: GameStream declares a pad on arrival
+// and reports nothing back, so the wire side stays undeclared. The type is the
+// binding's own, the one its bind sends, and the touchpad pick reads off, the
+// binding editor's own default for a Moonlight host.
+QVariantMap AppViewModel::moonlightBindingDiagnostics(const models::ControllerSlot& slot,
+                                                      const QString& hostId) const {
+    const int type = moonlightBindingType(slot.id);
+    QVariantMap row = bindingWireRow(BindingWireFacts{});
+    row[QStringLiteral("bound")] = true;
+    row[QStringLiteral("hostKind")] = QStringLiteral("moonlight");
+    row[QStringLiteral("hostId")] = hostId;
+    row[QStringLiteral("hostLabel")] = moonlightHostLabel(model_, hostId);
+    row[QStringLiteral("touchpadPick")] = kTouchpadPickOff;
+    row[QStringLiteral("solvedType")] = type;
+    row[QStringLiteral("capabilities")] = capabilityForCandidate(
+        slot.id, type, QStringLiteral("moonlight"), hostId,
+        tokens::desiredPathToken(slot.desiredPath), motionEnabledFor(slot.id),
+        rumbleEnabledFor(slot.id), kTouchpadPickOff, micEnabledFor(slot.id),
+        speakerEnabledFor(slot.id));
+    return row;
+}
+
+QVariantList AppViewModel::diagnosticsLog() const {
+    return diagnosticsLogRows(model_->diagnosticsLog().value());
+}
+
+void AppViewModel::copyToClipboard(const QString& text) const {
+    if (auto* clipboard = QGuiApplication::clipboard()) { clipboard->setText(text); }
+}
+
+void AppViewModel::startInputInspection(const QString& slotId) {
+    if (slotId != inspectedSlotId_) { stickBench_ = input::StickBench{}; }
+    inspectedSlotId_ = slotId;
+    inspectionTimer_->start();
+    onInspectionTick();
+}
+
+void AppViewModel::stopInputInspection() {
+    inspectionTimer_->stop();
+    inspectedSlotId_.clear();
+    stickBench_ = input::StickBench{};
+    publishInputSnapshot({});
+    publishStickTest(steadyNowMs());
+}
+
+void AppViewModel::startStickTest(const QString& kind) {
+    const auto parsed = stickTestKindFrom(kind);
+    if (inspectedSlotId_.isEmpty() || !parsed.has_value()) { return; }
+    const std::int64_t now = steadyNowMs();
+    stickBench_.start(*parsed, now);
+    publishStickTest(now);
+}
+
+bool AppViewModel::canTestRumble(const QString& slotId) const {
+    return model_->slotCarriesRumble(slotId);
+}
+
+void AppViewModel::testRumble(const QString& slotId, const QString& motor) {
+    const auto parsed = buzzMotorFrom(motor);
+    if (!parsed.has_value()) { return; }
+    model_->testRumble(slotId, reducer::testBuzzFor(*parsed));
+}
+
+// The stick tests read the report as the pad sent it: a drift the dead zone
+// hides is still the drift they have to measure.
+void AppViewModel::onInspectionTick() {
+    const auto seen = model_->processor()->inspect(inspectedSlotId_.toStdString());
+    publishInputSnapshot(inputSnapshotRow(seen));
+    if (seen.raw.has_value()) {
+        stickBench_.sample(input::stickSampleOf(seen.raw->lx, seen.raw->ly),
+                           input::stickSampleOf(seen.raw->rx, seen.raw->ry));
+    }
+    const std::int64_t now = steadyNowMs();
+    stickBench_.advance(now);
+    publishStickTest(now);
+}
+
+void AppViewModel::publishInputSnapshot(const QVariantMap& snapshot) {
+    if (snapshot == inputSnapshot_) { return; }
+    inputSnapshot_ = snapshot;
+    emit inputSnapshotChanged();
+}
+
+void AppViewModel::publishStickTest(std::int64_t nowMs) {
+    const QVariantMap next = stickTestRow(stickBench_, nowMs);
+    if (next == stickTest_) { return; }
+    stickTest_ = next;
+    emit stickTestChanged();
 }
 
 } // namespace dish::qml

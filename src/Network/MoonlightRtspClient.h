@@ -69,6 +69,9 @@ class MoonlightRtspClient {
                                                 const std::map<std::string, std::string>& options,
                                                 const std::string& payload = {});
     std::optional<moonlight::RtspResponse> setup(const std::string& streamId);
+
+    // The three SETUP exchanges, read into the result the caller returns.
+    std::optional<RtspHandshakeResult> negotiateStreams();
     int nextCseq() { return ++cseq_; }
 
     std::string host_;

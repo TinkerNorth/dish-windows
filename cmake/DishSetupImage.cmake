@@ -103,34 +103,45 @@ endif()
 file(MAKE_DIRECTORY "${IMAGE_DIR}/Dish/Chrome")
 file(COPY "${QMLDIR_FILE}" DESTINATION "${IMAGE_DIR}/Dish/Chrome")
 
-# --- 4. Non-Qt runtime DLLs (libsodium, SDL2) --------------------------------
-# windeployqt walks Qt's own dependency graph and nothing else, so the two
-# vcpkg libraries dish.exe imports directly would be missing from the image and
-# the installed app would fail to start with 0xc0000135 before drawing a pixel.
+# --- 4. Non-Qt runtime DLLs, by name -----------------------------------------
+# windeployqt walks Qt's own dependency graph and nothing else, so the vcpkg
+# libraries dish.exe imports directly would be missing from the image and the
+# installed app would fail to start with 0xc0000135 before drawing a pixel.
 # vcpkg's applocal step drops them beside the freshly linked exe, which is
-# where this picks them up: anything already staged (every Qt6*.dll and the
-# graphics fallbacks) is skipped, so a new dependency is staged automatically
-# instead of silently going missing.
+# where this picks them up, BY NAME and never as "every DLL there": that
+# directory is the test binary's as well, and holds what the tests need and
+# the app must not carry (section 7). The list is scripts/stage-bundle.ps1's,
+# which stages the portable zip the same way, so a new import joins both; a
+# missing one fails the staging, named. SDL2 carries a d suffix in a Debug
+# tree, and sentry.dll is there when the build has the optional Sentry SDK.
 get_filename_component(_build_bin_dir "${DISH_EXE}" DIRECTORY)
-file(GLOB _build_dlls "${_build_bin_dir}/*.dll")
-set(_extra_dlls "")
-foreach(_dll IN LISTS _build_dlls)
-    get_filename_component(_dll_name "${_dll}" NAME)
-    if(NOT EXISTS "${IMAGE_DIR}/${_dll_name}")
-        file(COPY "${_dll}" DESTINATION "${IMAGE_DIR}")
-        list(APPEND _extra_dlls "${_dll_name}")
+if(DEPLOY_CONFIG STREQUAL "Debug")
+    set(_sdl2_dll SDL2d.dll)
+else()
+    set(_sdl2_dll SDL2.dll)
+endif()
+set(_runtime_dlls libsodium.dll ${_sdl2_dll} opus.dll libcrypto-3-x64.dll)
+foreach(_dll IN LISTS _runtime_dlls)
+    if(NOT EXISTS "${_build_bin_dir}/${_dll}")
+        message(FATAL_ERROR
+            "No ${_dll} beside ${_dish_exe_name}: vcpkg's applocal step puts it "
+            "there when the exe is linked, and the image cannot start without it")
     endif()
 endforeach()
-if(_extra_dlls)
-    list(JOIN _extra_dlls ", " _extra_dlls_text)
-    message(STATUS "Staged non-Qt runtime DLLs: ${_extra_dlls_text}")
+if(EXISTS "${_build_bin_dir}/sentry.dll")
+    list(APPEND _runtime_dlls sentry.dll)
 endif()
+foreach(_dll IN LISTS _runtime_dlls)
+    file(COPY "${_build_bin_dir}/${_dll}" DESTINATION "${IMAGE_DIR}")
+endforeach()
+list(JOIN _runtime_dlls ", " _runtime_dlls_text)
+message(STATUS "Staged non-Qt runtime DLLs: ${_runtime_dlls_text}")
 
-# crashpad_handler.exe is the one runtime part the glob above cannot see: it
-# is an executable, not a DLL, and it is a separate PROCESS sentry-native
-# spawns to capture a crash rather than something dish.exe imports. Missing,
-# the installed app starts and runs perfectly and reports nothing at all, so
-# it is staged by name and its absence is worth failing the image build over.
+# crashpad_handler.exe goes with sentry.dll, and is not a DLL at all: it is
+# an executable, a separate PROCESS sentry-native spawns to capture a crash
+# rather than something dish.exe imports. Missing, the installed app starts
+# and runs perfectly and reports nothing at all, so it is staged by name and
+# its absence is worth failing the image build over.
 set(_crashpad "${_build_bin_dir}/crashpad_handler.exe")
 if(EXISTS "${_crashpad}")
     file(COPY "${_crashpad}" DESTINATION "${IMAGE_DIR}")
@@ -171,7 +182,19 @@ configure_file("${SRC_DIR}/THIRD_PARTY.md" "${IMAGE_DIR}/licenses/THIRD_PARTY.md
 configure_file("${SRC_DIR}/packaging/fonts/Inter-LICENSE.txt"
                "${IMAGE_DIR}/licenses/Inter-LICENSE.txt" COPYONLY)
 
-# --- 7. Summary --------------------------------------------------------------
+# --- 7. What must not ship ---------------------------------------------------
+# libssl is not part of Dish: TLS rides Qt's Schannel backend and the Moonlight
+# code links libcrypto alone (THIRD_PARTY.md). Qt takes OpenSSL over Schannel
+# whenever it can load it, so a libssl in the image would move every installed
+# Dish off the backend it ships on. The build tree keeps one for the tests
+# (tests/CMakeLists.txt), and this is what proves it never reaches an image.
+file(GLOB_RECURSE _image_libssl LIST_DIRECTORIES false "${IMAGE_DIR}/libssl*")
+if(_image_libssl)
+    list(JOIN _image_libssl ", " _image_libssl_text)
+    message(FATAL_ERROR "The install image carries ${_image_libssl_text}; libssl never ships")
+endif()
+
+# --- 8. Summary --------------------------------------------------------------
 file(GLOB_RECURSE _image_files LIST_DIRECTORIES false "${IMAGE_DIR}/*")
 set(_image_bytes 0)
 foreach(_file IN LISTS _image_files)

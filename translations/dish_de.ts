@@ -257,6 +257,14 @@
         <source>The driver this controller is on can’t drive it.</source>
         <translation>Der Treiber, auf dem dieser Controller läuft, kann das nicht ansteuern.</translation>
     </message>
+    <message>
+        <source>Dish can’t use the touchpad as a mouse.</source>
+        <translation>Dish kann das Touchpad nicht als Maus verwenden.</translation>
+    </message>
+    <message>
+        <source>Haptics</source>
+        <translation>Haptik</translation>
+    </message>
 </context>
 <context>
     <name>BindingStrip</name>
@@ -835,24 +843,8 @@
         <translation>Gefunden</translation>
     </message>
     <message>
-        <source>Needs pairing</source>
-        <translation>Kopplung nötig</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
-    </message>
-    <message>
-        <source>Ready</source>
-        <translation>Bereit</translation>
-    </message>
-    <message>
         <source>Connecting…</source>
         <translation>Verbindet…</translation>
-    </message>
-    <message>
-        <source>Online</source>
-        <translation>Online</translation>
     </message>
     <message>
         <source>Scanning…</source>
@@ -1003,10 +995,6 @@
     <message>
         <source>%1 — as %2</source>
         <translation>%1 — als %2</translation>
-    </message>
-    <message>
-        <source>Unsteady</source>
-        <translation>Instabil</translation>
     </message>
     <message>
         <source>Moonlight hosts</source>
@@ -1484,6 +1472,419 @@
     </message>
 </context>
 <context>
+    <name>DiagnosticsPage</name>
+    <message>
+        <source>Diagnostics</source>
+        <translation>Diagnose</translation>
+    </message>
+    <message>
+        <source>Controller inspector</source>
+        <translation>Controller-Inspektor</translation>
+    </message>
+    <message>
+        <source>in step</source>
+        <translation>stimmt überein</translation>
+    </message>
+    <message>
+        <source>out of step</source>
+        <translation>weicht ab</translation>
+    </message>
+    <message>
+        <source>waiting for the first heartbeat</source>
+        <translation>wartet auf den ersten Heartbeat</translation>
+    </message>
+    <message>
+        <source>none</source>
+        <translation>keine</translation>
+    </message>
+    <message>
+        <source>v%1</source>
+        <translation>v%1</translation>
+    </message>
+    <message>
+        <source>available</source>
+        <translation>verfügbar</translation>
+    </message>
+    <message>
+        <source>unavailable</source>
+        <translation>nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>unknown</source>
+        <translation>unbekannt</translation>
+    </message>
+    <message>
+        <source>no samples yet</source>
+        <translation>noch keine Messwerte</translation>
+    </message>
+    <message>
+        <source>%1 p50 · %2 p99 · %3 one way</source>
+        <translation>%1 p50 · %2 p99 · %3 einfache Strecke</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adresse</translation>
+    </message>
+    <message>
+        <source>%1 • UDP %2</source>
+        <translation>%1 • UDP %2</translation>
+    </message>
+    <message>
+        <source>Protocol</source>
+        <translation>Protokoll</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Sitzung</translation>
+    </message>
+    <message>
+        <source>No session right now</source>
+        <translation>Gerade keine Sitzung</translation>
+    </message>
+    <message>
+        <source>Epoch</source>
+        <translation>Epoche</translation>
+    </message>
+    <message>
+        <source>Controllers</source>
+        <translation>Controller</translation>
+    </message>
+    <message>
+        <source>Virtual controllers</source>
+        <translation>Virtuelle Controller</translation>
+    </message>
+    <message>
+        <source>Round trip</source>
+        <translation>Round-Trip</translation>
+    </message>
+    <message>
+        <source>Missed heartbeats</source>
+        <translation>Verpasste Heartbeats</translation>
+    </message>
+    <message>
+        <source>Mouse control</source>
+        <translation>Maussteuerung</translation>
+    </message>
+    <message>
+        <source>granted</source>
+        <translation>gewährt</translation>
+    </message>
+    <message>
+        <source>not granted</source>
+        <translation>nicht gewährt</translation>
+    </message>
+    <message>
+        <source>USB direct</source>
+        <translation>USB direkt</translation>
+    </message>
+    <message>
+        <source>Bluetooth</source>
+        <translation>Bluetooth</translation>
+    </message>
+    <message>
+        <source>USB standard</source>
+        <translation>USB standard</translation>
+    </message>
+    <message>
+        <source>through the system driver</source>
+        <translation>über den Systemtreiber</translation>
+    </message>
+    <message>
+        <source>claiming</source>
+        <translation>wird übernommen</translation>
+    </message>
+    <message>
+        <source>claimed</source>
+        <translation>übernommen</translation>
+    </message>
+    <message>
+        <source>waiting for the system to hand it back</source>
+        <translation>wartet, bis das System es zurückgibt</translation>
+    </message>
+    <message>
+        <source>stuck returning to Standard</source>
+        <translation>hängt bei der Rückkehr zu Standard</translation>
+    </message>
+    <message>
+        <source>needs a replug</source>
+        <translation>muss neu angeschlossen werden</translation>
+    </message>
+    <message>
+        <source>access denied</source>
+        <translation>Zugriff verweigert</translation>
+    </message>
+    <message>
+        <source>held by another app</source>
+        <translation>von einer anderen App belegt</translation>
+    </message>
+    <message>
+        <source>sent no reports</source>
+        <translation>hat keine Reports gesendet</translation>
+    </message>
+    <message>
+        <source>dropped during the claim</source>
+        <translation>während der Übernahme abgefallen</translation>
+    </message>
+    <message>
+        <source>Direct</source>
+        <translation>Direkt</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <source>poll %1</source>
+        <translation>Abfrage %1</translation>
+    </message>
+    <message>
+        <source>motion %1</source>
+        <translation>Bewegung %1</translation>
+    </message>
+    <message>
+        <source>no reports yet</source>
+        <translation>noch keine Reports</translation>
+    </message>
+    <message>
+        <source>wired</source>
+        <translation>am Kabel</translation>
+    </message>
+    <message>
+        <source>full</source>
+        <translation>voll</translation>
+    </message>
+    <message>
+        <source>%1%, charging</source>
+        <translation>%1 %, lädt</translation>
+    </message>
+    <message>
+        <source>%1%</source>
+        <translation>%1 %</translation>
+    </message>
+    <message>
+        <source>Moonlight</source>
+        <translation>Moonlight</translation>
+    </message>
+    <message>
+        <source>Satellite</source>
+        <translation>Satellit</translation>
+    </message>
+    <message>
+        <source>yes</source>
+        <translation>ja</translation>
+    </message>
+    <message>
+        <source>no</source>
+        <translation>nein</translation>
+    </message>
+    <message>
+        <source>nothing</source>
+        <translation>nichts</translation>
+    </message>
+    <message>
+        <source>pad</source>
+        <translation>Pad</translation>
+    </message>
+    <message>
+        <source>mouse</source>
+        <translation>Maus</translation>
+    </message>
+    <message>
+        <source>off</source>
+        <translation>aus</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Verbindung</translation>
+    </message>
+    <message>
+        <source>Path</source>
+        <translation>Pfad</translation>
+    </message>
+    <message>
+        <source>Input rate</source>
+        <translation>Eingaberate</translation>
+    </message>
+    <message>
+        <source>Battery</source>
+        <translation>Akku</translation>
+    </message>
+    <message>
+        <source>Binding</source>
+        <translation>Zuordnung</translation>
+    </message>
+    <message>
+        <source>Not bound</source>
+        <translation>Nicht zugeordnet</translation>
+    </message>
+    <message>
+        <source>On the wire</source>
+        <translation>Zum Host</translation>
+    </message>
+    <message>
+        <source>A Moonlight host reports nothing back about its controllers</source>
+        <translation>Ein Moonlight-Host meldet zu seinen Controllern nichts zurück</translation>
+    </message>
+    <message>
+        <source>Not declared to the host yet</source>
+        <translation>Dem Host noch nicht gemeldet</translation>
+    </message>
+    <message>
+        <source>Controller index</source>
+        <translation>Controller-Index</translation>
+    </message>
+    <message>
+        <source>Confirmed by host</source>
+        <translation>Vom Host bestätigt</translation>
+    </message>
+    <message>
+        <source>Streaming</source>
+        <translation>Streamt</translation>
+    </message>
+    <message>
+        <source>Advertised</source>
+        <translation>Angekündigt</translation>
+    </message>
+    <message>
+        <source>Touchpad on the wire</source>
+        <translation>Touchpad zum Host</translation>
+    </message>
+    <message>
+        <source>%1: appeared, %2</source>
+        <translation>%1: erschienen, %2</translation>
+    </message>
+    <message>
+        <source>%1: %2 → %3</source>
+        <translation>%1: %2 → %3</translation>
+    </message>
+    <message>
+        <source>%1: removed</source>
+        <translation>%1: entfernt</translation>
+    </message>
+    <message>
+        <source>%1: attached (%2)</source>
+        <translation>%1: verbunden (%2)</translation>
+    </message>
+    <message>
+        <source>%1: detached</source>
+        <translation>%1: getrennt</translation>
+    </message>
+    <message>
+        <source>%1: needs a replug</source>
+        <translation>%1: muss neu angeschlossen werden</translation>
+    </message>
+    <message>
+        <source>%1: stuck returning to Standard</source>
+        <translation>%1: hängt bei der Rückkehr zu Standard</translation>
+    </message>
+    <message>
+        <source>%1: Direct claim failed (%2)</source>
+        <translation>%1: Direkt-Übernahme fehlgeschlagen (%2)</translation>
+    </message>
+    <message>
+        <source>%1: bound to %2</source>
+        <translation>%1: %2 zugeordnet</translation>
+    </message>
+    <message>
+        <source>%1: unbound from %2</source>
+        <translation>%1: Zuordnung zu %2 aufgehoben</translation>
+    </message>
+    <message>
+        <source>Events copied.</source>
+        <translation>Ereignisse kopiert.</translation>
+    </message>
+    <message>
+        <source>Hosts</source>
+        <translation>Hosts</translation>
+    </message>
+    <message>
+        <source>No satellites yet. Pair one on the Connections page and its session shows here.</source>
+        <translation>Noch keine Satelliten. Koppele einen auf der Seite Verbindungen, dann erscheint seine Sitzung hier.</translation>
+    </message>
+    <message>
+        <source>Controller audio</source>
+        <translation>Controller-Audio</translation>
+    </message>
+    <message>
+        <source>No controllers connected.</source>
+        <translation>Keine Controller verbunden.</translation>
+    </message>
+    <message>
+        <source>Inspect input</source>
+        <translation>Eingabe prüfen</translation>
+    </message>
+    <message>
+        <source>Events</source>
+        <translation>Ereignisse</translation>
+    </message>
+    <message>
+        <source>No events yet.</source>
+        <translation>Noch keine Ereignisse.</translation>
+    </message>
+    <message>
+        <source>Copy events</source>
+        <translation>Ereignisse kopieren</translation>
+    </message>
+    <message>
+        <source>Newest first. The log covers this run of Dish and is not saved.</source>
+        <translation>Neueste zuerst. Das Protokoll umfasst diesen Start von Dish und wird nicht gespeichert.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n in use</source>
+        <translation>
+            <numerusform>%n in Verwendung</numerusform>
+            <numerusform>%n in Verwendung</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>%1 (offered v%2)</source>
+        <translation>%1 (angeboten: v%2)</translation>
+    </message>
+    <message>
+        <source>applied: %1</source>
+        <translation>angewendet: %1</translation>
+    </message>
+    <message>
+        <source>on the host: %1 · applied: %2</source>
+        <translation>auf dem Host: %1 · angewendet: %2</translation>
+    </message>
+    <message>
+        <source>confirmed: %1</source>
+        <translation>bestätigt: %1</translation>
+    </message>
+    <message>
+        <source>on the host: %1 · confirmed: %2</source>
+        <translation>auf dem Host: %1 · bestätigt: %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 of %n pings</source>
+        <translation>
+            <numerusform>%1 von %n Ping</numerusform>
+            <numerusform>%1 von %n Pings</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Not available</source>
+        <translation>Nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>An</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Aus</translation>
+    </message>
+    <message>
+        <source>Radios</source>
+        <translation>Funk</translation>
+    </message>
+    <message>
+        <source>Adapter</source>
+        <translation>Adapter</translation>
+    </message>
+</context>
+<context>
     <name>DonatePage</name>
     <message>
         <source>Support Dish</source>
@@ -1806,30 +2207,6 @@
         <translation>aktiv</translation>
     </message>
     <message>
-        <source>Found</source>
-        <translation>Gefunden</translation>
-    </message>
-    <message>
-        <source>Needs pairing</source>
-        <translation>Kopplung nötig</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
-    </message>
-    <message>
-        <source>Ready</source>
-        <translation>Bereit</translation>
-    </message>
-    <message>
-        <source>Connecting…</source>
-        <translation>Verbindet…</translation>
-    </message>
-    <message>
-        <source>Online</source>
-        <translation>Online</translation>
-    </message>
-    <message>
         <source>Set up a controller</source>
         <translation>Controller einrichten</translation>
     </message>
@@ -1944,20 +2321,12 @@
         <translation>standard</translation>
     </message>
     <message>
-        <source>Standard mode can’t carry it — switch to Direct.</source>
-        <translation>Der Standardmodus kann das nicht übertragen — wechsle zu Direkt.</translation>
-    </message>
-    <message>
         <source>no gyro · pad</source>
         <translation>kein Gyro · Pad</translation>
     </message>
     <message>
         <source>No gyro on this controller.</source>
         <translation>Dieser Controller hat kein Gyro.</translation>
-    </message>
-    <message>
-        <source>no gyro · link</source>
-        <translation>kein Gyro · Verbindung</translation>
     </message>
     <message>
         <source>gyro off</source>
@@ -1978,10 +2347,6 @@
     <message>
         <source>No touchpad on this controller.</source>
         <translation>Dieser Controller hat kein Touchpad.</translation>
-    </message>
-    <message>
-        <source>no touchpad · link</source>
-        <translation>kein Touchpad · Verbindung</translation>
     </message>
     <message>
         <source>touchpad off</source>
@@ -2036,13 +2401,176 @@
         <translation>Totzonen Stick %1 % · Trigger %2 %</translation>
     </message>
     <message>
-        <source>Unsteady</source>
-        <translation>Instabil</translation>
-    </message>
-    <message>
         <source>Pad</source>
         <comment>the controller column of the wire diagram</comment>
         <translation>Controller</translation>
+    </message>
+</context>
+<context>
+    <name>InputInspectorPage</name>
+    <message>
+        <source>Controller inspector</source>
+        <translation>Controller-Inspektor</translation>
+    </message>
+    <message>
+        <source>%1%</source>
+        <translation>%1 %</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Zurück</translation>
+    </message>
+    <message>
+        <source>Guide</source>
+        <translation>Guide</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>Stumm</translation>
+    </message>
+    <message>
+        <source>Pressed: %1</source>
+        <translation>Gedrückt: %1</translation>
+    </message>
+    <message>
+        <source>none</source>
+        <translation>keine</translation>
+    </message>
+    <message>
+        <source>%1 across, %2 down</source>
+        <translation>%1 horizontal, %2 vertikal</translation>
+    </message>
+    <message>
+        <source>Capturing… %1 s</source>
+        <translation>Messung läuft… %1 s</translation>
+    </message>
+    <message>
+        <source>The controller sent nothing during the test.</source>
+        <translation>Der Controller hat während des Tests nichts gesendet.</translation>
+    </message>
+    <message>
+        <source>Resting drift: L %1 · R %2. Suggested dead zone: %3.</source>
+        <translation>Ruhe-Drift: L %1 · R %2. Empfohlene Totzone: %3.</translation>
+    </message>
+    <message>
+        <source>Reach: L %1 · R %2. Circularity error: L %3 · R %4.</source>
+        <translation>Ausschlag: L %1 · R %2. Rundheitsfehler: L %3 · R %4.</translation>
+    </message>
+    <message>
+        <source>n/a</source>
+        <translation>k. A.</translation>
+    </message>
+    <message>
+        <source>Left stick</source>
+        <translation>Linker Stick</translation>
+    </message>
+    <message>
+        <source>Right stick</source>
+        <translation>Rechter Stick</translation>
+    </message>
+    <message>
+        <source>Left trigger</source>
+        <translation>Linker Trigger</translation>
+    </message>
+    <message>
+        <source>Right trigger</source>
+        <translation>Rechter Trigger</translation>
+    </message>
+    <message>
+        <source>Live input</source>
+        <translation>Live-Eingabe</translation>
+    </message>
+    <message>
+        <source>Waiting for this controller&apos;s first report. Move a stick or press a button.</source>
+        <translation>Warte auf den ersten Report dieses Controllers. Bewege einen Stick oder drücke eine Taste.</translation>
+    </message>
+    <message>
+        <source>%1: %2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <source>This is the input as it goes to the host, after the dead zones.</source>
+        <translation>So geht die Eingabe an den Host, nach den Totzonen.</translation>
+    </message>
+    <message>
+        <source>Motion and touch</source>
+        <translation>Bewegung und Touch</translation>
+    </message>
+    <message>
+        <source>Gyro: %1 · %2 · %3 deg/s</source>
+        <translation>Gyro: %1 · %2 · %3 °/s</translation>
+    </message>
+    <message>
+        <source>No motion data from this controller.</source>
+        <translation>Keine Bewegungsdaten von diesem Controller.</translation>
+    </message>
+    <message>
+        <source>Accel: %1 · %2 · %3 g</source>
+        <translation>Beschl.: %1 · %2 · %3 g</translation>
+    </message>
+    <message>
+        <source>Finger 1: %1 · Finger 2: %2 · Click: %3</source>
+        <translation>Finger 1: %1 · Finger 2: %2 · Klick: %3</translation>
+    </message>
+    <message>
+        <source>pressed</source>
+        <translation>gedrückt</translation>
+    </message>
+    <message>
+        <source>No touch data from this controller.</source>
+        <translation>Keine Touch-Daten von diesem Controller.</translation>
+    </message>
+    <message>
+        <source>Stick tests</source>
+        <translation>Stick-Tests</translation>
+    </message>
+    <message>
+        <source>The tests read the sticks as the controller sends them, before the dead zones.</source>
+        <translation>Die Tests lesen die Sticks so, wie der Controller sie sendet, vor den Totzonen.</translation>
+    </message>
+    <message>
+        <source>Drift test (hands off the sticks)</source>
+        <translation>Drift-Test (Sticks nicht berühren)</translation>
+    </message>
+    <message>
+        <source>Range test (sweep full circles)</source>
+        <translation>Bereichstest (volle Kreise ziehen)</translation>
+    </message>
+    <message>
+        <source>Rumble test</source>
+        <translation>Vibrationstest</translation>
+    </message>
+    <message>
+        <source>A short buzz straight to the controller, whatever its rumble switch says.</source>
+        <translation>Ein kurzes Vibrieren direkt am Controller, unabhängig vom Vibrationsschalter.</translation>
+    </message>
+    <message>
+        <source>This controller has no rumble motors on the path it is on now.</source>
+        <translation>Dieser Controller hat auf seinem jetzigen Pfad keine Vibrationsmotoren.</translation>
+    </message>
+    <message>
+        <source>Weak</source>
+        <translation>Schwach</translation>
+    </message>
+    <message>
+        <source>Strong</source>
+        <translation>Stark</translation>
+    </message>
+    <message>
+        <source>Both</source>
+        <translation>Beide</translation>
+    </message>
+    <message>
+        <source>lifted</source>
+        <translation>angehoben</translation>
+    </message>
+    <message>
+        <source>released</source>
+        <translation>losgelassen</translation>
     </message>
 </context>
 <context>
@@ -2639,6 +3167,26 @@
         <source>Direct mode can’t drive it — switch the connection to Standard.</source>
         <translation>Der Direktmodus kann das nicht ansteuern — wechsle die Verbindung zu Standard.</translation>
     </message>
+    <message>
+        <source>StickPlot</source>
+        <translation>StickPlot</translation>
+    </message>
+    <message>
+        <source>At rest</source>
+        <translation>In Ruhe</translation>
+    </message>
+    <message>
+        <source>Deflected</source>
+        <translation>Ausgelenkt</translation>
+    </message>
+    <message>
+        <source>At the rim</source>
+        <translation>Am Rand</translation>
+    </message>
+    <message>
+        <source>Not reporting</source>
+        <translation>Meldet nichts</translation>
+    </message>
 </context>
 <context>
     <name>LicensesPage</name>
@@ -2688,6 +3236,34 @@
     <message>
         <source>Dish update required</source>
         <translation>Dish-Update erforderlich</translation>
+    </message>
+    <message>
+        <source>Found</source>
+        <translation>Gefunden</translation>
+    </message>
+    <message>
+        <source>Needs pairing</source>
+        <translation>Kopplung nötig</translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation>Offline</translation>
+    </message>
+    <message>
+        <source>Ready</source>
+        <translation>Bereit</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Verbindet…</translation>
+    </message>
+    <message>
+        <source>Online</source>
+        <translation>Online</translation>
+    </message>
+    <message>
+        <source>Unsteady</source>
+        <translation>Instabil</translation>
     </message>
 </context>
 <context>
@@ -2790,10 +3366,6 @@
         <translation>%1, Moonlight-Host, %2</translation>
     </message>
     <message>
-        <source>Moonlight host (Sunshine/Apollo)</source>
-        <translation>Moonlight-Host (Sunshine/Apollo)</translation>
-    </message>
-    <message>
         <source>Pair…</source>
         <translation>Koppeln…</translation>
     </message>
@@ -2891,6 +3463,10 @@
     <message>
         <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
         <translation>Dish löscht seine Kopplung. Der Host behält seinen eigenen Eintrag, bis dort jemand Dish entfernt, und Sie brauchen die PIN erneut.</translation>
+    </message>
+    <message>
+        <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
+        <translation>Moonlight-Host (Sunshine, Apollo oder Wolf)</translation>
     </message>
 </context>
 <context>
@@ -2993,6 +3569,10 @@
     <message>
         <source>Pairing PIN, 6 digits</source>
         <translation>Kopplungs-PIN, 6 Stellen</translation>
+    </message>
+    <message>
+        <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
+        <translation>Die Sicherheitsidentität dieses Satelliten hat sich geändert. Falls er neu installiert wurde, entferne ihn hier und koppele erneut.</translation>
     </message>
 </context>
 <context>
@@ -3296,6 +3876,14 @@
     <message>
         <source>The notification area refused the icon, so closing the window quits Dish.</source>
         <translation>Der Infobereich hat das Symbol abgelehnt, daher beendet das Schließen des Fensters Dish.</translation>
+    </message>
+    <message>
+        <source>Diagnostics…</source>
+        <translation>Diagnose…</translation>
+    </message>
+    <message>
+        <source>Each host&apos;s session, each controller down to the wire, and a log of what changed.</source>
+        <translation>Die Sitzung jedes Hosts, jeder Controller bis zur Übertragung und ein Protokoll der Änderungen.</translation>
     </message>
 </context>
 <context>
@@ -3947,6 +4535,10 @@
         <source>Audio from the host plays on the pad’s speaker or headset.</source>
         <translation>Ton vom Host läuft über den Lautsprecher oder das Headset des Pads.</translation>
     </message>
+    <message>
+        <source>Forwards this pad’s touchpad to the game as a touchpad.</source>
+        <translation>Leitet das Touchpad dieses Pads als Touchpad an das Spiel weiter.</translation>
+    </message>
 </context>
 <context>
     <name>WizardInputPage</name>
@@ -4515,10 +5107,80 @@
     </message>
 </context>
 <context>
+    <name>dish::models::DiscoverySource</name>
+    <message>
+        <source>UDP broadcast</source>
+        <translation>UDP-Broadcast</translation>
+    </message>
+    <message>
+        <source>mDNS</source>
+        <translation>mDNS</translation>
+    </message>
+    <message>
+        <source>mDNS + broadcast</source>
+        <translation>mDNS + Broadcast</translation>
+    </message>
+</context>
+<context>
+    <name>dish::net::PairingOutcome</name>
+    <message>
+        <source>Server unreachable</source>
+        <translation>Server nicht erreichbar</translation>
+    </message>
+</context>
+<context>
     <name>dish::net::WifiConnectionManager</name>
     <message>
         <source>Refusing to connect to a non-local address (%1).</source>
         <translation>Verbindung zu einer nicht lokalen Adresse (%1) wird verweigert.</translation>
+    </message>
+    <message>
+        <source>Server unreachable — check it&apos;s powered on and on the same Wi-Fi.</source>
+        <translation>Server nicht erreichbar. Prüfe, ob er eingeschaltet und im selben WLAN ist.</translation>
+    </message>
+    <message>
+        <source>This satellite no longer recognizes this device. Re-pair needed.</source>
+        <translation>Dieser Satellit erkennt dieses Gerät nicht mehr. Bitte neu koppeln.</translation>
+    </message>
+    <message>
+        <source>This app and the satellite speak different protocol versions.</source>
+        <translation>Diese App und der Satellit sprechen unterschiedliche Protokollversionen.</translation>
+    </message>
+    <message>
+        <source>This satellite needs a newer version of Dish. Update the app and retry.</source>
+        <translation>Dieser Satellit braucht eine neuere Version von Dish. Aktualisiere die App und versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>This satellite is too old for this version of Dish. Update the satellite.</source>
+        <translation>Dieser Satellit ist zu alt für diese Version von Dish. Aktualisiere den Satelliten.</translation>
+    </message>
+    <message>
+        <source>That PIN wasn&apos;t accepted. Check the code on the satellite and try again.</source>
+        <translation>Diese PIN wurde nicht akzeptiert. Prüfe den Code auf dem Satelliten und versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>The satellite hasn&apos;t confirmed pairing yet. Try again in a moment.</source>
+        <translation>Der Satellit hat die Kopplung noch nicht bestätigt. Versuche es gleich noch einmal.</translation>
+    </message>
+    <message>
+        <source>The satellite declined this device. Pairing was not approved.</source>
+        <translation>Der Satellit hat dieses Gerät abgelehnt. Die Kopplung wurde nicht bestätigt.</translation>
+    </message>
+    <message>
+        <source>Timed out waiting for approval on the satellite. Try again.</source>
+        <translation>Zeitüberschreitung beim Warten auf die Bestätigung am Satelliten. Versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>The satellite accepted, but the controller link would not open. Try again.</source>
+        <translation>Der Satellit hat zugestimmt, aber die Controller-Verbindung ließ sich nicht öffnen. Versuche es erneut.</translation>
+    </message>
+    <message>
+        <source>Satellite can only be reached over IPv4, and this address (%1) is IPv6. Scan again to find its IPv4 address.</source>
+        <translation>Satellite ist nur über IPv4 erreichbar, und diese Adresse (%1) ist IPv6. Suche erneut, um seine IPv4-Adresse zu finden.</translation>
+    </message>
+    <message>
+        <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
+        <translation>Die Sicherheitsidentität dieses Satelliten hat sich geändert. Falls er neu installiert wurde, entferne ihn hier und koppele erneut.</translation>
     </message>
 </context>
 <context>

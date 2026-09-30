@@ -15,8 +15,10 @@
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
 #include "composer/CrashReportingBackend.h"
+#include "composer/DiagnosticsRecorder.h"
 #include "composer/BackgroundCoordinator.h"
 #include "composer/CrashReportingController.h"
+#include "composer/RumbleSwitchController.h"
 #include "composer/SleepCoordinator.h"
 #include "composer/TrayComposer.h"
 #include "composer/TrayController.h"
@@ -26,9 +28,12 @@
 #include "repository/AudioPreferenceRepository.h"
 #include "repository/DeadzoneRepository.h"
 #include "repository/MotionPreferenceRepository.h"
+#include "repository/RumblePreferenceRepository.h"
+#include "core/input/UsbReportParsers.h"
 #include "core/model/Protocol.h"
 #include "core/reducer/BindingPresence.h"
 #include "core/reducer/BatteryRouting.h"
+#include "core/reducer/FeedbackBench.h"
 #include "core/reducer/FeedbackRouting.h"
 #include "core/reducer/HostAudioVerdict.h"
 #include "core/reducer/MicIndicatorState.h"
@@ -48,6 +53,8 @@
 #include "source/store/AudioEnabledStore.h"
 #include "source/store/MicMuteStore.h"
 #include "source/store/MotionEnabledStore.h"
+#include "source/store/RumbleEnabledStore.h"
+#include "source/store/SlotSwitches.h"
 #include "source/store/OnboardingPreferenceStore.h"
 #include "source/store/TouchpadModeStore.h"
 #include "source/store/ThemePreferenceStore.h"
@@ -106,6 +113,11 @@ class AppModel : public QObject {
     // The reactive/command surface the UI binds to. Hot-path binding and
     // routing still live on hub().
     composer::ConnectionCoordinator* connections() { return connections_; }
+    // The flight recorder behind the Diagnostics page: link and pad events,
+    // oldest first and bounded, for this run only.
+    const arch::Observable<std::vector<reducer::DiagnosticsEvent>>& diagnosticsLog() const {
+        return diagnosticsLog_.state();
+    }
     // The Moonlight (GameStream) subsystem, a sibling of the Satellite manager.
     // Owns the host list, pairing and sessions for Sunshine/Apollo/Wolf hosts.
     net::MoonlightManager* moonlight() { return &moonlight_; }
@@ -134,6 +146,7 @@ class AppModel : public QObject {
 
     repository::DeadzoneRepository* deadzoneRepository() { return &deadzoneRepo_; }
     source::MotionEnabledStore* motionEnabledStore() { return &motionEnabledStore_; }
+    source::RumbleEnabledStore* rumbleEnabledStore() { return &rumbleEnabledStore_; }
     // The controller-audio toggles, persisted per binding slot like motion.
     // Mic defaults OFF (privacy), speaker ON; the stores own those defaults.
     source::MicEnabledStore* micEnabledStore() { return &micEnabledStore_; }
@@ -231,6 +244,19 @@ class AppModel : public QObject {
     // haptic lanes can be played rather than reduced by the host.
     bool slotCarriesHapticSink(const QString& slotId) const;
 
+    // The touchpadMode the slot's descriptor declares, one owner with anything
+    // that shows it. slotHardware covers the synthetic ids too, so a
+    // Direct-claimed pad that decodes its own touch block declares it: "off"
+    // makes the satellite drop every MSG_TOUCHPAD the forward path sends.
+    std::uint8_t declaredTouchpadMode(const QString& slotId) const;
+
+    // The Diagnostics bench. Whether the slot's pad can rumble on the path it is
+    // on now, and a test buzz that goes straight to the actuator: ungated by the
+    // binding's rumble switch, as dish-android's testBuzz is, so a pad whose
+    // rumble is switched off can still be tested.
+    bool slotCarriesRumble(const QString& slotId) const;
+    void testRumble(const QString& slotId, reducer::TestBuzz buzz);
+
     // Per-slot hardware truth read from the source layer that owns the slot:
     // the parser family for a synthetic (USB-direct) id, the SDL probe for a
     // framework id. The bind capability seams and the capability table read
@@ -254,6 +280,11 @@ class AppModel : public QObject {
         bool sdlEffects = false;
     };
     SlotHardware slotHardware(const QString& slotId) const;
+
+    // The two paths a slot's hardware can be known through, and the part they answer the same way.
+    static SlotHardware syntheticHardware(int vendorId, int productId);
+    SlotHardware sdlHardware(const QString& slotId) const;
+    static void applyOutputActuators(SlotHardware& hw, input::usbparse::HidParser parser);
 
     // The host layer for the mic/speaker rows ONLY: the per-session probe's
     // verdict off the connection, conservative {false,false} for an unknown or
@@ -297,6 +328,27 @@ class AppModel : public QObject {
 
   private:
     void rebuild();
+
+    // rebuild's passes, in the order it runs them. The three append* build the slot list, the
+    // cross-reference fills in what a binding adds, and the two republish* push the result to the
+    // input threads and the power inhibitor.
+    std::set<std::string>
+    hideSdlTwinsOfClaimedPads(const std::map<int, reducer::UsbController>& controllers,
+                              const QList<input::SDLGamepadBridge::Device>& sdlDevices);
+    void appendSdlSlots(const QList<input::SDLGamepadBridge::Device>& sdlDevices,
+                        const std::set<std::string>& hidden,
+                        const std::map<int, reducer::UsbController>& controllers,
+                        QList<models::ControllerSlot>& next,
+                        std::vector<reducer::PresentSlot>& presentPads);
+    void appendDirectSlots(const std::map<int, reducer::UsbController>& controllers,
+                           QList<models::ControllerSlot>& next,
+                           std::vector<reducer::PresentSlot>& presentPads);
+    void appendAwaitingClaimSlots(const std::map<int, reducer::UsbController>& controllers,
+                                  QList<models::ControllerSlot>& next,
+                                  std::vector<reducer::PresentSlot>& presentPads);
+    void crossReferenceBindings(QList<models::ControllerSlot>& next);
+    void republishRouting();
+    void republishStreamingCount(const QHash<QString, QString>& bindings);
     void onHubChanged();
     void onBridgeDevicesChanged();
     void onWifiEvent(const net::ConnectionEvent& evt);
@@ -304,6 +356,10 @@ class AppModel : public QObject {
     void onUsbNotice(const reducer::UsbController& c, reducer::UsbNotice notice);
     // Main thread only — it mutates the FSM.
     void pollUsbDirect();
+
+    // The poll-rate half of pollUsbDirect: sample, translate to slot keys, prune. True when the
+    // slot list has something new to render.
+    bool applyUsbPollRates(const std::map<int, reducer::UsbController>& controllers);
     void onUsbDirectChanged();
     // The read thread's battery edge, marshalled to the main thread.
     void onPadBatteryChanged(int vendorId, int productId, std::uint8_t level, std::uint8_t status);
@@ -328,6 +384,18 @@ class AppModel : public QObject {
     // Idempotent: invoked on every poolChanged so new connections get wired.
     void installRumbleHandlers();
 
+    // The seven feedback streams a satellite connection can send back. Each runs on that
+    // connection's receive thread.
+    void installFeedbackHandlers(net::WifiConnection& conn, const QString& id);
+    void onRumbleMessage(const QString& id, const net::SatelliteClient::RumbleMessage& rm);
+    void onLightbarMessage(const QString& id, const net::SatelliteClient::LightbarMessage& lm);
+    void onTriggerEffectsMessage(const QString& id,
+                                 const net::SatelliteClient::TriggerEffectsMessage& tm);
+    void onPlayerLedsMessage(const QString& id, const net::SatelliteClient::PlayerLedsMessage& pm);
+    void onPlayoutMessage(const QString& id, const net::SatelliteClient::SpeakerAudioMessage& sm,
+                          source::audio::PlayoutLane lane);
+    void onMicLedMessage(const QString& id, const net::SatelliteClient::MicLedMessage& mm);
+
     void syncInputRateDevices();
     // Emits stateChanged() only when a visible number moved, so a quiet 1 Hz
     // tick doesn't thrash the UI.
@@ -350,6 +418,12 @@ class AppModel : public QObject {
     // so an advertised capability and a delivered message can never disagree.
     reducer::SlotFeedbackInputs feedbackInputs(const QString& slotId) const;
 
+    // A host's rumble for a slot, through the user's rumble switch for it
+    // (reducer::rumbleTheUserAllows). Same threads as the actuators below.
+    void deliverRumble(const QString& slotId, std::uint16_t strong, std::uint16_t weak,
+                       std::uint16_t durationMs);
+    // Both motors to zero, for a slot whose rumble switch just went off.
+    void stopMotors(const QString& slotId);
     // Send one feedback report to whatever the slot can actuate. No-ops when
     // nothing can. Called on the SatelliteClient receive thread and on the
     // Moonlight control thread, so they only touch structures with their own
@@ -380,6 +454,29 @@ class AppModel : public QObject {
     // slot's binding, toggles, route, host verdict and mute. Runs at the end
     // of every rebuild(), which every relevant change funnels into.
     void reconcileAudioEngines();
+
+    // What one pass over the slots accumulates for the two engines, plus the two counts the
+    // app-wide microphone indicator folds.
+    struct AudioReconcile {
+        std::vector<source::audio::MicCaptureTarget> micTargets;
+        std::vector<source::audio::SpeakerVoiceTarget> speakerVoices;
+        std::vector<std::string> armedMicSlotIds;
+        int capturingMicSlots = 0;
+    };
+
+    // Null for a slot the engines have nothing to do with: unbound, Bluetooth, or bound to a
+    // connection that has since gone.
+    net::WifiConnection* audioConnectionFor(const models::ControllerSlot& s) const;
+
+    void collectMicForSlot(const models::ControllerSlot& s, net::WifiConnection& conn,
+                           const audio::PadAudioRoute& route, AudioReconcile& out) const;
+
+    void collectSpeakerForSlot(const models::ControllerSlot& s, net::WifiConnection& conn,
+                               const audio::PadAudioRoute& route, AudioReconcile& out) const;
+
+    std::optional<source::audio::SpeakerVoiceTarget>
+    speakerVoiceFor(const models::ControllerSlot& s, net::WifiConnection& conn,
+                    const audio::PadAudioRoute& route, source::audio::PlayoutLane lane) const;
 
     // Re-attach a bound slot so its descriptor re-folds and re-PUTs (the hub's
     // capability fns re-run on bind). No-op for an unbound slot.
@@ -417,6 +514,12 @@ class AppModel : public QObject {
     net::WifiConnectionManager* wifi_;
     net::ConnectionHub* hub_;
     composer::ConnectionCoordinator* connections_;
+    // Declaration order: the recorder subscribes to the coordinator's rows and
+    // writes into the store, so it comes after both and is destroyed first.
+    source::DiagnosticsLogStore diagnosticsLog_;
+    composer::DiagnosticsRecorder diagnosticsRecorder_;
+    // The Diagnostics bench's buzzes, so a stop ends only the buzz it was set for.
+    reducer::TestBuzzTickets buzzTickets_;
     // Self-contained: owns its own repo/identity/sessions and shares nothing with
     // the Satellite hot path, so the Moonlight path can never regress it.
     net::MoonlightManager moonlight_;
@@ -480,12 +583,20 @@ class AppModel : public QObject {
     repository::DeadzoneRepository deadzoneRepo_;
     repository::MotionPreferenceRepository motionPrefRepo_;
     source::MotionEnabledStore motionEnabledStore_;
+    // Same repo-before-store ordering rule.
+    repository::RumblePreferenceRepository rumblePrefRepo_;
+    source::RumbleEnabledStore rumbleEnabledStore_{&rumblePrefRepo_};
     // Same repo-before-store ordering rule. One repository per direction so the
     // two toggle lists never share a settings blob.
     repository::AudioPreferenceRepository micPrefRepo_{QStringLiteral("mic_preferences")};
     repository::AudioPreferenceRepository speakerPrefRepo_{QStringLiteral("speaker_preferences")};
     source::MicEnabledStore micEnabledStore_{&micPrefRepo_};
     source::SpeakerEnabledStore speakerEnabledStore_{&speakerPrefRepo_};
+    // Both after the stores they name.
+    source::SlotSwitchStores slotSwitches_{motionEnabledStore_, rumbleEnabledStore_,
+                                           micEnabledStore_, speakerEnabledStore_};
+    composer::RumbleSwitchController rumbleSwitchController_{
+        rumbleEnabledStore_.state(), [this](const QString& slotId) { stopMotors(slotId); }};
     source::MicMuteStore micMuteStore_;
     // Derived in reconcileAudioEngines: the fold behind micIndicator() and the
     // slots toggleAllMics() acts on. Armed = every fact but mute; capturing =
@@ -507,7 +618,7 @@ class AppModel : public QObject {
     // it on the main thread.
     mutable std::mutex audioRoutesMtx_;
     std::map<int, audio::PadAudioRoute> padAudioRoutes_;
-    // Absent = the ds4 pair-time default.
+    // Absent = never picked; declaredTouchpadMode sends ds4 for it.
     repository::TouchpadModeRepository touchpadModeRepo_;
     source::TouchpadModeStore touchpadModeStore_{&touchpadModeRepo_};
 
@@ -517,6 +628,8 @@ class AppModel : public QObject {
     source::JoystickRemapRepository joystickRemapRepo_;
     source::JoystickRemapStore joystickRemapStore_;
     arch::Observable<source::JoystickRemapMap>::Subscription joystickRemapSub_;
+    // Hands every move of the Motion switch to the Moonlight manager's routes.
+    arch::Observable<source::MotionEnabledMap>::Subscription motionSwitchSub_;
     // Device ids whose persisted deadzone profile was already pushed, so
     // onBridgeDevicesChanged pushes once per attach rather than per tick.
     QSet<QString> deadzonePushedDevices_;

@@ -17,6 +17,9 @@ namespace {
 std::mutex g_enetMtx;
 int g_enetRefs = 0;
 
+// The PERIODIC_PING cadence every Moonlight client keeps.
+constexpr std::chrono::milliseconds kKeepaliveInterval{500};
+
 } // namespace
 
 void moonlightEnetRef() {
@@ -103,6 +106,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
             // up sees the host and peer it was published with.
             connected_.store(true, std::memory_order_release);
             running_.store(true, std::memory_order_relaxed);
+            lastKeepalive_ = {};
             rxThread_ = std::thread([this] { receiveLoop(); });
             return true;
         }
@@ -149,11 +153,15 @@ void MoonlightControlChannel::disconnect() {
 }
 
 void MoonlightControlChannel::sealAndSend(const std::uint8_t* plaintext, std::size_t len) {
-    // Before the lock: a keepalive tick during the handshake must not wait on
-    // it, and until the link is published there is nothing here to send on.
+    // Before the lock: a send during the handshake must not wait on it, and
+    // until the link is published there is nothing here to send on.
     if (!connected_.load(std::memory_order_acquire)) { return; }
     std::lock_guard<std::mutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
+    sealAndSendLocked(plaintext, len);
+}
+
+void MoonlightControlChannel::sealAndSendLocked(const std::uint8_t* plaintext, std::size_t len) {
     std::size_t outLen = 0;
     const std::uint8_t* pkt = sealer_->seal(seq_, plaintext, len, &outLen);
     if (pkt == nullptr) { return; }
@@ -196,6 +204,24 @@ void MoonlightControlChannel::sendControllerArrival(std::uint8_t controllerNumbe
     sealAndSend(p.data(), p.size());
 }
 
+void MoonlightControlChannel::sendControllerReplug(std::uint8_t controllerNumber,
+                                                   std::uint16_t otherPadsMask,
+                                                   std::uint8_t controllerType,
+                                                   std::uint8_t capabilities,
+                                                   std::uint32_t supportedButtons) {
+    moonlight::ControllerState unplug;
+    unplug.controllerNumber = controllerNumber;
+    unplug.activeGamepadMask = otherPadsMask;
+    const auto arrival = moonlight::encodeControllerArrival(controllerNumber, controllerType,
+                                                            capabilities, supportedButtons);
+    if (!connected_.load(std::memory_order_acquire)) { return; }
+    std::lock_guard<std::mutex> lock(sendMtx_);
+    if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
+    const std::size_t unplugLen = moonlight::encodeControllerMulti(unplug, multiScratch_.data());
+    sealAndSendLocked(multiScratch_.data(), unplugLen);
+    sealAndSendLocked(arrival.data(), arrival.size());
+}
+
 void MoonlightControlChannel::sendControllerMotion(std::uint8_t controllerNumber,
                                                    std::uint8_t motionType, float x, float y,
                                                    float z) {
@@ -218,24 +244,71 @@ void MoonlightControlChannel::sendControllerBattery(std::uint8_t controllerNumbe
     sealAndSend(p.data(), p.size());
 }
 
-void MoonlightControlChannel::sendPeriodicPing() {
-    const auto p = moonlight::encodePeriodicPing();
-    sealAndSend(p.data(), p.size());
+// On this thread's clock, not the owner's: a host ends a session whose control stream is silent for
+// its ping timeout (Sunshine's is ten seconds), and the owner is the UI thread, which can stall.
+void MoonlightControlChannel::keepAliveIfDue() {
+    const auto now = std::chrono::steady_clock::now();
+    const bool due = now - lastKeepalive_ >= kKeepaliveInterval;
+    if (!due) { return; }
+    lastKeepalive_ = now;
+    const auto ping = moonlight::encodePeriodicPing();
+    sealAndSend(ping.data(), ping.size());
+}
+
+// Serviced without waiting: this lock is the one every hot-path send takes, and a 16 ms wait held
+// inside it was 16 ms a controller report could queue behind the receive side.
+//
+// Negative when the channel is gone, which ends the loop; 0 when nothing arrived.
+int MoonlightControlChannel::serviceEnet(_ENetEvent& event) {
+    std::lock_guard<std::mutex> lock(sendMtx_);
+    if (host_ == nullptr) { return -1; }
+    return enet_host_service(host_, &event, 0);
+}
+
+// Runs on the ENet receive thread. Each handler decides for itself what to marshal; nothing here
+// hops threads, because the gate on a motion request has to apply before the next send.
+void MoonlightControlChannel::dispatchServerEvent(const moonlight::ServerEvent& ev) {
+    switch (ev.type) {
+    case moonlight::ServerEventType::Rumble:
+        if (rumbleHandler_) { rumbleHandler_(ev.rumble); }
+        break;
+    case moonlight::ServerEventType::RumbleTriggers:
+        if (triggerHandler_) { triggerHandler_(ev.triggers); }
+        break;
+    case moonlight::ServerEventType::MotionEvent:
+        if (motionHandler_) { motionHandler_(ev.motion); }
+        break;
+    case moonlight::ServerEventType::RgbLed:
+        if (ledHandler_) { ledHandler_(ev.led); }
+        break;
+    case moonlight::ServerEventType::Termination:
+        // Recorded, not acted on: the DISCONNECT that follows is what ends the loop, and this is
+        // what tells the disconnect handler the host meant to end the session.
+        terminated_ = true;
+        break;
+    case moonlight::ServerEventType::Unknown:
+        // Ignored gracefully.
+        break;
+    }
+}
+
+// A packet that will not open, or opens into something this version does not model, is dropped
+// silently: the host is entitled to send events a client need not understand.
+void MoonlightControlChannel::onPacket(const _ENetPacket& packet) {
+    const auto opened = moonlight::crypto::openControl(key_, packet.data, packet.dataLength);
+    if (!opened.has_value()) { return; }
+    const auto ev = moonlight::decodeServerEvent(opened->data(), opened->size());
+    if (!ev.has_value()) { return; }
+    dispatchServerEvent(*ev);
 }
 
 void MoonlightControlChannel::receiveLoop() {
     while (running_.load(std::memory_order_relaxed)) {
+        keepAliveIfDue();
         ENetEvent event;
-        int rc = 0;
-        {
-            // Serviced without waiting: this lock is the one every hot-path send
-            // takes, and a 16 ms wait held inside it was 16 ms a controller
-            // report could queue behind the receive side.
-            std::lock_guard<std::mutex> lock(sendMtx_);
-            if (host_ == nullptr) { break; }
-            rc = enet_host_service(host_, &event, 0);
-        }
-        if (rc <= 0) {
+        const int rc = serviceEnet(event);
+        if (rc < 0) { break; }
+        if (rc == 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
@@ -247,33 +320,7 @@ void MoonlightControlChannel::receiveLoop() {
         }
         if (event.type != ENET_EVENT_TYPE_RECEIVE) { continue; }
 
-        const auto opened =
-            moonlight::crypto::openControl(key_, event.packet->data, event.packet->dataLength);
-        if (opened.has_value()) {
-            const auto ev = moonlight::decodeServerEvent(opened->data(), opened->size());
-            if (ev.has_value()) {
-                switch (ev->type) {
-                case moonlight::ServerEventType::Rumble:
-                    if (rumbleHandler_) { rumbleHandler_(ev->rumble); }
-                    break;
-                case moonlight::ServerEventType::RumbleTriggers:
-                    if (triggerHandler_) { triggerHandler_(ev->triggers); }
-                    break;
-                case moonlight::ServerEventType::MotionEvent:
-                    if (motionHandler_) { motionHandler_(ev->motion); }
-                    break;
-                case moonlight::ServerEventType::RgbLed:
-                    if (ledHandler_) { ledHandler_(ev->led); }
-                    break;
-                case moonlight::ServerEventType::Termination:
-                    terminated_ = true;
-                    break;
-                case moonlight::ServerEventType::Unknown:
-                    // Ignored gracefully.
-                    break;
-                }
-            }
-        }
+        onPacket(*event.packet);
         enet_packet_destroy(event.packet);
     }
 }

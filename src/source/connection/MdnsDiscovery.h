@@ -22,8 +22,7 @@ namespace dish::net {
 // path that reaches subnets where the UDP broadcast beacon (LANDiscovery) is
 // dropped.
 //
-// Windows has no first-class mDNS browse API free of COM / service
-// dependencies, so this is a one-shot raw multicast-DNS client: one PTR query
+// This is a one-shot raw multicast-DNS client: one PTR query
 // (unicast-response bit set) to 224.0.0.251:5353, then a parse of the PTR + SRV
 // + TXT + A answer records. The wire-DNS layer is in detail::; the
 // service→DiscoveredServer mapping below is split out so port precedence and

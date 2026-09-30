@@ -15,9 +15,9 @@
 // callback never runs, and a Moonlight host cannot survive that: Sunshine
 // answers a resumed handshake with a fatal internal_error alert (RFC 8446 alert
 // 80) and logs nothing at all. Every HTTPS request therefore disables ticket
-// reuse, session sharing and session persistence, and the connection cache is
-// dropped once the reply is in so the host is left holding nothing of ours
-// between calls.
+// reuse, session sharing and session persistence, and dials a connection of its
+// own that is closed once the reply is in, so the host is left holding nothing
+// of ours between calls.
 //
 // Responses are the small Moonlight XML documents; a minimal tag reader pulls
 // out the fields we need rather than pulling in a full XML dependency.
@@ -28,6 +28,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QMap>
 #include <QObject>
 #include <QString>
 
@@ -35,7 +36,9 @@
 #include <map>
 #include <optional>
 
-class QNetworkAccessManager;
+namespace dish::http {
+class HttpTransport;
+} // namespace dish::http
 
 namespace dish::net {
 
@@ -46,17 +49,19 @@ inline constexpr int kMoonlightStatusOk = 200;
 // A parsed Moonlight XML response: the flat leaf-tag -> text map plus the
 // root status. `reachable` is false when the transport produced no answer.
 //
-// A HOST SAYS NO IN THE BODY, NOT IN THE STATUS LINE. Measured against a live
-// Sunshine host: asking /launch to start a second app answers HTTP 200 carrying
-// `<root status_code="400" status_message="An app is already running on this
-// host"><resume>0</resume></root>`. Code that reads only the HTTP status treats
-// that refusal as a success and then fails further downstream on the missing
-// sessionUrl0, naming the wrong thing. Every XML endpoint is read through
-// `ok()`, never through the transport status.
+// A HOST SAYS NO IN THE BODY, NOT ONLY IN THE STATUS LINE. Measured against a
+// live Sunshine host: asking /launch to start a second app answers HTTP 200
+// carrying `<root status_code="400" status_message="An app is already running on
+// this host"><resume>0</resume></root>`. Code that reads only the HTTP status
+// treats that refusal as a success and then fails further downstream on the
+// missing sessionUrl0, naming the wrong thing. Wolf refuses in the status line as
+// well, with HTTP 400 for an app it does not know. Every XML endpoint is read
+// through `ok()`, never through the transport status.
 struct MoonlightXmlResponse {
     bool reachable = false;
-    int statusCode = kMoonlightStatusOk; // root status_code attribute
-    QString statusMessage;               // root status_message attribute
+    // The root status_code attribute, or the status line's when the body names none.
+    int statusCode = kMoonlightStatusOk;
+    QString statusMessage; // root status_message attribute
     // The transport's own status line, which a body-level refusal does NOT
     // report. Only one value is load-bearing: 401 is a host saying it does not
     // know this client, which is trust lost rather than a call that failed.
@@ -64,15 +69,14 @@ struct MoonlightXmlResponse {
     // <resume>1</resume>: the refused session can be joined with /resume rather
     // than cancelled.
     bool resumeAvailable = false;
-    std::map<QString, QString> values;
+    // A QMap, whose move cannot throw: MSVC's std::map allocates when it is moved, and every reply
+    // is moved on its way to the caller.
+    QMap<QString, QString> values;
     // The raw document, for list-shaped responses (/applist) whose repeated
     // nodes the flat map cannot carry.
     QByteArray rawBody;
 
-    QString value(const QString& tag) const {
-        const auto it = values.find(tag);
-        return it == values.end() ? QString() : it->second;
-    }
+    QString value(const QString& tag) const { return values.value(tag); }
     bool paired() const { return value(QStringLiteral("paired")) == QLatin1String("1"); }
     bool ok() const { return statusCode >= 200 && statusCode <= 299; }
     // The host already has an app running and will not start another. Either
@@ -93,8 +97,9 @@ class MoonlightHttpClient : public QObject {
     // Present this identity on every HTTPS request. Set before any HTTPS call.
     void setClientIdentity(const moonlight::Identity& identity) { identity_ = identity; }
 
-    // TOFU pin gate. Returning false aborts the TLS handshake. `certDer` is the
-    // peer cert DER. Mirrors HTTPClient::setPinVerifier.
+    // The pin gate: shown the peer's certificate (DER) once the TLS handshake
+    // completes, and returning false hangs up before a byte of the request is
+    // written. Unset, any certificate is accepted.
     using PinVerifier = std::function<bool(const QString& host, const QByteArray& certDer)>;
     void setPinVerifier(PinVerifier v) { pinVerifier_ = std::move(v); }
 
@@ -108,17 +113,25 @@ class MoonlightHttpClient : public QObject {
     void getHttps(const QString& host, int httpsPort, const QString& path,
                   const std::map<QString, QString>& query, ResponseCb cb);
 
-  private:
-    void perform(const QString& url, bool https, ResponseCb cb);
+    // The same, trusting `certDer` and no other certificate, whatever the pin
+    // gate holds: the pairing's phase 5, which only the certificate phases 1 to
+    // 4 proved may answer.
+    void getHttpsTrusting(const QString& host, int httpsPort, const QString& path,
+                          const std::map<QString, QString>& query, QByteArray certDer,
+                          ResponseCb cb);
 
-    QNetworkAccessManager* nam_;
+  private:
+    void perform(const QString& url, bool https, const PinVerifier& verifier, ResponseCb cb);
+
+    http::HttpTransport* transport_;
     std::optional<moonlight::Identity> identity_;
     PinVerifier pinVerifier_;
 };
 
-// Parse a Moonlight XML document (flat, one level of leaf tags under <root>).
-// Exposed for unit testing without a live server.
-MoonlightXmlResponse parseMoonlightXml(const QByteArray& body);
+// Parse a Moonlight XML document (flat, one level of leaf tags under <root>). A
+// body that names no status_code carries `httpStatus`, the status line it came
+// under. Exposed for unit testing without a live server.
+MoonlightXmlResponse parseMoonlightXml(const QByteArray& body, int httpStatus = kMoonlightStatusOk);
 
 // One /applist entry.
 struct MoonlightApp {

@@ -10,12 +10,14 @@
 #include <QHostAddress>
 #include <QLoggingCategory>
 #include <QNetworkDatagram>
+#include <QSslCertificate>
 #include <QStringView>
 #include <QTimer>
 #include <QUdpSocket>
 #include <QUrl>
 
 #include <array>
+#include <cstdint>
 #include <utility>
 
 namespace dish::net {
@@ -51,7 +53,27 @@ struct DisplayMode {
 // so the size asked for here never reaches their desktop.
 DisplayMode requestedDisplayMode() { return DisplayMode{}; }
 
+constexpr std::uint32_t kSpeakerFrontLeft = 0x1;
+constexpr std::uint32_t kSpeakerFrontRight = 0x2;
+constexpr std::uint32_t kStereoChannelCount = 2;
+
+constexpr std::uint32_t surroundAudioInfo(std::uint32_t channelMask, std::uint32_t channelCount) {
+    return (channelMask << 16) | channelCount;
+}
+
+constexpr std::uint32_t kStereoAudio =
+    surroundAudioInfo(kSpeakerFrontLeft | kSpeakerFrontRight, kStereoChannelCount);
+
 } // namespace
+
+int rtspPortFromSessionUrl(const QString& sessionUrl) {
+    const QUrl url(sessionUrl);
+    return url.port() > 0 ? url.port() : kDefaultRtspPort;
+}
+
+QString rtspTargetFor(const QString& hostIp, const QString& sessionUrl) {
+    return QStringLiteral("%1:%2").arg(hostIp).arg(rtspPortFromSessionUrl(sessionUrl));
+}
 
 MoonlightSession::MoonlightSession(models::MoonlightHost host, moonlight::Identity identity,
                                    repository::MoonlightHostRepository* repo, QObject* parent)
@@ -108,59 +130,70 @@ MoonlightSession::~MoonlightSession() {
     control_.disconnect();
 }
 
+// Mixed on THIS thread, where both rumble streams land, so the two can never interleave into a
+// torn mix. Only the result is marshalled, which keeps the UI routing off the ENet receive thread.
+void MoonlightSession::publishRumbleMix(std::uint16_t controllerNumber,
+                                        const moonlight::BodyRumble& mixed) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, n = static_cast<int>(controllerNumber), mixed] {
+            emit rumbleReceived(n, mixed.strong, mixed.weak);
+        },
+        Qt::QueuedConnection);
+}
+
+void MoonlightSession::onRumbleEvent(const moonlight::RumbleEvent& e) {
+    const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
+        return moonlight::withBodyRumble(mix, e.lowFreq, e.highFreq);
+    });
+    publishRumbleMix(e.controllerNumber, mixed);
+}
+
+// No pad this client can claim has trigger motors, so the host's trigger stream folds onto the
+// body motors instead of being dropped. The fold and the reason live in
+// core/moonlight/MoonlightTriggerRumble.h.
+void MoonlightSession::onRumbleTriggerEvent(const moonlight::RumbleTriggerEvent& e) {
+    const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
+        return moonlight::withTriggerRumble(mix, e.left, e.right);
+    });
+    publishRumbleMix(e.controllerNumber, mixed);
+}
+
+void MoonlightSession::onRgbLedEvent(const moonlight::RgbLedEvent& e) {
+    QMetaObject::invokeMethod(
+        this, [this, e] { emit rgbLedReceived(e.controllerNumber, e.r, e.g, e.b); },
+        Qt::QueuedConnection);
+}
+
+// The gate is applied on this thread, not the marshalled one: it is what stops motion going out,
+// and a queued hop would leave a window where an unsubscribe has arrived but samples still stream.
+void MoonlightSession::onMotionRequestEvent(const moonlight::MotionRequestEvent& e) {
+    motionGate_.onMotionRequest(e.controllerNumber, e.reportRateHz, e.motionType);
+    QMetaObject::invokeMethod(
+        this, [this, e] { emit motionRequested(e.controllerNumber, e.reportRateHz, e.motionType); },
+        Qt::QueuedConnection);
+}
+
+// A host that said it was ending and a link that simply went are two events, because only one of
+// them means the app on the other side is gone.
+void MoonlightSession::onControlDisconnect(bool terminated) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, terminated] {
+            dispatch(terminated ? moonlight::SessionEvent::ServerTerminated
+                                : moonlight::SessionEvent::ControlDropped);
+        },
+        Qt::QueuedConnection);
+}
+
 void MoonlightSession::wireControlHandlers() {
-    control_.setRumbleHandler([this](const moonlight::RumbleEvent& e) {
-        // Mixed on THIS thread, where both rumble streams land, so the two can
-        // never interleave into a torn mix. Marshalling only the result keeps
-        // the UI routing off the ENet receive thread.
-        const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
-            return moonlight::withBodyRumble(mix, e.lowFreq, e.highFreq);
-        });
-        QMetaObject::invokeMethod(
-            this,
-            [this, n = static_cast<int>(e.controllerNumber), mixed] {
-                emit rumbleReceived(n, mixed.strong, mixed.weak);
-            },
-            Qt::QueuedConnection);
-    });
-    // No pad this client can claim has trigger motors, so the host's trigger
-    // stream folds onto the body motors instead of being dropped. The fold and
-    // the reason live in core/moonlight/MoonlightTriggerRumble.h.
-    control_.setRumbleTriggerHandler([this](const moonlight::RumbleTriggerEvent& e) {
-        const auto mixed = updateRumbleMix(e.controllerNumber, [&e](moonlight::RumbleMix mix) {
-            return moonlight::withTriggerRumble(mix, e.left, e.right);
-        });
-        QMetaObject::invokeMethod(
-            this,
-            [this, n = static_cast<int>(e.controllerNumber), mixed] {
-                emit rumbleReceived(n, mixed.strong, mixed.weak);
-            },
-            Qt::QueuedConnection);
-    });
-    control_.setRgbLedHandler([this](const moonlight::RgbLedEvent& e) {
-        QMetaObject::invokeMethod(
-            this, [this, e] { emit rgbLedReceived(e.controllerNumber, e.r, e.g, e.b); },
-            Qt::QueuedConnection);
-    });
-    control_.setMotionRequestHandler([this](const moonlight::MotionRequestEvent& e) {
-        // Applied on this thread, not the marshalled one: the gate is what stops
-        // motion going out, and a queued hop would leave a window where an
-        // unsubscribe has arrived but samples still stream.
-        motionGate_.onMotionRequest(e.controllerNumber, e.reportRateHz, e.motionType);
-        QMetaObject::invokeMethod(
-            this,
-            [this, e] { emit motionRequested(e.controllerNumber, e.reportRateHz, e.motionType); },
-            Qt::QueuedConnection);
-    });
-    control_.setDisconnectHandler([this](bool terminated) {
-        QMetaObject::invokeMethod(
-            this,
-            [this, terminated] {
-                dispatch(terminated ? moonlight::SessionEvent::ServerTerminated
-                                    : moonlight::SessionEvent::ControlDropped);
-            },
-            Qt::QueuedConnection);
-    });
+    control_.setRumbleHandler([this](const moonlight::RumbleEvent& e) { onRumbleEvent(e); });
+    control_.setRumbleTriggerHandler(
+        [this](const moonlight::RumbleTriggerEvent& e) { onRumbleTriggerEvent(e); });
+    control_.setRgbLedHandler([this](const moonlight::RgbLedEvent& e) { onRgbLedEvent(e); });
+    control_.setMotionRequestHandler(
+        [this](const moonlight::MotionRequestEvent& e) { onMotionRequestEvent(e); });
+    control_.setDisconnectHandler([this](bool terminated) { onControlDisconnect(terminated); });
 }
 
 void MoonlightSession::dispatch(moonlight::SessionEvent event) {
@@ -192,8 +225,7 @@ void MoonlightSession::runEffects(const std::vector<moonlight::SessionEffect>& e
             break;
         case moonlight::SessionEffect::StartPinging:
             // Normally already running since SETUP named the ports; this is the
-            // control ping joining in, and a start for the path that never
-            // heard the ports named first.
+            // start for the path that never heard them named first.
             startPinging();
             break;
         case moonlight::SessionEffect::StopPinging:
@@ -265,6 +297,149 @@ void MoonlightSession::cancelHostApp() {
                     });
 }
 
+// What every phase of a run needs: the client whose state the phases build up, the host's two
+// ports, and the generation the run started in.
+struct MoonlightSession::PairingRun {
+    std::shared_ptr<moonlight::PairingClient> pc;
+    unsigned generation = 0;
+    QString ip;
+    int httpPort = 0;
+    int httpsPort = 0;
+};
+
+// True when a cancel landed between two phases. Without this the chain would report a refusal the
+// host never made, because the reply to the phase already in flight still arrives.
+bool MoonlightSession::pairAbandoned(const PairingRun& run, const char* phase) const {
+    if (pairGeneration_ == run.generation) { return false; }
+    qCInfo(lcMoonlightSession) << host_.ip << "pairing was cancelled; dropping the reply to"
+                               << phase;
+    return true;
+}
+
+// A /pair phase refuses the same way /launch does, with HTTP 200 and a status_code of its own, so
+// the body is what names the reason.
+void MoonlightSession::pairFailed(const char* phase, const MoonlightXmlResponse& r) {
+    failureMessage_ = r.statusMessage;
+    qCWarning(lcMoonlightSession) << host_.ip << "pairing gave up at" << phase << ": reachable"
+                                  << r.reachable << "status" << r.statusCode << r.statusMessage;
+    dispatch(moonlight::SessionEvent::PairFailed);
+    emit pairingFinished(false);
+}
+
+// `phrase=getservercert` is what marks this AS phase 1: a host that does not see it looks the
+// uniqueid up in its pending-pairing table instead, finds nothing, and answers `400 Invalid
+// uniqueid` in the body, which is what a live Sunshine host did to every attempt without it.
+void MoonlightSession::pairPhase1(const PairingRun& run) {
+    http_->getHttp(
+        run.ip, run.httpPort, QStringLiteral("/pair"),
+        {{QStringLiteral("uniqueid"), uniqueId_},
+         {QStringLiteral("devicename"), QStringLiteral("Dish")},
+         {QStringLiteral("updateState"), QStringLiteral("1")},
+         {QStringLiteral("phrase"), QStringLiteral("getservercert")},
+         {QStringLiteral("salt"), QString::fromStdString(run.pc->saltHex())},
+         {QStringLiteral("clientcert"), QString::fromStdString(run.pc->clientCertHex())}},
+        [this, run](const MoonlightXmlResponse& r) { onPairPhase1(run, r); });
+}
+
+void MoonlightSession::onPairPhase1(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 1")) { return; }
+    const std::string plaincert = r.value(QStringLiteral("plaincert")).toStdString();
+    if (!r.reachable || !r.ok() || plaincert.empty() || !run.pc->consumeServerCert(plaincert)) {
+        pairFailed("phase 1 (salt + clientcert)", r);
+        return;
+    }
+    pairPhase2(run);
+}
+
+void MoonlightSession::pairPhase2(const PairingRun& run) {
+    http_->getHttp(
+        run.ip, run.httpPort, QStringLiteral("/pair"),
+        {{QStringLiteral("uniqueid"), uniqueId_},
+         {QStringLiteral("clientchallenge"), QString::fromStdString(run.pc->clientChallengeHex())}},
+        [this, run](const MoonlightXmlResponse& r) { onPairPhase2(run, r); });
+}
+
+void MoonlightSession::onPairPhase2(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 2")) { return; }
+    const std::string cr = r.value(QStringLiteral("challengeresponse")).toStdString();
+    if (!r.reachable || !r.ok() || cr.empty() || !run.pc->consumeChallengeResponse(cr)) {
+        pairFailed("phase 2 (clientchallenge)", r);
+        return;
+    }
+    pairPhase3(run);
+}
+
+void MoonlightSession::pairPhase3(const PairingRun& run) {
+    http_->getHttp(run.ip, run.httpPort, QStringLiteral("/pair"),
+                   {{QStringLiteral("uniqueid"), uniqueId_},
+                    {QStringLiteral("serverchallengeresp"),
+                     QString::fromStdString(run.pc->serverChallengeRespHex())}},
+                   [this, run](const MoonlightXmlResponse& r) { onPairPhase3(run, r); });
+}
+
+void MoonlightSession::onPairPhase3(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 3")) { return; }
+    const std::string ps = r.value(QStringLiteral("pairingsecret")).toStdString();
+    if (!r.reachable || !r.ok() || ps.empty() || !run.pc->consumePairingSecret(ps)) {
+        pairFailed("phase 3 (serverchallengeresp)", r);
+        return;
+    }
+    pairPhase4(run);
+}
+
+void MoonlightSession::pairPhase4(const PairingRun& run) {
+    http_->getHttp(run.ip, run.httpPort, QStringLiteral("/pair"),
+                   {{QStringLiteral("uniqueid"), uniqueId_},
+                    {QStringLiteral("clientpairingsecret"),
+                     QString::fromStdString(run.pc->clientPairingSecretHex())}},
+                   [this, run](const MoonlightXmlResponse& r) { onPairPhase4(run, r); });
+}
+
+void MoonlightSession::onPairPhase4(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 4")) { return; }
+    if (!r.reachable || !r.ok() || !r.paired()) {
+        pairFailed("phase 4 (clientpairingsecret)", r);
+        return;
+    }
+    pairPhase5(run);
+}
+
+// Over TLS, presenting the client certificate: this is the phase that proves the key the first
+// four phases agreed on is the one the host will accept. Those phases proved the peer holds the
+// PIN-derived key and signed with the certificate it handed out in phase 1, so this one trusts
+// that certificate and no other, whatever is pinned: the pin of a host since rebuilt would refuse
+// it, and any other certificate is not the host that paired.
+void MoonlightSession::pairPhase5(const PairingRun& run) {
+    http_->getHttpsTrusting(run.ip, run.httpsPort, QStringLiteral("/pair"),
+                            {{QStringLiteral("uniqueid"), uniqueId_},
+                             {QStringLiteral("phrase"), QStringLiteral("pairchallenge")}},
+                            provenCertificateOf(run),
+                            [this, run](const MoonlightXmlResponse& r) { onPairPhase5(run, r); });
+}
+
+QByteArray MoonlightSession::provenCertificateOf(const PairingRun& run) {
+    return QSslCertificate(QByteArray::fromStdString(run.pc->serverCertPem()), QSsl::Pem).toDer();
+}
+
+void MoonlightSession::onPairPhase5(const PairingRun& run, const MoonlightXmlResponse& r) {
+    if (pairAbandoned(run, "phase 5")) { return; }
+    if (!r.reachable || !r.ok() || !r.paired()) {
+        pairFailed("phase 5 (pairchallenge over TLS)", r);
+        return;
+    }
+    host_.paired = true;
+    if (repo_ != nullptr) {
+        // The pairing proved this certificate, which outranks a pin written on first sight for a
+        // host since rebuilt.
+        repo_->setServerCert(host_.id(), QString::fromUtf8(provenCertificateOf(run).toHex()));
+        serverCertMismatch_ = false;
+        repo_->rememberHost(host_);
+    }
+    qCInfo(lcMoonlightSession) << host_.ip << "paired";
+    dispatch(moonlight::SessionEvent::PairSucceeded);
+    emit pairingFinished(true);
+}
+
 void MoonlightSession::pair(const QString& pin) {
     if (repo_ == nullptr) {
         emit pairingFinished(false);
@@ -272,130 +447,20 @@ void MoonlightSession::pair(const QString& pin) {
     }
     dispatch(moonlight::SessionEvent::StartPairing);
 
-    auto pc = std::make_shared<moonlight::PairingClient>(
+    PairingRun run;
+    run.pc = std::make_shared<moonlight::PairingClient>(
         identity_, pin.toStdString(), moonlight::crypto::randomBytes(16),
         moonlight::crypto::randomBytes(16), moonlight::crypto::randomBytes(16));
-    if (!pc->valid()) {
+    if (!run.pc->valid()) {
         dispatch(moonlight::SessionEvent::PairFailed);
         emit pairingFinished(false);
         return;
     }
-
-    // Each phase chains into the next in its callback. A failure at any step
-    // routes to PairFailed, naming the phase and whatever the host said in the
-    // body: a /pair phase refuses the same way /launch does, with HTTP 200 and a
-    // status_code of its own. The lambdas capture `pc` (shared) so state
-    // survives.
-    // Every phase carries the generation it started in, so a cancel between two
-    // phases stops the chain instead of reporting a refusal the host never made.
-    const unsigned generation = pairGeneration_;
-    auto abandoned = [this, generation](const char* phase) {
-        if (pairGeneration_ == generation) { return false; }
-        qCInfo(lcMoonlightSession)
-            << host_.ip << "pairing was cancelled; dropping the reply to" << phase;
-        return true;
-    };
-
-    auto fail = [this](const char* phase, const MoonlightXmlResponse& r) {
-        failureMessage_ = r.statusMessage;
-        qCWarning(lcMoonlightSession) << host_.ip << "pairing gave up at" << phase << ": reachable"
-                                      << r.reachable << "status" << r.statusCode << r.statusMessage;
-        dispatch(moonlight::SessionEvent::PairFailed);
-        emit pairingFinished(false);
-    };
-
-    const QString ip = host_.ip;
-    const int httpPort = host_.httpPort;
-    const int httpsPort = host_.httpsPort;
-
-    // Phase 1. `phrase=getservercert` is what marks it AS phase 1: a host that
-    // does not see it looks the uniqueid up in its pending-pairing table
-    // instead, finds nothing, and answers `400 Invalid uniqueid` in the body,
-    // which is what a live Sunshine host did to every attempt without it.
-    http_->getHttp(
-        ip, httpPort, QStringLiteral("/pair"),
-        {{QStringLiteral("uniqueid"), uniqueId_},
-         {QStringLiteral("devicename"), QStringLiteral("Dish")},
-         {QStringLiteral("updateState"), QStringLiteral("1")},
-         {QStringLiteral("phrase"), QStringLiteral("getservercert")},
-         {QStringLiteral("salt"), QString::fromStdString(pc->saltHex())},
-         {QStringLiteral("clientcert"), QString::fromStdString(pc->clientCertHex())}},
-        [this, pc, fail, abandoned, ip, httpPort, httpsPort](const MoonlightXmlResponse& r1) {
-            if (abandoned("phase 1")) { return; }
-            const std::string plaincert = r1.value(QStringLiteral("plaincert")).toStdString();
-            if (!r1.reachable || !r1.ok() || plaincert.empty() ||
-                !pc->consumeServerCert(plaincert)) {
-                fail("phase 1 (salt + clientcert)", r1);
-                return;
-            }
-            // Phase 2
-            http_->getHttp(
-                ip, httpPort, QStringLiteral("/pair"),
-                {{QStringLiteral("uniqueid"), uniqueId_},
-                 {QStringLiteral("clientchallenge"),
-                  QString::fromStdString(pc->clientChallengeHex())}},
-                [this, pc, fail, abandoned, ip, httpPort,
-                 httpsPort](const MoonlightXmlResponse& r2) {
-                    if (abandoned("phase 2")) { return; }
-                    const std::string cr =
-                        r2.value(QStringLiteral("challengeresponse")).toStdString();
-                    if (!r2.reachable || !r2.ok() || cr.empty() ||
-                        !pc->consumeChallengeResponse(cr)) {
-                        fail("phase 2 (clientchallenge)", r2);
-                        return;
-                    }
-                    // Phase 3
-                    http_->getHttp(
-                        ip, httpPort, QStringLiteral("/pair"),
-                        {{QStringLiteral("uniqueid"), uniqueId_},
-                         {QStringLiteral("serverchallengeresp"),
-                          QString::fromStdString(pc->serverChallengeRespHex())}},
-                        [this, pc, fail, abandoned, ip, httpPort,
-                         httpsPort](const MoonlightXmlResponse& r3) {
-                            if (abandoned("phase 3")) { return; }
-                            const std::string ps =
-                                r3.value(QStringLiteral("pairingsecret")).toStdString();
-                            if (!r3.reachable || !r3.ok() || ps.empty() ||
-                                !pc->consumePairingSecret(ps)) {
-                                fail("phase 3 (serverchallengeresp)", r3);
-                                return;
-                            }
-                            // Phase 4
-                            http_->getHttp(
-                                ip, httpPort, QStringLiteral("/pair"),
-                                {{QStringLiteral("uniqueid"), uniqueId_},
-                                 {QStringLiteral("clientpairingsecret"),
-                                  QString::fromStdString(pc->clientPairingSecretHex())}},
-                                [this, pc, fail, abandoned, ip,
-                                 httpsPort](const MoonlightXmlResponse& r4) {
-                                    if (abandoned("phase 4")) { return; }
-                                    if (!r4.reachable || !r4.ok() || !r4.paired()) {
-                                        fail("phase 4 (clientpairingsecret)", r4);
-                                        return;
-                                    }
-                                    // Phase 5 (HTTPS, presents the client cert)
-                                    http_->getHttps(
-                                        ip, httpsPort, QStringLiteral("/pair"),
-                                        {{QStringLiteral("uniqueid"), uniqueId_},
-                                         {QStringLiteral("phrase"),
-                                          QStringLiteral("pairchallenge")}},
-                                        [this, pc, fail,
-                                         abandoned](const MoonlightXmlResponse& r5) {
-                                            if (abandoned("phase 5")) { return; }
-                                            if (!r5.reachable || !r5.ok() || !r5.paired()) {
-                                                fail("phase 5 (pairchallenge over TLS)", r5);
-                                                return;
-                                            }
-                                            host_.paired = true;
-                                            if (repo_ != nullptr) { repo_->rememberHost(host_); }
-                                            qCInfo(lcMoonlightSession) << host_.ip << "paired";
-                                            dispatch(moonlight::SessionEvent::PairSucceeded);
-                                            emit pairingFinished(true);
-                                        });
-                                });
-                        });
-                });
-        });
+    run.generation = pairGeneration_;
+    run.ip = host_.ip;
+    run.httpPort = host_.httpPort;
+    run.httpsPort = host_.httpsPort;
+    pairPhase1(run);
 }
 
 void MoonlightSession::cancelPairing() {
@@ -450,7 +515,7 @@ void MoonlightSession::beginLaunch() {
          // Dish, whose user is sitting at the host using this as a pad: it would
          // silence the very machine they are listening to.
          {QStringLiteral("localAudioPlayMode"), QStringLiteral("1")},
-         {QStringLiteral("surroundAudioInfo"), QStringLiteral("196610")}});
+         {QStringLiteral("surroundAudioInfo"), QString::number(kStereoAudio)}});
     // No remoteControllersBitmap and no gcmap, as the other two clients send
     // none: the pads are plugged by their CONTROLLER_ARRIVAL, each with its own
     // type, and a bitmap naming one pad up front is a pad the host may build
@@ -465,50 +530,45 @@ void MoonlightSession::requestSession(const QString& path,
         [this, resuming](const MoonlightXmlResponse& r) { onLaunchReply(r, resuming); });
 }
 
-void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resuming) {
-    if (!r.reachable) {
-        qCWarning(lcMoonlightSession) << host_.ip << "session request did not reach the host";
-        dispatch(moonlight::SessionEvent::Unreachable);
+// A refusal arrives as HTTP 200 carrying a status_code of its own, so this runs on a reply the
+// transport called a success. `resumeAvailable` is kept because the UI states it separately from
+// the failure: a busy host that will hand the session back reads differently from one that will
+// not.
+void MoonlightSession::onSessionRefused(const MoonlightXmlResponse& r, bool resuming) {
+    failureMessage_ = r.statusMessage;
+    resumeAvailable_ = r.resumeAvailable;
+    qCWarning(lcMoonlightSession) << host_.ip << "refused the session:" << r.statusCode
+                                  << r.statusMessage << "resume" << r.resumeAvailable;
+    if (resuming) {
+        // The host named this session ours to take back and then would not hand it over. There is
+        // nothing left to try but closing it.
+        qCWarning(lcMoonlightSession) << host_.ip << "refused the resume it offered";
+        dispatch(moonlight::SessionEvent::ResumeRefused);
         return;
     }
-
-    // THE HOST SAYS NO IN THE BODY. A refusal arrives as HTTP 200 carrying a
-    // status_code of its own, so the transport status proves nothing.
-    if (!r.ok()) {
-        failureMessage_ = r.statusMessage;
-        resumeAvailable_ = r.resumeAvailable;
-        qCWarning(lcMoonlightSession) << host_.ip << "refused the session:" << r.statusCode
-                                      << r.statusMessage << "resume" << r.resumeAvailable;
-        if (resuming) {
-            // The host named this session ours to take back and then would not
-            // hand it over. There is nothing left to try but closing it.
-            qCWarning(lcMoonlightSession) << host_.ip << "refused the resume it offered";
-            dispatch(moonlight::SessionEvent::ResumeRefused);
-            return;
-        }
-        if (r.appAlreadyRunning() && r.resumeAvailable) {
-            qCInfo(lcMoonlightSession) << host_.ip << "app already running and resumable, resuming";
-            requestSession(
-                QStringLiteral("/resume"),
-                {{QStringLiteral("uniqueid"), uniqueId_},
-                 {QStringLiteral("rikey"), QString::fromStdString(moonlight::crypto::hexEncode(
-                                               rikey_.data(), rikey_.size()))},
-                 {QStringLiteral("rikeyid"), QString::number(rikeyId_)},
-                 {QStringLiteral("surroundAudioInfo"), QStringLiteral("196610")}});
-            return;
-        }
-        dispatch(r.appAlreadyRunning() ? moonlight::SessionEvent::LaunchRefusedBusy
-                                       : moonlight::SessionEvent::LaunchFailed);
+    if (r.appAlreadyRunning() && r.resumeAvailable) {
+        qCInfo(lcMoonlightSession) << host_.ip << "app already running and resumable, resuming";
+        requestResume();
         return;
     }
+    dispatch(r.appAlreadyRunning() ? moonlight::SessionEvent::LaunchRefusedBusy
+                                   : moonlight::SessionEvent::LaunchFailed);
+}
 
-    const QString sessionUrl = r.value(QStringLiteral("sessionUrl0"));
-    int rtspPort = 48010;
-    if (!sessionUrl.isEmpty()) {
-        const QUrl url(sessionUrl);
-        if (url.port() > 0) { rtspPort = url.port(); }
-    }
-    rtspTarget_ = QStringLiteral("%1:%2").arg(host_.ip).arg(rtspPort);
+// The host answers a launch and a resume the same way, so this is the one reply reader for both.
+void MoonlightSession::requestResume() {
+    requestSession(QStringLiteral("/resume"),
+                   {{QStringLiteral("uniqueid"), uniqueId_},
+                    {QStringLiteral("rikey"), QString::fromStdString(moonlight::crypto::hexEncode(
+                                                  rikey_.data(), rikey_.size()))},
+                    {QStringLiteral("rikeyid"), QString::number(rikeyId_)},
+                    {QStringLiteral("surroundAudioInfo"), QString::number(kStereoAudio)}});
+}
+
+// A 200 that is ok() is still not a session: a host that neither started one nor handed one back
+// says so in the body, and treating that as live would leave the client talking RTSP to nothing.
+void MoonlightSession::onSessionAccepted(const MoonlightXmlResponse& r) {
+    rtspTarget_ = rtspTargetFor(host_.ip, r.value(QStringLiteral("sessionUrl0")));
     qCInfo(lcMoonlightSession) << host_.ip << "session accepted, RTSP at" << rtspTarget_
                                << "gamesession" << r.value(QStringLiteral("gamesession"))
                                << "resume" << r.value(QStringLiteral("resume"));
@@ -516,12 +576,26 @@ void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resumin
     if (r.value(QStringLiteral("gamesession")) == QLatin1String("1") ||
         r.value(QStringLiteral("resume")) == QLatin1String("1")) {
         dispatch(moonlight::SessionEvent::LaunchSucceeded);
-    } else {
-        failureMessage_ = r.statusMessage;
-        qCWarning(lcMoonlightSession)
-            << host_.ip << "session reply named neither a gamesession nor a resume";
-        dispatch(moonlight::SessionEvent::LaunchFailed);
+        return;
     }
+    failureMessage_ = r.statusMessage;
+    qCWarning(lcMoonlightSession) << host_.ip
+                                  << "session reply named neither a gamesession nor a resume";
+    dispatch(moonlight::SessionEvent::LaunchFailed);
+}
+
+void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resuming) {
+    if (!r.reachable) {
+        qCWarning(lcMoonlightSession) << host_.ip << "session request did not reach the host";
+        dispatch(moonlight::SessionEvent::Unreachable);
+        return;
+    }
+    // THE HOST SAYS NO IN THE BODY, so the transport status proves nothing.
+    if (!r.ok()) {
+        onSessionRefused(r, resuming);
+        return;
+    }
+    onSessionAccepted(r);
 }
 
 void MoonlightSession::beginRtspAndControl() {
@@ -587,15 +661,11 @@ void MoonlightSession::onRtspFinished(bool rtspOk, bool controlOk,
 }
 
 void MoonlightSession::onPingTick() {
-    // 1) The encrypted control-stream keepalive.
-    control_.sendPeriodicPing();
-
-    // 2) The RTP client pings. Sunshine and Wolf both learn the client's media
-    //    address from these datagrams and will not start (or will time out) a
-    //    stream whose ports never saw one, so they are re-sent every tick rather
-    //    than only once. Failing this ends the session ten seconds after PLAY
-    //    with `Initial Ping Timeout`. We never decode media: anything the host
-    //    sends back is drained and dropped below.
+    // Sunshine and Wolf both learn the client's media address from these
+    // datagrams and will not start (or will time out) a stream whose ports never
+    // saw one, so they are re-sent every tick rather than only once. Failing this
+    // ends the session ten seconds after PLAY with `Initial Ping Timeout`. We
+    // never decode media: anything the host sends back is drained and dropped.
     if (rtsp_.videoPort == 0 && rtsp_.audioPort == 0) { return; }
 
     const QHostAddress dest(host_.ip);
@@ -661,7 +731,9 @@ void MoonlightSession::probe() {
                        qCInfo(lcMoonlightSession)
                            << host_.ip << "/serverinfo reachable" << r.reachable << "PairStatus"
                            << r.value(QStringLiteral("PairStatus")) << "uniqueid" << uniqueId;
-                       emit probeFinished(r.reachable, uniqueId);
+                       // An error from whatever holds the port is not the host answering.
+                       const bool hostAnswered = r.reachable && r.ok();
+                       emit probeFinished(hostAnswered, uniqueId);
                    });
 }
 
@@ -700,6 +772,30 @@ void MoonlightSession::sendInitialState(std::uint8_t number) {
 }
 
 void MoonlightSession::forgetControllerArrival(std::uint8_t number) { arrivals_.erase(number); }
+
+std::optional<moonlight::AnnouncedPad> MoonlightSession::announcedPad(std::uint8_t number) const {
+    const auto it = arrivals_.find(number);
+    if (it == arrivals_.end()) { return std::nullopt; }
+    return moonlight::AnnouncedPad{it->second.type, it->second.capabilities};
+}
+
+// The pad the host builds next starts from nothing, so it has to ask for motion again before any
+// goes out: a subscription the old pad made is not one the new pad made.
+void MoonlightSession::sendControllerReplug(std::uint8_t number, std::uint8_t type,
+                                            std::uint8_t caps, std::uint32_t supportedButtons) {
+    arrivals_[number] = PadArrival{type, caps, supportedButtons};
+    forgetMotionSubscriptions(number);
+    if (!streaming()) {
+        qCInfo(lcMoonlightSession)
+            << host_.ip << "pad" << number << "announced again before the stream is live; held";
+        return;
+    }
+    qCInfo(lcMoonlightSession) << host_.ip << "replugging pad" << number << "as type" << type
+                               << "caps" << caps;
+    const auto otherPads = static_cast<std::uint16_t>(presentMask() & ~(1U << number));
+    control_.sendControllerReplug(number, otherPads, type, caps, supportedButtons);
+    sendInitialState(number);
+}
 
 void MoonlightSession::sendPendingArrivals() {
     for (const auto& [number, pad] : arrivals_) {

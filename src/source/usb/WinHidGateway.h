@@ -67,6 +67,11 @@ class WinHidGateway : public UsbDeviceGateway {
     // .cpp so the Windows HID SDK types stay out of this header.
     struct HidPDecode;
 
+    // The claimed device behind an id, or null. Takes mtx_ and gives it back, so the caller holds
+    // no gateway lock while it talks to the pad.
+    struct Claimed;
+    Claimed* claimedFor(int syntheticId) const;
+
     // One claimed device's read loop + handle.
     struct Claimed {
         std::string path;       // the HID device interface path.
@@ -108,6 +113,14 @@ class WinHidGateway : public UsbDeviceGateway {
     };
 
     void readLoop(Claimed* c);
+
+    // True when the packet was a dongle event rather than input. `handle` is the claim's raw
+    // device handle; this header does not include <windows.h>, which is why Claimed::handle is a
+    // void* too.
+    static bool handleSteamWirelessEvent(void* handle, Claimed* c, const std::uint8_t* data,
+                                         std::size_t len);
+    static bool decodeOneReport(Claimed* c, const std::uint8_t* data, std::size_t len,
+                                input::usbparse::ParsedReport& parsed);
 
     // The next synthetic id to hand out. Negative + decreasing, mirroring the
     // android synthetic-id space (so they never collide with positive SDL ids).

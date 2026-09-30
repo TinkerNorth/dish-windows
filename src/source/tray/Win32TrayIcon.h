@@ -6,12 +6,14 @@
 // out of the process, the same call dish-linux made when it spoke
 // StatusNotifier over the bus by hand.
 //
-// The item needs an HWND to receive its callback message; a message-only
-// window (HWND_MESSAGE) serves, invisible and owned here. Explorer restarts
-// drop every icon, so the TaskbarCreated broadcast re-adds it. Availability is
-// whether the shell accepted the icon: Windows always has a notification area,
-// but the add can fail (Explorer not up yet at logon), and a failed add must
-// not let the window hide, or a running Dish is stranded with no way back.
+// The item needs an HWND to receive its callback message: a tool window, never
+// shown and owned here. It is top-level, not message-only (HWND_MESSAGE):
+// Explorer restarts drop every icon and announce it with the TaskbarCreated
+// broadcast, which only top-level windows receive, and the re-add hangs off
+// it. Availability is whether the shell accepted the icon: Windows always has
+// a notification area, but the add can fail (Explorer not up yet at logon),
+// and a failed add must not let the window hide, or a running Dish is
+// stranded with no way back.
 //
 // The menu is the way back and the way out: a click on the item shows the
 // window, and the context menu offers Show Dish and Quit. Both surface as the
@@ -28,10 +30,12 @@
 
 namespace dish::source {
 
+class NotifyIconShell;
+
 class Win32TrayIcon final : public TrayIcon {
     Q_OBJECT
   public:
-    explicit Win32TrayIcon(QObject* parent = nullptr);
+    explicit Win32TrayIcon(std::unique_ptr<NotifyIconShell> shell, QObject* parent = nullptr);
     ~Win32TrayIcon() override;
 
     void show() override;

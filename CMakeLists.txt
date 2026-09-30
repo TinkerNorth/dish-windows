@@ -168,6 +168,8 @@ set(DISH_CORE_SOURCES
     src/architecture/Repository.h
     src/core/wire/SessionCrypto.h
     src/core/wire/SessionCrypto.cpp
+    src/core/wire/HttpFraming.h
+    src/core/wire/HttpFraming.cpp
     # Moonlight (GameStream) protocol core: control-stream codec, pairing
     # crypto, RTSP text and the session FSM. Pure logic; sockets live in
     # src/Network, persistence in src/repository.
@@ -219,6 +221,13 @@ set(DISH_CORE_SOURCES
     src/core/reducer/InputRateTracker.h
     src/core/reducer/MotionIndicatorState.h
     src/core/reducer/LatencyWindow.h
+    # The Diagnostics page: the session's own account of itself, the flight
+    # recorder's diff, and the input inspector's readout and stick tests.
+    src/core/reducer/SessionDiagnostics.h
+    src/core/reducer/DiagnosticsLog.h
+    src/core/input/InputReadout.h
+    src/core/input/StickHealth.h
+    src/core/reducer/FeedbackBench.h
     src/core/reducer/CapabilitySolver.h
     src/core/reducer/CapabilitySolver.cpp
     src/core/reducer/HostAudioVerdict.h
@@ -267,14 +276,16 @@ set(DISH_CORE_SOURCES
     src/Network/WinsockInit.cpp
     src/Network/SatelliteClient.h
     src/Network/SatelliteClient.cpp
-    src/Network/PairingClient.h
-    src/Network/PairingClient.cpp
+    src/Network/PairingOutcome.h
+    src/Network/PairingOutcome.cpp
     src/Network/HTTPClient.h
     src/Network/HTTPClient.cpp
     src/Network/WifiConnection.h
     src/Network/WifiConnection.cpp
     src/Network/WifiConnectionManager.h
     src/Network/WifiConnectionManager.cpp
+    src/Network/WifiManagerEffects.h
+    src/Network/WifiManagerEffects.cpp
     src/Network/ConnectionHub.h
     src/Network/ConnectionHub.cpp
     src/Network/ConnectionStore.h
@@ -301,8 +312,15 @@ set(DISH_CORE_SOURCES
     src/source/connection/LANDiscovery.cpp
     src/source/connection/MdnsDiscovery.h
     src/source/connection/MdnsDiscovery.cpp
+    src/source/connection/MdnsScan.cpp
     src/source/connection/DiscoveryGateway.h
     src/source/connection/DiscoveryGateway.cpp
+    # The HTTP/1.1 transport both REST clients ride: one socket per call, on
+    # the caller's thread, behind a seam a test answers through in-process.
+    src/source/http/HttpExchange.h
+    src/source/http/HttpExchange.cpp
+    src/source/http/HttpTransport.h
+    src/source/http/HttpTransport.cpp
     src/source/http/SatelliteTlsVerifier.h
     src/source/http/SatelliteTlsVerifier.cpp
     # An ETag cache over HTTPClient::getCatalog, not a durable Repository,
@@ -314,6 +332,10 @@ set(DISH_CORE_SOURCES
     src/source/store/ControllerTypeStore.cpp
     src/source/store/MotionEnabledStore.h
     src/source/store/MotionEnabledStore.cpp
+    src/source/store/RumbleEnabledStore.h
+    src/source/store/RumbleEnabledStore.cpp
+    src/source/store/SlotSwitches.h
+    src/source/store/SlotSwitches.cpp
     src/source/store/AudioEnabledStore.h
     src/source/store/AudioEnabledStore.cpp
     src/source/store/MicMuteStore.h
@@ -387,6 +409,8 @@ set(DISH_CORE_SOURCES
     src/repository/DeadzoneRepository.cpp
     src/repository/MotionPreferenceRepository.h
     src/repository/MotionPreferenceRepository.cpp
+    src/repository/RumblePreferenceRepository.h
+    src/repository/RumblePreferenceRepository.cpp
     src/repository/AudioPreferenceRepository.h
     src/repository/AudioPreferenceRepository.cpp
     src/composer/ConnectionsComposer.h
@@ -398,9 +422,14 @@ set(DISH_CORE_SOURCES
     src/composer/MotionCapabilityComposer.h
     src/composer/MotionCapabilityComposer.cpp
     src/composer/StreamingSlotCount.h
+    src/source/store/DiagnosticsLogStore.h
+    src/composer/DiagnosticsRecorder.h
+    src/composer/DiagnosticsRecorder.cpp
     src/composer/WakeStateComposer.h
     src/composer/WakeStateController.h
     src/composer/WakeStateController.cpp
+    src/composer/RumbleSwitchController.h
+    src/composer/RumbleSwitchController.cpp
     # Running in the background: the close policy, the tray item and the
     # suspend/resume edge (the port of dish-linux's tray and sleep handling).
     src/core/reducer/BackgroundMode.h
@@ -411,6 +440,7 @@ set(DISH_CORE_SOURCES
     src/source/system/SleepMonitor.h
     src/source/system/SleepMonitor.cpp
     src/source/tray/TrayIcon.h
+    src/source/tray/NotifyIconShell.h
     src/source/tray/Win32TrayIcon.h
     src/source/tray/Win32TrayIcon.cpp
     src/source/tray/TrayBalloonNotifier.h
@@ -466,7 +496,9 @@ set(DISH_CORE_SOURCES
     src/qml/AppViewModel.cpp
     # Split out of AppViewModel so the mapping is testable without AppModel.
     src/qml/AppSettingsMaps.h
-    src/qml/AppSettingsMaps.cpp)
+    src/qml/AppSettingsMaps.cpp
+    src/qml/DiagnosticsMaps.h
+    src/qml/DiagnosticsMaps.cpp)
 
 # Crash reporting (Sentry). Two gates, and only one of them is load-bearing.
 #
@@ -566,7 +598,7 @@ target_link_libraries(dish_core
         bthprops
         # DpapiSecretCipher: CryptProtectData / CryptUnprotectData.
         crypt32
-        # The notification-area item (Shell_NotifyIcon) and its message-only
+        # The notification-area item (Shell_NotifyIcon) and its hidden
         # window, menu and cursor calls.
         shell32
         user32
@@ -690,6 +722,8 @@ qt_add_qml_module(Dish
         src/qml/pages/LicensesPage.qml
         src/qml/pages/ControlsRemapPage.qml
         src/qml/pages/ConfigureBindingPage.qml
+        src/qml/pages/DiagnosticsPage.qml
+        src/qml/pages/InputInspectorPage.qml
         src/qml/pages/PairingDialog.qml
         src/qml/onboarding/OnboardingFlow.qml
         src/qml/onboarding/WelcomeScreen.qml
@@ -730,9 +764,10 @@ target_link_libraries(Dish PRIVATE
 # whole contribution is this staging target. installer.iss ships
 # ${CMAKE_BINARY_DIR}/setup-image verbatim, and cmake/DishSetupImage.cmake is
 # the ONE place that decides what an installed Dish consists of (dish.exe, the
-# windeployqt output, libsodium/SDL2, the five app-local CRT DLLs, the
-# Dish.Chrome module entry, licenses/). Outside ALL because it re-runs
-# windeployqt over ~100 MB, which is a release chore, not a build chore.
+# windeployqt output, the vcpkg DLLs dish.exe imports, named one by one, the
+# five app-local CRT DLLs, the Dish.Chrome module entry, licenses/, and never
+# libssl). Outside ALL because it re-runs windeployqt over ~100 MB, which is a
+# release chore, not a build chore.
 get_target_property(_dish_image_qmake Qt6::qmake IMPORTED_LOCATION)
 get_filename_component(_dish_image_qt_bin "${_dish_image_qmake}" DIRECTORY)
 add_custom_target(dish_setup_image

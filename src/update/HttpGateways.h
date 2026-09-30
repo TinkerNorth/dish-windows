@@ -6,10 +6,10 @@
 // and the default NoLessSafeRedirectPolicy, which follows GitHub's 302 to the
 // download CDN without ever downgrading to http.
 //
-// net::HTTPClient / net::PairingClient MUST NOT carry this traffic: they set
-// QSslSocket::VerifyNone deliberately (TOFU pinning for satellites on a LAN),
-// which is exactly wrong for a public host. That is why these two own dedicated
-// managers rather than borrowing the app's.
+// net::HTTPClient MUST NOT carry this traffic: it sets QSslSocket::VerifyNone
+// deliberately (TOFU pinning for satellites on a LAN), which is exactly wrong
+// for a public host. That is why these two own dedicated managers rather than
+// borrowing the app's.
 //
 // A QNetworkAccessManager belongs to the thread that created it, so the
 // download gateway is constructed ON the "dish-update" worker and the manifest
@@ -53,6 +53,7 @@ class HttpManifestGateway : public QObject, public ManifestGateway {
     void setUrl(const QString& url) { url_ = url; }
 
   private:
+    void onManifestReply(QNetworkReply* reply);
     void finish(const ManifestFetchResult& result);
 
     QNetworkAccessManager* nam_ = nullptr;

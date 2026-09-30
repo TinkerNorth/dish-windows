@@ -120,6 +120,115 @@ bool runSteamConfig(HANDLE h, int featureLen, input::usbparse::SteamConfig stage
     return true;
 }
 
+// The interface's wide device path, or empty when the two-call size query does not produce one.
+// Wide because CreateFileW wants it that way; the utf8 form is only for the admission checks.
+std::wstring interfacePathOf(HDEVINFO devInfo, SP_DEVICE_INTERFACE_DATA& ifData) {
+    DWORD needed = 0;
+    SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
+    if (needed == 0) { return {}; }
+    std::vector<std::uint8_t> detailBuf(needed);
+    auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
+    detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+    if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) == 0) {
+        return {};
+    }
+    return detail->DevicePath;
+}
+
+// Admission is per model family: the collection the model's parser actually decodes. Everything
+// without a table row has to stay "gamepad-shaped"; the Steam Controller's game interface is
+// admitted by model despite its vendor usage page.
+bool isClaimCandidate(HANDLE h, HIDD_ATTRIBUTES& attrs, HIDP_CAPS& caps) {
+    if (HidD_GetAttributes(h, &attrs) == 0) { return false; }
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    if (HidD_GetPreparsedData(h, &preparsed) == 0) { return false; }
+    bool accepted = false;
+    if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
+        const auto parser = input::usbparse::parserForDevice(attrs.VendorID, attrs.ProductID);
+        accepted = collectionMatchesParser(caps, parser);
+    }
+    HidD_FreePreparsedData(preparsed);
+    return accepted;
+}
+
+// What the claim machinery needs to know about a device it has not opened for reading yet.
+UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const HIDD_ATTRIBUTES& attrs,
+                             const HIDP_CAPS& caps) {
+    UsbDeviceInfo info;
+    info.vendorId = attrs.VendorID;
+    info.productId = attrs.ProductID;
+    // The catalog name is deterministic where one exists; it also names models whose own product
+    // string is generic or empty.
+    const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
+    info.name = model != nullptr ? model->name : productName(h, path);
+    info.interfaceNumber = 0;
+    // The input report length is the max-packet proxy; bInterval is not exposed by the HID class
+    // API, so it defaults to 1 ms (the common gamepad case) and the poll-rate sampler measures the
+    // real rate.
+    info.endpointInMaxPacket = caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
+    info.endpointInInterval = 1;
+    info.hasOutEndpoint = caps.OutputReportByteLength > 0;
+    // Derived from the per-model decoder family so it tracks the parser selection rather than a
+    // hard-coded VID list.
+    info.hasImu = input::usbparse::parserHasImu(
+        input::usbparse::parserForDevice(info.vendorId, info.productId));
+    return info;
+}
+
+// Null for an interface that is not a claim candidate at all.
+std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
+    const std::string path = wideToUtf8(widePath.c_str());
+    // A Bluetooth-connected pad is a HID device too (same VID:PID as its USB identity) but is NOT
+    // a USB-direct claim candidate: the raw-HID claim is a USB feature, the per-model decoders
+    // parse the USB report layout (the BT layout differs, since a DS4 streams the short 0x01
+    // report until a feature-report handshake), and tracking it would grow a bogus "USB PATH"
+    // control on a wireless pad. Skipped before probing.
+    if (input::isBluetoothHidDevicePath(path)) { return std::nullopt; }
+
+    // Opened for query only, with no read/write share, so probing does not disturb other readers.
+    // The actual claim re-opens with read access.
+    HANDLE h = CreateFileW(widePath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) { return std::nullopt; }
+
+    HIDD_ATTRIBUTES attrs{};
+    attrs.Size = sizeof(attrs);
+    HIDP_CAPS caps{};
+    std::optional<UsbDeviceInfo> info;
+    if (isClaimCandidate(h, attrs, caps)) { info = describeDevice(h, path, attrs, caps); }
+    CloseHandle(h);
+    return info;
+}
+
+// The handle is overlapped, so a write needs its own OVERLAPPED and event or it would complete into
+// the read loop's. Waiting on the event keeps the call synchronous from the caller's point of view
+// without ever blocking the pending ReadFile.
+//
+// A pad that never completes must not wedge the caller (the network receive thread); after the
+// timeout the transfer is cancelled and the feedback is simply dropped, which is the right outcome
+// for a lossy telemetry return path.
+bool overlappedWrite(HANDLE handle, const std::uint8_t* buf, DWORD want) {
+    OVERLAPPED ov{};
+    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (ov.hEvent == nullptr) { return false; }
+
+    DWORD written = 0;
+    bool ok = WriteFile(handle, buf, want, &written, &ov) != 0;
+    if (!ok && GetLastError() == ERROR_IO_PENDING) {
+        if (WaitForSingleObject(ov.hEvent, kOutputWriteTimeoutMs) == WAIT_OBJECT_0) {
+            ok = GetOverlappedResult(handle, &ov, &written, FALSE) != 0;
+        } else {
+            CancelIoEx(handle, &ov);
+            GetOverlappedResult(handle, &ov, &written, TRUE);
+            ok = false;
+        }
+    }
+    CloseHandle(ov.hEvent);
+    // A short write reached the pad as a different report, which is a failure even though the call
+    // returned.
+    return ok && written == want;
+}
+
 } // namespace
 
 // The caps-derived field map for GENERIC-HID pads. Windows exposes preparsed
@@ -378,75 +487,14 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
     ifData.cbSize = sizeof(ifData);
     for (DWORD i = 0; SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
          ++i) {
-        DWORD needed = 0;
-        SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
-        if (needed == 0) { continue; }
-        std::vector<std::uint8_t> detailBuf(needed);
-        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
-        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-        if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) ==
-            0) {
-            continue;
-        }
-        const std::string path = wideToUtf8(detail->DevicePath);
-
-        // A Bluetooth-connected pad is a HID device too (same VID:PID as its
-        // USB identity) but is NOT a USB-direct claim candidate: the raw-HID
-        // claim is a USB feature, the per-model decoders parse the USB report
-        // layout (the BT layout differs — a DS4 streams the short 0x01 report
-        // until a feature-report handshake), and tracking it would grow a bogus
-        // "USB PATH" control on a wireless pad. Skip it before probing.
-        if (input::isBluetoothHidDevicePath(path)) { continue; }
-
-        // Open for query only (no read/write share so we don't disturb other
-        // readers while probing). The actual claim re-opens with read access.
-        HANDLE h = CreateFileW(detail->DevicePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                               OPEN_EXISTING, 0, nullptr);
-        if (h == INVALID_HANDLE_VALUE) { continue; }
-
-        HIDD_ATTRIBUTES attrs{};
-        attrs.Size = sizeof(attrs);
-        PHIDP_PREPARSED_DATA preparsed = nullptr;
-        HIDP_CAPS caps{};
-        bool accepted = false;
-        UsbDeviceInfo info;
-        if (HidD_GetAttributes(h, &attrs) != 0 && HidD_GetPreparsedData(h, &preparsed) != 0) {
-            if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
-                // Admission is per model family: the collection the model's
-                // parser actually decodes. For everything without a table row
-                // that stays "gamepad-shaped"; the Steam Controller's game
-                // interface is admitted by model despite its vendor usage page.
-                const auto parser =
-                    input::usbparse::parserForDevice(attrs.VendorID, attrs.ProductID);
-                accepted = collectionMatchesParser(caps, parser);
-            }
-            HidD_FreePreparsedData(preparsed);
-        }
-        if (accepted) {
-            info.vendorId = attrs.VendorID;
-            info.productId = attrs.ProductID;
-            // The catalog name is deterministic where one exists (it also names
-            // models whose own product string is generic or empty).
-            const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
-            info.name = model != nullptr ? model->name : productName(h, path);
-            info.interfaceNumber = 0;
-            // The input report length is our max-packet proxy; bInterval is not
-            // exposed by the HID class API, so default it to 1ms (the common
-            // gamepad case) — the poll-rate sampler measures the real rate.
-            info.endpointInMaxPacket =
-                caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
-            info.endpointInInterval = 1;
-            info.hasOutEndpoint = caps.OutputReportByteLength > 0;
-            // Derive the IMU from the per-model decoder family so it tracks the
-            // parser selection rather than a hard-coded VID list.
-            info.hasImu = input::usbparse::parserHasImu(
-                input::usbparse::parserForDevice(info.vendorId, info.productId));
-        }
-        CloseHandle(h);
-
-        // Skip Microsoft-VID gamepad collections: Xbox pads belong to XInput, not
-        // this raw-HID path, and shouldn't be fought over.
-        if (accepted && info.vendorId != kVidMicrosoft) { out.push_back(std::move(info)); }
+        const std::wstring widePath = interfacePathOf(devInfo, ifData);
+        if (widePath.empty()) { continue; }
+        auto info = probeInterface(widePath);
+        if (!info.has_value()) { continue; }
+        // Microsoft-VID gamepad collections are skipped: Xbox pads belong to XInput, not this
+        // raw-HID path, and should not be fought over.
+        if (info->vendorId == kVidMicrosoft) { continue; }
+        out.push_back(std::move(*info));
     }
 
     SetupDiDestroyDeviceInfoList(devInfo);
@@ -577,109 +625,144 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     return ClaimResult::success(syntheticId);
 }
 
+namespace {
+
+// Short enough that running=false is observed promptly, long enough that an idle pad does not spin
+// the read thread.
+constexpr DWORD kReadWaitMs = 100;
+
+// What one overlapped read came back with. Idle covers both a wait timeout and a zero-length
+// read: neither is an error and neither carries a report.
+enum class ReadOutcome : std::uint8_t { Report, Idle, Stop };
+
+ReadOutcome readOneReport(HANDLE handle, OVERLAPPED& ov, std::array<std::uint8_t, 128>& buf,
+                          DWORD& read) {
+    read = 0;
+    ResetEvent(ov.hEvent);
+    if (ReadFile(handle, buf.data(), static_cast<DWORD>(buf.size()), &read, &ov) == 0) {
+        if (GetLastError() != ERROR_IO_PENDING) { return ReadOutcome::Stop; }
+        if (WaitForSingleObject(ov.hEvent, kReadWaitMs) == WAIT_TIMEOUT) {
+            CancelIo(handle);
+            return ReadOutcome::Idle;
+        }
+        if (GetOverlappedResult(handle, &ov, &read, FALSE) == 0) { return ReadOutcome::Stop; }
+    }
+    if (read == 0) { return ReadOutcome::Idle; }
+    return ReadOutcome::Report;
+}
+
+// The Steam Controller's vendor collection is id-less, so Windows prepends a 0x00 report-id byte
+// the wire packet never carried; the decoders expect the packet as it left the device.
+void stripPrependedReportId(const std::uint8_t*& data, std::size_t& len) {
+    if (len > 1 && data[0] == 0x00) {
+        data += 1;
+        len -= 1;
+    }
+}
+
+// Straight field copy: ParsedReport is the decoder's shape and UsbReport is the gateway's.
+// micMuted is the latch rather than the button, mirrored up so the driver can edge-detect it.
+UsbReport toUsbReport(const input::usbparse::ParsedReport& parsed, const bool micMuted) {
+    UsbReport report{};
+    report.wButtons = parsed.wButtons;
+    report.micMuted = micMuted;
+    report.lt = parsed.lt;
+    report.rt = parsed.rt;
+    report.lx = parsed.lx;
+    report.ly = parsed.ly;
+    report.rx = parsed.rx;
+    report.ry = parsed.ry;
+    report.motionValid = parsed.motionValid;
+    report.gyroX = parsed.gyroX;
+    report.gyroY = parsed.gyroY;
+    report.gyroZ = parsed.gyroZ;
+    report.accelX = parsed.accelX;
+    report.accelY = parsed.accelY;
+    report.accelZ = parsed.accelZ;
+    report.touchpadValid = parsed.touchpadValid;
+    report.finger0Active = parsed.finger0Active;
+    report.finger0Id = parsed.finger0Id;
+    report.finger0X = parsed.finger0X;
+    report.finger0Y = parsed.finger0Y;
+    report.finger1Active = parsed.finger1Active;
+    report.finger1Id = parsed.finger1Id;
+    report.finger1X = parsed.finger1X;
+    report.finger1Y = parsed.finger1Y;
+    report.touchpadButton = parsed.touchpadButton;
+    report.batteryValid = parsed.batteryValid;
+    report.batteryLevel = parsed.batteryLevel;
+    report.batteryStatus = parsed.batteryStatus;
+    return report;
+}
+
+} // namespace
+
+// True when the packet was a dongle event rather than input, and the loop should take the next
+// report. Connect and disconnect interleave with input on the Steam dongle.
+bool WinHidGateway::handleSteamWirelessEvent(void* handle, Claimed* c, const std::uint8_t* data,
+                                             std::size_t len) {
+    const auto ev = input::usbparse::checkWirelessEvent(c->parser, data, len);
+    if (ev == input::usbparse::WirelessEvent::Connect) {
+        // A returning pad has rebooted, so its settings are gone and quiet mode is re-applied.
+        runSteamConfig(static_cast<HANDLE>(handle), c->featureReportLen,
+                       input::usbparse::SteamConfig::Quiet);
+        return true;
+    }
+    if (ev == input::usbparse::WirelessEvent::Disconnect) {
+        // A departing pad's last input must not stay latched.
+        if (c->onReport) { c->onReport(UsbReport{}); }
+        return true;
+    }
+    return false;
+}
+
+// A descriptor-driven layout wins where the device published one; everything else goes through the
+// per-model decoder chosen at claim time.
+bool WinHidGateway::decodeOneReport(Claimed* c, const std::uint8_t* data, std::size_t len,
+                                    input::usbparse::ParsedReport& parsed) {
+    if (c->hidp != nullptr && c->hidp->valid) { return c->hidp->decode(data, len, parsed); }
+    return input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks, &c->micMute);
+}
+
+// Plain C++ on its own thread: no allocation per report, no Qt. Each HID input report is decoded
+// into a normalised XUSB report via the pure core/input/UsbReportParsers decoders and handed to
+// onReport, which publishes through GamepadInputProcessor.
+//
+// Allocation discipline: the read buffer and the ParsedReport scratch live on this thread's stack
+// and are reused every iteration; the decoder is a pure function over those, mutating the device's
+// stick auto-range state in place. HidP_GetUsageValue/GetUsages walk preparsed data in user mode,
+// with no IO and no allocation. Nothing on the per-report path heap-allocates.
+//
+// NOTE: the button/stick/trigger byte offsets mirror dish-android's usb_parsers.cpp 1:1
+// (hardware-validated there). The DS4/DualSense IMU and touchpad offsets are the public
+// hid-playstation layout and need a final sign/scale check against real pads (flagged in
+// UsbReportParsers.h).
 void WinHidGateway::readLoop(Claimed* c) {
-    // The read loop is plain C++ on its own thread — no allocation per report, no
-    // Qt. It decodes each HID input report into a normalised XUSB report via the
-    // pure core/input/UsbReportParsers decoders (chosen per-model at claim time)
-    // and hands it to onReport, which publishes through GamepadInputProcessor.
-    //
-    // Allocation discipline: the read buffer + the ParsedReport scratch live on
-    // this thread's stack and are reused every iteration; the decoder is a pure
-    // function over those, mutating the device's stick auto-range state in place.
-    // HidP_GetUsageValue/GetUsages walk preparsed data in user mode — no IO, no
-    // allocation. Nothing on the per-report path heap-allocates.
-    //
-    // NOTE: the button/stick/trigger byte offsets mirror dish-android's
-    // usb_parsers.cpp 1:1 (hardware-validated there). The DS4/DualSense IMU +
-    // touchpad offsets are the public hid-playstation layout and need a final
-    // sign/scale check against real pads (flagged in UsbReportParsers.h).
     auto* handle = static_cast<HANDLE>(c->handle);
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
     ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     while (c->running.load()) {
         DWORD read = 0;
-        ResetEvent(ov.hEvent);
-        if (ReadFile(handle, buf.data(), static_cast<DWORD>(buf.size()), &read, &ov) == 0) {
-            if (GetLastError() != ERROR_IO_PENDING) { break; }
-            // Wait with a short timeout so running=false is observed promptly.
-            const DWORD w = WaitForSingleObject(ov.hEvent, 100);
-            if (w == WAIT_TIMEOUT) {
-                CancelIo(handle);
-                continue;
-            }
-            if (GetOverlappedResult(handle, &ov, &read, FALSE) == 0) { break; }
-        }
-        if (read == 0) { continue; }
+        const ReadOutcome outcome = readOneReport(handle, ov, buf, read);
+        if (outcome == ReadOutcome::Stop) { break; }
+        if (outcome == ReadOutcome::Idle) { continue; }
         c->completions.fetch_add(1);
 
         const std::uint8_t* data = buf.data();
         auto len = static_cast<std::size_t>(read);
         if (c->parser == input::usbparse::HidParser::SteamController) {
-            // The vendor collection is id-less, so Windows prepends a 0x00
-            // report-id byte the wire packet never carried; the decoders expect
-            // the packet as it left the device.
-            if (len > 1 && data[0] == 0x00) {
-                data += 1;
-                len -= 1;
-            }
-            // Dongle connect/disconnect events interleave with input. A
-            // returning pad has rebooted (settings gone), so quiet mode is
-            // re-applied; a departing pad's last input must not stay latched.
-            const auto ev = input::usbparse::checkWirelessEvent(c->parser, data, len);
-            if (ev == input::usbparse::WirelessEvent::Connect) {
-                runSteamConfig(handle, c->featureReportLen, input::usbparse::SteamConfig::Quiet);
-                continue;
-            }
-            if (ev == input::usbparse::WirelessEvent::Disconnect) {
-                if (c->onReport) { c->onReport(UsbReport{}); }
-                continue;
-            }
+            stripPrependedReportId(data, len);
+            if (handleSteamWirelessEvent(handle, c, data, len)) { continue; }
         }
 
-        // Decode into the XUSB report. A report that doesn't match the family's
-        // shape (wrong id / too short) is skipped rather than published as noise.
+        // A report that does not match the family's shape (wrong id, too short) is skipped rather
+        // than published as noise.
         input::usbparse::ParsedReport parsed{};
-        bool decoded = false;
-        if (c->hidp != nullptr && c->hidp->valid) {
-            decoded = c->hidp->decode(data, len, parsed);
-        } else {
-            decoded =
-                input::usbparse::decodeReport(c->parser, data, len, parsed, c->sticks, &c->micMute);
+        if (!decodeOneReport(c, data, len, parsed)) { continue; }
+        if (c->onReport) {
+            c->onReport(toUsbReport(parsed, c->micMute.muted.load(std::memory_order_relaxed)));
         }
-        if (!decoded) { continue; }
-        UsbReport report{};
-        report.wButtons = parsed.wButtons;
-        // The latch, not the button: what the wire's kXusbMicMute bit carries,
-        // mirrored up so the driver can edge-detect it.
-        report.micMuted = c->micMute.muted.load(std::memory_order_relaxed);
-        report.lt = parsed.lt;
-        report.rt = parsed.rt;
-        report.lx = parsed.lx;
-        report.ly = parsed.ly;
-        report.rx = parsed.rx;
-        report.ry = parsed.ry;
-        report.motionValid = parsed.motionValid;
-        report.gyroX = parsed.gyroX;
-        report.gyroY = parsed.gyroY;
-        report.gyroZ = parsed.gyroZ;
-        report.accelX = parsed.accelX;
-        report.accelY = parsed.accelY;
-        report.accelZ = parsed.accelZ;
-        report.touchpadValid = parsed.touchpadValid;
-        report.finger0Active = parsed.finger0Active;
-        report.finger0Id = parsed.finger0Id;
-        report.finger0X = parsed.finger0X;
-        report.finger0Y = parsed.finger0Y;
-        report.finger1Active = parsed.finger1Active;
-        report.finger1Id = parsed.finger1Id;
-        report.finger1X = parsed.finger1X;
-        report.finger1Y = parsed.finger1Y;
-        report.touchpadButton = parsed.touchpadButton;
-        report.batteryValid = parsed.batteryValid;
-        report.batteryLevel = parsed.batteryLevel;
-        report.batteryStatus = parsed.batteryStatus;
-        if (c->onReport) { c->onReport(report); }
     }
     if (ov.hEvent != nullptr) { CloseHandle(ov.hEvent); }
 }
@@ -727,59 +810,35 @@ bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
     return true;
 }
 
+// Null when nothing claims the id. The claim map's lock is released before the caller writes: a
+// write can block on a sleeping pad, and holding mtx_ across it would stall reconcile(). Safe
+// because releaseClaim() joins the reader and erases the entry only from the owner thread, and
+// every caller here is downstream of a live binding for this device.
+WinHidGateway::Claimed* WinHidGateway::claimedFor(int syntheticId) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    return it == claimed_.end() ? nullptr : it->second.get();
+}
+
 bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) {
     if (data == nullptr || len == 0) { return false; }
-    Claimed* c = nullptr;
-    {
-        // The claim map's lock is released before the write: a write can block
-        // on a sleeping pad, and holding mtx_ across it would stall reconcile().
-        // Safe because releaseClaim() joins the reader and erases the entry only
-        // from the owner thread, and every caller here is downstream of a live
-        // binding for this device.
-        std::lock_guard<std::mutex> lock(mtx_);
-        const auto it = claimed_.find(syntheticId);
-        if (it == claimed_.end()) { return false; }
-        c = it->second.get();
-    }
-    if (c->outputReportLen <= 0) { return false; }
+    Claimed* c = claimedFor(syntheticId);
+    if (c == nullptr || c->outputReportLen <= 0) { return false; }
+
     const auto want = static_cast<std::size_t>(c->outputReportLen);
-    // A report LONGER than the collection's output length is not ours to
-    // truncate: it would reach the pad as a different report.
+    // A report LONGER than the collection's output length is not ours to truncate: it would reach
+    // the pad as a different report.
     if (len > want) { return false; }
 
     std::lock_guard<std::mutex> lock(c->writeMtx);
-    // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any
-    // other length outright.
+    // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any other length outright.
     std::array<std::uint8_t, 256> buf{};
     if (want > buf.size()) { return false; }
     std::memcpy(buf.data(), data, len);
 
     auto handle = static_cast<HANDLE>(c->handle);
     if (handle == nullptr || handle == INVALID_HANDLE_VALUE) { return false; }
-    // The handle is overlapped, so the write needs its own OVERLAPPED and event
-    // or it would complete into the read loop's. Waiting on the event keeps the
-    // call synchronous from the caller's point of view without ever blocking
-    // the pending ReadFile.
-    OVERLAPPED ov{};
-    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    if (ov.hEvent == nullptr) { return false; }
-    DWORD written = 0;
-    bool ok = WriteFile(handle, buf.data(), static_cast<DWORD>(want), &written, &ov) != 0;
-    if (!ok && GetLastError() == ERROR_IO_PENDING) {
-        // A pad that never completes the write must not wedge the caller (the
-        // network receive thread); after the timeout the transfer is cancelled
-        // and the feedback is simply dropped, which is the right outcome for a
-        // lossy telemetry return path.
-        if (WaitForSingleObject(ov.hEvent, kOutputWriteTimeoutMs) == WAIT_OBJECT_0) {
-            ok = GetOverlappedResult(handle, &ov, &written, FALSE) != 0;
-        } else {
-            CancelIoEx(handle, &ov);
-            GetOverlappedResult(handle, &ov, &written, TRUE);
-            ok = false;
-        }
-    }
-    CloseHandle(ov.hEvent);
-    return ok && written == static_cast<DWORD>(want);
+    return overlappedWrite(handle, buf.data(), static_cast<DWORD>(want));
 }
 
 } // namespace dish::source::usb

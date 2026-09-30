@@ -239,7 +239,7 @@ TEST_CASE("The row and the section never disagree about trust", "[moonlight][ses
 }
 
 TEST_CASE("A readable mutual-TLS reply outranks a plaintext PairStatus of 0",
-          "[moonlight][sessionui]") {
+          "[moonlight][sessionui][h1]") {
     // A host with no client certificate in front of it reports PairStatus 0 to
     // everyone, so the plaintext probe cannot be the last word on trust. The
     // manager folds a readable /applist into hostPairStatus before this runs.
@@ -487,7 +487,7 @@ TEST_CASE("Only the two refusals and a live session offer to close the app",
 }
 
 TEST_CASE("Trust is three words, and a remembered host that is silent keeps its pairing",
-          "[moonlight][sessionui]") {
+          "[moonlight][sessionui][b1]") {
     // Both halves. The host's word on its own was what stranded a forgotten host
     // behind a Paired chip with no Pair button; see the recovery case above.
     SessionUiInputs answeredPaired;

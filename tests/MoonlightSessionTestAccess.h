@@ -22,6 +22,10 @@
 #include "Network/MoonlightSession.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
 
+#include <array>
+#include <cstdint>
+#include <string>
+
 namespace dish::net {
 
 class MoonlightSessionTestAccess {
@@ -47,6 +51,21 @@ class MoonlightSessionTestAccess {
 
     // Whether anything this session does can still reach the store.
     static bool persists(const MoonlightSession& session) { return session.repo_ != nullptr; }
+
+    // Open the control link to `ip`:`port` under `key`, the call the RTSP worker
+    // makes once SETUP has named the port, and report the link up the way the
+    // worker does. Setup only: the handshake that precedes it needs a host.
+    static bool connectControl(MoonlightSession& session, const std::string& ip, std::uint16_t port,
+                               const std::array<std::uint8_t, 16>& key) {
+        settle(session, moonlight::SessionPhase::ControlConnecting);
+        const bool connected = session.control_.connect(ip, port, key, 0);
+        if (connected) { feed(session, moonlight::SessionEvent::ControlConnected); }
+        return connected;
+    }
+
+    // The session's own control link, so a case can connect it to a host on loopback and read
+    // what the session puts on the wire. Setup only, like settle.
+    static MoonlightControlChannel& control(MoonlightSession& session) { return session.control_; }
 };
 
 } // namespace dish::net
