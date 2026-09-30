@@ -843,24 +843,8 @@
         <translation>Gefunden</translation>
     </message>
     <message>
-        <source>Needs pairing</source>
-        <translation>Kopplung nötig</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
-    </message>
-    <message>
-        <source>Ready</source>
-        <translation>Bereit</translation>
-    </message>
-    <message>
         <source>Connecting…</source>
         <translation>Verbindet…</translation>
-    </message>
-    <message>
-        <source>Online</source>
-        <translation>Online</translation>
     </message>
     <message>
         <source>Scanning…</source>
@@ -1011,10 +995,6 @@
     <message>
         <source>%1 — as %2</source>
         <translation>%1 — als %2</translation>
-    </message>
-    <message>
-        <source>Unsteady</source>
-        <translation>Instabil</translation>
     </message>
     <message>
         <source>Moonlight hosts</source>
@@ -2227,30 +2207,6 @@
         <translation>aktiv</translation>
     </message>
     <message>
-        <source>Found</source>
-        <translation>Gefunden</translation>
-    </message>
-    <message>
-        <source>Needs pairing</source>
-        <translation>Kopplung nötig</translation>
-    </message>
-    <message>
-        <source>Offline</source>
-        <translation>Offline</translation>
-    </message>
-    <message>
-        <source>Ready</source>
-        <translation>Bereit</translation>
-    </message>
-    <message>
-        <source>Connecting…</source>
-        <translation>Verbindet…</translation>
-    </message>
-    <message>
-        <source>Online</source>
-        <translation>Online</translation>
-    </message>
-    <message>
         <source>Set up a controller</source>
         <translation>Controller einrichten</translation>
     </message>
@@ -2443,10 +2399,6 @@
     <message>
         <source>dead zones stick %1% · trigger %2%</source>
         <translation>Totzonen Stick %1 % · Trigger %2 %</translation>
-    </message>
-    <message>
-        <source>Unsteady</source>
-        <translation>Instabil</translation>
     </message>
     <message>
         <source>Pad</source>
