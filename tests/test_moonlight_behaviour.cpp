@@ -949,6 +949,103 @@ TEST_CASE("A refusal whose body names no status of its own takes the status line
     CHECK(reply->statusCode == 404);
 }
 
+// ── The app a launch asks for ───────────────────────────────────────────────
+
+// Made before any member, so the fixture host below is built inside an application.
+struct InsideAnApp {
+    InsideAnApp() { ensureApp(); }
+};
+
+// A host whose app list is `listed` on its TLS port, remembered with `pick` as the app to start.
+struct AppListHost : InsideAnApp {
+    std::shared_ptr<QSettings> settings = makeSharedSettings();
+    MoonlightFakeHost fake{QStringLiteral("0000")};
+    std::unique_ptr<MoonlightManager> manager;
+    std::unique_ptr<MoonlightHostRepository> store;
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    bool listening = false;
+
+    AppListHost(const QString& pick, int status, const QByteArray& listed) {
+        manager = std::make_unique<MoonlightManager>(settings);
+        store = std::make_unique<MoonlightHostRepository>(settings);
+        listening = fake.listening() && fake.serveTls();
+        fake.answerWith(QStringLiteral("/applist"), status, listed);
+        h.httpPort = fake.port();
+        h.httpsPort = fake.tlsPort();
+        h.lastAppId = pick;
+        h.lastAppName = pick.isEmpty() ? QString() : QStringLiteral("Picked");
+        store->rememberHost(h);
+    }
+
+    // Reads the host's app list the way entering a screen does, and waits for the answer.
+    bool readAppList() const {
+        bool answered = false;
+        const auto token = QObject::connect(manager.get(), &MoonlightManager::appListReady,
+                                            [&answered](const QString&, const QStringList&,
+                                                        const QStringList&) { answered = true; });
+        manager->refreshApps(h.id());
+        const bool settled = pumpUntil([&answered] { return answered; });
+        QObject::disconnect(token);
+        return settled;
+    }
+
+    QString storedPick() const { return store->hosts().first().lastAppId; }
+};
+
+const QByteArray kTwoApps = QByteArrayLiteral(
+    "<root status_code=\"200\"><App><AppTitle>Desktop</AppTitle><ID>881448767</ID></App>"
+    "<App><AppTitle>Steam</AppTitle><ID>1234</ID></App></root>");
+
+TEST_CASE("An app the host no longer lists is forgotten as the pick when its list is read",
+          "[moonlight][behaviour][b7][h3]") {
+    // Launched, it is refused every time (Wolf answers an unknown app with HTTP
+    // 400), and the refusal hides the picker it could be changed in.
+    AppListHost at(QStringLiteral("9"), 200, kTwoApps);
+    REQUIRE(at.listening);
+
+    REQUIRE(at.readAppList());
+
+    CHECK(at.storedPick().isEmpty());
+    CHECK(at.store->hosts().first().lastAppName.isEmpty());
+}
+
+TEST_CASE("An app the host still lists stays the pick", "[moonlight][behaviour][b7]") {
+    AppListHost at(QStringLiteral("1234"), 200, kTwoApps);
+    REQUIRE(at.listening);
+
+    REQUIRE(at.readAppList());
+
+    CHECK(at.storedPick() == QStringLiteral("1234"));
+}
+
+TEST_CASE("A pick stays when the host's app list cannot be read", "[moonlight][behaviour][b7]") {
+    // A list that did not come back says nothing about what the host can start.
+    AppListHost at(QStringLiteral("9"), 401, QByteArrayLiteral("<root status_code=\"401\"/>"));
+    REQUIRE(at.listening);
+
+    REQUIRE(at.readAppList());
+
+    CHECK(at.storedPick() == QStringLiteral("9"));
+}
+
+TEST_CASE("A session on a host with no pick starts the first app the host lists",
+          "[moonlight][behaviour][b7]") {
+    // What the binding flow promises for a host with no pick. Wolf's app ids are
+    // hashes of each app's title and icon, so a fixed default names nothing it
+    // has, and a launch of it is refused.
+    AppListHost at(QStringLiteral("9"), 200, kTwoApps);
+    REQUIRE(at.listening);
+    REQUIRE(at.readAppList());
+    MoonlightRequestLog log(*at.manager);
+
+    REQUIRE(at.manager->bindSlot(QStringLiteral("sdl:1"), at.h.id(),
+                                 dish::models::kMoonlightDeviceAuto, false, false, false, false,
+                                 false) == BindOutcome::Bound);
+
+    REQUIRE(log.count(kLaunch) == 1);
+    CHECK(log.query(0).contains(QStringLiteral("appid=881448767")));
+}
+
 TEST_CASE("A launch the host turns into a resume brings the session up",
           "[moonlight][behaviour][h3][b9]") {
     // A /launch from a client that already holds a session on Wolf is answered

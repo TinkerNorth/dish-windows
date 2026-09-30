@@ -237,33 +237,58 @@ void MoonlightManager::onSessionPairingFinished(const QString& id, bool ok) {
 
 // A readable mutual-TLS reply IS the proof of trust: the host ran its verify callback and let us
 // in, whatever a plaintext probe said about PairStatus.
-void MoonlightManager::recordAppListProbe(const QString& id, int appCount, bool ok,
+void MoonlightManager::recordAppListProbe(const QString& id, const QStringList& ids, bool ok,
                                           bool unauthorized) {
     auto& probe = probes_[id];
     probe.trustInFlight = false;
     probe.appsInFlight = false;
     probe.appsFetched = ok;
     probe.appsFailed = !ok;
-    probe.appCount = ok ? appCount : 0;
+    probe.appCount = ok ? static_cast<int>(ids.size()) : 0;
     probe.unauthorized = unauthorized;
     if (ok) {
         probe.answered = true;
         probe.timedOut = false;
         probe.mtlsVerified = true;
+        probe.appIds = ids;
     }
     if (unauthorized) { probe.mtlsVerified = false; }
+}
+
+// The host's app list is its own word on what it can start. A pick it no longer lists is refused
+// on every launch, behind a refusal that hides the picker it could be changed in, so it is
+// forgotten and the host's first app starts, as the binding flow promises for a host with no pick.
+void MoonlightManager::forgetAPickTheHostDropped(const QString& id, const QStringList& listed) {
+    auto host = rememberedHost(id);
+    if (!host.has_value()) { return; }
+    const bool theHostDroppedIt = !host->lastAppId.isEmpty() && !listed.contains(host->lastAppId);
+    if (!theHostDroppedIt) { return; }
+    qCInfo(lcMoonlightManager) << "app pick:" << id << "no longer lists" << host->lastAppId
+                               << "; forgetting it as the pick";
+    host->lastAppId.clear();
+    host->lastAppName.clear();
+    repo_->rememberHost(*host);
 }
 
 void MoonlightManager::onSessionAppListReady(const QString& id, const QStringList& ids,
                                              const QStringList& titles, bool ok,
                                              bool unauthorized) {
-    recordAppListProbe(id, static_cast<int>(ids.size()), ok, unauthorized);
+    recordAppListProbe(id, ids, ok, unauthorized);
     // recordAppListProbe holds its reference into probes_ and this does not: the emit below runs
     // handlers, and one that probes some other host would insert into probes_ and leave that
     // reference dangling mid-update.
-    if (ok) { rememberProvenTrust(id); }
+    if (ok) {
+        rememberProvenTrust(id);
+        forgetAPickTheHostDropped(id, ids);
+    }
     emit appListReady(id, ids, titles);
     emit hostsChanged();
+}
+
+QString MoonlightManager::appToLaunch(const models::MoonlightHost& host) const {
+    if (!host.lastAppId.isEmpty()) { return host.lastAppId; }
+    const QStringList listed = probes_.value(host.id()).appIds;
+    return listed.isEmpty() ? QString() : listed.first();
 }
 
 // True when the host came back as a different host. The old pairing cannot work, and the user has
@@ -472,7 +497,7 @@ void MoonlightManager::connectHost(const QString& id, const QString& appId) {
         return;
     }
     // An explicit pick wins; otherwise fall back to what the user chose last.
-    session->launch(appId.isEmpty() ? host->lastAppId : appId);
+    session->launch(appId.isEmpty() ? appToLaunch(*host) : appId);
 }
 
 void MoonlightManager::refreshApps(const QString& id) {
@@ -679,7 +704,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
         reannounceInPlace(slotId, *held, *session, arrival);
         // A session that is down is started again, as the first bind on a host starts one; one
         // that is up or on its way up reduces this to nothing.
-        session->launch(host->lastAppId);
+        session->launch(appToLaunch(*host));
         return moonlight::BindOutcome::Bound;
     }
 
@@ -724,7 +749,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
     // first pad may announce itself before there is a stream to announce on. A
     // later pad joins the session that is already running and sends no HTTP at
     // all: launch() reduces to nothing outside a phase that can start one.
-    if (firstOnHost) { session->launch(host->lastAppId); }
+    if (firstOnHost) { session->launch(appToLaunch(*host)); }
     return moonlight::BindOutcome::Bound;
 }
 

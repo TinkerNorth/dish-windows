@@ -23,6 +23,7 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 #include <atomic>
 #include <cstdint>
@@ -133,7 +134,8 @@ class MoonlightManager : public QObject {
     void cancelPairing(const QString& id);
 
     // Launch (or resume) an app and bring the control stream up. Empty appId
-    // launches the host's remembered pick, then the host's default.
+    // launches the host's remembered pick, then the first app the host listed,
+    // then the host's default.
     void connectHost(const QString& id, const QString& appId);
 
     // GET /applist on a paired host; the reply arrives as appListReady.
@@ -279,7 +281,11 @@ class MoonlightManager : public QObject {
     void wireSession(const QString& id, MoonlightSession* session);
     void onSessionPhaseChanged(const QString& id, MoonlightSession* session);
     void onSessionPairingFinished(const QString& id, bool ok);
-    void recordAppListProbe(const QString& id, int appCount, bool ok, bool unauthorized);
+    void recordAppListProbe(const QString& id, const QStringList& ids, bool ok, bool unauthorized);
+    void forgetAPickTheHostDropped(const QString& id, const QStringList& listed);
+    // The app a session starts: the user's pick, or with none the first app the host listed, which
+    // is what the binding flow promises. Empty when neither is known.
+    QString appToLaunch(const models::MoonlightHost& host) const;
     void onSessionAppListReady(const QString& id, const QStringList& ids, const QStringList& titles,
                                bool ok, bool unauthorized);
     bool recordProbeIdentity(const QString& id, bool answered, const QString& uniqueId);
@@ -340,6 +346,8 @@ class MoonlightManager : public QObject {
         // still out, so the probe has not answered whether the pairing stands.
         bool trustInFlight = false;
         int appCount = 0;
+        // The ids of the last list the host answered with, in its order.
+        QStringList appIds;
         bool pairingActive = false;
         bool pairingRefused = false;
     };
