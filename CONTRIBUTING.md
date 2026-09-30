@@ -102,7 +102,7 @@ license.
 
 ## Style
 
-- C++17, four-space indent, 100-column limit. `.clang-format` is
+- C++20, four-space indent, 100-column limit. `.clang-format` is
   authoritative; run `clang-format -i` if you are unsure. CI pins
   clang-format 22.1.4, and older versions produce small diffs on braced-init
   lists, so match the pin if you can.
