@@ -214,6 +214,7 @@ void MoonlightManager::rememberProvenTrust(const QString& id) {
 // established on without anyone typing a PIN.
 void MoonlightManager::onSessionPhaseChanged(const QString& id, MoonlightSession* session) {
     if (session->phase() == moonlight::SessionPhase::RtspHandshake) { rememberProvenTrust(id); }
+    if (session->phase() == moonlight::SessionPhase::Streaming) { forgetTouchFramesOn(session); }
     emit sessionPhaseChanged(id);
     emit hostsChanged();
 }
@@ -811,6 +812,14 @@ void MoonlightManager::forgetTouchFrame(const QString& slotId) {
     std::lock_guard<std::mutex> lock(routeMtx_);
     const auto it = routes_.find(slotId.toStdString());
     if (it != routes_.end()) { it->second.touchDiffer.reset(); }
+}
+
+// A stream that comes up has the host build every pad on it afresh, holding no contact.
+void MoonlightManager::forgetTouchFramesOn(const MoonlightSession* session) {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    for (auto& entry : routes_) {
+        if (entry.second.session == session) { entry.second.touchDiffer.reset(); }
+    }
 }
 
 // Unbinding and binding again would release the number, and the LAST pad off a live session

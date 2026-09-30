@@ -330,6 +330,7 @@ class MoonlightManager : public QObject {
     std::optional<std::uint8_t> numberOnSession(const QString& slotId,
                                                 const MoonlightSession* session) const;
     void forgetTouchFrame(const QString& slotId);
+    void forgetTouchFramesOn(const MoonlightSession* session);
     void reannounceInPlace(const QString& slotId, std::uint8_t number, MoonlightSession& session,
                            const moonlight::AnnouncedPad& wanted);
 

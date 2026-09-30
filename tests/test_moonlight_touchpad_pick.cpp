@@ -260,3 +260,21 @@ TEST_CASE("A finger held through a re-apply is lifted on the host when it lifts"
         return touchesAfter(fx.host, before, dish::moonlight::kTouchEventUp) == 1;
     }));
 }
+
+TEST_CASE("A pad's touch starts from nothing on a stream that comes up again",
+          "[moonlight][touchpad]") {
+    // The host builds its pads afresh for a new stream, so a finger that stayed down across it is
+    // a contact the new pad never saw go down.
+    Fixture fx;
+    REQUIRE(fx.bindLive(dish::models::kMoonlightDevicePlayStation));
+    fx.fingerDown();
+    REQUIRE(pumpUntil([&fx] { return downsAfter(fx.host, 0) == 1; }));
+    auto* live = fx.session();
+    MoonlightSessionTestAccess::settle(*live, SessionPhase::ControlConnecting);
+    MoonlightSessionTestAccess::feed(*live, SessionEvent::ControlConnected);
+    const std::size_t before = fx.host.packets().size();
+
+    fx.fingerDown();
+
+    CHECK(pumpUntil([&fx, before] { return downsAfter(fx.host, before) == 1; }));
+}
