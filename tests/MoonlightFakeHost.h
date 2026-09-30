@@ -20,7 +20,8 @@
 //
 // A refusal is answered the way a host refuses: HTTP 200 carrying a status_code
 // of its own, which is how Moonlight says no, or under an HTTP error with the
-// same body (refuseWith), which is how Wolf says it.
+// same body (refuseWith), which is how Wolf says it. answerWith() answers one
+// path with a status line and body of the test's choosing.
 
 #pragma once
 
@@ -141,6 +142,14 @@ class MoonlightFakeHost : public QObject {
     bool listening() const { return server_.isListening(); }
     int port() const { return static_cast<int>(server_.serverPort()); }
 
+    // Answer every request for `path` with this status line and body: Wolf answers a /launch for
+    // an app it does not know with HTTP 400 and <root status_code="400"/>.
+    void answerWith(const QString& path, int httpStatus, QByteArray body) {
+        answeredPath_ = path;
+        answeredStatus_ = httpStatus;
+        answeredBody_ = std::move(body);
+    }
+
     // Which phase numbers were served, in order, so a refused exchange can be
     // shown to have STOPPED rather than merely to have failed at the end.
     const QList<int>& phasesServed() const { return phasesServed_; }
@@ -164,9 +173,11 @@ class MoonlightFakeHost : public QObject {
             if (parts.size() < 2) { return; }
             const QUrl url(QString::fromUtf8(parts.at(1)));
             const QUrlQuery query(url.query());
-            const QByteArray body = replyFor(url.path(), query);
+            const bool answeredAsSet = url.path() == answeredPath_;
+            const QByteArray body = answeredAsSet ? answeredBody_ : replyFor(url.path(), query);
             if (body.isNull()) { return; } // hold the request open, answer nothing
-            const QByteArray head = "HTTP/1.1 " + QByteArray::number(statusFor(url.path(), query)) +
+            const int status = answeredAsSet ? answeredStatus_ : statusFor(url.path(), query);
+            const QByteArray head = "HTTP/1.1 " + QByteArray::number(status) +
                                     " X\r\nContent-Type: application/xml\r\nContent-Length: " +
                                     QByteArray::number(body.size()) +
                                     "\r\nConnection: close\r\n\r\n";
@@ -255,6 +266,9 @@ class MoonlightFakeHost : public QObject {
     // Unless refuseWith says otherwise, the refusal rides an HTTP 200.
     int refusalStatus_ = kHttpOk;
     QString refusalMessage_ = QStringLiteral("Invalid uniqueid");
+    QString answeredPath_;
+    int answeredStatus_ = 0;
+    QByteArray answeredBody_;
     QString uniqueId_ = QStringLiteral("FAKEHOST-0001");
     fake_detail::PairingServer pairing_;
     QList<int> phasesServed_;

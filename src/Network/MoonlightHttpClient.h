@@ -49,13 +49,14 @@ inline constexpr int kMoonlightStatusOk = 200;
 // A parsed Moonlight XML response: the flat leaf-tag -> text map plus the
 // root status. `reachable` is false when the transport produced no answer.
 //
-// A HOST SAYS NO IN THE BODY, NOT IN THE STATUS LINE. Measured against a live
-// Sunshine host: asking /launch to start a second app answers HTTP 200 carrying
-// `<root status_code="400" status_message="An app is already running on this
-// host"><resume>0</resume></root>`. Code that reads only the HTTP status treats
-// that refusal as a success and then fails further downstream on the missing
-// sessionUrl0, naming the wrong thing. Every XML endpoint is read through
-// `ok()`, never through the transport status.
+// A HOST SAYS NO IN THE BODY, NOT ONLY IN THE STATUS LINE. Measured against a
+// live Sunshine host: asking /launch to start a second app answers HTTP 200
+// carrying `<root status_code="400" status_message="An app is already running on
+// this host"><resume>0</resume></root>`. Code that reads only the HTTP status
+// treats that refusal as a success and then fails further downstream on the
+// missing sessionUrl0, naming the wrong thing. Wolf refuses in the status line as
+// well, with HTTP 400 for an app it does not know. Every XML endpoint is read
+// through `ok()`, never through the transport status.
 struct MoonlightXmlResponse {
     bool reachable = false;
     // The root status_code attribute, or the status line's when the body names none.

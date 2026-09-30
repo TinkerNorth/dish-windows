@@ -29,7 +29,7 @@ TEST_CASE("parseMoonlightXml reports not-paired and challenge fields", "[moonlig
     REQUIRE(resp.value(QStringLiteral("challengeresponse")) == QStringLiteral("ABCD"));
 }
 
-TEST_CASE("a host refuses in the body, not in the status line", "[moonlight][http][status]") {
+TEST_CASE("a host refuses in the body, not in the status line", "[moonlight][http][status][h3]") {
     // Measured against a live Sunshine host: asking /launch to start a second
     // app answers HTTP 200 carrying this. Code that reads only the transport
     // status treats the refusal as a success and then fails downstream on the

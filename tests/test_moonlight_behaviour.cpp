@@ -42,6 +42,8 @@
 #include <QStringList>
 
 #include <memory>
+#include <optional>
+#include <utility>
 
 using dish::models::MoonlightBinding;
 using dish::models::MoonlightHost;
@@ -625,6 +627,93 @@ TEST_CASE("A resume the host offered and then refused is its own answer",
     REQUIRE(session->failure() == SessionFailure::ResumeRejected);
     REQUIRE(fx.uiStateAnswered(kIdA) == SessionUiState::ResumeFailed);
     REQUIRE(dish::moonlight::sessionUiOffersQuit(fx.uiStateAnswered(kIdA)));
+}
+
+// ── H3 · a refusal in the status line is still an answer ────────────────────
+
+TEST_CASE("A launch refused in the status line is a refusal, not a host that never answered",
+          "[moonlight][behaviour][h3]") {
+    // Wolf answers a /launch for an app it does not know with HTTP 400 and
+    // <root status_code="400"/>, where Sunshine refuses inside a 200 (the busy
+    // cases above). Read as a transport failure, the host that said no rendered
+    // as a host nobody could reach.
+    ensureApp();
+    MoonlightFakeHost wolf(QStringLiteral("0000"));
+    REQUIRE(wolf.listening());
+    wolf.answerWith(kLaunch, 400, QByteArrayLiteral("<root status_code=\"400\"/>"));
+
+    // The reply as the client's own transport reads it. /launch rides TLS and
+    // this host is plaintext, but both routes hand their reply to one reader.
+    dish::net::MoonlightHttpClient client;
+    std::optional<dish::net::MoonlightXmlResponse> reply;
+    client.getHttp(QStringLiteral("127.0.0.1"), wolf.port(), kLaunch, {},
+                   [&reply](const dish::net::MoonlightXmlResponse& r) { reply = r; });
+    REQUIRE(pumpUntil([&reply] { return reply.has_value(); }));
+    CHECK(reply->reachable);
+    CHECK(reply->statusCode == 400);
+
+    Fixture fx;
+    fx.establishPairing(kIpA);
+    auto* session = fx.sessionFor(kIpA);
+    REQUIRE(session != nullptr);
+    MoonlightSessionTestAccess::settle(*session, SessionPhase::Launching);
+    MoonlightRequestLog log(*fx.manager);
+
+    MoonlightSessionTestAccess::feedLaunchReply(*session, *reply, /*resuming=*/false);
+
+    CHECK(session->failure() == SessionFailure::LaunchRejected);
+    CHECK(fx.uiStateAnswered(kIdA) == SessionUiState::Refused);
+    // A refused launch started nothing of ours, so there is nothing to close.
+    CHECK(log.count(kCancel) == 0);
+}
+
+TEST_CASE("A refusal whose body names no status of its own takes the status line's",
+          "[moonlight][behaviour][h3]") {
+    ensureApp();
+    MoonlightFakeHost host(QStringLiteral("0000"));
+    REQUIRE(host.listening());
+    host.answerWith(kLaunch, 404, QByteArrayLiteral("<html>Not Found</html>"));
+
+    dish::net::MoonlightHttpClient client;
+    std::optional<dish::net::MoonlightXmlResponse> reply;
+    client.getHttp(QStringLiteral("127.0.0.1"), host.port(), kLaunch, {},
+                   [&reply](const dish::net::MoonlightXmlResponse& r) { reply = r; });
+    REQUIRE(pumpUntil([&reply] { return reply.has_value(); }));
+
+    CHECK(reply->reachable);
+    CHECK_FALSE(reply->ok());
+    CHECK(reply->statusCode == 404);
+}
+
+TEST_CASE("A launch the host turns into a resume brings the session up",
+          "[moonlight][behaviour][h3][b9]") {
+    // A /launch from a client that already holds a session on Wolf is answered
+    // as a resume: HTTP 200, a sessionUrl0 and <resume>1</resume>, and no
+    // <gamesession>. It is the session this client already holds, coming back.
+    ensureApp();
+    auto settings = makeSharedSettings();
+    MoonlightHostRepository repo(settings);
+    const auto identity = repo.getOrCreateIdentity();
+    REQUIRE(identity.has_value());
+    // The RTSP handshake the accepted launch starts dials this host, which
+    // answers it at once rather than leaving a worker waiting on a timeout.
+    MoonlightFakeHost rtsp(QStringLiteral("0000"));
+    REQUIRE(rtsp.listening());
+    MoonlightHost h = host(QStringLiteral("Fake"), QStringLiteral("127.0.0.1"));
+    h.httpPort = rtsp.port();
+    h.httpsPort = rtsp.port();
+    MoonlightSession session(h, *identity, &repo);
+    MoonlightSessionTestAccess::settle(session, SessionPhase::Launching);
+
+    const auto resumed = dish::net::parseMoonlightXml(
+        QStringLiteral("<root status_code=\"200\"><sessionUrl0>rtsp://127.0.0.1:%1</sessionUrl0>"
+                       "<resume>1</resume></root>")
+            .arg(rtsp.port())
+            .toUtf8());
+    MoonlightSessionTestAccess::feedLaunchReply(session, resumed, /*resuming=*/false);
+
+    CHECK(session.phase() == SessionPhase::RtspHandshake);
+    CHECK(session.failure() == SessionFailure::None);
 }
 
 // ── B11, B12, B21 · nothing about a host may block a binding ────────────────
