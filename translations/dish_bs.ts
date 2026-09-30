@@ -1895,6 +1895,26 @@
             <numerusform>%1 od %n pingova</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Not available</source>
+        <translation>Nije dostupan</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Uključen</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Isključen</translation>
+    </message>
+    <message>
+        <source>Radios</source>
+        <translation>Radiji</translation>
+    </message>
+    <message>
+        <source>Adapter</source>
+        <translation>Adapter</translation>
+    </message>
 </context>
 <context>
     <name>DonatePage</name>

@@ -1883,6 +1883,26 @@
             <numerusform>%1 de %n pings</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Not available</source>
+        <translation>Indisponível</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Ligado</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Desligado</translation>
+    </message>
+    <message>
+        <source>Radios</source>
+        <translation>Rádios</translation>
+    </message>
+    <message>
+        <source>Adapter</source>
+        <translation>Adaptador</translation>
+    </message>
 </context>
 <context>
     <name>DonatePage</name>
