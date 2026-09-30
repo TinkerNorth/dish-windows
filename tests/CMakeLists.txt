@@ -25,6 +25,7 @@ set(DISH_TEST_SOURCES
     test_kernel.cpp
     test_async_state.cpp
     test_session_crypto.cpp
+    test_http_framing.cpp
     # Moonlight (GameStream) path.
     test_moonlight_control.cpp
     test_moonlight_touch_differ.cpp

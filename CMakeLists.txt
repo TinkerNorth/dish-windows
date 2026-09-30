@@ -168,6 +168,8 @@ set(DISH_CORE_SOURCES
     src/architecture/Repository.h
     src/core/wire/SessionCrypto.h
     src/core/wire/SessionCrypto.cpp
+    src/core/wire/HttpFraming.h
+    src/core/wire/HttpFraming.cpp
     # Moonlight (GameStream) protocol core: control-stream codec, pairing
     # crypto, RTSP text and the session FSM. Pure logic; sockets live in
     # src/Network, persistence in src/repository.
