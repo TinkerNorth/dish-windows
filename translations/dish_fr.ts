@@ -1857,10 +1857,6 @@
         </translation>
     </message>
     <message>
-        <source>%1 of %2 pings</source>
-        <translation>%1 sur %2 pings</translation>
-    </message>
-    <message>
         <source>%1 (offered v%2)</source>
         <translation>%1 (proposé : v%2)</translation>
     </message>
@@ -1879,6 +1875,13 @@
     <message>
         <source>on the host: %1 · confirmed: %2</source>
         <translation>sur l&apos;hôte : %1 · confirmé : %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 of %n pings</source>
+        <translation>
+            <numerusform>%1 sur %n ping</numerusform>
+            <numerusform>%1 sur %n pings</numerusform>
+        </translation>
     </message>
 </context>
 <context>

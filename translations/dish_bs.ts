@@ -1868,10 +1868,6 @@
         </translation>
     </message>
     <message>
-        <source>%1 of %2 pings</source>
-        <translation>%1 od %2 pingova</translation>
-    </message>
-    <message>
         <source>%1 (offered v%2)</source>
         <translation>%1 (ponuđeno: v%2)</translation>
     </message>
@@ -1890,6 +1886,14 @@
     <message>
         <source>on the host: %1 · confirmed: %2</source>
         <translation>na hostu: %1 · potvrđeno: %2</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 of %n pings</source>
+        <translation>
+            <numerusform>%1 od %n pinga</numerusform>
+            <numerusform>%1 od %n pinga</numerusform>
+            <numerusform>%1 od %n pingova</numerusform>
+        </translation>
     </message>
 </context>
 <context>
