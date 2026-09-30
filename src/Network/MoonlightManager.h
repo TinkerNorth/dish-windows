@@ -259,6 +259,14 @@ class MoonlightManager : public QObject {
     // Main thread. Asks the switch again for every bound slot, after the user turned one.
     void refreshMotionSwitches();
 
+    // A host's touchpad pick as the store holds it, empty for a host never picked for. Read on the
+    // main thread when a slot binds, which Apply does after writing the pick, and kept with the
+    // slot's route: forwardTouch sends a pad's touches only where the pick lets them reach the
+    // host, and lifts the contact the host holds when they stop. With no pick to read, every host
+    // reads as never picked for.
+    using TouchpadPick = std::function<std::optional<std::string>(const QString& hostId)>;
+    void setTouchpadPick(TouchpadPick touchpadPick);
+
   signals:
     void hostsChanged();
     void scanningChanged();
@@ -329,6 +337,9 @@ class MoonlightManager : public QObject {
     bool motionSwitchAllows(const QString& slotId) const;
     // Main thread. Keeps the switch's answer with the slot's route, where forwardMotion reads it.
     void readMotionSwitch(const QString& slotId);
+    std::optional<std::string> touchpadPickFor(const QString& hostId) const;
+    // Main thread. Keeps whether the slot's touches reach its host with its route.
+    void keepTouchReach(const QString& slotId, bool touchReaches);
 
     // Resolves a slot to its live session + controller number under routeMtx_.
     struct Route {
@@ -336,6 +347,7 @@ class MoonlightManager : public QObject {
         std::uint8_t controllerNumber = 0;
         QString hostId;
         bool userMotionOn = true;
+        bool touchReaches = true;
         // Per bound pad: the last touch frame, so the event stream is the
         // difference between frames. Dies with the route, which is exactly when
         // the host forgets the pad's contacts too.
@@ -389,6 +401,7 @@ class MoonlightManager : public QObject {
     QHash<QString, moonlight::PadSlots> padSlots_;
     std::atomic<bool> anyBound_{false};
     MotionSwitch motionSwitch_;
+    TouchpadPick touchpadPick_;
 };
 
 } // namespace dish::net

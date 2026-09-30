@@ -12,6 +12,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <optional>
+#include <string>
+
 using namespace dish::moonlight;
 
 TEST_CASE("PadSlots assigns the lowest free controller number", "[moonlight][padslots]") {
@@ -376,4 +379,32 @@ TEST_CASE("Only another type or another motion bit gets the user another pad",
         sameToTheHost.capabilities = static_cast<std::uint8_t>(held.capabilities ^ unread);
         CHECK_FALSE(hostBuildsAnotherPad(held, sameToTheHost));
     }
+}
+
+// ── The host's touchpad pick, on a Moonlight binding ────────────────────────
+
+TEST_CASE("A host never picked for gets a PlayStation pad's touches", "[moonlight][padslots]") {
+    // The Pad the binding editors show for it, and the ds4 render a satellite declares.
+    CHECK(touchReachesHost(std::nullopt, /*padHasTouchpad=*/true, kPadTypePlayStation));
+}
+
+TEST_CASE("A Pad pick sends the touches and an Off pick keeps them", "[moonlight][padslots]") {
+    CHECK(touchReachesHost(std::string("ds4"), true, kPadTypePlayStation));
+    CHECK_FALSE(touchReachesHost(std::string("off"), true, kPadTypePlayStation));
+}
+
+TEST_CASE("A type that renders no touchpad gets no touches", "[moonlight][padslots]") {
+    // The Xbox and Nintendo pads a host builds have no touchpad to put them on.
+    CHECK_FALSE(touchReachesHost(std::nullopt, true, kPadTypeXbox));
+    CHECK_FALSE(touchReachesHost(std::string("ds4"), true, kPadTypeNintendo));
+}
+
+TEST_CASE("A pad with no touchpad sends no touches", "[moonlight][padslots]") {
+    CHECK_FALSE(touchReachesHost(std::nullopt, /*padHasTouchpad=*/false, kPadTypePlayStation));
+}
+
+TEST_CASE("A Mouse pick sends no touches while no touchpad is routed as a mouse",
+          "[moonlight][padslots]") {
+    // As on a satellite: a blocked pick never falls back to the pad render.
+    CHECK_FALSE(touchReachesHost(std::string("mouse"), true, kPadTypePlayStation));
 }

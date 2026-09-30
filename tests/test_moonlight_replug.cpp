@@ -346,15 +346,16 @@ TEST_CASE("A replugged pad streams motion only once the pad the host built asks 
 
 TEST_CASE("A replugged pad's touch starts from nothing", "[moonlight][replug][h5]") {
     // A finger that stayed on the pad through the replug is a contact the new pad never saw go
-    // down, so the next frame has to put it down again rather than move it.
+    // down, so the next frame has to put it down again rather than move it. The pad loses its gyro
+    // in between, which is a replug that keeps a type whose pad has a touchpad.
     Fixture fx;
     REQUIRE(fx.host.listening());
-    REQUIRE(fx.bind(QStringLiteral("sdl:1"), dish::models::kMoonlightDeviceXbox, false, false) ==
-            BindOutcome::Bound);
+    REQUIRE(fx.bind(QStringLiteral("sdl:1"), dish::models::kMoonlightDevicePlayStation, true,
+                    false) == BindOutcome::Bound);
     auto* session = fx.session();
     REQUIRE(session != nullptr);
     REQUIRE(fx.bringLive(*session));
-    REQUIRE(pumpUntil([&fx] { return fx.host.padType(0) == kPadTypeXbox; }));
+    REQUIRE(fx.announced(1));
     const auto touch = [&fx] {
         fx.manager->forwardTouch("sdl:1", true, 7, 100, 200, false, 0, 0, 0);
     };
@@ -369,10 +370,11 @@ TEST_CASE("A replugged pad's touch starts from nothing", "[moonlight][replug][h5
         return count;
     };
     REQUIRE(pumpUntil([&downs] { return downs() == 1; }));
+    const std::size_t before = fx.host.packets().size();
 
     REQUIRE(fx.bind(QStringLiteral("sdl:1"), dish::models::kMoonlightDevicePlayStation, false,
                     false) == BindOutcome::Bound);
-    REQUIRE(pumpUntil([&fx] { return fx.host.padType(0) == kPadTypePlayStation; }));
+    REQUIRE(pumpUntil([&fx, before] { return padPacketsAfter(fx.host, before) >= 2; }));
     touch();
 
     CHECK(pumpUntil([&downs] { return downs() == 2; }));

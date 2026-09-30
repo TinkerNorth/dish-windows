@@ -181,6 +181,9 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
     motionSwitchSub_ = motionEnabledStore_.state().subscribe(
         [this](const source::MotionEnabledMap&) { moonlight_.refreshMotionSwitches(); },
         /*emitCurrent=*/false);
+    // The host's touchpad pick, which Apply writes before it binds.
+    moonlight_.setTouchpadPick(
+        [this](const QString& hostId) { return touchpadModeStore_.modeFor(hostId.toStdString()); });
 
     autoReconnectTimer_->setInterval(15'000);
     QObject::connect(autoReconnectTimer_, &QTimer::timeout, this,

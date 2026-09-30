@@ -700,8 +700,11 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
     // something that will not arrive.
     const auto arrival = moonlight::arrivalForBinding(controllerType, hasRumble, hasMotion,
                                                       hasTouchpad, hasBattery, hasLightbar);
+    const bool touchReaches =
+        moonlight::touchReachesHost(touchpadPickFor(hostId), hasTouchpad, arrival.type);
     if (const auto held = numberOnSession(slotId, session)) {
         readMotionSwitch(slotId);
+        keepTouchReach(slotId, touchReaches);
         reannounceInPlace(slotId, *held, *session, arrival);
         // A session that is down is started again, as the first bind on a host starts one; one
         // that is up or on its way up reduces this to nothing.
@@ -736,6 +739,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
         route.controllerNumber = *number;
         route.hostId = hostId;
         route.userMotionOn = userMotionOn;
+        route.touchReaches = touchReaches;
         routes_[key] = std::move(route);
         anyBound_.store(true, std::memory_order_relaxed);
     }
@@ -1026,7 +1030,11 @@ void MoonlightManager::forwardTouch(const std::string& slotId, bool finger0Activ
         f1.id = finger1Id;
         f1.x = moonlight::touchNorm(finger1X);
         f1.y = moonlight::touchNorm(finger1Y);
-        events = it->second.touchDiffer.diff(f0, f1);
+        // A pad whose touches do not reach the host is diffed against nothing touching, which
+        // lifts a contact the host still holds and sends nothing after it.
+        const moonlight::TouchFinger nothing;
+        events = it->second.touchReaches ? it->second.touchDiffer.diff(f0, f1)
+                                         : it->second.touchDiffer.diff(nothing, nothing);
     }
     if (session == nullptr) { return; }
     for (const auto& event : events) { session->sendControllerTouch(number, event); }
@@ -1051,6 +1059,21 @@ void MoonlightManager::forwardBattery(const std::string& slotId, std::uint8_t le
 
 void MoonlightManager::setMotionSwitch(MotionSwitch motionSwitch) {
     motionSwitch_ = std::move(motionSwitch);
+}
+
+void MoonlightManager::setTouchpadPick(TouchpadPick touchpadPick) {
+    touchpadPick_ = std::move(touchpadPick);
+}
+
+std::optional<std::string> MoonlightManager::touchpadPickFor(const QString& hostId) const {
+    if (!touchpadPick_) { return std::nullopt; }
+    return touchpadPick_(hostId);
+}
+
+void MoonlightManager::keepTouchReach(const QString& slotId, bool touchReaches) {
+    std::lock_guard<std::mutex> lock(routeMtx_);
+    const auto it = routes_.find(slotId.toStdString());
+    if (it != routes_.end()) { it->second.touchReaches = touchReaches; }
 }
 
 void MoonlightManager::refreshMotionSwitches() {
