@@ -815,7 +815,8 @@ class AppViewModel : public QObject {
     QStringList moonlightAppTitles_;
 
     // ── Diagnostics internals ────────────────────────────────────────────────
-    QVariantMap satelliteBindingDiagnostics(const models::ControllerSlot& slot) const;
+    QVariantMap satelliteBindingDiagnostics(const models::ControllerSlot& slot,
+                                            const QString& hostId) const;
     QVariantMap moonlightBindingDiagnostics(const models::ControllerSlot& slot,
                                             const QString& hostId) const;
     // One poll: the snapshot, and the stick test's sample and clock.
