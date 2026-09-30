@@ -40,3 +40,34 @@ TEST_CASE("isPrivateHostLiteral handles IPv6 edge forms", "[iplit]") {
     CHECK_FALSE(isPrivateHostLiteral("::ffff:8.8.8.8"));  // v4-mapped, high bytes 0 -> not private
     CHECK_FALSE(isPrivateHostLiteral("::ffff:10.0.0.1")); // v4-mapped, high bytes 0 -> not private
 }
+
+// The satellite binds AF_INET only (its UDP receiver, its HTTPS listener on
+// 0.0.0.0, its beacon and mDNS responder), so a private IPv6 literal is local
+// and still unreachable.
+TEST_CASE("classifySatelliteHost: a private IPv4 literal is reachable", "[iplit][satellite]") {
+    using dish::net::classifySatelliteHost;
+    using dish::net::SatelliteHostVerdict;
+    CHECK(classifySatelliteHost("10.0.0.5") == SatelliteHostVerdict::Reachable);
+    CHECK(classifySatelliteHost("192.168.1.1") == SatelliteHostVerdict::Reachable);
+    CHECK(classifySatelliteHost("127.0.0.1") == SatelliteHostVerdict::Reachable);
+}
+
+TEST_CASE("classifySatelliteHost: a private IPv6 literal is local but not IPv4",
+          "[iplit][satellite]") {
+    using dish::net::classifySatelliteHost;
+    using dish::net::SatelliteHostVerdict;
+    CHECK(classifySatelliteHost("fd00::5") == SatelliteHostVerdict::NotIpv4);
+    CHECK(classifySatelliteHost("[fd00::5]") == SatelliteHostVerdict::NotIpv4);
+    CHECK(classifySatelliteHost("fe80::1") == SatelliteHostVerdict::NotIpv4);
+    CHECK(classifySatelliteHost("::1") == SatelliteHostVerdict::NotIpv4);
+}
+
+TEST_CASE("classifySatelliteHost: a public literal or a hostname is not local, whatever its family",
+          "[iplit][satellite]") {
+    using dish::net::classifySatelliteHost;
+    using dish::net::SatelliteHostVerdict;
+    CHECK(classifySatelliteHost("8.8.8.8") == SatelliteHostVerdict::NotLocal);
+    CHECK(classifySatelliteHost("2001:4860:4860::8888") == SatelliteHostVerdict::NotLocal);
+    CHECK(classifySatelliteHost("example.com") == SatelliteHostVerdict::NotLocal);
+    CHECK(classifySatelliteHost("") == SatelliteHostVerdict::NotLocal);
+}

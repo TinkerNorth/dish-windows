@@ -217,7 +217,6 @@ Kit.Page {
             if (current >= 0) {
                 draft.chooseType(current, page.typeNameFor(current));
             }
-            draft.touchpadMode = page.touchpadIndex(App.touchpadModeFor(boundId));
         }
         draft.motionOn = App.motionEnabledFor(page.slotId);
         draft.rumbleOn = App.rumbleEnabledFor(page.slotId);
@@ -421,17 +420,10 @@ Kit.Page {
                                            && !page.touchpadTunable && !page.micTunable
                                            && !page.speakerTunable
 
-    readonly property var touchpadOptions: [qsTr("Off"), qsTr("Pad"), qsTr("Mouse")]
-
-    function touchpadIndex(token) {
-        if (token === "pad") {
-            return 1;
-        }
-        if (token === "mouse") {
-            return 2;
-        }
-        return 0;
-    }
+    readonly property bool mouseOffered: draft.offersMouse(page.matrixRows)
+    readonly property var touchpadOptions: page.mouseOffered
+                                           ? [qsTr("Off"), qsTr("Pad"), qsTr("Mouse")]
+                                           : [qsTr("Off"), qsTr("Pad")]
 
     // ── Link vocabulary ─────────────────────────────────────────────────────
     function chipText(token) {
@@ -580,7 +572,7 @@ Kit.Page {
             App.setMoonlightApp(draft.hostId, draft.appId, draft.appName);
         }
         App.applyBinding(page.slotId, draft.hostId, draft.type, draft.desiredPath,
-                         draft.motionOn, draft.rumbleOn, draft.touchpadMode,
+                         draft.motionOn, draft.rumbleOn, draft.touchpadModeToApply(),
                          draft.micOn, draft.speakerOn);
     }
 

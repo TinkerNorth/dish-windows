@@ -90,7 +90,7 @@ enum class SessionEffect {
     BeginRtsp,      // run the RTSP handshake
     ConnectControl, // ENet-connect the control channel
     SendArrival,    // send CONTROLLER_ARRIVAL for each pad
-    StartPinging,   // begin the PERIODIC_PING keepalive
+    StartPinging,   // keep the media ports pinged
     StopPinging,    // pause pinging while faltering
     // LOCAL ONLY: stop pinging, close the media sockets, TERMINATION + ENet
     // disconnect. It is deliberately separate from the one below, because

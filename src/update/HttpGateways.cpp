@@ -3,6 +3,8 @@
 
 #include "update/HttpGateways.h"
 
+#include "update/UpdateTransportError.h"
+
 #include "core/update/UpdateManifest.h"
 
 #include <QDir>
@@ -36,25 +38,6 @@ void discardPart(const QString& partPath) {
     }
 }
 
-// A transport failure that means "this machine cannot reach the internet right
-// now" rather than "GitHub said no". The distinction only changes the copy in
-// Settings; both back off identically.
-reducer::UpdateError classify(QNetworkReply::NetworkError error) {
-    switch (error) {
-    case QNetworkReply::ConnectionRefusedError:
-    case QNetworkReply::HostNotFoundError:
-    case QNetworkReply::TemporaryNetworkFailureError:
-    case QNetworkReply::NetworkSessionFailedError:
-    case QNetworkReply::UnknownNetworkError:
-        return reducer::UpdateError::Offline;
-    case QNetworkReply::TimeoutError:
-    case QNetworkReply::OperationCanceledError:
-        return reducer::UpdateError::Stalled;
-    default:
-        return reducer::UpdateError::Http;
-    }
-}
-
 void applyCommonRequestPolicy(QNetworkRequest& request) {
     request.setRawHeader(QByteArrayLiteral("User-Agent"), updateUserAgent().toUtf8());
     // https-only redirects. This is Qt 6's default; stated explicitly because
@@ -77,6 +60,22 @@ QNetworkAccessManager* makeManager(QObject* parent) {
 
 } // namespace
 
+reducer::UpdateError classifyNetworkError(QNetworkReply::NetworkError error) {
+    switch (error) {
+    case QNetworkReply::ConnectionRefusedError:
+    case QNetworkReply::HostNotFoundError:
+    case QNetworkReply::TemporaryNetworkFailureError:
+    case QNetworkReply::NetworkSessionFailedError:
+    case QNetworkReply::UnknownNetworkError:
+        return reducer::UpdateError::Offline;
+    case QNetworkReply::TimeoutError:
+    case QNetworkReply::OperationCanceledError:
+        return reducer::UpdateError::Stalled;
+    default:
+        return reducer::UpdateError::Http;
+    }
+}
+
 QString updateUserAgent() {
     return QStringLiteral("Dish/%1 (Windows; x64)").arg(QLatin1String(DISH_VERSION));
 }
@@ -87,6 +86,33 @@ HttpManifestGateway::HttpManifestGateway(QObject* parent)
     : QObject(parent), nam_(makeManager(this)), url_(QLatin1String(kLatestManifestUrl)) {}
 
 HttpManifestGateway::~HttpManifestGateway() { cancel(); }
+
+// The reply this gateway is currently waiting on; anything else is a cancelled request whose
+// finished signal still arrived.
+void HttpManifestGateway::onManifestReply(QNetworkReply* reply) {
+    reply->deleteLater();
+    if (reply_ != reply) { return; }
+    reply_.clear();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        finish(ManifestFetchResult::failed(classifyNetworkError(reply->error())));
+        return;
+    }
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (status != 200) {
+        // 404 is the ordinary publish-window case: transient, backed off, self-healing the moment
+        // the asset appears.
+        finish(ManifestFetchResult::failed(reducer::UpdateError::Http));
+        return;
+    }
+    const QByteArray body = reply->readAll();
+    const auto parsed = UpdateManifest::parse(body);
+    if (const auto* manifest = std::get_if<UpdateManifest>(&parsed)) {
+        finish(ManifestFetchResult::ok(*manifest, body));
+        return;
+    }
+    finish(ManifestFetchResult::failed(reducer::UpdateError::ManifestInvalid));
+}
 
 void HttpManifestGateway::fetch(Callback done) {
     if (!reply_.isNull()) { return; }
@@ -101,37 +127,16 @@ void HttpManifestGateway::fetch(Callback done) {
     QNetworkReply* reply = nam_->get(request);
     reply_ = reply;
 
-    // A captive portal can answer with an arbitrarily large splash page. Cut it
-    // off at the cap rather than buffering it just to reject it later.
+    // A captive portal can answer with an arbitrarily large splash page. Cut it off at the cap
+    // rather than buffering it just to reject it later.
     QObject::connect(reply, &QNetworkReply::downloadProgress, this,
                      [this](qint64 receivedBytes, qint64) {
                          if (receivedBytes > kManifestMaxBytes && !reply_.isNull()) {
                              reply_->abort();
                          }
                      });
-    QObject::connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        reply->deleteLater();
-        if (reply_ != reply) { return; }
-        reply_.clear();
-        if (reply->error() != QNetworkReply::NoError) {
-            finish(ManifestFetchResult::failed(classify(reply->error())));
-            return;
-        }
-        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (status != 200) {
-            // 404 is the ordinary publish-window case: transient, backed off,
-            // self-healing the moment the asset appears.
-            finish(ManifestFetchResult::failed(reducer::UpdateError::Http));
-            return;
-        }
-        const QByteArray body = reply->readAll();
-        const auto parsed = UpdateManifest::parse(body);
-        if (const auto* manifest = std::get_if<UpdateManifest>(&parsed)) {
-            finish(ManifestFetchResult::ok(*manifest, body));
-            return;
-        }
-        finish(ManifestFetchResult::failed(reducer::UpdateError::ManifestInvalid));
-    });
+    QObject::connect(reply, &QNetworkReply::finished, this,
+                     [this, reply] { onManifestReply(reply); });
 }
 
 void HttpManifestGateway::cancel() {
@@ -259,7 +264,7 @@ void HttpDownloadGateway::onFinished() {
     if (done_) { return; }
 
     if (reply->error() != QNetworkReply::NoError) {
-        fail(classify(reply->error()));
+        fail(classifyNetworkError(reply->error()));
         return;
     }
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

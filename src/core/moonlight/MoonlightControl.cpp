@@ -223,6 +223,13 @@ std::vector<std::uint8_t> encodeTermination() {
     return out;
 }
 
+// ONE FUNCTION ON PURPOSE, despite its length. Every arm is the same three lines - check the body
+// is long enough for this event's fixed layout, then read its fields at their documented offsets -
+// and the case label already names it. Splitting it would put five one-use functions between a
+// reader and the layout table they are checking against, which is the only thing anyone opens this
+// for. A short body is treated as an unknown event rather than a torn frame: the caller already
+// validated the GCM tag, so the length is authoritative and a short body means a version we do not
+// model.
 std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_t len) {
     if (buf == nullptr || len < 4) { return std::nullopt; }
     ServerEvent ev;
@@ -230,9 +237,6 @@ std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_
     const std::uint16_t bodyLen = readU16Le(buf + 2);
     const std::uint8_t* body = buf + 4;
     const std::size_t avail = len - 4;
-    // A truncated body is treated as an unknown/ignored event, not a torn frame:
-    // the caller already validated the GCM tag, so the length is authoritative
-    // and a short body means a version we do not model.
     const std::size_t bl = bodyLen <= avail ? bodyLen : avail;
 
     switch (ev.rawType) {

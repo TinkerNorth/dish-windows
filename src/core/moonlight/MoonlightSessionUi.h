@@ -28,12 +28,12 @@ namespace dish::moonlight {
 
 enum class SessionUiState {
     Checking,       // M1  probe in flight, nothing cached
-    NotPaired,      // M2  answered, PairStatus 0, no stored server cert
+    NotPaired,      // M2  answered, and this client holds no pairing with it
     PairingPin,     // M3  pairing in flight, the PIN is on screen
     PairingRefused, // M4  pairing finished not-ok
     Unreachable,    // M5  never answered, and nothing remembered
     Remembered,     // M6  never answered, but the pairing is remembered
-    TrustLost,      // M7  answered with PairStatus 0 over a stored cert, or a 401
+    TrustLost,      // M7  answered without confirming the pairing we hold, or a 401
     HostReplaced,   // M8  the host's uniqueid, or its certificate, is not ours
     AppsLoading,    // M9  paired, no session of ours, /applist in flight
     NewSession,     // M10 paired, no session of ours, the list is readable

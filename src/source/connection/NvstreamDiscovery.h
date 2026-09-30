@@ -3,9 +3,9 @@
 //
 // Discovers Moonlight hosts advertised over mDNS as `_nvstream._tcp.local.`.
 // Sibling of MdnsDiscovery on the Satellite path: a one-shot raw multicast-DNS
-// client (one PTR query, then a parse of the PTR/SRV/A/TXT answers), because
-// Windows exposes no COM-free mDNS browse API. Manual host entry (an IP typed by
-// the user) is the fallback and lives in the coordinator, not here.
+// client (one PTR query, then a parse of the PTR/SRV/A answers). Manual host
+// entry (an IP typed by the user) is the fallback and lives in MoonlightManager,
+// not here.
 
 #pragma once
 

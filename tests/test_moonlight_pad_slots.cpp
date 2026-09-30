@@ -12,6 +12,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <optional>
+#include <string>
+
 using namespace dish::moonlight;
 
 TEST_CASE("PadSlots assigns the lowest free controller number", "[moonlight][padslots]") {
@@ -314,4 +317,72 @@ TEST_CASE("Auto sends the resolved type own capability set", "[moonlight][padslo
         arrivalTypeForBinding(dish::models::kMoonlightDeviceAuto, /*sourceHasMotion=*/false);
     REQUIRE(plain == kPadTypeXbox);
     REQUIRE(declaredCapabilities(plain, true, false, true, false, false) == 0x03);
+}
+
+TEST_CASE("a binding's arrival is the type it resolves to and what that type declares",
+          "[moonlight][padslots]") {
+    // The one computation the announcement and the binding strip both read.
+    const auto arrival = arrivalForBinding(dish::models::kMoonlightDevicePlayStation, true, true,
+                                           true, false, false);
+    CHECK(arrival.type == kPadTypePlayStation);
+    CHECK(arrival.capabilities ==
+          declaredCapabilities(kPadTypePlayStation, true, true, true, false, false));
+
+    const auto autoPlain =
+        arrivalForBinding(dish::models::kMoonlightDeviceAuto, true, false, true, false, false);
+    CHECK(autoPlain.type == kPadTypeXbox);
+}
+
+TEST_CASE("Only another type or another motion bit gets the user another pad",
+          "[moonlight][padslots][h5]") {
+    const AnnouncedPad held{kPadTypePlayStation,
+                            static_cast<std::uint8_t>(kPadCapAnalogTriggers | kPadCapAccel)};
+
+    CHECK_FALSE(hostBuildsAnotherPad(held, held));
+
+    AnnouncedPad anotherType = held;
+    anotherType.type = kPadTypeXbox;
+    CHECK(hostBuildsAnotherPad(held, anotherType));
+
+    for (const std::uint8_t motionBit : {kPadCapAccel, kPadCapGyro}) {
+        AnnouncedPad anotherMotion = held;
+        anotherMotion.capabilities = static_cast<std::uint8_t>(held.capabilities ^ motionBit);
+        CHECK(hostBuildsAnotherPad(held, anotherMotion));
+    }
+
+    // Every other bit is one the host never reads at arrival.
+    for (const std::uint8_t unread : {kPadCapAnalogTriggers, kPadCapRumble, kPadCapTriggerRumble,
+                                      kPadCapTouchpad, kPadCapBattery, kPadCapRgbLed}) {
+        AnnouncedPad sameToTheHost = held;
+        sameToTheHost.capabilities = static_cast<std::uint8_t>(held.capabilities ^ unread);
+        CHECK_FALSE(hostBuildsAnotherPad(held, sameToTheHost));
+    }
+}
+
+// ── The host's touchpad pick, on a Moonlight binding ────────────────────────
+
+TEST_CASE("A host never picked for gets a PlayStation pad's touches", "[moonlight][padslots]") {
+    // The Pad the binding editors show for it, and the ds4 render a satellite declares.
+    CHECK(touchReachesHost(std::nullopt, /*padHasTouchpad=*/true, kPadTypePlayStation));
+}
+
+TEST_CASE("A Pad pick sends the touches and an Off pick keeps them", "[moonlight][padslots]") {
+    CHECK(touchReachesHost(std::string("ds4"), true, kPadTypePlayStation));
+    CHECK_FALSE(touchReachesHost(std::string("off"), true, kPadTypePlayStation));
+}
+
+TEST_CASE("A type that renders no touchpad gets no touches", "[moonlight][padslots]") {
+    // The Xbox and Nintendo pads a host builds have no touchpad to put them on.
+    CHECK_FALSE(touchReachesHost(std::nullopt, true, kPadTypeXbox));
+    CHECK_FALSE(touchReachesHost(std::string("ds4"), true, kPadTypeNintendo));
+}
+
+TEST_CASE("A pad with no touchpad sends no touches", "[moonlight][padslots]") {
+    CHECK_FALSE(touchReachesHost(std::nullopt, /*padHasTouchpad=*/false, kPadTypePlayStation));
+}
+
+TEST_CASE("A Mouse pick sends no touches while no touchpad is routed as a mouse",
+          "[moonlight][padslots]") {
+    // As on a satellite: a blocked pick never falls back to the pad render.
+    CHECK_FALSE(touchReachesHost(std::string("mouse"), true, kPadTypePlayStation));
 }

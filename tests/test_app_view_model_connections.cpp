@@ -10,6 +10,7 @@
 #include "Network/ConnectionStore.h"
 #include "Network/WifiConnectionManager.h"
 
+#include "InstalledCatalog.h"
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -37,16 +38,25 @@ DiscoveredServer sat(const QString& machineId, const QString& ip, DiscoverySourc
 
 } // namespace
 
-// Discovery reactivity is NOT covered here: driving it means calling the real
-// manager's startDiscovery(), which launches a blocking Winsock/mDNS scan on the
-// global thread pool that the test process must join on exit, and there is no
-// network seam to substitute. It hangs the run, so it is verified at runtime.
+// Discovery reactivity is covered against the real manager on its effects seam,
+// with no scan on the wire, in test_wifi_connection_manager.cpp.
 
 TEST_CASE("discoverySourceLabel maps every source to the FOUND-row label",
           "[appvm][connections][source]") {
     CHECK(discoverySourceLabel(DiscoverySource::Broadcast) == QStringLiteral("UDP broadcast"));
     CHECK(discoverySourceLabel(DiscoverySource::Mdns) == QStringLiteral("mDNS"));
     CHECK(discoverySourceLabel(DiscoverySource::Both) == QStringLiteral("mDNS + broadcast"));
+}
+
+TEST_CASE("discoverySourceLabel reads in the user's language", "[appvm][connections][i18n]") {
+    if (!dish::test::catalogsBuilt()) { SKIP("built without Qt LinguistTools"); }
+    const dish::test::InstalledCatalog german(QStringLiteral("de_DE"));
+    REQUIRE(german.loaded);
+    const QString inGerman =
+        german.lookup("dish::models::DiscoverySource", QStringLiteral("mDNS + broadcast"));
+    REQUIRE_FALSE(inGerman.isEmpty());
+
+    CHECK(discoverySourceLabel(DiscoverySource::Both).toStdString() == inGerman.toStdString());
 }
 
 TEST_CASE("a discovered server keeps its source for the FOUND-row label",

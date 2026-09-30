@@ -3,23 +3,53 @@
 
 #include "HTTPClient.h"
 
+#include "source/http/HttpTransport.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
-#include <QSslCertificate>
 #include <QSslConfiguration>
-#include <QSslError>
 #include <QSslSocket>
 #include <QUrl>
+
+#include <memory>
+#include <utility>
+#include <vector>
 
 namespace dish::net {
 
 namespace {
 
 constexpr int kTimeoutMs = 5000;
+
+// VerifyNone only stops the handshake refusing the self-signed certificate before the pin verifier
+// has seen it; the verifier is the real gate.
+QSslConfiguration satelliteTls() {
+    QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
+    tls.setPeerVerifyMode(QSslSocket::VerifyNone);
+    return tls;
+}
+
+// Every call is JSON, and the rest ride only when they carry something. The proof header exists so
+// a diverged pairing key fails with a terminal 401 rather than as a silently undecryptable UDP
+// session.
+std::vector<wire::HttpHeader> satelliteHeaders(const QString& deviceId, const QString& hmacProof,
+                                               const QString& acceptLanguage,
+                                               const QString& ifNoneMatch) {
+    struct Field {
+        const char* name;
+        const QString& value;
+    };
+    const Field optionalFields[] = {{"X-Device-Id", deviceId},
+                                    {"X-Hmac-Proof", hmacProof},
+                                    {"Accept-Language", acceptLanguage},
+                                    {"If-None-Match", ifNoneMatch}};
+    std::vector<wire::HttpHeader> headers{{"Content-Type", "application/json"}};
+    for (const Field& field : optionalFields) {
+        if (!field.value.isEmpty()) { headers.emplace_back(field.name, field.value.toStdString()); }
+    }
+    return headers;
+}
 
 QJsonObject parseObject(const QByteArray& body) {
     if (body.isEmpty()) { return {}; }
@@ -29,59 +59,70 @@ QJsonObject parseObject(const QByteArray& body) {
     return doc.object();
 }
 
+// A reply that never arrived is "connect failed" whatever the endpoint; one that did is read by the
+// endpoint's own parser and stamped with the transport status, which the body cannot carry.
+models::PairResponse pairResponseFrom(const QByteArray& body, int status, bool reachable,
+                                      models::PairResponse (*parse)(const QJsonObject&)) {
+    if (!reachable) {
+        models::PairResponse r;
+        r.ok = false;
+        r.error = QStringLiteral("connect failed");
+        // No JSON body arrived, so httpStatus stays 0 as well.
+        r.reachable = false;
+        return r;
+    }
+    auto r = parse(parseObject(body));
+    r.httpStatus = status;
+    return r;
+}
+
 } // namespace
 
-HTTPClient::HTTPClient(QObject* parent) : QObject(parent), nam_(new QNetworkAccessManager(this)) {
-    nam_->setTransferTimeout(kTimeoutMs);
+HTTPClient::HTTPClient(QObject* parent) : HTTPClient(new http::HttpTransport, parent) {}
+
+HTTPClient::HTTPClient(http::HttpTransport* transport, QObject* parent)
+    : QObject(parent), transport_(transport) {
+    transport_->setParent(this);
 }
 
 HTTPClient::~HTTPClient() = default;
+
+// A status is the server answering, whatever it said; without one the transport failed.
+HTTPClient::RawReply HTTPClient::rawReplyOf(const http::HttpResult& result, bool pinMismatch) {
+    RawReply out;
+    out.status = result.response.status;
+    out.reachable = out.status != 0;
+    out.body = QByteArray::fromStdString(result.response.body);
+    out.etag = QString::fromStdString(result.response.header("etag"));
+    out.pinMismatch = pinMismatch;
+    return out;
+}
 
 void HTTPClient::perform(const QString& url, const QByteArray& method, const QByteArray& body,
                          const QString& deviceId, const QString& hmacProof,
                          const QString& acceptLanguage, const QString& ifNoneMatch,
                          std::function<void(const RawReply&)> done) {
-    QNetworkRequest req((QUrl(url)));
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    // The proof header exists so a diverged pairing key fails here with a
-    // terminal 401 rather than as a silently undecryptable UDP session.
-    if (!deviceId.isEmpty()) { req.setRawHeader("X-Device-Id", deviceId.toUtf8()); }
-    if (!hmacProof.isEmpty()) { req.setRawHeader("X-Hmac-Proof", hmacProof.toUtf8()); }
-    if (!acceptLanguage.isEmpty()) { req.setRawHeader("Accept-Language", acceptLanguage.toUtf8()); }
-    if (!ifNoneMatch.isEmpty()) { req.setRawHeader("If-None-Match", ifNoneMatch.toUtf8()); }
-
-    // VerifyNone only stops Qt refusing the self-signed chain before we get a
-    // chance to pin it; the `encrypted` handler below is the real gate.
-    QSslConfiguration tls = QSslConfiguration::defaultConfiguration();
-    tls.setPeerVerifyMode(QSslSocket::VerifyNone);
-    req.setSslConfiguration(tls);
-
-    const QString host = QUrl(url).host();
-
-    auto* reply = nam_->sendCustomRequest(req, method, body);
-    QObject::connect(reply, &QNetworkReply::sslErrors, reply,
-                     [reply](const QList<QSslError>&) { reply->ignoreSslErrors(); });
-    // `encrypted` is the earliest point the peer cert is available. An abort here
-    // surfaces through `finished` as unreachable, indistinguishable from a
-    // dropped connection.
+    http::HttpRequest request{
+        .url = QUrl(url),
+        .method = method,
+        .headers = satelliteHeaders(deviceId, hmacProof, acceptLanguage, ifNoneMatch),
+        .body = body,
+        .tls = satelliteTls(),
+        .timeoutMs = kTimeoutMs};
+    // The pin is checked on the TLS `encrypted` edge, and a refusal there leaves no status and no
+    // body, so the mismatch rides out beside the reply or it would read as a dropped connection.
+    const auto pinMismatch = std::make_shared<bool>(false);
+    const QString host = request.url.host();
+    http::PeerCheck peerCheck;
     if (pinVerifier_) {
-        QObject::connect(reply, &QNetworkReply::encrypted, reply, [this, reply, host] {
-            const QByteArray der = reply->sslConfiguration().peerCertificate().toDer();
-            if (!pinVerifier_(host, der)) { reply->abort(); }
-        });
+        peerCheck = [verifier = pinVerifier_, host, pinMismatch](const QByteArray& certDer) {
+            return verifier(host, certDer, *pinMismatch);
+        };
     }
-    QObject::connect(reply, &QNetworkReply::finished, this, [reply, done = std::move(done)] {
-        reply->deleteLater();
-        RawReply out;
-        const auto statusVar = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
-        out.status = statusVar.isValid() ? statusVar.toInt() : 0;
-        out.body = reply->readAll();
-        // A 4xx/5xx body still means the server answered; only a missing status
-        // AND an empty body is a transport failure.
-        out.reachable = out.status != 0 || !out.body.isEmpty();
-        out.etag = QString::fromUtf8(reply->rawHeader("ETag"));
-        done(out);
-    });
+    transport_->exchange(std::move(request), std::move(peerCheck),
+                         [pinMismatch, done = std::move(done)](const http::HttpResult& result) {
+                             done(rawReplyOf(result, *pinMismatch));
+                         });
 }
 
 void HTTPClient::putSession(const QString& ip, int port, const QString& deviceId,
@@ -103,7 +144,7 @@ void HTTPClient::putSession(const QString& ip, int port, const QString& deviceId
         if (r.reachable) { resp = models::SessionResponse::fromJson(parseObject(r.body)); }
         resp.httpStatus = r.status;
         resp.reachable = r.reachable;
-        cb(resp);
+        cb(resp, r.pinMismatch);
     });
 }
 
@@ -167,6 +208,35 @@ void HTTPClient::deleteController(const QString& ip, int port, const QString& co
                 resp.reachable = r.reachable;
                 cb(resp);
             });
+}
+
+void HTTPClient::pair(const QString& ip, int port, const QString& deviceId,
+                      const QString& deviceName, const QString& pin, const QString& clientPin,
+                      PairCb cb) {
+    const QString url = QStringLiteral("https://%1:%2/api/pair").arg(ip).arg(port);
+    const QJsonObject obj{
+        {"deviceId", deviceId},
+        {"deviceName", deviceName},
+        {"protocolVersion", proto::kProtocolVersion},
+        {"pin", pin},
+        {"clientPin", clientPin},
+    };
+    perform(url, "POST", QJsonDocument(obj).toJson(QJsonDocument::Compact), {}, {}, {}, {},
+            [cb = std::move(cb)](const RawReply& r) {
+                cb(pairResponseFrom(r.body, r.status, r.reachable, &models::PairResponse::fromJson),
+                   r.pinMismatch);
+            });
+}
+
+void HTTPClient::pairStatus(const QString& ip, int port, const QString& deviceId, PairCb cb) {
+    const QString url = QStringLiteral("https://%1:%2/api/pair/status?deviceId=%3")
+                            .arg(ip)
+                            .arg(port)
+                            .arg(QString::fromUtf8(QUrl::toPercentEncoding(deviceId)));
+    perform(url, "GET", {}, {}, {}, {}, {}, [cb = std::move(cb)](const RawReply& r) {
+        cb(pairResponseFrom(r.body, r.status, r.reachable, &models::PairResponse::fromStatusJson),
+           r.pinMismatch);
+    });
 }
 
 void HTTPClient::unpair(const QString& ip, int port, const QString& deviceId,

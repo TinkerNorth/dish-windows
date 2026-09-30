@@ -110,6 +110,9 @@ void writeMiniDump(EXCEPTION_POINTERS* ep) {
 // address when symbols are unavailable. Bounded scratch; no heap of our own
 // (dbghelp may allocate internally, but we are already past the point of no
 // return and best-effort).
+// A corrupted frame chain can be cyclic, and this runs inside a crash: the walk stops either way.
+constexpr int kMaxStackFrames = 64;
+
 void writeFrame(HANDLE log, HANDLE process, DWORD64 addr) {
     char hexbuf[20];
     writeStr(log, "  ");
@@ -154,93 +157,114 @@ void writeFrame(HANDLE log, HANDLE process, DWORD64 addr) {
     writeStr(log, "\r\n");
 }
 
-void writeCrashLog(EXCEPTION_POINTERS* ep) {
-    HANDLE log = CreateFileW(g_logPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
-                             FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (log == INVALID_HANDLE_VALUE) { return; }
-
-    char hexbuf[20];
+void writeHeader(HANDLE log) {
     writeStr(log, "Dish crash report\r\n");
     writeStr(log, "=================\r\n");
 
-    // Timestamp (UTC).
     SYSTEMTIME st{};
     GetSystemTime(&st);
     char ts[64];
     std::snprintf(ts, sizeof(ts), "time (UTC): %04u-%02u-%02u %02u:%02u:%02u\r\n", st.wYear,
                   st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
     writeStr(log, ts);
+}
 
-    const EXCEPTION_RECORD* rec = (ep != nullptr) ? ep->ExceptionRecord : nullptr;
+// The code always, and for an access violation the operation and address too, which is the
+// difference between "it crashed" and "it read from null".
+void writeExceptionCode(HANDLE log, const EXCEPTION_RECORD* rec) {
     const DWORD code = (rec != nullptr) ? rec->ExceptionCode : 0;
     char codeLine[64];
     std::snprintf(codeLine, sizeof(codeLine), "exception code: 0x%08lx\r\n",
                   static_cast<unsigned long>(code));
     writeStr(log, codeLine);
-    if (code == EXCEPTION_ACCESS_VIOLATION && rec != nullptr && rec->NumberParameters >= 2) {
-        // AV info[0] = 0 read / 1 write / 8 DEP; info[1] = the offending address.
-        const ULONG_PTR op = rec->ExceptionInformation[0];
-        writeStr(log, op == 1 ? "  access violation: WRITE to "
-                              : (op == 8 ? "  access violation: EXEC at "
-                                         : "  access violation: READ from "));
-        writeStr(log, hex64(static_cast<std::uint64_t>(rec->ExceptionInformation[1]), hexbuf,
-                            sizeof(hexbuf)));
-        writeStr(log, "\r\n");
+    if (code != EXCEPTION_ACCESS_VIOLATION || rec == nullptr || rec->NumberParameters < 2) {
+        return;
     }
+    // AV info[0] = 0 read / 1 write / 8 DEP; info[1] = the offending address.
+    const ULONG_PTR op = rec->ExceptionInformation[0];
+    writeStr(log, op == 1 ? "  access violation: WRITE to "
+                          : (op == 8 ? "  access violation: EXEC at "
+                                     : "  access violation: READ from "));
+    char hexbuf[20];
+    writeStr(log, hex64(static_cast<std::uint64_t>(rec->ExceptionInformation[1]), hexbuf,
+                        sizeof(hexbuf)));
+    writeStr(log, "\r\n");
+}
 
-    HANDLE process = GetCurrentProcess();
-    HANDLE thread = GetCurrentThread();
-
-    // Faulting instruction address + its module.
+void writeFaultingAddress(HANDLE log, HANDLE process, const EXCEPTION_RECORD* rec) {
     const DWORD64 faultAddr =
         (rec != nullptr) ? reinterpret_cast<DWORD64>(rec->ExceptionAddress) : 0;
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    SymInitialize(process, nullptr, TRUE);
-
+    char hexbuf[20];
     writeStr(log, "faulting address: ");
     writeStr(log, hex64(static_cast<std::uint64_t>(faultAddr), hexbuf, sizeof(hexbuf)));
     writeStr(log, "\r\n");
-    if (faultAddr != 0) {
-        writeStr(log, "faulting frame:\r\n");
-        writeFrame(log, process, faultAddr);
-    }
+    if (faultAddr == 0) { return; }
+    writeStr(log, "faulting frame:\r\n");
+    writeFrame(log, process, faultAddr);
+}
 
-    // Best-effort stack walk from the captured context.
-    writeStr(log, "stack:\r\n");
-    if (ep != nullptr && ep->ContextRecord != nullptr) {
-        CONTEXT ctx = *ep->ContextRecord;
-        STACKFRAME64 frame{};
-        DWORD machine;
+// The machine type and the three registers StackWalk64 needs to start, per architecture.
+DWORD seedStackFrame(const CONTEXT& ctx, STACKFRAME64& frame) {
 #if defined(_M_X64)
-        machine = IMAGE_FILE_MACHINE_AMD64;
-        frame.AddrPC.Offset = ctx.Rip;
-        frame.AddrFrame.Offset = ctx.Rbp;
-        frame.AddrStack.Offset = ctx.Rsp;
+    frame.AddrPC.Offset = ctx.Rip;
+    frame.AddrFrame.Offset = ctx.Rbp;
+    frame.AddrStack.Offset = ctx.Rsp;
+    const DWORD machine = IMAGE_FILE_MACHINE_AMD64;
 #elif defined(_M_ARM64)
-        machine = IMAGE_FILE_MACHINE_ARM64;
-        frame.AddrPC.Offset = ctx.Pc;
-        frame.AddrFrame.Offset = ctx.Fp;
-        frame.AddrStack.Offset = ctx.Sp;
+    frame.AddrPC.Offset = ctx.Pc;
+    frame.AddrFrame.Offset = ctx.Fp;
+    frame.AddrStack.Offset = ctx.Sp;
+    const DWORD machine = IMAGE_FILE_MACHINE_ARM64;
 #else
-        machine = IMAGE_FILE_MACHINE_I386;
-        frame.AddrPC.Offset = ctx.Eip;
-        frame.AddrFrame.Offset = ctx.Ebp;
-        frame.AddrStack.Offset = ctx.Esp;
+    frame.AddrPC.Offset = ctx.Eip;
+    frame.AddrFrame.Offset = ctx.Ebp;
+    frame.AddrStack.Offset = ctx.Esp;
+    const DWORD machine = IMAGE_FILE_MACHINE_I386;
 #endif
-        frame.AddrPC.Mode = AddrModeFlat;
-        frame.AddrFrame.Mode = AddrModeFlat;
-        frame.AddrStack.Mode = AddrModeFlat;
-        for (int i = 0; i < 64; ++i) {
-            if (!StackWalk64(machine, process, thread, &frame, &ctx, nullptr,
-                             SymFunctionTableAccess64, SymGetModuleBase64, nullptr)) {
-                break;
-            }
-            if (frame.AddrPC.Offset == 0) { break; }
-            writeFrame(log, process, frame.AddrPC.Offset);
-        }
-    } else {
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    frame.AddrStack.Mode = AddrModeFlat;
+    return machine;
+}
+
+// Best-effort: a walk that stops early still leaves the frames it reached, which is more than a
+// report with no stack at all. StackWalk64 mutates the context, so it gets a copy.
+void writeStackWalk(HANDLE log, HANDLE process, HANDLE thread, EXCEPTION_POINTERS* ep) {
+    writeStr(log, "stack:\r\n");
+    if (ep == nullptr || ep->ContextRecord == nullptr) {
         writeStr(log, "  <no thread context captured>\r\n");
+        return;
     }
+    CONTEXT ctx = *ep->ContextRecord;
+    STACKFRAME64 frame{};
+    const DWORD machine = seedStackFrame(ctx, frame);
+    // Bounded, because a corrupted frame chain can be cyclic and this runs inside a crash.
+    for (int i = 0; i < kMaxStackFrames; ++i) {
+        if (!StackWalk64(machine, process, thread, &frame, &ctx, nullptr, SymFunctionTableAccess64,
+                         SymGetModuleBase64, nullptr)) {
+            break;
+        }
+        if (frame.AddrPC.Offset == 0) { break; }
+        writeFrame(log, process, frame.AddrPC.Offset);
+    }
+}
+
+void writeCrashLog(EXCEPTION_POINTERS* ep) {
+    HANDLE log = CreateFileW(g_logPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+                             FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (log == INVALID_HANDLE_VALUE) { return; }
+
+    const EXCEPTION_RECORD* rec = (ep != nullptr) ? ep->ExceptionRecord : nullptr;
+    HANDLE process = GetCurrentProcess();
+    HANDLE thread = GetCurrentThread();
+
+    writeHeader(log);
+    writeExceptionCode(log, rec);
+
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+    SymInitialize(process, nullptr, TRUE);
+    writeFaultingAddress(log, process, rec);
+    writeStackWalk(log, process, thread, ep);
 
     writeStr(log, "\r\nA matching minidump was written next to this file (crash.dmp).\r\n");
     writeStr(log, "Please send BOTH files to the Dish developers.\r\n");

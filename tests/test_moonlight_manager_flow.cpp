@@ -43,7 +43,7 @@ using dish::test::makeSharedSettings;
 
 namespace {
 
-// MoonlightSession builds a QNetworkAccessManager, whose app-static factory
+// MoonlightSession's calls open QSslSockets, whose app-static TLS backend loader
 // asserts unless a QCoreApplication exists, and Catch2WithMain creates none. Same
 // function-local static with a leaked argv that test_connection_coordinator uses.
 void ensureApp() {
@@ -174,7 +174,7 @@ TEST_CASE("Add by address remembers the host; an empty address does not", "[moon
 }
 
 TEST_CASE("A host id is the address and does not move when the identity is learned",
-          "[moonlight][flow]") {
+          "[moonlight][flow][h4]") {
     // The id has to come from ONE source. An id that upgraded when a probe
     // answered would orphan the pinned certificate, the standing bindings and the
     // routing table under the key they were written with, which is exactly the
@@ -189,7 +189,7 @@ TEST_CASE("A host id is the address and does not move when the identity is learn
 // ── Trust ───────────────────────────────────────────────────────────────────
 
 TEST_CASE("Confirming trust writes the record a pairing would have written",
-          "[moonlight][flow][trust]") {
+          "[moonlight][flow][trust][b4]") {
     Fixture fx;
     fx.manager->applyDiscoverySweep({host(QStringLiteral("PC"), kIpA)});
     // Discovered only: visible, and not durable.
@@ -239,7 +239,7 @@ TEST_CASE("Confirming trust keeps everything else the record carries", "[moonlig
 // ── Bindings ────────────────────────────────────────────────────────────────
 
 TEST_CASE("A binding to a host nobody has paired is remembered, host and all",
-          "[moonlight][flow][binding]") {
+          "[moonlight][flow][binding][b12][b21]") {
     Fixture fx;
     // Discovered and never paired. This is the shape that went dormant: the
     // binding was written, the host was not, and one missed sweep later there was
@@ -315,7 +315,7 @@ TEST_CASE("Forgetting a binding drops it, and forgetting none is not an error",
 // ── Bind and unbind ─────────────────────────────────────────────────────────
 
 TEST_CASE("Binding allocates controller numbers and refuses a fifth pad",
-          "[moonlight][flow][bind]") {
+          "[moonlight][flow][bind][b11]") {
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
 
@@ -428,7 +428,7 @@ TEST_CASE("Two hosts carry two sessions and neither counts the other's pads",
 
 // ── Forget ──────────────────────────────────────────────────────────────────
 
-TEST_CASE("Forget leaves no residue of any kind", "[moonlight][flow][forget]") {
+TEST_CASE("Forget leaves no residue of any kind", "[moonlight][flow][forget][b6]") {
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
     fx.manager->addManualHost(kIpB, QStringLiteral("Other PC"));
@@ -485,7 +485,7 @@ TEST_CASE("Forget leaves no residue of any kind", "[moonlight][flow][forget]") {
 }
 
 TEST_CASE("A session detached from the store can no longer write to it",
-          "[moonlight][flow][forget]") {
+          "[moonlight][flow][forget][b6]") {
     // The half of the forget that no state assertion can reach: the pin verifier
     // runs on a TLS handshake that completes on a LATER turn of the event loop,
     // and the teardown a forget triggers opens exactly one such handshake to send
@@ -517,7 +517,7 @@ TEST_CASE("A session detached from the store can no longer write to it",
 }
 
 TEST_CASE("A forgotten host offers Pair again even while the host still answers for it",
-          "[moonlight][flow][forget]") {
+          "[moonlight][flow][forget][b6][h1]") {
     // The end-to-end shape of the reported symptom, through the real manager.
     // The client identity outlives a forget, so the host keeps answering
     // PairStatus 1 to the uniqueid this install sends, and the only thing that
@@ -546,7 +546,7 @@ TEST_CASE("A forgotten host offers Pair again even while the host still answers 
 }
 
 TEST_CASE("A forget takes the probe cache with it and nothing puts it back",
-          "[moonlight][flow][forget]") {
+          "[moonlight][flow][forget][b6]") {
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
     fx.manager->pairHost(kIdA, QStringLiteral("1234"));
@@ -587,7 +587,7 @@ TEST_CASE("Forgetting a host nothing knows about is not an error", "[moonlight][
     REQUIRE(fx.manager->hostRows().isEmpty());
 }
 
-TEST_CASE("Re-adding a forgotten host starts from nothing", "[moonlight][flow][forget]") {
+TEST_CASE("Re-adding a forgotten host starts from nothing", "[moonlight][flow][forget][b6]") {
     Fixture fx;
     fx.manager->addManualHost(kIpA, QStringLiteral("Study PC"));
     fx.manager->rememberProvenTrust(kIdA);

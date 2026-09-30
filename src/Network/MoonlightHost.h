@@ -4,7 +4,7 @@
 // The DTO for a Moonlight (GameStream) host: what discovery finds and what the
 // remembered-host repository persists. The sibling of models::DiscoveredServer
 // on the Satellite path, kept separate so the two host kinds never blur in the
-// UI ("Moonlight host (Sunshine/Apollo)" vs a Satellite receiver).
+// UI ("Moonlight host (Sunshine, Apollo or Wolf)" vs a Satellite receiver).
 
 #pragma once
 

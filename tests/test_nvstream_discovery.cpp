@@ -11,7 +11,8 @@
 
 using namespace dish::net;
 
-TEST_CASE("nvstreamServiceToHost fills fixed ports and falls back to IP", "[moonlight][nvstream]") {
+TEST_CASE("nvstreamServiceToHost fills fixed ports and falls back to IP",
+          "[moonlight][nvstream][h4]") {
     const auto named =
         nvstreamServiceToHost(QStringLiteral("living-room-pc"), QStringLiteral("192.168.1.50"));
     REQUIRE(named.has_value());

@@ -25,6 +25,7 @@ set(DISH_TEST_SOURCES
     test_kernel.cpp
     test_async_state.cpp
     test_session_crypto.cpp
+    test_http_framing.cpp
     # Moonlight (GameStream) path.
     test_moonlight_control.cpp
     test_moonlight_touch_differ.cpp
@@ -37,9 +38,16 @@ set(DISH_TEST_SOURCES
     test_moonlight_session_ui.cpp
     test_moonlight_host_repository.cpp
     test_moonlight_http_xml.cpp
+    test_moonlight_http_wire.cpp
     test_moonlight_manager_rows.cpp
     test_moonlight_manager_flow.cpp
+    test_legacy_catalog.cpp
     test_moonlight_behaviour.cpp
+    test_moonlight_keepalive.cpp
+    test_moonlight_launch_audio.cpp
+    test_moonlight_replug.cpp
+    test_moonlight_motion_switch.cpp
+    test_moonlight_touchpad_pick.cpp
     test_moonlight_pad_slots.cpp
     test_nvstream_discovery.cpp
     test_atomic_counter.cpp
@@ -51,6 +59,7 @@ set(DISH_TEST_SOURCES
     test_stable_key.cpp
     test_tofu.cpp
     test_ip_literals.cpp
+    test_ip_literals_parse.cpp
     test_mdns_mapping.cpp
     test_discovery_gateway.cpp
     test_satellite_tls_verifier.cpp
@@ -58,7 +67,9 @@ set(DISH_TEST_SOURCES
     test_shared_key_repository.cpp
     test_dpapi_secret_cipher.cpp
     test_remembered_satellite_repository.cpp
+    test_remembered_wifi_eq.cpp
     test_connection_store_identity.cpp
+    test_connection_store_migration.cpp
     test_remembered_reconnect.cpp
     test_gamepad_input_processor.cpp
     test_sdl_motion_convert.cpp
@@ -71,10 +82,17 @@ set(DISH_TEST_SOURCES
     test_deadzone_repository.cpp
     test_motion_preference_repository.cpp
     test_motion_enabled_store.cpp
+    test_rumble_preference_repository.cpp
+    test_rumble_enabled_store.cpp
+    test_rumble_switch_controller.cpp
+    test_slot_switch_carry.cpp
     test_motion_backend_status_store.cpp
     test_motion_capability_composer.cpp
     test_physical_motion_source.cpp
-    test_pairing_client_classify.cpp
+    test_pairing_outcome.cpp
+    test_pairing_wire.cpp
+    test_http_client_wire.cpp
+    test_http_exchange.cpp
     test_rest_control_plane.cpp
     test_reverse_pairing.cpp
     test_battery_ui.cpp
@@ -95,9 +113,11 @@ set(DISH_TEST_SOURCES
     test_pad_identity_seed.cpp
     test_connections_composer.cpp
     test_connection_coordinator.cpp
+    test_connection_hub_bindings.cpp
     test_found_visibility.cpp
     test_session_lifecycle.cpp
     test_session_manager.cpp
+    test_wifi_connection_manager.cpp
     test_catalog_repository.cpp
     test_catalog_dto.cpp
     test_controller_type_store.cpp
@@ -156,6 +176,7 @@ set(DISH_TEST_SOURCES
     test_usb_report_parsers.cpp
     test_usb_output_reports.cpp
     test_usb_gamepad_manager_feedback.cpp
+    test_usb_hid_items.cpp
     test_usb_hid_layout.cpp
     test_usb_twin_dedup.cpp
     test_hid_transport.cpp
@@ -166,6 +187,7 @@ set(DISH_TEST_SOURCES
     test_crash_reporting.cpp
     test_main_ui_state.cpp
     test_window_hit_test.cpp
+    test_list_model_roles.cpp
     test_slot_list_model.cpp
     test_slot_path_fields.cpp
     test_connection_list_model.cpp
@@ -173,6 +195,7 @@ set(DISH_TEST_SOURCES
     test_app_view_model_connections.cpp
     test_app_view_model_bind_availability.cpp
     test_capability_solver.cpp
+    test_catalog_feature_gate.cpp
     test_feedback_routing.cpp
     # Controller audio.
     test_audio_jitter.cpp
@@ -198,7 +221,16 @@ set(DISH_TEST_SOURCES
     test_update_staging_store.cpp
     test_update_coordinator.cpp
     test_update_handoff.cpp
+    test_ui_preference_store.cpp
     test_update_preference_store.cpp
+    # Diagnostics page.
+    test_session_diagnostics.cpp
+    test_input_readout.cpp
+    test_stick_health.cpp
+    test_diagnostics_log.cpp
+    test_diagnostics_recorder.cpp
+    test_diagnostics_maps.cpp
+    test_feedback_bench.cpp
     test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
@@ -223,15 +255,42 @@ target_compile_definitions(DishTests PRIVATE
 # The `release_translations` dependency is wired from the TOP-LEVEL CMakeLists:
 # that target does not exist until this directory scope is finalized.
 
+# The process the tray test starts below its own integrity level, to post
+# Explorer's TaskbarCreated the way Explorer reaches an elevated Dish.
+add_executable(TaskbarCreatedSender TaskbarCreatedSender.cpp)
+target_link_libraries(TaskbarCreatedSender PRIVATE user32 dish_warnings dish_strict)
+add_dependencies(DishTests TaskbarCreatedSender)
+target_compile_definitions(DishTests PRIVATE
+    DISH_TASKBAR_CREATED_SENDER="$<TARGET_FILE:TaskbarCreatedSender>")
+
+# The TLS tests run on Qt's OpenSSL backend (tests/FakeHttpsListener.h says why
+# not Schannel), and Qt loads libssl at run time. dish_core links libcrypto
+# alone, so vcpkg's applocal step never puts libssl beside the exe, and this
+# does not either: DishTests.exe shares its directory with dish.exe, and Qt
+# takes OpenSSL over Schannel whenever it can load it, so a libssl there would
+# move the developer's dish.exe off the Schannel it ships with, and into any
+# install image staged from this tree. It gets a directory of its own, which
+# only the test runs below put on PATH; libssl finds its libcrypto already
+# loaded by then.
+set(DISH_TEST_TLS_DIR "${CMAKE_BINARY_DIR}/test-tls")
+add_custom_command(TARGET DishTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${DISH_TEST_TLS_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/$<$<CONFIG:Debug>:debug/>bin/libssl-3-x64.dll"
+        "${DISH_TEST_TLS_DIR}")
+
 # Catch2's discovery step launches DishTests.exe, which needs Qt6's DLLs. vcpkg
 # drops libsodium/SDL2 beside the exe at link time, but Qt is not vcpkg-managed,
 # so without DL_PATHS discovery exits with STATUS_DLL_NOT_FOUND (0xc0000135).
+# DL_PATHS holds for every test run as well as for discovery, which is how the
+# TLS tests reach their libssl.
 if(WIN32)
     catch_discover_tests(DishTests
         DL_PATHS
             $<TARGET_FILE_DIR:Qt6::Core>
             $<TARGET_FILE_DIR:Qt6::Network>
-            $<TARGET_FILE_DIR:Qt6::Gui>)
+            $<TARGET_FILE_DIR:Qt6::Gui>
+            "${DISH_TEST_TLS_DIR}")
 else()
     catch_discover_tests(DishTests)
 endif()

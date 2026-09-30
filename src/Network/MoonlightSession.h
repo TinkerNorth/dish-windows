@@ -24,6 +24,7 @@
 #include "Network/MoonlightRtspClient.h"
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightIdentity.h"
+#include "core/moonlight/MoonlightPadSlots.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
 #include "core/moonlight/MoonlightTelemetry.h"
 #include "core/moonlight/MoonlightTouchDiffer.h"
@@ -35,6 +36,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <optional>
 #include <thread>
 
 namespace dish::repository {
@@ -45,6 +47,17 @@ class QTimer;
 class QUdpSocket;
 
 namespace dish::net {
+
+// Moonlight's well-known RTSP port, used when the host names none.
+constexpr int kDefaultRtspPort = 48010;
+
+// Where the RTSP handshake goes, from the host we asked and the `sessionUrl0` it answered with.
+// The HOST'S OWN ADDRESS WINS: sessionUrl0 routinely carries the host's idea of itself, which on a
+// machine with more than one interface is not the address that reached it. Only the port is taken.
+// A url that cannot be read is not a reason to abandon a session the host accepted, so it falls
+// back to kDefaultRtspPort rather than failing.
+int rtspPortFromSessionUrl(const QString& sessionUrl);
+QString rtspTargetFor(const QString& hostIp, const QString& sessionUrl);
 
 class MoonlightSession : public QObject {
     Q_OBJECT
@@ -81,6 +94,24 @@ class MoonlightSession : public QObject {
     // and the user types it here, so the 4-digit code we pass in is what the user
     // entered). Emits pairingFinished(ok).
     void pair(const QString& pin);
+
+    // The five /pair phases. Each request method starts a phase and each on* method consumes its
+    // reply and starts the next, so the chain reads down the file instead of nesting.
+    struct PairingRun;
+    bool pairAbandoned(const PairingRun& run, const char* phase) const;
+    void pairFailed(const char* phase, const MoonlightXmlResponse& r);
+    void pairPhase1(const PairingRun& run);
+    void onPairPhase1(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase2(const PairingRun& run);
+    void onPairPhase2(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase3(const PairingRun& run);
+    void onPairPhase3(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase4(const PairingRun& run);
+    void onPairPhase4(const PairingRun& run, const MoonlightXmlResponse& r);
+    void pairPhase5(const PairingRun& run);
+    // The host certificate phases 1 to 4 proved, as DER: what phase 5 trusts and a pairing pins.
+    static QByteArray provenCertificateOf(const PairingRun& run);
+    void onPairPhase5(const PairingRun& run, const MoonlightXmlResponse& r);
 
     // Abandon a pairing in flight. The five phases chain through callbacks and
     // phase 1 PARKS ON THE HOST until a human types the PIN, so there is nothing
@@ -135,6 +166,16 @@ class MoonlightSession : public QObject {
     // Drop a pad from the remembered set, so a later reconnect does not announce
     // a controller nobody is bound to any more.
     void forgetControllerArrival(std::uint8_t number);
+
+    // What the host has been told, or will be told when the stream comes up, about the pad under
+    // `number`. Empty when no pad is announced there.
+    std::optional<moonlight::AnnouncedPad> announcedPad(std::uint8_t number) const;
+
+    // Announce the pad under `number` again as another pad. A host keeps a number it holds and
+    // skips a second arrival for it, so on a live stream this unplugs the number and plugs the new
+    // pad in; before one, only the remembered arrival changes.
+    void sendControllerReplug(std::uint8_t number, std::uint8_t type, std::uint8_t caps,
+                              std::uint32_t supportedButtons);
 
     // Forward a motion sample / battery report for a bound pad. No-ops unless
     // streaming, like sendControllerState.
@@ -203,9 +244,21 @@ class MoonlightSession : public QObject {
     void beginLaunch();
     void requestSession(const QString& path, const std::map<QString, QString>& query);
     void onLaunchReply(const MoonlightXmlResponse& r, bool resuming);
+    void onSessionRefused(const MoonlightXmlResponse& r, bool resuming);
+    void onSessionAccepted(const MoonlightXmlResponse& r);
+    void requestResume();
     void beginRtspAndControl();
     void onRtspFinished(bool rtspOk, bool controlOk, const RtspHandshakeResult& rtsp);
     void wireControlHandlers();
+
+    // The five streams the control channel delivers, each on the ENet receive thread. The two
+    // rumble streams share publishRumbleMix, which is the only thing that leaves that thread.
+    void publishRumbleMix(std::uint16_t controllerNumber, const moonlight::BodyRumble& mixed);
+    void onRumbleEvent(const moonlight::RumbleEvent& e);
+    void onRumbleTriggerEvent(const moonlight::RumbleTriggerEvent& e);
+    void onRgbLedEvent(const moonlight::RgbLedEvent& e);
+    void onMotionRequestEvent(const moonlight::MotionRequestEvent& e);
+    void onControlDisconnect(bool terminated);
     void sendPendingArrivals();
     // The first CONTROLLER_MULTI a pad sends, right behind its arrival: zeroed,
     // carrying the active mask, so a bound pad nobody has touched yet is a pad
@@ -220,10 +273,10 @@ class MoonlightSession : public QObject {
     void onRtspNamedPorts(const RtspHandshakeResult& rtsp);
     void startPinging();
     bool streaming() const;
-    // One tick of both keepalives: the encrypted PERIODIC_PING on the control
-    // stream and the RTP client pings on the negotiated video/audio UDP ports.
-    // The host gates media startup on the RTP pings; their incoming payloads are
-    // read and discarded (we never decode media).
+    // One tick of the RTP client pings on the negotiated video/audio UDP ports.
+    // The host gates media startup on them; their incoming payloads are read and
+    // discarded (we never decode media). The control stream's PERIODIC_PING is
+    // the control channel's own, on its receive thread.
     void onPingTick();
 
     // The parsed /launch rikey material.

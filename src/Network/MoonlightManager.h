@@ -23,9 +23,11 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -133,7 +135,8 @@ class MoonlightManager : public QObject {
     void cancelPairing(const QString& id);
 
     // Launch (or resume) an app and bring the control stream up. Empty appId
-    // launches the host's remembered pick, then the host's default.
+    // launches the host's remembered pick, then the first app the host listed,
+    // then the host's default.
     void connectHost(const QString& id, const QString& appId);
 
     // GET /applist on a paired host; the reply arrives as appListReady.
@@ -152,16 +155,18 @@ class MoonlightManager : public QObject {
     // come from the host's body.
     QString refusalMessage(const QString& id) const;
 
-    // Re-verify remembered trust: a plaintext /serverinfo for PairStatus and the
-    // host's uniqueid. Never polled; run on entering a screen and before a
-    // session starts. The answer lands on hostsChanged().
+    // Re-verify remembered trust: a plaintext /serverinfo for reachability and the
+    // host's uniqueid, then, for a host we hold a pairing with, the mutual-TLS
+    // question that says whether it still stands. Never polled; run on entering a
+    // screen and before a session starts. The answer lands on hostsChanged().
     void probeHost(const QString& id);
 
     void disconnectHost(const QString& id);
 
-    // Stop whatever app the host is running, without a session of ours to tear
-    // down. The answer to a host that refused /launch because an app is already
-    // running and offered no resumable session.
+    // Stop whatever app the host is running: our own session with it, or the bare
+    // /cancel for an app another device left running, which is the answer to a
+    // host that refused /launch and offered no resumable session. Then asks the
+    // host again, because the reply to /cancel proves nothing.
     void cancelHostApp(const QString& id);
 
     void forgetHost(const QString& id);
@@ -180,7 +185,8 @@ class MoonlightManager : public QObject {
     // Allocates a controller number, sends CONTROLLER_ARRIVAL with
     // THIS BINDING's emulated-device pick and the pad's real capabilities, and
     // adds the pad to the active mask. `hasRumble` and friends are the pad's
-    // detected hardware.
+    // detected hardware. A slot already riding this host keeps its number and is
+    // replugged only where the host would build another pad for it.
     //
     // THE SESSION IS REFERENCE COUNTED PER HOST, never one per binding: a host
     // carries one session for up to four controllers, so the first pad on a host
@@ -243,6 +249,24 @@ class MoonlightManager : public QObject {
     // True while at least one slot is bound to a Moonlight host.
     bool hasBoundSlots() const { return anyBound_.load(std::memory_order_relaxed); }
 
+    // The pad's Motion switch: whether the user lets a slot's motion reach its host. Asked on the
+    // main thread when the slot is bound and again by refreshMotionSwitches, and kept with the
+    // slot's route, so the input thread never reads the store behind it. The arrival still
+    // declares the pad's sensors, as dish-android's does: the switch stops the samples, and
+    // turning it back on costs the pad no replug. With no switch set, motion goes out.
+    using MotionSwitch = std::function<bool(const QString& slotId)>;
+    void setMotionSwitch(MotionSwitch motionSwitch);
+    // Main thread. Asks the switch again for every bound slot, after the user turned one.
+    void refreshMotionSwitches();
+
+    // A host's touchpad pick as the store holds it, empty for a host never picked for. Read on the
+    // main thread when a slot binds, which Apply does after writing the pick, and kept with the
+    // slot's route: forwardTouch sends a pad's touches only where the pick lets them reach the
+    // host, and lifts the contact the host holds when they stop. With no pick to read, every host
+    // reads as never picked for.
+    using TouchpadPick = std::function<std::optional<std::string>(const QString& hostId)>;
+    void setTouchpadPick(TouchpadPick touchpadPick);
+
   signals:
     void hostsChanged();
     void scanningChanged();
@@ -255,9 +279,36 @@ class MoonlightManager : public QObject {
     void rgbLedReceived(const QString& id, int controllerNumber, int r, int g, int b);
 
   private:
+    // forgetHost in order. Each step is what makes the next one safe, so they are named rather than
+    // run as one block: see the comment on each.
+    // What a fresh pairing has to undo first: an attempt parked on the host, and a pinned
+    // certificate that belongs to a host this one has replaced. Answers whether the identity moved.
+    bool clearForNewPairing(const QString& id, MoonlightSession* session);
+
+    MoonlightSession* detachSessionFromStore(const QString& id);
+    void releaseRoutesAt(const QString& id);
+    void forgetLearnedState(const QString& id);
+    void retireSession(MoonlightSession* session);
+
     // Ensures a session exists for `host`, wiring its signals through. Lazily
     // loads the client identity on first use (RSA keygen is not paid at startup).
     MoonlightSession* ensureSession(const models::MoonlightHost& host);
+
+    // The session's six signals, each with a name. The record* pair hold their reference into
+    // probes_ and emit nothing, so the emitting half cannot leave it dangling.
+    bool ensureIdentity();
+    void wireSession(const QString& id, MoonlightSession* session);
+    void onSessionPhaseChanged(const QString& id, MoonlightSession* session);
+    void onSessionPairingFinished(const QString& id, bool ok);
+    void recordAppListProbe(const QString& id, const QStringList& ids, bool ok, bool unauthorized);
+    void forgetAPickTheHostDropped(const QString& id, const QStringList& listed);
+    // The app a session starts: the user's pick, or with none the first app the host listed, which
+    // is what the binding flow promises. Empty when neither is known.
+    QString appToLaunch(const models::MoonlightHost& host) const;
+    void onSessionAppListReady(const QString& id, const QStringList& ids, const QStringList& titles,
+                               bool ok, bool unauthorized);
+    bool recordProbeIdentity(const QString& id, bool answered, const QString& uniqueId);
+    void onSessionProbeFinished(const QString& id, bool answered, const QString& uniqueId);
     std::optional<models::MoonlightHost> hostById(const QString& id) const;
     // Only the PERSISTED list, which is what separates a host the user keeps from
     // one that happens to be answering an mDNS sweep right now.
@@ -275,11 +326,29 @@ class MoonlightManager : public QObject {
     // the caller can act on it without holding the lock.
     QStringList slotsRoutedTo(const QString& hostId) const;
 
+    // bindSlot's second flow, for a slot that already rides the session it is bound to again.
+    std::optional<std::uint8_t> numberOnSession(const QString& slotId,
+                                                const MoonlightSession* session) const;
+    void forgetTouchFrame(const QString& slotId);
+    void forgetTouchFramesOn(const MoonlightSession* session);
+    void reannounceInPlace(const QString& slotId, std::uint8_t number, MoonlightSession& session,
+                           const moonlight::AnnouncedPad& wanted);
+
+    // What the Motion switch answers for a slot: yes with no switch set.
+    bool motionSwitchAllows(const QString& slotId) const;
+    // Main thread. Keeps the switch's answer with the slot's route, where forwardMotion reads it.
+    void readMotionSwitch(const QString& slotId);
+    std::optional<std::string> touchpadPickFor(const QString& hostId) const;
+    // Main thread. Keeps whether the slot's touches reach its host with its route.
+    void keepTouchReach(const QString& slotId, bool touchReaches);
+
     // Resolves a slot to its live session + controller number under routeMtx_.
     struct Route {
         MoonlightSession* session = nullptr;
         std::uint8_t controllerNumber = 0;
         QString hostId;
+        bool userMotionOn = true;
+        bool touchReaches = true;
         // Per bound pad: the last touch frame, so the event stream is the
         // difference between frames. Dies with the route, which is exactly when
         // the host forgets the pad's contacts too.
@@ -303,7 +372,12 @@ class MoonlightManager : public QObject {
         // whoever is asking, so a field holding it is a field somebody will gate
         // on, and gating on it is what makes a paired host unable to look paired.
         bool mtlsVerified = false;
+        // The plaintext half answered and the mutual-TLS question it asks next is
+        // still out, so the probe has not answered whether the pairing stands.
+        bool trustInFlight = false;
         int appCount = 0;
+        // The ids of the last list the host answered with, in its order.
+        QStringList appIds;
         bool pairingActive = false;
         bool pairingRefused = false;
     };
@@ -327,6 +401,8 @@ class MoonlightManager : public QObject {
     // Per host: which controller numbers are in use and the active mask.
     QHash<QString, moonlight::PadSlots> padSlots_;
     std::atomic<bool> anyBound_{false};
+    MotionSwitch motionSwitch_;
+    TouchpadPick touchpadPick_;
 };
 
 } // namespace dish::net

@@ -100,43 +100,29 @@ void SentryCrashReportingBackend::disarm() noexcept {
 
 SentryCrashReportingBackend::~SentryCrashReportingBackend() { disarm(); }
 
-void SentryCrashReportingBackend::setEnabled(bool enabled) {
-    if (!enabled) {
-        const bool wasArmed = active_;
-        disarm();
-        if (wasArmed) { qCInfo(lcCrash) << "crash reporting disarmed"; }
-        return;
-    }
-
-    if (active_) { return; }
-
-    const std::string envOverride = envDsn();
-    if (!shouldArmSentry(compiledSentryDsn(), envOverride.c_str(), true)) {
-        // The common case for anything but a release build, and not a problem:
-        // the local crash.dmp and crash.log are still written either way.
-        qCInfo(lcCrash) << "crash reporting requested but this build carries no DSN;"
-                        << "local crash files are still written";
-        return;
-    }
-
 #ifdef DISH_HAS_SENTRY
+namespace {
+
+// Ownership passes to sentry_init, which takes the options whether or not it succeeds. File-local
+// rather than a member, so the header still names no sentry type: it is included from dish_core,
+// which builds with and without the SDK.
+sentry_options_t* buildSentryOptions(const std::string& databaseDir) {
     sentry_options_t* options = sentry_options_new();
 
-    // Leave the DSN unset when only $SENTRY_DSN is present: the SDK reads the
-    // environment itself, and an empty string here would override it.
+    // Leave the DSN unset when only $SENTRY_DSN is present: the SDK reads the environment itself,
+    // and an empty string here would override it.
     if (compiledSentryDsn()[0] != '\0') { sentry_options_set_dsn(options, compiledSentryDsn()); }
 
-    const std::string dir = databaseDir_.empty() ? defaultDatabaseDir() : databaseDir_;
+    const std::string dir = databaseDir.empty() ? defaultDatabaseDir() : databaseDir;
     sentry_options_set_database_path(options, dir.c_str());
     sentry_options_set_release(options, DISH_SENTRY_RELEASE);
     sentry_options_set_environment(options, sentryEnvironment());
     sentry_options_set_debug(options, 0);
 
-    // Named explicitly rather than left to the SDK's own lookup. The crashpad
-    // backend runs an out-of-process handler, and the default search is
-    // relative to the working directory, which Dish does not control when it
-    // is launched from a shortcut or by the updater. Beside the executable is
-    // where CMake stages it and where the installer and portable bundle put it.
+    // Named explicitly rather than left to the SDK's own lookup. The crashpad backend runs an
+    // out-of-process handler, and the default search is relative to the working directory, which
+    // Dish does not control when it is launched from a shortcut or by the updater. Beside the
+    // executable is where CMake stages it and where the installer and portable bundle put it.
     const QString handler = QDir(QCoreApplication::applicationDirPath())
                                 .filePath(QStringLiteral("crashpad_handler.exe"));
     if (QFileInfo::exists(handler)) {
@@ -147,22 +133,48 @@ void SentryCrashReportingBackend::setEnabled(bool enabled) {
                            << "crashes will not be captured";
     }
 
-    // Defaults to on, and would report every launch and quit of a desktop app.
-    // The crash is the payload; the rest is telemetry nobody agreed to when
-    // they left a switch labelled "crash reports" alone.
+    // Defaults to on, and would report every launch and quit of a desktop app. The crash is the
+    // payload; the rest is telemetry nobody agreed to when they left a switch labelled "crash
+    // reports" alone.
     sentry_options_set_auto_session_tracking(options, 0);
 
-    // No sentry_options_set_send_default_pii() call on purpose: in
-    // sentry-native that setter exists only under SENTRY_PLATFORM_NX, and its
-    // own documentation states that not sending PII is already the default
-    // everywhere. Calling it would not compile on Windows.
+    // No sentry_options_set_send_default_pii() call on purpose: in sentry-native that setter exists
+    // only under SENTRY_PLATFORM_NX, and its own documentation states that not sending PII is
+    // already the default everywhere. Calling it would not compile on Windows.
+    return options;
+}
 
-    if (sentry_init(options) == 0) {
+} // namespace
+#endif
+
+void SentryCrashReportingBackend::setEnabled(bool enabled) {
+    if (!enabled) {
+        const bool wasArmed = active_;
+        disarm();
+        if (wasArmed) { qCInfo(lcCrash) << "crash reporting disarmed"; }
+        return;
+    }
+    if (active_) { return; }
+    arm();
+}
+
+void SentryCrashReportingBackend::arm() {
+    const std::string envOverride = envDsn();
+    if (!shouldArmSentry(compiledSentryDsn(), envOverride.c_str(), true)) {
+        // The common case for anything but a release build, and not a problem: the local crash.dmp
+        // and crash.log are still written either way.
+        qCInfo(lcCrash) << "crash reporting requested but this build carries no DSN;"
+                        << "local crash files are still written";
+        return;
+    }
+
+#ifdef DISH_HAS_SENTRY
+    if (sentry_init(buildSentryOptions(databaseDir_)) == 0) {
         active_ = true;
         qCInfo(lcCrash) << "crash reporting armed (" << sentryEnvironment() << ")";
-    } else {
-        qCWarning(lcCrash) << "sentry_init failed; local crash files are still written";
+        return;
     }
+    qCWarning(lcCrash) << "sentry_init failed; local crash files are still written";
 #endif
 }
 

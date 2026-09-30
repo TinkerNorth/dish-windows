@@ -21,6 +21,107 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A Diagnostics page.** Settings opens a page that shows each satellite's
+  session (the protocol settled and offered, the epoch and controller bitmap
+  on the host against what Dish applied, the round trip's median and tail,
+  missed heartbeats, mouse control and audio), each controller down to the
+  wire (path, claim, rates, battery, its binding's index and advertised
+  capabilities, the declared touchpad mode, and the capability table with
+  its reasons), a flight recorder of link and pad changes with a Copy
+  button, the Bluetooth adapter's state, and an input inspector with live
+  sticks, triggers, buttons, motion and touch, drift and range tests for the
+  sticks, and a rumble bench that buzzes a pad whatever its Rumble switch
+  says.
+
+### Fixed
+
+- **Forgetting a satellite while it was pairing or connecting could crash
+  Dish, or bring the satellite back.** A late reply from a forgotten
+  satellite was still handled: it could read memory Dish had already freed,
+  or write the pairing key back and remember the satellite again. Replies
+  for a forgotten satellite are now dropped, and a reply from before a
+  Forget no longer reaches a satellite paired afresh under the same name.
+- **A reinstalled satellite says so.** Its changed security identity read as
+  "unreachable": a PIN pairing failed with that word, and a connection in
+  the background retried forever. Dish now says the identity changed and
+  asks you to forget the satellite and pair again; an approval request that
+  meets a changed identity or another protocol version says which, instead
+  of reading as the operator's decline. A satellite that was only ever
+  seen, never paired, can still pair after a reinstall, and forgetting a
+  satellite forgets the certificate its address was trusted with.
+- **A session granted after you pressed Disconnect is handed back** to the
+  satellite instead of starting anyway, or holding the satellite's slot
+  until its own timeout.
+- **A pairing key carried over from an older build no longer stays behind in
+  plain text** once it has been wrapped for your account, and forgetting
+  that satellite is no longer undone at the next start.
+- **A stray datagram from a satellite's address no longer hides that
+  satellite from a scan.**
+- **The Rumble switch works.** Turning rumble off for a pad did nothing, and
+  the switch showed on again whenever the page reopened. The choice is now
+  kept per pad, a pad switched off gets no rumble from a satellite or a
+  Moonlight host, switching it off stops a motor that is already running,
+  and the wizard starts from your choice. A pad's motion, rumble, mic and
+  speaker switches now follow it when it is claimed for Direct or released.
+- **The touchpad's Pad choice works on a satellite.** Applying it turned the
+  touchpad off until the next restart, a host never picked for read as Off
+  while Dish forwarded touch, and a DualSense-type binding never forwarded
+  touch at all. The wizard starts from the satellite's own pick, and a
+  binding that cannot carry the touchpad leaves the host's pick alone.
+- **Mouse is no longer offered for the touchpad.** Dish cannot route the
+  touchpad as a mouse yet, but the wizard and the binding page offered it
+  and could report it as supported, which left a dead touchpad.
+- **The Home page no longer says Standard mode cannot carry gyro or
+  touchpad.** It can, for every pad whose sensors and touchpad SDL reads.
+- **The tray icon comes back after Explorer restarts.** The tray's window
+  could not receive the message Windows sends for that, so a Dish hidden to
+  the tray was left with no icon to bring it back, and a close sent to
+  every window of the process no longer takes the tray's window with it.
+- **The Moonlight keepalive no longer runs on the window's thread.** A stall
+  there (a host answering slowly while Dish connected) could let Sunshine
+  end the session after ten seconds without hearing from Dish.
+- **A Moonlight host that refuses a launch is reported as refusing it**,
+  with the host's own message, instead of as unreachable, and a pairing
+  step the host refuses keeps the host's message.
+- **Forgetting a Moonlight host while a request to it was still in flight
+  could end Dish.**
+- **A paired Moonlight host no longer reads "Trust lost" on the first probe
+  of a run** while its mutual-TLS answer is still on its way.
+- **Changing a bound pad's emulated type no longer unplugs it on the host.**
+  The change went through unbind and bind: on a host carrying one pad that
+  ended the game and launched it again, and on a shared host the pad could
+  come back under another number. The pad keeps its number and is replugged
+  only where the host would build a different pad for it.
+- **An app the Moonlight host no longer lists is dropped as the pick**
+  instead of being launched and refused on every attempt, and a host with
+  no pick starts the first app it lists.
+- **A pad's Motion switch holds its motion back from a Moonlight host too.**
+  It only reached satellites.
+- **A Moonlight binding's touchpad pick is honoured.** Off keeps the touches
+  from the host, Pad sends them for a type whose pad has a touchpad, and a
+  finger held across a re-apply or a stream restart is lifted on the host
+  instead of read as a move of a contact it never saw go down. The binding
+  page reads the touchpad as what reaches the host.
+- **A Moonlight pairing trusts the certificate the host handed out in its
+  first step, and no other.** Whatever answered on the host's TLS port used
+  to be pinned on first sight. A completed pairing pins that certificate, so
+  a host rebuilt since its certificate was pinned pairs again without being
+  forgotten first.
+- **Quitting a Moonlight host's app checks the host again** from wherever it
+  was asked, since a host answers /cancel with success whether or not
+  anything was running.
+
+### Changed
+
+- Every HTTP exchange with a satellite or a Moonlight host runs on the
+  thread that made it, over one HTTP/1.1 transport shared with the Linux
+  app; a host presenting a certificate other than the one Dish pinned is
+  sent nothing at all.
+
 ## [2.1.0] - 2026-09-21
 
 ### Security

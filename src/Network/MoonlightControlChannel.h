@@ -22,6 +22,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -31,6 +32,8 @@
 
 struct _ENetHost;
 struct _ENetPeer;
+struct _ENetEvent;
+struct _ENetPacket;
 
 namespace dish::net {
 
@@ -79,9 +82,16 @@ class MoonlightControlChannel {
     // CONTROLLER_MULTI. No heap allocation in our layer.
     void sendControllerState(const moonlight::ControllerState& state);
 
-    // Cold-path control messages (arrival, motion forward, ping, termination).
+    // Cold-path control messages (arrival, motion forward, termination).
     void sendControllerArrival(std::uint8_t controllerNumber, std::uint8_t controllerType,
                                std::uint8_t capabilities, std::uint32_t supportedButtons);
+    // The CONTROLLER_MULTI that names `controllerNumber` with its bit cleared (the unplug), then
+    // the arrival that plugs it back in as another pad. One hold of the send lock covers both: an
+    // input frame for the number sent between them would make Wolf plug a default Xbox pad there
+    // and skip the arrival.
+    void sendControllerReplug(std::uint8_t controllerNumber, std::uint16_t otherPadsMask,
+                              std::uint8_t controllerType, std::uint8_t capabilities,
+                              std::uint32_t supportedButtons);
     void sendControllerMotion(std::uint8_t controllerNumber, std::uint8_t motionType, float x,
                               float y, float z);
     // One CONTROLLER_TOUCH event. Already diffed by the caller: the wire wants
@@ -90,13 +100,21 @@ class MoonlightControlChannel {
                              std::uint32_t pointerId, float x, float y, float pressure);
     void sendControllerBattery(std::uint8_t controllerNumber, std::uint8_t batteryState,
                                std::uint8_t percentage);
-    void sendPeriodicPing();
 
   private:
     // Seals `plaintext` under the next seq and reliably sends it. Serialised by
     // sendMtx_ because the seq counter and the ENet host are single-writer.
     void sealAndSend(const std::uint8_t* plaintext, std::size_t len);
+    // sealAndSend's body, for a caller that already holds sendMtx_ over a live link.
+    void sealAndSendLocked(const std::uint8_t* plaintext, std::size_t len);
     void receiveLoop();
+
+    // The loop's parts: the keepalive it owes the host, what it takes the send lock for, what it
+    // does with a packet, and where an event goes. All on the ENet receive thread.
+    void keepAliveIfDue();
+    int serviceEnet(_ENetEvent& event);
+    void onPacket(const _ENetPacket& packet);
+    void dispatchServerEvent(const moonlight::ServerEvent& ev);
 
     _ENetHost* host_ = nullptr;
     _ENetPeer* peer_ = nullptr;
@@ -110,6 +128,8 @@ class MoonlightControlChannel {
     std::thread rxThread_;
     std::atomic<bool> running_{false};
     std::atomic<bool> connected_{false};
+    // Receive-thread only once the link is up; connect() resets it before the thread starts.
+    std::chrono::steady_clock::time_point lastKeepalive_{};
 
     RumbleHandler rumbleHandler_;
     RumbleTriggerHandler triggerHandler_;
