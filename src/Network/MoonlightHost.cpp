@@ -39,6 +39,7 @@ QJsonObject MoonlightBinding::toJson() const {
     obj[QStringLiteral("slotId")] = slotId;
     obj[QStringLiteral("hostId")] = hostId;
     obj[QStringLiteral("controllerType")] = controllerType;
+    obj[QStringLiteral("padIdentity")] = padIdentity;
     return obj;
 }
 
@@ -48,6 +49,7 @@ MoonlightBinding MoonlightBinding::fromJson(const QJsonObject& obj) {
     b.hostId = obj.value(QStringLiteral("hostId")).toString();
     b.controllerType =
         migrateDevicePick(obj.value(QStringLiteral("controllerType")).toInt(kMoonlightDeviceAuto));
+    b.padIdentity = obj.value(QStringLiteral("padIdentity")).toString();
     return b;
 }
 

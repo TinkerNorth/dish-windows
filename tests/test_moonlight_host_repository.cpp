@@ -5,6 +5,8 @@
 
 #include "QSettingsFixture.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 #include <utility>
@@ -275,4 +277,34 @@ TEST_CASE("Moonlight identity: a key this account cannot open is replaced by a f
     REQUIRE(second.has_value());
     CHECK(second->certPem != first->certPem);
     CHECK(second->privateKeyPem != first->privateKeyPem);
+}
+
+TEST_CASE("a binding keeps the pad's identity, and a record from before it existed reads as none",
+          "[moonlight][repo]") {
+    auto settings = dish::test::makeSharedSettings();
+    MoonlightHostRepository repo(settings);
+    dish::models::MoonlightBinding withPad;
+    withPad.slotId = QStringLiteral("sdl:1");
+    withPad.hostId = QStringLiteral("ml:ip:192.168.0.2");
+    withPad.padIdentity = QStringLiteral("guid:0300aabb/serial:11:22:33");
+    repo.rememberBinding(withPad);
+
+    const auto back = MoonlightHostRepository(settings).binding(QStringLiteral("sdl:1"));
+    REQUIRE(back.has_value());
+    CHECK(*back == withPad);
+
+    const auto raw =
+        settings->value(QLatin1String(dish::repository::keys::kMoonlightBindingListKey))
+            .toString()
+            .toUtf8();
+    const auto obj = QJsonDocument::fromJson(raw).array().first().toObject();
+    CHECK(obj.value(QStringLiteral("padIdentity")).toString() ==
+          QStringLiteral("guid:0300aabb/serial:11:22:33"));
+
+    QJsonObject old;
+    old[QStringLiteral("slotId")] = QStringLiteral("sdl:2");
+    old[QStringLiteral("hostId")] = QStringLiteral("ml:ip:192.168.0.2");
+    const auto legacy = dish::models::MoonlightBinding::fromJson(old);
+    CHECK(legacy.isValid());
+    CHECK(legacy.padIdentity.isEmpty());
 }
