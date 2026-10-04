@@ -104,7 +104,7 @@ namespace {
 QString padIdentity(SDL_Joystick* js) {
     char guid[64] = {0};
     SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(js), guid, sizeof(guid));
-    const QString model = QStringLiteral("guid:") + QString::fromLatin1(guid);
+    QString model = QStringLiteral("guid:") + QString::fromLatin1(guid);
     if (const char* serial = SDL_JoystickGetSerial(js); serial != nullptr && serial[0] != '\0') {
         return model + QStringLiteral("/serial:") + QString::fromUtf8(serial);
     }
