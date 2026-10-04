@@ -75,7 +75,7 @@ class SDLGamepadBridge : public QObject {
         // Bluetooth address), else the HID path, which Windows derives from the
         // port the pad sits on: a standing binding follows the pad and not the
         // order pads were plugged.
-        QString identity;
+        QString identity{};
     };
     QList<Device> devices() const;
 
