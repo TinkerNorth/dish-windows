@@ -11,6 +11,8 @@
 #include <QColor>
 #include <QString>
 
+#include <cstdint>
+
 namespace dish::ui {
 
 struct ThemePalette {
@@ -42,7 +44,7 @@ struct ThemePalette {
 
 // The resolved half of android's ThemeMode: System is resolved to one of these
 // before a palette is selected.
-enum class Appearance { Dark, Light };
+enum class Appearance : std::uint8_t { Dark, Light };
 
 const ThemePalette& darkPalette();
 const ThemePalette& lightPalette();

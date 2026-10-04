@@ -9,25 +9,35 @@
 
 #include "core/reducer/SatelliteLinkState.h"
 
+#include <cstdint>
+
 namespace dish::reducer {
 
 // The composer only builds Satellite rows (Moonlight hosts render through
 // MoonlightManager's own rows), but the kind names both so the link-tier
 // ladder (LinkTier.h) ranks one enum rather than two that happen to agree.
-enum class ConnectionKind { Satellite, Moonlight };
+enum class ConnectionKind : std::uint8_t { Satellite, Moonlight };
 
 // Icon keys the UI resolves to Qt resources.
-enum class ConnectionGlyph { SatelliteBase, SatelliteConnected, SatelliteOff };
+enum class ConnectionGlyph : std::uint8_t { SatelliteBase, SatelliteConnected, SatelliteOff };
 
 // Semantic colour tokens the UI resolves against the theme.
-enum class DotColor { Success, Primary, Warning, Muted };
+enum class DotColor : std::uint8_t { Success, Primary, Warning, Muted };
 
 // One key per LinkState, the chip vocabulary shared across the Dish clients.
-enum class StatusChipKey { Found, NeedsPairing, Offline, Ready, Connecting, Online, Unstable };
+enum class StatusChipKey : std::uint8_t {
+    Found,
+    NeedsPairing,
+    Offline,
+    Ready,
+    Connecting,
+    Online,
+    Unstable
+};
 
 // The UI formats the detail line from the (ip, udpPort) args under its own
 // catalogue, which is what keeps this layer free of tr().
-enum class RowDetailKey { DiscoveredRow };
+enum class RowDetailKey : std::uint8_t { DiscoveredRow };
 
 // An Unstable link is still streaming, so the dashboard and the connections
 // screen both count it as live.

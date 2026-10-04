@@ -9,9 +9,11 @@
 
 #include "Models/Models.h"
 
+#include <cstdint>
+
 namespace dish::ui {
 
-enum class RateChipKind {
+enum class RateChipKind : std::uint8_t {
     Hidden, // no measurement worth showing (idle, never measured)
     Live,   // a current measurement: "<hz> Hz"
     Peak,   // only a high-water mark: "~<hz> Hz"

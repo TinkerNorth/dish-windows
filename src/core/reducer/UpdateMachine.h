@@ -26,12 +26,13 @@
 
 #include <QString>
 
+#include <cstdint>
 #include <variant>
 #include <vector>
 
 namespace dish::reducer {
 
-enum class UpdatePhase {
+enum class UpdatePhase : std::uint8_t {
     Disabled,    // checks turned off: no timers, no QNAM, no network IO at all
     Idle,        // enabled, nothing known yet
     Checking,    // a manifest fetch is in flight
@@ -43,7 +44,7 @@ enum class UpdatePhase {
     Failed,      // the last attempt failed; `error` says how
 };
 
-enum class UpdateError {
+enum class UpdateError : std::uint8_t {
     None,
     Offline,         // reachability gate; no request was made
     Http,            // transport, TLS, status code, 404 in a publish window
@@ -57,9 +58,9 @@ enum class UpdateError {
 
 // The coordinator turns these into localized toasts; the engine never vends a
 // sentence.
-enum class UpdateNotice { Ready, Available, Unsupported, Updated };
+enum class UpdateNotice : std::uint8_t { Ready, Available, Unsupported, Updated };
 
-enum class UpdateTrigger { Startup, Periodic, Manual, Retry };
+enum class UpdateTrigger : std::uint8_t { Startup, Periodic, Manual, Retry };
 
 // ==-comparable so the coordinator's Observable suppresses no-op re-emits.
 struct UpdateStatus {

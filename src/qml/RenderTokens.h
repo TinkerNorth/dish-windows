@@ -132,10 +132,10 @@ inline QString moonlightSessionToken(moonlight::SessionUiState s) {
         return QStringLiteral("dropped");
     case moonlight::SessionUiState::EndedByHost:
         return QStringLiteral("endedByHost");
-    }
-    return {};
     case moonlight::SessionUiState::PickRemoved:
         return QStringLiteral("pickRemoved");
+    }
+    return {};
 }
 
 // Why a bind did not take, as the token the binding flow turns into a sentence.

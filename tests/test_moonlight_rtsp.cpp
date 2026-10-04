@@ -35,7 +35,7 @@ TEST_CASE("parseRtspResponse reads status, CSeq and Transport", "[moonlight][rts
     REQUIRE(resp.has_value());
     REQUIRE(resp->statusCode == 200);
     REQUIRE(resp->cseq == 3);
-    REQUIRE(resp->options.at("Session") == "DEADBEEFCAFE;timeout = 90");
+    REQUIRE(resp->option("Session") == "DEADBEEFCAFE;timeout = 90");
     REQUIRE(setupServerPort(*resp).has_value());
     REQUIRE(*setupServerPort(*resp) == 48010);
 }
