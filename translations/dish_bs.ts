@@ -3398,6 +3398,10 @@
         <translation>Zaboraviti %1?</translation>
     </message>
     <message>
+        <source>Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.</source>
+        <translation>Dish briše svoje uparivanje i PIN će vam ponovo biti potreban. %1 čuva vlastiti zapis o ovom uređaju dok ga tamo ne uklonite.</translation>
+    </message>
+    <message>
         <source>Cancel</source>
         <translation>Otkaži</translation>
     </message>
@@ -3476,10 +3480,6 @@
     <message>
         <source>Quit session</source>
         <translation>Prekini sesiju</translation>
-    </message>
-    <message>
-        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
-        <translation>Dish briše svoje uparivanje. Host zadržava vlastiti zapis dok neko tamo ne ukloni Dish, i trebat će vam PIN ponovo.</translation>
     </message>
     <message>
         <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
@@ -4827,6 +4827,10 @@
         <translation>Nova sesija</translation>
     </message>
     <message>
+        <source>%1 is no longer on this host</source>
+        <translation>%1 više nije na ovom hostu</translation>
+    </message>
+    <message>
         <source>Joining %1</source>
         <translation>Pridruživanje %1</translation>
     </message>
@@ -4869,6 +4873,10 @@
     <message>
         <source>Check that the code went into the right host, then try again.</source>
         <translation>Provjerite je li kod unesen na pravi host, pa pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>The app you picked was removed from %1. Pick another one to start.</source>
+        <translation>Aplikacija koju ste odabrali uklonjena je s hosta %1. Odaberite drugu za pokretanje.</translation>
     </message>
     <message>
         <source>Check that the host is switched on and on this network, then try again.</source>

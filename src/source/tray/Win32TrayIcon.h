@@ -26,6 +26,7 @@
 
 #include <QString>
 
+#include <cstdint>
 #include <memory>
 
 namespace dish::source {
@@ -49,7 +50,7 @@ class Win32TrayIcon final : public TrayIcon {
     void showBalloon(const QString& title, const QString& body);
 
     // ── The event side, public so the dispatch is pinned without a shell ────
-    enum MenuCommand : int { CommandNone = 0, CommandShowWindow = 1, CommandQuit = 2 };
+    enum MenuCommand : std::uint8_t { CommandNone = 0, CommandShowWindow = 1, CommandQuit = 2 };
 
     // `event` is the low word of the callback message's lParam under
     // NOTIFYICON_VERSION_4. A select (click or keyboard) shows the window; the

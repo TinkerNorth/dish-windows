@@ -220,7 +220,7 @@ std::vector<std::uint8_t> encodeRtpPing(const std::string& pingPayload, std::uin
 
 // ── Host -> client events (decode of a decrypted control plaintext) ──────────
 
-enum class ServerEventType {
+enum class ServerEventType : std::uint8_t {
     Rumble,
     RumbleTriggers,
     MotionEvent,

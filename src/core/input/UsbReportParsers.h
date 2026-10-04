@@ -281,18 +281,18 @@ inline bool decodeDualShock4(const std::uint8_t* buf, std::size_t len, ParsedRep
     s.ry = scaleU8Centered(buf[4], true);
 
     std::uint16_t b = 0;
-    if (buf[5] & 0x10) { b |= layout::kXusbX; }
-    if (buf[5] & 0x20) { b |= layout::kXusbA; }
-    if (buf[5] & 0x40) { b |= layout::kXusbB; }
-    if (buf[5] & 0x80) { b |= layout::kXusbY; }
-    if (buf[6] & 0x01) { b |= layout::kXusbLeftShoulder; }
-    if (buf[6] & 0x02) { b |= layout::kXusbRightShoulder; }
-    if (buf[6] & 0x10) { b |= layout::kXusbBack; }
-    if (buf[6] & 0x20) { b |= layout::kXusbStart; }
-    if (buf[6] & 0x40) { b |= layout::kXusbLeftThumb; }
-    if (buf[6] & 0x80) { b |= layout::kXusbRightThumb; }
+    if ((buf[5] & 0x10) != 0) { b |= layout::kXusbX; }
+    if ((buf[5] & 0x20) != 0) { b |= layout::kXusbA; }
+    if ((buf[5] & 0x40) != 0) { b |= layout::kXusbB; }
+    if ((buf[5] & 0x80) != 0) { b |= layout::kXusbY; }
+    if ((buf[6] & 0x01) != 0) { b |= layout::kXusbLeftShoulder; }
+    if ((buf[6] & 0x02) != 0) { b |= layout::kXusbRightShoulder; }
+    if ((buf[6] & 0x10) != 0) { b |= layout::kXusbBack; }
+    if ((buf[6] & 0x20) != 0) { b |= layout::kXusbStart; }
+    if ((buf[6] & 0x40) != 0) { b |= layout::kXusbLeftThumb; }
+    if ((buf[6] & 0x80) != 0) { b |= layout::kXusbRightThumb; }
     // PS/Guide button.
-    if (len > 7 && (buf[7] & 0x01)) { b |= layout::kXusbGuide; }
+    if (len > 7 && ((buf[7] & 0x01) != 0)) { b |= layout::kXusbGuide; }
     b = setDpadFromHat(b, static_cast<std::uint8_t>(buf[5] & 0x0F));
     s.wButtons = b;
 
@@ -385,18 +385,18 @@ inline bool decodeDualSense(const std::uint8_t* buf, std::size_t len, ParsedRepo
     s.rt = buf[6];
 
     std::uint16_t b = 0;
-    if (buf[8] & 0x10) { b |= layout::kXusbX; }
-    if (buf[8] & 0x20) { b |= layout::kXusbA; }
-    if (buf[8] & 0x40) { b |= layout::kXusbB; }
-    if (buf[8] & 0x80) { b |= layout::kXusbY; }
-    if (buf[9] & 0x01) { b |= layout::kXusbLeftShoulder; }
-    if (buf[9] & 0x02) { b |= layout::kXusbRightShoulder; }
-    if (buf[9] & 0x10) { b |= layout::kXusbBack; }
-    if (buf[9] & 0x20) { b |= layout::kXusbStart; }
-    if (buf[9] & 0x40) { b |= layout::kXusbLeftThumb; }
-    if (buf[9] & 0x80) { b |= layout::kXusbRightThumb; }
+    if ((buf[8] & 0x10) != 0) { b |= layout::kXusbX; }
+    if ((buf[8] & 0x20) != 0) { b |= layout::kXusbA; }
+    if ((buf[8] & 0x40) != 0) { b |= layout::kXusbB; }
+    if ((buf[8] & 0x80) != 0) { b |= layout::kXusbY; }
+    if ((buf[9] & 0x01) != 0) { b |= layout::kXusbLeftShoulder; }
+    if ((buf[9] & 0x02) != 0) { b |= layout::kXusbRightShoulder; }
+    if ((buf[9] & 0x10) != 0) { b |= layout::kXusbBack; }
+    if ((buf[9] & 0x20) != 0) { b |= layout::kXusbStart; }
+    if ((buf[9] & 0x40) != 0) { b |= layout::kXusbLeftThumb; }
+    if ((buf[9] & 0x80) != 0) { b |= layout::kXusbRightThumb; }
     // PS button.
-    if (len > 10 && (buf[10] & 0x01)) { b |= layout::kXusbGuide; }
+    if (len > 10 && ((buf[10] & 0x01) != 0)) { b |= layout::kXusbGuide; }
     // Mic-mute lives beside the PS button and the touchpad click in button
     // byte 10 (0x04 next to 0x01 and 0x02). The press is an edge, the wire bit
     // is a state: flip the latch on the way down only, so holding the button
@@ -494,26 +494,26 @@ inline bool decodeSwitchProUsb(const std::uint8_t* buf, std::size_t len, ParsedR
     const std::uint8_t bl = buf[5];
 
     std::uint16_t b = 0;
-    if (br & 0x01) { b |= layout::kXusbX; }
-    if (br & 0x02) { b |= layout::kXusbY; }
-    if (br & 0x04) { b |= layout::kXusbA; }
-    if (br & 0x08) { b |= layout::kXusbB; }
-    if (br & 0x40) { b |= layout::kXusbRightShoulder; }
-    if (bs & 0x01) { b |= layout::kXusbBack; }
-    if (bs & 0x02) { b |= layout::kXusbStart; }
-    if (bs & 0x04) { b |= layout::kXusbRightThumb; }
-    if (bs & 0x08) { b |= layout::kXusbLeftThumb; }
-    if (bs & 0x10) { b |= layout::kXusbGuide; } // Home
-    if (bl & 0x01) { b |= layout::kXusbDpadDown; }
-    if (bl & 0x02) { b |= layout::kXusbDpadUp; }
-    if (bl & 0x04) { b |= layout::kXusbDpadRight; }
-    if (bl & 0x08) { b |= layout::kXusbDpadLeft; }
-    if (bl & 0x40) { b |= layout::kXusbLeftShoulder; }
+    if ((br & 0x01) != 0) { b |= layout::kXusbX; }
+    if ((br & 0x02) != 0) { b |= layout::kXusbY; }
+    if ((br & 0x04) != 0) { b |= layout::kXusbA; }
+    if ((br & 0x08) != 0) { b |= layout::kXusbB; }
+    if ((br & 0x40) != 0) { b |= layout::kXusbRightShoulder; }
+    if ((bs & 0x01) != 0) { b |= layout::kXusbBack; }
+    if ((bs & 0x02) != 0) { b |= layout::kXusbStart; }
+    if ((bs & 0x04) != 0) { b |= layout::kXusbRightThumb; }
+    if ((bs & 0x08) != 0) { b |= layout::kXusbLeftThumb; }
+    if ((bs & 0x10) != 0) { b |= layout::kXusbGuide; } // Home
+    if ((bl & 0x01) != 0) { b |= layout::kXusbDpadDown; }
+    if ((bl & 0x02) != 0) { b |= layout::kXusbDpadUp; }
+    if ((bl & 0x04) != 0) { b |= layout::kXusbDpadRight; }
+    if ((bl & 0x08) != 0) { b |= layout::kXusbDpadLeft; }
+    if ((bl & 0x40) != 0) { b |= layout::kXusbLeftShoulder; }
     s.wButtons = b;
 
     // ZL/ZR are digital on the Pro.
-    s.lt = (bl & 0x80) ? 255 : 0;
-    s.rt = (br & 0x80) ? 255 : 0;
+    s.lt = ((bl & 0x80) != 0) ? 255 : 0;
+    s.rt = ((br & 0x80) != 0) ? 255 : 0;
 
     const std::uint16_t lx =
         static_cast<std::uint16_t>(buf[6]) | ((static_cast<std::uint16_t>(buf[7]) & 0x0F) << 8);
@@ -577,19 +577,19 @@ inline bool decodeGenericHid(const std::uint8_t* buf, std::size_t len, ParsedRep
     b = setDpadFromHat(b, static_cast<std::uint8_t>(buf[4] & 0x0F));
     const std::uint8_t btnLo = buf[4];
     const std::uint8_t btnHi = len > 5 ? buf[5] : 0;
-    if (btnLo & 0x10) { b |= layout::kXusbA; }
-    if (btnLo & 0x20) { b |= layout::kXusbB; }
-    if (btnLo & 0x40) { b |= layout::kXusbX; }
-    if (btnLo & 0x80) { b |= layout::kXusbY; }
-    if (btnHi & 0x01) { b |= layout::kXusbLeftShoulder; }
-    if (btnHi & 0x02) { b |= layout::kXusbRightShoulder; }
-    if (btnHi & 0x04) { b |= layout::kXusbBack; }
-    if (btnHi & 0x08) { b |= layout::kXusbStart; }
-    if (btnHi & 0x10) { b |= layout::kXusbLeftThumb; }
-    if (btnHi & 0x20) { b |= layout::kXusbRightThumb; }
+    if ((btnLo & 0x10) != 0) { b |= layout::kXusbA; }
+    if ((btnLo & 0x20) != 0) { b |= layout::kXusbB; }
+    if ((btnLo & 0x40) != 0) { b |= layout::kXusbX; }
+    if ((btnLo & 0x80) != 0) { b |= layout::kXusbY; }
+    if ((btnHi & 0x01) != 0) { b |= layout::kXusbLeftShoulder; }
+    if ((btnHi & 0x02) != 0) { b |= layout::kXusbRightShoulder; }
+    if ((btnHi & 0x04) != 0) { b |= layout::kXusbBack; }
+    if ((btnHi & 0x08) != 0) { b |= layout::kXusbStart; }
+    if ((btnHi & 0x10) != 0) { b |= layout::kXusbLeftThumb; }
+    if ((btnHi & 0x20) != 0) { b |= layout::kXusbRightThumb; }
     s.wButtons = b;
-    s.lt = (btnHi & 0x40) ? 255 : 0;
-    s.rt = (btnHi & 0x80) ? 255 : 0;
+    s.lt = ((btnHi & 0x40) != 0) ? 255 : 0;
+    s.rt = ((btnHi & 0x80) != 0) ? 255 : 0;
     return true;
 }
 
@@ -675,20 +675,20 @@ inline bool decodeSteamController(const std::uint8_t* buf, std::size_t len, Pars
                               (static_cast<std::uint32_t>(buf[10]) << 16);
 
     std::uint16_t b = 0;
-    if (btn & kSteamSouth) { b |= layout::kXusbA; }
-    if (btn & kSteamEast) { b |= layout::kXusbB; }
-    if (btn & kSteamWest) { b |= layout::kXusbX; }
-    if (btn & kSteamNorth) { b |= layout::kXusbY; }
-    if (btn & kSteamLeftBumper) { b |= layout::kXusbLeftShoulder; }
-    if (btn & kSteamRightBumper) { b |= layout::kXusbRightShoulder; }
-    if (btn & kSteamMenu) { b |= layout::kXusbBack; }
-    if (btn & kSteamEscape) { b |= layout::kXusbStart; }
-    if (btn & kSteamGuide) { b |= layout::kXusbGuide; }
-    if (btn & kSteamDpadUp) { b |= layout::kXusbDpadUp; }
-    if (btn & kSteamDpadDown) { b |= layout::kXusbDpadDown; }
-    if (btn & kSteamDpadLeft) { b |= layout::kXusbDpadLeft; }
-    if (btn & kSteamDpadRight) { b |= layout::kXusbDpadRight; }
-    if (btn & kSteamRightPadClicked) { b |= layout::kXusbRightThumb; }
+    if ((btn & kSteamSouth) != 0) { b |= layout::kXusbA; }
+    if ((btn & kSteamEast) != 0) { b |= layout::kXusbB; }
+    if ((btn & kSteamWest) != 0) { b |= layout::kXusbX; }
+    if ((btn & kSteamNorth) != 0) { b |= layout::kXusbY; }
+    if ((btn & kSteamLeftBumper) != 0) { b |= layout::kXusbLeftShoulder; }
+    if ((btn & kSteamRightBumper) != 0) { b |= layout::kXusbRightShoulder; }
+    if ((btn & kSteamMenu) != 0) { b |= layout::kXusbBack; }
+    if ((btn & kSteamEscape) != 0) { b |= layout::kXusbStart; }
+    if ((btn & kSteamGuide) != 0) { b |= layout::kXusbGuide; }
+    if ((btn & kSteamDpadUp) != 0) { b |= layout::kXusbDpadUp; }
+    if ((btn & kSteamDpadDown) != 0) { b |= layout::kXusbDpadDown; }
+    if ((btn & kSteamDpadLeft) != 0) { b |= layout::kXusbDpadLeft; }
+    if ((btn & kSteamDpadRight) != 0) { b |= layout::kXusbDpadRight; }
+    if ((btn & kSteamRightPadClicked) != 0) { b |= layout::kXusbRightThumb; }
 
     s.lt = steamTriggerToWire(buf[11]);
     s.rt = steamTriggerToWire(buf[12]);
@@ -703,17 +703,17 @@ inline bool decodeSteamController(const std::uint8_t* buf, std::size_t len, Pars
         st.steamStickY = rdLe16(buf, 18);
         // With no live pad the firmware reports a stick click as a left-pad
         // click.
-        if (!interleaved && (btn & kSteamLeftPadClicked)) { b |= layout::kXusbLeftThumb; }
+        if (!interleaved && ((btn & kSteamLeftPadClicked) != 0)) { b |= layout::kXusbLeftThumb; }
     } else if (!interleaved) {
         st.steamStickX = 0;
         st.steamStickY = 0;
     }
-    if (btn & kSteamStickButton) { b |= layout::kXusbLeftThumb; }
+    if ((btn & kSteamStickButton) != 0) { b |= layout::kXusbLeftThumb; }
     s.wButtons = b;
     s.lx = st.steamStickX;
     s.ly = st.steamStickY;
 
-    if (btn & kSteamRightPadFinger) {
+    if ((btn & kSteamRightPadFinger) != 0) {
         steamRotatePad(rdLe16(buf, 20), rdLe16(buf, 22), s.rx, s.ry);
     } else {
         s.rx = 0;

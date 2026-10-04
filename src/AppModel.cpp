@@ -179,7 +179,12 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         return motionEnabledStore_.isEnabled(slotId.toStdString());
     });
     motionSwitchSub_ = motionEnabledStore_.state().subscribe(
-        [this](const source::MotionEnabledMap&) { moonlight_.refreshMotionSwitches(); },
+        [this](const source::MotionEnabledMap&) {
+            moonlight_.refreshMotionSwitches();
+            // The satellite tables too: republishRouting installs a motion sender only while its
+            // switch is on.
+            republishRouting();
+        },
         /*emitCurrent=*/false);
     // The host's touchpad pick, which Apply writes before it binds.
     moonlight_.setTouchpadPick(
@@ -970,7 +975,11 @@ void AppModel::republishRouting() {
         if (auto sender = hub_->reportSenderForSlot(slot.id)) {
             nextRouting.insert(slot.id, sender);
         }
-        if (auto sender = hub_->motionSenderForSlot(slot.id)) {
+        // The switch gates the sender itself, not only CAP_MOTION in the descriptor: a satellite
+        // accepts MSG_MOTION without the cap. Decided here, off the hot path; a flip rebuilds the
+        // tables.
+        const bool motionAllowed = motionEnabledStore_.isEnabled(slot.id.toStdString());
+        if (auto sender = hub_->motionSenderForSlot(slot.id); sender && motionAllowed) {
             nextMotion.insert(slot.id, sender);
         }
         if (auto sender = hub_->batterySenderForSlot(slot.id)) {
@@ -1006,6 +1015,8 @@ void AppModel::republishStreamingCount(const QHash<QString, QString>& bindings) 
     streamingSlotCount_.set(nextStreaming);
 }
 
+// Long because it is the order: every pass below is named, and the sequence (slots, then the
+// binding cross-reference, publish, converge, notify, presence) is the contract the comments pin.
 void AppModel::rebuild() {
     QList<models::ControllerSlot> next;
     // Every slot this pass SHOWS, with the USB identity of the pad behind it. Published before the
@@ -1560,6 +1571,9 @@ void AppModel::reconcileAudioEngines() {
         reducer::micIndicatorFor(static_cast<int>(armedMicSlotIds_.size()), capturingMicSlots_);
 }
 
+// Stays long because its steps are one guarded sequence: the notices are read before the detach
+// that would erase them, the re-entrancy guard spans the whole, and the toasts wait for it to
+// clear. A function per step would hand the guard and the notices back and forth.
 void AppModel::applyBindingPresence() {
     if (bindingPresenceInFlight_) { return; }
     const auto bindings = hub_->bindings();

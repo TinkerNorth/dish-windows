@@ -29,14 +29,16 @@ class QTimer;
 
 namespace dish::net {
 
-enum class ConnectionEventKind { PairingRequired, Error };
+// quint8 rather than std::uint8_t on the enums here: lupdate 6.7.3, the CI pin, loses this
+// file's namespace after the "::" and re-files every tr() string in the class under a bare name.
+enum class ConnectionEventKind : quint8 { PairingRequired, Error };
 
 // Reverse (host-initiated) pairing: the dish shows a clientPin, the operator
 // types it on the satellite, and the poll loop resolves. The terminal arms are
 // sticky until the next request or cancel clears them. IdentityChanged and
 // VersionMismatch end an attempt no new code can rescue, so each keeps its own
 // arm rather than reading as the operator's decline.
-enum class ReversePairingPhase {
+enum class ReversePairingPhase : quint8 {
     Idle,
     AwaitingApproval,
     Approved,
@@ -54,7 +56,7 @@ struct ConnectionEvent {
 
 // Only UserInitiated may toast on failure. The two background intents must fail
 // silently, with the row chip's Connecting → Saved/Stale flip as the only cue.
-enum class ConnectIntent { UserInitiated, AutoReconnect, RetryAfterDeath };
+enum class ConnectIntent : quint8 { UserInitiated, AutoReconnect, RetryAfterDeath };
 
 // Owns the pool of live and remembered WiFi sessions and drives the REST control
 // plane for each: session PUT on connect, per-controller PUT/DELETE for slot

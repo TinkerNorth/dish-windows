@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace dish::net {
@@ -19,7 +20,7 @@ bool isPrivateHostLiteral(const std::string& host);
 // Whether a satellite at `host` can be dialled at all. A satellite is LAN-only, and it listens on
 // IPv4 alone (every socket it opens is AF_INET), so a private IPv6 literal is local and still
 // unreachable.
-enum class SatelliteHostVerdict { Reachable, NotLocal, NotIpv4 };
+enum class SatelliteHostVerdict : std::uint8_t { Reachable, NotLocal, NotIpv4 };
 SatelliteHostVerdict classifySatelliteHost(const std::string& host);
 
 } // namespace dish::net

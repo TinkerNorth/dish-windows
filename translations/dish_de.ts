@@ -3382,6 +3382,10 @@
         <translation>%1 entfernen?</translation>
     </message>
     <message>
+        <source>Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.</source>
+        <translation>Dish löscht seine Kopplung, und du brauchst die PIN erneut. %1 behält seinen eigenen Eintrag für dieses Gerät, bis du ihn dort entfernst.</translation>
+    </message>
+    <message>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
@@ -3459,10 +3463,6 @@
     <message>
         <source>Quit session</source>
         <translation>Sitzung beenden</translation>
-    </message>
-    <message>
-        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
-        <translation>Dish löscht seine Kopplung. Der Host behält seinen eigenen Eintrag, bis dort jemand Dish entfernt, und Sie brauchen die PIN erneut.</translation>
     </message>
     <message>
         <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
@@ -4805,6 +4805,10 @@
         <translation>Neue Sitzung</translation>
     </message>
     <message>
+        <source>%1 is no longer on this host</source>
+        <translation>%1 ist auf diesem Host nicht mehr vorhanden</translation>
+    </message>
+    <message>
         <source>Joining %1</source>
         <translation>%1 wird beigetreten</translation>
     </message>
@@ -4847,6 +4851,10 @@
     <message>
         <source>Check that the code went into the right host, then try again.</source>
         <translation>Prüfen Sie, ob der Code beim richtigen Host eingegeben wurde, und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>The app you picked was removed from %1. Pick another one to start.</source>
+        <translation>Die gewählte App wurde von %1 entfernt. Wähle eine andere, um zu starten.</translation>
     </message>
     <message>
         <source>Check that the host is switched on and on this network, then try again.</source>

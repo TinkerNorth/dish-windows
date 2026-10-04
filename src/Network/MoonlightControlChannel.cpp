@@ -259,7 +259,7 @@ void MoonlightControlChannel::keepAliveIfDue() {
 // inside it was 16 ms a controller report could queue behind the receive side.
 //
 // Negative when the channel is gone, which ends the loop; 0 when nothing arrived.
-int MoonlightControlChannel::serviceEnet(_ENetEvent& event) {
+int MoonlightControlChannel::serviceEnet(ENetEvent& event) {
     std::lock_guard<std::mutex> lock(sendMtx_);
     if (host_ == nullptr) { return -1; }
     return enet_host_service(host_, &event, 0);
@@ -294,7 +294,7 @@ void MoonlightControlChannel::dispatchServerEvent(const moonlight::ServerEvent& 
 
 // A packet that will not open, or opens into something this version does not model, is dropped
 // silently: the host is entitled to send events a client need not understand.
-void MoonlightControlChannel::onPacket(const _ENetPacket& packet) {
+void MoonlightControlChannel::onPacket(const ENetPacket& packet) {
     const auto opened = moonlight::crypto::openControl(key_, packet.data, packet.dataLength);
     if (!opened.has_value()) { return; }
     const auto ev = moonlight::decodeServerEvent(opened->data(), opened->size());

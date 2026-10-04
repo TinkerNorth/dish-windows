@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace dish::chrome {
 
 // Window-local, top-left origin. Rect is half-open on the high edges —
@@ -29,7 +31,7 @@ struct Rect {
 // MaximizeButton -> HTMAXBUTTON, which is the ONLY way Win11 shows the Snap
 // Layouts flyout for a custom-drawn maximize button on a frameless window;
 // Client -> HTCLIENT (the QML scene handles the event normally).
-enum class HitRegion {
+enum class HitRegion : std::uint8_t {
     Client,
     Caption,
     MaximizeButton,

@@ -15,11 +15,13 @@
 #include "core/moonlight/MoonlightControl.h"
 #include "core/reducer/TouchpadModeResolve.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace dish::moonlight {
 
@@ -34,7 +36,7 @@ class PadSlots {
     // Assigns the lowest free controller number. Returns nullopt when full or
     // already assigned (the caller reads `numberFor` for the existing one).
     std::optional<std::uint8_t> assign(const std::string& slotId) {
-        if (assigned_.count(slotId) != 0) { return std::nullopt; }
+        if (find(slotId) != assigned_.end()) { return std::nullopt; }
         for (std::uint8_t n = 0; n < kMaxPads; ++n) {
             bool taken = false;
             for (const auto& [id, num] : assigned_) {
@@ -44,7 +46,7 @@ class PadSlots {
                 }
             }
             if (!taken) {
-                assigned_[slotId] = n;
+                assigned_.emplace_back(slotId, n);
                 return n;
             }
         }
@@ -53,7 +55,7 @@ class PadSlots {
 
     // The controller number this slot holds, if any.
     std::optional<std::uint8_t> numberFor(const std::string& slotId) const {
-        const auto it = assigned_.find(slotId);
+        const auto it = find(slotId);
         if (it == assigned_.end()) { return std::nullopt; }
         return it->second;
     }
@@ -61,7 +63,7 @@ class PadSlots {
     // Releases the slot and returns the number it held, so the caller can send
     // the final bit-cleared CONTROLLER_MULTI for it.
     std::optional<std::uint8_t> release(const std::string& slotId) {
-        const auto it = assigned_.find(slotId);
+        const auto it = find(slotId);
         if (it == assigned_.end()) { return std::nullopt; }
         const std::uint8_t number = it->second;
         assigned_.erase(it);
@@ -81,7 +83,18 @@ class PadSlots {
     std::size_t size() const { return assigned_.size(); }
 
   private:
-    std::map<std::string, std::uint8_t> assigned_;
+    // At most kMaxPads entries, so a list beats a tree, and its move never allocates: a
+    // std::map's does under MSVC, which made the implicit move a function that may throw.
+    using Assignment = std::pair<std::string, std::uint8_t>;
+    std::vector<Assignment>::const_iterator find(const std::string& slotId) const {
+        return std::find_if(assigned_.begin(), assigned_.end(),
+                            [&slotId](const Assignment& a) { return a.first == slotId; });
+    }
+    std::vector<Assignment>::iterator find(const std::string& slotId) {
+        return std::find_if(assigned_.begin(), assigned_.end(),
+                            [&slotId](const Assignment& a) { return a.first == slotId; });
+    }
+    std::vector<Assignment> assigned_;
 };
 
 // The session belongs to the HOST and is reference counted by the pads bound to
@@ -99,7 +112,7 @@ inline bool unbindEndsSession(const PadSlots& pads) { return pads.empty(); }
 // like from the outside: no route, no session, no log line and no reason. The
 // caller is expected to say which of them happened, so `Bound` is the only value
 // that means nothing has to be reported.
-enum class BindOutcome {
+enum class BindOutcome : std::uint8_t {
     Bound,
     // Neither the remembered list nor the discovery sweep resolves the host id.
     UnknownHost,

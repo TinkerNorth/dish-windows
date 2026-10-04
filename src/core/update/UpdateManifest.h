@@ -15,6 +15,7 @@
 #include <QByteArray>
 #include <QString>
 
+#include <cstdint>
 #include <variant>
 
 namespace dish::update {
@@ -31,10 +32,10 @@ inline constexpr const char* kSetupAssetName = "dish-setup.exe";
 // Caps: the body is size-checked BEFORE the JSON parse (a captive portal's
 // HTML splash can be arbitrarily large), and no plausible installer is half a
 // gigabyte.
-inline constexpr qint64 kManifestMaxBytes = 64 * 1024;
+inline constexpr qint64 kManifestMaxBytes = qint64(64) * 1024;
 inline constexpr qint64 kAssetMaxBytes = qint64(500) * 1024 * 1024;
 
-enum class ManifestError {
+enum class ManifestError : std::uint8_t {
     Oversize,          // body > 64 KiB before parsing
     BadJson,           // unparseable, or the root is not an object (portal HTML)
     UnsupportedSchema, // schema != 1 (greater = newer client required)

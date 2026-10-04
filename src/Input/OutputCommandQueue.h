@@ -25,7 +25,7 @@ namespace dish::input {
 // thread would race that close into a use-after-free. The effect commands
 // carry what the game asked for, not bytes: the report is built on the SDL
 // thread at drain time, where the per-pad FeedbackState shadow lives.
-enum class OutputKind { Rumble, Lightbar, TriggerEffects, PlayerLeds, MicLed };
+enum class OutputKind : std::uint8_t { Rumble, Lightbar, TriggerEffects, PlayerLeds, MicLed };
 
 struct OutputCommand {
     OutputKind kind = OutputKind::Rumble;

@@ -27,6 +27,7 @@
 
 #include <QString>
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <mutex>
@@ -40,7 +41,7 @@ namespace dish::source {
 
 // Carried AS DATA (the UI localizes it) so the picker can show a distinct
 // message and retry per cause instead of one generic "try again".
-enum class CatalogError {
+enum class CatalogError : std::uint8_t {
     Unreachable, // transport never produced a response (offline / wrong host)
     ServerError, // a reply arrived but not a 200 catalog (5xx, etc.)
     Malformed,   // a 200 whose body did not parse into a real catalog

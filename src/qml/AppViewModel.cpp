@@ -1763,6 +1763,9 @@ void AppViewModel::dispatchApply(const reducer::ApplyEvent& event) {
     }
 }
 
+// One tick of the apply machine. Long because its three questions (did the pad vanish, has the
+// path settled, did the satellite answer) are asked in this order on the same tick, and each
+// reads the slot the one before it resolved.
 void AppViewModel::onApplyTick() {
     dispatchApply(reducer::apply_event::Tick{kApplyTickMs});
     if (!applyInFlight()) { return; }

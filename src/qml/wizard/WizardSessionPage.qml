@@ -167,6 +167,9 @@ ColumnLayout {
             return qsTr("%1 was reset").arg(page.hostName);
         case "newSession":
             return qsTr("New session");
+        case "pickRemoved":
+            // The same readout a joining binding names: nothing of ours runs on the host.
+            return qsTr("%1 is no longer on this host").arg(page.joinedAppName(page.accounting));
         case "joining":
             return page.joinedAppName(page.accounting).length > 0
                    ? qsTr("Joining %1").arg(page.joinedAppName(page.accounting))
@@ -195,6 +198,8 @@ ColumnLayout {
             return qsTr("Type %1 into the Moonlight or Sunshine page on %2.").arg(page.pin).arg(page.hostName);
         case "pairingRefused":
             return qsTr("Check that the code went into the right host, then try again.");
+        case "pickRemoved":
+            return qsTr("The app you picked was removed from %1. Pick another one to start.").arg(page.hostName);
         case "unreachable":
             return qsTr("Check that the host is switched on and on this network, then try again.");
         case "remembered":
@@ -437,7 +442,7 @@ ColumnLayout {
 
     // ── The pick, and only when there is one to make ────────────────────────
     Repeater {
-        model: page.state === "newSession" ? page.apps : []
+        model: page.state === "newSession" || page.state === "pickRemoved" ? page.apps : []
 
         delegate: Kit.SelectRow {
             id: appRow

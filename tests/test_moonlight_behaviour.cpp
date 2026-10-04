@@ -1056,17 +1056,34 @@ const QByteArray kTwoApps = QByteArrayLiteral(
     "<root status_code=\"200\"><App><AppTitle>Desktop</AppTitle><ID>881448767</ID></App>"
     "<App><AppTitle>Steam</AppTitle><ID>1234</ID></App></root>");
 
-TEST_CASE("An app the host no longer lists is forgotten as the pick when its list is read",
+TEST_CASE("An app the host no longer lists stays the pick when its list is read, and is named",
           "[moonlight][behaviour][b7][h3]") {
-    // Launched, it is refused every time (Wolf answers an unknown app with HTTP
-    // 400), and the refusal hides the picker it could be changed in.
+    // The pick is the user's word: forgetting it started the host's first app, which they never
+    // chose.
     AppListHost at(QStringLiteral("9"), 200, kTwoApps);
     REQUIRE(at.listening);
 
     REQUIRE(at.readAppList());
 
-    CHECK(at.storedPick().isEmpty());
-    CHECK(at.store->hosts().first().lastAppName.isEmpty());
+    CHECK(at.storedPick() == QStringLiteral("9"));
+    CHECK(at.store->hosts().first().lastAppName == QStringLiteral("Picked"));
+    CHECK(at.manager->sessionUiInputs(at.h.id(), QString()).pickRemoved);
+}
+
+TEST_CASE("A session on a host that no longer lists the picked app launches nothing",
+          "[moonlight][behaviour][b7]") {
+    AppListHost at(QStringLiteral("9"), 200, kTwoApps);
+    REQUIRE(at.listening);
+    REQUIRE(at.readAppList());
+    MoonlightRequestLog log(*at.manager);
+
+    REQUIRE(at.manager->bindSlot(QStringLiteral("sdl:1"), at.h.id(),
+                                 dish::models::kMoonlightDeviceAuto, false, false, false, false,
+                                 false) == BindOutcome::Bound);
+
+    CHECK(log.count(kLaunch) == 0);
+    CHECK(at.storedPick() == QStringLiteral("9"));
+    CHECK(at.manager->boundHostFor(QStringLiteral("sdl:1")) == at.h.id());
 }
 
 TEST_CASE("An app the host still lists stays the pick", "[moonlight][behaviour][b7]") {
@@ -1076,6 +1093,7 @@ TEST_CASE("An app the host still lists stays the pick", "[moonlight][behaviour][
     REQUIRE(at.readAppList());
 
     CHECK(at.storedPick() == QStringLiteral("1234"));
+    CHECK_FALSE(at.manager->sessionUiInputs(at.h.id(), QString()).pickRemoved);
 }
 
 TEST_CASE("A pick stays when the host's app list cannot be read", "[moonlight][behaviour][b7]") {
@@ -1086,6 +1104,7 @@ TEST_CASE("A pick stays when the host's app list cannot be read", "[moonlight][b
     REQUIRE(at.readAppList());
 
     CHECK(at.storedPick() == QStringLiteral("9"));
+    CHECK_FALSE(at.manager->sessionUiInputs(at.h.id(), QString()).pickRemoved);
 }
 
 TEST_CASE("A session on a host with no pick starts the first app the host lists",
@@ -1093,7 +1112,7 @@ TEST_CASE("A session on a host with no pick starts the first app the host lists"
     // What the binding flow promises for a host with no pick. Wolf's app ids are
     // hashes of each app's title and icon, so a fixed default names nothing it
     // has, and a launch of it is refused.
-    AppListHost at(QStringLiteral("9"), 200, kTwoApps);
+    AppListHost at(QString(), 200, kTwoApps);
     REQUIRE(at.listening);
     REQUIRE(at.readAppList());
     MoonlightRequestLog log(*at.manager);

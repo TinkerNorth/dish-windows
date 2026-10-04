@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
 
 namespace dish::reducer {
 
-enum class PathChoice {
+enum class PathChoice : std::uint8_t {
     Direct,
     Standard,
 };

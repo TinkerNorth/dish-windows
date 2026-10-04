@@ -11,13 +11,14 @@
 
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <vector>
 
 namespace dish::moonlight {
 
 // The phases a Moonlight session moves through. Failed carries a reason.
-enum class SessionPhase {
+enum class SessionPhase : std::uint8_t {
     Idle,              // nothing started
     Pairing,           // PIN pairing in flight (HTTP 5-phase)
     Paired,            // paired, ready to launch an app
@@ -30,7 +31,7 @@ enum class SessionPhase {
     Failed,            // terminal error (see reason)
 };
 
-enum class SessionFailure {
+enum class SessionFailure : std::uint8_t {
     None,
     PairRejected,      // wrong PIN / server refused
     Unreachable,       // HTTP/RTSP transport dead
@@ -54,7 +55,7 @@ struct SessionState {
 };
 
 // World signals fed into reduce().
-enum class SessionEvent {
+enum class SessionEvent : std::uint8_t {
     StartPairing,
     PairSucceeded,
     PairFailed,
@@ -84,7 +85,7 @@ enum class SessionEvent {
 };
 
 // Effects the coordinator performs. Returned as data, executed at the edge.
-enum class SessionEffect {
+enum class SessionEffect : std::uint8_t {
     BeginPairing,   // run the 5-phase HTTP pairing
     BeginLaunch,    // POST /launch (or /resume)
     BeginRtsp,      // run the RTSP handshake

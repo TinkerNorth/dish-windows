@@ -301,10 +301,15 @@ class MoonlightManager : public QObject {
     void onSessionPhaseChanged(const QString& id, MoonlightSession* session);
     void onSessionPairingFinished(const QString& id, bool ok);
     void recordAppListProbe(const QString& id, const QStringList& ids, bool ok, bool unauthorized);
-    void forgetAPickTheHostDropped(const QString& id, const QStringList& listed);
+    // The remembered pick is missing from a list the host answered with; such a pick is never
+    // launched.
+    bool pickRemoved(const models::MoonlightHost& host) const;
     // The app a session starts: the user's pick, or with none the first app the host listed, which
     // is what the binding flow promises. Empty when neither is known.
     QString appToLaunch(const models::MoonlightHost& host) const;
+    // Starts appToLaunch, unless the host dropped the pick: then nothing starts until another is
+    // picked.
+    void launchPick(MoonlightSession* session, const models::MoonlightHost& host);
     void onSessionAppListReady(const QString& id, const QStringList& ids, const QStringList& titles,
                                bool ok, bool unauthorized);
     bool recordProbeIdentity(const QString& id, bool answered, const QString& uniqueId);

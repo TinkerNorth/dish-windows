@@ -23,7 +23,7 @@ struct LicenseManifest;
 }
 
 namespace dish::net {
-enum class ReversePairingPhase;
+enum class ReversePairingPhase : quint8;
 }
 
 namespace dish::input {

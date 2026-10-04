@@ -16,6 +16,7 @@
 #include <QList>
 #include <QString>
 
+#include <cstdint>
 #include <vector>
 
 namespace dish::qml {
@@ -31,7 +32,7 @@ class SlotListModel : public QAbstractListModel {
     // and colours from them. The Sat* roles are the bound connection row joined
     // in by setConnectionRows, sharing ConnectionListModel's vocabulary so the
     // two surfaces cannot disagree; they read empty when the binding has no row.
-    enum Roles {
+    enum Roles : std::uint16_t {
         IdRole = Qt::UserRole + 1,
         NameRole,
         BoundRole,

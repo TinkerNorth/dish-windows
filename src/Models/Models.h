@@ -20,8 +20,14 @@
 
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 namespace dish::models {
+
+// Sized, so no terminator is assumed behind the string_view.
+inline QLatin1StringView latin1(std::string_view sv) {
+    return {sv.data(), static_cast<qsizetype>(sv.size())};
+}
 
 inline constexpr int kDefaultUdpPort = 9876;
 // The connection API and pairing share one HTTPS port, so both constants
@@ -30,7 +36,7 @@ inline constexpr int kDefaultHttpPort = 9443;
 inline constexpr int kDefaultPairPort = 9443;
 
 // Not a wire field — assigned client-side by the discovery merge.
-enum class DiscoverySource { Broadcast, Mdns, Both };
+enum class DiscoverySource : std::uint8_t { Broadcast, Mdns, Both };
 
 // Routed through translate() even though these are protocol acronyms, so the
 // i18n pipeline stays complete and a translator can override. The context is
@@ -152,8 +158,8 @@ struct SessionResponse {
     bool reachable = false;
 
     bool unauthorized() const {
-        return code.has_value() && (*code == QLatin1String(proto::kAuthCodeNotPaired.data()) ||
-                                    *code == QLatin1String(proto::kAuthCodeBadProof.data()));
+        return code.has_value() && (*code == latin1(proto::kAuthCodeNotPaired) ||
+                                    *code == latin1(proto::kAuthCodeBadProof));
     }
 
     static SessionResponse fromJson(const QJsonObject& obj);
@@ -169,8 +175,8 @@ struct ControllerPutResponse {
     bool reachable = false;
 
     bool unauthorized() const {
-        return code.has_value() && (*code == QLatin1String(proto::kAuthCodeNotPaired.data()) ||
-                                    *code == QLatin1String(proto::kAuthCodeBadProof.data()));
+        return code.has_value() && (*code == latin1(proto::kAuthCodeNotPaired) ||
+                                    *code == latin1(proto::kAuthCodeBadProof));
     }
 
     static ControllerPutResponse fromJson(const QJsonObject& obj);
@@ -209,8 +215,8 @@ struct SessionViewDto {
     bool reachable = false;
 
     bool unauthorized() const {
-        return code.has_value() && (*code == QLatin1String(proto::kAuthCodeNotPaired.data()) ||
-                                    *code == QLatin1String(proto::kAuthCodeBadProof.data()));
+        return code.has_value() && (*code == latin1(proto::kAuthCodeNotPaired) ||
+                                    *code == latin1(proto::kAuthCodeBadProof));
     }
 
     static SessionViewDto fromJson(const QJsonObject& obj);
@@ -369,7 +375,7 @@ QJsonArray controllersJson(const QList<ControllerDescriptor>& descriptors);
 // the key and stops auto-retry. Unstable enters at two consecutive missed
 // heartbeat acks (the contract's "not responding" threshold) and recovers to
 // Connected the moment an ack lands.
-enum class LinkState { Found, Stale, Saved, Ready, Connecting, Connected, Unstable };
+enum class LinkState : std::uint8_t { Found, Stale, Saved, Ready, Connecting, Connected, Unstable };
 
 // What a physical controller's HARDWARE exposes, detected once at attach.
 // Distinct from any user "forward this feature?" preference, so the slot card
@@ -503,7 +509,7 @@ QList<RememberedWifi> rememberedListFromJson(const QJsonArray& arr);
 // want to dedup or categorise; the renderer does not switch on it. A persistent
 // banner the user can't dismiss sets `dismissible` false.
 struct DishNotification {
-    enum class Severity { Info, Success, Warn, Error };
+    enum class Severity : std::uint8_t { Info, Success, Warn, Error };
 
     // kDurationPersistent keeps the toast up until NotificationQueue::dismiss.
     static constexpr int kDurationShortMs = 3'500;

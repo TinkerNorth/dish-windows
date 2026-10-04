@@ -3382,6 +3382,10 @@
         <translation>¿Olvidar %1?</translation>
     </message>
     <message>
+        <source>Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.</source>
+        <translation>Dish borra su emparejamiento y necesitarás el PIN de nuevo. %1 conserva su propio registro de este dispositivo hasta que lo elimines allí.</translation>
+    </message>
+    <message>
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
@@ -3459,10 +3463,6 @@
     <message>
         <source>Quit session</source>
         <translation>Salir de la sesión</translation>
-    </message>
-    <message>
-        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
-        <translation>Dish borra su emparejamiento. El anfitrión conserva su propio registro hasta que alguien elimine Dish allí, y necesitarás el PIN de nuevo.</translation>
     </message>
     <message>
         <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
@@ -4805,6 +4805,10 @@
         <translation>Nueva sesión</translation>
     </message>
     <message>
+        <source>%1 is no longer on this host</source>
+        <translation>%1 ya no está en este host</translation>
+    </message>
+    <message>
         <source>Joining %1</source>
         <translation>Uniéndose a %1</translation>
     </message>
@@ -4847,6 +4851,10 @@
     <message>
         <source>Check that the code went into the right host, then try again.</source>
         <translation>Comprueba que el código se introdujo en el host correcto y vuelve a intentarlo.</translation>
+    </message>
+    <message>
+        <source>The app you picked was removed from %1. Pick another one to start.</source>
+        <translation>La app que elegiste se quitó de %1. Elige otra para empezar.</translation>
     </message>
     <message>
         <source>Check that the host is switched on and on this network, then try again.</source>

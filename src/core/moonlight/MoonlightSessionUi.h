@@ -3,7 +3,7 @@
 //
 // What the Moonlight session section renders, as a pure total function of what
 // is known about the host. The sibling of MoonlightSessionMachine: that one owns
-// the wire lifecycle, this one owns the twenty-one states a user can be looking
+// the wire lifecycle, this one owns the twenty-two states a user can be looking
 // at, so the binding flow never re-derives a state from a phase.
 //
 // Moonlight has no bidirectional liveness. Pairing is remembered trust, checked
@@ -24,9 +24,11 @@
 #include "core/moonlight/MoonlightPadSlots.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
 
+#include <cstdint>
+
 namespace dish::moonlight {
 
-enum class SessionUiState {
+enum class SessionUiState : std::uint8_t {
     Checking,       // M1  probe in flight, nothing cached
     NotPaired,      // M2  answered, and this client holds no pairing with it
     PairingPin,     // M3  pairing in flight, the PIN is on screen
@@ -48,13 +50,14 @@ enum class SessionUiState {
     Live,           // M19 this binding is on a connected control stream
     Dropped,        // M20 was live, the link closed without a host termination
     EndedByHost,    // M21 the host terminated, or the app closed
+    PickRemoved,    // M22 the list is readable and the remembered pick is not in it
 };
 
 // How the last attempt on this host ended. None means nothing has been tried
 // this visit, which is what separates M9 through M13 from everything below them:
 // "no session of ours" and "the host refused" are both true after a refusal, and
 // only the refusal is worth rendering.
-enum class SessionOutcome {
+enum class SessionOutcome : std::uint8_t {
     None,
     BusyOther,
     ResumeFailed,
@@ -67,7 +70,7 @@ enum class SessionOutcome {
 
 // The three words the hosts screen renders. Never a liveness light: the host
 // cannot tell us it has forgotten us, so trust is remembered and verified late.
-enum class TrustState {
+enum class TrustState : std::uint8_t {
     NotPaired,
     Remembered,
     Paired,
@@ -106,6 +109,9 @@ struct SessionUiInputs {
     bool appsFetched = false;
     bool appsFailed = false;
     int appCount = 0;
+    // The remembered pick is missing from the list the host answered with; meaningful with
+    // appsFetched.
+    bool pickRemoved = false;
     // This device holds a session on this host. `bindingLive` narrows that to
     // the binding being looked at, which is what separates joining a session
     // from riding one.
@@ -179,6 +185,9 @@ inline bool identityChanged(const SessionUiInputs& in) {
 
 } // namespace detail
 
+// Evaluated top to bottom in one place on purpose: the order IS the rule (a full host before
+// anything the network could change, a rejection before the silence), and the comments pin why
+// each test sits where it does.
 inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     if (in.pairingActive) { return SessionUiState::PairingPin; }
     if (in.pairingRefused) { return SessionUiState::PairingRefused; }
@@ -214,7 +223,9 @@ inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     if (in.appsInFlight) { return SessionUiState::AppsLoading; }
     if (in.appsFailed) { return SessionUiState::AppsFailed; }
     if (in.appsFetched) {
-        return in.appCount > 0 ? SessionUiState::NewSession : SessionUiState::NoApps;
+        if (in.appCount == 0) { return SessionUiState::NoApps; }
+        if (in.pickRemoved) { return SessionUiState::PickRemoved; }
+        return SessionUiState::NewSession;
     }
     return SessionUiState::Checking;
 }
@@ -250,6 +261,7 @@ inline bool sessionUiIsProblem(SessionUiState state) {
     case SessionUiState::SetupFailed:
     case SessionUiState::Dropped:
     case SessionUiState::EndedByHost:
+    case SessionUiState::PickRemoved:
         return true;
     case SessionUiState::Checking:
     case SessionUiState::NotPaired:

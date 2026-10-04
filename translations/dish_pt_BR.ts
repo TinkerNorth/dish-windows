@@ -3382,6 +3382,10 @@
         <translation>Esquecer %1?</translation>
     </message>
     <message>
+        <source>Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.</source>
+        <translation>O Dish apaga o pareamento dele e você precisará do PIN de novo. %1 mantém o próprio registro deste dispositivo até você removê-lo lá.</translation>
+    </message>
+    <message>
         <source>Cancel</source>
         <translation>Cancelar</translation>
     </message>
@@ -3459,10 +3463,6 @@
     <message>
         <source>Quit session</source>
         <translation>Encerrar sessão</translation>
-    </message>
-    <message>
-        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
-        <translation>O Dish apaga o pareamento dele. O host mantém o próprio registro até que alguém remova o Dish por lá, e você precisará do PIN de novo.</translation>
     </message>
     <message>
         <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
@@ -4805,6 +4805,10 @@
         <translation>Nova sessão</translation>
     </message>
     <message>
+        <source>%1 is no longer on this host</source>
+        <translation>%1 não está mais neste host</translation>
+    </message>
+    <message>
         <source>Joining %1</source>
         <translation>Entrando em %1</translation>
     </message>
@@ -4847,6 +4851,10 @@
     <message>
         <source>Check that the code went into the right host, then try again.</source>
         <translation>Confira se o código foi digitado no host certo e tente de novo.</translation>
+    </message>
+    <message>
+        <source>The app you picked was removed from %1. Pick another one to start.</source>
+        <translation>O app que você escolheu foi removido de %1. Escolha outro para começar.</translation>
     </message>
     <message>
         <source>Check that the host is switched on and on this network, then try again.</source>
