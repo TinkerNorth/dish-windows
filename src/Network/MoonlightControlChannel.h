@@ -30,10 +30,9 @@
 #include <string>
 #include <thread>
 
-struct _ENetHost;
-struct _ENetPeer;
-struct _ENetEvent;
-struct _ENetPacket;
+// Whole, not forward-declared: ENet's struct tags are reserved identifiers and its typedef
+// names are the only spelling that is not.
+#include <enet/enet.h>
 
 namespace dish::net {
 
@@ -112,12 +111,12 @@ class MoonlightControlChannel {
     // The loop's parts: the keepalive it owes the host, what it takes the send lock for, what it
     // does with a packet, and where an event goes. All on the ENet receive thread.
     void keepAliveIfDue();
-    int serviceEnet(_ENetEvent& event);
-    void onPacket(const _ENetPacket& packet);
+    int serviceEnet(ENetEvent& event);
+    void onPacket(const ENetPacket& packet);
     void dispatchServerEvent(const moonlight::ServerEvent& ev);
 
-    _ENetHost* host_ = nullptr;
-    _ENetPeer* peer_ = nullptr;
+    ENetHost* host_ = nullptr;
+    ENetPeer* peer_ = nullptr;
 
     std::mutex sendMtx_;
     std::unique_ptr<moonlight::crypto::ControlSealer> sealer_;

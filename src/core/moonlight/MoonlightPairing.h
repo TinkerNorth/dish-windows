@@ -28,7 +28,7 @@
 namespace dish::moonlight {
 
 // Why a phase failed, so the UI can localize a cause rather than a raw string.
-enum class PairError {
+enum class PairError : std::uint8_t {
     None,
     BadServerCert,   // plaincert did not decode / parse
     BadResponse,     // a phase response was malformed or the wrong length

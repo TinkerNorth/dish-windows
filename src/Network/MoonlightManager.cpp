@@ -256,19 +256,22 @@ void MoonlightManager::recordAppListProbe(const QString& id, const QStringList& 
     if (unauthorized) { probe.mtlsVerified = false; }
 }
 
-// The host's app list is its own word on what it can start. A pick it no longer lists is refused
-// on every launch, behind a refusal that hides the picker it could be changed in, so it is
-// forgotten and the host's first app starts, as the binding flow promises for a host with no pick.
-void MoonlightManager::forgetAPickTheHostDropped(const QString& id, const QStringList& listed) {
-    auto host = rememberedHost(id);
-    if (!host.has_value()) { return; }
-    const bool theHostDroppedIt = !host->lastAppId.isEmpty() && !listed.contains(host->lastAppId);
-    if (!theHostDroppedIt) { return; }
-    qCInfo(lcMoonlightManager) << "app pick:" << id << "no longer lists" << host->lastAppId
-                               << "; forgetting it as the pick";
-    host->lastAppId.clear();
-    host->lastAppName.clear();
-    repo_->rememberHost(*host);
+// A pick the host no longer lists is the binding flow's to name (M22), never launched or replaced.
+bool MoonlightManager::pickRemoved(const models::MoonlightHost& host) const {
+    if (host.lastAppId.isEmpty()) { return false; }
+    const auto probe = probes_.value(host.id());
+    if (!probe.appsFetched) { return false; }
+    return !probe.appIds.contains(host.lastAppId);
+}
+
+void MoonlightManager::launchPick(MoonlightSession* session, const models::MoonlightHost& host) {
+    if (pickRemoved(host)) {
+        qCWarning(lcMoonlightManager)
+            << "launch:" << host.id() << "no longer lists" << host.lastAppId
+            << "; nothing starts until another app is picked";
+        return;
+    }
+    session->launch(appToLaunch(host));
 }
 
 void MoonlightManager::onSessionAppListReady(const QString& id, const QStringList& ids,
@@ -278,10 +281,7 @@ void MoonlightManager::onSessionAppListReady(const QString& id, const QStringLis
     // recordAppListProbe holds its reference into probes_ and this does not: the emit below runs
     // handlers, and one that probes some other host would insert into probes_ and leave that
     // reference dangling mid-update.
-    if (ok) {
-        rememberProvenTrust(id);
-        forgetAPickTheHostDropped(id, ids);
-    }
+    if (ok) { rememberProvenTrust(id); }
     emit appListReady(id, ids, titles);
     emit hostsChanged();
 }
@@ -497,8 +497,12 @@ void MoonlightManager::connectHost(const QString& id, const QString& appId) {
         qCWarning(lcMoonlightManager) << "connect:" << id << "has no session to launch on";
         return;
     }
-    // An explicit pick wins; otherwise fall back to what the user chose last.
-    session->launch(appId.isEmpty() ? appToLaunch(*host) : appId);
+    // An explicit pick wins; otherwise what the user chose last, unless the host dropped it.
+    if (!appId.isEmpty()) {
+        session->launch(appId);
+        return;
+    }
+    launchPick(session, *host);
 }
 
 void MoonlightManager::refreshApps(const QString& id) {
@@ -709,7 +713,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
         reannounceInPlace(slotId, *held, *session, arrival);
         // A session that is down is started again, as the first bind on a host starts one; one
         // that is up or on its way up reduces this to nothing.
-        session->launch(appToLaunch(*host));
+        launchPick(session, *host);
         return moonlight::BindOutcome::Bound;
     }
 
@@ -757,7 +761,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
     // first pad may announce itself before there is a stream to announce on. A
     // later pad joins the session that is already running and sends no HTTP at
     // all: launch() reduces to nothing outside a phase that can start one.
-    if (firstOnHost) { session->launch(appToLaunch(*host)); }
+    if (firstOnHost) { launchPick(session, *host); }
     return moonlight::BindOutcome::Bound;
 }
 
@@ -918,6 +922,9 @@ moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& host
     in.appsFetched = probe.appsFetched;
     in.appsFailed = probe.appsFailed;
     in.appCount = probe.appCount;
+    if (const auto remembered = rememberedHost(hostId)) {
+        in.pickRemoved = pickRemoved(*remembered);
+    }
     in.pairingHeld = holdsPairing(hostId);
     in.boundControllers = boundSlotCount(hostId);
     // A host that answers the plaintext probe but hands the mutual-TLS list back

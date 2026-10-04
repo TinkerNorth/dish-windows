@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The twenty-one states the Moonlight session section can render, one assertion
+// The twenty-two states the Moonlight session section can render, one assertion
 // per state against the token QML localizes from, plus the two questions the
 // surrounding chrome asks of a state: does it block the bind, and is it a
 // problem. Every state is reachable and no two inputs land on the same one by
@@ -313,6 +313,23 @@ TEST_CASE("M9 through M12: the app list, in flight and in every way it can end",
     failed.appsFailed = true;
     REQUIRE(sessionUiState(failed) == SessionUiState::AppsFailed);
     REQUIRE(tokenOf(failed) == QStringLiteral("appsFailed"));
+
+    // M22. A pick the host no longer lists is named over the picker rather than swapped for the
+    // first app.
+    SessionUiInputs removed = paired();
+    removed.appsFetched = true;
+    removed.appCount = 2;
+    removed.pickRemoved = true;
+    REQUIRE(sessionUiState(removed) == SessionUiState::PickRemoved);
+    REQUIRE(tokenOf(removed) == QStringLiteral("pickRemoved"));
+    // An empty list outranks it: there is nothing to pick instead.
+    SessionUiInputs removedFromNothing = removed;
+    removedFromNothing.appCount = 0;
+    REQUIRE(sessionUiState(removedFromNothing) == SessionUiState::NoApps);
+    SessionUiInputs removedUnread = removed;
+    removedUnread.appsFetched = false;
+    removedUnread.appsFailed = true;
+    REQUIRE(sessionUiState(removedUnread) == SessionUiState::AppsFailed);
 }
 
 TEST_CASE("M13 joining our session, and it shows no picker", "[moonlight][sessionui]") {
@@ -422,6 +439,7 @@ TEST_CASE("Every state has a token and no two share one", "[moonlight][sessionui
         SessionUiState::Joining,        SessionUiState::HostFull,     SessionUiState::BusyOther,
         SessionUiState::ResumeFailed,   SessionUiState::Refused,      SessionUiState::SetupFailed,
         SessionUiState::Live,           SessionUiState::Dropped,      SessionUiState::EndedByHost,
+        SessionUiState::PickRemoved,
     };
     QSet<QString> seen;
     for (const auto state : all) {
@@ -430,7 +448,7 @@ TEST_CASE("Every state has a token and no two share one", "[moonlight][sessionui
         REQUIRE_FALSE(seen.contains(token));
         seen.insert(token);
     }
-    REQUIRE(seen.size() == 21);
+    REQUIRE(seen.size() == 22);
 }
 
 TEST_CASE("Only a full host blocks the bind", "[moonlight][sessionui]") {
@@ -442,6 +460,7 @@ TEST_CASE("Only a full host blocks the bind", "[moonlight][sessionui]") {
         SessionUiState::Joining,        SessionUiState::HostFull,     SessionUiState::BusyOther,
         SessionUiState::ResumeFailed,   SessionUiState::Refused,      SessionUiState::SetupFailed,
         SessionUiState::Live,           SessionUiState::Dropped,      SessionUiState::EndedByHost,
+        SessionUiState::PickRemoved,
     };
     for (const auto state : all) {
         const bool blocked = sessionUiBlocksApply(state);
@@ -474,6 +493,7 @@ TEST_CASE("Amber is the problem colour and never the working one", "[moonlight][
     REQUIRE(sessionUiIsProblem(SessionUiState::SetupFailed));
     REQUIRE(sessionUiIsProblem(SessionUiState::Dropped));
     REQUIRE(sessionUiIsProblem(SessionUiState::EndedByHost));
+    REQUIRE(sessionUiIsProblem(SessionUiState::PickRemoved));
 }
 
 TEST_CASE("Only the two refusals and a live session offer to close the app",

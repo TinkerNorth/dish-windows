@@ -26,8 +26,10 @@
     five languages plus an exception.
 
 .PARAMETER LinguistBin
-    Directory holding lupdate. Defaults to QT_ROOT_DIR/bin (what
-    jurplel/install-qt-action sets in CI), then to whatever is on PATH.
+    Directory holding lupdate, 6.9 or newer. Defaults to QT_ROOT_DIR/bin (what
+    jurplel/install-qt-action sets in CI), then to whatever is on PATH; the
+    build Qt's 6.7.3 is refused below, so CI installs a newer Linguist beside
+    it and passes this.
 
 .EXAMPLE
     ./scripts/check-translations.ps1
@@ -89,6 +91,25 @@ try {
         Write-Error 'lupdate not found. Pass -LinguistBin <qt>/bin, or set QT_ROOT_DIR.'
     }
     Write-Host "Using $lupdate"
+
+    # Before 6.9, lupdate loses a class's namespace after an enum with a base type that a
+    # struct follows (Network/WifiConnectionManager.h), and re-files that class's tr()
+    # strings under a bare name the app never looks up. Since this script rewrites the
+    # catalogues in place, it refuses such a lupdate rather than let it do that quietly.
+    $versionText = (& $lupdate -version | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error ("'$lupdate -version' exited with $LASTEXITCODE and said '$($versionText.Trim())'. " +
+                     "lupdate links Qt6Core and Qt6Qml; a Linguist installed from its own archives needs qtbase and qtdeclarative beside it.")
+    }
+    if ($versionText -notmatch '(\d+)\.(\d+)') {
+        Write-Error "could not read a version out of '$lupdate -version': '$($versionText.Trim())'."
+    }
+    $lupdateMajor = [int]$Matches[1]
+    $lupdateMinor = [int]$Matches[2]
+    if ($lupdateMajor -lt 6 -or ($lupdateMajor -eq 6 -and $lupdateMinor -lt 9)) {
+        Write-Error ("lupdate $lupdateMajor.$lupdateMinor is too old; this gate needs 6.9 or newer. " +
+                     "Pass -LinguistBin <qt>/bin of a newer Qt (CI installs one beside the build Qt).")
+    }
 
     $catalogues = @(Invoke-Git ls-files 'translations/*.ts')
     if ($catalogues.Count -eq 0) {

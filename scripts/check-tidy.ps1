@@ -6,8 +6,11 @@
     Must run after a debug build: it lints against that tree's
     compile_commands.json and needs the generated mocs to exist.
 
-    .cpp only: headers are covered transitively via HeaderFilterRegex, and
+    .cpp only: headers are covered transitively through --header-filter, and
     passing a .h directly trips clang-diagnostic-pragma-once-outside-header.
+    The filter is passed here rather than read from the fleet .clang-tidy:
+    its HeaderFilterRegex is written with `/`, which a Windows path in
+    compile_commands.json never matches, so the headers went unlinted.
 
     The sweep reads a copy of compile_commands.json with /Zc:preprocessor
     removed. clang-cl's preprocessor conforms already, so the flag means
@@ -84,6 +87,10 @@ if ($Files.Count) {
     if (-not $files) { throw 'git ls-files found no sources for clang-tidy' }
 }
 
+# Separator-agnostic twin of the fleet .clang-tidy HeaderFilterRegex: our headers under src/ and
+# tests/, whichever way the database spells the path.
+$headerFilter = '.*[/\\](src|tests)[/\\].*\.h$'
+
 $failed = [System.Collections.Generic.List[string]]::new()
 
 if ($PSVersionTable.PSVersion.Major -ge 7) {
@@ -91,7 +98,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
     $files | ForEach-Object -Parallel {
         $ErrorActionPreference = 'Continue'
         try {
-            $out = clang-tidy -p $using:bd --quiet --warnings-as-errors='*' $_ 2>&1
+            $out = clang-tidy -p $using:bd --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $_ 2>&1
             [pscustomobject]@{ File = $_; Code = $LASTEXITCODE; Out = $out }
         } catch {
             [pscustomobject]@{ File = $_; Code = 1; Out = @("$_") }
@@ -115,7 +122,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
             $ErrorActionPreference = 'Continue'
             foreach ($f in $using:chunk) {
                 try {
-                    $out = clang-tidy -p $using:tidyDir --quiet --warnings-as-errors='*' $f 2>&1
+                    $out = clang-tidy -p $using:tidyDir --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $f 2>&1
                     [pscustomobject]@{ File = $f; Code = $LASTEXITCODE; Out = ($out | ForEach-Object { "$_" }) }
                 } catch {
                     [pscustomobject]@{ File = $f; Code = 1; Out = @("$_") }

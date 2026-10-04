@@ -21,6 +21,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -30,8 +31,16 @@ namespace dish::moonlight {
 struct RtspResponse {
     int statusCode = 0;
     int cseq = 0;
-    // Header option lines (key -> value), keys as sent.
-    std::map<std::string, std::string> options;
+    // Header option lines (key, value) as sent. A list, not a map: a std::map's move allocates
+    // under MSVC, which would make this struct's move a function that may throw.
+    std::vector<std::pair<std::string, std::string>> options;
+    // The last option sent under `name`, exact-case, as the map lookup it replaces found it.
+    std::optional<std::string> option(std::string_view name) const {
+        for (auto it = options.rbegin(); it != options.rend(); ++it) {
+            if (it->first == name) { return it->second; }
+        }
+        return std::nullopt;
+    }
     // Payload lines after the blank line: (key, value) pairs of `key=value` or
     // `a=...` SDP-style attributes.
     std::vector<std::pair<std::string, std::string>> payloads;

@@ -113,6 +113,9 @@ void writeMiniDump(EXCEPTION_POINTERS* ep) {
 // A corrupted frame chain can be cyclic, and this runs inside a crash: the walk stops either way.
 constexpr int kMaxStackFrames = 64;
 
+// One frame of the crash log, module then symbol then line, each a dbghelp call with its own
+// buffer. Long because it runs inside a crash with no heap of its own, so the buffers stay here
+// rather than in helpers that would allocate.
 void writeFrame(HANDLE log, HANDLE process, DWORD64 addr) {
     char hexbuf[20];
     writeStr(log, "  ");

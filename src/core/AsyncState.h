@@ -10,13 +10,14 @@
 
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
 
 namespace dish::core {
 
-enum class AsyncPhase { Idle, Loading, Success, Error };
+enum class AsyncPhase : std::uint8_t { Idle, Loading, Success, Error };
 
 template <class T, class E = std::string> struct AsyncState {
     AsyncPhase phase = AsyncPhase::Idle;
@@ -30,7 +31,8 @@ template <class T, class E = std::string> struct AsyncState {
     bool isError() const { return phase == AsyncPhase::Error; }
     bool hasData() const { return data.has_value(); }
 
-    const T& valueOr(const T& fallback) const { return data ? *data : fallback; }
+    // By value: a reference into `fallback` would dangle when the caller passed a temporary.
+    T valueOr(const T& fallback) const { return data ? *data : fallback; }
 
     bool operator==(const AsyncState& o) const {
         return phase == o.phase && data == o.data && error == o.error && stale == o.stale;

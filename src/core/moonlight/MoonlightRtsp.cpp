@@ -77,6 +77,8 @@ std::string buildRtspRequest(const std::string& command, const std::string& targ
     return os.str();
 }
 
+// One pass over one message, status line then headers then payload; the cursor is the state,
+// and a function per section would hand it back and forth.
 std::optional<RtspResponse> parseRtspResponse(const std::string& text) {
     const auto lines = splitLines(text);
     if (lines.empty()) { return std::nullopt; }
@@ -112,7 +114,7 @@ std::optional<RtspResponse> parseRtspResponse(const std::string& text) {
                     std::from_chars(value.data(), value.data() + value.size(), cseq);
                 if (ec == std::errc{} && end == value.data() + value.size()) { resp.cseq = cseq; }
             } else {
-                resp.options[key] = value;
+                resp.options.emplace_back(key, value);
             }
         } else {
             if (line.empty()) { continue; }
@@ -153,6 +155,8 @@ bool rtspResponseComplete(const std::string& text) {
     return text.size() - end >= *declared;
 }
 
+// One attribute per line, in one function on purpose: the list IS the protocol, and it reads
+// best against a capture of a real client's ANNOUNCE, top to bottom.
 std::string buildAnnounceSdp(int width, int height, int fps) {
     // clientRefreshRateX100 is hundredths of a frame per second.
     constexpr int kFpsHundredths = 100;
@@ -227,15 +231,15 @@ std::optional<int> serverPortFromTransport(const std::string& transportValue) {
 }
 
 std::optional<int> setupServerPort(const RtspResponse& response) {
-    const auto it = response.options.find("Transport");
-    if (it == response.options.end()) { return std::nullopt; }
-    return serverPortFromTransport(it->second);
+    const auto transport = response.option("Transport");
+    if (!transport.has_value()) { return std::nullopt; }
+    return serverPortFromTransport(*transport);
 }
 
 std::optional<std::uint32_t> setupConnectData(const RtspResponse& response) {
-    const auto it = response.options.find("X-SS-Connect-Data");
-    if (it == response.options.end()) { return std::nullopt; }
-    const std::string v = trim(it->second);
+    const auto connectData = response.option("X-SS-Connect-Data");
+    if (!connectData.has_value()) { return std::nullopt; }
+    const std::string v = trim(*connectData);
     if (v.empty()) { return std::nullopt; }
     errno = 0;
     char* end = nullptr;
@@ -245,9 +249,9 @@ std::optional<std::uint32_t> setupConnectData(const RtspResponse& response) {
 }
 
 std::string setupPingPayload(const RtspResponse& response) {
-    const auto it = response.options.find("X-SS-Ping-Payload");
-    if (it == response.options.end()) { return {}; }
-    return trim(it->second);
+    const auto payload = response.option("X-SS-Ping-Payload");
+    if (!payload.has_value()) { return {}; }
+    return trim(*payload);
 }
 
 } // namespace dish::moonlight

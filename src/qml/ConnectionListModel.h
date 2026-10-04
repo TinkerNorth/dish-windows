@@ -14,6 +14,7 @@
 #include <QHash>
 #include <QString>
 
+#include <cstdint>
 #include <vector>
 
 namespace dish::qml {
@@ -27,7 +28,7 @@ class ConnectionListModel : public QAbstractListModel {
   public:
     // LinkState/Chip/DotColor/Glyph vend the render-key TOKENS from
     // RenderTokens.h, never sentences; QML localizes and colours from them.
-    enum Roles {
+    enum Roles : std::uint16_t {
         IdRole = Qt::UserRole + 1,
         LabelRole,
         IpRole,

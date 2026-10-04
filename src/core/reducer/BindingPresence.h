@@ -19,6 +19,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -42,7 +43,7 @@ struct BoundSlot {
     std::optional<std::pair<int, int>> identity;
 };
 
-enum class BindingPresenceKind { Unbind, Migrate };
+enum class BindingPresenceKind : std::uint8_t { Unbind, Migrate };
 
 // `slotId` is always the binding to drop and `connId` the connection it pointed
 // at: on a Migrate that is what to re-bind `toSlotId` to, on an Unbind it is who
@@ -54,8 +55,17 @@ struct BindingPresenceAction {
     std::string connId;
 };
 
+// The pad behind a binding, when it names one: a (0, 0) identity is no identity.
+inline std::optional<std::pair<int, int>>
+padIdentityOf(const std::optional<std::pair<int, int>>& identity) {
+    if (!identity.has_value()) { return std::nullopt; }
+    const bool blank = identity->first == 0 && identity->second == 0;
+    if (blank) { return std::nullopt; }
+    return identity;
+}
+
 inline bool isPadIdentity(const std::optional<std::pair<int, int>>& identity) {
-    return identity.has_value() && !(identity->first == 0 && identity->second == 0);
+    return padIdentityOf(identity).has_value();
 }
 
 // Also the seam the emulation-type seed reads: `emulates` hints match against the
@@ -98,12 +108,12 @@ resolveBindingPresence(const std::vector<PresentSlot>& present,
         action.connId = binding->connId;
         action.kind = BindingPresenceKind::Unbind;
 
-        if (isPadIdentity(binding->identity)) {
+        if (const auto identity = padIdentityOf(binding->identity)) {
             // Same pad, different slot id: the twin transition. First match in
             // the caller's slot order wins.
             for (const auto& candidate : present) {
-                if (candidate.vendorId != binding->identity->first ||
-                    candidate.productId != binding->identity->second) {
+                if (candidate.vendorId != identity->first ||
+                    candidate.productId != identity->second) {
                     continue;
                 }
                 if (boundIds.count(candidate.id) != 0) { continue; }
