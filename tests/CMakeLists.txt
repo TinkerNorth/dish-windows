@@ -37,6 +37,7 @@ set(DISH_TEST_SOURCES
     test_moonlight_session_machine.cpp
     test_moonlight_session_ui.cpp
     test_moonlight_host_repository.cpp
+    test_moonlight_binding_reattach.cpp
     test_moonlight_http_xml.cpp
     test_moonlight_http_wire.cpp
     test_moonlight_manager_rows.cpp

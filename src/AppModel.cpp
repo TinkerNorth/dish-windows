@@ -846,6 +846,7 @@ void AppModel::appendSdlSlots(const QList<input::SDLGamepadBridge::Device>& sdlD
         models::ControllerSlot s;
         s.id = d.id;
         s.name = d.name;
+        s.padIdentity = d.identity;
         s.capabilities.hasMotion = d.motionCapable;
         s.capabilities.hasLightbar = d.hasLightbar;
         s.capabilities.hasTouchpad = d.hasTouchpad;
