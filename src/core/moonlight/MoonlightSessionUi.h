@@ -185,6 +185,9 @@ inline bool identityChanged(const SessionUiInputs& in) {
 
 inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     if (in.pairingActive) { return SessionUiState::PairingPin; }
+// Evaluated top to bottom in one place on purpose: the order IS the rule (a full host before
+// anything the network could change, a rejection before the silence), and the comments pin why
+// each test sits where it does.
     if (in.pairingRefused) { return SessionUiState::PairingRefused; }
     if (detail::identityChanged(in)) { return SessionUiState::HostReplaced; }
 

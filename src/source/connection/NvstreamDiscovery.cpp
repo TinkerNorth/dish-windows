@@ -96,6 +96,9 @@ bool readName(const std::uint8_t* p, std::size_t len, std::size_t off, std::stri
     return false;
 }
 
+// One pass over one mDNS answer, questions skipped then records read, with the cursor as the
+// state; the three record kinds are read where the cursor stands, and a reader per kind would
+// have to re-derive it.
 std::optional<models::MoonlightHost> parseResponse(const std::uint8_t* p, std::size_t len) {
     if (len < 12) { return std::nullopt; }
     const std::uint16_t qd = read16(p + 4);

@@ -478,6 +478,8 @@ void MoonlightSession::launch(const QString& appId) {
     dispatch(moonlight::SessionEvent::StartLaunch);
 }
 
+// The /launch request with every parameter beside the reason it is sent. Long because the
+// parameter list IS the contract with the host, read against the other two clients' launches.
 void MoonlightSession::beginLaunch() {
     failureMessage_.clear();
     resumeAvailable_ = false;
@@ -598,6 +600,9 @@ void MoonlightSession::onLaunchReply(const MoonlightXmlResponse& r, bool resumin
     onSessionAccepted(r);
 }
 
+// The worker thread's whole life in one closure, on purpose: what it captures, the handshake it
+// runs and the three results it hands back to the Qt thread are one sequence, and a function per
+// step would hide which thread each line runs on.
 void MoonlightSession::beginRtspAndControl() {
     if (worker_.joinable()) { worker_.join(); }
     // Captured from non-const locals, so the closure's members are non-const

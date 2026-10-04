@@ -77,6 +77,8 @@ std::string buildRtspRequest(const std::string& command, const std::string& targ
     return os.str();
 }
 
+// One pass over one message, status line then headers then payload; the cursor is the state,
+// and a function per section would hand it back and forth.
 std::optional<RtspResponse> parseRtspResponse(const std::string& text) {
     const auto lines = splitLines(text);
     if (lines.empty()) { return std::nullopt; }
@@ -153,6 +155,8 @@ bool rtspResponseComplete(const std::string& text) {
     return text.size() - end >= *declared;
 }
 
+// One attribute per line, in one function on purpose: the list IS the protocol, and it reads
+// best against a capture of a real client's ANNOUNCE, top to bottom.
 std::string buildAnnounceSdp(int width, int height, int fps) {
     // clientRefreshRateX100 is hundredths of a frame per second.
     constexpr int kFpsHundredths = 100;

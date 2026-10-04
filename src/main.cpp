@@ -65,6 +65,9 @@ void applyUiAppearance(QGuiApplication& app) {
 
 } // namespace
 
+// Long because it is the boot order, and the order is the point: the crash handler before
+// anything that can fault, the update hand-off before anything an installer would have to wait
+// for, Winsock and libsodium before the application that assumes them.
 int main(int argc, char* argv[]) {
     // FIRST, before any other subsystem can fault, so a crash still leaves a minidump behind.
     dish::crash::install();

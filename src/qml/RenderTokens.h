@@ -86,6 +86,8 @@ inline QString glyphToken(reducer::ConnectionGlyph g) {
     return {};
 }
 
+// The token table, one line per state, and long for exactly that reason. A switch rather than
+// an array so the compiler checks that every state has a word.
 inline QString moonlightSessionToken(moonlight::SessionUiState s) {
     switch (s) {
     case moonlight::SessionUiState::Checking:

@@ -39,6 +39,8 @@ share a version number.
 
 ### Fixed
 
+- **Switching Motion off stops the gyro reaching a satellite host.** The switch only
+  cleared the capability the pad declared; the samples kept flowing.
 - **Forgetting a satellite while it was pairing or connecting could crash
   Dish, or bring the satellite back.** A late reply from a forgotten
   satellite was still handled: it could read memory Dish had already freed,
@@ -117,6 +119,11 @@ share a version number.
 
 ### Changed
 
+- **A Moonlight app the host removed is named, not replaced.** Dish used to forget
+  the pick and start whatever the host listed first. The pick stays, nothing starts,
+  and the binding page names the app with the picker under it.
+- **Forget says what it does**, in the same words as the other Dish apps: Dish
+  deletes its pairing, the host keeps its own record until you remove it there.
 - Every HTTP exchange with a satellite or a Moonlight host runs on the
   thread that made it, over one HTTP/1.1 transport shared with the Linux
   app; a host presenting a certificate other than the one Dish pinned is

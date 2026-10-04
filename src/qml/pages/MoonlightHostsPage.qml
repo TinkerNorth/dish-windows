@@ -353,7 +353,7 @@ Kit.Page {
         // Forget is UNILATERAL and the copy has to say so: the protocol has no
         // unpair verb, so the host keeps its own record of this device until a
         // human deletes it there.
-        bodyText: qsTr("Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.")
+        bodyText: qsTr("Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.").arg(page.currentLabel)
         acceptText: qsTr("Forget")
         rejectText: qsTr("Cancel")
         destructiveAccept: true
