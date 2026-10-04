@@ -802,25 +802,46 @@ add_custom_target(dish_setup_image
 # scripts/check-translations.ps1 by 26 strings, so `update_translations` would
 # delete exactly what the CI gate then demands back.
 if(Qt6LinguistTools_FOUND)
-    qt_add_translations(
-        TARGETS Dish
-        SOURCE_TARGETS Dish dish_core
-        TS_FILES
-            translations/dish_en.ts
-            translations/dish_bs.ts
-            translations/dish_de.ts
-            translations/dish_es.ts
-            translations/dish_fr.ts
-            translations/dish_pt_BR.ts
-        RESOURCE_PREFIX "/i18n"
-        # Must stay identical to $lupdateArgs in scripts/check-translations.ps1,
-        # or the staleness gate fails on formatting instead of content.
-        # -locations none: the catalogues are tracked and the gate fails a stale
-        # PR, so the files must change only when a STRING changes. With line
-        # numbers in them, one inserted blank line rewrites hundreds of
-        # <location> tags and the gate cries wolf.
-        # -no-obsolete: drop messages whose source is gone rather than hoard.
-        LUPDATE_OPTIONS -locations none -no-obsolete)
+    set(_dish_ts_files
+        translations/dish_en.ts
+        translations/dish_bs.ts
+        translations/dish_de.ts
+        translations/dish_es.ts
+        translations/dish_fr.ts
+        translations/dish_pt_BR.ts)
+    if(Qt6_VERSION VERSION_LESS 6.9)
+        # Below 6.9, lupdate loses a class's namespace after an enum with a base
+        # type that a struct follows and re-files that class's tr() strings
+        # under a bare context the app never looks up, while the check still
+        # reads "in sync". This Qt therefore only compiles the catalogues;
+        # update_translations refuses with the reason, and
+        # scripts/check-translations.ps1 with a 6.9+ -LinguistBin is the way
+        # to refresh them.
+        qt_add_lrelease(TS_FILES ${_dish_ts_files} QM_FILES_OUTPUT_VARIABLE _dish_qm_files)
+        qt_add_resources(Dish "Dish_translations"
+            PREFIX "/i18n"
+            BASE "${CMAKE_CURRENT_BINARY_DIR}"
+            FILES ${_dish_qm_files})
+        add_custom_target(update_translations
+            COMMAND ${CMAKE_COMMAND} -E echo
+                "update_translations needs lupdate 6.9 or newer and this build Qt is ${Qt6_VERSION}: run scripts/check-translations.ps1 -LinguistBin <Qt 6.9+ bin> instead"
+            COMMAND ${CMAKE_COMMAND} -E false
+            VERBATIM)
+    else()
+        qt_add_translations(
+            TARGETS Dish
+            SOURCE_TARGETS Dish dish_core
+            TS_FILES ${_dish_ts_files}
+            RESOURCE_PREFIX "/i18n"
+            # Must stay identical to $lupdateArgs in scripts/check-translations.ps1,
+            # or the staleness gate fails on formatting instead of content.
+            # -locations none: the catalogues are tracked and the gate fails a stale
+            # PR, so the files must change only when a STRING changes. With line
+            # numbers in them, one inserted blank line rewrites hundreds of
+            # <location> tags and the gate cries wolf.
+            # -no-obsolete: drop messages whose source is gone rather than hoard.
+            LUPDATE_OPTIONS -locations none -no-obsolete)
+    endif()
 else()
     if(DISH_REQUIRE_TRANSLATIONS)
         message(FATAL_ERROR

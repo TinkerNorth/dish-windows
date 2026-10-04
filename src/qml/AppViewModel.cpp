@@ -9,6 +9,7 @@
 #include "Input/JoystickMapping.h"
 #include "Input/SDLGamepadBridge.h"
 #include "Network/MoonlightManager.h"
+#include "core/moonlight/MoonlightBindingReattach.h"
 #include "Network/WifiConnectionManager.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
@@ -1008,6 +1009,7 @@ void AppViewModel::applyMoonlightBinding(const QString& slotId, const QString& h
     binding.slotId = slotId;
     binding.hostId = hostId;
     binding.controllerType = type;
+    if (const auto* slot = slotById(slotId)) { binding.padIdentity = slot->padIdentity; }
     model_->moonlight()->rememberBinding(binding);
     const QString refusal = bindMoonlightSlot(slotId, hostId, type);
 
@@ -1025,13 +1027,23 @@ void AppViewModel::reattachMoonlightBindings() {
     auto* moon = model_->moonlight();
     const auto standing = moon->bindings();
     if (standing.isEmpty()) { return; }
-    for (const auto& binding : standing) {
-        if (!moon->boundHostFor(binding.slotId).isEmpty()) { continue; }
-        // The pad is not plugged in. Not a failure and not worth a word: the
-        // binding is waiting for its controller, which is what a binding does.
-        if (slotById(binding.slotId) == nullptr) { continue; }
-        // Whatever comes back is already logged by the manager, and there is
-        // nobody to tell: this runs off a device arriving, not off a button.
+    QList<moonlight::PresentPad> present;
+    QSet<QString> driving;
+    for (const auto& slot : model_->state().slotList) {
+        present.append({slot.id, slot.padIdentity});
+        if (!moon->boundHostFor(slot.id).isEmpty()) { driving.insert(slot.id); }
+    }
+    // A binding whose pad is not plugged in is left waiting for it, which is what a
+    // binding does. Whatever a bind answers is already logged by the manager, and there
+    // is nobody to tell: this runs off a device arriving, not off a button.
+    for (const auto& item : moonlight::bindingsToReattach(standing, present, driving)) {
+        models::MoonlightBinding binding = item.binding;
+        if (binding.slotId != item.slotId || binding.padIdentity != item.identity) {
+            moon->forgetBinding(binding.slotId);
+            binding.slotId = item.slotId;
+            binding.padIdentity = item.identity;
+            moon->rememberBinding(binding);
+        }
         bindMoonlightSlot(binding.slotId, binding.hostId, binding.controllerType);
     }
 }

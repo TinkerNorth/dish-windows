@@ -80,11 +80,14 @@ struct MoonlightBinding {
     QString slotId;
     QString hostId;
     int controllerType = kMoonlightDeviceAuto;
+    // The pad as the bridge identifies it; empty in a record written before it existed.
+    QString padIdentity;
 
     bool isValid() const { return !slotId.isEmpty() && !hostId.isEmpty(); }
 
     bool operator==(const MoonlightBinding& o) const {
-        return slotId == o.slotId && hostId == o.hostId && controllerType == o.controllerType;
+        return slotId == o.slotId && hostId == o.hostId && controllerType == o.controllerType &&
+               padIdentity == o.padIdentity;
     }
 
     QJsonObject toJson() const;
