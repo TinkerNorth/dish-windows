@@ -3,7 +3,7 @@
 //
 // What the Moonlight session section renders, as a pure total function of what
 // is known about the host. The sibling of MoonlightSessionMachine: that one owns
-// the wire lifecycle, this one owns the twenty-one states a user can be looking
+// the wire lifecycle, this one owns the twenty-two states a user can be looking
 // at, so the binding flow never re-derives a state from a phase.
 //
 // Moonlight has no bidirectional liveness. Pairing is remembered trust, checked
@@ -50,6 +50,7 @@ enum class SessionUiState {
     EndedByHost,    // M21 the host terminated, or the app closed
 };
 
+    PickRemoved,    // M22 the list is readable and the remembered pick is not in it
 // How the last attempt on this host ended. None means nothing has been tried
 // this visit, which is what separates M9 through M13 from everything below them:
 // "no session of ours" and "the host refused" are both true after a refusal, and
@@ -108,6 +109,9 @@ struct SessionUiInputs {
     int appCount = 0;
     // This device holds a session on this host. `bindingLive` narrows that to
     // the binding being looked at, which is what separates joining a session
+    // The remembered pick is missing from the list the host answered with; meaningful with
+    // appsFetched.
+    bool pickRemoved = false;
     // from riding one.
     bool sessionLive = false;
     bool bindingLive = false;
@@ -214,7 +218,9 @@ inline SessionUiState sessionUiState(const SessionUiInputs& in) {
     if (in.appsInFlight) { return SessionUiState::AppsLoading; }
     if (in.appsFailed) { return SessionUiState::AppsFailed; }
     if (in.appsFetched) {
-        return in.appCount > 0 ? SessionUiState::NewSession : SessionUiState::NoApps;
+        if (in.appCount == 0) { return SessionUiState::NoApps; }
+        if (in.pickRemoved) { return SessionUiState::PickRemoved; }
+        return SessionUiState::NewSession;
     }
     return SessionUiState::Checking;
 }
@@ -255,6 +261,7 @@ inline bool sessionUiIsProblem(SessionUiState state) {
     case SessionUiState::NotPaired:
     case SessionUiState::PairingPin:
     case SessionUiState::AppsLoading:
+    case SessionUiState::PickRemoved:
     case SessionUiState::NewSession:
     case SessionUiState::NoApps:
     case SessionUiState::AppsFailed:

@@ -3382,6 +3382,10 @@
         <translation>Forget %1?</translation>
     </message>
     <message>
+        <source>Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.</source>
+        <translation>Dish deletes its pairing and you will need the PIN again. %1 keeps its own record of this device until you remove it there.</translation>
+    </message>
+    <message>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -3459,10 +3463,6 @@
     <message>
         <source>Quit session</source>
         <translation>Quit session</translation>
-    </message>
-    <message>
-        <source>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</source>
-        <translation>Dish deletes its pairing. The host keeps its own record until someone removes Dish there, and you will need the PIN again.</translation>
     </message>
     <message>
         <source>Moonlight host (Sunshine, Apollo or Wolf)</source>
@@ -4805,6 +4805,10 @@
         <translation>New session</translation>
     </message>
     <message>
+        <source>%1 is no longer on this host</source>
+        <translation>%1 is no longer on this host</translation>
+    </message>
+    <message>
         <source>Joining %1</source>
         <translation>Joining %1</translation>
     </message>
@@ -4847,6 +4851,10 @@
     <message>
         <source>Check that the code went into the right host, then try again.</source>
         <translation>Check that the code went into the right host, then try again.</translation>
+    </message>
+    <message>
+        <source>The app you picked was removed from %1. Pick another one to start.</source>
+        <translation>The app you picked was removed from %1. Pick another one to start.</translation>
     </message>
     <message>
         <source>Check that the host is switched on and on this network, then try again.</source>
