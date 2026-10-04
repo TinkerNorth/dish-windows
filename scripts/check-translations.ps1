@@ -97,8 +97,12 @@ try {
     # strings under a bare name the app never looks up. Since this script rewrites the
     # catalogues in place, it refuses such a lupdate rather than let it do that quietly.
     $versionText = (& $lupdate -version | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error ("'$lupdate -version' exited with $LASTEXITCODE and said '$($versionText.Trim())'. " +
+                     "lupdate links Qt6Core and Qt6Qml; a Linguist installed from its own archives needs qtbase and qtdeclarative beside it.")
+    }
     if ($versionText -notmatch '(\d+)\.(\d+)') {
-        Write-Error "could not read a version out of '$lupdate -version'."
+        Write-Error "could not read a version out of '$lupdate -version': '$($versionText.Trim())'."
     }
     $lupdateMajor = [int]$Matches[1]
     $lupdateMinor = [int]$Matches[2]
