@@ -21,6 +21,15 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **The dish faces its signal.** The dish glyph aimed up and to the left while
+  the signal arcs sat at the upper right. The reflector now points at the
+  signal in every state glyph and in the app mark, so the window icon, the
+  tray icon and the installer read the same way.
+
 ## [2.2.0] - 2026-10-04
 
 ### Added
