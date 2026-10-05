@@ -57,7 +57,7 @@ jobs:
         run: choco install ninja --no-progress --yes
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb # v4.4.0
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: ${{ env.QT_VERSION }}
           host: windows
@@ -70,7 +70,7 @@ jobs:
       # build keeps linking 6.7.3 while the catalogues are read by a parser that copes. lupdate links
       # Qt6Core and Qt6Qml, so qtbase and qtdeclarative come with qttools.
       - name: Install Linguist ${{ env.LINGUIST_QT_VERSION }}
-        uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb # v4.4.0
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: ${{ env.LINGUIST_QT_VERSION }}
           host: windows
