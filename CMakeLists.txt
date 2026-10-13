@@ -456,6 +456,7 @@ set(DISH_CORE_SOURCES
     src/composer/ThemeController.cpp
     src/composer/CrashReportingBackend.h
     src/composer/CrashReportingBackend.cpp
+    src/composer/CrashRearmHook.cpp
     src/composer/CrashReportingController.h
     src/composer/CrashReportingController.cpp
     # Theme and FontStacks are in dish_core, not the exe, so ThemeController,

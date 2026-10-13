@@ -358,7 +358,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         /*emitCurrent=*/false);
 
     // Each start() applies its current value immediately, so the persisted wake
-    // intent, palette and crash opt-in all take effect without waiting for a
+    // intent, palette and crash switch all take effect without waiting for a
     // first change.
     wakeController_.start();
     themeController_.start();

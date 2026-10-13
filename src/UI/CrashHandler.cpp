@@ -3,6 +3,8 @@
 
 #include "UI/CrashHandler.h"
 
+#include "composer/CrashRearmHook.h"
+
 #if defined(_WIN32)
 
 // <windows.h> must precede dbghelp, which depends on the base Win32 types.
@@ -16,9 +18,13 @@
 #endif
 
 #include <array>
+#include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
+#include <typeinfo>
 
 namespace dish::crash {
 
@@ -27,6 +33,20 @@ namespace {
 // If the handler itself faults, or a second thread crashes mid-write, bail
 // rather than recurse into MiniDumpWriteDump.
 LONG g_inHandler = 0;
+
+// Whoever held the top-level filter and the SIGABRT handler before us. The SDK
+// installs its own during sentry_init and never calls on, so the files here
+// and the report there both see the crash only if we chain to it.
+LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter = nullptr;
+using AbortHandler = void (*)(int);
+AbortHandler g_prevAbortHandler = nullptr;
+
+// STATUS_FATAL_APP_EXIT, the code the CRT reports an abort under.
+constexpr DWORD kStatusFatalAppExit = 0x40000015;
+
+// What std::terminate found, written into the log's header; fixed so the
+// terminate path allocates nothing.
+char g_terminateReason[256] = {0};
 
 // Resolved once at install() while the heap and CRT are still healthy, so the
 // fault path only concatenates fixed buffers — no allocation, no
@@ -170,6 +190,11 @@ void writeHeader(HANDLE log) {
     std::snprintf(ts, sizeof(ts), "time (UTC): %04u-%02u-%02u %02u:%02u:%02u\r\n", st.wYear,
                   st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
     writeStr(log, ts);
+    if (g_terminateReason[0] != '\0') {
+        writeStr(log, "reason: ");
+        writeStr(log, g_terminateReason);
+        writeStr(log, "\r\n");
+    }
 }
 
 // The code always, and for an access violation the operation and address too, which is the
@@ -277,17 +302,84 @@ void writeCrashLog(EXCEPTION_POINTERS* ep) {
     CloseHandle(log);
 }
 
+// Passes the exception on to whoever held the filter before us (the SDK's,
+// when reporting is armed), or continues the search so WER and a debugger see
+// a real crash. Every exit from the filter goes through here, so no early
+// return can swallow the crash.
+LONG chainOrContinue(EXCEPTION_POINTERS* ep) {
+    if (g_prevFilter != nullptr) { return g_prevFilter(ep); }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
 LONG WINAPI unhandledFilter(EXCEPTION_POINTERS* ep) {
     // Single-shot: if we're already inside (re-entrant fault / second crashing
-    // thread), let the OS take it rather than recurse.
-    if (InterlockedExchange(&g_inHandler, 1) != 0) { return EXCEPTION_EXECUTE_HANDLER; }
+    // thread), hand on rather than recurse.
+    if (InterlockedExchange(&g_inHandler, 1) != 0) { return chainOrContinue(ep); }
     if (g_pathsReady) {
         writeMiniDump(ep);
         writeCrashLog(ep);
     }
-    // Hand back to the OS so WER / the debugger still see a real crash and the
-    // process actually terminates.
-    return EXCEPTION_EXECUTE_HANDLER;
+    return chainOrContinue(ep);
+}
+
+// abort() never reaches an exception filter, so it is caught here: the files
+// are written from a context captured on the spot under the code the CRT
+// reports an abort under, then the previous handler (the SDK's, when armed)
+// takes its turn. The CRT terminates the process when this returns.
+void onAbortSignal(int signum) {
+    if (InterlockedExchange(&g_inHandler, 1) == 0 && g_pathsReady) {
+        CONTEXT ctx{};
+        RtlCaptureContext(&ctx);
+        EXCEPTION_RECORD rec{};
+        rec.ExceptionCode = kStatusFatalAppExit;
+        rec.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+#if defined(_M_ARM64)
+        rec.ExceptionAddress = reinterpret_cast<PVOID>(ctx.Pc);
+#elif defined(_M_X64)
+        rec.ExceptionAddress = reinterpret_cast<PVOID>(ctx.Rip);
+#else
+        rec.ExceptionAddress = reinterpret_cast<PVOID>(ctx.Eip);
+#endif
+        EXCEPTION_POINTERS ep{&rec, &ctx};
+        writeMiniDump(&ep);
+        writeCrashLog(&ep);
+    }
+    if (g_prevAbortHandler != nullptr && g_prevAbortHandler != SIG_IGN &&
+        g_prevAbortHandler != SIG_DFL) {
+        g_prevAbortHandler(signum);
+    }
+}
+
+// An uncaught exception names itself in the log, then aborts, which is the
+// path above. No allocation beyond what the CRT's own terminate already did.
+void onTerminate() {
+    const char* reason = "std::terminate: no active exception";
+    if (std::exception_ptr active = std::current_exception()) {
+        try {
+            std::rethrow_exception(active);
+        } catch (const std::exception& e) {
+            std::snprintf(g_terminateReason, sizeof(g_terminateReason), "std::terminate: %s: %s",
+                          typeid(e).name(), e.what());
+            reason = nullptr;
+        } catch (...) { reason = "std::terminate: non-standard exception"; }
+    }
+    if (reason != nullptr) {
+        std::snprintf(g_terminateReason, sizeof(g_terminateReason), "%s", reason);
+    }
+    std::abort();
+}
+
+// A pure-virtual call or an invalid CRT parameter would otherwise fast-fail
+// past every handler; naming them and aborting routes them through the files.
+void onPureCall() {
+    std::snprintf(g_terminateReason, sizeof(g_terminateReason), "pure virtual function call");
+    std::abort();
+}
+
+void onInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int,
+                        uintptr_t) {
+    std::snprintf(g_terminateReason, sizeof(g_terminateReason), "invalid CRT parameter");
+    std::abort();
 }
 
 #if defined(_DEBUG)
@@ -326,7 +418,14 @@ void install() {
     if (g_installed) { return; }
     g_installed = true;
     buildPaths();
-    SetUnhandledExceptionFilter(unhandledFilter);
+    // WER stays armed and quiet: it is the only recorder left for a fast-fail
+    // (a stack cookie, CFG), which never reaches a filter; only its dialog goes.
+    SetErrorMode(SEM_FAILCRITICALERRORS);
+    rearmFilterChain();
+    std::set_terminate(onTerminate);
+    _set_purecall_handler(onPureCall);
+    _set_invalid_parameter_handler(onInvalidParameter);
+    setRearmHook(&rearmFilterChain);
 #if defined(_DEBUG)
     const int reports[] = {_CRT_WARN, _CRT_ERROR, _CRT_ASSERT};
     for (const int report : reports) {
@@ -339,12 +438,23 @@ void install() {
 #endif
 }
 
+void rearmFilterChain() {
+    LPTOP_LEVEL_EXCEPTION_FILTER prev = SetUnhandledExceptionFilter(unhandledFilter);
+    // Never chain to ourselves, which would recurse until the stack is gone:
+    // prev == unhandledFilter means nothing was installed after us.
+    if (prev != unhandledFilter) { g_prevFilter = prev; }
+
+    AbortHandler prevAbort = std::signal(SIGABRT, onAbortSignal);
+    if (prevAbort != SIG_ERR && prevAbort != onAbortSignal) { g_prevAbortHandler = prevAbort; }
+}
+
 } // namespace dish::crash
 
 #else // !_WIN32
 
 namespace dish::crash {
 void install() {}
+void rearmFilterChain() {}
 } // namespace dish::crash
 
 #endif

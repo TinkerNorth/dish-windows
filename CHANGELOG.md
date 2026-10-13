@@ -21,6 +21,33 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **The local crash files are written again when crash reporting is on.** The
+  Sentry SDK's crashpad installs its own exception filter on top of the app's
+  during `sentry_init` and never calls on, so with *Share crash reports* on,
+  the default, a crash wrote no `crash.dmp` and no `crash.log` at all, against
+  what the privacy policy promised. The handler now puts itself back on top
+  after every arm and chains to what the SDK installed, as the satellite does,
+  so both record the crash; with nothing installed it continues the search so
+  WER still sees a real crash instead of a silent exit.
+- **Opting out mid-session stops the very next report.** `sentry_close` leaves
+  crashpad's handler and database in place on Windows, so a crash after an
+  opt-out could still be dumped and uploaded. The SDK now runs with the user's
+  consent required: given when the switch arms it, revoked before the close
+  when the switch disarms it, which is what the handler reads at the next
+  crash.
+- **`abort()`, an uncaught exception, a pure-virtual call and an invalid CRT
+  parameter now leave crash files too.** None of them reaches an exception
+  filter; the handler now catches SIGABRT, names the reason in `crash.log`
+  and chains to the previous handler, and routes the other three through it.
+- **The privacy policy names the SDK's state directory**
+  (`%LOCALAPPDATA%\TinkerNorth\Dish\sentry\`), adds it to the wipe step, and
+  says how the opt-out works; the code's comments no longer call the switch
+  "opt-in".
+
 ## [2.2.1] - 2026-10-05
 
 ### Changed
