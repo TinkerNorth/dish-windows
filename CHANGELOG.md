@@ -40,6 +40,31 @@ share a version number.
   being set up through SignPath Foundation; the README states who signs, what
   is signed and from where, and what the signed package contains. Until it
   lands the installer stays unsigned and SmartScreen keeps warning.
+- **Opus decoding moved off the receive thread.** Speaker and haptics frames
+  are copied onto the playout engine's own thread (at most eight waiting, the
+  oldest dropped), so a decode burst no longer delays the heartbeat ack behind
+  it or inflates the measured round trip.
+
+### Fixed
+
+- **The microphone's sequence no longer restarts on a reopen.** A mute, a
+  toggle, a lost and regained route or a device rename closed and reopened the
+  capture, and the new capture counted from 0 again; the satellite's reorder
+  window then dropped every frame as late for as long as the old count ran
+  ahead, up to ten minutes of silent voice after a long call. The engine now
+  keeps one count per slot for its whole life.
+- **The playout queue is capped.** A burst after a stall, or a pad whose clock
+  ran slower than the stream's, piled windows into the device queue that never
+  drained back to the two-frame cushion, so latency only grew. A window that
+  would push the queue past four frames is dropped instead.
+- **A stream that restarts under a living voice plays again.** The satellite
+  restarts a lane's count when it re-plugs the pad or heals the session; a
+  voice nothing else changed about kept its old window and read the whole new
+  stream as late. Ten late frames in a row now prime a fresh window.
+- **A replugged audio endpoint reopens.** An unplug and replug that both landed
+  between two route resolves kept the dead device handle, because the routes
+  read the same by name. A departed device now closes its voices and captures
+  at once, and the next resolve reopens them.
 
 ## [2.2.1] - 2026-10-05
 
