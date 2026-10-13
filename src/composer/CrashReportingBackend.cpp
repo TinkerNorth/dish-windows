@@ -3,6 +3,8 @@
 
 #include "composer/CrashReportingBackend.h"
 
+#include "composer/CrashRearmHook.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -92,7 +94,11 @@ void SentryCrashReportingBackend::disarm() noexcept {
     if (!active_) { return; }
     active_ = false;
 #ifdef DISH_HAS_SENTRY
-    // Flushes what is already queued, then closes. An opt-out must not strand
+    // Consent first: crashpad's handler and its database outlive sentry_close
+    // on Windows, and the database's upload switch is what the handler reads
+    // at the next crash. Revoking it is what stops that report, not the close.
+    sentry_user_consent_revoke();
+    // Then flush what is already queued and close. An opt-out must not strand
     // a report the user has just declined to send.
     sentry_close();
 #endif
@@ -118,6 +124,12 @@ sentry_options_t* buildSentryOptions(const std::string& databaseDir) {
     sentry_options_set_release(options, DISH_SENTRY_RELEASE);
     sentry_options_set_environment(options, sentryEnvironment());
     sentry_options_set_debug(options, 0);
+
+    // Uploads ride the user's consent, kept in the SDK's database where the
+    // out-of-process crashpad handler reads it: given at arm, revoked at
+    // disarm, so an opt-out mid-session stops the very next report even though
+    // crashpad's own handlers stay installed after sentry_close.
+    sentry_options_set_require_user_consent(options, 1);
 
     // Named explicitly rather than left to the SDK's own lookup. The crashpad backend runs an
     // out-of-process handler, and the default search is relative to the working directory, which
@@ -171,6 +183,11 @@ void SentryCrashReportingBackend::arm() {
 #ifdef DISH_HAS_SENTRY
     if (sentry_init(buildSentryOptions(databaseDir_)) == 0) {
         active_ = true;
+        sentry_user_consent_give();
+        // sentry_init put crashpad's filter on top of the local handler's and
+        // crashpad never calls on; the handler goes back on top, chaining to it,
+        // so crash.dmp and crash.log are written whether or not a report goes.
+        dish::crash::rearmAfterSdkInit();
         qCInfo(lcCrash) << "crash reporting armed (" << sentryEnvironment() << ")";
         return;
     }
