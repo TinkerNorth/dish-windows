@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The seam a crash-reporting opt-in flip is routed to.
+// The seam a crash-reporting switch flip is routed to.
 //
 // Two separate things happen when Dish crashes, and only one of them is behind
 // this switch:
@@ -9,9 +9,14 @@
 //   * UI/CrashHandler always writes crash.dmp and crash.log to
 //     %LOCALAPPDATA%\Dish\. That is local, private, and armed first thing in
 //     main() before the preference has even been read, because a crash during
-//     startup still deserves an artifact. Nothing here can turn it off.
+//     startup still deserves an artifact. Nothing here can turn it off: after
+//     every arm the handler is put back on top of the SDK's and chains to it
+//     (composer/CrashRearmHook.h), so both see the crash.
 //   * Uploading a report to Sentry. That is what this backend does, and it is
-//     what the Settings switch means.
+//     what the Settings switch means. The SDK is told to require the user's
+//     consent, given at arm and revoked at disarm, because crashpad's handler
+//     and database outlive sentry_close and read that consent at the next
+//     crash.
 //
 // The switch is opt-OUT (CrashReportingStore::kDefaultEnabled is true), matching
 // dish-android and the FAQ.
@@ -52,7 +57,8 @@ class SentryCrashReportingBackend : public CrashReportingBackend {
     ~SentryCrashReportingBackend() override;
 
     // Disarming is immediate and deliberate: withdrawing consent has to stop
-    // the next crash from being sent, not the one after that.
+    // the next crash from being sent, not the one after that, which is why the
+    // SDK's consent is revoked before the close rather than relying on it.
     void setEnabled(bool enabled) override;
 
     // True only once the SDK actually armed. False on a build with no DSN even

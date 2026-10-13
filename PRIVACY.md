@@ -269,8 +269,11 @@ The registry values behind these switches are in section 2.1, and the
 This is the part most likely to be misread, so it is stated plainly.
 
 **What is written locally, always.** The app installs a Win32 unhandled
-exception filter. When the process crashes it writes two files to
-`%LOCALAPPDATA%\Dish\`:
+exception filter, and catches `abort()` as well, which is where an uncaught
+exception, a pure-virtual call and an invalid CRT parameter end up. When the
+process crashes it writes two files to `%LOCALAPPDATA%\Dish\`, whether or not
+*Share crash reports* is on: the app's own handler runs first and then hands
+the crash on to the reporting SDK's, so neither costs you the other.
 
 - `crash.dmp`, a minidump containing data segments, handle data, and thread
   info for the crashed process.
@@ -312,11 +315,18 @@ crash data for 90 days, then deletes it. We use Sentry's US region, so the
 data is stored in the United States. See Sentry's
 [privacy policy](https://sentry.io/privacy/) for its role as a processor.
 
-**Opting out.** Turn *Share crash reports* off. The switch disarms the SDK
-immediately, so it stops the very next report, not just later ones, and the
+**Opting out.** Turn *Share crash reports* off. The switch revokes the SDK's
+upload consent in its own database and disarms it immediately, so it stops the
+very next report, not just later ones: the SDK's crash handler stays loaded
+until the app quits, but it reads that consent before it sends anything. The
 choice persists in the registry. The installer asks the same question on a
 first install, and a silent install can answer it with `/CRASHREPORTS=no`.
 Opting out never costs you the local files above.
+
+**Where the SDK keeps its state.** The crash reporter keeps its run state, any
+report it has not yet sent, and after an opt-out a dump it will not send,
+under `%LOCALAPPDATA%\TinkerNorth\Dish\sentry\`. Delete that folder at any
+time; the app recreates it only while the switch is on.
 
 **Builds that cannot upload.** Only official releases from this repository
 carry the Sentry address (DSN) that the SDK needs. A source build, a
@@ -341,6 +351,7 @@ apps do, so this is the equivalent list of what the app touches.
 | `SetThreadExecutionState` | Preventing sleep while a controller is actively streaming, so input latency stays low. Released when streaming stops. |
 | `HKEY_CURRENT_USER` registry read and write | Settings and pairing state, as listed in section 2.1. |
 | `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, and the `updates\` folder described in section 2.1. |
+| `%LOCALAPPDATA%\TinkerNorth\Dish\sentry\` file write | The crash reporter's run state and any report not yet sent (section 3), only while *Share crash reports* is on. |
 | Default browser launch | Opening the links listed in section 2.3, only when you click one. |
 
 The app runs as a normal user. It does not request elevation, does not
@@ -378,10 +389,11 @@ version running. A per-user install, which is the default, never prompts.
   *Wipe everything* step below removes those too.
 - **Wipe everything.** Delete `HKEY_CURRENT_USER\Software\Dish\Dish` and
   `HKEY_CURRENT_USER\Software\TinkerNorth\Dish`, and delete
-  `%LOCALAPPDATA%\Dish\`. That removes every remembered server, pairing key,
-  certificate pin, Moonlight identity, preference, update setting, and crash
-  artifact. There is no server-side record to delete, because there is no
-  TinkerNorth server.
+  `%LOCALAPPDATA%\Dish\` and `%LOCALAPPDATA%\TinkerNorth\Dish\`. That removes
+  every remembered server, pairing key, certificate pin, Moonlight identity,
+  preference, update setting, and crash artifact, pending reports included.
+  There is no server-side record to delete, because there is no TinkerNorth
+  server.
 - **Verify any of this.** The client is free software under
   [LGPL-3.0-or-later](LICENSE). Every claim above is checkable in this
   repository, and you can build the binary yourself. See
