@@ -376,8 +376,7 @@ void onPureCall() {
     std::abort();
 }
 
-void onInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int,
-                        uintptr_t) {
+void onInvalidParameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t) {
     std::snprintf(g_terminateReason, sizeof(g_terminateReason), "invalid CRT parameter");
     std::abort();
 }

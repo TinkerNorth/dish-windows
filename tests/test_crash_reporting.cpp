@@ -194,8 +194,7 @@ int g_rearmCalls = 0;
 void countRearm() { g_rearmCalls++; }
 } // namespace
 
-TEST_CASE("the re-arm hook runs after an arm only once a handler registered it",
-          "[crash][rearm]") {
+TEST_CASE("the re-arm hook runs after an arm only once a handler registered it", "[crash][rearm]") {
     // sentry_init puts crashpad's filter on top of the local handler's and never
     // calls on; the backend asks the handler to go back on top through this seam.
     dish::crash::setRearmHook(nullptr);
