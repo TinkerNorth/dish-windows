@@ -357,6 +357,8 @@ set(DISH_CORE_SOURCES
     # Windows-shell-only prefs, so the default QSettings() hive
     # (HKCU\Software\TinkerNorth\Dish) rather than the cross-client one.
     src/source/store/UpdatePreferenceStore.h
+    src/source/store/InstallDefaults.h
+    src/source/store/InstallDefaults.cpp
     # XInput hides Xbox pads from raw HID, so this path serves DualSense/DS4/
     # 8BitDo and Xbox pads fall back to SDL/XInput.
     src/source/usb/UsbDeviceGateway.h

@@ -224,6 +224,7 @@ set(DISH_TEST_SOURCES
     test_update_handoff.cpp
     test_ui_preference_store.cpp
     test_update_preference_store.cpp
+    test_install_defaults.cpp
     # Diagnostics page.
     test_session_diagnostics.cpp
     test_input_readout.cpp
@@ -253,6 +254,8 @@ target_compile_definitions(DishTests PRIVATE
 target_compile_definitions(DishTests PRIVATE
     DISH_QM_DIR="${CMAKE_BINARY_DIR}"
     DISH_TS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../translations")
+target_compile_definitions(DishTests PRIVATE
+    DISH_INSTALLER_ISS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../installer.iss")
 # The `release_translations` dependency is wired from the TOP-LEVEL CMakeLists:
 # that target does not exist until this directory scope is finalized.
 

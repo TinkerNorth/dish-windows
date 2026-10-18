@@ -21,6 +21,26 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **The installer asks about privacy.** A Privacy page after the tasks page
+  says what can leave the PC (the update check against GitHub and, after a
+  crash, one report to Sentry), offers both as checkboxes that are on by
+  default, and links the full policy. An upgrade keeps the existing choices
+  and says so. Silent installs answer with `/UPDATECHECK=yes|no` and
+  `/CRASHREPORTS=yes|no`. The installer leaves the answers under
+  `Software\TinkerNorth\Dish\InstallDefaults`, and the app applies them once
+  at its next start, never over a choice made in Settings afterwards.
+
+### Changed
+
+- **A code signing policy in the README.** Free code signing on Windows is
+  being set up through SignPath Foundation; the README states who signs, what
+  is signed and from where, and what the signed package contains. Until it
+  lands the installer stays unsigned and SmartScreen keeps warning.
+
 ## [2.2.1] - 2026-10-05
 
 ### Changed
