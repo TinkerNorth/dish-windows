@@ -52,8 +52,7 @@ std::optional<InstallDefaults> applyInstallDefaultsOnce(const QSettings& userSco
     auto defaults = readInstallDefaults(userScope, systemScope);
     if (!defaults.has_value()) { return std::nullopt; }
 
-    const QString applied =
-        appSettings.value(QLatin1String(kKeyInstallDefaultsApplied)).toString();
+    const QString applied = appSettings.value(QLatin1String(kKeyInstallDefaultsApplied)).toString();
     if (defaults->stamp == applied) { return std::nullopt; }
 
     if (defaults->updateCheck.has_value()) { updates.setChecksEnabled(*defaults->updateCheck); }
@@ -62,7 +61,8 @@ std::optional<InstallDefaults> applyInstallDefaultsOnce(const QSettings& userSco
     appSettings.sync();
 
     qCInfo(lcInstall).noquote()
-        << QStringLiteral("installer defaults applied: update check %1, crash reports %2 (stamp %3)")
+        << QStringLiteral(
+               "installer defaults applied: update check %1, crash reports %2 (stamp %3)")
                .arg(describe(defaults->updateCheck), describe(defaults->crashReports),
                     defaults->stamp);
     return defaults;

@@ -46,8 +46,7 @@ struct Fixture {
     }
 
     std::optional<InstallDefaults> apply() {
-        return applyInstallDefaultsOnce(userScope, systemScope, appSettings, updates,
-                                        crashReports);
+        return applyInstallDefaultsOnce(userScope, systemScope, appSettings, updates, crashReports);
     }
 
     bool persistedChecksEnabled() const {
