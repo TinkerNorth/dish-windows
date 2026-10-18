@@ -58,9 +58,11 @@ prompt, and carries the Visual C++ runtime, so it works on a machine where
 nothing has been installed. All-users installs are offered and ask for
 elevation. Removal is a normal Windows Settings, Installed apps entry.
 
-The installer is not code-signed yet, so SmartScreen shows "Windows protected
-your PC" on first run. Choose **More info**, then **Run anyway**. If you would
-rather check the bytes, every release also carries a `SHA256SUMS` asset:
+Code signing through [SignPath Foundation](https://signpath.org) is being set
+up (see [Code signing policy](#code-signing-policy) below). Until it lands the
+installer is unsigned, so SmartScreen shows "Windows protected your PC" on first
+run. Choose **More info**, then **Run anyway**. If you would rather check the
+bytes, every release also carries a `SHA256SUMS` asset:
 
 ```powershell
 $expected = (Get-Content .\SHA256SUMS |
@@ -251,6 +253,43 @@ pull request; `Windows CI`, `Security` and `CodeQL` run on every one.
 Vulnerability disclosure: [`SECURITY.md`](SECURITY.md). Dish is LAN-only and
 talks to no TinkerNorth-operated server. Release artifacts ship with SHA256SUMS
 and an SPDX SBOM.
+
+## Code signing policy
+
+Free code signing on Windows provided by [SignPath.io](https://signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+**Team.** Committers, reviewers and approvers: Emir Hasanbegovic
+([@emir-hasanbegovic](https://github.com/emir-hasanbegovic)), owner of the
+TinkerNorth organisation
+([organisation owners](https://github.com/orgs/TinkerNorth/people?query=role%3Aowner)).
+
+**What is signed, and when.** Only the release workflow,
+[`release.yml`](.github/workflows/release.yml), signs, and only when it runs
+from a tagged commit of this repository. Nothing built locally, on a pull
+request or from a fork is ever signed. The signed artifacts are
+`dish-setup.exe`, the installer, and the two executables inside it: `dish.exe`
+and `crashpad_handler.exe`. The rest of the install image is the unmodified
+third-party runtime listed below.
+
+**Privacy.** [`PRIVACY.md`](PRIVACY.md) is the policy. Two things can leave
+the PC: an update check against GitHub (one request for `latest.json` on this
+project's releases page, with no identifier attached) and, when the app
+crashes and *Share crash reports* is on, one crash report to Sentry (a stack
+trace, a minidump of the crashed process, and the app and Windows versions).
+Both are on by default, both can be turned off in Settings, and the installer
+asks about both on a first install; silent installs take `/UPDATECHECK=no` and
+`/CRASHREPORTS=no`. There is no analytics, no telemetry and no account.
+
+**Third-party components in the signed package.** Qt 6 (LGPL-3.0), SDL2
+(Zlib), libsodium (ISC), OpenSSL `libcrypto` (Apache-2.0; the Moonlight path
+only), sentry-native and Crashpad (MIT and Apache-2.0; the crash reporter,
+which sends nothing unless *Share crash reports* is on and the build carries a
+Sentry address), the Microsoft Visual C++ runtime, and the Windows SDK shader
+DLLs `dxcompiler.dll` and `dxil.dll`. ENet (MIT) is linked statically into
+`dish.exe` and the Inter font (OFL-1.1) is embedded in it. Versions, licences
+and the redistribution terms are in [`THIRD_PARTY.md`](THIRD_PARTY.md), and
+the licence texts ship in the installed `licenses\` folder.
 
 ## License
 
