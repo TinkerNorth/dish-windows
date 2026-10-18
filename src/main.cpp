@@ -6,6 +6,7 @@
 #include "UI/CrashHandler.h"
 #include "Util/Localization.h"
 #include "qml/QmlEntryPoint.h"
+#include "source/store/InstallDefaults.h"
 #include "update/UpdateHandoff.h"
 
 #include <QFont>
@@ -104,6 +105,7 @@ int main(int argc, char* argv[]) {
     // stays out of the process.
     QGuiApplication app(argc, argv);
     applyApplicationIdentity();
+    dish::source::applyInstallDefaultsFromRegistry();
     installUiTranslator();
     applyUiAppearance(app);
 
