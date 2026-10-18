@@ -60,6 +60,9 @@
 ; it as Local\TinkerNorth.Dish.Running.
 #define AppRunningMutex "TinkerNorth.Dish.Running"
 
+#define PrivacyUrl "https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md"
+#define InstallDefaultsKey "Software\TinkerNorth\Dish\InstallDefaults"
+
 [Setup]
 ; Stable AppId: never change this without a migration plan; it is how Windows
 ; and Inno recognise in-place upgrades of an existing install.
@@ -134,6 +137,43 @@ Name: "spanish";    MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "french";     MessagesFile: "compiler:Languages\French.isl"
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
+[CustomMessages]
+english.PrivacyTitle=Privacy
+english.PrivacySubtitle=What leaves this PC, and your choices
+english.PrivacyDescription=Dish talks only to the host you pair with, on your own network. Two things can leave this PC, and you can turn both off: an update check against GitHub (about every four hours while Dish runs) and, when Dish crashes, one crash report to Sentry (a stack trace and version numbers, nothing else).
+english.PrivacyUpdateCheck=Check for updates automatically (contacts GitHub)
+english.PrivacyCrashReports=Send a crash report when Dish crashes (Sentry)
+english.PrivacyKept=Your existing choices are kept. Change them at any time in Settings: Check for updates automatically, and Share crash reports.
+english.PrivacyPolicyLink=Full privacy policy:
+german.PrivacyTitle=Datenschutz
+german.PrivacySubtitle=Was diesen PC verlässt, und was Sie entscheiden
+german.PrivacyDescription=Dish spricht nur mit dem Host, den Sie in Ihrem eigenen Netzwerk koppeln. Zwei Dinge können diesen PC verlassen, und beide lassen sich abschalten: eine Update-Prüfung bei GitHub (etwa alle vier Stunden, solange Dish läuft) und, wenn Dish abstürzt, ein Absturzbericht an Sentry (nur Stacktrace und Versionsnummern, sonst nichts).
+german.PrivacyUpdateCheck=Automatisch nach Updates suchen (kontaktiert GitHub)
+german.PrivacyCrashReports=Bei einem Absturz einen Absturzbericht senden (Sentry)
+german.PrivacyKept=Ihre bisherigen Einstellungen bleiben erhalten. Sie können sie jederzeit in den Einstellungen ändern: Automatisch nach Updates suchen, und Absturzberichte senden.
+german.PrivacyPolicyLink=Vollständige Datenschutzerklärung:
+spanish.PrivacyTitle=Privacidad
+spanish.PrivacySubtitle=Qué sale de este PC, y qué decide usted
+spanish.PrivacyDescription=Dish solo habla con el host que usted empareja, en su propia red. Dos cosas pueden salir de este PC, y ambas se pueden desactivar: una comprobación de actualizaciones en GitHub (cada cuatro horas aproximadamente mientras Dish está abierto) y, si Dish falla, un informe de fallo a Sentry (solo la traza de pila y los números de versión, nada más).
+spanish.PrivacyUpdateCheck=Buscar actualizaciones automáticamente (contacta con GitHub)
+spanish.PrivacyCrashReports=Enviar un informe de fallo cuando Dish falle (Sentry)
+spanish.PrivacyKept=Se conservan sus opciones actuales. Puede cambiarlas en cualquier momento en Ajustes: Buscar actualizaciones automáticamente, y Compartir informes de fallos.
+spanish.PrivacyPolicyLink=Política de privacidad completa:
+french.PrivacyTitle=Confidentialité
+french.PrivacySubtitle=Ce qui quitte ce PC, et vos choix
+french.PrivacyDescription=Dish ne communique qu'avec l'hôte que vous associez, sur votre propre réseau. Deux choses peuvent quitter ce PC, et vous pouvez désactiver les deux : une vérification des mises à jour auprès de GitHub (environ toutes les quatre heures tant que Dish est ouvert) et, si Dish plante, un rapport de plantage envoyé à Sentry (uniquement la pile d'appels et les numéros de version, rien d'autre).
+french.PrivacyUpdateCheck=Rechercher les mises à jour automatiquement (contacte GitHub)
+french.PrivacyCrashReports=Envoyer un rapport de plantage quand Dish plante (Sentry)
+french.PrivacyKept=Vos choix actuels sont conservés. Vous pouvez les modifier à tout moment dans les Paramètres : Rechercher les mises à jour automatiquement, et Partager les rapports de plantage.
+french.PrivacyPolicyLink=Politique de confidentialité complète :
+brazilianportuguese.PrivacyTitle=Privacidade
+brazilianportuguese.PrivacySubtitle=O que sai deste PC, e o que você decide
+brazilianportuguese.PrivacyDescription=O Dish só fala com o host que você emparelha, na sua própria rede. Duas coisas podem sair deste PC, e ambas podem ser desativadas: uma verificação de atualizações no GitHub (cerca de a cada quatro horas enquanto o Dish está aberto) e, se o Dish travar, um relatório de falha para o Sentry (apenas o rastreamento de pilha e os números de versão, nada mais).
+brazilianportuguese.PrivacyUpdateCheck=Verificar atualizações automaticamente (contata o GitHub)
+brazilianportuguese.PrivacyCrashReports=Enviar um relatório de falha quando o Dish travar (Sentry)
+brazilianportuguese.PrivacyKept=Suas escolhas atuais são mantidas. Você pode alterá-las a qualquer momento em Configurações: Verificar atualizações automaticamente, e Compartilhar relatórios de falhas.
+brazilianportuguese.PrivacyPolicyLink=Política de privacidade completa:
+
 [Tasks]
 ; Start Menu is always created (the old wizard's default-on); Desktop stays
 ; the old default-off, opt-in.
@@ -147,6 +187,12 @@ Source: "{#ImageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs c
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Registry]
+Root: HKA; Subkey: "{#InstallDefaultsKey}"; Flags: deletekey; Check: WritesInstallDefaults
+Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: string; ValueName: "Stamp"; ValueData: "{code:InstallStamp}"; Flags: uninsdeletekey; Check: WritesInstallDefaults
+Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: dword; ValueName: "UpdateCheck"; ValueData: "{code:UpdateCheckValue}"; Check: WritesUpdateCheck
+Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: dword; ValueName: "CrashReports"; ValueData: "{code:CrashReportsValue}"; Check: WritesCrashReports
 
 [Run]
 ; Interactive installs offer a launch checkbox (the old wizard's default-on
@@ -175,6 +221,10 @@ Type: filesandordirs; Name: "{localappdata}\Dish\updates"
 
 var
   OtaInstallSucceeded: Boolean;
+  UpgradeInstall: Boolean;
+  InstallStampValue: String;
+  PrivacyPage: TInputOptionWizardPage;
+  PrivacyChoicesOffered: Boolean;
 
 function WantsOTA: Boolean;
 var
@@ -189,11 +239,158 @@ begin
     end;
 end;
 
+function SwitchValue(const Name: String): String;
+var
+  I: Integer;
+  Param, Prefix: String;
+begin
+  Result := '';
+  Prefix := '/' + Name + '=';
+  for I := 1 to ParamCount do
+  begin
+    Param := ParamStr(I);
+    if CompareText(Copy(Param, 1, Length(Prefix)), Prefix) = 0 then
+    begin
+      Result := Copy(Param, Length(Prefix) + 1, Length(Param));
+      Exit;
+    end;
+  end;
+end;
+
+function SwitchGiven(const Name: String): Boolean;
+var
+  Value: String;
+begin
+  Value := SwitchValue(Name);
+  Result := (CompareText(Value, 'yes') = 0) or (CompareText(Value, 'no') = 0);
+end;
+
+function SwitchEnabled(const Name: String): Boolean;
+begin
+  Result := CompareText(SwitchValue(Name), 'no') <> 0;
+end;
+
+function WritesInstallDefaults: Boolean;
+begin
+  Result := (not WantsOTA) and
+    ((not UpgradeInstall) or SwitchGiven('UPDATECHECK') or SwitchGiven('CRASHREPORTS'));
+end;
+
+function WritesUpdateCheck: Boolean;
+begin
+  Result := WritesInstallDefaults and ((not UpgradeInstall) or SwitchGiven('UPDATECHECK'));
+end;
+
+function WritesCrashReports: Boolean;
+begin
+  Result := WritesInstallDefaults and ((not UpgradeInstall) or SwitchGiven('CRASHREPORTS'));
+end;
+
+function DwordText(const Enabled: Boolean): String;
+begin
+  if Enabled then
+    Result := '1'
+  else
+    Result := '0';
+end;
+
+function InstallStamp(Param: String): String;
+begin
+  Result := InstallStampValue;
+end;
+
+function UpdateCheckValue(Param: String): String;
+begin
+  if PrivacyChoicesOffered then
+    Result := DwordText(PrivacyPage.Values[0])
+  else
+    Result := DwordText(SwitchEnabled('UPDATECHECK'));
+end;
+
+function CrashReportsValue(Param: String): String;
+begin
+  if PrivacyChoicesOffered then
+    Result := DwordText(PrivacyPage.Values[1])
+  else
+    Result := DwordText(SwitchEnabled('CRASHREPORTS'));
+end;
+
+procedure PrivacyLinkClick(Sender: TObject);
+var
+  ErrorCode: Integer;
+begin
+  ShellExecAsOriginalUser('open', '{#PrivacyUrl}', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
+procedure AddPrivacyChoices;
+begin
+  PrivacyPage.Add(CustomMessage('PrivacyUpdateCheck'));
+  PrivacyPage.Add(CustomMessage('PrivacyCrashReports'));
+  PrivacyPage.Values[0] := SwitchEnabled('UPDATECHECK');
+  PrivacyPage.Values[1] := SwitchEnabled('CRASHREPORTS');
+  PrivacyChoicesOffered := True;
+end;
+
+procedure AddPrivacyKeptNote;
+var
+  Note: TNewStaticText;
+begin
+  PrivacyPage.CheckListBox.Visible := False;
+  Note := TNewStaticText.Create(PrivacyPage);
+  Note.AutoSize := False;
+  Note.WordWrap := True;
+  Note.Top := PrivacyPage.CheckListBox.Top;
+  Note.Width := PrivacyPage.SurfaceWidth;
+  Note.Caption := CustomMessage('PrivacyKept');
+  Note.Parent := PrivacyPage.Surface;
+  Note.AdjustHeight;
+end;
+
+procedure AddPrivacyLink;
+var
+  Link: TNewStaticText;
+begin
+  Link := TNewStaticText.Create(PrivacyPage);
+  Link.AutoSize := False;
+  Link.WordWrap := True;
+  Link.Width := PrivacyPage.SurfaceWidth;
+  Link.Caption := CustomMessage('PrivacyPolicyLink') + ' {#PrivacyUrl}';
+  Link.Cursor := crHand;
+  Link.Font.Style := [fsUnderline];
+  Link.StyleElements := Link.StyleElements - [seFont];
+  if IsDarkInstallMode then
+    Link.Font.Color := StrToColor('#4DA3FF')
+  else
+    Link.Font.Color := StrToColor('#0063B1');
+  Link.OnClick := @PrivacyLinkClick;
+  Link.Parent := PrivacyPage.Surface;
+  Link.AdjustHeight;
+  Link.Top := PrivacyPage.SurfaceHeight - Link.Height;
+  PrivacyPage.CheckListBox.Height := Link.Top - PrivacyPage.CheckListBox.Top - ScaleY(8);
+end;
+
+procedure InitializeWizard;
+begin
+  if WantsOTA then
+    Exit;
+  PrivacyPage := CreateInputOptionPage(wpSelectTasks, CustomMessage('PrivacyTitle'),
+    CustomMessage('PrivacySubtitle'), CustomMessage('PrivacyDescription'), False, False);
+  if UpgradeInstall then
+    AddPrivacyKeptNote
+  else
+    AddPrivacyChoices;
+  AddPrivacyLink;
+end;
+
 function InitializeSetup: Boolean;
 var
   Waited: Integer;
 begin
   Result := True;
+  InstallStampValue := GetDateTimeString('yyyymmddhhnnss', #0, #0) + '-' +
+    IntToStr(Random(1000000000));
+  UpgradeInstall := RegKeyExists(HKA,
+    ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1'));
   if not WantsOTA then
     Exit;
   { The spawning dish.exe is mid-exit. Its Running mutex dies with the
