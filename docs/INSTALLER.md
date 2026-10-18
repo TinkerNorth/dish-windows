@@ -36,8 +36,8 @@ either one run on a machine where nothing has ever been installed.
 ## 2. Installing
 
 Double-clicking runs the normal Inno Setup wizard: language, licence, scope,
-folder, a Desktop-shortcut checkbox, install. The defaults are the product
-decisions:
+folder, a Desktop-shortcut checkbox, the privacy page, install. The defaults
+are the product decisions:
 
 - **Per-user by default** (`PrivilegesRequired=lowest`): installs under
   `%LOCALAPPDATA%\Programs\Dish` with **no UAC prompt**. "Install for all
@@ -56,6 +56,18 @@ decisions:
   has no official Inno catalogue and is an open follow-up; the app itself
   ships all six.
 
+After the tasks page comes a **Privacy** page. It states the two things that
+can leave the PC (the update check against GitHub and, after a crash, one
+report to Sentry, both described in [`PRIVACY.md`](../PRIVACY.md)), offers
+them as two checkboxes that are on by default, *Check for updates
+automatically (contacts GitHub)* and *Send a crash report when Dish crashes
+(Sentry)*, and links the full policy. On an upgrade over an existing install
+(the AppId's uninstall key exists in the install scope's hive) the checkboxes
+give way to one line saying the existing choices are kept and where to change
+them in Settings. The page is never shown on a silent or `/OTA` run; silent
+installs answer it with the two switches in section 3. The text is translated
+through `[CustomMessages]` for the five wizard languages.
+
 ### What it writes
 
 One Add/Remove Programs key, created by Inno under
@@ -68,6 +80,29 @@ upgrade; never change it without a migration plan.
 The shortcuts are ordinary `.lnk` files: the Start Menu entry always, the
 Desktop one when its task was ticked. Upgrades preserve the previous install's
 directory and scope automatically through Inno's own recorded state.
+
+One more key carries the privacy page's answers to the app:
+`<hive>\Software\TinkerNorth\Dish\InstallDefaults`, with `Stamp` (`REG_SZ`,
+the date and time plus a random number, unique per installer run),
+`UpdateCheck` and `CrashReports` (`REG_DWORD`, `1` or `0`). The hive follows
+the install scope like the uninstall key does (`Root: HKA`), and the
+uninstaller deletes the key (`uninsdeletekey`). It is written on a first
+install, and on any install where `/UPDATECHECK=` or `/CRASHREPORTS=` was given
+explicitly, in which case only the values that were given are written; an
+upgrade with neither switch does not touch it, and an `/OTA` run never does.
+
+The app applies it once. At startup, right after it sets its organisation and
+application names and before anything reads a preference, `dish.exe` reads the
+user-scope key, then the system-scope one (the user scope wins when both
+exist). If the `Stamp` differs from the one recorded under
+`HKCU\Software\TinkerNorth\Dish\install_defaults_stamp`, it writes `UpdateCheck`
+to `updates_check_enabled` and `CrashReports` to
+`crashlytics_collection_enabled`, through the same stores Settings uses, then
+records the stamp and logs one line under the `dish.install` category. A
+matching stamp changes nothing, which is what keeps a repair or reinstall from
+undoing a choice made in Settings since
+([`src/source/store/InstallDefaults.cpp`](../src/source/store/InstallDefaults.cpp),
+pinned by `tests/test_install_defaults.cpp`).
 
 ---
 
@@ -83,8 +118,16 @@ dish-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
     [/TASKS="desktopicon"]        opt into the Desktop shortcut
     [/LANG=<code>]                wizard language for /SILENT runs
     [/LOG="file.log"]             full install log; without it one lands in %TEMP%
+    [/UPDATECHECK=yes|no]         the privacy page's update-check choice; default yes
+    [/CRASHREPORTS=yes|no]        the privacy page's crash-report choice; default yes
     [/OTA]                        internal: the auto-updater's boot handoff (section 5)
 ```
+
+`/UPDATECHECK` and `/CRASHREPORTS` stand in for the privacy page a silent run
+never shows (section 2). Both are case-insensitive, and a value other than
+`yes` or `no` is ignored. On a first install both are written, defaulting to
+`yes`; on an upgrade only a switch given explicitly is written, and it
+overrides that one choice at the app's next start.
 
 `/SILENT` shows a progress bar with no questions; `/VERYSILENT` shows nothing.
 A re-run over the same version is a repair; a newer setup over an older

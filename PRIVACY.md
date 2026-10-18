@@ -102,15 +102,25 @@ removes it.
 
 **What the installer writes.** `dish-setup.exe` is a separate program from the
 app (Inno Setup, compiled from [`installer.iss`](installer.iss)), and it
-touches two more places on your PC. It creates the Add/Remove Programs entry
+touches three more places on your PC. It creates the Add/Remove Programs entry
 under
 `HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\`
 (or the `HKEY_LOCAL_MACHINE` equivalent for an all-users install), holding the
 display name, version, publisher, install location, uninstall command and
-estimated size that Windows shows you in Installed apps. And it creates the
+estimated size that Windows shows you in Installed apps. It creates the
 shortcuts you asked for: a Start Menu entry and, if you turned it on, a
-desktop one. The uninstaller (`unins000.exe`, beside `dish.exe`) removes all
-three. [`docs/INSTALLER.md`](docs/INSTALLER.md) has the details.
+desktop one. And it records the two choices its Privacy page asks for, under
+`HKEY_CURRENT_USER\Software\TinkerNorth\Dish\InstallDefaults` (or the
+`HKEY_LOCAL_MACHINE` equivalent for an all-users install): `UpdateCheck` and
+`CrashReports`, each `1` or `0`, plus a `Stamp` naming that installer run. The
+app reads the key at its next start and applies the pair exactly once,
+remembering the stamp as `install_defaults_stamp` under
+`HKEY_CURRENT_USER\Software\TinkerNorth\Dish`, so a choice you make in
+Settings afterwards is never undone by it. The key is written on a first
+install, or on any install where `/UPDATECHECK=` or `/CRASHREPORTS=` was given
+on the command line; an upgrade with neither leaves your settings alone. The
+uninstaller (`unins000.exe`, beside `dish.exe`) removes all three.
+[`docs/INSTALLER.md`](docs/INSTALLER.md) has the details.
 
 The app also **reads** (never writes)
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
@@ -244,8 +254,10 @@ exists and downloads nothing until you ask.
 
 **Turning it off.** *Check for updates automatically* is the master switch. Off
 means the app makes no update-related network request of any kind, arms no
-timer, and creates no network stack for it. The portable zip never downloads or
-applies an update at all; it only tells you one exists.
+timer, and creates no network stack for it. The installer asks the same
+question on a first install, and a silent install can answer it with
+`/UPDATECHECK=no`. The portable zip never downloads or applies an update at
+all; it only tells you one exists.
 
 The registry values behind these switches are in section 2.1, and the
 `%LOCALAPPDATA%\Dish\updates\` folder is described there too.
@@ -302,8 +314,9 @@ data is stored in the United States. See Sentry's
 
 **Opting out.** Turn *Share crash reports* off. The switch disarms the SDK
 immediately, so it stops the very next report, not just later ones, and the
-choice persists in the registry. Opting out never costs you the local files
-above.
+choice persists in the registry. The installer asks the same question on a
+first install, and a silent install can answer it with `/CRASHREPORTS=no`.
+Opting out never costs you the local files above.
 
 **Builds that cannot upload.** Only official releases from this repository
 carry the Sentry address (DSN) that the SDK needs. A source build, a
