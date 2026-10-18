@@ -1,6 +1,6 @@
 # Dish for Windows: Privacy Policy
 
-**Effective date:** 2026-09-06.
+**Effective date:** 2026-10-18.
 **Canonical copy:** this file, at
 [`https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md`](https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md).
 The app links to it from Help, and the privacy index on
