@@ -322,8 +322,10 @@ TEST_CASE("moonlight http: a host that takes the request and never answers fails
 
     REQUIRE(dish::test::spinUntil([&host] { return host.requests().size() == 1; }));
     REQUIRE(dish::test::spinUntil([&got] { return got.arrived; }));
+    // An unanswered reply is read by `reachable` alone, as every caller reads it: its body status
+    // is the default, not a refusal the host sent.
     CHECK_FALSE(got.reply.reachable);
-    CHECK_FALSE(got.reply.ok());
+    CHECK(got.reply.httpStatus == 0);
 }
 
 TEST_CASE("moonlight http: a probe answered by serverinfo has found the host",
