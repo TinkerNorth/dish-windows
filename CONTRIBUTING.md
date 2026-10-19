@@ -343,6 +343,9 @@ directly.
 A pull request is ready for review when:
 
 - CI is green. Every job listed below is blocking.
+- Commits and PR descriptions name no tool. No `Co-Authored-By` trailer for an
+  assistant, no "Generated with …" footer: the author of record is the person
+  who opened the PR, whatever helped write it.
 - The PR template (`.github/pull_request_template.md`) is filled in, including
   the manual test matrix you actually ran.
 - Commits are focused and fixup noise is squashed.
