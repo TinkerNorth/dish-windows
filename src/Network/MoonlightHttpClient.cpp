@@ -94,19 +94,21 @@ QList<MoonlightApp> parseMoonlightAppList(const QByteArray& body) {
 }
 
 void MoonlightHttpClient::getHttp(const QString& host, int httpPort, const QString& path,
-                                  const std::map<QString, QString>& query, ResponseCb cb) {
+                                  const std::map<QString, QString>& query, int timeoutMs,
+                                  ResponseCb cb) {
     QString url = QStringLiteral("http://%1:%2%3").arg(host).arg(httpPort).arg(path);
     const QString qs = buildMoonlightQuery(query);
     if (!qs.isEmpty()) { url += QLatin1Char('?') + qs; }
-    perform(url, /*https=*/false, pinVerifier_, std::move(cb));
+    perform(url, /*https=*/false, pinVerifier_, timeoutMs, std::move(cb));
 }
 
 void MoonlightHttpClient::getHttps(const QString& host, int httpsPort, const QString& path,
-                                   const std::map<QString, QString>& query, ResponseCb cb) {
+                                   const std::map<QString, QString>& query, int timeoutMs,
+                                   ResponseCb cb) {
     QString url = QStringLiteral("https://%1:%2%3").arg(host).arg(httpsPort).arg(path);
     const QString qs = buildMoonlightQuery(query);
     if (!qs.isEmpty()) { url += QLatin1Char('?') + qs; }
-    perform(url, /*https=*/true, pinVerifier_, std::move(cb));
+    perform(url, /*https=*/true, pinVerifier_, timeoutMs, std::move(cb));
 }
 
 namespace {
@@ -170,11 +172,11 @@ void handOver(const QString& path, const MoonlightHttpClient::ResponseCb& cb,
 
 // The pin is checked on `encrypted`, the last moment before any request bytes go out, so a host
 // whose certificate changed never sees the request at all. The verifier is the one in force when
-// the call was made: a store detaches it with calls still in flight. No call carries a deadline:
-// pairing phase 1 waits on a human typing the PIN into the host.
+// the call was made: a store detaches it with calls still in flight. Every call names its own
+// deadline, because only the caller knows whether it waits on a host or on a human.
 void MoonlightHttpClient::getHttpsTrusting(const QString& host, int httpsPort, const QString& path,
                                            const std::map<QString, QString>& query,
-                                           QByteArray certDer, ResponseCb cb) {
+                                           QByteArray certDer, int timeoutMs, ResponseCb cb) {
     QString url = QStringLiteral("https://%1:%2%3").arg(host).arg(httpsPort).arg(path);
     const QString qs = buildMoonlightQuery(query);
     if (!qs.isEmpty()) { url += QLatin1Char('?') + qs; }
@@ -183,14 +185,15 @@ void MoonlightHttpClient::getHttpsTrusting(const QString& host, int httpsPort, c
         [trusted = std::move(certDer)](const QString&, const QByteArray& der) {
             return der == trusted;
         },
-        std::move(cb));
+        timeoutMs, std::move(cb));
 }
 
 void MoonlightHttpClient::perform(const QString& url, bool https, const PinVerifier& verifier,
-                                  ResponseCb cb) {
+                                  int timeoutMs, ResponseCb cb) {
     http::HttpRequest request;
     request.url = QUrl(url);
     request.method = QByteArrayLiteral("GET");
+    request.timeoutMs = timeoutMs;
     request.tls = https ? std::optional(sslConfigFor(identity_)) : std::nullopt;
     http::PeerCheck peerCheck;
     if (verifier) {

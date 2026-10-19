@@ -136,7 +136,8 @@ TEST_CASE("Full pairing round-trip succeeds with the right PIN", "[moonlight][pa
     REQUIRE(client.error() == dish::moonlight::PairError::None);
 }
 
-TEST_CASE("A wrong PIN fails at the server hash check", "[moonlight][pairing]") {
+TEST_CASE("A wrong PIN fails at the client's hash check, before the host sees a secret",
+          "[moonlight][pairing]") {
     const auto salt = fill(0x11);
     const auto clientChallenge = fill(0xAA);
     const auto clientSecret = fill(0xBB);
@@ -148,15 +149,33 @@ TEST_CASE("A wrong PIN fails at the server hash check", "[moonlight][pairing]") 
 
     REQUIRE(client.consumeServerCert(server.plaincertHex()));
     const std::string chalResp = server.challengeResponse(client.clientChallengeHex());
-    // The client still decodes SOMETHING (garbage), so it does not hard-fail here.
-    client.consumeChallengeResponse(chalResp);
+    // The client still decodes SOMETHING (garbage) under its own key, so phase 2 cannot tell.
+    REQUIRE(client.consumeChallengeResponse(chalResp));
     const std::string pairingSecret = server.pairingSecret(client.serverChallengeRespHex());
-    // The server's own signature still verifies (its real key), so phase 3 passes.
-    client.consumePairingSecret(pairingSecret);
-    server.verifyClient(client.clientPairingSecretHex(), clientId.certPem);
-
-    // The server catches the mismatch: the derived keys never agreed.
+    // The server's own signature verifies (its real key), but the hash phase 2 carried was built
+    // under the other PIN and does not reproduce from the secret: the client stops here, its own
+    // secret unsent, where the old flow left the server to catch the mismatch a phase later.
+    REQUIRE_FALSE(client.consumePairingSecret(pairingSecret));
+    REQUIRE(client.error() == dish::moonlight::PairError::PinMismatch);
+    REQUIRE_FALSE(client.valid());
     REQUIRE_FALSE(server.paired);
+}
+
+TEST_CASE("consumePairingSecret refuses a secret that does not complete phase 2's hash",
+          "[moonlight][pairing]") {
+    // Same PIN both ends and a good signature, but the host signs a secret other than the one it
+    // hashed in phase 2: the signature check alone would let it through.
+    const auto salt = fill(0x33);
+    const auto clientId = *dish::moonlight::generateIdentity();
+    PairingClient client(clientId, "2468", salt, fill(0xAA), fill(0xBB));
+    FakeServer server(salt, "2468", fill(0xCC), fill(0xDD));
+
+    REQUIRE(client.consumeServerCert(server.plaincertHex()));
+    REQUIRE(client.consumeChallengeResponse(server.challengeResponse(client.clientChallengeHex())));
+    server.serverSecret = fill(0xEE);
+    REQUIRE_FALSE(
+        client.consumePairingSecret(server.pairingSecret(client.serverChallengeRespHex())));
+    REQUIRE(client.error() == dish::moonlight::PairError::PinMismatch);
 }
 
 TEST_CASE("consumePairingSecret rejects a tampered server signature", "[moonlight][pairing]") {

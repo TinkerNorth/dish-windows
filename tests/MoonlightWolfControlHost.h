@@ -43,13 +43,15 @@ class MoonlightWolfControlHost {
   public:
     using Key = std::array<std::uint8_t, moonlight::crypto::kAesKey128>;
 
-    // One packet as the host read it. The number, mask, type, capabilities and touch event are
-    // filled only for the input kinds that carry them.
+    // One packet as the host read it. The number, mask, buttons, type, capabilities and touch
+    // event are filled only for the input kinds that carry them.
     struct Packet {
         std::uint32_t seq = 0;
         std::uint32_t inputType = 0;
         std::uint16_t number = 0;
         std::uint16_t mask = 0;
+        // buttonFlags | buttonFlags2 << 16, the way the host folds a frame's two words.
+        std::uint32_t buttons = 0;
         std::uint8_t type = 0;
         std::uint8_t capabilities = 0;
         std::uint8_t touchEvent = 0;
@@ -157,6 +159,7 @@ class MoonlightWolfControlHost {
         if (isMulti) {
             packet.number = u16At(body + 2);
             packet.mask = u16At(body + 4);
+            packet.buttons = u16At(body + 8) | (static_cast<std::uint32_t>(u16At(body + 22)) << 16);
         }
         if (isTouch) {
             packet.number = body[0];

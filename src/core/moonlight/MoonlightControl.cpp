@@ -193,9 +193,19 @@ std::vector<std::uint8_t> encodeMouseMoveRel(std::int16_t dx, std::int16_t dy) {
     return out;
 }
 
+namespace {
+// The keepalive in the form Wolf captured from a real client: a four-byte word of 4 and four zero
+// bytes behind the header. control-specs.adoc draws it with no body; the captured bytes are the
+// ones a host has been seen to accept, and the three Dish clients send the same twelve.
+constexpr std::uint16_t kPeriodicPingBody = 8;
+constexpr std::uint32_t kPeriodicPingWord = 4;
+} // namespace
+
 std::vector<std::uint8_t> encodePeriodicPing() {
-    std::vector<std::uint8_t> out(4);
-    writeControlHeader(out.data(), kCtrlPeriodicPing, 0);
+    std::vector<std::uint8_t> out(4 + kPeriodicPingBody);
+    const std::size_t off = writeControlHeader(out.data(), kCtrlPeriodicPing, kPeriodicPingBody);
+    putU32Le(out.data() + off, kPeriodicPingWord);
+    putU32Le(out.data() + off + 4, 0);
     return out;
 }
 
@@ -241,6 +251,7 @@ std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_
 
     switch (ev.rawType) {
     case kCtrlTermination:
+    case kCtrlTerminationLegacy:
         ev.type = ServerEventType::Termination;
         break;
     case kCtrlRumbleData:

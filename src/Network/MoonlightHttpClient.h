@@ -105,23 +105,32 @@ class MoonlightHttpClient : public QObject {
 
     using ResponseCb = std::function<void(const MoonlightXmlResponse&)>;
 
+    // Every call names a deadline, because a host that never answers is a failure to report, not
+    // a wait: the fleet's five seconds over plain HTTP and ten over TLS, and two minutes for the
+    // one call that waits on a human, pairing's phase 1, which the host holds open until the PIN
+    // is typed into it.
+    static constexpr int kPlainDeadlineMs = 5000;
+    static constexpr int kTlsDeadlineMs = 10000;
+    static constexpr int kPinEntryDeadlineMs = 120000;
+
     // GET over plaintext HTTP :httpPort. `query` is appended as ?k=v&... .
     void getHttp(const QString& host, int httpPort, const QString& path,
-                 const std::map<QString, QString>& query, ResponseCb cb);
+                 const std::map<QString, QString>& query, int timeoutMs, ResponseCb cb);
 
     // GET over HTTPS :httpsPort presenting the client certificate.
     void getHttps(const QString& host, int httpsPort, const QString& path,
-                  const std::map<QString, QString>& query, ResponseCb cb);
+                  const std::map<QString, QString>& query, int timeoutMs, ResponseCb cb);
 
     // The same, trusting `certDer` and no other certificate, whatever the pin
     // gate holds: the pairing's phase 5, which only the certificate phases 1 to
     // 4 proved may answer.
     void getHttpsTrusting(const QString& host, int httpsPort, const QString& path,
                           const std::map<QString, QString>& query, QByteArray certDer,
-                          ResponseCb cb);
+                          int timeoutMs, ResponseCb cb);
 
   private:
-    void perform(const QString& url, bool https, const PinVerifier& verifier, ResponseCb cb);
+    void perform(const QString& url, bool https, const PinVerifier& verifier, int timeoutMs,
+                 ResponseCb cb);
 
     http::HttpTransport* transport_;
     std::optional<moonlight::Identity> identity_;

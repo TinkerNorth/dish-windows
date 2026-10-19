@@ -5,6 +5,7 @@
 
 #include "core/moonlight/MoonlightCrypto.h"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <utility>
@@ -97,6 +98,7 @@ bool PairingClient::consumeChallengeResponse(const std::string& challengeRespons
         fail(PairError::BadResponse);
         return false;
     }
+    serverHash_.assign(dec->begin(), dec->begin() + 32);
     serverChallenge_.assign(dec->begin() + 32, dec->begin() + 48);
     return true;
 }
@@ -132,6 +134,18 @@ bool PairingClient::consumePairingSecret(const std::string& pairingSecretHex) {
     const std::uint8_t* serverSig = blob->data() + 16;
     if (!c::rsaVerify(serverPublicKeyPem_, serverSecret, 16, serverSig, kRsaSigLen)) {
         fail(PairError::ServerSignature);
+        return false;
+    }
+    // The hash phase 2 carried under the PIN-derived key must be the one this secret completes:
+    // SHA256(client_challenge + server_cert_signature + server_secret). Garbage decrypted under
+    // the wrong PIN never reproduces it, so a mistyped PIN fails here, with the client's secret
+    // still unsent, rather than at the host in phase 4.
+    c::Bytes hashInput(clientChallenge_.begin(), clientChallenge_.end());
+    hashInput.insert(hashInput.end(), serverCertSignature_.begin(), serverCertSignature_.end());
+    hashInput.insert(hashInput.end(), serverSecret, serverSecret + 16);
+    const auto expected = c::sha256(hashInput);
+    if (!std::equal(expected.begin(), expected.end(), serverHash_.begin(), serverHash_.end())) {
+        fail(PairError::PinMismatch);
         return false;
     }
     return true;
