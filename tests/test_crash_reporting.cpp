@@ -4,6 +4,7 @@
 #include "composer/CrashReportingBackend.h"
 
 #include <string>
+#include "composer/CrashRearmHook.h"
 #include "composer/CrashReportingController.h"
 #include "source/store/CrashReportingStore.h"
 
@@ -183,6 +184,30 @@ TEST_CASE("the test binary itself carries no DSN and reports as development", "[
     // has nowhere to send anything.
     CHECK(std::string(dish::composer::compiledSentryDsn()).empty());
     CHECK(std::string(dish::composer::sentryEnvironment()) == "development");
+}
+
+// ---------------------------------------------------------------------------
+// The re-arm seam between the SDK and the local handler.
+
+namespace {
+int g_rearmCalls = 0;
+void countRearm() { g_rearmCalls++; }
+} // namespace
+
+TEST_CASE("the re-arm hook runs after an arm only once a handler registered it", "[crash][rearm]") {
+    // sentry_init puts crashpad's filter on top of the local handler's and never
+    // calls on; the backend asks the handler to go back on top through this seam.
+    dish::crash::setRearmHook(nullptr);
+    dish::crash::rearmAfterSdkInit(); // no handler: nothing to do, nothing to crash
+    CHECK(dish::crash::rearmHook() == nullptr);
+
+    g_rearmCalls = 0;
+    dish::crash::setRearmHook(&countRearm);
+    CHECK(dish::crash::rearmHook() == &countRearm);
+    dish::crash::rearmAfterSdkInit();
+    dish::crash::rearmAfterSdkInit();
+    CHECK(g_rearmCalls == 2);
+    dish::crash::setRearmHook(nullptr);
 }
 
 TEST_CASE("SentryCrashReportingBackend stays inert without a DSN", "[crash][sentry]") {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// Routes each crash-reporting opt-in flip from the store to the backend seam.
+// Routes each crash-reporting switch flip from the store to the backend seam.
 // The one behaviour that sets this Controller apart: stop() is a deliberate
 // no-op, so a flip after teardown still reaches the backend.
 
@@ -23,7 +23,7 @@ class CrashReportingController : public arch::Controller<bool> {
 
   public:
     // Deliberate no-op: do NOT cancel the subscription. Process-scoped, so the
-    // opt-in keeps propagating across teardowns.
+    // switch keeps propagating across teardowns.
     void stop() override;
 
   private:

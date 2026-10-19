@@ -15,7 +15,7 @@ void CrashReportingController::apply(const bool& enabled) {
 
 void CrashReportingController::stop() {
     // Deliberate no-op — do NOT call cancelCollection(). Process-scoped: the
-    // opt-in must survive teardown and keep propagating flips to the backend.
+    // switch must survive teardown and keep propagating flips to the backend.
 }
 
 } // namespace dish::composer
