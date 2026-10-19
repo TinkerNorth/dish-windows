@@ -963,19 +963,7 @@ void MoonlightManager::forwardReport(const std::string& slotId, std::uint16_t bu
                                      std::uint8_t lt, std::uint8_t rt, std::int16_t lx,
                                      std::int16_t ly, std::int16_t rx, std::int16_t ry) {
     if (!anyBound_.load(std::memory_order_relaxed)) { return; }
-    MoonlightSession* session = nullptr;
     moonlight::ControllerState state;
-    {
-        std::lock_guard<std::mutex> lock(routeMtx_);
-        const auto it = routes_.find(slotId);
-        if (it == routes_.end()) { return; }
-        session = it->second.session;
-        state.controllerNumber = it->second.controllerNumber;
-        const auto padIt = padSlots_.constFind(it->second.hostId);
-        state.activeGamepadMask = padIt == padSlots_.constEnd()
-                                      ? static_cast<std::uint16_t>(1U << state.controllerNumber)
-                                      : padIt->activeMask();
-    }
     // The processor's button word is XUSB, which is bit-for-bit the layout
     // Moonlight's low 16 button flags use (pinned by a unit test), so the fold
     // is the identity — minus the Satellite-only mic-mute state bit, which a
@@ -988,7 +976,28 @@ void MoonlightManager::forwardReport(const std::string& slotId, std::uint16_t bu
     state.leftStickY = ly;
     state.rightStickX = rx;
     state.rightStickY = ry;
+    MoonlightSession* session = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(routeMtx_);
+        const auto it = routes_.find(slotId);
+        if (it == routes_.end()) { return; }
+        session = it->second.session;
+        state.controllerNumber = it->second.controllerNumber;
+        state.activeGamepadMask = activeMaskLocked(it->second);
+        // The touchpad click is a button in this frame, held from frame to frame
+        // until the touch stream says it lifted.
+        state.buttonFlags2 = moonlight::touchpadClickFlags2(it->second.clickHeld);
+        it->second.lastFrame = state;
+    }
     if (session != nullptr) { session->sendControllerState(state); }
+}
+
+std::uint16_t MoonlightManager::activeMaskLocked(const Route& route) const {
+    const auto padIt = padSlots_.constFind(route.hostId);
+    if (padIt == padSlots_.constEnd()) {
+        return static_cast<std::uint16_t>(1U << route.controllerNumber);
+    }
+    return padIt->activeMask();
 }
 
 void MoonlightManager::forwardMotion(const std::string& slotId, std::int16_t gyroX,
@@ -1022,10 +1031,11 @@ void MoonlightManager::forwardTouch(const std::string& slotId, bool finger0Activ
                                     std::uint8_t finger0Id, std::int16_t finger0X,
                                     std::int16_t finger0Y, bool finger1Active,
                                     std::uint8_t finger1Id, std::int16_t finger1X,
-                                    std::int16_t finger1Y) {
+                                    std::int16_t finger1Y, bool buttonPressed) {
     if (!anyBound_.load(std::memory_order_relaxed)) { return; }
     MoonlightSession* session = nullptr;
     std::uint8_t number = 0;
+    std::optional<moonlight::ControllerState> clickFrame;
     std::vector<moonlight::TouchEvent> events;
     {
         std::lock_guard<std::mutex> lock(routeMtx_);
@@ -1033,6 +1043,7 @@ void MoonlightManager::forwardTouch(const std::string& slotId, bool finger0Activ
         if (it == routes_.end()) { return; }
         session = it->second.session;
         number = it->second.controllerNumber;
+        clickFrame = clickEdgeLocked(it->second, buttonPressed);
         // Diffed under the route lock, because the differ IS the route's state:
         // two threads diffing the same pad would each see the other's frame as
         // the previous one and emit crossed DOWN/UP pairs.
@@ -1053,7 +1064,23 @@ void MoonlightManager::forwardTouch(const std::string& slotId, bool finger0Activ
                                          : it->second.touchDiffer.diff(nothing, nothing);
     }
     if (session == nullptr) { return; }
+    // The click first: it is a button in the pad frame, which the host reads before the finger
+    // that made it.
+    if (clickFrame.has_value()) { session->sendControllerState(*clickFrame); }
     for (const auto& event : events) { session->sendControllerTouch(number, event); }
+}
+
+std::optional<moonlight::ControllerState> MoonlightManager::clickEdgeLocked(Route& route,
+                                                                            bool buttonPressed) {
+    const bool clickHeld = buttonPressed && route.touchReaches;
+    if (clickHeld == route.clickHeld) { return std::nullopt; }
+    route.clickHeld = clickHeld;
+    // The frame the pad last sent, at rest before it has sent one, under the mask the host holds
+    // now: a mask from an earlier frame could unplug a pad that joined since.
+    route.lastFrame.controllerNumber = route.controllerNumber;
+    route.lastFrame.activeGamepadMask = activeMaskLocked(route);
+    route.lastFrame.buttonFlags2 = moonlight::touchpadClickFlags2(clickHeld);
+    return route.lastFrame;
 }
 
 void MoonlightManager::forwardBattery(const std::string& slotId, std::uint8_t level,

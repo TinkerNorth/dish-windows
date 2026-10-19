@@ -289,7 +289,7 @@ void MoonlightSession::closeMediaSockets() {
 void MoonlightSession::cancelHostApp() {
     ++cancelsInFlight_;
     http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/cancel"),
-                    {{QStringLiteral("uniqueid"), uniqueId_}},
+                    {{QStringLiteral("uniqueid"), uniqueId_}}, MoonlightHttpClient::kTlsDeadlineMs,
                     [this](const MoonlightXmlResponse& r) {
                         qCInfo(lcMoonlightSession) << host_.ip << "/cancel reachable" << r.reachable
                                                    << "status" << r.statusCode << r.statusMessage;
@@ -338,6 +338,7 @@ void MoonlightSession::pairPhase1(const PairingRun& run) {
          {QStringLiteral("phrase"), QStringLiteral("getservercert")},
          {QStringLiteral("salt"), QString::fromStdString(run.pc->saltHex())},
          {QStringLiteral("clientcert"), QString::fromStdString(run.pc->clientCertHex())}},
+        MoonlightHttpClient::kPinEntryDeadlineMs,
         [this, run](const MoonlightXmlResponse& r) { onPairPhase1(run, r); });
 }
 
@@ -356,6 +357,7 @@ void MoonlightSession::pairPhase2(const PairingRun& run) {
         run.ip, run.httpPort, QStringLiteral("/pair"),
         {{QStringLiteral("uniqueid"), uniqueId_},
          {QStringLiteral("clientchallenge"), QString::fromStdString(run.pc->clientChallengeHex())}},
+        MoonlightHttpClient::kPlainDeadlineMs,
         [this, run](const MoonlightXmlResponse& r) { onPairPhase2(run, r); });
 }
 
@@ -374,6 +376,7 @@ void MoonlightSession::pairPhase3(const PairingRun& run) {
                    {{QStringLiteral("uniqueid"), uniqueId_},
                     {QStringLiteral("serverchallengeresp"),
                      QString::fromStdString(run.pc->serverChallengeRespHex())}},
+                   MoonlightHttpClient::kPlainDeadlineMs,
                    [this, run](const MoonlightXmlResponse& r) { onPairPhase3(run, r); });
 }
 
@@ -381,6 +384,11 @@ void MoonlightSession::onPairPhase3(const PairingRun& run, const MoonlightXmlRes
     if (pairAbandoned(run, "phase 3")) { return; }
     const std::string ps = r.value(QStringLiteral("pairingsecret")).toStdString();
     if (!r.reachable || !r.ok() || ps.empty() || !run.pc->consumePairingSecret(ps)) {
+        // A host that answered well can still be refused here: its phase-2 hash did not reproduce
+        // from the secret, which is a PIN typed differently on the two ends.
+        if (run.pc->error() == moonlight::PairError::PinMismatch) {
+            qCWarning(lcMoonlightSession) << host_.ip << "pairing: the host's PIN was not ours";
+        }
         pairFailed("phase 3 (serverchallengeresp)", r);
         return;
     }
@@ -392,6 +400,7 @@ void MoonlightSession::pairPhase4(const PairingRun& run) {
                    {{QStringLiteral("uniqueid"), uniqueId_},
                     {QStringLiteral("clientpairingsecret"),
                      QString::fromStdString(run.pc->clientPairingSecretHex())}},
+                   MoonlightHttpClient::kPlainDeadlineMs,
                    [this, run](const MoonlightXmlResponse& r) { onPairPhase4(run, r); });
 }
 
@@ -413,7 +422,7 @@ void MoonlightSession::pairPhase5(const PairingRun& run) {
     http_->getHttpsTrusting(run.ip, run.httpsPort, QStringLiteral("/pair"),
                             {{QStringLiteral("uniqueid"), uniqueId_},
                              {QStringLiteral("phrase"), QStringLiteral("pairchallenge")}},
-                            provenCertificateOf(run),
+                            provenCertificateOf(run), MoonlightHttpClient::kTlsDeadlineMs,
                             [this, run](const MoonlightXmlResponse& r) { onPairPhase5(run, r); });
 }
 
@@ -528,7 +537,7 @@ void MoonlightSession::requestSession(const QString& path,
                                       const std::map<QString, QString>& query) {
     const bool resuming = path == QLatin1String("/resume");
     http_->getHttps(
-        host_.ip, host_.httpsPort, path, query,
+        host_.ip, host_.httpsPort, path, query, MoonlightHttpClient::kTlsDeadlineMs,
         [this, resuming](const MoonlightXmlResponse& r) { onLaunchReply(r, resuming); });
 }
 
@@ -705,7 +714,7 @@ void MoonlightSession::onPingTick() {
 
 void MoonlightSession::refreshApps() {
     http_->getHttps(host_.ip, host_.httpsPort, QStringLiteral("/applist"),
-                    {{QStringLiteral("uniqueid"), uniqueId_}},
+                    {{QStringLiteral("uniqueid"), uniqueId_}}, MoonlightHttpClient::kTlsDeadlineMs,
                     [this](const MoonlightXmlResponse& r) {
                         // /applist refuses in the body too: an unpaired client
                         // gets HTTP 200 with a status_code of its own.
@@ -728,7 +737,7 @@ void MoonlightSession::refreshApps() {
 
 void MoonlightSession::probe() {
     http_->getHttp(host_.ip, host_.httpPort, QStringLiteral("/serverinfo"),
-                   {{QStringLiteral("uniqueid"), uniqueId_}},
+                   {{QStringLiteral("uniqueid"), uniqueId_}}, MoonlightHttpClient::kPlainDeadlineMs,
                    [this](const MoonlightXmlResponse& r) {
                        const QString uniqueId = r.value(QStringLiteral("uniqueid"));
                        // The PairStatus is logged and goes no further. It is a diagnostic

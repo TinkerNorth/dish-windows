@@ -89,6 +89,19 @@ int downsAfter(const MoonlightWolfControlHost& host, std::size_t seen) {
     return touchesAfter(host, seen, dish::moonlight::kTouchEventDown);
 }
 
+// The CONTROLLER_MULTI frames after `seen` whose button word carries the touchpad click, or
+// whose word does not, as `clicked` asks.
+int clickFramesAfter(const MoonlightWolfControlHost& host, std::size_t seen, bool clicked) {
+    int count = 0;
+    const auto packets = host.packets();
+    for (std::size_t i = seen; i < packets.size(); ++i) {
+        const bool isFrame = packets[i].inputType == dish::moonlight::kInputControllerMulti;
+        const bool carriesClick = (packets[i].buttons & dish::moonlight::kBtnTouchpad) != 0;
+        if (isFrame && carriesClick == clicked) { ++count; }
+    }
+    return count;
+}
+
 // Every CONTROLLER_TOUCH, whatever it says: the link carries keepalives of its own besides.
 int anyTouchesAfter(const MoonlightWolfControlHost& host, std::size_t seen) {
     int count = 0;
@@ -145,10 +158,14 @@ struct Fixture {
     // One full-state frame, the way the input thread hands it over: finger 7 down at the given
     // spot, or nothing on the pad.
     void fingerDown() const {
-        manager->forwardTouch(slotId().toStdString(), true, 7, 100, 200, false, 0, 0, 0);
+        manager->forwardTouch(slotId().toStdString(), true, 7, 100, 200, false, 0, 0, 0, false);
     }
     void nothingTouching() const {
-        manager->forwardTouch(slotId().toStdString(), false, 0, 0, 0, false, 0, 0, 0);
+        manager->forwardTouch(slotId().toStdString(), false, 0, 0, 0, false, 0, 0, 0, false);
+    }
+    // The pad's click with no finger reported: the DualSense reports the two apart.
+    void click(bool pressed) const {
+        manager->forwardTouch(slotId().toStdString(), false, 0, 0, 0, false, 0, 0, 0, pressed);
     }
 };
 
@@ -277,4 +294,46 @@ TEST_CASE("A pad's touch starts from nothing on a stream that comes up again",
     fx.fingerDown();
 
     CHECK(pumpUntil([&fx, before] { return downsAfter(fx.host, before) == 1; }));
+}
+
+TEST_CASE("A touchpad click replays the pad frame with BTN_TOUCHPAD, and its release without",
+          "[moonlight][touchpad]") {
+    // The click has no packet of its own: it is a button in the pad frame, so an edge is a frame.
+    Fixture fx;
+    REQUIRE(fx.bindLive(dish::models::kMoonlightDevicePlayStation));
+    std::size_t before = fx.host.packets().size();
+
+    fx.click(true);
+    CHECK(pumpUntil([&fx, before] { return clickFramesAfter(fx.host, before, true) == 1; }));
+
+    before = fx.host.packets().size();
+    fx.click(false);
+    CHECK(pumpUntil([&fx, before] { return clickFramesAfter(fx.host, before, false) == 1; }));
+}
+
+TEST_CASE("A click held across touch frames is sent once", "[moonlight][touchpad]") {
+    // Only the edge is a frame; the bit rides the pad's own frames while held.
+    Fixture fx;
+    REQUIRE(fx.bindLive(dish::models::kMoonlightDevicePlayStation));
+    fx.click(true);
+    REQUIRE(pumpUntil([&fx] { return clickFramesAfter(fx.host, 0, true) == 1; }));
+    const std::size_t before = fx.host.packets().size();
+
+    fx.click(true);
+
+    pumpFor(kQuietMs);
+    CHECK(clickFramesAfter(fx.host, before, true) == 0);
+}
+
+TEST_CASE("A host picked Off gets no click either", "[moonlight][touchpad]") {
+    // The click is part of the touchpad the pick keeps from the host.
+    Fixture fx;
+    fx.pick = "off";
+    REQUIRE(fx.bindLive(dish::models::kMoonlightDevicePlayStation));
+    const std::size_t before = fx.host.packets().size();
+
+    fx.click(true);
+
+    pumpFor(kQuietMs);
+    CHECK(clickFramesAfter(fx.host, before, true) == 0);
 }

@@ -971,6 +971,7 @@ TEST_CASE("A launch refused in the status line is a refusal, not a host that nev
     dish::net::MoonlightHttpClient client;
     std::optional<dish::net::MoonlightXmlResponse> reply;
     client.getHttp(QStringLiteral("127.0.0.1"), wolf.port(), kLaunch, {},
+                   dish::net::MoonlightHttpClient::kPlainDeadlineMs,
                    [&reply](const dish::net::MoonlightXmlResponse& r) { reply = r; });
     REQUIRE(pumpUntil([&reply] { return reply.has_value(); }));
     CHECK(reply->reachable);
@@ -1001,6 +1002,7 @@ TEST_CASE("A refusal whose body names no status of its own takes the status line
     dish::net::MoonlightHttpClient client;
     std::optional<dish::net::MoonlightXmlResponse> reply;
     client.getHttp(QStringLiteral("127.0.0.1"), host.port(), kLaunch, {},
+                   dish::net::MoonlightHttpClient::kPlainDeadlineMs,
                    [&reply](const dish::net::MoonlightXmlResponse& r) { reply = r; });
     REQUIRE(pumpUntil([&reply] { return reply.has_value(); }));
 

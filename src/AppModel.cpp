@@ -260,10 +260,11 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         }
         // The Moonlight path takes the SAME full-state frame and diffs it into
         // CONTROLLER_TOUCH events. The pad click has no packet of its own there:
-        // it rides the pad frame as BTN_TOUCHPAD, which forwardReport already
-        // carries, so only the finger positions come this way.
+        // it rides the pad frame as BTN_TOUCHPAD, so the manager replays the
+        // frame on a click edge and keeps the bit on while the click is held.
         moonlight_.forwardTouch(did, s.finger0Active, s.finger0Id, s.finger0X, s.finger0Y,
-                                s.finger1Active, s.finger1Id, s.finger1X, s.finger1Y);
+                                s.finger1Active, s.finger1Id, s.finger1X, s.finger1Y,
+                                s.buttonPressed);
     });
 
     // Every actuator cap goes through the one router, so the descriptor claims

@@ -119,9 +119,11 @@ TEST_CASE("CONTROLLER_TOUCH is the same length whatever it carries", "[moonlight
 }
 
 TEST_CASE("PERIODIC_PING and TERMINATION headers", "[moonlight][control]") {
-    REQUIRE(hx(encodePeriodicPing()) == "00020000");
-    // 0100 (type) 0400 (len=4) 80030023 (graceful reason, big-endian)
-    REQUIRE(hx(encodeTermination()) == "0001040080030023");
+    // The ping Wolf captured from a real client: 0200 (type) 0800 (len=8), a word of 4, a word of
+    // 0. The same twelve bytes dish-android and dish-mac send.
+    REQUIRE(hx(encodePeriodicPing()) == "000208000400000000000000");
+    // 0901 (Wolf's TERMINATION, 0x0109) 0400 (len=4) 80030023 (graceful reason, big-endian)
+    REQUIRE(hx(encodeTermination()) == "0901040080030023");
 }
 
 TEST_CASE("encodeRtpPing carries the session payload, else the legacy form",
@@ -213,10 +215,11 @@ TEST_CASE("CONTROLLER_ARRIVAL carries the capability and button words a host rea
     // The alignment tell, byte for byte. A live Sunshine host logged
     // `capabilities [FF03] supportedButtonFlags [000000FF]` for the seven-byte
     // body and `capabilities [0003] supportedButtonFlags [0000FFFF]` for this
-    // one: analog triggers plus rumble, and the whole low sixteen buttons.
+    // one. The words are the caller's: today's advert leaves the mic-mute bit
+    // out, so a host reads back [0000F7FF], FFF7 on the wire.
     const auto bytes =
-        encodeControllerArrival(0, kPadTypeXbox, kPadCapAnalogTriggers | kPadCapRumble, 0x0000FFFF);
-    REQUIRE(hx(bytes) == "060210000000000C0400005500010300FFFF0000");
+        encodeControllerArrival(0, kPadTypeXbox, kPadCapAnalogTriggers | kPadCapRumble, 0x0000F7FF);
+    REQUIRE(hx(bytes) == "060210000000000C0400005500010300FFF70000");
 
     // Read back the way the host does, off the aligned offsets.
     REQUIRE(bytes[14] == 0x03);
@@ -224,10 +227,10 @@ TEST_CASE("CONTROLLER_ARRIVAL carries the capability and button words a host rea
                                   (static_cast<std::uint32_t>(bytes[17]) << 8) |
                                   (static_cast<std::uint32_t>(bytes[18]) << 16) |
                                   (static_cast<std::uint32_t>(bytes[19]) << 24);
-    REQUIRE(buttons == 0x0000FFFFu);
+    REQUIRE(buttons == 0x0000F7FFu);
 
     // A second pad announces under its own number, nothing else shifting.
-    const auto second = encodeControllerArrival(1, kPadTypeNintendo, kPadCapRumble, 0x0000FFFF);
+    const auto second = encodeControllerArrival(1, kPadTypeNintendo, kPadCapRumble, 0x0000F7FF);
     REQUIRE(second[12] == 0x01);
     REQUIRE(second[13] == kPadTypeNintendo);
     REQUIRE(second[14] == kPadCapRumble);
@@ -276,6 +279,13 @@ TEST_CASE("decodeServerEvent parses each event body", "[moonlight][control][deco
         REQUIRE(ev->led.g == 0x22);
         REQUIRE(ev->led.b == 0x33);
     }
+    // TERMINATION: Wolf's 0x0109 and the GFE-era 0x0100 both end the session.
+    for (const char* type : {"0901", "0001"}) {
+        const auto p = *mc::hexDecode(std::string(type) + "040080030023");
+        const auto ev = decodeServerEvent(p.data(), p.size());
+        REQUIRE(ev.has_value());
+        REQUIRE(ev->type == ServerEventType::Termination);
+    }
 }
 
 TEST_CASE("decodeServerEvent rejects short and unknown buffers", "[moonlight][control][decode]") {
@@ -316,4 +326,13 @@ TEST_CASE("the Satellite-only mic-mute bit never reaches a Moonlight button word
         CHECK(sanitizeButtonFlags(static_cast<std::uint16_t>(bit | 0x0800)) == bit);
     }
     CHECK(dish::moonlight::kSatelliteOnlyButtonBits == dish::input::layout::kXusbMicMute);
+}
+
+TEST_CASE("the touchpad click is BTN_TOUCHPAD's high word in buttonFlags2, or nothing",
+          "[moonlight][control]") {
+    // A click edge is a CONTROLLER_MULTI frame: the bit sits in the second button word, where the
+    // host folds it back under 0x100000.
+    REQUIRE(touchpadClickFlags2(true) == 0x0010);
+    REQUIRE((static_cast<std::uint32_t>(touchpadClickFlags2(true)) << 16) == kBtnTouchpad);
+    REQUIRE(touchpadClickFlags2(false) == 0);
 }

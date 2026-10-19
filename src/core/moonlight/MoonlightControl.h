@@ -34,7 +34,11 @@ namespace dish::moonlight {
 
 // ── Outer control packet types (plaintext ptype, little-endian) ──────────────
 inline constexpr std::uint16_t kCtrlEncrypted = 0x0001;
-inline constexpr std::uint16_t kCtrlTermination = 0x0100;
+// TERMINATION is 0x0109 in Wolf's control.hpp, the reference this port is read against, and the
+// type Wolf acts on. The GFE-era control-specs.adoc says 0x0100 and a Sunshine host still sends
+// that one, so the decoder reads both; the client sends Wolf's.
+inline constexpr std::uint16_t kCtrlTermination = 0x0109;
+inline constexpr std::uint16_t kCtrlTerminationLegacy = 0x0100;
 inline constexpr std::uint16_t kCtrlPeriodicPing = 0x0200;
 inline constexpr std::uint16_t kCtrlInputData = 0x0206;
 inline constexpr std::uint16_t kCtrlRumbleData = 0x010b;
@@ -118,8 +122,9 @@ inline std::uint8_t batteryStateFromSatelliteStatus(std::uint8_t satelliteStatus
     case 3:
         return kBatteryStateFull;
     case 4:
-        // Wired with no charge telemetry reads as charging, the closest state.
-        return kBatteryStateCharging;
+        // Wired is a pad with no battery to show, powered by its cable, which is what the
+        // satellite itself makes of it; charging would promise a level that never comes.
+        return kBatteryStateNotPresent;
     default:
         return kBatteryStateUnknown;
     }
@@ -159,6 +164,14 @@ inline constexpr std::uint16_t kSatelliteOnlyButtonBits = 0x0800;
 
 inline constexpr std::uint16_t sanitizeButtonFlags(std::uint16_t xusbButtons) {
     return static_cast<std::uint16_t>(xusbButtons & ~kSatelliteOnlyButtonBits);
+}
+
+// The touchpad click as a pad frame carries it: BTN_TOUCHPAD (0x100000) lives in the high word,
+// so it is a buttonFlags2 bit, on for every frame while the click is held. The click has no
+// packet of its own in the protocol; a click edge is a frame.
+inline constexpr std::uint16_t touchpadClickFlags2(bool clickHeld) {
+    return clickHeld ? static_cast<std::uint16_t>(kBtnTouchpad >> 16)
+                     : static_cast<std::uint16_t>(0);
 }
 
 // Hot path: encode `state` into `out` at fixed offsets, zero heap allocation.

@@ -12,6 +12,7 @@
 #pragma once
 
 #include "Network/MoonlightHost.h"
+#include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightIdentity.h"
 #include "core/moonlight/MoonlightPadSlots.h"
 #include "core/moonlight/MoonlightSessionMachine.h"
@@ -241,10 +242,13 @@ class MoonlightManager : public QObject {
                         std::uint8_t satelliteStatus);
     // The pad's full-state touch frame, in satellite wire units. Diffed into
     // CONTROLLER_TOUCH events here, because the host wants transitions and the
-    // difference between the two shapes is this class's to own.
+    // difference between the two shapes is this class's to own. The click has no
+    // packet of its own: it is BTN_TOUCHPAD in the pad frame, so a click edge
+    // replays the pad's last frame with the bit flipped, ahead of the fingers.
     void forwardTouch(const std::string& slotId, bool finger0Active, std::uint8_t finger0Id,
                       std::int16_t finger0X, std::int16_t finger0Y, bool finger1Active,
-                      std::uint8_t finger1Id, std::int16_t finger1X, std::int16_t finger1Y);
+                      std::uint8_t finger1Id, std::int16_t finger1X, std::int16_t finger1Y,
+                      bool buttonPressed);
 
     // True while at least one slot is bound to a Moonlight host.
     bool hasBoundSlots() const { return anyBound_.load(std::memory_order_relaxed); }
@@ -358,7 +362,20 @@ class MoonlightManager : public QObject {
         // difference between frames. Dies with the route, which is exactly when
         // the host forgets the pad's contacts too.
         moonlight::MoonlightTouchDiffer touchDiffer;
+        // The touchpad click, which rides every pad frame as BTN_TOUCHPAD while
+        // held, and the last frame the pad sent (at rest before it has sent one),
+        // which a click edge replays with the bit flipped.
+        bool clickHeld = false;
+        moonlight::ControllerState lastFrame;
     };
+
+    // routeMtx_ held. The active-pad mask the host holds for the route's host,
+    // or this pad alone before the host's set is known.
+    std::uint16_t activeMaskLocked(const Route& route) const;
+    // routeMtx_ held. The frame a click edge replays, with BTN_TOUCHPAD flipped;
+    // nothing when the click did not change, or when the pad's touches do not
+    // reach the host, where the click does not either.
+    std::optional<moonlight::ControllerState> clickEdgeLocked(Route& route, bool buttonPressed);
 
     // Per host: what the last probe and the last /applist answered, so the
     // session section renders from what we asked rather than from a guess.

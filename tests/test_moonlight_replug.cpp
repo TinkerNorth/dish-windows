@@ -357,7 +357,7 @@ TEST_CASE("A replugged pad's touch starts from nothing", "[moonlight][replug][h5
     REQUIRE(fx.bringLive(*session));
     REQUIRE(fx.announced(1));
     const auto touch = [&fx] {
-        fx.manager->forwardTouch("sdl:1", true, 7, 100, 200, false, 0, 0, 0);
+        fx.manager->forwardTouch("sdl:1", true, 7, 100, 200, false, 0, 0, 0, false);
     };
     touch();
     const auto downs = [&fx] {

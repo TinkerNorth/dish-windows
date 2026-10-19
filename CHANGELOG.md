@@ -89,6 +89,28 @@ share a version number.
   says how the opt-out works; the code's comments no longer call the switch
   "opt-in".
 
+### Fixed
+
+- **A Moonlight pairing typed with the wrong PIN is refused by Dish, with its
+  secret unsent.** Phase 3 now checks that the hash the host sent in phase 2
+  is the one its secret completes, which only a host holding the same PIN can
+  produce; before, the host was the only side checking, one phase later.
+- **Every Moonlight HTTP call has a deadline.** Five seconds over plain HTTP,
+  ten over TLS, two minutes for the pairing phase that waits on the PIN being
+  typed. A host that accepted the connection and never answered used to leave
+  the call waiting for good.
+- **The touchpad click reaches a Moonlight host.** A DualSense's click is a
+  button in the pad frame, not a touch event; Dish now replays the frame with
+  it on each click edge and keeps it on while held. Only the finger positions
+  were forwarded before.
+- **One pad for the three Dish clients.** `[wire-coordinated]` with dish-android
+  and dish-linux: the emulated Xbox and Nintendo pads now carry trigger rumble
+  and a battery; every type's advertised buttons leave out the mic-mute bit the
+  frames already strip; a wired pad reports its battery as not present rather
+  than charging; a session ends with the termination type Wolf's control
+  protocol names (the older one is still read) and keeps alive with the ping
+  captured from a real client.
+
 ## [2.2.1] - 2026-10-05
 
 ### Changed

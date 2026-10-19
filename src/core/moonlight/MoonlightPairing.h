@@ -34,6 +34,7 @@ enum class PairError : std::uint8_t {
     BadResponse,     // a phase response was malformed or the wrong length
     ServerSignature, // the server's pairing signature did not verify
     CryptoFailure,   // an OpenSSL operation failed
+    PinMismatch,     // the host's phase-2 hash did not reproduce: its PIN was not ours
 };
 
 class PairingClient {
@@ -65,8 +66,11 @@ class PairingClient {
     // Phase 3: the AES-ECB-encrypted client hash, hex. Empty on failure.
     std::string serverChallengeRespHex();
 
-    // Consume phase 3's `pairingsecret` and verify the server's signature over
-    // its secret. Returns false (ServerSignature / BadResponse) on any mismatch.
+    // Consume phase 3's `pairingsecret`: verify the server's signature over its
+    // secret, then that the hash phase 2 carried is SHA256(client challenge +
+    // server cert signature + server secret), which only a host holding our PIN
+    // can have produced. Returns false (ServerSignature / PinMismatch /
+    // BadResponse) on any mismatch.
     bool consumePairingSecret(const std::string& pairingSecretHex);
 
     // Phase 4: the client's own secret + RSA signature over it, hex. Empty on
@@ -95,6 +99,7 @@ class PairingClient {
     std::string serverPublicKeyPem_;
     std::vector<std::uint8_t> clientCertSignature_;
 
+    std::vector<std::uint8_t> serverHash_;      // recovered in phase 2, checked in phase 3
     std::vector<std::uint8_t> serverChallenge_; // recovered in phase 2
     std::vector<std::uint8_t> clientHash_;      // computed in phase 3
 

@@ -121,8 +121,8 @@ TEST_CASE("batteryStateFromSatelliteStatus maps every satellite status", "[moonl
     REQUIRE(batteryStateFromSatelliteStatus(1) == kBatteryStateDischarging);
     REQUIRE(batteryStateFromSatelliteStatus(2) == kBatteryStateCharging);
     REQUIRE(batteryStateFromSatelliteStatus(3) == kBatteryStateFull);
-    // Wired is the closest thing the protocol has to charging.
-    REQUIRE(batteryStateFromSatelliteStatus(4) == kBatteryStateCharging);
+    // Wired is a pad with no battery to show, as the satellite itself treats it.
+    REQUIRE(batteryStateFromSatelliteStatus(4) == kBatteryStateNotPresent);
     REQUIRE(batteryStateFromSatelliteStatus(200) == kBatteryStateUnknown);
 }
 
@@ -177,14 +177,16 @@ TEST_CASE("Auto resolves on the client and never sends Unknown", "[moonlight][pa
 
 TEST_CASE("The capability ceiling is the table the reference host builds",
           "[moonlight][padslots]") {
-    // Xbox and Nintendo carry analog triggers and rumble and nothing else.
-    // NINTENDO HAS NO MOTION over Moonlight, unlike the Satellite type of the
-    // same name.
-    REQUIRE(typeCapabilityCeiling(kPadTypeXbox) == 0x03);
-    REQUIRE(typeCapabilityCeiling(kPadTypeNintendo) == 0x03);
+    // Xbox and Nintendo carry what describes the physical pad: analog triggers,
+    // rumble, trigger rumble and a battery, 0x47 as dish-android, dish-linux and
+    // dish-mac draw it. NINTENDO HAS NO MOTION over Moonlight, unlike the
+    // Satellite type of the same name.
+    REQUIRE(typeCapabilityCeiling(kPadTypeXbox) == 0x47);
+    REQUIRE(typeCapabilityCeiling(kPadTypeNintendo) == 0x47);
     REQUIRE((typeCapabilityCeiling(kPadTypeNintendo) & kPadCapGyro) == 0);
     REQUIRE((typeCapabilityCeiling(kPadTypeNintendo) & kPadCapAccel) == 0);
     REQUIRE((typeCapabilityCeiling(kPadTypeNintendo) & kPadCapTouchpad) == 0);
+    REQUIRE((typeCapabilityCeiling(kPadTypeXbox) & kPadCapRgbLed) == 0);
     REQUIRE(typeCapabilityCeiling(kPadTypePlayStation) == 0xFF);
 }
 
@@ -202,8 +204,8 @@ TEST_CASE("CONTROLLER_ARRIVAL declares the type ceiling met by the pad hardware"
             (kPadCapAnalogTriggers | kPadCapRumble | kPadCapTriggerRumble | kPadCapTouchpad |
              kPadCapAccel | kPadCapGyro | kPadCapBattery | kPadCapRgbLed));
 
-    REQUIRE(declaredCapabilities(kPadTypeXbox, true, true, true, true, true) == 0x03);
-    REQUIRE(declaredCapabilities(kPadTypeNintendo, true, true, true, true, true) == 0x03);
+    REQUIRE(declaredCapabilities(kPadTypeXbox, true, true, true, true, true) == 0x47);
+    REQUIRE(declaredCapabilities(kPadTypeNintendo, true, true, true, true, true) == 0x47);
 
     // And it never exceeds the pad either: a pad with no motors declares none.
     REQUIRE(declaredCapabilities(kPadTypePlayStation, false, false, false, false, false) ==
@@ -211,8 +213,8 @@ TEST_CASE("CONTROLLER_ARRIVAL declares the type ceiling met by the pad hardware"
     REQUIRE(declaredCapabilities(kPadTypeXbox, false, false, false, false, false) ==
             kPadCapAnalogTriggers);
 
-    // The pad a live host logged as capabilities [0003]: rumble and nothing else.
-    REQUIRE(declaredCapabilities(kPadTypeXbox, true, false, false, false, false) == 0x0003);
+    // A pad with motors and nothing else: rumble, and the trigger rumble that rides it.
+    REQUIRE(declaredCapabilities(kPadTypeXbox, true, false, false, false, false) == 0x0007);
 }
 
 TEST_CASE("trigger rumble is advertised only alongside real motors", "[moonlight][padslots]") {
@@ -229,28 +231,35 @@ TEST_CASE("trigger rumble is advertised only alongside real motors", "[moonlight
     CHECK(without == kPadCapAnalogTriggers);
 }
 
-TEST_CASE("an Xbox or Nintendo type masks trigger rumble away", "[moonlight][padslots]") {
-    // The reference host materialises trigger motors only for its PlayStation
-    // pad, so declaring them on the other two would be asking for a packet the
-    // emulated device cannot represent.
-    CHECK((declaredCapabilities(kPadTypeXbox, true, true, true, true, true) &
-           kPadCapTriggerRumble) == 0);
-    CHECK((declaredCapabilities(kPadTypeNintendo, true, true, true, true, true) &
-           kPadCapTriggerRumble) == 0);
+TEST_CASE("an Xbox or Nintendo type keeps trigger rumble and the battery, and masks the rest",
+          "[moonlight][padslots]") {
+    // Trigger rumble and a battery describe the physical pad, so every type carries them; the
+    // touchpad, motion and the lamp are the PlayStation pad's alone.
+    for (const std::uint8_t type : {kPadTypeXbox, kPadTypeNintendo}) {
+        const std::uint8_t caps = declaredCapabilities(type, true, true, true, true, true);
+        CHECK((caps & kPadCapTriggerRumble) != 0);
+        CHECK((caps & kPadCapBattery) != 0);
+        CHECK((caps & (kPadCapTouchpad | kPadCapAccel | kPadCapGyro | kPadCapRgbLed)) == 0);
+    }
 }
 
-TEST_CASE("The button word is the low sixteen, plus the touchpad click only when there is one",
+TEST_CASE("The button word is the low sixteen less the mic-mute bit, plus the touchpad click only "
+          "when there is one",
           "[moonlight][padslots]") {
-    // What a live host read back as supportedButtonFlags [0000FFFF].
+    // A host reads it back as supportedButtonFlags [0000F7FF]: the bit the frame mask strips is
+    // not advertised either, so the word says what the frames can carry.
     REQUIRE(declaredButtonFlags(declaredCapabilities(kPadTypeXbox, true, false, false, false,
-                                                     false)) == 0x0000FFFFu);
+                                                     false)) == 0x0000F7FFu);
     REQUIRE(declaredButtonFlags(declaredCapabilities(kPadTypeNintendo, true, true, true, true,
-                                                     true)) == 0x0000FFFFu);
+                                                     true)) == 0x0000F7FFu);
     REQUIRE(declaredButtonFlags(declaredCapabilities(kPadTypePlayStation, true, true, true, true,
-                                                     true)) == (0x0000FFFFu | 0x00100000u));
+                                                     true)) == (0x0000F7FFu | 0x00100000u));
     // A PlayStation type on a pad with no touchpad claims no touchpad click.
     REQUIRE(declaredButtonFlags(declaredCapabilities(kPadTypePlayStation, true, true, false, true,
-                                                     true)) == 0x0000FFFFu);
+                                                     true)) == 0x0000F7FFu);
+    // The bit left out is the one the frame mask strips.
+    REQUIRE((kSupportedButtonsBase & kSatelliteOnlyButtonBits) == 0);
+    REQUIRE((kSupportedButtonsBase | kSatelliteOnlyButtonBits) == 0x0000FFFFu);
 }
 
 TEST_CASE("The arrival packet is byte-exact for every type", "[moonlight][padslots]") {
@@ -264,15 +273,15 @@ TEST_CASE("The arrival packet is byte-exact for every type", "[moonlight][padslo
         std::uint8_t caps;
         std::uint32_t buttons;
     };
-    // The PlayStation ceiling is 0xFF and a pad with everything now declares all
-    // of it: trigger rumble (0x04) rides the rumble bit, because the host's
-    // trigger stream folds onto the body motors rather than being dropped.
-    // The Xbox and Nintendo ceilings still mask it away, which is why those two
-    // stay at 0x03.
+    // The PlayStation ceiling is 0xFF and a pad with everything declares all of
+    // it: trigger rumble (0x04) rides the rumble bit, because the host's trigger
+    // stream folds onto the body motors rather than being dropped. The Xbox and
+    // Nintendo ceilings keep that and the battery and mask the touchpad, motion
+    // and lamp away, which is why those two land at 0x47.
     const Case cases[] = {
-        {dish::models::kMoonlightDeviceXbox, false, 0x01, 0x03, 0x0000FFFFu},
-        {dish::models::kMoonlightDevicePlayStation, true, 0x02, 0xFF, 0x0000FFFFu | 0x00100000u},
-        {dish::models::kMoonlightDeviceNintendo, true, 0x03, 0x03, 0x0000FFFFu},
+        {dish::models::kMoonlightDeviceXbox, false, 0x01, 0x47, 0x0000F7FFu},
+        {dish::models::kMoonlightDevicePlayStation, true, 0x02, 0xFF, 0x0000F7FFu | 0x00100000u},
+        {dish::models::kMoonlightDeviceNintendo, true, 0x03, 0x47, 0x0000F7FFu},
     };
 
     for (const auto& c : cases) {
@@ -316,7 +325,7 @@ TEST_CASE("Auto sends the resolved type own capability set", "[moonlight][padslo
     const std::uint8_t plain =
         arrivalTypeForBinding(dish::models::kMoonlightDeviceAuto, /*sourceHasMotion=*/false);
     REQUIRE(plain == kPadTypeXbox);
-    REQUIRE(declaredCapabilities(plain, true, false, true, false, false) == 0x03);
+    REQUIRE(declaredCapabilities(plain, true, false, true, false, false) == 0x07);
 }
 
 TEST_CASE("a binding's arrival is the type it resolves to and what that type declares",

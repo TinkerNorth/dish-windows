@@ -167,16 +167,17 @@ inline std::uint8_t arrivalTypeFromDevicePick(int devicePick) {
 // NO MOONLIGHT HOST EXPOSES THIS: there is no API that reports it and the data
 // flows the other way, the host picking its emulated device from what the client
 // declares. So it is client-side knowledge, taken from what the reference host
-// builds per type. Only the PlayStation pad carries trigger rumble, a touchpad,
-// motion, a battery and an LED; Xbox and Nintendo carry analog triggers and
-// rumble and nothing else. Nintendo has NO MOTION over Moonlight, unlike the
-// Satellite type of the same name: the two are different type systems that
-// happen to share their nouns.
+// builds per type. Trigger rumble and a battery describe the physical pad, so
+// every type carries them; only the PlayStation pad gets a touchpad, motion and
+// an LED. Nintendo has NO MOTION over Moonlight, unlike the Satellite type of
+// the same name: the two are different type systems that happen to share their
+// nouns. The three Dish clients draw the same ceiling, so a host sees one pad.
 inline std::uint8_t typeCapabilityCeiling(std::uint8_t arrivalType) {
     switch (arrivalType) {
     case kPadTypeXbox:
     case kPadTypeNintendo:
-        return static_cast<std::uint8_t>(kPadCapAnalogTriggers | kPadCapRumble);
+        return static_cast<std::uint8_t>(kPadCapAnalogTriggers | kPadCapRumble |
+                                         kPadCapTriggerRumble | kPadCapBattery);
     default:
         return 0xFF;
     }
@@ -227,9 +228,12 @@ inline AnnouncedPad arrivalForBinding(int devicePick, bool hasRumble, bool hasMo
     return {type, capabilities};
 }
 
-// The whole low sixteen, which every type carries, plus the touchpad click only
-// when a touchpad is in the declared set.
-inline constexpr std::uint32_t kSupportedButtonsBase = 0x0000FFFFu;
+// XUSB's low sixteen less the satellite's mic-mute bit, which is no Moonlight
+// button (kSatelliteOnlyButtonBits), plus the touchpad click only when a touchpad
+// is in the declared set. A frame can never carry the bit the advert leaves out,
+// so the two agree, and a host reads back supportedButtonFlags [0000F7FF].
+inline constexpr std::uint32_t kSupportedButtonsBase =
+    0x0000FFFFu & ~static_cast<std::uint32_t>(kSatelliteOnlyButtonBits);
 inline constexpr std::uint32_t kSupportedButtonTouchpadClick = 0x00100000u;
 
 inline std::uint32_t declaredButtonFlags(std::uint8_t declaredCaps) {

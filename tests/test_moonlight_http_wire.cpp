@@ -3,10 +3,11 @@
 //
 // MoonlightHttpClient's TLS calls against a real listener on loopback: the pin is checked before
 // the request is written, the identity a host demands is presented, a host's answer is read
-// whatever its HTTP status says, and a call waits as long as the host takes. The listener is all a
-// GameStream host's HTTPS port is from here: something that speaks TLS and records what reached it.
-// The session cases read that answer one level up: whether a host is there, and what a session
-// makes of a launch or a pairing phase the host refused under an HTTP error.
+// whatever its HTTP status says, and a call waits as long as its deadline allows, then fails. The
+// listener is all a GameStream host's HTTPS port is from here: something that speaks TLS and
+// records what reached it. The session cases read that answer one level up: whether a host is
+// there, and what a session makes of a launch or a pairing phase the host refused under an HTTP
+// error.
 
 #include "Network/MoonlightHost.h"
 #include "Network/MoonlightHttpClient.h"
@@ -47,6 +48,9 @@ using dish::test::SeenRequest;
 namespace {
 
 const QString kLoopback = QStringLiteral("127.0.0.1");
+
+// Short enough to fail inside a test, long enough for a loopback handshake to have completed first.
+constexpr int kShortDeadlineMs = 300;
 
 // Wolf's two refusals that come under an HTTP error with a reason: a pairing phase out of order,
 // under 400 (fail_pair, src/moonlight-server/rest/endpoints.hpp), and any HTTPS call from a
@@ -151,7 +155,8 @@ struct Answer {
 MoonlightXmlResponse serverInfoFrom(MoonlightHttpClient& http, int port, int timeoutMs = 20000) {
     Answer got;
     http.getHttps(kLoopback, port, QStringLiteral("/serverinfo"),
-                  {{QStringLiteral("uniqueid"), QStringLiteral("0123456789ABCDEF")}}, got.take());
+                  {{QStringLiteral("uniqueid"), QStringLiteral("0123456789ABCDEF")}},
+                  MoonlightHttpClient::kTlsDeadlineMs, got.take());
     REQUIRE(dish::test::spinUntil([&got] { return got.arrived; }, timeoutMs));
     return got.reply;
 }
@@ -197,7 +202,8 @@ TEST_CASE("moonlight http: a verifier withdrawn mid-call still judges the call i
         return true;
     });
     Answer got;
-    client.http.getHttps(kLoopback, host.port(), QStringLiteral("/cancel"), {}, got.take());
+    client.http.getHttps(kLoopback, host.port(), QStringLiteral("/cancel"), {},
+                         MoonlightHttpClient::kTlsDeadlineMs, got.take());
 
     // What forgetting a host does to its session, with a TLS call already out.
     client.http.setPinVerifier(nullptr);
@@ -272,7 +278,8 @@ TEST_CASE("moonlight http: a 401 from the host is trust lost", "[moonlight][http
     CHECK_FALSE(reply.ok());
 }
 
-TEST_CASE("moonlight http: a call waits as long as the host takes", "[moonlight][http][wire]") {
+TEST_CASE("moonlight http: a call waits as long as its deadline allows",
+          "[moonlight][http][wire]") {
     REQUIRE(dish::test::useTestTlsBackend());
     FakeHttpsListener host;
     REQUIRE(host.listening());
@@ -282,9 +289,11 @@ TEST_CASE("moonlight http: a call waits as long as the host takes", "[moonlight]
     host.hold();
     PairedClient client;
     Answer got;
-    client.http.getHttps(kLoopback, host.port(), QStringLiteral("/pair"), {}, got.take());
+    client.http.getHttps(kLoopback, host.port(), QStringLiteral("/pair"), {},
+                         MoonlightHttpClient::kPinEntryDeadlineMs, got.take());
 
-    // Pairing phase 1 waits on a human typing the PIN into the host; nothing here cuts it short.
+    // Pairing phase 1 waits on a human typing the PIN into the host: two minutes, so nothing here
+    // cuts it short.
     REQUIRE(dish::test::spinUntil([&host] { return host.requests().size() == 1; }));
     dish::test::spinUntil([&got] { return got.arrived; }, 1500);
     CHECK_FALSE(got.arrived);
@@ -293,6 +302,28 @@ TEST_CASE("moonlight http: a call waits as long as the host takes", "[moonlight]
     REQUIRE(dish::test::spinUntil([&got] { return got.arrived; }));
     CHECK(got.reply.reachable);
     CHECK(got.reply.ok());
+}
+
+TEST_CASE("moonlight http: a host that takes the request and never answers fails at the deadline",
+          "[moonlight][http][wire]") {
+    // A host that accepted the connection and then says nothing is a failure the caller hears of,
+    // not a callback that never comes.
+    REQUIRE(dish::test::useTestTlsBackend());
+    FakeHttpsListener host;
+    REQUIRE(host.listening());
+    host.respond = [](const SeenRequest&) {
+        return HttpsAnswer{200, R"(<root status_code="200"/>)"};
+    };
+    host.hold();
+    PairedClient client;
+    Answer got;
+    client.http.getHttps(kLoopback, host.port(), QStringLiteral("/serverinfo"), {},
+                         kShortDeadlineMs, got.take());
+
+    REQUIRE(dish::test::spinUntil([&host] { return host.requests().size() == 1; }));
+    REQUIRE(dish::test::spinUntil([&got] { return got.arrived; }));
+    CHECK_FALSE(got.reply.reachable);
+    CHECK_FALSE(got.reply.ok());
 }
 
 TEST_CASE("moonlight http: a probe answered by serverinfo has found the host",
