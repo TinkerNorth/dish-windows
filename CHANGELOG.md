@@ -47,6 +47,15 @@ share a version number.
 
 ### Fixed
 
+- **A stick pushed all the way up now reads as up, not down.** SDL reports a
+  stick's Y axis with down positive and the wire carries up positive, so Dish
+  flips it. At the very top of the stick's travel SDL reports -32768, the one
+  16-bit value with no positive mirror, and the flip wrapped it round to full
+  down: in a game, holding a stick fully forward walked backwards and looking
+  up looked down. Both sticks of every pad on the Standard path were affected,
+  generic pads included, whether streaming to a satellite or a Moonlight host,
+  and an Xbox pad reaches that value every time a stick is pushed fully up.
+  The flip now saturates, so full up reads as full up.
 - **The microphone's sequence no longer restarts on a reopen.** A mute, a
   toggle, a lost and regained route or a device rename closed and reopened the
   capture, and the new capture counted from 0 again; the satellite's reorder

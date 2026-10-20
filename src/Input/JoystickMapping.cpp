@@ -3,6 +3,8 @@
 
 #include "JoystickMapping.h"
 
+#include "core/input/Deadzones.h"
+
 namespace dish::input {
 
 std::int16_t axisAt(const JoystickSnapshot& snap, int index) {
@@ -154,6 +156,16 @@ JoystickRemap withInvert(JoystickRemap base, InvertTarget which, bool on) {
     return base;
 }
 
+GamepadInputProcessor::DeviceState mapGamepad(const GamepadSnapshot& snap) {
+    return {.wButtons = snap.wButtons,
+            .lt = triggerFromAxis(snap.leftTrigger),
+            .rt = triggerFromAxis(snap.rightTrigger),
+            .lx = snap.leftX,
+            .ly = deadzone::invertStickAxis(snap.leftY),
+            .rx = snap.rightX,
+            .ry = deadzone::invertStickAxis(snap.rightY)};
+}
+
 GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
                                                const JoystickRemap& remap) {
     using B = GamepadInputProcessor::Buttons;
@@ -165,7 +177,7 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     st.lx = remap.leftStickX >= 0 ? axisAt(snap, remap.leftStickX) : 0;
     {
         const std::int16_t ly = remap.leftStickY >= 0 ? axisAt(snap, remap.leftStickY) : 0;
-        st.ly = remap.invertLeftY ? static_cast<std::int16_t>(-ly) : ly;
+        st.ly = remap.invertLeftY ? deadzone::invertStickAxis(ly) : ly;
     }
     int rightX = remap.rightStickX;
     int rightY = remap.rightStickY;
@@ -176,7 +188,7 @@ GamepadInputProcessor::DeviceState mapJoystick(const JoystickSnapshot& snap,
     st.rx = rightX >= 0 ? axisAt(snap, rightX) : 0;
     {
         const std::int16_t ry = rightY >= 0 ? axisAt(snap, rightY) : 0;
-        st.ry = remap.invertRightY ? static_cast<std::int16_t>(-ry) : ry;
+        st.ry = remap.invertRightY ? deadzone::invertStickAxis(ry) : ry;
     }
 
     // ── Buttons ─────────────────────────────────────────────────────────────
