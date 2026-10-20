@@ -21,7 +21,7 @@ share a version number.
 
 ---
 
-## [Unreleased]
+## [2.3.0] - 2026-10-20
 
 ### Added
 
@@ -97,9 +97,6 @@ share a version number.
   (`%LOCALAPPDATA%\TinkerNorth\Dish\sentry\`), adds it to the wipe step, and
   says how the opt-out works; the code's comments no longer call the switch
   "opt-in".
-
-### Fixed
-
 - **A Moonlight pairing typed with the wrong PIN is refused by Dish, with its
   secret unsent.** Phase 3 now checks that the hash the host sent in phase 2
   is the one its secret completes, which only a host holding the same PIN can
@@ -793,7 +790,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.2.1...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.3.0...main
+[2.3.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.3.0
 [2.2.1]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.2.1
 [2.2.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.2.0
 [2.1.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.1.0
