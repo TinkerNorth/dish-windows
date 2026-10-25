@@ -21,7 +21,7 @@ share a version number.
 
 ---
 
-## [Unreleased]
+## [2.3.0] - 2026-10-20
 
 ### Added
 
@@ -47,6 +47,15 @@ share a version number.
 
 ### Fixed
 
+- **A stick pushed all the way up now reads as up, not down.** SDL reports a
+  stick's Y axis with down positive and the wire carries up positive, so Dish
+  flips it. At the very top of the stick's travel SDL reports -32768, the one
+  16-bit value with no positive mirror, and the flip wrapped it round to full
+  down: in a game, holding a stick fully forward walked backwards and looking
+  up looked down. Both sticks of every pad on the Standard path were affected,
+  generic pads included, whether streaming to a satellite or a Moonlight host,
+  and an Xbox pad reaches that value every time a stick is pushed fully up.
+  The flip now saturates, so full up reads as full up.
 - **The microphone's sequence no longer restarts on a reopen.** A mute, a
   toggle, a lost and regained route or a device rename closed and reopened the
   capture, and the new capture counted from 0 again; the satellite's reorder
@@ -88,9 +97,6 @@ share a version number.
   (`%LOCALAPPDATA%\TinkerNorth\Dish\sentry\`), adds it to the wipe step, and
   says how the opt-out works; the code's comments no longer call the switch
   "opt-in".
-
-### Fixed
-
 - **A Moonlight pairing typed with the wrong PIN is refused by Dish, with its
   secret unsent.** Phase 3 now checks that the hash the host sent in phase 2
   is the one its secret completes, which only a host holding the same PIN can
@@ -784,7 +790,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.2.1...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.3.0...main
+[2.3.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.3.0
 [2.2.1]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.2.1
 [2.2.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.2.0
 [2.1.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.1.0
