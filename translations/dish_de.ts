@@ -1111,6 +1111,10 @@
         <translation>Direkt-Übernahme belegt — eine andere App oder ein Treiber hält das Gerät.</translation>
     </message>
     <message>
+        <source>Direct read nothing it could use from the controller, so it stays on Standard.</source>
+        <translation>Direkt hat vom Controller nichts Brauchbares gelesen, er bleibt also auf Standard.</translation>
+    </message>
+    <message>
         <source>The device dropped during the claim — a replug is needed.</source>
         <translation>Das Gerät ist während der Übernahme abgefallen — es muss neu angeschlossen werden.</translation>
     </message>
@@ -1187,10 +1191,6 @@
     <message>
         <source>Standard mode isn’t responding — switch to Direct, retry, or replug.</source>
         <translation>Standardmodus reagiert nicht — wechsle zu Direkt, versuche es erneut oder schließe den Controller neu an.</translation>
-    </message>
-    <message>
-        <source>Direct claim couldn’t start the controller’s report stream.</source>
-        <translation>Die Direkt-Übernahme konnte den Report-Stream des Controllers nicht starten.</translation>
     </message>
     <message>
         <source>Mic muted</source>
@@ -1618,10 +1618,6 @@
         <translation>von einer anderen App belegt</translation>
     </message>
     <message>
-        <source>sent no reports</source>
-        <translation>hat keine Reports gesendet</translation>
-    </message>
-    <message>
         <source>dropped during the claim</source>
         <translation>während der Übernahme abgefallen</translation>
     </message>
@@ -1704,6 +1700,10 @@
     <message>
         <source>Input rate</source>
         <translation>Eingaberate</translation>
+    </message>
+    <message>
+        <source>USB ID</source>
+        <translation>USB-ID</translation>
     </message>
     <message>
         <source>Battery</source>
@@ -1862,6 +1862,10 @@
             <numerusform>%1 von %n Ping</numerusform>
             <numerusform>%1 von %n Pings</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>sent nothing Dish could read</source>
+        <translation>hat nichts gesendet, was Dish lesen konnte</translation>
     </message>
     <message>
         <source>Not available</source>
@@ -5093,6 +5097,10 @@
     <message>
         <source>Couldn’t return %1 to Standard mode.</source>
         <translation>Standardmodus für %1 konnte nicht wiederhergestellt werden.</translation>
+    </message>
+    <message>
+        <source>This Steam Deck&apos;s controls</source>
+        <translation>Die Bedienelemente dieses Steam Decks</translation>
     </message>
     <message>
         <source>Controller disconnected — its binding was removed.</source>

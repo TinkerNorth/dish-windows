@@ -87,8 +87,9 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     SlotListModel model;
     const auto names = model.roleNames();
     // One entry per declared role: a role added without a name drifts this count.
-    REQUIRE(names.size() == 41);
+    REQUIRE(names.size() == 42);
     REQUIRE(names.value(SlotListModel::HasRumbleRole) == QByteArray("hasRumble"));
+    REQUIRE(names.value(SlotListModel::UsbIdRole) == QByteArray("usbId"));
     REQUIRE(names.value(SlotListModel::MicArmedRole) == QByteArray("micArmed"));
     REQUIRE(names.value(SlotListModel::MicMutedRole) == QByteArray("micMuted"));
     REQUIRE(names.value(SlotListModel::IdRole) == QByteArray("slotId"));
@@ -494,4 +495,15 @@ TEST_CASE("SlotListModel: setConnectionRows with no slots emits nothing", "[slot
     RowSpy spy(&model);
     model.setConnectionRows({connectedRow()});
     REQUIRE(spy.changes == 0);
+}
+
+TEST_CASE("SlotListModel: usbId names the pad's USB identity, or nothing", "[slotmodel][roles]") {
+    SlotListModel model;
+    m::ControllerSlot sony = plainSlot();
+    sony.vendorId = 0x054C;
+    sony.productId = 0x0CE6;
+    model.setState({sony, plainSlot(QStringLiteral("slot-1"))});
+
+    REQUIRE(roleOf(model, 0, SlotListModel::UsbIdRole).toString() == QStringLiteral("054c:0ce6"));
+    REQUIRE(roleOf(model, 1, SlotListModel::UsbIdRole).toString().isEmpty());
 }

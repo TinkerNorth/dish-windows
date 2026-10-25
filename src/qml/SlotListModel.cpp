@@ -165,6 +165,8 @@ std::optional<QVariant> SlotListModel::capabilityFieldFor(const models::Controll
         return s.capabilities.hasTouchpad;
     case HasRumbleRole:
         return s.capabilities.hasRumble;
+    case UsbIdRole:
+        return tokens::usbIdToken(s.vendorId, s.productId);
     case VerifiedModelRole:
         return s.verifiedModel;
     case MicArmedRole:
@@ -262,6 +264,7 @@ QHash<int, QByteArray> SlotListModel::roleNames() const {
         {HasTouchpadRole, "hasTouchpad"},
         {HasRumbleRole, "hasRumble"},
         {VerifiedModelRole, "verifiedModel"},
+        {UsbIdRole, "usbId"},
         {MicArmedRole, "micArmed"},
         {MicMutedRole, "micMuted"},
     };
