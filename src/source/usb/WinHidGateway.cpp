@@ -255,7 +255,7 @@ struct WinHidGateway::HidPDecode {
     bool hasButtons = false;
     USAGE buttonPage = 0;
     USAGE buttonUsageMin = 0;
-    bool switchOrderButtons = false;
+    input::usbhid::ButtonOrder order = input::usbhid::ButtonOrder::Western;
 
     ~HidPDecode() {
         if (preparsed != nullptr) { HidD_FreePreparsedData(preparsed); }
@@ -350,8 +350,7 @@ struct WinHidGateway::HidPDecode {
             }
         }
 
-        switchOrderButtons = input::usbparse::buttonOrderForDevice(vendorId, productId) ==
-                             input::usbparse::ButtonOrder::Switch;
+        order = input::usbparse::buttonOrderForDevice(vendorId, productId);
         // Same validity rule as parseReportDescriptor: something gamepad-like
         // must exist, else the fixed-offset fallback stays in charge.
         valid = lx.present || ly.present || hasButtons || hasHat;
@@ -371,13 +370,26 @@ struct WinHidGateway::HidPDecode {
         auto* report = reinterpret_cast<PCHAR>(const_cast<std::uint8_t*>(buf));
         const auto rlen = static_cast<ULONG>(len);
 
+        using input::usbhid::axisIsDirection;
+        using input::usbhid::directionBits;
         using input::usbhid::scaleAxis16;
         using input::usbhid::scaleTrig8;
-        if (lx.present) {
+        std::uint16_t b = 0;
+        if (axisIsDirection(lx.scale)) {
+            b = static_cast<std::uint16_t>(
+                b | directionBits(static_cast<std::uint32_t>(readValue(lx, report, rlen)), lx.scale,
+                                  static_cast<std::uint16_t>(input::layout::kXusbDpadLeft),
+                                  static_cast<std::uint16_t>(input::layout::kXusbDpadRight)));
+        } else if (lx.present) {
             s.lx = scaleAxis16(static_cast<std::uint32_t>(readValue(lx, report, rlen)), lx.scale,
                                false);
         }
-        if (ly.present) {
+        if (axisIsDirection(ly.scale)) {
+            b = static_cast<std::uint16_t>(
+                b | directionBits(static_cast<std::uint32_t>(readValue(ly, report, rlen)), ly.scale,
+                                  static_cast<std::uint16_t>(input::layout::kXusbDpadUp),
+                                  static_cast<std::uint16_t>(input::layout::kXusbDpadDown)));
+        } else if (ly.present) {
             s.ly = scaleAxis16(static_cast<std::uint32_t>(readValue(ly, report, rlen)), ly.scale,
                                true);
         }
@@ -396,7 +408,6 @@ struct WinHidGateway::HidPDecode {
             s.rt = scaleTrig8(static_cast<std::uint32_t>(readValue(rt, report, rlen)), rt.scale);
         }
 
-        std::uint16_t b = 0;
         if (hasHat) {
             ULONG raw = 0;
             if (HidP_GetUsageValue(HidP_Input, hatPage, 0, hatUsage, &raw, preparsed, report,
@@ -413,27 +424,27 @@ struct WinHidGateway::HidPDecode {
             auto count = static_cast<ULONG>(usages.size());
             if (HidP_GetUsages(HidP_Input, buttonPage, 0, usages.data(), &count, preparsed, report,
                                rlen) == HIDP_STATUS_SUCCESS) {
-                bool zl = false;
-                bool zr = false;
+                const input::usbhid::ButtonOrderMap& map = input::usbhid::buttonOrderMap(order);
+                bool leftTrigger = false;
+                bool rightTrigger = false;
                 for (ULONG i = 0; i < count; i++) {
                     if (usages[i] < buttonUsageMin) { continue; }
-                    const auto idx = static_cast<std::uint8_t>(usages[i] - buttonUsageMin);
-                    if (switchOrderButtons) {
-                        if (idx == 6) {
-                            zl = true;
-                        } else if (idx == 7) {
-                            zr = true;
-                        } else {
-                            b = static_cast<std::uint16_t>(
-                                b | input::usbhid::switchOrderButtonBit(idx));
-                        }
+                    const auto index = static_cast<USAGE>(usages[i] - buttonUsageMin);
+                    if (index >= input::usbhid::kMaxButtons) { continue; }
+                    const auto idx = static_cast<std::uint8_t>(index);
+                    if (idx == map.leftTriggerIndex) {
+                        leftTrigger = true;
+                    } else if (idx == map.rightTriggerIndex) {
+                        rightTrigger = true;
                     } else {
-                        b = static_cast<std::uint16_t>(b | input::usbhid::layoutButtonBit(idx));
+                        b = static_cast<std::uint16_t>(b | map.bits[idx]);
                     }
                 }
-                if (switchOrderButtons) {
-                    s.lt = zl ? 255 : 0;
-                    s.rt = zr ? 255 : 0;
+                // A digital trigger is the whole truth about that trigger: an analog usage
+                // beside it only echoes the same button.
+                if (map.leftTriggerIndex != input::usbhid::kNoDigitalTrigger) {
+                    s.lt = leftTrigger ? 255 : 0;
+                    s.rt = rightTrigger ? 255 : 0;
                 }
             }
         }
@@ -760,11 +771,13 @@ void WinHidGateway::readLoop(Claimed* c) {
         // than published as noise.
         input::usbparse::ParsedReport parsed{};
         if (!decodeOneReport(c, data, len, parsed)) { continue; }
+        c->decoded.fetch_add(1);
         if (c->onReport) {
             c->onReport(toUsbReport(parsed, c->micMute.muted.load(std::memory_order_relaxed)));
         }
     }
     if (ov.hEvent != nullptr) { CloseHandle(ov.hEvent); }
+    c->alive.store(false);
 }
 
 void WinHidGateway::releaseClaim(int syntheticId) {
@@ -792,11 +805,25 @@ void WinHidGateway::releaseClaim(int syntheticId) {
     }
 }
 
+bool WinHidGateway::isClaimAlive(int syntheticId) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    if (it == claimed_.end()) { return false; }
+    return it->second->alive.load();
+}
+
 std::int64_t WinHidGateway::completionCount(int syntheticId) const {
     std::lock_guard<std::mutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return 0; }
     return it->second->completions.load();
+}
+
+std::int64_t WinHidGateway::decodedCount(int syntheticId) const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    if (it == claimed_.end()) { return 0; }
+    return it->second->decoded.load();
 }
 
 bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {

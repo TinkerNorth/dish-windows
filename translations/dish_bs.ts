@@ -1119,6 +1119,10 @@
         <translation>Brzi način ne može preuzeti uređaj — druga aplikacija ili drajver ga drži.</translation>
     </message>
     <message>
+        <source>Direct read nothing it could use from the controller, so it stays on Standard.</source>
+        <translation>Brzi način nije pročitao ništa upotrebljivo s kontrolera, pa ostaje na Standardnom.</translation>
+    </message>
+    <message>
         <source>The device dropped during the claim — a replug is needed.</source>
         <translation>Uređaj je nestao tokom preuzimanja — potrebno ga je ponovo priključiti.</translation>
     </message>
@@ -1197,10 +1201,6 @@
     <message>
         <source>Standard mode isn’t responding — switch to Direct, retry, or replug.</source>
         <translation>Standardni način ne reagira — prebacite na Brzi, pokušajte ponovo ili ponovo priključite.</translation>
-    </message>
-    <message>
-        <source>Direct claim couldn’t start the controller’s report stream.</source>
-        <translation>Brzi način nije mogao pokrenuti tok izvještaja kontrolera.</translation>
     </message>
     <message>
         <source>Mic muted</source>
@@ -1628,10 +1628,6 @@
         <translation>zauzeto drugom aplikacijom</translation>
     </message>
     <message>
-        <source>sent no reports</source>
-        <translation>nije poslao izvještaje</translation>
-    </message>
-    <message>
         <source>dropped during the claim</source>
         <translation>nestao tokom preuzimanja</translation>
     </message>
@@ -1714,6 +1710,10 @@
     <message>
         <source>Input rate</source>
         <translation>Učestalost unosa</translation>
+    </message>
+    <message>
+        <source>USB ID</source>
+        <translation>USB ID</translation>
     </message>
     <message>
         <source>Battery</source>
@@ -1874,6 +1874,10 @@
             <numerusform>%1 od %n pinga</numerusform>
             <numerusform>%1 od %n pingova</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>sent nothing Dish could read</source>
+        <translation>nije poslao ništa što Dish može pročitati</translation>
     </message>
     <message>
         <source>Not available</source>
@@ -5115,6 +5119,10 @@
     <message>
         <source>Couldn’t return %1 to Standard mode.</source>
         <translation>Nije moguće vratiti %1 na Standardni način.</translation>
+    </message>
+    <message>
+        <source>This Steam Deck&apos;s controls</source>
+        <translation>Kontrole ovog Steam Decka</translation>
     </message>
     <message>
         <source>Controller disconnected — its binding was removed.</source>
