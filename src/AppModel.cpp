@@ -12,6 +12,7 @@
 #include "core/input/UsbReportParsers.h"
 #include "core/reducer/CatalogFeatureGate.h"
 #include "core/reducer/CatalogPrewarm.h"
+#include "core/reducer/HostBuiltInPad.h"
 #include "core/reducer/PickerVisibility.h"
 #include "core/reducer/RumbleRouting.h"
 #include "core/reducer/SlotPathFields.h"
@@ -847,7 +848,10 @@ void AppModel::appendSdlSlots(const QList<input::SDLGamepadBridge::Device>& sdlD
         if (hidden.count(d.id.toStdString()) != 0) { continue; }
         models::ControllerSlot s;
         s.id = d.id;
-        s.name = d.name;
+        s.vendorId = d.vendorId;
+        s.productId = d.productId;
+        s.hostBuiltIn = reducer::isHostBuiltInPad(d.vendorId, d.productId);
+        s.name = s.hostBuiltIn ? tr("This Steam Deck's controls") : d.name;
         s.padIdentity = d.identity;
         s.capabilities.hasMotion = d.motionCapable;
         s.capabilities.hasLightbar = d.hasLightbar;
@@ -879,6 +883,8 @@ void AppModel::appendDirectSlots(const std::map<int, reducer::UsbController>& co
         models::ControllerSlot s;
         s.id = QString::fromStdString(std::to_string(key));
         s.name = QString::fromStdString(c.name);
+        s.vendorId = c.vendorId;
+        s.productId = c.productId;
         const auto parser = input::usbparse::parserForDevice(c.vendorId, c.productId);
         s.capabilities.hasMotion = input::usbparse::parserHasImu(parser);
         s.capabilities.hasLightbar = false;
@@ -921,6 +927,8 @@ void AppModel::appendAwaitingClaimSlots(const std::map<int, reducer::UsbControll
         models::ControllerSlot s;
         s.id = QString::fromStdString(std::to_string(key));
         s.name = QString::fromStdString(c.name);
+        s.vendorId = c.vendorId;
+        s.productId = c.productId;
         const auto parser = input::usbparse::parserForDevice(c.vendorId, c.productId);
         s.capabilities.hasMotion = input::usbparse::parserHasImu(parser);
         s.capabilities.hasTouchpad = input::usbparse::parserHasTouchpad(parser);
