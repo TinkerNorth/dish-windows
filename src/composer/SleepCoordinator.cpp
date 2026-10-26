@@ -6,6 +6,7 @@
 #include "composer/ConnectionCoordinator.h"
 #include "source/system/SleepMonitor.h"
 
+#include <QByteArrayView>
 #include <QLoggingCategory>
 
 #include <utility>
@@ -63,10 +64,7 @@ void SleepCoordinator::onPreparingForSleep(bool starting) {
 
 void SleepCoordinator::onLidPositionChanged(reducer::LidPosition position) {
     lid_ = reducer::reduceLidChange(lid_, position).next;
-    const auto name = reducer::lidPositionName(position);
-    qCInfo(lcDishSleep).noquote() << "lid"
-                                  << QString::fromLatin1(name.data(),
-                                                         static_cast<qsizetype>(name.size()));
+    qCInfo(lcDishSleep).noquote() << "lid" << QByteArrayView(reducer::lidPositionName(position));
 }
 
 void SleepCoordinator::announce(reducer::LidNotice notice) {
