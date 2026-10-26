@@ -60,6 +60,10 @@
         <translation>Configurer le maintien en éveil</translation>
     </message>
     <message>
+        <source>Streaming paused while the lid was closed</source>
+        <translation>Diffusion en pause pendant que le capot était fermé</translation>
+    </message>
+    <message>
         <source>Dish %1 is ready · restart when convenient.</source>
         <translation>Dish %1 est prêt · redémarrez quand cela vous arrange.</translation>
     </message>
@@ -3567,12 +3571,12 @@
         <translation>Le code change si l&apos;écran de Satellite a été actualisé.</translation>
     </message>
     <message>
-        <source>Enter the 6-digit PIN shown on the Satellite’s screen.</source>
-        <translation>Saisissez le PIN à 6 chiffres affiché sur l&apos;écran de Satellite.</translation>
+        <source>Enter the 4-digit PIN shown on the Satellite’s screen.</source>
+        <translation>Saisissez le PIN à 4 chiffres affiché sur l&apos;écran de Satellite.</translation>
     </message>
     <message>
-        <source>Pairing PIN, 6 digits</source>
-        <translation>PIN d&apos;appairage, 6 chiffres</translation>
+        <source>Pairing PIN, 4 digits</source>
+        <translation>PIN d&apos;appairage, 4 chiffres</translation>
     </message>
     <message>
         <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
@@ -3800,6 +3804,10 @@
     <message>
         <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
         <translation>Transmettre une manette nécessite la machine, pas l&apos;écran, donc ceci est désactivé sauf si vous regardez un jeu sur cet écran.</translation>
+    </message>
+    <message>
+        <source>Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.</source>
+        <translation>Fermer le capot met toujours l&apos;ordinateur en veille, comme le prévoit le mode de gestion de l&apos;alimentation de Windows. Le maintien éveillé n&apos;empêche que la mise en veille pour inactivité, et Windows l&apos;annule quand le capot se ferme. Pour continuer la diffusion capot fermé, modifiez « Lorsque je ferme le capot » dans « Choisir l&apos;action qui suit la fermeture du capot » de Windows.</translation>
     </message>
     <message>
         <source>Updates</source>

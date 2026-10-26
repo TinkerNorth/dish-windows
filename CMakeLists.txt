@@ -436,6 +436,7 @@ set(DISH_CORE_SOURCES
     # suspend/resume edge (the port of dish-linux's tray and sleep handling).
     src/core/reducer/BackgroundMode.h
     src/core/reducer/SleepCycle.h
+    src/core/reducer/LidSleep.h
     src/core/reducer/TrayPresentation.h
     src/source/store/BackgroundPreferenceStore.h
     src/source/notification/DesktopNotifier.h

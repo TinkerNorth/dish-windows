@@ -112,7 +112,9 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
       sleepMonitor_(std::make_unique<source::WindowsPowerSleepMonitor>()),
       backgroundCoordinator_(new composer::BackgroundCoordinator(&backgroundStore_, tray_.get(),
                                                                  notifier_.get(), this)),
-      sleepCoordinator_(new composer::SleepCoordinator(sleepMonitor_.get(), connections_, this)),
+      sleepCoordinator_(new composer::SleepCoordinator(
+          sleepMonitor_.get(), connections_, [this] { return streamingSlotCount_.value() > 0; },
+          this)),
       trayComposer_(backgroundCoordinator_->windowVisible(), streamingSlotCount_),
       trayController_(trayComposer_.state(), tray_.get()), updateCoordinator_(&updatePrefs_, this),
       catalogHttp_(new net::HTTPClient(this)), catalogRepo_(catalogHttp_),

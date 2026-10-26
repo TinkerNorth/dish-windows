@@ -140,6 +140,7 @@ set(DISH_TEST_SOURCES
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
     test_sleep_cycle.cpp
+    test_lid_sleep.cpp
     test_sleep_coordinator.cpp
     test_windows_power_sleep_monitor.cpp
     test_tray_presentation.cpp

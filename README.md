@@ -42,7 +42,8 @@ landed versus what is a tested-but-unwired specification.
 - Per-device deadzones, button remapping, and a guided setup wizard
 - Keeps the computer awake while a slot is streaming — never, only while a
   controller is actually being used, or for as long as the link is up — with an
-  optional idle timeout and an opt-in for the display too
+  optional idle timeout and an opt-in for the display too (closing the lid
+  still sleeps; see [Power and the lid](#power-and-the-lid))
 - Light and dark themes, six UI languages
 - A single-file installer, and in-place auto-update that verifies every
   download against the release manifest's SHA-256 before it runs
@@ -98,6 +99,32 @@ notification. What the check sends is spelled out in
 [`docs/INSTALLER.md`](docs/INSTALLER.md) documents the Inno Setup script, the
 silent command line for scripted installs, the staging layout, and the apply
 handoff.
+
+### Power and the lid
+
+Settings, Power decides when Dish keeps the computer awake: never, while a
+controller is being used, or for as long as a controller is streaming. The hold
+is `SetThreadExecutionState(ES_SYSTEM_REQUIRED)`, plus `ES_DISPLAY_REQUIRED`
+when the display is kept awake too. It stops **idle** sleep and nothing else.
+
+Closing the lid still puts the computer to sleep, according to the Windows
+power plan. Microsoft's
+[`PowerSetRequest`](https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-powersetrequest)
+remarks say power requests are cleared when the user starts sleep directly,
+closing the lid included, and no application can hold the machine up against
+that. To keep streaming with the lid closed, open Windows' *Choose what closing
+the lid does* (Control Panel, Power Options) and set *When I close the lid* to
+*Do nothing*.
+
+Away mode (`ES_AWAYMODE_REQUIRED`), the one documented exception, is not used.
+It only exists on traditional S3 sleep systems and does nothing on Modern
+Standby laptops, which is most current ones, and while it is held the process
+can surface as "Media playing" in Task Scheduler.
+
+Dish listens for the lid (`GUID_LIDSWITCH_STATE_CHANGE`) and logs each change
+under `dish.sleep`. When a sleep that began with the lid closed paused a
+stream, the window shows one notice after the resume, "Streaming paused while
+the lid was closed", and the satellites reconnect as after any sleep.
 
 ## Build from source
 

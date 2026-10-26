@@ -595,6 +595,16 @@ Item {
         function onErrorMessage(message) { toastHost.show(message); }
     }
 
+    // Windows clears the keep-awake hold when the lid starts sleep, so the one
+    // thing left to do is say so once after the resume (edge-detected in C++).
+    // A warning, because the stream did stop.
+    Connections {
+        target: App
+        function onPausedWhileLidClosed() {
+            toastHost.show(qsTr("Streaming paused while the lid was closed"), "warning");
+        }
+    }
+
     // The updater's only interruption. Edge-detected in C++ (once per version
     // per session) and success/warning only: a periodic check that failed is a
     // Settings matter, never a toast.

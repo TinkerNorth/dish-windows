@@ -60,6 +60,10 @@
         <translation>Configurar a opção de manter ativo</translation>
     </message>
     <message>
+        <source>Streaming paused while the lid was closed</source>
+        <translation>Transmissão pausada enquanto a tampa estava fechada</translation>
+    </message>
+    <message>
         <source>Dish %1 is ready · restart when convenient.</source>
         <translation>Dish %1 está pronto · reinicie quando for conveniente.</translation>
     </message>
@@ -3567,12 +3571,12 @@
         <translation>O código muda se a tela do Satellite foi atualizada.</translation>
     </message>
     <message>
-        <source>Enter the 6-digit PIN shown on the Satellite’s screen.</source>
-        <translation>Digite o PIN de 6 dígitos exibido na tela do Satellite.</translation>
+        <source>Enter the 4-digit PIN shown on the Satellite’s screen.</source>
+        <translation>Digite o PIN de 4 dígitos exibido na tela do Satellite.</translation>
     </message>
     <message>
-        <source>Pairing PIN, 6 digits</source>
-        <translation>PIN de pareamento, 6 dígitos</translation>
+        <source>Pairing PIN, 4 digits</source>
+        <translation>PIN de pareamento, 4 dígitos</translation>
     </message>
     <message>
         <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
@@ -3800,6 +3804,10 @@
     <message>
         <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
         <translation>Encaminhar um controle precisa da máquina, não da tela, então isto fica desligado a menos que você esteja assistindo a um jogo neste monitor.</translation>
+    </message>
+    <message>
+        <source>Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.</source>
+        <translation>Fechar a tampa ainda coloca o computador em suspensão, como define o plano de energia do Windows. Manter ativo só impede a suspensão por inatividade, e o Windows desfaz isso quando a tampa é fechada. Para continuar transmitindo com a tampa fechada, altere “Ao fechar a tampa” em “Escolher a função do fechamento da tampa” do Windows.</translation>
     </message>
     <message>
         <source>Updates</source>

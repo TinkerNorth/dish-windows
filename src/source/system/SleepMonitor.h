@@ -13,8 +13,16 @@
 // the same resume here, and the reducer (core/reducer/SleepCycle.h) makes the
 // repeat inert. There is no delay lock to hold, unlike logind: the message is
 // delivered synchronously and the sessions are closed inside the handler.
+//
+// The lid rides the same message as PBT_POWERSETTINGCHANGE, but only to a
+// window that registered for GUID_LIDSWITCH_STATE_CHANGE, so the monitor owns
+// a message-only window for that registration; Windows sends the current
+// position as soon as it is made. Knowing the lid changes nothing about the
+// sleep itself: a lid close clears every power request Dish holds.
 
 #pragma once
+
+#include "core/reducer/LidSleep.h"
 
 #include <QAbstractNativeEventFilter>
 #include <QByteArray>
@@ -35,6 +43,7 @@ class SleepMonitor : public QObject {
 
   signals:
     void preparingForSleep(bool starting);
+    void lidPositionChanged(dish::reducer::LidPosition position);
 };
 
 class WindowsPowerSleepMonitor final : public SleepMonitor, public QAbstractNativeEventFilter {
@@ -43,12 +52,17 @@ class WindowsPowerSleepMonitor final : public SleepMonitor, public QAbstractNati
     explicit WindowsPowerSleepMonitor(QObject* parent = nullptr);
     ~WindowsPowerSleepMonitor() override;
 
-    // Installs / removes the filter on the application. Idempotent.
+    // Installs / removes the filter on the application and the lid
+    // registration. Idempotent.
     void start() override;
     void stop() override;
 
     // Never consumes the message: every window still sees its own broadcast.
     bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) override;
+
+    // Both doors land here: the filter (broadcasts to Qt's own windows) and
+    // the lid window. `data` is the message's lParam.
+    void onPowerBroadcast(quintptr powerEvent, qintptr data);
 
     // The edge a WM_POWERBROADCAST wParam means: true for PBT_APMSUSPEND, false
     // for the two resume events, nothing for everything else (battery and
@@ -56,10 +70,22 @@ class WindowsPowerSleepMonitor final : public SleepMonitor, public QAbstractNati
     // pinned without a window.
     static std::optional<bool> edgeFor(unsigned long long powerEvent);
 
+    // The lid position a PBT_POWERSETTINGCHANGE's POWERBROADCAST_SETTING
+    // carries, or nothing when the setting is another one or malformed.
+    static std::optional<reducer::LidPosition> lidPositionFor(const void* powerSetting);
+
     bool isStarted() const { return started_; }
+    bool isWatchingTheLid() const { return lidNotification_ != nullptr; }
 
   private:
+    void watchTheLid();
+    void stopWatchingTheLid();
+
     bool started_ = false;
+    // An HWND and an HPOWERNOTIFY, kept opaque so this header stays free of
+    // <windows.h>.
+    void* lidWindow_ = nullptr;
+    void* lidNotification_ = nullptr;
 };
 
 } // namespace dish::source

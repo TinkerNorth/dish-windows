@@ -445,6 +445,8 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
         true);
     updatePrefsSub_ = model_->updatePreferenceStore()->state().subscribe(
         [this](const source::UpdatePreferences&) { emit updatePrefsChanged(); }, false);
+    QObject::connect(model_->sleepCoordinator(), &composer::SleepCoordinator::pausedWhileLidClosed,
+                     this, &AppViewModel::pausedWhileLidClosed);
     QObject::connect(model_->updates(), &update::UpdateCoordinator::notice, this,
                      [this](reducer::UpdateNotice notice, const QString& version) {
                          emit updateNotice(updateNoticeToken(notice), version);

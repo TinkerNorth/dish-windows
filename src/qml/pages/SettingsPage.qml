@@ -318,6 +318,16 @@ Kit.Page {
                         onToggled: (checked) => App.setKeepDisplayAwake(checked)
                     }
                 }
+
+                // Microsoft's PowerSetRequest remarks: a request is cleared when
+                // the user starts sleep directly, closing the lid included.
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.")
+                    color: Theme.muted
+                    font.pixelSize: Tokens.textMeta
+                    wrapMode: Text.WordWrap
+                }
             }
 
             ColumnLayout {

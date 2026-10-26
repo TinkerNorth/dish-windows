@@ -44,6 +44,13 @@ inline ReversePairingAction nextReversePairingAction(ApprovalVerdict approval,
                                      : ReversePairingAction::KeepPolling;
 }
 
+// ── The satellite's PIN ──────────────────────────────────────────────────────
+// The forward path: the PIN the satellite shows on the PC and the user types
+// here. The satellite mints exactly 4 digits (satellite src/net/pin_rotation.cpp),
+// so a sheet that waits for more can never submit.
+
+inline constexpr int kSatellitePinDigits = 4;
+
 // ── 4-digit PIN shape ────────────────────────────────────────────────────────
 // The value is random, but the contract fixes the shape at exactly 4 zero-padded
 // decimal digits. Formatter and validator live here so a test can pin the shape

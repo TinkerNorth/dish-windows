@@ -60,6 +60,10 @@
         <translation>Configure keep-awake</translation>
     </message>
     <message>
+        <source>Streaming paused while the lid was closed</source>
+        <translation>Streaming paused while the lid was closed</translation>
+    </message>
+    <message>
         <source>Dish %1 is ready · restart when convenient.</source>
         <translation>Dish %1 is ready · restart when convenient.</translation>
     </message>
@@ -3535,12 +3539,12 @@
         <translation>Pair</translation>
     </message>
     <message>
-        <source>Enter the 6-digit PIN shown on the Satellite’s screen.</source>
-        <translation>Enter the 6-digit PIN shown on the Satellite’s screen.</translation>
+        <source>Enter the 4-digit PIN shown on the Satellite’s screen.</source>
+        <translation>Enter the 4-digit PIN shown on the Satellite’s screen.</translation>
     </message>
     <message>
-        <source>Pairing PIN, 6 digits</source>
-        <translation>Pairing PIN, 6 digits</translation>
+        <source>Pairing PIN, 4 digits</source>
+        <translation>Pairing PIN, 4 digits</translation>
     </message>
     <message>
         <source>or</source>
@@ -3708,6 +3712,10 @@
     <message>
         <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
         <translation>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</translation>
+    </message>
+    <message>
+        <source>Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.</source>
+        <translation>Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.</translation>
     </message>
     <message>
         <source>Diagnostics</source>
