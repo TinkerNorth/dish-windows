@@ -136,3 +136,16 @@ TEST_CASE("isValidReversePin rejects the wrong length or non-digits", "[reverse]
     REQUIRE_FALSE(reducer::isValidReversePin("12 4"));
     REQUIRE_FALSE(reducer::isValidReversePin("-123"));
 }
+
+TEST_CASE("the satellite's PIN is four digits, the length the pairing sheet waits for",
+          "[reverse][pin]") {
+    // satellite src/net/pin_rotation.cpp mints randomDigits(4) on reset and on
+    // every rotation; a six-cell sheet could never submit it.
+    STATIC_REQUIRE(reducer::kSatellitePinDigits == 4);
+}
+
+TEST_CASE("both PINs the sheet shows have the satellite's length", "[reverse][pin]") {
+    const std::string reversePin = reducer::formatReversePin(4321);
+    REQUIRE(reversePin.size() == static_cast<std::size_t>(reducer::kSatellitePinDigits));
+    STATIC_REQUIRE(reducer::kReversePinDigits == reducer::kSatellitePinDigits);
+}

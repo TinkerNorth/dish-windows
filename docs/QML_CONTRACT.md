@@ -105,6 +105,7 @@ moc strips it.
 | `pairingActive` | `bool` | `stateChanged` | The model parked a pairing target. Open the pairing sheet on the rising edge, and call `clearPairingTarget()` before showing it. |
 | `pairingServerName` | `string` | `stateChanged` | Display name of the parked target; empty when `!pairingActive`. |
 | `pairingServerId` | `string` | `stateChanged` | Stable id of the parked target. Capture it, with the name, **before** `clearPairingTarget()`; the sheet needs it for both pairing paths. |
+| `satellitePinDigits` | `int` | CONSTANT | How many digits the satellite's own PIN has (4, `reducer::kSatellitePinDigits`). The sheet's cells, its paste filter and its submit gate read it. |
 | `reversePairingPhase` | `string` | `reversePairingChanged` | `"idle"` / `"awaiting"` / `"approved"` / `"declined"` / `"timedout"`. |
 | `reversePairingPin` | `string` | `reversePairingChanged` | The 4-digit PIN to show while `awaiting`. Stays set on the terminal phases so the sheet can keep showing it; cleared on the next `requestReversePairing` or `cancelReversePairing`. |
 | `reversePairingServerName` | `string` | `reversePairingChanged` | Name, or ip when unnamed, of the server being reverse-paired. Empty when `idle`. |
@@ -202,6 +203,7 @@ Republished at the inspector's 33 ms poll while an inspection is armed (see
 | `railCollapsedChanged` | | `railCollapsed` flipped. |
 | `lightbarChanged` | | `lightbarFollowGame` flipped. |
 | `keepAwakePrefsChanged` | | Any of the three keep-awake preferences moved. One signal for the group, like the update pair. |
+| `pausedWhileLidClosed` | | One-shot, after a resume: the sleep began (or went on) with the lid closed while a slot was streaming. The shell raises one **warning** toast. Windows clears the keep-awake hold when the lid starts sleep, so this is the truth, not a failure. |
 | `deadzonesChanged` | | Deadzone device rows or their values moved. Re-pull `deadzoneDevices()`. |
 | `bluetoothChanged` | | The radio presence/enabled pair moved. |
 | `pairingSucceeded` | | One-shot: a connection reached `Connected` after a pair. The pairing sheet may close on it. Best effort. |
@@ -255,7 +257,7 @@ because the slot-keyed reads vend nothing before a binding exists.
 | `reconnectConnection(connectionId)` | `string` | Reconnect a **remembered** satellite without a rescan and without re-pairing; the key persists. If the id is in the current scan it connects the fresh endpoint, otherwise it kicks a discovery relearn and tries the last-known endpoint now. Gate on the row **not** being `liveLink`. |
 | `disconnectConnection(connectionId)` | `string` | Graceful disconnect of a live session **without** forgetting: the row and the pairing key survive. Gate on the row's `liveLink`. |
 | `forgetConnection(connectionId)` | `string` | Forget a remembered connection: unbinds its slots and drops the key, the PIN and the row. |
-| `pairByServerId(serverId, pin)` | `string, string` | Submit a 6-digit PIN for the discovered server with that stable id. Watch `pairingFailed` and `errorMessage` for failure, `isPairingInFlight` for the spinner. |
+| `pairByServerId(serverId, pin)` | `string, string` | Submit the satellite's 4-digit PIN for the discovered server with that stable id. Watch `pairingFailed` and `errorMessage` for failure, `isPairingInFlight` for the spinner. |
 | `isPairingInFlight(serverId)` | `string` → `bool` | A pair request is in flight for that server id. |
 | `clearPairingTarget()` | | Drop the one-shot pairing trigger. Call before opening the pairing sheet to avoid re-entry. |
 | `requestReversePairing(serverId)` | `string` | Start host-initiated pairing: the dish shows a 4-digit PIN and the operator approves on the satellite. A second call cancels the first. |
@@ -268,7 +270,7 @@ simultaneously, and no tap gates either one.
 
 On open it calls `cancelReversePairing()` (a stale phase from an earlier sheet
 must not leak in) and then `requestReversePairing(server.id)` immediately, so
-the operator is notified the moment the sheet opens. The 6-digit field stays
+the operator is notified the moment the sheet opens. The 4-digit field stays
 typeable throughout as the live fallback, submitting through `pairByServerId`.
 Show the reverse block only while `reversePairingPhase !== "idle"`: an
 unresolvable id leaves the phase idle and the sheet degrades to forward-only,

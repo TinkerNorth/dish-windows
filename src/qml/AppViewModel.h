@@ -14,6 +14,7 @@
 #include "core/reducer/ApplyBindingMachine.h"
 #include "core/input/StickHealth.h"
 #include "core/reducer/DiagnosticsLog.h"
+#include "core/reducer/ReversePairing.h"
 #include "core/reducer/UpdateMachine.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
@@ -63,6 +64,9 @@ class AppViewModel : public QObject {
     // The parked target's stable id, so the sheet can drive both pairing paths
     // for a satellite that demanded pairing mid-connect, not only clicked rows.
     Q_PROPERTY(QString pairingServerId READ pairingServerId NOTIFY stateChanged)
+    // How many digits the satellite's own PIN has, so the sheet's cells and
+    // its submit gate cannot disagree with what the satellite mints.
+    Q_PROPERTY(int satellitePinDigits READ satellitePinDigits CONSTANT)
 
     // ── Collections the pages iterate ────────────────────────────────────────
     // Owned children with pointers stable for the app lifetime, so QML binds
@@ -240,6 +244,7 @@ class AppViewModel : public QObject {
     // knows it.
     Q_INVOKABLE void setWindowVisible(bool visible);
     QString appVersion() const;
+    int satellitePinDigits() const { return reducer::kSatellitePinDigits; }
     bool onboardingNeeded() const;
     QString reversePairingPhase() const;
     QString reversePairingPin() const;
@@ -688,6 +693,10 @@ class AppViewModel : public QObject {
     // in the coordinator, so it fires once per version per session. Periodic
     // check FAILURES never reach here: they live in Settings.
     void updateNotice(const QString& token, const QString& version);
+
+    // Once per resume after a lid-closed sleep paused a stream
+    // (composer/SleepCoordinator). The toast is the shell's.
+    void pausedWhileLidClosed();
 
     void diagnosticsLogChanged();
     void inputSnapshotChanged();

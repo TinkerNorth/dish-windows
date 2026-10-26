@@ -137,6 +137,8 @@ class AppModel : public QObject {
     // The close policy, the tray's two commands and the window-visible fact the
     // tray item is derived from.
     composer::BackgroundCoordinator* background() { return backgroundCoordinator_; }
+    // The suspend edge and the lid; the view model forwards its one notice.
+    composer::SleepCoordinator* sleepCoordinator() { return sleepCoordinator_; }
 
     // The auto-updater. The store is the reactive preference slice the Settings
     // page binds to; the coordinator owns the state machine, the timers and the

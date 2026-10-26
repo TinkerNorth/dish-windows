@@ -167,7 +167,7 @@ Kit.ContentDialog {
     body: [
         Kit.KitTextField {
             id: pinField
-            placeholderText: qsTr("6-digit PIN")
+            placeholderText: qsTr("4-digit PIN")
             maximumLength: 6
             inputMethodHints: Qt.ImhDigitsOnly
         }

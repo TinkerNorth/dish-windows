@@ -60,6 +60,10 @@
         <translation>Wachhalten konfigurieren</translation>
     </message>
     <message>
+        <source>Streaming paused while the lid was closed</source>
+        <translation>Streaming pausiert, während der Deckel geschlossen war</translation>
+    </message>
+    <message>
         <source>Dish %1 is ready · restart when convenient.</source>
         <translation>Dish %1 ist bereit · starte neu, wenn es dir passt.</translation>
     </message>
@@ -3567,12 +3571,12 @@
         <translation>Der Code ändert sich, wenn der Bildschirm des Satelliten aktualisiert wurde.</translation>
     </message>
     <message>
-        <source>Enter the 6-digit PIN shown on the Satellite’s screen.</source>
-        <translation>Gib den 6-stelligen PIN ein, der auf dem Bildschirm des Satelliten angezeigt wird.</translation>
+        <source>Enter the 4-digit PIN shown on the Satellite’s screen.</source>
+        <translation>Gib den 4-stelligen PIN ein, der auf dem Bildschirm des Satelliten angezeigt wird.</translation>
     </message>
     <message>
-        <source>Pairing PIN, 6 digits</source>
-        <translation>Kopplungs-PIN, 6 Stellen</translation>
+        <source>Pairing PIN, 4 digits</source>
+        <translation>Kopplungs-PIN, 4 Stellen</translation>
     </message>
     <message>
         <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
@@ -3800,6 +3804,10 @@
     <message>
         <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
         <translation>Zum Weiterleiten eines Controllers wird der Rechner gebraucht, nicht der Bildschirm — daher ist das aus, solange nicht ein Spiel auf dieser Anzeige verfolgt wird.</translation>
+    </message>
+    <message>
+        <source>Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.</source>
+        <translation>Das Zuklappen versetzt den Computer weiterhin in den Energiesparmodus, wie es der Windows-Energiesparplan vorsieht. Wach halten verhindert nur den Energiesparmodus bei Leerlauf, und Windows hebt es beim Zuklappen auf. Um mit geschlossenem Deckel weiter zu streamen, ändere „Beim Zuklappen“ unter „Auswählen, was beim Zuklappen des Computers geschehen soll“ in Windows.</translation>
     </message>
     <message>
         <source>Updates</source>

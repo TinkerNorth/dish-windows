@@ -21,6 +21,33 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Dish notices the lid.** It listens for the laptop lid opening and closing
+  and logs each change. When a sleep that began with the lid closed paused a
+  stream, the window says "Streaming paused while the lid was closed" once
+  after the resume, so a stream that stopped in a bag is not a mystery.
+
+### Changed
+
+- **Settings and the README say what keep-awake cannot do.** Keeping the
+  computer awake only stops idle sleep: Windows lets go of every such hold when
+  the lid closes, and closing the lid still sleeps the way the power plan says.
+  Settings, Power now says so and points to Windows' "Choose what closing the
+  lid does". The README explains why away mode is not used: it only exists on
+  older S3 laptops, does nothing on Modern Standby ones, and makes Windows
+  report Dish as playing media.
+
+### Fixed
+
+- **The pairing sheet takes the satellite's 4-digit PIN.** It waited for six
+  digits while the satellite shows four, so a typed PIN could never be
+  submitted and pairing only worked through approval on the satellite. The
+  sheet now has four cells, says "Enter the 4-digit PIN", and reads the length
+  from the same constant the tests pin.
+
 ## [2.4.0] - 2026-10-25
 
 ### Added

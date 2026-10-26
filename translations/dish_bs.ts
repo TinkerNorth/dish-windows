@@ -60,6 +60,10 @@
         <translation>Podesi držanje budnim</translation>
     </message>
     <message>
+        <source>Streaming paused while the lid was closed</source>
+        <translation>Striming je pauziran dok je poklopac bio zatvoren</translation>
+    </message>
+    <message>
         <source>Dish %1 is ready · restart when convenient.</source>
         <translation>Dish %1 je spreman · ponovo pokrenite kada vam odgovara.</translation>
     </message>
@@ -3584,12 +3588,12 @@
         <translation>Kod se mijenja ako je ekran na satelitu osvježen.</translation>
     </message>
     <message>
-        <source>Enter the 6-digit PIN shown on the Satellite’s screen.</source>
-        <translation>Unesite šestocifreni PIN prikazan na ekranu satelita.</translation>
+        <source>Enter the 4-digit PIN shown on the Satellite’s screen.</source>
+        <translation>Unesite četverocifreni PIN prikazan na ekranu satelita.</translation>
     </message>
     <message>
-        <source>Pairing PIN, 6 digits</source>
-        <translation>PIN za uparivanje, 6 cifara</translation>
+        <source>Pairing PIN, 4 digits</source>
+        <translation>PIN za uparivanje, 4 cifre</translation>
     </message>
     <message>
         <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
@@ -3817,6 +3821,10 @@
     <message>
         <source>Forwarding a controller needs the machine, not the screen, so this is off unless a game is being watched on this display.</source>
         <translation>Prosljeđivanje kontrolera treba računar, a ne ekran, pa je ovo isključeno osim ako se igra gleda na ovom ekranu.</translation>
+    </message>
+    <message>
+        <source>Closing the lid still puts the computer to sleep, the way the Windows power plan says. Keeping it awake only stops idle sleep, and Windows lets go of it when the lid closes. To keep streaming with the lid closed, change “When I close the lid” in Windows’ “Choose what closing the lid does”.</source>
+        <translation>Zatvaranje poklopca i dalje uspavljuje računar, kako nalaže Windows plan napajanja. Držanje budnim sprječava samo uspavljivanje zbog neaktivnosti, a Windows ga poništava kad se poklopac zatvori. Da biste nastavili striming sa zatvorenim poklopcem, promijenite „Kada zatvorim poklopac“ u Windows postavci „Odaberite šta radi zatvaranje poklopca“.</translation>
     </message>
     <message>
         <source>Updates</source>
