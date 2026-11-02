@@ -62,6 +62,8 @@ constexpr std::array<LockName, 0> kUsbReaderMayAcquire{};
 
 constexpr std::array<LockName, 0> kReceiveMayAcquire{};
 
+constexpr std::array<LockName, 0> kAudioCaptureMayAcquire{};
+
 constexpr std::array<LockPair, 0> kBlockingMayHold{};
 
 constexpr std::array<LockPair, 0> kOrderMayNest{};
@@ -275,7 +277,7 @@ LawRun runTheHotPathsTogether() {
             }
             const QStringList slotIds{padId, usbSlot};
             rig.router().republish(slotIds);
-            const auto mic = rig.hub().micAudioSenderForSlot(padId);
+            const auto mic = rig.router().micSenderForSlot(padId);
             if (!mic) {
                 run.failed = "the bound pad has no mic sender";
                 return run;
@@ -453,4 +455,10 @@ TEST_CASE("lock law 5: every nesting edge is today's, and the order has no cycle
     INFO("cycle: " << joined(cycle));
     CHECK_FALSE(cyclic);
     expectExactly("order law", edges, kOrderMayNest);
+}
+
+TEST_CASE("lock law 6: the mic capture thread takes exactly today's locks", "[lockstats][laws]") {
+    const LawRun run = wiredRun();
+    expectExactly("AudioCapture law", acquiredBy(run.snap, dt::ThreadRole::AudioCapture),
+                  kAudioCaptureMayAcquire);
 }

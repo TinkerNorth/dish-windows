@@ -35,11 +35,12 @@ share a version number.
 - **Nothing on the input or feedback path waits for anything else.** Sending
   a report takes no lock and never waits for the network: a full send buffer
   drops the packet, as the network itself would, instead of holding the pad's
-  next report. Rumble, light-bar and the other feedback reach a pad through a
-  mailbox its own thread empties, so a slow pad on the direct USB path can no
-  longer hold up the session's other traffic. The threads that read pads and
-  the network ask Windows for game priority, and Dish asks for the 1 ms timer
-  itself rather than relying on SDL to.
+  next report, and a pad's microphone sends the same way. Rumble, light-bar
+  and the other feedback reach a pad through a mailbox its own thread empties,
+  so a slow pad on the direct USB path can no longer hold up the session's
+  other traffic. The threads that read pads and the network ask Windows for
+  game priority, and Dish asks for the 1 ms timer itself rather than relying
+  on SDL to.
 - **A DualSense or DualShock 4 on the direct USB path sends its touchpad the
   way Android does.** A touch, a lift or a click goes at once, a move at most
   every 8 ms, and an idle touchpad nothing, which takes such a pad from about
