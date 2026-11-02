@@ -37,6 +37,7 @@ option(DISH_REQUIRE_TRANSLATIONS
 # A measurement build, configured in its own build directory: every TrackedMutex counts its use per
 # lock and thread role. The release preset never sets it, so the shipped binary has plain mutexes.
 option(DISH_LOCK_STATS "Count tracked-lock use per lock and thread role" OFF)
+option(DISH_BUILD_BENCH "Build the input-path latency bench (tools/bench)" OFF)
 
 if(DISH_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
     include(CheckIPOSupported)
@@ -911,4 +912,8 @@ if(DISH_BUILD_TESTS)
     if(Qt6LinguistTools_FOUND)
         cmake_language(DEFER CALL add_dependencies DishTests release_translations)
     endif()
+endif()
+
+if(DISH_BUILD_BENCH)
+    add_subdirectory(tools/bench)
 endif()
