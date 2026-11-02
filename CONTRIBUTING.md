@@ -374,7 +374,9 @@ same gates from the same sources):
 1. `scripts/check-format.ps1`: `clang-format --dry-run --Werror` over `src/`
    and `tests/`, pinned 22.1.4.
 2. The `debug` preset (`-DDISH_BUILD_TESTS=ON -DDISH_REQUIRE_TRANSLATIONS=ON`
-   into `build/`), build, and `ctest --preset debug --parallel`.
+   into `build/`), build, and `ctest --preset debug --parallel`, then the
+   measurements report's tests (`python -m unittest discover -s tests -p
+   'test_measurements_report.py'`).
 3. `scripts/check-qml.ps1`: `qmllint` over every tracked `src/qml/**/*.qml`.
    Every category gates at its default level, nothing downgraded: `App`,
    `Theme` and `Tokens` are module singletons the generated `qmltypes`
@@ -396,6 +398,14 @@ fails the pull request when the three version declarations disagree, or when
 the vcpkg baseline in `vcpkg.json` stops matching the `VCPKG_COMMITID` the
 build workflows pin and the baseline `THIRD_PARTY.md` documents. Blocking, like
 everything above.
+
+`measurements.yml` runs on pull requests that touch the input path (`src/`,
+`tools/bench/`, the lock-law test, its report or `CMakeLists.txt`), by hand,
+and from `release.yml`. It builds the input-path bench and its lock-statistics
+twin in the release configuration, runs the lock laws and the benches, and
+fails when the SDL input, USB reader, receive or mic capture thread takes a
+lock; [`tools/bench/README.md`](tools/bench/README.md), "Release
+measurements", has the rest.
 
 Security gates:
 
@@ -483,8 +493,11 @@ and describes the update chain's own integrity guarantees.
 re-runs the security gates against the tagged commit, builds Release, compiles
 `dish-setup.exe` with Inno Setup, runs the installer round trip against the
 artifact it is about to publish, emits `latest.json`, computes checksums,
-uploads everything as a
-**draft**, and only then flips the release to published. The draft step is
+uploads everything as a **draft**, measures the input path of the tagged
+commit and attaches `measurements-<version>.md` and `.json` to the draft, and
+only then flips the release to published. A release whose measurements fail
+their lock law gate stays a draft; "Re-run failed jobs" repeats only the
+measurement. The draft step is
 load-bearing: GitHub never points `releases/latest` at a draft, so every client
 polling the update permalink sees the previous release until the flip makes the
 new one visible atomically.
@@ -525,13 +538,26 @@ it.
 
 ## Touching the hot path
 
-The SDL gamepad thread runs at controller polling rate and must never block on
-the UI thread or allocate. If you are modifying `SDLGamepadBridge`,
-`GamepadInputProcessor`, or `SatelliteClient::sendReport`:
+Three threads carry every report and every feedback message: the SDL input
+thread, a Direct pad's raw-HID read thread, and each session's receive thread.
+None of them takes a lock, allocates per report, or waits on the network, the
+GUI or a pad, and a mic capture thread sends its frames without a lock too. If
+you are modifying `SDLGamepadBridge`, `GamepadInputProcessor`,
+`SlotRouter`, `UsbGamepadManager`'s publisher or its output worker, or
+`SatelliteClient`:
 
+- State another thread changes reaches these threads as an immutable snapshot
+  (`SlotRouter`'s table, read inside a grace epoch; the bridge's inputs through
+  `LatestValue`) or through a seqlock or a single-consumer queue
+  (`core/thread/`). Nothing on the path takes a `TrackedMutex`.
+- Buffers live on the stack or in fixed records; nothing on the path allocates.
 - No `QObject::connect` cross-thread signals on the send path.
-- No lock held longer than the existing key/token/counter snapshot.
-- No allocation per packet. Use the preallocated buffer.
+- Both rules are enforced, not hoped for: `tests/test_lock_laws.cpp`
+  (`DishLockLawTests`, built with `-DDISH_LOCK_STATS=ON`) fails when one of these
+  threads takes any tracked lock, and `tools/bench` measures the path and its
+  locks on every run; `measurements.yml` runs both on a pull request that
+  touches the path and before every release. Run both after a change here; see
+  [`tools/bench/README.md`](tools/bench/README.md).
 - Preserve `IP_TOS = 0xB8` (DSCP EF) on every send. Windows strips it silently
   for non-administrator processes, but the call stays so a machine with the
   `DisableUserTOSSetting=0` registry override honours it.

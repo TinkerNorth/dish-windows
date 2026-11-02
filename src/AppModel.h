@@ -11,6 +11,7 @@
 #include "Network/ConnectionStore.h"
 #include "Network/MoonlightManager.h"
 #include "Network/WifiConnectionManager.h"
+#include "SlotRouter.h"
 #include "architecture/Observable.h"
 #include "composer/CatalogComposer.h"
 #include "composer/ConnectionCoordinator.h"
@@ -39,6 +40,7 @@
 #include "core/reducer/MicIndicatorState.h"
 #include "core/reducer/PollRateSampler.h"
 #include "core/audio/PadAudioMatcher.h"
+#include "core/thread/TrackedMutex.h"
 #include "source/audio/MicCaptureEngine.h"
 #include "source/audio/SdlAudioGateway.h"
 #include "source/audio/SpeakerPlayoutEngine.h"
@@ -259,34 +261,10 @@ class AppModel : public QObject {
     bool slotCarriesRumble(const QString& slotId) const;
     void testRumble(const QString& slotId, reducer::TestBuzz buzz);
 
-    // Per-slot hardware truth read from the source layer that owns the slot:
-    // the parser family for a synthetic (USB-direct) id, the SDL probe for a
-    // framework id. The bind capability seams and the capability table read
-    // through this so a Direct claim advertises the motion/touchpad it
-    // decodes — and never the rumble/lightbar it cannot drive.
-    struct SlotHardware {
-        bool usbDirect = false;
-        bool hasMotion = false;
-        bool hasLightbar = false;
-        bool hasTouchpad = false;
-        bool hasRumble = false;
-        // Protocol-2 actuators and the DualSense mic lamp. Hardware facts only,
-        // read from the parser family on either path: whether the path can
-        // drive them is the feedback router's answer, not this struct's.
-        bool hasTriggerEffects = false;
-        bool hasPlayerLeds = false;
-        bool hasMicLed = false;
-        // The SDL layer takes this pad's raw effect body
-        // (SDL_GameControllerSendEffect lands), which is the Standard path's
-        // route to the three above. Only ever true for an SDL slot.
-        bool sdlEffects = false;
-    };
+    // Per-slot hardware truth read from the source layer that owns the slot: the parser family
+    // for a synthetic (USB-direct) id, the SDL probe for a framework id.
+    using SlotHardware = SlotRouter::SlotHardware;
     SlotHardware slotHardware(const QString& slotId) const;
-
-    // The two paths a slot's hardware can be known through, and the part they answer the same way.
-    static SlotHardware syntheticHardware(int vendorId, int productId);
-    SlotHardware sdlHardware(const QString& slotId) const;
-    static void applyOutputActuators(SlotHardware& hw, input::usbparse::HidParser parser);
 
     // The host layer for the mic/speaker rows ONLY: the per-session probe's
     // verdict off the connection, conservative {false,false} for an unknown or
@@ -386,18 +364,6 @@ class AppModel : public QObject {
     // Idempotent: invoked on every poolChanged so new connections get wired.
     void installRumbleHandlers();
 
-    // The seven feedback streams a satellite connection can send back. Each runs on that
-    // connection's receive thread.
-    void installFeedbackHandlers(net::WifiConnection& conn, const QString& id);
-    void onRumbleMessage(const QString& id, const net::SatelliteClient::RumbleMessage& rm);
-    void onLightbarMessage(const QString& id, const net::SatelliteClient::LightbarMessage& lm);
-    void onTriggerEffectsMessage(const QString& id,
-                                 const net::SatelliteClient::TriggerEffectsMessage& tm);
-    void onPlayerLedsMessage(const QString& id, const net::SatelliteClient::PlayerLedsMessage& pm);
-    void onPlayoutMessage(const QString& id, const net::SatelliteClient::SpeakerAudioMessage& sm,
-                          source::audio::PlayoutLane lane);
-    void onMicLedMessage(const QString& id, const net::SatelliteClient::MicLedMessage& mm);
-
     void syncInputRateDevices();
     // Emits stateChanged() only when a visible number moved, so a quiet 1 Hz
     // tick doesn't thrash the UI.
@@ -489,17 +455,11 @@ class AppModel : public QObject {
 
     // The matcher's answer for the slot's USB pad (a synthetic's own vid:pid,
     // or an SDL slot's from the bridge), NONE for a Bluetooth or unknown slot.
-    // Takes audioRoutesMtx_ — callable from the receive threads via
-    // feedbackInputs().
     audio::PadAudioRoute audioRouteForSlot(const QString& slotId) const;
 
     // The pad's own mute button moved (queued to the main thread by the
     // observer; the edge itself is seen on the gateway read thread).
     void onPadMicMuteChanged(int vendorId, int productId, bool muted);
-
-    // The slot bound to a connection, or empty. Reads the hub's binding table,
-    // which is what makes it callable from a receive thread.
-    QString boundSlotForConnection(const QString& connectionId) const;
 
     // Warm the catalog cache once each time a satellite link goes Live, so the
     // type picker usually resolves instantly from cache. Silent by design: it
@@ -618,11 +578,6 @@ class AppModel : public QObject {
     source::audio::MicCaptureEngine micEngine_{&audioGateway_};
     source::audio::SpeakerPlayoutEngine speakerEngine_{&audioGateway_};
 
-    // The matcher's current answer, whole-table per resolve. Guarded because
-    // feedbackInputs() reads it from the receive threads while resolve writes
-    // it on the main thread.
-    mutable std::mutex audioRoutesMtx_;
-    std::map<int, audio::PadAudioRoute> padAudioRoutes_;
     // Absent = never picked; declaredTouchpadMode sends ds4 for it.
     repository::TouchpadModeRepository touchpadModeRepo_;
     source::TouchpadModeStore touchpadModeStore_{&touchpadModeRepo_};
@@ -635,6 +590,7 @@ class AppModel : public QObject {
     arch::Observable<source::JoystickRemapMap>::Subscription joystickRemapSub_;
     // Hands every move of the Motion switch to the Moonlight manager's routes.
     arch::Observable<source::MotionEnabledMap>::Subscription motionSwitchSub_;
+    arch::Observable<source::RumbleEnabledMap>::Subscription rumbleSwitchSub_;
     // Device ids whose persisted deadzone profile was already pushed, so
     // onBridgeDevicesChanged pushes once per attach rather than per tick.
     QSet<QString> deadzonePushedDevices_;
@@ -738,15 +694,9 @@ class AppModel : public QObject {
     // from usbPollRateHz_ at rebuild(). Main-thread-only.
     QHash<QString, models::SlotLiveRates> liveRatesBySlot_;
 
-    // slotId -> active sender. Read on the SDL gamepad thread, written on the Qt
-    // main thread; routingMtx_ guards both directions.
-    mutable std::mutex routingMtx_;
-    QHash<QString, net::ConnectionHub::ReportSender> routing_;
-    // Read on the SDL sensor / battery-poll threads, both inside
-    // SDLGamepadBridge::runLoop, under the same routingMtx_.
-    QHash<QString, net::ConnectionHub::MotionSender> motionRouting_;
-    QHash<QString, net::ConnectionHub::BatterySender> batteryRouting_;
-    QHash<QString, net::ConnectionHub::TouchpadSender> touchpadRouting_;
+    // Every report and every feedback message, routed from the table republishRouting() hands
+    // it. Made in the constructor once the USB manager exists.
+    std::unique_ptr<SlotRouter> router_;
 };
 
 } // namespace dish

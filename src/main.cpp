@@ -4,9 +4,11 @@
 #include "AppModel.h"
 #include "Network/WinsockInit.h"
 #include "UI/CrashHandler.h"
+#include "core/thread/TrackedMutex.h"
 #include "Util/Localization.h"
 #include "qml/QmlEntryPoint.h"
 #include "source/store/InstallDefaults.h"
+#include "source/system/ThreadPriority.h"
 #include "update/UpdateHandoff.h"
 
 #include <QFont>
@@ -72,6 +74,7 @@ void applyUiAppearance(QGuiApplication& app) {
 int main(int argc, char* argv[]) {
     // FIRST, before any other subsystem can fault, so a crash still leaves a minidump behind.
     dish::crash::install();
+    dish::thread::setThreadRole(dish::thread::ThreadRole::Gui);
 
     // The auto-update boot gate, deliberately here: before Winsock, libsodium and QGuiApplication,
     // so a staged installer is handed the machine while this process still owns nothing but a crash
@@ -100,6 +103,11 @@ int main(int argc, char* argv[]) {
         QTextStream(stderr) << "dish: libsodium initialisation failed\n";
         return 1;
     }
+
+    // Waits and sleeps round to the timer period, 15.6 ms by default, and since Windows 10 2004 a
+    // process only runs at 1 ms when it asks for that itself.
+    dish::source::WindowsSchedulerGateway scheduler;
+    const dish::source::TimerPeriodGuard timerPeriod(1, scheduler);
 
     // QGuiApplication, not QApplication: no QWidget is ever constructed, so the widgets module
     // stays out of the process.

@@ -33,6 +33,7 @@
 #include "source/usb/UsbDeviceGateway.h"
 
 #include "core/input/UsbReportParsers.h"
+#include "core/thread/TrackedMutex.h"
 
 #include <atomic>
 #include <cstdint>
@@ -60,6 +61,7 @@ class WinHidGateway : public UsbDeviceGateway {
     std::int64_t completionCount(int syntheticId) const override;
     std::int64_t decodedCount(int syntheticId) const override;
     bool writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) override;
+    std::unique_ptr<HidReportWriter> openReportWriter(int syntheticId) override;
     bool setPadMicMuted(int syntheticId, bool muted) override;
 
   private:
@@ -112,7 +114,7 @@ class WinHidGateway : public UsbDeviceGateway {
         int outputReportLen = 0;
         // Serialises writers against each other. The read loop is untouched: the
         // handle is overlapped, so a write never waits on the pending read.
-        std::mutex writeMtx;
+        thread::TrackedMutex writeMtx{"hid.write"};
 
         ~Claimed();
     };
@@ -131,7 +133,7 @@ class WinHidGateway : public UsbDeviceGateway {
     // android synthetic-id space (so they never collide with positive SDL ids).
     std::atomic<int> nextSyntheticId_{-1000};
 
-    mutable std::mutex mtx_;
+    mutable thread::TrackedMutex mtx_{"hid.claims"};
     std::map<int, std::unique_ptr<Claimed>> claimed_; // syntheticId -> claim.
 };
 

@@ -1,0 +1,278 @@
+name: Measurements
+
+# Runs the input-path bench (tools/bench) and its lock-statistics twin on a
+# hosted runner and turns their JSON into measurements-<version>.md (the job
+# summary) and measurements-<version>.json through
+# scripts/measurements-report.py. release.yml calls it between the draft and
+# the publish and attaches both files to the release; the next release's run
+# compares against them.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version label for measurements-<version>.json and the job summary"
+        type: string
+        required: true
+      upload_to_release:
+        description: "Attach the two files to the release named by tag"
+        type: boolean
+        required: false
+        default: false
+      tag:
+        description: "Release tag to measure and to attach the files to"
+        type: string
+        required: false
+        default: ""
+      enforce_lock_gate:
+        description: "Fail when SdlInput, UsbReader, Receive or AudioCapture takes a lock"
+        type: boolean
+        required: false
+        default: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label (default: dev-<short commit>)"
+        type: string
+        required: false
+        default: ""
+      upload_to_release:
+        description: "Attach the two files to the release named by tag"
+        type: boolean
+        required: false
+        default: false
+      tag:
+        description: "Release tag to measure and to attach the files to (default: the ref the workflow runs on)"
+        type: string
+        required: false
+        default: ""
+      enforce_lock_gate:
+        description: "Fail when SdlInput, UsbReader, Receive or AudioCapture takes a lock"
+        type: boolean
+        required: false
+        default: true
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tools/bench/**"
+      - "tests/HotPathRig.h"
+      - "tests/test_lock_laws.cpp"
+      - "tests/test_measurements_report.py"
+      - "scripts/measurements-report.py"
+      - "CMakeLists.txt"
+      - ".github/workflows/measurements.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: Measure (MSVC, Release, windows-2022)
+    runs-on: windows-2022
+    timeout-minutes: 90
+    concurrency:
+      group: measurements-${{ github.event_name }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+    # windows-ci.yml's toolchain and its vcpkg binary cache: the same key
+    # restores the archives that lane and codeql.yml save (why the files
+    # provider and not x-gha is in windows-ci.yml).
+    env:
+      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+      QT_VERSION: "6.7.3"
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
+
+    steps:
+      - name: Check the inputs
+        shell: pwsh
+        env:
+          UPLOAD: ${{ inputs.upload_to_release }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:UPLOAD -eq 'true' -and -not $env:TAG) { throw 'upload_to_release needs a tag' }
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve the version label
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = $env:INPUT_VERSION -replace '^v', ''
+          if (-not $version) { $version = 'dev-' + $env:GITHUB_SHA.Substring(0, 7) }
+          if ($version -cnotmatch '^[0-9A-Za-z][0-9A-Za-z._+-]*$') {
+            throw "version label '$version' may only hold letters, digits, '.', '_', '+' and '-'"
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "MEASURE_VERSION=$version"
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja --no-progress --yes
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          modules: ""
+          cache: true
+
+      - name: Prepare vcpkg binary cache
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
+          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-bin-${{ runner.os }}-${{ env.IMAGE_VERSION }}-${{ env.VCPKG_COMMITID }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-bin-${{ runner.os }}-
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11.6
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMITID }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # The configuration that ships (preset release), once plain for the
+      # latencies and once with lock statistics for the lock table; the lock
+      # laws are a test, so that tree also has the tests. ViGEmClient is
+      # fetched here, pinned by commit, for the bench's vigem mode, which CI
+      # never runs: a runner has no ViGEmBus driver.
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake --preset release -B build-measure-plain -DDISH_BUILD_BENCH=ON
+          if ($LASTEXITCODE -ne 0) { throw 'configure (plain) failed' }
+          cmake --preset release -B build-measure-lockstats -DDISH_BUILD_BENCH=ON -DDISH_LOCK_STATS=ON -DDISH_BUILD_TESTS=ON
+          if ($LASTEXITCODE -ne 0) { throw 'configure (lockstats) failed' }
+
+      # 4 = the windows-2022 runner's vCPU count.
+      - name: Build the benches and the lock-law test
+        shell: pwsh
+        run: |
+          cmake --build build-measure-plain --parallel 4 --target bench_input_path
+          if ($LASTEXITCODE -ne 0) { throw 'build (plain) failed' }
+          cmake --build build-measure-lockstats --parallel 4 --target bench_input_path_lockstats DishLockLawTests
+          if ($LASTEXITCODE -ne 0) { throw 'build (lockstats) failed' }
+
+      - name: Lock laws
+        shell: pwsh
+        run: |
+          ctest --test-dir build-measure-lockstats --output-on-failure --no-tests=error -R '^lock law'
+          if ($LASTEXITCODE -ne 0) { throw 'the lock laws failed' }
+
+      - name: Fetch the previous release's measurements
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          New-Item -ItemType Directory -Force previous-measurements | Out-Null
+          gh release download --pattern 'measurements-*.json' --dir previous-measurements
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::notice::No earlier release carries measurements; the trend comparison is skipped.'
+          }
+          exit 0
+
+      # Each bench at its defaults, and S5 again with a 1 kHz mic. The runs go
+      # one after another, because two benches at once would measure each
+      # other, and the loopback satellites block in recvfrom, because a
+      # spinning one takes a core of the runner's four.
+      - name: Run the benches
+        id: bench
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force measurements-raw | Out-Null
+          $failures = @()
+          foreach ($target in @('bench_input_path', 'bench_input_path_lockstats')) {
+            $variant = if ($target -eq 'bench_input_path_lockstats') { 'lockstats' } else { 'plain' }
+            $exe = "build-measure-$variant/$target.exe"
+            Write-Host "::group::$target"
+            & $exe --receiver block --json "measurements-raw/$target.json"
+            if ($LASTEXITCODE -ne 0) { $failures += "$target exited with $LASTEXITCODE" }
+            Write-Host '::endgroup::'
+            Write-Host "::group::$target --mic-hz 1000 --scenarios S5"
+            & $exe --receiver block --mic-hz 1000 --scenarios S5 --json "measurements-raw/$target-mic1000.json"
+            if ($LASTEXITCODE -ne 0) { $failures += "$target --mic-hz 1000 exited with $LASTEXITCODE" }
+            Write-Host '::endgroup::'
+          }
+          if ($failures.Count -gt 0) { throw ($failures -join '; ') }
+
+      # The report's own tests first, against what the bench just wrote.
+      - name: Test the report script
+        if: ${{ !cancelled() && steps.bench.outcome != 'skipped' }}
+        shell: pwsh
+        env:
+          DISH_BENCH_JSON: measurements-raw/bench_input_path.json
+        run: |
+          python -m unittest discover -s tests -p 'test_measurements_report.py'
+          if ($LASTEXITCODE -ne 0) { throw 'the report tests failed' }
+
+      # The lock law gate is enforced unless a caller turns enforce_lock_gate
+      # off, which a pull request cannot.
+      - name: Build the report and check the gates
+        id: report
+        if: ${{ !cancelled() && steps.bench.outcome != 'skipped' }}
+        shell: pwsh
+        env:
+          ENFORCE_LOCK_GATE: ${{ inputs.enforce_lock_gate }}
+        run: |
+          $gate = if ($env:ENFORCE_LOCK_GATE -eq 'false') { '--no-enforce-lock-gate' } else { '--enforce-lock-gate' }
+          python scripts/measurements-report.py --input-dir measurements-raw --output-dir measurements `
+            --version $env:MEASURE_VERSION --previous-dir previous-measurements `
+            --commit (git rev-parse HEAD) $gate
+          exit $LASTEXITCODE
+
+      - name: Upload the measurements
+        if: ${{ !cancelled() && steps.report.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: measurements
+          path: |
+            measurements/measurements-*.json
+            measurements/measurements-*.md
+          retention-days: 90
+          if-no-files-found: warn
+
+  attach:
+    name: Attach to the release
+    needs: [measure]
+    if: ${{ inputs.upload_to_release }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the measurements
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: measurements
+          path: measurements
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" measurements/measurements-*.json measurements/measurements-*.md --clobber

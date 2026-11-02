@@ -3,7 +3,7 @@ name: Version consistency
 # A PR-time text-consistency gate, not a build. The version lives in
 # CMakeLists.txt (`project(Dish VERSION ...)`, the source) and is hand-mirrored
 # into packaging/dish.rc and vcpkg.json; the vcpkg baseline lives in vcpkg.json
-# (the source) and is hand-mirrored into the VCPKG_COMMITID pins of three
+# (the source) and is hand-mirrored into the VCPKG_COMMITID pins of four
 # workflows and documented in THIRD_PARTY.md section 3. This job fails the pull
 # request that moves one copy without the others. release.yml keeps its own
 # check: only it can compare the tag and the built dish.exe.
@@ -22,6 +22,7 @@ on:
       - .github/workflows/windows-ci.yml
       - .github/workflows/release.yml
       - .github/workflows/codeql.yml
+      - .github/workflows/measurements.yml
       - .github/workflows/version-consistency.yml
   pull_request:
     branches: [main]
@@ -33,6 +34,7 @@ on:
       - .github/workflows/windows-ci.yml
       - .github/workflows/release.yml
       - .github/workflows/codeql.yml
+      - .github/workflows/measurements.yml
       - .github/workflows/version-consistency.yml
 
 concurrency:
@@ -81,7 +83,7 @@ jobs:
           grep -Fq "\"version-string\": \"$ver\"" vcpkg.json \
             || err "vcpkg.json version-string is not \"$ver\""
 
-          # vcpkg baseline: vcpkg.json is the source; the three workflows pin
+          # vcpkg baseline: vcpkg.json is the source; the four workflows pin
           # the same commit for their vcpkg checkout, and THIRD_PARTY.md
           # section 3 names it as what the dependency versions resolve from.
           base=$(sed -nE 's/.*"builtin-baseline":[[:space:]]*"([0-9a-f]{40})".*/\1/p' vcpkg.json)
@@ -89,7 +91,7 @@ jobs:
             err "could not read builtin-baseline from vcpkg.json"
           else
             echo "vcpkg.json builtin-baseline is $base"
-            for wf in windows-ci release codeql; do
+            for wf in windows-ci release codeql measurements; do
               grep -Fq "VCPKG_COMMITID: \"$base\"" ".github/workflows/$wf.yml" \
                 || err ".github/workflows/$wf.yml VCPKG_COMMITID does not match the vcpkg.json builtin-baseline"
             done

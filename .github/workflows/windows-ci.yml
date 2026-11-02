@@ -142,6 +142,12 @@ jobs:
       - name: Run tests
         run: ctest --preset debug --parallel
 
+      # measurements.yml turns the bench's JSON into a release's report and
+      # runs these tests against what its bench wrote; this lane builds no
+      # bench, so the one test that reads a real bench file skips here.
+      - name: Measurements report tests
+        run: python -m unittest discover -s tests -p "test_measurements_report.py"
+
       # Must run after Build: qt_add_qml_module generates the Dish.Chrome
       # qmldir/qmltypes into build/, which importing pages resolve against.
       # File set and flags live in scripts/check-qml.ps1, shared with

@@ -6,6 +6,7 @@
 #include "core/input/HidTransport.h"
 #include "core/input/UsbHidLayout.h"
 #include "core/input/UsbReportParsers.h"
+#include "source/system/ThreadPriority.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
 // then the HID + SetupAPI headers, which depend on the base Win32 types.
@@ -25,7 +26,6 @@ namespace {
 // How long an OUT report may sit unacknowledged before it is abandoned. Well
 // under the 2 s heartbeat, so a wedged pad can never back the feedback caller
 // up into the session's liveness.
-constexpr DWORD kOutputWriteTimeoutMs = 250;
 
 constexpr USAGE kUsagePageGenericDesktop = 0x01;
 constexpr USAGE kUsageJoystick = 0x04;
@@ -198,35 +198,6 @@ std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
     if (isClaimCandidate(h, attrs, caps)) { info = describeDevice(h, path, attrs, caps); }
     CloseHandle(h);
     return info;
-}
-
-// The handle is overlapped, so a write needs its own OVERLAPPED and event or it would complete into
-// the read loop's. Waiting on the event keeps the call synchronous from the caller's point of view
-// without ever blocking the pending ReadFile.
-//
-// A pad that never completes must not wedge the caller (the network receive thread); after the
-// timeout the transfer is cancelled and the feedback is simply dropped, which is the right outcome
-// for a lossy telemetry return path.
-bool overlappedWrite(HANDLE handle, const std::uint8_t* buf, DWORD want) {
-    OVERLAPPED ov{};
-    ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    if (ov.hEvent == nullptr) { return false; }
-
-    DWORD written = 0;
-    bool ok = WriteFile(handle, buf, want, &written, &ov) != 0;
-    if (!ok && GetLastError() == ERROR_IO_PENDING) {
-        if (WaitForSingleObject(ov.hEvent, kOutputWriteTimeoutMs) == WAIT_OBJECT_0) {
-            ok = GetOverlappedResult(handle, &ov, &written, FALSE) != 0;
-        } else {
-            CancelIoEx(handle, &ov);
-            GetOverlappedResult(handle, &ov, &written, TRUE);
-            ok = false;
-        }
-    }
-    CloseHandle(ov.hEvent);
-    // A short write reached the pad as a different report, which is a failure even though the call
-    // returned.
-    return ok && written == want;
 }
 
 } // namespace
@@ -472,7 +443,7 @@ WinHidGateway::~WinHidGateway() {
     for (;;) {
         int syntheticId = 0;
         {
-            std::lock_guard<std::mutex> lock(mtx_);
+            std::lock_guard<thread::TrackedMutex> lock(mtx_);
             if (claimed_.empty()) { break; }
             syntheticId = claimed_.begin()->first;
         }
@@ -629,7 +600,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->running.store(true);
     Claimed* raw = claim.get();
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<thread::TrackedMutex> lock(mtx_);
         claimed_.emplace(syntheticId, std::move(claim));
     }
     raw->reader = std::thread([this, raw] { readLoop(raw); });
@@ -749,6 +720,8 @@ bool WinHidGateway::decodeOneReport(Claimed* c, const std::uint8_t* data, std::s
 // hid-playstation layout and need a final sign/scale check against real pads (flagged in
 // UsbReportParsers.h).
 void WinHidGateway::readLoop(Claimed* c) {
+    const thread::ScopedThreadRole role(thread::ThreadRole::UsbReader);
+    const ScopedThreadPriority priority(thread::ThreadRole::UsbReader);
     auto* handle = static_cast<HANDLE>(c->handle);
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
@@ -783,7 +756,7 @@ void WinHidGateway::readLoop(Claimed* c) {
 void WinHidGateway::releaseClaim(int syntheticId) {
     std::unique_ptr<Claimed> claim;
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<thread::TrackedMutex> lock(mtx_);
         const auto it = claimed_.find(syntheticId);
         if (it == claimed_.end()) { return; }
         claim = std::move(it->second);
@@ -806,28 +779,28 @@ void WinHidGateway::releaseClaim(int syntheticId) {
 }
 
 bool WinHidGateway::isClaimAlive(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return false; }
     return it->second->alive.load();
 }
 
 std::int64_t WinHidGateway::completionCount(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return 0; }
     return it->second->completions.load();
 }
 
 std::int64_t WinHidGateway::decodedCount(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return 0; }
     return it->second->decoded.load();
 }
 
 bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return false; }
     if (it->second->parser != input::usbparse::HidParser::DualSense) { return false; }
@@ -842,30 +815,27 @@ bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
 // because releaseClaim() joins the reader and erases the entry only from the owner thread, and
 // every caller here is downstream of a live binding for this device.
 WinHidGateway::Claimed* WinHidGateway::claimedFor(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     return it == claimed_.end() ? nullptr : it->second.get();
 }
 
+// The claim's own handle and write lock; the manager stops the worker that holds the writer
+// before it releases the claim, which is what closes the handle.
+std::unique_ptr<HidReportWriter> WinHidGateway::openReportWriter(int syntheticId) {
+    Claimed* c = claimedFor(syntheticId);
+    if (c == nullptr || c->outputReportLen <= 0) {
+        return UsbDeviceGateway::openReportWriter(syntheticId);
+    }
+    return std::make_unique<HandleReportWriter>(
+        c->handle, static_cast<std::size_t>(c->outputReportLen), &c->writeMtx);
+}
+
 bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) {
-    if (data == nullptr || len == 0) { return false; }
     Claimed* c = claimedFor(syntheticId);
     if (c == nullptr || c->outputReportLen <= 0) { return false; }
-
-    const auto want = static_cast<std::size_t>(c->outputReportLen);
-    // A report LONGER than the collection's output length is not ours to truncate: it would reach
-    // the pad as a different report.
-    if (len > want) { return false; }
-
-    std::lock_guard<std::mutex> lock(c->writeMtx);
-    // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any other length outright.
-    std::array<std::uint8_t, 256> buf{};
-    if (want > buf.size()) { return false; }
-    std::memcpy(buf.data(), data, len);
-
-    auto handle = static_cast<HANDLE>(c->handle);
-    if (handle == nullptr || handle == INVALID_HANDLE_VALUE) { return false; }
-    return overlappedWrite(handle, buf.data(), static_cast<DWORD>(want));
+    return HandleReportWriter(c->handle, static_cast<std::size_t>(c->outputReportLen), &c->writeMtx)
+        .write(data, len);
 }
 
 } // namespace dish::source::usb

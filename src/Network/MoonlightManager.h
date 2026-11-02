@@ -19,6 +19,7 @@
 #include "core/moonlight/MoonlightSessionUi.h"
 #include "core/moonlight/MoonlightTelemetry.h"
 #include "core/moonlight/MoonlightTouchDiffer.h"
+#include "core/thread/TrackedMutex.h"
 
 #include <QHash>
 #include <QList>
@@ -418,7 +419,7 @@ class MoonlightManager : public QObject {
     // The routing table is written on the main thread and read on the SDL input
     // thread, so it has its own mutex, held only for the lookup. anyBound_ keeps
     // the uncontended no-Moonlight case off the lock entirely.
-    mutable std::mutex routeMtx_;
+    mutable thread::TrackedMutex routeMtx_{"moonlight.routes"};
     std::map<std::string, Route> routes_;
     // Per host: which controller numbers are in use and the active mask.
     QHash<QString, moonlight::PadSlots> padSlots_;

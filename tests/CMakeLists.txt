@@ -24,6 +24,8 @@ set(DISH_TEST_SOURCES
     CrtAssertToStderr.cpp
     test_kernel.cpp
     test_async_state.cpp
+    test_tracked_mutex.cpp
+    test_bench_support.cpp
     test_session_crypto.cpp
     test_http_framing.cpp
     # Moonlight (GameStream) path.
@@ -45,6 +47,7 @@ set(DISH_TEST_SOURCES
     test_legacy_catalog.cpp
     test_moonlight_behaviour.cpp
     test_moonlight_keepalive.cpp
+    test_moonlight_rx_lock.cpp
     test_moonlight_launch_audio.cpp
     test_moonlight_replug.cpp
     test_moonlight_motion_switch.cpp
@@ -139,6 +142,7 @@ set(DISH_TEST_SOURCES
     test_mic_indicator_state.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
+    test_thread_priority.cpp
     test_sleep_cycle.cpp
     test_lid_sleep.cpp
     test_sleep_coordinator.cpp
@@ -158,7 +162,12 @@ set(DISH_TEST_SOURCES
     test_satellite_client_lightbar.cpp
     test_satellite_client_send_counter.cpp
     test_wifi_connection_rekey.cpp
-    test_output_command_queue.cpp
+    test_client_ref.cpp
+    test_controller_shadow.cpp
+    test_slot_router.cpp
+    test_output_mailbox.cpp
+    test_output_worker.cpp
+    test_sdl_bridge_devices.cpp
     test_lightbar_routing.cpp
     test_feature_settings.cpp
     test_host_battery.cpp
@@ -172,6 +181,11 @@ set(DISH_TEST_SOURCES
     test_usb_path_machine_edge_cases.cpp
     test_usb_poll_rate.cpp
     test_poll_rate_sampler.cpp
+    test_pump_pacing.cpp
+    test_dirty_set.cpp
+    test_touch_gate.cpp
+    test_thread_primitives.cpp
+    test_satellite_client_send_gate.cpp
     test_path_choice.cpp
     test_usb_path_resolution.cpp
     test_usb_claim_health.cpp
@@ -250,6 +264,9 @@ target_link_libraries(DishTests
         dish_warnings
         dish_strict)
 
+# The input-path bench's pure helpers, tested here because they decide what the bench reports.
+target_include_directories(DishTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../tools/bench)
+
 # The manifest is a resource of the Dish exe, not of dish_core, which is what
 # DishTests links — so the test reads the source file by absolute path instead.
 target_compile_definitions(DishTests PRIVATE
@@ -293,6 +310,40 @@ add_custom_command(TARGET DishTests POST_BUILD
 # so without DL_PATHS discovery exits with STATUS_DLL_NOT_FOUND (0xc0000135).
 # DL_PATHS holds for every test run as well as for discovery, which is how the
 # TLS tests reach their libssl.
+# The statistics half of test_tracked_mutex.cpp, so a plain build runs both halves. The header is
+# all it needs, so nothing of dish_core (whose mutexes are plain here) links in.
+if(NOT DISH_LOCK_STATS)
+    add_executable(DishTrackedMutexStatsTests CrtAssertToStderr.cpp test_tracked_mutex.cpp)
+    target_include_directories(DishTrackedMutexStatsTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+    target_compile_definitions(DishTrackedMutexStatsTests PRIVATE DISH_LOCK_STATS)
+    target_link_libraries(DishTrackedMutexStatsTests
+        PRIVATE
+            Catch2::Catch2WithMain
+            Threads::Threads
+            dish_warnings
+            dish_strict)
+    catch_discover_tests(DishTrackedMutexStatsTests TEST_PREFIX "lockstats/")
+endif()
+
+# The lock-law ratchet reads the lock statistics, so only a DISH_LOCK_STATS build has it. It wires
+# the real objects through tests/HotPathRig.h, which the input-path bench shares.
+if(DISH_LOCK_STATS)
+    add_executable(DishLockLawTests CrtAssertToStderr.cpp test_lock_laws.cpp)
+    target_link_libraries(DishLockLawTests
+        PRIVATE
+            dish_core
+            Catch2::Catch2WithMain
+            dish_warnings
+            dish_strict)
+    target_compile_definitions(DishLockLawTests PRIVATE DISH_QM_DIR="${CMAKE_BINARY_DIR}")
+    catch_discover_tests(DishLockLawTests
+        DL_PATHS
+            $<TARGET_FILE_DIR:Qt6::Core>
+            $<TARGET_FILE_DIR:Qt6::Network>
+            $<TARGET_FILE_DIR:Qt6::Gui>)
+endif()
+
 if(WIN32)
     catch_discover_tests(DishTests
         DL_PATHS

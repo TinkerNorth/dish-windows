@@ -16,6 +16,9 @@ artifact/
 vcpkg_installed/
 .vcpkg-root
 
+# Bytecode from scripts/measurements-report.py and its tests
+__pycache__/
+
 # CMake
 CMakeFiles/
 CMakeCache.txt

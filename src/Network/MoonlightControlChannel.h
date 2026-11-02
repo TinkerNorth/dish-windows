@@ -19,6 +19,7 @@
 
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightCrypto.h"
+#include "core/thread/TrackedMutex.h"
 
 #include <array>
 #include <atomic>
@@ -27,8 +28,10 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 // Whole, not forward-declared: ENet's struct tags are reserved identifiers and its typedef
 // names are the only spelling that is not.
@@ -42,7 +45,10 @@ void moonlightEnetUnref();
 
 class MoonlightControlChannel {
   public:
-    MoonlightControlChannel();
+    using PacketOpener = std::function<std::optional<moonlight::crypto::Bytes>(
+        const std::array<std::uint8_t, 16>& key, const std::uint8_t* packet, std::size_t len)>;
+
+    explicit MoonlightControlChannel(PacketOpener opener = moonlight::crypto::openControl);
     ~MoonlightControlChannel();
 
     MoonlightControlChannel(const MoonlightControlChannel&) = delete;
@@ -106,23 +112,30 @@ class MoonlightControlChannel {
     void sealAndSend(const std::uint8_t* plaintext, std::size_t len);
     // sealAndSend's body, for a caller that already holds sendMtx_ over a live link.
     void sealAndSendLocked(const std::uint8_t* plaintext, std::size_t len);
-    void receiveLoop();
+    void receiveLoop(ENetSocket socket);
 
-    // The loop's parts: the keepalive it owes the host, what it takes the send lock for, what it
-    // does with a packet, and where an event goes. All on the ENet receive thread.
+    // The loop's parts: the keepalive it owes the host, what it waits for without the send lock,
+    // what it takes the lock for, what it does with a packet, and where an event goes. All on the
+    // ENet receive thread.
     void keepAliveIfDue();
-    int serviceEnet(ENetEvent& event);
-    void onPacket(const ENetPacket& packet);
+    bool serviceDue(ENetSocket socket) const;
+    int serviceEnet(ENetEvent& event, std::vector<std::uint8_t>& payload);
+    void onPacket(const std::vector<std::uint8_t>& sealed);
     void dispatchServerEvent(const moonlight::ServerEvent& ev);
+
+    const PacketOpener open_;
 
     ENetHost* host_ = nullptr;
     ENetPeer* peer_ = nullptr;
 
-    std::mutex sendMtx_;
+    thread::TrackedMutex sendMtx_{"moonlight.send"};
     std::unique_ptr<moonlight::crypto::ControlSealer> sealer_;
     std::uint32_t seq_ = 0;
     // Reused plaintext scratch for the hot-path encoder (never per-packet heap).
     std::array<std::uint8_t, moonlight::kControllerMultiBytes> multiScratch_{};
+    // Written under sendMtx_, read by the receive thread without it: ENet holds data the host has
+    // not acknowledged, and only a service pass runs its retransmit and timeout clocks.
+    std::atomic<bool> awaitingAck_{false};
 
     std::thread rxThread_;
     std::atomic<bool> running_{false};

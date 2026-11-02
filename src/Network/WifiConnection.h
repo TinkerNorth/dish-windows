@@ -6,6 +6,7 @@
 #include "Models/Models.h"
 #include "SatelliteClient.h"
 #include "core/reducer/ProtocolNegotiation.h"
+#include "core/thread/TrackedMutex.h"
 
 #include <QObject>
 #include <QString>
@@ -15,6 +16,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <utility>
 #include <mutex>
 #include <optional>
 #include <vector>
@@ -32,20 +34,26 @@ namespace dish::net {
 //                close-notify(unpaired), or a silent retry is in flight.
 enum class SessionState : std::uint8_t { Idle, Linking, Live, Faltering, Stale };
 
-// Written on the Qt main thread, read on the SDL input thread every report.
+// The session's live client, on the Qt main thread. The hot threads hold theirs through
+// SlotRouter's published table.
 class ClientRef {
   public:
     std::shared_ptr<SatelliteClient> get() const {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<thread::TrackedMutex> lock(mtx_);
         return value_;
     }
+    // The client this replaces is released after the lock: its destructor joins the session's
+    // heartbeat and receive threads, and a report on another thread would wait out both joins.
     void set(std::shared_ptr<SatelliteClient> v) {
-        std::lock_guard<std::mutex> lock(mtx_);
-        value_ = std::move(v);
+        std::shared_ptr<SatelliteClient> replaced;
+        {
+            std::lock_guard<thread::TrackedMutex> lock(mtx_);
+            replaced = std::exchange(value_, std::move(v));
+        }
     }
 
   private:
-    mutable std::mutex mtx_;
+    mutable thread::TrackedMutex mtx_{"wifi.client"};
     std::shared_ptr<SatelliteClient> value_;
 };
 
@@ -66,6 +74,14 @@ class WifiConnection : public QObject {
     std::optional<QString> connectionId() const { return connectionId_; }
     std::optional<QString> boundSlotId() const { return boundSlotId_; }
     std::shared_ptr<SatelliteClient> client() const { return clientRef_.get(); }
+
+    // Where the bound slot's reports go right now: the live client and the slot's controller
+    // index. Empty while no slot is bound and registered or no link is open. GUI thread.
+    struct SendTarget {
+        std::shared_ptr<SatelliteClient> client;
+        int controllerIndex = 0;
+    };
+    std::optional<SendTarget> sendTarget() const;
 
     // Rounded to the 0.1 ms display precision. 0 / 0 with no live session or an
     // unseeded window, and zeroed on teardown so a dead row shows no figure.
@@ -176,23 +192,6 @@ class WifiConnection : public QObject {
     bool matchesAppliedView(const models::SessionViewDto& view) const;
     // Registered controller indices, for comparison against the ack's bitmap.
     std::uint16_t registeredBitmap() const;
-
-    // Hot path, called on the SDL input thread. Silently drops unless the bound
-    // slot is registered, since the server would discard it anyway.
-    void sendReport(std::uint16_t buttons, std::uint8_t lt, std::uint8_t rt, std::int16_t lx,
-                    std::int16_t ly, std::int16_t rx, std::int16_t ry);
-    void sendMotion(std::int16_t gyroX, std::int16_t gyroY, std::int16_t gyroZ, std::int16_t accelX,
-                    std::int16_t accelY, std::int16_t accelZ, std::uint32_t timestampDeltaUs);
-    void sendBattery(std::uint8_t level, std::uint8_t status);
-    void sendTouchpad(bool finger0Active, std::uint8_t finger0Id, std::int16_t finger0X,
-                      std::int16_t finger0Y, bool finger1Active, std::uint8_t finger1Id,
-                      std::int16_t finger1X, std::int16_t finger1Y, bool buttonPressed,
-                      std::uint32_t eventTimeMs);
-    // MSG_MIC_AUDIO for the bound slot; the capture engine calls it from the
-    // audio thread, the same cross-thread contract as sendReport from the SDL
-    // input thread. Gated on `registered` like every stream — the server drops
-    // audio for an unapplied slot anyway. Returns false when nothing was sent.
-    bool sendMicAudio(std::uint16_t seq, const std::uint8_t* opus, std::size_t opusLen);
 
     // Held here rather than on the per-session SatelliteClient so they survive a
     // reconnect; markConnected re-installs them.

@@ -6,8 +6,8 @@
 .DESCRIPTION
     A green run here means a green run there: clang-format (pinned 22.1.4)
     over CI's exact file set, the action-pin lint from _security.yml, the
-    debug preset's configure + build + ctest, qmllint with CI's flags, the QML
-    literal scanner, the translation gate, clang-tidy four wide over CI's file
+    debug preset's configure + build + ctest, the measurements report's tests,
+    qmllint with CI's flags, the QML literal scanner, the translation gate, clang-tidy four wide over CI's file
     set, the release preset build (Dish + dish_setup_image), the staged-bundle
     portable smoke test, and (opt-in) the installer compile + silent
     round-trip.
@@ -25,8 +25,8 @@
     throwaway runner.
 
 .PARAMETER AllowMissing
-    Downgrade a missing gated tool (clang-format, clang-tidy, cmake, qmllint,
-    lupdate, windeployqt) to a notice instead of failing.
+    Downgrade a missing gated tool (clang-format, clang-tidy, cmake, python,
+    qmllint, lupdate, windeployqt) to a notice instead of failing.
 
 .PARAMETER WithInstaller
     Also compile installer.iss (scripts/build-installer.ps1) and run
@@ -148,6 +148,12 @@ if ($builds) {
     Step 'Run tests'
     & ctest --preset debug --parallel
     if ($LASTEXITCODE -ne 0) { throw 'ctest failed' }
+
+    Step 'Measurements report tests'
+    if (Have 'python') {
+        & python -m unittest discover -s tests -p 'test_measurements_report.py'
+        if ($LASTEXITCODE -ne 0) { throw 'measurements report tests failed' }
+    }
 
     Step 'qmllint (QML static analysis)'
     if (Resolve-QtTool 'qmllint.exe') {

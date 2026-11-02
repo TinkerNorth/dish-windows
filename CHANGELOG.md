@@ -21,6 +21,51 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Each release carries its own measurements.** The release workflow runs
+  the input-path benchmark on the tagged code and attaches
+  `measurements-<version>.md` and `measurements-<version>.json` to the
+  release: how long a pad's report takes from the moment Dish has it to the
+  satellite, in seven scenarios, and every lock each thread took on the way.
+  A release whose controller, receive or microphone threads take a lock is not
+  published, and each report is compared with the previous release's.
+
+### Changed
+
+- **Pads are read every half millisecond, and each change goes out once.**
+  While a controller is plugged in, Dish reads it every 0.5 ms on a
+  high-resolution timer instead of SDL's 1 ms sleep, which read it every 1.5
+  to 2 ms. A 1 kHz pad's input reaches the satellite well under half a
+  millisecond after Windows sees it, instead of half a millisecond at the
+  median, and almost no report is skipped. A stick moved diagonally sends one
+  packet instead of two, and a report that changed nothing sends none.
+- **Nothing on the input or feedback path waits for anything else.** Sending
+  a report takes no lock and never waits for the network: a full send buffer
+  drops the packet, as the network itself would, instead of holding the pad's
+  next report, and a pad's microphone sends the same way. Rumble, light-bar
+  and the other feedback reach a pad through a mailbox its own thread empties,
+  so a slow pad on the direct USB path can no longer hold up the session's
+  other traffic. The threads that read pads and the network ask Windows for
+  game priority, and Dish asks for the 1 ms timer itself rather than relying
+  on SDL to.
+- **A DualSense or DualShock 4 on the direct USB path sends its touchpad the
+  way Android does.** A touch, a lift or a click goes at once, a move at most
+  every 8 ms, and an idle touchpad nothing, which takes such a pad from about
+  two packets a report to about one.
+- **Sending to a Moonlight host no longer waits behind the receive side.** The
+  receive thread waits for the host without the lock the senders need.
+
+### Fixed
+
+- **Picking Direct for a pad that was being unplugged no longer crashes
+  Dish.** The claim locked the same lock twice when the pad had gone between
+  the scan and the claim.
+
+---
+
 ## [2.5.0] - 2026-10-26
 
 ### Added
