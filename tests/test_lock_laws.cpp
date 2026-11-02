@@ -59,27 +59,23 @@ struct LockPair {
 constexpr std::array kSdlInputMayAcquire{
     LockName{"app.routing", Allowance::Debt},     LockName{"bridge.devices", Allowance::Debt},
     LockName{"bridge.output", Allowance::Debt},   LockName{"bridge.suppressed", Allowance::Debt},
-    LockName{"input.processor", Allowance::Debt}, LockName{"satellite.material", Allowance::Debt},
-    LockName{"satellite.send", Allowance::Debt},  LockName{"wifi.client", Allowance::Debt},
+    LockName{"input.processor", Allowance::Debt}, LockName{"wifi.client", Allowance::Debt},
 };
 
 constexpr std::array kUsbReaderMayAcquire{
-    LockName{"app.routing", Allowance::Debt},        LockName{"input.processor", Allowance::Debt},
-    LockName{"satellite.material", Allowance::Debt}, LockName{"satellite.send", Allowance::Debt},
+    LockName{"app.routing", Allowance::Debt},
+    LockName{"input.processor", Allowance::Debt},
     LockName{"wifi.client", Allowance::Debt},
 };
 
 constexpr std::array kReceiveMayAcquire{
-    LockName{"app.audioRoutes", Allowance::Debt},   LockName{"bridge.devices", Allowance::Debt},
-    LockName{"bridge.output", Allowance::Debt},     LockName{"hub.bindings", Allowance::Debt},
-    LockName{"playout.pending", Allowance::Debt},   LockName{"satellite.handlers", Allowance::Debt},
-    LockName{"satellite.latency", Allowance::Debt}, LockName{"satellite.material", Allowance::Debt},
-    LockName{"store.observable", Allowance::Debt},  LockName{"usb.feedback", Allowance::Debt},
-    LockName{"usb.manager", Allowance::Debt},
+    LockName{"app.audioRoutes", Allowance::Debt}, LockName{"bridge.devices", Allowance::Debt},
+    LockName{"bridge.output", Allowance::Debt},   LockName{"hub.bindings", Allowance::Debt},
+    LockName{"playout.pending", Allowance::Debt}, LockName{"store.observable", Allowance::Debt},
+    LockName{"usb.feedback", Allowance::Debt},    LockName{"usb.manager", Allowance::Debt},
 };
 
 constexpr std::array kBlockingMayHold{
-    LockPair{"net.sendto", "satellite.send", Allowance::Debt},
     LockPair{"sdl.close", "bridge.devices", Allowance::Debt},
 };
 
