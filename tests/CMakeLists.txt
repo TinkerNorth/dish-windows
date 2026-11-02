@@ -310,6 +310,24 @@ if(NOT DISH_LOCK_STATS)
     catch_discover_tests(DishTrackedMutexStatsTests TEST_PREFIX "lockstats/")
 endif()
 
+# The lock-law ratchet reads the lock statistics, so only a DISH_LOCK_STATS build has it. It wires
+# the real objects through tests/HotPathRig.h, which the input-path bench shares.
+if(DISH_LOCK_STATS)
+    add_executable(DishLockLawTests CrtAssertToStderr.cpp test_lock_laws.cpp)
+    target_link_libraries(DishLockLawTests
+        PRIVATE
+            dish_core
+            Catch2::Catch2WithMain
+            dish_warnings
+            dish_strict)
+    target_compile_definitions(DishLockLawTests PRIVATE DISH_QM_DIR="${CMAKE_BINARY_DIR}")
+    catch_discover_tests(DishLockLawTests
+        DL_PATHS
+            $<TARGET_FILE_DIR:Qt6::Core>
+            $<TARGET_FILE_DIR:Qt6::Network>
+            $<TARGET_FILE_DIR:Qt6::Gui>)
+endif()
+
 if(WIN32)
     catch_discover_tests(DishTests
         DL_PATHS
