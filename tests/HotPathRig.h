@@ -154,8 +154,8 @@ inline BoundSocket bindLoopbackUdp() {
         ::closesocket(bound.sock);
         return BoundSocket{};
     }
-    // Bounds the blocking receive so the loop sees its stop flag.
-    const DWORD timeoutMs = 50;
+    // Bounds the blocking receive so the loop sees its stop and spin flags.
+    const DWORD timeoutMs = 10;
     ::setsockopt(bound.sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeoutMs),
                  sizeof(timeoutMs));
     bound.port = ntohs(addr.sin_port);
@@ -191,6 +191,10 @@ class LoopbackSatellite {
     LoopbackSatellite& operator=(LoopbackSatellite&&) = delete;
 
     bool ok() const { return bound_.sock != INVALID_SOCKET; }
+
+    // Spinning on a non-blocking socket, as the satellite's own receive loop does, keeps this
+    // thread's wake-up out of what a datagram's arrival stamp measures.
+    void setSpinning(bool spinning) { spinning_.store(spinning, std::memory_order_relaxed); }
     std::uint16_t port() const { return bound_.port; }
     bool knowsDish() const { return knowsDish_.load(std::memory_order_acquire); }
     std::uint64_t rejected() const { return rejected_.load(std::memory_order_relaxed); }
@@ -229,14 +233,22 @@ class LoopbackSatellite {
         }
         std::array<std::uint8_t, proto::kUdpDatagramMaxBytes> buf{};
         std::array<std::uint8_t, proto::kUdpDatagramMaxBytes> plain{};
+        bool nonBlocking = false;
         while (running_.load(std::memory_order_relaxed)) {
+            if (const bool spin = spinning_.load(std::memory_order_relaxed); spin != nonBlocking) {
+                u_long mode = spin ? 1 : 0;
+                if (::ioctlsocket(bound_.sock, FIONBIO, &mode) == 0) { nonBlocking = spin; }
+            }
             sockaddr_in from{};
             int fromLen = static_cast<int>(sizeof(from));
             const int n = ::recvfrom(bound_.sock, reinterpret_cast<char*>(buf.data()),
                                      static_cast<int>(buf.size()), 0,
                                      reinterpret_cast<sockaddr*>(&from), &fromLen);
             const auto arrived = Clock::now();
-            if (n <= 0) { continue; }
+            if (n <= 0) {
+                if (nonBlocking) { YieldProcessor(); }
+                continue;
+            }
             if (!knowsDish()) {
                 dish_ = from;
                 knowsDish_.store(true, std::memory_order_release);
@@ -292,6 +304,7 @@ class LoopbackSatellite {
     std::atomic<std::uint64_t> acksSent_{0};
     std::mutex sendMtx_;
     std::uint32_t sendCounter_ = 0;
+    std::atomic<bool> spinning_{false};
     std::atomic<bool> running_{false};
     std::thread thread_;
 };

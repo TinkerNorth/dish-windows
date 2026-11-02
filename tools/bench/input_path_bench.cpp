@@ -157,11 +157,14 @@ struct Options {
     std::string json;
     std::string csv;
     std::vector<std::string> scenarios;
+    bool spinReceivers = true;
     bool smoke = false;
     bool help = false;
 };
 
 const char* modeName(Mode mode) { return mode == Mode::Vigem ? "vigem" : "synthetic"; }
+
+const char* receiverName(const Options& o) { return o.spinReceivers ? "spin" : "block"; }
 
 void printUsage(std::ostream& out) {
     out << "usage: bench_input_path [options]\n"
@@ -173,11 +176,12 @@ void printUsage(std::ostream& out) {
            "                          whose p99.9 is the median is reported (default 3)\n"
            "  --mic-hz <hz>           S5's mic frames per second (default 50)\n"
            "  --scenarios <list>      comma-separated subset of S1..S7 (default all)\n"
+           "  --receiver spin|block   how a measured session's loopback satellite waits for a\n"
+           "                          datagram: spinning (default) or blocked in recvfrom\n"
            "  --json <path>           also write the results, settings and machine as JSON\n"
            "  --csv <path>            also write the result rows as CSV\n"
-           "  --smoke                 every scenario for 0.2 s, one rep, no warm-up; the exit "
-           "code\n"
-           "                          is the harness's own accounting, never a latency\n"
+           "  --smoke                 every scenario for 0.2 s, one rep, no warm-up; the exit\n"
+           "                          code is the harness's own accounting, never a latency\n"
            "  --help                  this text\n"
            "Every producer paces to absolute deadlines: a high-resolution timer to 800 us before\n"
            "each deadline, then a spin.\n";
@@ -219,6 +223,11 @@ bool applyFlag(Options& o, std::string_view flag, const std::function<const char
     if (flag == "--mode") {
         if (text != "synthetic" && text != "vigem") { return false; }
         o.mode = text == "vigem" ? Mode::Vigem : Mode::Synthetic;
+        return true;
+    }
+    if (flag == "--receiver") {
+        if (text != "spin" && text != "block") { return false; }
+        o.spinReceivers = text == "spin";
         return true;
     }
     if (flag == "--rate") { return parseNumber(std::string(text), o.rateHz) && o.rateHz > 0.0; }
@@ -638,6 +647,10 @@ class SyntheticBench {
         tap(kPadBSession).arm(sc.padB ? &padB_ : nullptr);
         tap(kDirectSession).arm(sc.direct ? &direct_ : nullptr);
         tap(kToggleSession).arm(nullptr);
+        const bool spin = options_.spinReceivers;
+        rig_.satellite(kPadASession).setSpinning(spin && !sc.direct);
+        rig_.satellite(kPadBSession).setSpinning(spin && sc.padB);
+        rig_.satellite(kDirectSession).setSpinning(spin && sc.direct);
         if (sc.heartbeatAndMic) { rig_.connection(kPadASession)->client()->startHeartbeat(); }
         const std::uint64_t routedBefore = routed();
         std::atomic<std::uint64_t> rumblesSent{0};
@@ -662,6 +675,7 @@ class SyntheticBench {
         for (std::thread& t : producers) { t.join(); }
         pumpBetween(end, end + kSettleNs);
         for (SessionTap& t : taps_) { t.close(); }
+        for (int s = 0; s < rig_.sessionCount(); ++s) { rig_.satellite(s).setSpinning(false); }
 
         ScenarioRun out;
         out.scenario = scenarioLabel(sc, options_);
@@ -947,6 +961,7 @@ class VigemBench {
     ScenarioRun run(double secs) {
         stream_.reset(expectedFrames(options_.rateHz, secs));
         taps_[0].arm(&stream_);
+        rig_.satellite(kPadASession).setSpinning(options_.spinReceivers);
         startLockWindow();
         taps_[0].open();
         const std::int64_t start = nowNs() + kStartDelayNs;
@@ -965,6 +980,7 @@ class VigemBench {
         spinning.store(false);
         spinner.join();
         taps_[0].close();
+        rig_.satellite(kPadASession).setSpinning(false);
 
         ScenarioRun out;
         out.scenario = "V1";
@@ -1308,13 +1324,10 @@ QJsonObject toJson(const Options& o, const Report& report) {
                                      {"maxHoldUs", l.maxHoldUs}});
         }
     }
-    QJsonObject settings{{"mode", modeName(o.mode)},
-                         {"rateHz", o.rateHz},
-                         {"secs", o.secs},
-                         {"reps", o.reps},
-                         {"micHz", o.micHz},
-                         {"smoke", o.smoke},
-                         {"scenarios", toJsonArray(o.scenarios)}};
+    QJsonObject settings{{"mode", modeName(o.mode)}, {"rateHz", o.rateHz},
+                         {"secs", o.secs},           {"reps", o.reps},
+                         {"micHz", o.micHz},         {"receiver", receiverName(o)},
+                         {"smoke", o.smoke},         {"scenarios", toJsonArray(o.scenarios)}};
     QJsonObject machine{{"cpu", QString::fromStdString(cpuName())},
                         {"logicalCpus", static_cast<int>(std::thread::hardware_concurrency())},
                         {"windowsBuild", QString::fromStdString(windowsBuild())},
@@ -1358,8 +1371,8 @@ bool writeCsv(const std::string& path, const Options& o, const Report& report) {
 
 void printBanner(std::ostream& out, const Options& o) {
     out << "bench_input_path: mode " << modeName(o.mode) << ", rate " << o.rateHz << " Hz, "
-        << o.secs << " s x " << o.reps << " reps, mic " << o.micHz << " Hz"
-        << (o.smoke ? ", smoke" : "") << "\n"
+        << o.secs << " s x " << o.reps << " reps, mic " << o.micHz << " Hz, receivers "
+        << receiverName(o) << (o.smoke ? ", smoke" : "") << "\n"
         << "machine: " << cpuName() << ", " << std::thread::hardware_concurrency()
         << " logical CPUs, Windows build " << windowsBuild() << ", " << buildType() << " build"
         << (lockStatsBuild() ? ", lock statistics on" : "") << "\n";
