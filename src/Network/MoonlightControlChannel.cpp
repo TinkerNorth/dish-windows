@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstring>
 #include <mutex>
+#include <utility>
 
 namespace dish::net {
 
@@ -19,6 +20,11 @@ int g_enetRefs = 0;
 
 // The PERIODIC_PING cadence every Moonlight client keeps.
 constexpr std::chrono::milliseconds kKeepaliveInterval{500};
+
+constexpr enet_uint32 kServicePollMs = 2;
+
+// ENet reads every datagram into a buffer this size, so a packet it did not fragment always fits.
+constexpr std::size_t kDatagramBytes = ENET_PROTOCOL_MAXIMUM_MTU;
 
 } // namespace
 
@@ -36,7 +42,7 @@ void moonlightEnetUnref() {
     }
 }
 
-MoonlightControlChannel::MoonlightControlChannel() {
+MoonlightControlChannel::MoonlightControlChannel(PacketOpener opener) : open_(std::move(opener)) {
     moonlightEnetRef();
     enetRef_ = true;
 }
@@ -107,7 +113,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
             connected_.store(true, std::memory_order_release);
             running_.store(true, std::memory_order_relaxed);
             lastKeepalive_ = {};
-            rxThread_ = std::thread([this] { receiveLoop(); });
+            rxThread_ = std::thread([this, socket = host->socket] { receiveLoop(socket); });
             return true;
         }
     }
@@ -175,6 +181,7 @@ void MoonlightControlChannel::sealAndSendLocked(const std::uint8_t* plaintext, s
         enet_packet_destroy(packet);
         return;
     }
+    awaitingAck_.store(true, std::memory_order_relaxed);
     thread::blockingRegion("enet.flush");
     enet_host_flush(host_);
 }
@@ -185,18 +192,7 @@ void MoonlightControlChannel::sendControllerState(const moonlight::ControllerSta
     std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
     const std::size_t n = moonlight::encodeControllerMulti(state, multiScratch_.data());
-    std::size_t outLen = 0;
-    const std::uint8_t* pkt = sealer_->seal(seq_, multiScratch_.data(), n, &outLen);
-    if (pkt == nullptr) { return; }
-    ++seq_;
-    ENetPacket* packet = enet_packet_create(pkt, outLen, ENET_PACKET_FLAG_RELIABLE);
-    if (packet == nullptr) { return; }
-    if (enet_peer_send(peer_, 0, packet) < 0) {
-        enet_packet_destroy(packet);
-        return;
-    }
-    thread::blockingRegion("enet.flush");
-    enet_host_flush(host_);
+    sealAndSendLocked(multiScratch_.data(), n);
 }
 
 void MoonlightControlChannel::sendControllerArrival(std::uint8_t controllerNumber,
@@ -259,15 +255,31 @@ void MoonlightControlChannel::keepAliveIfDue() {
     sealAndSend(ping.data(), ping.size());
 }
 
+bool MoonlightControlChannel::serviceDue(ENetSocket socket) const {
+    thread::blockingRegion("enet.wait");
+    enet_uint32 condition = ENET_SOCKET_WAIT_RECEIVE;
+    if (enet_socket_wait(socket, &condition, kServicePollMs) != 0) { return true; }
+    return (condition & ENET_SOCKET_WAIT_RECEIVE) != 0 ||
+           awaitingAck_.load(std::memory_order_relaxed);
+}
+
 // Serviced without waiting: this lock is the one every hot-path send takes, and a 16 ms wait held
 // inside it was 16 ms a controller report could queue behind the receive side.
 //
 // Negative when the channel is gone, which ends the loop; 0 when nothing arrived.
-int MoonlightControlChannel::serviceEnet(ENetEvent& event) {
+int MoonlightControlChannel::serviceEnet(ENetEvent& event, std::vector<std::uint8_t>& payload) {
     std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (host_ == nullptr) { return -1; }
     thread::blockingRegion("enet.service");
-    return enet_host_service(host_, &event, 0);
+    const int rc = enet_host_service(host_, &event, 0);
+    awaitingAck_.store(peer_ != nullptr && enet_peer_has_outgoing_commands(peer_) != 0,
+                       std::memory_order_relaxed);
+    if (rc > 0 && event.type == ENET_EVENT_TYPE_RECEIVE) {
+        payload.assign(event.packet->data, event.packet->data + event.packet->dataLength);
+        enet_packet_destroy(event.packet);
+        event.packet = nullptr;
+    }
+    return rc;
 }
 
 // Runs on the ENet receive thread. Each handler decides for itself what to marshal; nothing here
@@ -299,35 +311,34 @@ void MoonlightControlChannel::dispatchServerEvent(const moonlight::ServerEvent& 
 
 // A packet that will not open, or opens into something this version does not model, is dropped
 // silently: the host is entitled to send events a client need not understand.
-void MoonlightControlChannel::onPacket(const ENetPacket& packet) {
-    const auto opened = moonlight::crypto::openControl(key_, packet.data, packet.dataLength);
+void MoonlightControlChannel::onPacket(const std::vector<std::uint8_t>& sealed) {
+    const auto opened = open_(key_, sealed.data(), sealed.size());
     if (!opened.has_value()) { return; }
     const auto ev = moonlight::decodeServerEvent(opened->data(), opened->size());
     if (!ev.has_value()) { return; }
     dispatchServerEvent(*ev);
 }
 
-void MoonlightControlChannel::receiveLoop() {
+void MoonlightControlChannel::receiveLoop(ENetSocket socket) {
     const thread::ScopedThreadRole role(thread::ThreadRole::MoonlightRx);
+    std::vector<std::uint8_t> payload;
+    payload.reserve(kDatagramBytes);
+    bool drained = false;
     while (running_.load(std::memory_order_relaxed)) {
         keepAliveIfDue();
-        ENetEvent event;
-        const int rc = serviceEnet(event);
+        if (drained && !serviceDue(socket)) { continue; }
+        ENetEvent event{};
+        const int rc = serviceEnet(event, payload);
         if (rc < 0) { break; }
-        if (rc == 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
-            continue;
-        }
+        drained = rc == 0;
+        if (drained) { continue; }
 
         if (event.type == ENET_EVENT_TYPE_DISCONNECT) {
             connected_.store(false, std::memory_order_relaxed);
             if (disconnectHandler_) { disconnectHandler_(terminated_); }
             break;
         }
-        if (event.type != ENET_EVENT_TYPE_RECEIVE) { continue; }
-
-        onPacket(*event.packet);
-        enet_packet_destroy(event.packet);
+        if (event.type == ENET_EVENT_TYPE_RECEIVE) { onPacket(payload); }
     }
 }
 

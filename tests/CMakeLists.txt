@@ -47,6 +47,7 @@ set(DISH_TEST_SOURCES
     test_legacy_catalog.cpp
     test_moonlight_behaviour.cpp
     test_moonlight_keepalive.cpp
+    test_moonlight_rx_lock.cpp
     test_moonlight_launch_audio.cpp
     test_moonlight_replug.cpp
     test_moonlight_motion_switch.cpp
