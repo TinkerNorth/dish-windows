@@ -204,7 +204,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
                                       std::int16_t ly, std::int16_t rx, std::int16_t ry) {
         net::ConnectionHub::ReportSender sender;
         {
-            std::lock_guard<std::mutex> lock(routingMtx_);
+            std::lock_guard<thread::TrackedMutex> lock(routingMtx_);
             sender = routing_.value(QString::fromStdString(did));
         }
         if (sender) { sender(buttons, lt, rt, lx, ly, rx, ry); }
@@ -220,7 +220,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
                                       std::int16_t az, std::uint32_t dtUs) {
         net::ConnectionHub::MotionSender sender;
         {
-            std::lock_guard<std::mutex> lock(routingMtx_);
+            std::lock_guard<thread::TrackedMutex> lock(routingMtx_);
             sender = motionRouting_.value(QString::fromStdString(did));
         }
         if (sender) { sender(gx, gy, gz, ax, ay, az, dtUs); }
@@ -231,7 +231,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         [this](const std::string& did, std::uint8_t level, std::uint8_t status) {
             net::ConnectionHub::BatterySender sender;
             {
-                std::lock_guard<std::mutex> lock(routingMtx_);
+                std::lock_guard<thread::TrackedMutex> lock(routingMtx_);
                 sender = batteryRouting_.value(QString::fromStdString(did));
             }
             if (sender) { sender(level, status); }
@@ -242,7 +242,7 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
                                         const input::GamepadInputProcessor::TouchpadSample& s) {
         net::ConnectionHub::TouchpadSender sender;
         {
-            std::lock_guard<std::mutex> lock(routingMtx_);
+            std::lock_guard<thread::TrackedMutex> lock(routingMtx_);
             sender = touchpadRouting_.value(QString::fromStdString(did));
         }
         if (sender) {
@@ -1003,7 +1003,7 @@ void AppModel::republishRouting() {
         }
     }
     {
-        std::lock_guard<std::mutex> lock(routingMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routingMtx_);
         routing_ = std::move(nextRouting);
         motionRouting_ = std::move(nextMotion);
         batteryRouting_ = std::move(nextBattery);
@@ -1377,7 +1377,7 @@ audio::PadAudioRoute AppModel::audioRouteForSlot(const QString& slotId) const {
         if (!found) { return {}; }
     }
     if (vendorId == 0 && productId == 0) { return {}; }
-    std::lock_guard<std::mutex> lock(audioRoutesMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(audioRoutesMtx_);
     const auto it = padAudioRoutes_.find(audio::padAudioKey(vendorId, productId));
     if (it == padAudioRoutes_.end()) { return {}; }
     return it->second;
@@ -1405,7 +1405,7 @@ void AppModel::resolveAudioRoutes() {
         pads, audioGateway_.captureDeviceNames(), audioGateway_.playbackDeviceNames(),
         [this](const std::string& name) { return audioGateway_.playbackDeviceChannels(name); });
     {
-        std::lock_guard<std::mutex> lock(audioRoutesMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(audioRoutesMtx_);
         if (routes == padAudioRoutes_) { return; }
         padAudioRoutes_ = std::move(routes);
     }

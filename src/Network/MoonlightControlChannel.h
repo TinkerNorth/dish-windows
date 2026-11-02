@@ -19,6 +19,7 @@
 
 #include "core/moonlight/MoonlightControl.h"
 #include "core/moonlight/MoonlightCrypto.h"
+#include "core/thread/TrackedMutex.h"
 
 #include <array>
 #include <atomic>
@@ -118,7 +119,7 @@ class MoonlightControlChannel {
     ENetHost* host_ = nullptr;
     ENetPeer* peer_ = nullptr;
 
-    std::mutex sendMtx_;
+    thread::TrackedMutex sendMtx_{"moonlight.send"};
     std::unique_ptr<moonlight::crypto::ControlSealer> sealer_;
     std::uint32_t seq_ = 0;
     // Reused plaintext scratch for the hot-path encoder (never per-packet heap).

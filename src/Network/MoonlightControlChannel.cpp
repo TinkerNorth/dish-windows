@@ -54,7 +54,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
     {
         // The key and the sealer are read under sendMtx_ by every sender, and
         // the cancel flag is what a disconnect() landing mid-handshake raises.
-        std::lock_guard<std::mutex> lock(sendMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
         key_ = rikey;
         terminated_ = false;
         cancelled_ = false;
@@ -98,7 +98,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
     const bool up =
         enet_host_service(host, &event, timeoutMs) > 0 && event.type == ENET_EVENT_TYPE_CONNECT;
     if (up) {
-        std::lock_guard<std::mutex> lock(sendMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
         if (!cancelled_) {
             host_ = host;
             peer_ = peer;
@@ -118,7 +118,7 @@ bool MoonlightControlChannel::connect(const std::string& hostIp, std::uint16_t p
         enet_peer_reset(peer);
     }
     enet_host_destroy(host);
-    std::lock_guard<std::mutex> lock(sendMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     sealer_.reset();
     return false;
 }
@@ -127,7 +127,7 @@ void MoonlightControlChannel::disconnect() {
     {
         // A connect() blocked in its handshake cannot be interrupted; the flag
         // makes it tear down whatever it establishes instead of publishing it.
-        std::lock_guard<std::mutex> lock(sendMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
         cancelled_ = true;
     }
     if (running_.exchange(false, std::memory_order_relaxed)) {
@@ -139,12 +139,14 @@ void MoonlightControlChannel::disconnect() {
     }
     if (rxThread_.joinable()) { rxThread_.join(); }
 
-    std::lock_guard<std::mutex> lock(sendMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (peer_ != nullptr) {
+        thread::blockingRegion("enet.teardown");
         enet_peer_disconnect_now(peer_, 0);
         peer_ = nullptr;
     }
     if (host_ != nullptr) {
+        thread::blockingRegion("enet.teardown");
         enet_host_destroy(host_);
         host_ = nullptr;
     }
@@ -156,7 +158,7 @@ void MoonlightControlChannel::sealAndSend(const std::uint8_t* plaintext, std::si
     // Before the lock: a send during the handshake must not wait on it, and
     // until the link is published there is nothing here to send on.
     if (!connected_.load(std::memory_order_acquire)) { return; }
-    std::lock_guard<std::mutex> lock(sendMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
     sealAndSendLocked(plaintext, len);
 }
@@ -173,13 +175,14 @@ void MoonlightControlChannel::sealAndSendLocked(const std::uint8_t* plaintext, s
         enet_packet_destroy(packet);
         return;
     }
+    thread::blockingRegion("enet.flush");
     enet_host_flush(host_);
 }
 
 void MoonlightControlChannel::sendControllerState(const moonlight::ControllerState& state) {
     // Hot path: encode into the reused scratch, then seal+send. No allocation
     // in our code; the seq counter and host are serialised by sendMtx_.
-    std::lock_guard<std::mutex> lock(sendMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
     const std::size_t n = moonlight::encodeControllerMulti(state, multiScratch_.data());
     std::size_t outLen = 0;
@@ -192,6 +195,7 @@ void MoonlightControlChannel::sendControllerState(const moonlight::ControllerSta
         enet_packet_destroy(packet);
         return;
     }
+    thread::blockingRegion("enet.flush");
     enet_host_flush(host_);
 }
 
@@ -215,7 +219,7 @@ void MoonlightControlChannel::sendControllerReplug(std::uint8_t controllerNumber
     const auto arrival = moonlight::encodeControllerArrival(controllerNumber, controllerType,
                                                             capabilities, supportedButtons);
     if (!connected_.load(std::memory_order_acquire)) { return; }
-    std::lock_guard<std::mutex> lock(sendMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (host_ == nullptr || peer_ == nullptr || !sealer_) { return; }
     const std::size_t unplugLen = moonlight::encodeControllerMulti(unplug, multiScratch_.data());
     sealAndSendLocked(multiScratch_.data(), unplugLen);
@@ -260,8 +264,9 @@ void MoonlightControlChannel::keepAliveIfDue() {
 //
 // Negative when the channel is gone, which ends the loop; 0 when nothing arrived.
 int MoonlightControlChannel::serviceEnet(ENetEvent& event) {
-    std::lock_guard<std::mutex> lock(sendMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(sendMtx_);
     if (host_ == nullptr) { return -1; }
+    thread::blockingRegion("enet.service");
     return enet_host_service(host_, &event, 0);
 }
 
@@ -303,6 +308,7 @@ void MoonlightControlChannel::onPacket(const ENetPacket& packet) {
 }
 
 void MoonlightControlChannel::receiveLoop() {
+    const thread::ScopedThreadRole role(thread::ThreadRole::MoonlightRx);
     while (running_.load(std::memory_order_relaxed)) {
         keepAliveIfDue();
         ENetEvent event;

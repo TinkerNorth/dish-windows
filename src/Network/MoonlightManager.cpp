@@ -602,7 +602,7 @@ void MoonlightManager::cancelHostApp(const QString& id) {
 }
 
 QStringList MoonlightManager::slotsRoutedTo(const QString& hostId) const {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     QStringList out;
     for (const auto& [slotId, route] : routes_) {
         if (route.hostId == hostId) { out.append(QString::fromStdString(slotId)); }
@@ -735,7 +735,7 @@ moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const Q
 
     const bool userMotionOn = motionSwitchAllows(slotId);
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         // Named rather than braced-aggregate: the differ is default-constructed
         // on purpose (a fresh binding starts from "nothing is touching"), and a
         // positional init would have to spell that out to stay warning-clean.
@@ -769,7 +769,7 @@ void MoonlightManager::unbindSlot(const QString& slotId) {
     const std::string key = slotId.toStdString();
     Route route;
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         const auto it = routes_.find(key);
         if (it == routes_.end()) {
             qCDebug(lcMoonlightManager)
@@ -805,7 +805,7 @@ void MoonlightManager::unbindSlot(const QString& slotId) {
 
 std::optional<std::uint8_t>
 MoonlightManager::numberOnSession(const QString& slotId, const MoonlightSession* session) const {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     const auto it = routes_.find(slotId.toStdString());
     if (it == routes_.end() || it->second.session != session) { return std::nullopt; }
     return it->second.controllerNumber;
@@ -813,14 +813,14 @@ MoonlightManager::numberOnSession(const QString& slotId, const MoonlightSession*
 
 // The pad the host builds next holds no contact, so the next frame is diffed from nothing.
 void MoonlightManager::forgetTouchFrame(const QString& slotId) {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     const auto it = routes_.find(slotId.toStdString());
     if (it != routes_.end()) { it->second.touchDiffer.reset(); }
 }
 
 // A stream that comes up has the host build every pad on it afresh, holding no contact.
 void MoonlightManager::forgetTouchFramesOn(const MoonlightSession* session) {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     for (auto& entry : routes_) {
         if (entry.second.session == session) { entry.second.touchDiffer.reset(); }
     }
@@ -944,13 +944,13 @@ moonlight::SessionUiInputs MoonlightManager::sessionUiInputs(const QString& host
 }
 
 QString MoonlightManager::boundHostFor(const QString& slotId) const {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     const auto it = routes_.find(slotId.toStdString());
     return it == routes_.end() ? QString() : it->second.hostId;
 }
 
 QString MoonlightManager::slotForController(const QString& hostId, int controllerNumber) const {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     for (const auto& [slotId, route] : routes_) {
         if (route.hostId == hostId && route.controllerNumber == controllerNumber) {
             return QString::fromStdString(slotId);
@@ -978,7 +978,7 @@ void MoonlightManager::forwardReport(const std::string& slotId, std::uint16_t bu
     state.rightStickY = ry;
     MoonlightSession* session = nullptr;
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         const auto it = routes_.find(slotId);
         if (it == routes_.end()) { return; }
         session = it->second.session;
@@ -1007,7 +1007,7 @@ void MoonlightManager::forwardMotion(const std::string& slotId, std::int16_t gyr
     MoonlightSession* session = nullptr;
     std::uint8_t number = 0;
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         const auto it = routes_.find(slotId);
         if (it == routes_.end() || !it->second.userMotionOn) { return; }
         session = it->second.session;
@@ -1038,7 +1038,7 @@ void MoonlightManager::forwardTouch(const std::string& slotId, bool finger0Activ
     std::optional<moonlight::ControllerState> clickFrame;
     std::vector<moonlight::TouchEvent> events;
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         const auto it = routes_.find(slotId);
         if (it == routes_.end()) { return; }
         session = it->second.session;
@@ -1089,7 +1089,7 @@ void MoonlightManager::forwardBattery(const std::string& slotId, std::uint8_t le
     MoonlightSession* session = nullptr;
     std::uint8_t number = 0;
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         const auto it = routes_.find(slotId);
         if (it == routes_.end()) { return; }
         session = it->second.session;
@@ -1114,7 +1114,7 @@ std::optional<std::string> MoonlightManager::touchpadPickFor(const QString& host
 }
 
 void MoonlightManager::keepTouchReach(const QString& slotId, bool touchReaches) {
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     const auto it = routes_.find(slotId.toStdString());
     if (it != routes_.end()) { it->second.touchReaches = touchReaches; }
 }
@@ -1122,7 +1122,7 @@ void MoonlightManager::keepTouchReach(const QString& slotId, bool touchReaches) 
 void MoonlightManager::refreshMotionSwitches() {
     QStringList routed;
     {
-        std::lock_guard<std::mutex> lock(routeMtx_);
+        std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
         for (const auto& entry : routes_) { routed.append(QString::fromStdString(entry.first)); }
     }
     for (const auto& slotId : routed) { readMotionSwitch(slotId); }
@@ -1135,7 +1135,7 @@ bool MoonlightManager::motionSwitchAllows(const QString& slotId) const {
 // Asked outside routeMtx_, because the switch reads a store the input thread must never wait on.
 void MoonlightManager::readMotionSwitch(const QString& slotId) {
     const bool on = motionSwitchAllows(slotId);
-    std::lock_guard<std::mutex> lock(routeMtx_);
+    std::lock_guard<thread::TrackedMutex> lock(routeMtx_);
     const auto it = routes_.find(slotId.toStdString());
     if (it != routes_.end()) { it->second.userMotionOn = on; }
 }

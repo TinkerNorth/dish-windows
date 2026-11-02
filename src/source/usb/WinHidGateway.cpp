@@ -472,7 +472,7 @@ WinHidGateway::~WinHidGateway() {
     for (;;) {
         int syntheticId = 0;
         {
-            std::lock_guard<std::mutex> lock(mtx_);
+            std::lock_guard<thread::TrackedMutex> lock(mtx_);
             if (claimed_.empty()) { break; }
             syntheticId = claimed_.begin()->first;
         }
@@ -629,7 +629,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->running.store(true);
     Claimed* raw = claim.get();
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<thread::TrackedMutex> lock(mtx_);
         claimed_.emplace(syntheticId, std::move(claim));
     }
     raw->reader = std::thread([this, raw] { readLoop(raw); });
@@ -749,6 +749,7 @@ bool WinHidGateway::decodeOneReport(Claimed* c, const std::uint8_t* data, std::s
 // hid-playstation layout and need a final sign/scale check against real pads (flagged in
 // UsbReportParsers.h).
 void WinHidGateway::readLoop(Claimed* c) {
+    const thread::ScopedThreadRole role(thread::ThreadRole::UsbReader);
     auto* handle = static_cast<HANDLE>(c->handle);
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
@@ -783,7 +784,7 @@ void WinHidGateway::readLoop(Claimed* c) {
 void WinHidGateway::releaseClaim(int syntheticId) {
     std::unique_ptr<Claimed> claim;
     {
-        std::lock_guard<std::mutex> lock(mtx_);
+        std::lock_guard<thread::TrackedMutex> lock(mtx_);
         const auto it = claimed_.find(syntheticId);
         if (it == claimed_.end()) { return; }
         claim = std::move(it->second);
@@ -806,28 +807,28 @@ void WinHidGateway::releaseClaim(int syntheticId) {
 }
 
 bool WinHidGateway::isClaimAlive(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return false; }
     return it->second->alive.load();
 }
 
 std::int64_t WinHidGateway::completionCount(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return 0; }
     return it->second->completions.load();
 }
 
 std::int64_t WinHidGateway::decodedCount(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return 0; }
     return it->second->decoded.load();
 }
 
 bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     if (it == claimed_.end()) { return false; }
     if (it->second->parser != input::usbparse::HidParser::DualSense) { return false; }
@@ -842,7 +843,7 @@ bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
 // because releaseClaim() joins the reader and erases the entry only from the owner thread, and
 // every caller here is downstream of a live binding for this device.
 WinHidGateway::Claimed* WinHidGateway::claimedFor(int syntheticId) const {
-    std::lock_guard<std::mutex> lock(mtx_);
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
     const auto it = claimed_.find(syntheticId);
     return it == claimed_.end() ? nullptr : it->second.get();
 }
@@ -857,7 +858,7 @@ bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data,
     // the pad as a different report.
     if (len > want) { return false; }
 
-    std::lock_guard<std::mutex> lock(c->writeMtx);
+    std::lock_guard<thread::TrackedMutex> lock(c->writeMtx);
     // Exactly OutputReportByteLength, zero-padded. The HID stack rejects any other length outright.
     std::array<std::uint8_t, 256> buf{};
     if (want > buf.size()) { return false; }
@@ -865,6 +866,7 @@ bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data,
 
     auto handle = static_cast<HANDLE>(c->handle);
     if (handle == nullptr || handle == INVALID_HANDLE_VALUE) { return false; }
+    thread::blockingRegion("hid.write");
     return overlappedWrite(handle, buf.data(), static_cast<DWORD>(want));
 }
 

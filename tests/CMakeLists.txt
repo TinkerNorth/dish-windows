@@ -24,6 +24,7 @@ set(DISH_TEST_SOURCES
     CrtAssertToStderr.cpp
     test_kernel.cpp
     test_async_state.cpp
+    test_tracked_mutex.cpp
     test_session_crypto.cpp
     test_http_framing.cpp
     # Moonlight (GameStream) path.
@@ -293,6 +294,22 @@ add_custom_command(TARGET DishTests POST_BUILD
 # so without DL_PATHS discovery exits with STATUS_DLL_NOT_FOUND (0xc0000135).
 # DL_PATHS holds for every test run as well as for discovery, which is how the
 # TLS tests reach their libssl.
+# The statistics half of test_tracked_mutex.cpp, so a plain build runs both halves. The header is
+# all it needs, so nothing of dish_core (whose mutexes are plain here) links in.
+if(NOT DISH_LOCK_STATS)
+    add_executable(DishTrackedMutexStatsTests CrtAssertToStderr.cpp test_tracked_mutex.cpp)
+    target_include_directories(DishTrackedMutexStatsTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+    target_compile_definitions(DishTrackedMutexStatsTests PRIVATE DISH_LOCK_STATS)
+    target_link_libraries(DishTrackedMutexStatsTests
+        PRIVATE
+            Catch2::Catch2WithMain
+            Threads::Threads
+            dish_warnings
+            dish_strict)
+    catch_discover_tests(DishTrackedMutexStatsTests TEST_PREFIX "lockstats/")
+endif()
+
 if(WIN32)
     catch_discover_tests(DishTests
         DL_PATHS
