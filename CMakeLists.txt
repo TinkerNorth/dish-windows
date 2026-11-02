@@ -261,6 +261,7 @@ set(DISH_CORE_SOURCES
     src/core/input/PhysicalMotionSource.h
     src/core/input/PumpPacing.h
     src/core/input/DirtySet.h
+    src/core/thread/GraceEpoch.h
     src/core/thread/LatestValue.h
     src/core/thread/Seqlock.h
     src/core/thread/SpscRing.h
@@ -498,6 +499,8 @@ set(DISH_CORE_SOURCES
     src/FeatureSettings.h
     src/FeatureSettings.cpp
     src/LightbarRouting.h
+    src/SlotRouter.h
+    src/SlotRouter.cpp
     src/AppModel.h
     src/AppModel.cpp
     # The pure hit-test math only. The side-effecting Win32 chrome
