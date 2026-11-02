@@ -332,10 +332,13 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
 
 AppModel::~AppModel() {
     // Order matters. Stop the input thread first so no further SDL report races
-    // teardown; the timers next so no queued pollUsbDirect fires against a
-    // half-torn-down manager. The gateway's destructor is what releases the live
-    // claims, so it must outlive the manager that borrows it.
+    // teardown; then every session, so no feedback reaches the router, the USB
+    // manager or the playout engine as they go; the timers next so no queued
+    // pollUsbDirect fires against a half-torn-down manager. The gateway's
+    // destructor is what releases the live claims, so it must outlive the
+    // manager that borrows it.
     bridge_->stop();
+    wifi_->stopEverySession();
     usbScanTimer_->stop();
     inputRateTimer_->stop();
     // Remove the tray item and the power filter explicitly: a shell that

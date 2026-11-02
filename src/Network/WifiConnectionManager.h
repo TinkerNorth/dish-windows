@@ -122,6 +122,9 @@ class WifiConnectionManager : public QObject {
     // remembered list on the way back is the only path that always converges.
     void prepareForSleep();
     void resumeFromSleep();
+    // Ends every session on this side only, joining its heartbeat and receive threads, and tells
+    // no one. An owner's teardown calls it before anything a session's handlers reach goes.
+    void stopEverySession();
 
     QList<models::RememberedWifi> remembered() const { return store_->remembered(); }
 

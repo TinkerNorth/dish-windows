@@ -144,7 +144,9 @@ WifiConnectionManager::WifiConnectionManager(ConnectionStore* store, HTTPClient*
                               [this](const QString& host) { return pinGuardsAPairingAt(host); }));
 }
 
-WifiConnectionManager::~WifiConnectionManager() {
+WifiConnectionManager::~WifiConnectionManager() { stopEverySession(); }
+
+void WifiConnectionManager::stopEverySession() {
     // This loop exists to tear down live sessions, not to announce anything —
     // and by the time it runs there is nobody left who can safely listen.
     //
