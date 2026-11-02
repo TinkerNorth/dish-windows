@@ -132,6 +132,56 @@ written.
   another agent's Gradle daemon and test runs were resident, and the CPU load sampled before and
   after each run was 0 to 5 percent. Compare runs of one binary on one machine.
 
+## Release measurements
+
+`.github/workflows/measurements.yml` turns this bench into a record per release. It runs on pull
+requests that touch `src/**`, `tools/bench/**`, `tests/HotPathRig.h`, `tests/test_lock_laws.cpp`,
+the report or its tests, `CMakeLists.txt` or the workflow itself; by hand (`workflow_dispatch`); and
+from `release.yml` as the `measurements` job between `draft` and `publish`. One `windows-2022` job
+configures the `release` preset twice, plain with `-DDISH_BUILD_BENCH=ON` and with
+`-DDISH_LOCK_STATS=ON -DDISH_BUILD_BENCH=ON -DDISH_BUILD_TESTS=ON`, builds `bench_input_path`,
+`bench_input_path_lockstats` and `DishLockLawTests`, runs the lock laws, and runs each bench at its
+defaults and once more with `--mic-hz 1000 --scenarios S5`, all with `--receiver block`, because a
+spinning receiver takes one of the runner's four cores. ViGEm mode does not run there: a runner has
+no ViGEmBus. `scripts/measurements-report.py` merges the four JSON files and renders the report.
+
+- **Lock law gate (fails the job).** In the lockstats runs the SdlInput, UsbReader, Receive and
+  AudioCapture roles must show no acquisition of any lock in any scenario, the rule of
+  `tests/test_lock_laws.cpp` read off the shipped configuration. An acquisition fails the report
+  with an error that names the run, scenario, role and lock, and so does a lockstats run that
+  recorded no lock at all, which cannot be judged. `publish` needs `measurements`, so a release that
+  fails stays a draft, and "Re-run failed jobs" repeats only the measurement. A dispatch can set
+  `enforce_lock_gate` to false to report the gate without failing on it; a pull request cannot.
+- **Trend (warnings only).** The report downloads `measurements-*.json` from the latest published
+  release and warns, in the markdown and as `::warning::` annotations, when a row's p99.9 or max is
+  more than twice the previous value and more than 100 us above it. A shared runner is noisy, so
+  this never fails a run.
+- **Headline.** S1 pad A's median, p99 and p99.9 from publish to the satellite, the same run's max
+  and longest gap as the runner's noise floor, and the locks the SdlInput thread took per report.
+- **Where the files land.** `measurements-<version>.md` and `measurements-<version>.json`. The
+  markdown is the job summary, both files are the `measurements` workflow artifact (kept 90 days),
+  and a release run attaches them to the draft release with `gh release upload --clobber`. That
+  happens after `harden`, so `SHA256SUMS` and the signatures do not cover them. The next release's
+  run reads the JSON back from there.
+
+By hand, from the two Release trees (Qt's bin directory on PATH):
+
+```
+build-bench-rel\bench_input_path.exe --receiver block --json raw\bench_input_path.json
+build-bench-rel\bench_input_path.exe --receiver block --mic-hz 1000 --scenarios S5 --json raw\bench_input_path-mic1000.json
+build-bench-rel-lockstats\bench_input_path_lockstats.exe --receiver block --json raw\bench_input_path_lockstats.json
+build-bench-rel-lockstats\bench_input_path_lockstats.exe --receiver block --mic-hz 1000 --scenarios S5 --json raw\bench_input_path_lockstats-mic1000.json
+gh release download --pattern "measurements-*.json" --dir previous
+python scripts\measurements-report.py --input-dir raw --output-dir out --version dev --previous-dir previous
+```
+
+The report exits 1 when an enforced gate fails and 2 when its input cannot be read.
+`--previous-dir` is optional, `--allow-partial` accepts a directory that lacks some of the four
+runs, `--no-enforce-lock-gate` reports the lock gate without failing on it, and `--trend-ratio` and
+`--trend-min-delta-us` move the trend's thresholds. `python -m unittest discover -s tests -p
+"test_measurements_report.py"` tests the script (windows-ci.yml runs it), and reads a file the bench
+really wrote when `DISH_BENCH_JSON` names one.
+
 ## Before: 2.5.0 input path
 
 AMD Ryzen 9 7900X 12-Core Processor (24 logical CPUs), Windows 11 build 26300, Release build

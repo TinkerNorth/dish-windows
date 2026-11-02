@@ -376,7 +376,9 @@ changes reaches them in one of four ways, each with one owner:
 [`tests/test_lock_laws.cpp`](../tests/test_lock_laws.cpp) runs every hot thread
 at once over the production objects and fails if one of these three, or the
 mic capture thread's send, takes any tracked lock;
-[`tools/bench`](../tools/bench/README.md) measures the path.
+[`tools/bench`](../tools/bench/README.md) measures the path, and
+`measurements.yml` reads the same rule off the shipped configuration's bench
+before every release and attaches the record to it.
 
 ### The feedback path: one owner for "may I" and "where to"
 

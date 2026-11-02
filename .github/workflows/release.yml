@@ -29,7 +29,10 @@ on:
 # The release is uploaded as a DRAFT and flipped to published afterwards:
 # GitHub never points releases/latest at a draft, so the assets upload while
 # the update permalink still resolves to the previous release; the flip is
-# what makes publication atomic for every client polling latest.json.
+# what makes publication atomic for every client polling latest.json. Between
+# the two, measurements.yml runs the input-path bench on the tagged commit and
+# attaches measurements-<version>.md and .json to the draft, and its lock law
+# gate keeps a release whose hot threads take a lock a draft.
 #
 # Prerelease tags (1.2.3-rc.1) publish marked as prerelease and skip
 # latest.json; stable clients never see them.
@@ -417,17 +420,17 @@ jobs:
       # it from source instead.
       compile-generator: true
 
-  # Publishes on both triggers. `tag_name` is explicit because on
+  # Uploads on both triggers. `tag_name` is explicit because on
   # workflow_dispatch github.ref is the default branch, not the tag that
   # was built, and action-gh-release would otherwise create a release
   # against the branch ref.
   #
   # draft: true is load-bearing. GitHub never points releases/latest at a
   # draft, so the assets upload while the update permalink still resolves
-  # to the previous release; the flip below is what makes publication
+  # to the previous release; the flip in publish is what makes publication
   # atomic for every client polling latest.json.
-  publish:
-    name: Publish to GitHub Releases
+  draft:
+    name: Upload the draft GitHub Release
     needs: [harden, provenance]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -449,7 +452,7 @@ jobs:
       - name: Show what we're about to publish
         run: find release -type f -printf '%p\n'
 
-      - name: Publish GitHub Release (as draft)
+      - name: Upload to GitHub Releases (as draft)
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
@@ -459,6 +462,28 @@ jobs:
           files: release/**/*
           fail_on_unmatched_files: true
 
+  # The input-path measurements of the tagged commit, attached to the draft
+  # with `gh release upload --clobber` before anything is published. They
+  # come after harden, so SHA256SUMS and the signatures do not cover them.
+  measurements:
+    name: Release measurements
+    needs: [draft]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/measurements.yml
+    with:
+      version: ${{ inputs.tag || github.ref_name }}
+      upload_to_release: true
+      tag: ${{ inputs.tag || github.ref_name }}
+
+  publish:
+    name: Publish to GitHub Releases
+    needs: [draft, measurements]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
       # Assets upload while the release is a draft (drafts are never 'latest');
       # flipping afterwards makes the publish atomic for the update permalink.
       - name: Flip release from draft to published

@@ -23,6 +23,16 @@ share a version number.
 
 ## [Unreleased]
 
+### Added
+
+- **Each release carries its own measurements.** The release workflow runs
+  the input-path benchmark on the tagged code and attaches
+  `measurements-<version>.md` and `measurements-<version>.json` to the
+  release: how long a pad's report takes from the moment Dish has it to the
+  satellite, in seven scenarios, and every lock each thread took on the way.
+  A release whose controller, receive or microphone threads take a lock is not
+  published, and each report is compared with the previous release's.
+
 ### Changed
 
 - **Pads are read every half millisecond, and each change goes out once.**
