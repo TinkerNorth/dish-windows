@@ -8,6 +8,7 @@
 #include "Util/Localization.h"
 #include "qml/QmlEntryPoint.h"
 #include "source/store/InstallDefaults.h"
+#include "source/system/ThreadPriority.h"
 #include "update/UpdateHandoff.h"
 
 #include <QFont>
@@ -102,6 +103,11 @@ int main(int argc, char* argv[]) {
         QTextStream(stderr) << "dish: libsodium initialisation failed\n";
         return 1;
     }
+
+    // Waits and sleeps round to the timer period, 15.6 ms by default, and since Windows 10 2004 a
+    // process only runs at 1 ms when it asks for that itself.
+    dish::source::WindowsSchedulerGateway scheduler;
+    const dish::source::TimerPeriodGuard timerPeriod(1, scheduler);
 
     // QGuiApplication, not QApplication: no QWidget is ever constructed, so the widgets module
     // stays out of the process.

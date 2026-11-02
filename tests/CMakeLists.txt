@@ -141,6 +141,7 @@ set(DISH_TEST_SOURCES
     test_mic_indicator_state.cpp
     test_winsock_init.cpp
     test_set_thread_execution_state_inhibitor.cpp
+    test_thread_priority.cpp
     test_sleep_cycle.cpp
     test_lid_sleep.cpp
     test_sleep_coordinator.cpp

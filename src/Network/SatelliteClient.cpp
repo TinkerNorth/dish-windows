@@ -5,6 +5,7 @@
 
 #include "Util/Endian.h"
 #include "core/wire/SessionCrypto.h"
+#include "source/system/ThreadPriority.h"
 
 #include <QtGlobal>
 
@@ -425,6 +426,7 @@ void SatelliteClient::stopReceiveLoop() {
 
 void SatelliteClient::receiveLoop() {
     const thread::ScopedThreadRole role(thread::ThreadRole::Receive);
+    const source::ScopedThreadPriority priority(thread::ThreadRole::Receive);
     // A full datagram, not the 256 bytes of the pre-audio protocol: recvfrom
     // TRUNCATES a UDP datagram to the buffer and a truncated SPEAKER_AUDIO
     // ciphertext then fails the AEAD, so every full-size audio frame would be

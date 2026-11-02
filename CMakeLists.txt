@@ -398,6 +398,8 @@ set(DISH_CORE_SOURCES
     src/source/system/BluetoothRadioProbe.cpp
     src/source/system/WakeInhibitor.h
     src/source/system/WakeInhibitor.cpp
+    src/source/system/ThreadPriority.h
+    src/source/system/ThreadPriority.cpp
     # Auto-update runtime: gateways, staging store, coordinator and the boot
     # handoff. In dish_core (not the exe) because main.cpp's boot gate runs
     # before the composition root and the tests link this library, not the exe.
@@ -621,8 +623,10 @@ target_link_libraries(dish_core
         $<TARGET_NAME_IF_EXISTS:SDL2::SDL2> $<TARGET_NAME_IF_EXISTS:SDL2::SDL2-static>
         Threads::Threads
         ws2_32
-        # ENet's Win32 backend uses timeGetTime.
+        # ENet's Win32 backend uses timeGetTime; ThreadPriority, timeBeginPeriod.
         winmm
+        # ThreadPriority: the MMCSS Games task (AvSetMmThreadCharacteristicsW).
+        avrt
         # Raw-HID claim path: SetupAPI enumeration + the HID class API.
         setupapi
         hid

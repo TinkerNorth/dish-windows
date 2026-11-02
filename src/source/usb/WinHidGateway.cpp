@@ -6,6 +6,7 @@
 #include "core/input/HidTransport.h"
 #include "core/input/UsbHidLayout.h"
 #include "core/input/UsbReportParsers.h"
+#include "source/system/ThreadPriority.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
 // then the HID + SetupAPI headers, which depend on the base Win32 types.
@@ -720,6 +721,7 @@ bool WinHidGateway::decodeOneReport(Claimed* c, const std::uint8_t* data, std::s
 // UsbReportParsers.h).
 void WinHidGateway::readLoop(Claimed* c) {
     const thread::ScopedThreadRole role(thread::ThreadRole::UsbReader);
+    const ScopedThreadPriority priority(thread::ThreadRole::UsbReader);
     auto* handle = static_cast<HANDLE>(c->handle);
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
