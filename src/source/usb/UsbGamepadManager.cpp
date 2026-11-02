@@ -5,6 +5,7 @@
 
 #include "source/store/UsbPathPreferenceStore.h"
 
+#include "Input/TouchGate.h"
 #include "core/input/UsbReportParsers.h"
 #include "core/reducer/UsbClaimHealth.h"
 #include "core/reducer/UsbPollRate.h"
@@ -118,6 +119,9 @@ class ClaimedPadPublisher {
         t.finger1X = r.finger1X;
         t.finger1Y = r.finger1Y;
         t.buttonPressed = r.touchpadButton;
+        const input::TouchpadVerdict verdict = touchGate_->decide(t, processor_->nanoTime());
+        if (verdict.send == input::TouchpadSend::Skip) { return; }
+        t.eventTimeMs = verdict.eventTimeMs;
         processor_->publishTouchpad(*index_, t);
     }
 
@@ -135,6 +139,8 @@ class ClaimedPadPublisher {
     std::shared_ptr<std::atomic<bool>> lastMicMuted_ = std::make_shared<std::atomic<bool>>(false);
     std::shared_ptr<std::atomic<std::uint16_t>> lastBattery_ =
         std::make_shared<std::atomic<std::uint16_t>>(0xFFFF);
+    // Touched only on the claim's raw-HID read thread.
+    std::shared_ptr<input::TouchGate> touchGate_ = std::make_shared<input::TouchGate>();
 };
 
 } // namespace
