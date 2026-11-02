@@ -247,32 +247,34 @@ void SlotRouter::report(DeviceIndex index, const DeviceId& id, const DeviceState
     deps_.moonlight->forwardReport(id, s.wButtons, s.lt, s.rt, s.lx, s.ly, s.rx, s.ry);
 }
 
-void SlotRouter::motion(DeviceIndex index, const DeviceId& id, const MotionSample& m,
+void SlotRouter::motion(DeviceIndex index, const DeviceId& id, const MotionSample& sample,
                         std::uint32_t timestampDeltaUs) {
     {
         const thread::GraceGuard guard(grace_, index);
         if (const RouteTable* table = table_.load(std::memory_order_acquire)) {
             const InputRoute& route = table->inputs[index];
             if (route.client && route.motion) {
-                route.client->sendMotion(route.controllerIndex, m.gyroX, m.gyroY, m.gyroZ, m.accelX,
-                                         m.accelY, m.accelZ, timestampDeltaUs);
+                route.client->sendMotion(route.controllerIndex, sample.gyroX, sample.gyroY,
+                                         sample.gyroZ, sample.accelX, sample.accelY, sample.accelZ,
+                                         timestampDeltaUs);
             }
         }
     }
-    deps_.moonlight->forwardMotion(id, m.gyroX, m.gyroY, m.gyroZ, m.accelX, m.accelY, m.accelZ);
+    deps_.moonlight->forwardMotion(id, sample.gyroX, sample.gyroY, sample.gyroZ, sample.accelX,
+                                   sample.accelY, sample.accelZ);
 }
 
-void SlotRouter::battery(DeviceIndex index, const DeviceId& id, const BatterySample& b) {
+void SlotRouter::battery(DeviceIndex index, const DeviceId& id, const BatterySample& sample) {
     {
         const thread::GraceGuard guard(grace_, index);
         if (const RouteTable* table = table_.load(std::memory_order_acquire)) {
             const InputRoute& route = table->inputs[index];
             if (route.client) {
-                route.client->sendBattery(route.controllerIndex, b.level, b.status);
+                route.client->sendBattery(route.controllerIndex, sample.level, sample.status);
             }
         }
     }
-    deps_.moonlight->forwardBattery(id, b.level, b.status);
+    deps_.moonlight->forwardBattery(id, sample.level, sample.status);
 }
 
 void SlotRouter::touchpad(DeviceIndex index, const DeviceId& id, const TouchpadSample& s) {
@@ -380,16 +382,16 @@ void SlotRouter::installFeedbackHandlers(net::WifiConnection& conn, const QStrin
     // Handed to the playout engine, which copies the frame onto its own thread and returns at
     // once, so a decode burst cannot delay the heartbeat ack behind it. The message borrows the
     // receive buffer; the engine copies it before returning.
-    const std::string engineId = connectionId.toStdString();
+    const auto engineId = std::make_shared<const std::string>(connectionId.toStdString());
     conn.setSpeakerAudioHandler([this,
                                  engineId](const net::SatelliteClient::SpeakerAudioMessage& sm) {
-        deps_.speaker->deliver(engineId, sm.controllerIndex, source::audio::PlayoutLane::Speaker,
+        deps_.speaker->deliver(*engineId, sm.controllerIndex, source::audio::PlayoutLane::Speaker,
                                sm.seq, sm.opus, sm.opusLen);
     });
     conn.setHapticAudioHandler(
         [this, engineId](const net::SatelliteClient::SpeakerAudioMessage& hm) {
-            deps_.speaker->deliver(engineId, hm.controllerIndex, source::audio::PlayoutLane::Haptic,
-                                   hm.seq, hm.opus, hm.opusLen);
+            deps_.speaker->deliver(*engineId, hm.controllerIndex,
+                                   source::audio::PlayoutLane::Haptic, hm.seq, hm.opus, hm.opusLen);
         });
 }
 
