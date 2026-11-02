@@ -169,7 +169,8 @@ TEST_CASE("the handle writer gives up on a pad that never takes the report",
                                   FILE_FLAG_OVERLAPPED, nullptr);
     REQUIRE(handle != INVALID_HANDLE_VALUE);
     dish::thread::TrackedMutex writeMtx{"hid.write"};
-    HandleReportWriter writer(handle, 256, &writeMtx, 50ms);
+    constexpr auto kCap = 50ms;
+    HandleReportWriter writer(handle, 256, &writeMtx, kCap);
     const std::array<std::uint8_t, 256> report{0x02};
     // Nobody reads the pipe, so once its buffer is full a write stays pending.
     bool gaveUp = false;
@@ -180,7 +181,9 @@ TEST_CASE("the handle writer gives up on a pad that never takes the report",
         slowest = std::max(slowest, std::chrono::steady_clock::now() - started);
     }
     CHECK(gaveUp);
-    CHECK(slowest >= 40ms);
+    // A windows-2022 runner's 50 ms wait has ended at 39.5 ms by the steady clock: half the cap
+    // still tells a writer that waited from one that gave up at once.
+    CHECK(slowest >= kCap / 2);
     CHECK(slowest < 1s);
     ::CloseHandle(handle);
     ::CloseHandle(pad);
