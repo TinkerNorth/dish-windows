@@ -259,6 +259,7 @@ set(DISH_CORE_SOURCES
     src/core/input/GamepadButtonLayouts.h
     src/core/input/Deadzones.h
     src/core/input/PhysicalMotionSource.h
+    src/core/input/PumpPacing.h
     # Byte layouts mirrored 1:1 from dish-android's usb_parsers.cpp /
     # usb_hid_descriptor.cpp; keep the two in step when either side gains a
     # model.
@@ -484,6 +485,8 @@ set(DISH_CORE_SOURCES
     src/Input/JoystickMapping.h
     src/Input/JoystickMapping.cpp
     src/Input/OutputCommandQueue.h
+    src/Input/PumpWaiter.h
+    src/Input/PumpWaiter.cpp
     src/Input/SDLGamepadBridge.h
     src/Input/SDLGamepadBridge.cpp
     src/FeatureSettings.h

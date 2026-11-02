@@ -174,6 +174,7 @@ set(DISH_TEST_SOURCES
     test_usb_path_machine_edge_cases.cpp
     test_usb_poll_rate.cpp
     test_poll_rate_sampler.cpp
+    test_pump_pacing.cpp
     test_path_choice.cpp
     test_usb_path_resolution.cpp
     test_usb_claim_health.cpp
