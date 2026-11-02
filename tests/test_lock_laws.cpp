@@ -56,17 +56,11 @@ struct LockPair {
 // The ratchet. Each list is exactly what today's code does: a lock that appears and is not listed
 // fails, and so does a listed lock that no longer appears. The hot-path work deletes entries.
 
-constexpr std::array kSdlInputMayAcquire{
-    LockName{"bridge.output", Allowance::Debt},
-};
+constexpr std::array<LockName, 0> kSdlInputMayAcquire{};
 
 constexpr std::array<LockName, 0> kUsbReaderMayAcquire{};
 
-constexpr std::array kReceiveMayAcquire{
-    LockName{"bridge.output", Allowance::Debt},
-    LockName{"playout.pending", Allowance::Debt},
-    LockName{"usb.feedback", Allowance::Debt},
-};
+constexpr std::array<LockName, 0> kReceiveMayAcquire{};
 
 constexpr std::array<LockPair, 0> kBlockingMayHold{};
 

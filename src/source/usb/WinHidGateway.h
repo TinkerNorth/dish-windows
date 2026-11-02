@@ -61,6 +61,7 @@ class WinHidGateway : public UsbDeviceGateway {
     std::int64_t completionCount(int syntheticId) const override;
     std::int64_t decodedCount(int syntheticId) const override;
     bool writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) override;
+    std::unique_ptr<HidReportWriter> openReportWriter(int syntheticId) override;
     bool setPadMicMuted(int syntheticId, bool muted) override;
 
   private:
