@@ -7,9 +7,6 @@ name: Version consistency
 # workflows and documented in THIRD_PARTY.md section 3. This job fails the pull
 # request that moves one copy without the others. release.yml keeps its own
 # check: only it can compare the tag and the built dish.exe.
-#
-# Pin map (verify: gh api repos/<owner>/<repo>/git/ref/tags/<tag>):
-#   actions/checkout  v7.0.1  3d3c42e5aac5ba805825da76410c181273ba90b1
 
 on:
   push:
