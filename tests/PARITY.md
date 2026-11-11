@@ -86,7 +86,22 @@ enhanced mode since the 2026-09-20 wave and nobody has paired one against it.
 | 8BitDo | ✅ known XInput models | ✅ in HID mode (generic HID parser); Standard only in XInput mode (XUSB owns it) | ✅ in HID mode (generic HID parser); Standard only in XInput mode (xpad owns it) |
 | Xbox 360 / One / Series wired | ✅ | ❌ Standard only (XUSB owns it) | ❌ Standard only (xpad owns it) |
 | Stadia | ✅ | ⚠️ generic HID parser, manual pick | ⚠️ generic HID parser, manual pick |
-| Steam Controller | ✅ | ⚠️ never verified | ⚠️ never verified |
+| Steam Controller (2015) | ✅ | ⚠️ never verified | ⚠️ never verified |
+| Steam Controller (2026) | ❌ | ⚠️ never verified, ported from SDL (see below) | ⚠️ never verified, ported from SDL |
+
+The 2026 Steam Controller (wired `28DE:1302`, dongles `28DE:1304` and
+`28DE:1305`) is ported from SDL's driver (`SDL_hidapi_steam_triton.c`) and no
+pad has been on hand. Like the 2015 pad it is never claimed on its own, only
+through a Direct pick on its card. Its output worker sends the quiet settings
+(lizard mode off, raw accelerometer and gyro on) at the claim and every 3 s,
+because the pad's firmware turns lizard mode back on otherwise, and repeats a
+running rumble every 40 ms, because the pad stops one on its own. Open
+follow-ups: the two trackpads, the four back paddles, the quick-access button,
+the trigger and trackpad clicks and the capacitive touches have no wire field
+and are not forwarded; a dongle is claimed on the first of its pad interfaces
+(2 to 5) the system lists, because Direct keys a pad by model as it does for the
+2015 dongle, so a pad paired to a later slot reads nothing on Direct; and the
+Bluetooth identity (`28DE:1303`) is never Direct, like every Bluetooth pad.
 
 ## 5. Decisions, not gaps
 

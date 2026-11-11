@@ -37,10 +37,11 @@ today.
 | [Windows SDK shader binaries](#windows-sdk-shader-binaries) | `dxcompiler.dll` 1.6.2112.16, `dxil.dll` 101.6.2112.13 | Proprietary, Microsoft | Copied into the release zip and the installer payload by `windeployqt` from the installed Windows SDK. | Microsoft Windows SDK redistribution terms |
 | [Windows system libraries](#windows-system-libraries) | OS | Proprietary, Microsoft | Import libraries only. Nothing is redistributed. | None |
 
-Two further items are reuse of published facts rather than of code, and are
+Three further items are reuse of published facts rather than of code, and are
 covered in [section 7](#7-reused-facts-not-reused-code): SDL's default Switch Pro
-motion scaling constants, and the HID input-report byte layouts documented in the
-Linux kernel's PlayStation and Nintendo HID drivers.
+motion scaling constants, the HID input-report byte layouts documented in the
+Linux kernel's PlayStation and Nintendo HID drivers, and the 2026 Steam
+Controller's protocol as SDL's driver for it reads it.
 
 Everything under `packaging/brand/` and `packaging/dish.svg` is original
 TinkerNorth artwork, covered by this repository's own license. See
@@ -438,8 +439,8 @@ Linked as import libraries against the operating system, and never redistributed
 
 ## 7. Reused facts, not reused code
 
-Two places in this repository reuse published device-protocol facts. No
-third-party source is compiled in either case, and the values were remapped onto
+Three places in this repository reuse published device-protocol facts. No
+third-party source is compiled in any of them, and the values were remapped onto
 this project's own decoders.
 
 ### SDL default motion scaling
@@ -468,6 +469,26 @@ project.
 
 The dish-android repository carries the same attribution for the parsers these
 were mirrored from.
+
+### SDL's 2026 Steam Controller driver
+
+The 2026 Steam Controller's report ids and layouts, button bits, settings
+message and setting numbers, sensor axes and scales, charge states, dongle
+interface numbers, haptic rumble report and its 3 s and 40 ms resend periods, in
+[`src/core/input/UsbReportParsers.h`](src/core/input/UsbReportParsers.h),
+[`src/core/input/UsbOutputReports.h`](src/core/input/UsbOutputReports.h) and
+[`src/core/input/OutputCadence.h`](src/core/input/OutputCadence.h), follow SDL's
+HIDAPI driver `src/joystick/hidapi/SDL_hidapi_steam_triton.c` and the Valve
+headers it reads, `src/joystick/hidapi/steam/controller_structs.h` and
+`controller_constants.h`. Only offsets, values and their meanings were used,
+restated in this project's own decoders and builders; no SDL source is compiled
+in. The driver carries SDL's zlib notice, reproduced in [section 3](#sdl2). The
+two Valve headers carry the same zlib text under Valve's copyright:
+
+```
+Copyright (C) 2020 Valve Corporation   (controller_structs.h)
+Copyright (C) 2021 Valve Corporation   (controller_constants.h)
+```
 
 ---
 

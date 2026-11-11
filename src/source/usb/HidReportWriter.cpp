@@ -5,6 +5,9 @@
 
 #include <windows.h>
 
+#include <hidsdi.h>
+
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <mutex>
@@ -12,9 +15,10 @@
 namespace dish::source::usb {
 
 HandleReportWriter::HandleReportWriter(void* handle, std::size_t outputReportLen,
-                                       thread::TrackedMutex* writeMtx,
+                                       std::size_t featureReportLen, thread::TrackedMutex* writeMtx,
                                        std::chrono::milliseconds timeout)
-    : handle_(handle), outputReportLen_(outputReportLen), writeMtx_(writeMtx), timeout_(timeout),
+    : handle_(handle), outputReportLen_(outputReportLen), featureReportLen_(featureReportLen),
+      writeMtx_(writeMtx), timeout_(timeout),
       event_(::CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
 
 HandleReportWriter::~HandleReportWriter() {
@@ -55,6 +59,24 @@ bool HandleReportWriter::write(const std::uint8_t* data, std::size_t len) {
     // A short write reached the pad as a different report, which is a failure even though the call
     // returned.
     return ok && written == want;
+}
+
+// Sized the way hidapi sizes it for SDL: a report shorter than the collection's feature length is
+// zero-padded up to it, which HidD_SetFeature insists on, and a longer one goes whole for the HID
+// class driver to cut to that length. HidD_SetFeature is synchronous, so there is no overlapped
+// wait to cancel, and the handle's overlapped read is unaffected; the Steam Controller config
+// writes share the handle the same way.
+bool HandleReportWriter::writeFeature(const std::uint8_t* data, std::size_t len) {
+    std::array<std::uint8_t, 256> buf{};
+    const std::size_t sendLen = std::max(len, featureReportLen_);
+    if (data == nullptr || len == 0 || featureReportLen_ == 0 || sendLen > buf.size() ||
+        handle_ == nullptr || handle_ == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+    std::memcpy(buf.data(), data, len);
+    std::lock_guard<thread::TrackedMutex> lock(*writeMtx_);
+    thread::blockingRegion("hid.write");
+    return ::HidD_SetFeature(handle_, buf.data(), static_cast<ULONG>(sendLen)) != 0;
 }
 
 } // namespace dish::source::usb
