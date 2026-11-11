@@ -197,6 +197,7 @@ set(DISH_TEST_SOURCES
     test_steam_triton.cpp
     test_output_cadence.cpp
     test_usb_gamepad_manager_feedback.cpp
+    test_usb_receiver_slots.cpp
     test_usb_hid_items.cpp
     test_usb_hid_layout.cpp
     test_usb_hid_layout_orders.cpp
@@ -212,6 +213,7 @@ set(DISH_TEST_SOURCES
     test_list_model_roles.cpp
     test_slot_list_model.cpp
     test_slot_path_fields.cpp
+    test_direct_pad_key.cpp
     test_connection_list_model.cpp
     test_app_view_model_maps.cpp
     test_app_view_model_connections.cpp

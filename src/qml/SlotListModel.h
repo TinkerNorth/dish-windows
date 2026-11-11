@@ -65,6 +65,7 @@ class SlotListModel : public QAbstractListModel {
         PathSupportedRole,
         ClaimInProgressRole,
         DirectFailureRole,
+        WaitingForControllerRole,
 
         SatIpRole,
         SatLinkStateRole,
