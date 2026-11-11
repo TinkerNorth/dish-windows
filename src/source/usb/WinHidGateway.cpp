@@ -5,6 +5,7 @@
 
 #include "core/input/HidTransport.h"
 #include "core/input/UsbHidLayout.h"
+#include "core/input/UsbOutputReports.h"
 #include "core/input/UsbReportParsers.h"
 #include "source/system/ThreadPriority.h"
 
@@ -15,6 +16,7 @@
 #include <hidsdi.h>
 #include <setupapi.h>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 
@@ -34,6 +36,9 @@ constexpr USAGE kUsageGamepad = 0x05;
 // usages, so Android never enumerates it as a gamepad and neither does this
 // filter; it is admitted by model, not by shape.
 constexpr USAGE kUsagePageVendor = 0xFF00;
+
+// A path with no interface part, which no 2026 Steam Controller dongle's pad has.
+constexpr int kNoInterface = -1;
 
 // Microsoft's vendor id. Xbox pads are XInput-claimed and won't appear as HID,
 // but a few Microsoft HID peripherals share the VID; we skip MS-VID gamepad
@@ -78,15 +83,31 @@ std::string productName(HANDLE h, const std::string& fallbackPath) {
 }
 
 // Whether this HID collection is the one the model's parser decodes: the
-// vendor-defined game interface for the Steam Controller (its keyboard and
+// vendor-defined game interface for the Steam Controllers (their keyboard and
 // mouse collections share the VID:PID), a gamepad/joystick collection for
-// every other family.
+// every other family. The 2015 pad's is on page 0xFF00. The 2026 pad's is taken
+// to be anywhere on the vendor-defined pages (0xFF00 to 0xFFFF), which no pad
+// has confirmed yet: SDL reads it without looking at the page.
 bool collectionMatchesParser(const HIDP_CAPS& caps, input::usbparse::HidParser parser) {
     if (parser == input::usbparse::HidParser::SteamController) {
         return caps.UsagePage == kUsagePageVendor;
     }
+    if (parser == input::usbparse::HidParser::SteamTriton) {
+        return caps.UsagePage >= kUsagePageVendor;
+    }
     return caps.UsagePage == kUsagePageGenericDesktop &&
            (caps.Usage == kUsageGamepad || caps.Usage == kUsageJoystick);
+}
+
+// Whether the collection at this path carries a pad: every one does but a 2026
+// Steam Controller dongle's, whose pads ride interfaces 2 to 5 only.
+bool pathCarriesPad(const std::string& path, int vendorId, int productId) {
+    if (input::usbparse::parserForDevice(vendorId, productId) !=
+        input::usbparse::HidParser::SteamTriton) {
+        return true;
+    }
+    const int iface = input::hidInterfaceNumberFromPath(path).value_or(kNoInterface);
+    return input::usbparse::tritonInterfaceCarriesPad(productId, iface);
 }
 
 // One Steam Controller config feature report: report id 0 + the packet, padded
@@ -118,6 +139,39 @@ bool runSteamConfig(HANDLE h, int featureLen, input::usbparse::SteamConfig stage
         if (!sendSteamFeature(h, featureLen, pkt.data(), n)) { return false; }
     }
     return true;
+}
+
+// The 2026 Steam Controller's settings undone at release, IMU off and then
+// lizard mode on, each a whole feature report through the claim's own writer.
+// One try each, as SDL sends them: a pad that refused the first is gone, and
+// the pad's firmware turns lizard mode back on by itself once the claim stops
+// re-sending the quiet settings.
+void restoreTriton(void* handle, int featureLen, thread::TrackedMutex* writeMtx) {
+    if (featureLen <= 0) { return; }
+    HandleReportWriter writer(handle, 0, static_cast<std::size_t>(featureLen), writeMtx);
+    std::array<std::uint8_t, input::usbparse::kTritonFeatureReportBytes> report{};
+    for (int i = 0;; i++) {
+        const std::size_t n = input::usbparse::buildTritonConfigReport(
+            input::usbparse::SteamConfig::Restore, i, report.data(), report.size());
+        if (n == 0 || !writer.writeFeature(report.data(), n)) { return; }
+    }
+}
+
+// The DualSense's firmware-info feature report, which picks its rumble mode. HidD_GetFeature wants
+// the collection's whole feature length and reports no length of its own, so the report's 64 bytes
+// are read off the front of that; an unanswered read keeps the pad on the original mode.
+input::usbout::Ds5FirmwareInfo readDs5FirmwareInfo(HANDLE h, int featureLen) {
+    std::array<std::uint8_t, 128> buf{};
+    const bool lengthFits =
+        featureLen >= static_cast<int>(input::usbout::kDs5FirmwareInfoReportBytes) &&
+        static_cast<std::size_t>(featureLen) <= buf.size();
+    if (!lengthFits) { return input::usbout::Ds5FirmwareInfo{}; }
+    buf[0] = input::usbout::kDs5FirmwareInfoReportId;
+    if (HidD_GetFeature(h, buf.data(), static_cast<ULONG>(featureLen)) == 0) {
+        return input::usbout::Ds5FirmwareInfo{};
+    }
+    return input::usbout::parseDs5FirmwareInfo(buf.data(),
+                                               input::usbout::kDs5FirmwareInfoReportBytes);
 }
 
 // The interface's wide device path, or empty when the two-call size query does not produce one.
@@ -161,7 +215,7 @@ UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const HIDD_ATTRI
     // string is generic or empty.
     const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
     info.name = model != nullptr ? model->name : productName(h, path);
-    info.interfaceNumber = 0;
+    info.interfaceNumber = input::hidInterfaceNumberFromPath(path).value_or(0);
     // The input report length is the max-packet proxy; bInterval is not exposed by the HID class
     // API, so it defaults to 1 ms (the common gamepad case) and the poll-rate sampler measures the
     // real rate.
@@ -195,7 +249,9 @@ std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
     attrs.Size = sizeof(attrs);
     HIDP_CAPS caps{};
     std::optional<UsbDeviceInfo> info;
-    if (isClaimCandidate(h, attrs, caps)) { info = describeDevice(h, path, attrs, caps); }
+    if (isClaimCandidate(h, attrs, caps) && pathCarriesPad(path, attrs.VendorID, attrs.ProductID)) {
+        info = describeDevice(h, path, attrs, caps);
+    }
     CloseHandle(h);
     return info;
 }
@@ -517,8 +573,11 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         }
         // Same VID:PID can be present over BOTH transports at once (a pad
         // charging over USB while still BT-paired); never claim the Bluetooth
-        // interface — enumerate() filtered it, so the claim must match.
-        if (input::isBluetoothHidDevicePath(wideToUtf8(detail->DevicePath))) { continue; }
+        // interface — enumerate() filtered it, so the claim must match. A dongle
+        // interface without a pad is filtered the same way.
+        const std::string utf8Path = wideToUtf8(detail->DevicePath);
+        if (input::isBluetoothHidDevicePath(utf8Path)) { continue; }
+        if (!pathCarriesPad(utf8Path, device.vendorId, device.productId)) { continue; }
         HANDLE h = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                FILE_FLAG_OVERLAPPED, nullptr);
@@ -567,6 +626,8 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     // switches that off and enables the IMU. This is the one family whose init
     // persistently reconfigures the device, so a failure restores the defaults
     // before giving up — a partly-applied init must never strand the pad mute.
+    // The 2026 pad's quiet settings are its output worker's to send, at once and
+    // every 3 s after, because its firmware undoes them unless they keep coming.
     const int featureReportLen = caps.FeatureReportByteLength;
     if (parser == input::usbparse::HidParser::SteamController) {
         if (!runSteamConfig(opened, featureReportLen, input::usbparse::SteamConfig::Quiet)) {
@@ -577,6 +638,12 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
                                      /*frameworkStolen=*/false);
         }
     }
+
+    // Read once at the claim, the way hid-playstation reads it at probe.
+    const input::usbout::Ds5FirmwareInfo ds5Firmware =
+        parser == input::usbparse::HidParser::DualSense
+            ? readDs5FirmwareInfo(opened, featureReportLen)
+            : input::usbout::Ds5FirmwareInfo{};
 
     const int syntheticId = nextSyntheticId_.fetch_sub(1);
     auto claim = std::make_unique<Claimed>();
@@ -604,7 +671,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         claimed_.emplace(syntheticId, std::move(claim));
     }
     raw->reader = std::thread([this, raw] { readLoop(raw); });
-    return ClaimResult::success(syntheticId);
+    return ClaimResult::success(syntheticId, ds5Firmware);
 }
 
 namespace {
@@ -686,8 +753,12 @@ bool WinHidGateway::handleSteamWirelessEvent(void* handle, Claimed* c, const std
     const auto ev = input::usbparse::checkWirelessEvent(c->parser, data, len);
     if (ev == input::usbparse::WirelessEvent::Connect) {
         // A returning pad has rebooted, so its settings are gone and quiet mode is re-applied.
-        runSteamConfig(static_cast<HANDLE>(handle), c->featureReportLen,
-                       input::usbparse::SteamConfig::Quiet);
+        // The 2026 pad's come back with its output worker's next settings write, within 3 s, so
+        // this thread never writes to it.
+        if (c->parser == input::usbparse::HidParser::SteamController) {
+            runSteamConfig(static_cast<HANDLE>(handle), c->featureReportLen,
+                           input::usbparse::SteamConfig::Quiet);
+        }
         return true;
     }
     if (ev == input::usbparse::WirelessEvent::Disconnect) {
@@ -737,7 +808,10 @@ void WinHidGateway::readLoop(Claimed* c) {
         auto len = static_cast<std::size_t>(read);
         if (c->parser == input::usbparse::HidParser::SteamController) {
             stripPrependedReportId(data, len);
-            if (handleSteamWirelessEvent(handle, c, data, len)) { continue; }
+        }
+        if (input::usbparse::parserHasWirelessEvents(c->parser) &&
+            handleSteamWirelessEvent(handle, c, data, len)) {
+            continue;
         }
 
         // A report that does not match the family's shape (wrong id, too short) is skipped rather
@@ -773,6 +847,9 @@ void WinHidGateway::releaseClaim(int syntheticId) {
         // mouse. Best-effort by design — an unplugged pad cannot be written to.
         if (claim->parser == input::usbparse::HidParser::SteamController) {
             runSteamConfig(handle, claim->featureReportLen, input::usbparse::SteamConfig::Restore);
+        }
+        if (claim->parser == input::usbparse::HidParser::SteamTriton) {
+            restoreTriton(handle, claim->featureReportLen, &claim->writeMtx);
         }
         CloseHandle(handle);
     }
@@ -828,13 +905,16 @@ std::unique_ptr<HidReportWriter> WinHidGateway::openReportWriter(int syntheticId
         return UsbDeviceGateway::openReportWriter(syntheticId);
     }
     return std::make_unique<HandleReportWriter>(
-        c->handle, static_cast<std::size_t>(c->outputReportLen), &c->writeMtx);
+        c->handle, static_cast<std::size_t>(c->outputReportLen),
+        static_cast<std::size_t>(std::max(c->featureReportLen, 0)), &c->writeMtx);
 }
 
 bool WinHidGateway::writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) {
     Claimed* c = claimedFor(syntheticId);
     if (c == nullptr || c->outputReportLen <= 0) { return false; }
-    return HandleReportWriter(c->handle, static_cast<std::size_t>(c->outputReportLen), &c->writeMtx)
+    return HandleReportWriter(c->handle, static_cast<std::size_t>(c->outputReportLen),
+                              static_cast<std::size_t>(std::max(c->featureReportLen, 0)),
+                              &c->writeMtx)
         .write(data, len);
 }
 

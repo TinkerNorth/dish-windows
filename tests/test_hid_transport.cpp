@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+using dish::input::hidInterfaceNumberFromPath;
 using dish::input::isBluetoothHidDevicePath;
 
 TEST_CASE("HidTransport: a USB HID interface path is not Bluetooth", "[hidtransport]") {
@@ -38,4 +39,29 @@ TEST_CASE("HidTransport: empty / unknown paths fail safe to not-Bluetooth", "[hi
     // Failing to not-Bluetooth keeps a claimable USB pad from being filtered out.
     REQUIRE_FALSE(isBluetoothHidDevicePath(""));
     REQUIRE_FALSE(isBluetoothHidDevicePath("XInput#0"));
+}
+
+TEST_CASE("HidTransport: a composite device's collection path names its interface",
+          "[hidtransport]") {
+    // The 2026 Steam Controller's dongle carries one pad per interface, 2 to 5,
+    // so the claim reads the interface off the collection's path.
+    REQUIRE(
+        hidInterfaceNumberFromPath(
+            R"(\\?\hid#vid_28de&pid_1304&mi_02#8&2b1a6c0f&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030})") ==
+        2);
+    // Upper case, and an interface with several top-level collections.
+    REQUIRE(
+        hidInterfaceNumberFromPath(
+            R"(\\?\HID#VID_28DE&PID_1305&MI_05&Col01#9&1a2b3c4&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030})") ==
+        5);
+}
+
+TEST_CASE("HidTransport: a path without an interface part names none", "[hidtransport]") {
+    REQUIRE_FALSE(
+        hidInterfaceNumberFromPath(
+            R"(\\?\hid#vid_054c&pid_0ce6#7&1d2c3b4&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030})")
+            .has_value());
+    REQUIRE_FALSE(hidInterfaceNumberFromPath("").has_value());
+    REQUIRE_FALSE(hidInterfaceNumberFromPath(R"(\\?\hid#vid_28de&pid_1304&mi_)").has_value());
+    REQUIRE_FALSE(hidInterfaceNumberFromPath(R"(\\?\hid#vid_28de&pid_1304&mi_zz#8)").has_value());
 }
