@@ -5,6 +5,7 @@
 
 #include "core/input/HidTransport.h"
 #include "core/input/UsbHidLayout.h"
+#include "core/input/UsbOutputReports.h"
 #include "core/input/UsbReportParsers.h"
 #include "source/system/ThreadPriority.h"
 
@@ -118,6 +119,23 @@ bool runSteamConfig(HANDLE h, int featureLen, input::usbparse::SteamConfig stage
         if (!sendSteamFeature(h, featureLen, pkt.data(), n)) { return false; }
     }
     return true;
+}
+
+// The DualSense's firmware-info feature report, which picks its rumble mode. HidD_GetFeature wants
+// the collection's whole feature length and reports no length of its own, so the report's 64 bytes
+// are read off the front of that; an unanswered read keeps the pad on the original mode.
+input::usbout::Ds5FirmwareInfo readDs5FirmwareInfo(HANDLE h, int featureLen) {
+    std::array<std::uint8_t, 128> buf{};
+    const bool lengthFits =
+        featureLen >= static_cast<int>(input::usbout::kDs5FirmwareInfoReportBytes) &&
+        static_cast<std::size_t>(featureLen) <= buf.size();
+    if (!lengthFits) { return input::usbout::Ds5FirmwareInfo{}; }
+    buf[0] = input::usbout::kDs5FirmwareInfoReportId;
+    if (HidD_GetFeature(h, buf.data(), static_cast<ULONG>(featureLen)) == 0) {
+        return input::usbout::Ds5FirmwareInfo{};
+    }
+    return input::usbout::parseDs5FirmwareInfo(buf.data(),
+                                               input::usbout::kDs5FirmwareInfoReportBytes);
 }
 
 // The interface's wide device path, or empty when the two-call size query does not produce one.
@@ -578,6 +596,12 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         }
     }
 
+    // Read once at the claim, the way hid-playstation reads it at probe.
+    const input::usbout::Ds5FirmwareInfo ds5Firmware =
+        parser == input::usbparse::HidParser::DualSense
+            ? readDs5FirmwareInfo(opened, featureReportLen)
+            : input::usbout::Ds5FirmwareInfo{};
+
     const int syntheticId = nextSyntheticId_.fetch_sub(1);
     auto claim = std::make_unique<Claimed>();
     claim->path = device.name;
@@ -604,7 +628,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         claimed_.emplace(syntheticId, std::move(claim));
     }
     raw->reader = std::thread([this, raw] { readLoop(raw); });
-    return ClaimResult::success(syntheticId);
+    return ClaimResult::success(syntheticId, ds5Firmware);
 }
 
 namespace {
