@@ -86,6 +86,15 @@ TEST_CASE("the driving check applies to the slot the pad holds now, not the one 
     CHECK(bindingsToReattach({standingPad}, {{kOtherPad, kDualSense}}, {kPad}).size() == 1);
 }
 
+TEST_CASE("a record never lands on a slot that carries no binding",
+          "[moonlight][binding][reattach]") {
+    // A receiver's card is listed under the id its one pad had before the slots were pads of
+    // their own, so an old record names it; the card carries no binding, and the record waits.
+    CHECK(bindingsToReattach({standing(kPad)}, {{kPad, kDualSense, false}}, kNone).isEmpty());
+    CHECK(bindingsToReattach({standing(kOtherPad, kDualSense)}, {{kPad, kDualSense, false}}, kNone)
+              .isEmpty());
+}
+
 TEST_CASE("only the bindings whose pads are here are put back", "[moonlight][binding][reattach]") {
     const auto plan =
         bindingsToReattach({standing(kPad), standing(kOtherPad)}, {{kOtherPad, {}}}, kNone);

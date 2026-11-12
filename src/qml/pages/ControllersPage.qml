@@ -114,6 +114,7 @@ Kit.Page {
                 required property bool claimInProgress
                 required property string directFailure
                 required property bool waitingForController
+                required property bool bindable
                 required property bool micArmed
                 required property bool micMuted
 
@@ -202,8 +203,9 @@ Kit.Page {
                             Layout.alignment: Qt.AlignVCenter
                             onClicked: page.openBindingEditor(card.slotId)
                         }
+                        // A card that carries no binding (a receiver's) is neither.
                         Kit.LiveStat {
-                            visible: !card.bound
+                            visible: !card.bound && card.bindable
                             text: qsTr("not bound")
                             Layout.alignment: Qt.AlignVCenter
                         }

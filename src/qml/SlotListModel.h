@@ -45,6 +45,7 @@ class SlotListModel : public QAbstractListModel {
         RemappableRole,
         EmulateNameRole,
         RegisteringRole,
+        BindableRole,
 
         HasMotionRole,
         HasLightbarRole,

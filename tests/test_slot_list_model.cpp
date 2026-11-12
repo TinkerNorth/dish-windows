@@ -87,7 +87,7 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     SlotListModel model;
     const auto names = model.roleNames();
     // One entry per declared role: a role added without a name drifts this count.
-    REQUIRE(names.size() == 43);
+    REQUIRE(names.size() == 44);
     REQUIRE(names.value(SlotListModel::HasRumbleRole) == QByteArray("hasRumble"));
     REQUIRE(names.value(SlotListModel::UsbIdRole) == QByteArray("usbId"));
     REQUIRE(names.value(SlotListModel::MicArmedRole) == QByteArray("micArmed"));
@@ -98,6 +98,7 @@ TEST_CASE("SlotListModel: roleNames covers every Roles enumerator", "[slotmodel]
     REQUIRE(names.value(SlotListModel::RemappableRole) == QByteArray("remappable"));
     REQUIRE(names.value(SlotListModel::EmulateNameRole) == QByteArray("emulateName"));
     REQUIRE(names.value(SlotListModel::RegisteringRole) == QByteArray("registering"));
+    REQUIRE(names.value(SlotListModel::BindableRole) == QByteArray("bindable"));
     REQUIRE(names.value(SlotListModel::GamepadHzShownRole) == QByteArray("gamepadHzShown"));
     REQUIRE(names.value(SlotListModel::PollHzShownRole) == QByteArray("pollHzShown"));
     REQUIRE(names.value(SlotListModel::PathPhaseRole) == QByteArray("pathPhase"));
@@ -144,6 +145,7 @@ TEST_CASE("SlotListModel: data maps a bound rich pad's roles", "[slotmodel][data
     REQUIRE(roleOf(model, 0, SlotListModel::LiveRole).toBool());
     REQUIRE(roleOf(model, 0, SlotListModel::DotColorRole).toString() == "success");
     REQUIRE(roleOf(model, 0, SlotListModel::UsbDirectRole).toBool());
+    REQUIRE(roleOf(model, 0, SlotListModel::BindableRole).toBool());
 
     REQUIRE(roleOf(model, 0, SlotListModel::HasMotionRole).toBool());
     REQUIRE(roleOf(model, 0, SlotListModel::HasLightbarRole).toBool());
@@ -373,8 +375,10 @@ TEST_CASE("SlotListModel: a receiver waiting for a controller is Direct and not 
     s.pathPhase = r::UsbPhase::Direct;
     s.desiredPath = r::PathChoice::Direct;
     s.waitingForController = true;
+    s.bindable = false;
     model.setState({s});
     REQUIRE(roleOf(model, 0, SlotListModel::WaitingForControllerRole).toBool());
+    REQUIRE_FALSE(roleOf(model, 0, SlotListModel::BindableRole).toBool());
     REQUIRE(roleOf(model, 0, SlotListModel::PathPhaseRole).toString() == "direct");
     REQUIRE_FALSE(roleOf(model, 0, SlotListModel::ClaimInProgressRole).toBool());
 }

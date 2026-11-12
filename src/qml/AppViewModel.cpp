@@ -583,12 +583,17 @@ int AppViewModel::streamingSlotCountFor(const MainUiState& st) {
 
 namespace {
 
+// Over the slots that can carry a binding: a receiver's card is never the pad to set up.
 QString defaultPadSlotIdFor(const QList<models::ControllerSlot>& slotList) {
+    std::vector<const models::ControllerSlot*> candidates;
     std::vector<bool> hostBuiltIn;
-    hostBuiltIn.reserve(static_cast<std::size_t>(slotList.size()));
-    for (const auto& s : slotList) { hostBuiltIn.push_back(s.hostBuiltIn); }
+    for (const auto& s : slotList) {
+        if (!s.bindable) { continue; }
+        candidates.push_back(&s);
+        hostBuiltIn.push_back(s.hostBuiltIn);
+    }
     const int index = reducer::defaultPadIndex(hostBuiltIn);
-    return index < 0 ? QString() : slotList[index].id;
+    return index < 0 ? QString() : candidates[static_cast<std::size_t>(index)]->id;
 }
 
 } // namespace
@@ -1051,7 +1056,7 @@ void AppViewModel::reattachMoonlightBindings() {
     QList<moonlight::PresentPad> present;
     QSet<QString> driving;
     for (const auto& slot : model_->state().slotList) {
-        present.append({slot.id, slot.padIdentity});
+        present.append({slot.id, slot.padIdentity, slot.bindable});
         if (!moon->boundHostFor(slot.id).isEmpty()) { driving.insert(slot.id); }
     }
     // A binding whose pad is not plugged in is left waiting for it, which is what a
@@ -1569,6 +1574,9 @@ QString AppViewModel::displacedSlotName(const QString& connectionId) const {
 
 QString AppViewModel::resolveSlotIdForBind(const QString& slotId) const {
     const auto& st = model_->state();
+    const auto* slot = slotById(slotId);
+    const bool carriesNoBinding = slot != nullptr && !slot->bindable;
+    if (carriesNoBinding) { return QString(); }
     const auto vidPid = resolveSlotVidPid(model_, slotId);
     // With no (vid, pid) to re-resolve through, the id is all there is, and it
     // is valid exactly as long as the slot is still listed. A receiver's pad is
