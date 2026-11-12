@@ -806,12 +806,12 @@ void WinHidGateway::controllerArrived(void* handle, Claimed* c) {
     c->linked.store(true, std::memory_order_release);
 }
 
-// A departing pad's last input must not stay latched, and a pad that left keeps none of the
-// settings a release would restore.
+// A pad that left keeps none of the settings a release would restore; what its leaving means
+// for its last input and its readings is the manager's (UsbGamepadManager's publisher).
 void WinHidGateway::controllerLeft(Claimed* c) {
     c->quieted = false;
     c->linked.store(false, std::memory_order_release);
-    if (c->onReport) { c->onReport(UsbReport{}); }
+    if (c->onReport) { c->onReport(padLinkReport(PadLinkEvent::ControllerLeft)); }
 }
 
 // A descriptor-driven layout wins where the device published one; everything else goes through the
