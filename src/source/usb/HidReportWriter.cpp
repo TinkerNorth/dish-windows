@@ -66,17 +66,25 @@ bool HandleReportWriter::write(const std::uint8_t* data, std::size_t len) {
 // class driver to cut to that length. HidD_SetFeature is synchronous, so there is no overlapped
 // wait to cancel, and the handle's overlapped read is unaffected; the Steam Controller config
 // writes share the handle the same way.
-bool HandleReportWriter::writeFeature(const std::uint8_t* data, std::size_t len) {
+FeatureWrite HandleReportWriter::writeFeature(const std::uint8_t* data, std::size_t len) {
     std::array<std::uint8_t, 256> buf{};
     const std::size_t sendLen = std::max(len, featureReportLen_);
     if (data == nullptr || len == 0 || featureReportLen_ == 0 || sendLen > buf.size() ||
         handle_ == nullptr || handle_ == INVALID_HANDLE_VALUE) {
-        return false;
+        return FeatureWrite::Refused;
     }
     std::memcpy(buf.data(), data, len);
     std::lock_guard<thread::TrackedMutex> lock(*writeMtx_);
     thread::blockingRegion("hid.write");
-    return ::HidD_SetFeature(handle_, buf.data(), static_cast<ULONG>(sendLen)) != 0;
+    if (::HidD_SetFeature(handle_, buf.data(), static_cast<ULONG>(sendLen)) != 0) {
+        return FeatureWrite::Taken;
+    }
+    return featureWriteOutcomeOf(::GetLastError());
+}
+
+FeatureWrite featureWriteOutcomeOf(unsigned long lastError) {
+    const bool gone = lastError == ERROR_DEVICE_NOT_CONNECTED || lastError == ERROR_GEN_FAILURE;
+    return gone ? FeatureWrite::PadGone : FeatureWrite::Refused;
 }
 
 } // namespace dish::source::usb

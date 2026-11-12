@@ -26,6 +26,7 @@
 #include <vector>
 
 using dish::input::usbparse::HidParser;
+using dish::source::usb::FeatureWrite;
 using dish::source::usb::HandleReportWriter;
 using dish::source::usb::HidReportWriter;
 using dish::source::usb::OutputWorker;
@@ -36,11 +37,13 @@ namespace {
 
 // A pad that takes `delay` to accept each report, recording what it got and the thread that
 // wrote each feature report. It refuses the first `featureRefusals` feature reports and every one
-// whose message id is in `refusedMessages`, the way a dongle under load refuses a write.
+// whose message id is in `refusedMessages`, the way a dongle under load refuses a write; `gone`
+// is a pad that was unplugged, whose every feature write says so.
 struct SlowPad {
     std::chrono::milliseconds delay{0};
     int featureRefusals = 0;
     std::vector<std::uint8_t> refusedMessages;
+    bool gone = false;
     mutable std::mutex mtx;
     std::vector<std::vector<std::uint8_t>> reports;
     std::vector<std::vector<std::uint8_t>> features;
@@ -74,20 +77,21 @@ class SlowWriter final : public HidReportWriter {
         pad_.reports.emplace_back(data, data + len);
         return true;
     }
-    bool writeFeature(const std::uint8_t* data, std::size_t len) override {
+    FeatureWrite writeFeature(const std::uint8_t* data, std::size_t len) override {
         const std::lock_guard<std::mutex> lock(pad_.mtx);
         ++pad_.featureCalls;
+        if (pad_.gone) { return FeatureWrite::PadGone; }
         if (pad_.featureRefusals > 0) {
             --pad_.featureRefusals;
-            return false;
+            return FeatureWrite::Refused;
         }
         const bool messageRefused =
             len > 1 && std::find(pad_.refusedMessages.begin(), pad_.refusedMessages.end(),
                                  data[1]) != pad_.refusedMessages.end();
-        if (messageRefused) { return false; }
+        if (messageRefused) { return FeatureWrite::Refused; }
         pad_.features.emplace_back(data, data + len);
         pad_.featureWriters.push_back(std::this_thread::get_id());
-        return true;
+        return FeatureWrite::Taken;
     }
 
   private:
@@ -296,21 +300,46 @@ TEST_CASE("a quiet the dongle refuses is offered again", "[output-worker][steam]
     worker.stop();
 }
 
-TEST_CASE("a quiet the pad never takes is undone, and the pad then holds nothing",
+TEST_CASE("a quiet that took part-way is undone at once, and what the pad refused to take back "
+          "is offered again at the hand-back",
           "[output-worker][steam]") {
-    // The first report is offered 25 times, 20 ms apart, then the restore sequence goes; the
-    // hand-back has nothing left to do.
+    // The second report is offered 25 times, 20 ms apart, then the restore sequence goes, whose
+    // last report meets the same refusal, so the pad still holds settings of ours and the
+    // hand-back offers the restore once more.
+    SlowPad pad;
+    pad.refusedMessages = {kSteamSetSettings};
+    OutputWorker worker(std::make_unique<SlowWriter>(pad), HidParser::SteamController);
+    worker.postPadLink(true);
+    REQUIRE(waitForFeatures(pad, 3));
+    CHECK(steamMessages(pad.gotFeatures()) == std::vector<std::uint8_t>{kSteamClearMappings,
+                                                                        kSteamDefaultMappings,
+                                                                        kSteamDefaultSettings});
+    const auto deadline = std::chrono::steady_clock::now() + 3s;
+    while (pad.featureCallCount() < 1 + 25 + 2 + 25 &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    worker.stop();
+    CHECK(pad.featureCallCount() == 1 + 25 + 2 + 25 + 2 + 25);
+    CHECK(steamMessages(pad.gotFeatures()) ==
+          std::vector<std::uint8_t>{kSteamClearMappings, kSteamDefaultMappings,
+                                    kSteamDefaultSettings, kSteamDefaultMappings,
+                                    kSteamDefaultSettings});
+}
+
+TEST_CASE("a quiet whose first report never reached the pad has nothing to undo",
+          "[output-worker][steam]") {
     SlowPad pad;
     pad.refusedMessages = {kSteamClearMappings};
     OutputWorker worker(std::make_unique<SlowWriter>(pad), HidParser::SteamController);
     worker.postPadLink(true);
-    REQUIRE(waitForFeatures(pad, 3));
-    CHECK(steamMessages(pad.gotFeatures()) == std::vector<std::uint8_t>{kSteamDefaultMappings,
-                                                                        kSteamDefaultSettings,
-                                                                        kSteamSetSettings});
-    CHECK(pad.featureCallCount() == 28);
+    const auto deadline = std::chrono::steady_clock::now() + 3s;
+    while (pad.featureCallCount() < 25 && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
     worker.stop();
-    CHECK(pad.featureCallCount() == 28);
+    CHECK(pad.featureCallCount() == 25);
+    CHECK(pad.gotFeatures().empty());
 }
 
 TEST_CASE("a 2026 slot's settings are taken back only from a controller that is there",
@@ -360,6 +389,46 @@ TEST_CASE("a refused feature write is offered again, and a taken one ends the of
     pad.featureRefusals = 10;
     CHECK_FALSE(writeFeatureWithRetry(writer, report.data(), report.size(), 3));
     CHECK(pad.featureCallCount() == 6);
+}
+
+TEST_CASE("a pad that is gone is not offered a feature write again", "[output-worker][hid]") {
+    SlowPad pad;
+    pad.gone = true;
+    SlowWriter writer(pad);
+    const std::array<std::uint8_t, 3> report{0x00, kSteamClearMappings, 0x00};
+    const auto started = std::chrono::steady_clock::now();
+    CHECK_FALSE(writeFeatureWithRetry(writer, report.data(), report.size(), 25));
+    CHECK(pad.featureCallCount() == 1);
+    CHECK(std::chrono::steady_clock::now() - started < 100ms);
+}
+
+TEST_CASE("a worker abandoned with its pad takes nothing back", "[output-worker][steam]") {
+    SlowPad pad;
+    OutputWorker worker(std::make_unique<SlowWriter>(pad), HidParser::SteamController);
+    worker.postPadLink(true);
+    REQUIRE(waitForFeatures(pad, 2));
+    worker.abandon();
+    CHECK(pad.featureCallCount() == 2);
+    // Whichever end is asked for first stands.
+    worker.stop();
+    CHECK(pad.featureCallCount() == 2);
+}
+
+TEST_CASE("a quiet that fails because the pad is gone gives up at once and holds nothing",
+          "[output-worker][steam]") {
+    // The quiet's first report once: no 25 offers, no 20 ms pauses, and nothing to undo.
+    SlowPad pad;
+    pad.gone = true;
+    OutputWorker worker(std::make_unique<SlowWriter>(pad), HidParser::SteamController);
+    const auto started = std::chrono::steady_clock::now();
+    worker.postPadLink(true);
+    const auto deadline = started + 3s;
+    while (pad.featureCallCount() < 1 && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+    worker.stop();
+    CHECK(pad.featureCallCount() == 1);
+    CHECK(std::chrono::steady_clock::now() - started < 500ms);
 }
 
 TEST_CASE("a family with nothing on a clock writes only what it is asked", "[output-worker]") {
@@ -455,13 +524,22 @@ TEST_CASE("the handle writer refuses a feature report the collection cannot take
     // Empty, past any buffer a report could need, or for a collection with no
     // feature reports at all.
     HandleReportWriter writer(handle, 8, 8, &writeMtx);
-    CHECK_FALSE(writer.writeFeature(report.data(), 0));
-    CHECK_FALSE(writer.writeFeature(report.data(), report.size()));
+    CHECK(writer.writeFeature(report.data(), 0) == FeatureWrite::Refused);
+    CHECK(writer.writeFeature(report.data(), report.size()) == FeatureWrite::Refused);
     HandleReportWriter outputOnly(handle, 8, 0, &writeMtx);
-    CHECK_FALSE(outputOnly.writeFeature(report.data(), 1));
+    CHECK(outputOnly.writeFeature(report.data(), 1) == FeatureWrite::Refused);
     // A handle that is no HID collection fails the call itself, short or long.
-    CHECK_FALSE(writer.writeFeature(report.data(), 6));
-    CHECK_FALSE(writer.writeFeature(report.data(), 64));
+    CHECK(writer.writeFeature(report.data(), 6) == FeatureWrite::Refused);
+    CHECK(writer.writeFeature(report.data(), 64) == FeatureWrite::Refused);
     ::CloseHandle(handle);
     ::CloseHandle(pad);
+}
+
+TEST_CASE("a feature write that failed because the device left says the pad is gone",
+          "[output-worker][hid]") {
+    using dish::source::usb::featureWriteOutcomeOf;
+    CHECK(featureWriteOutcomeOf(ERROR_DEVICE_NOT_CONNECTED) == FeatureWrite::PadGone);
+    CHECK(featureWriteOutcomeOf(ERROR_GEN_FAILURE) == FeatureWrite::PadGone);
+    CHECK(featureWriteOutcomeOf(ERROR_INVALID_PARAMETER) == FeatureWrite::Refused);
+    CHECK(featureWriteOutcomeOf(ERROR_INVALID_FUNCTION) == FeatureWrite::Refused);
 }

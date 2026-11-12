@@ -133,9 +133,10 @@ connect event or first report for a receiver's controller) and its restore
 sequence when the claim is handed back while the pad still holds them; the 2026
 pad's settings go on the worker's 3 s clock and are undone the same way. The
 read thread only flags the arrival and the departure, so a slot's reports never
-wait on a feature write. No receiver has been on hand: how an empty slot answers
-the feature reports (the 2015 state request, the 2026 pad's 3 s settings) is
-unverified.
+wait on a feature write. A pad that is unplugged is let go with nothing written
+to it, and a feature write that fails because the pad is gone is not retried. No
+receiver has been on hand: how an empty slot answers the feature reports (the
+2015 state request, the 2026 pad's 3 s settings) is unverified.
 
 ## 5. Decisions, not gaps
 
