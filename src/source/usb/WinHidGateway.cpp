@@ -55,13 +55,6 @@ constexpr int kVidSony = 0x054C;
 constexpr int kVidNintendo = 0x057E;
 constexpr int kVid8BitDo = 0x2DC8;
 
-// Feature-report writes retry the way SDL and hid-steam retry EPIPE: the
-// wireless dongle under load fails transiently, not terminally. The budget is
-// capped so even a wholly unresponsive device finishes init and teardown well
-// inside the manager's transition timeout.
-constexpr int kFeatureReportAttempts = 25;
-constexpr DWORD kFeatureReportRetryMs = 20;
-
 std::string wideToUtf8(const wchar_t* w) {
     if (w == nullptr) { return {}; }
     const int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
@@ -115,49 +108,15 @@ bool pathIsTheClaimedPad(const std::string& path, const UsbDeviceInfo& device) {
     return iface == device.interfaceNumber;
 }
 
-// One Steam Controller config feature report: report id 0 + the packet, padded
-// to the collection's feature length, with the transient-failure retry both
-// reference drivers use.
-bool sendSteamFeature(HANDLE h, int featureLen, const std::uint8_t* data, std::size_t len) {
-    std::array<std::uint8_t, 128> buf{};
-    if (featureLen <= 0 || static_cast<std::size_t>(featureLen) > buf.size() ||
-        len + 1 > static_cast<std::size_t>(featureLen)) {
-        return false;
-    }
-    std::memcpy(buf.data() + 1, data, len);
-    for (int attempt = 0; attempt < kFeatureReportAttempts; attempt++) {
-        if (HidD_SetFeature(h, buf.data(), static_cast<ULONG>(featureLen)) != 0) { return true; }
-        Sleep(kFeatureReportRetryMs);
-    }
-    return false;
-}
-
-// Runs one config direction (quiet at attach, restore at release) to the end.
-// Restore is best-effort: a pad that is gone can no longer be restored, and
-// failing the release over it would strand the claim.
-bool runSteamConfig(HANDLE h, int featureLen, input::usbparse::SteamConfig stage) {
-    std::array<std::uint8_t, 16> pkt{};
-    for (int i = 0;; i++) {
-        const std::size_t n =
-            input::usbparse::buildSteamConfigPacket(stage, i, pkt.data(), pkt.size());
-        if (n == 0) { break; }
-        if (!sendSteamFeature(h, featureLen, pkt.data(), n)) { return false; }
-    }
-    return true;
-}
-
-// A quiet that does not take is undone at once, so a pad is never left part-way. True while the
-// pad still holds settings of ours, which its release must restore.
-bool quietSteamPad(HANDLE h, int featureLen) {
-    if (runSteamConfig(h, featureLen, input::usbparse::SteamConfig::Quiet)) { return true; }
-    return !runSteamConfig(h, featureLen, input::usbparse::SteamConfig::Restore);
-}
-
-// A 2015 receiver's slot answers with the connect or disconnect event for its controller.
-bool askSteamReceiverSlot(HANDLE h, int featureLen) {
-    std::array<std::uint8_t, 16> pkt{};
-    const std::size_t n = input::usbparse::buildSteamReceiverStateRequest(pkt.data(), pkt.size());
-    return sendSteamFeature(h, featureLen, pkt.data(), n);
+// A 2015 receiver's slot answers with the connect or disconnect event for its controller, on
+// the read loop. The one feature write a claim makes; a pad's settings are its output worker's.
+bool askSteamReceiverSlot(HidReportWriter& writer) {
+    std::array<std::uint8_t, input::usbparse::kSteamFeatureReportBytes> report{};
+    const std::size_t n =
+        input::usbparse::buildSteamReceiverStateReport(report.data(), report.size());
+    const int attempts =
+        input::usbparse::configWriteAttempts(input::usbparse::HidParser::SteamController);
+    return writeFeatureWithRetry(writer, report.data(), n, attempts);
 }
 
 // A claim given up after the open: the handle and the preparsed data go with it.
@@ -165,22 +124,6 @@ ClaimResult abandonClaim(HANDLE opened, PHIDP_PREPARSED_DATA preparsed) {
     if (preparsed != nullptr) { HidD_FreePreparsedData(preparsed); }
     CloseHandle(opened);
     return ClaimResult::fail(reducer::DirectClaimFailure::InitFailed, /*frameworkStolen=*/false);
-}
-
-// The 2026 Steam Controller's settings undone at release, IMU off and then
-// lizard mode on, each a whole feature report through the claim's own writer.
-// One try each, as SDL sends them: a pad that refused the first is gone, and
-// the pad's firmware turns lizard mode back on by itself once the claim stops
-// re-sending the quiet settings.
-void restoreTriton(void* handle, int featureLen, thread::TrackedMutex* writeMtx) {
-    if (featureLen <= 0) { return; }
-    HandleReportWriter writer(handle, 0, static_cast<std::size_t>(featureLen), writeMtx);
-    std::array<std::uint8_t, input::usbparse::kTritonFeatureReportBytes> report{};
-    for (int i = 0;; i++) {
-        const std::size_t n = input::usbparse::buildTritonConfigReport(
-            input::usbparse::SteamConfig::Restore, i, report.data(), report.size());
-        if (n == 0 || !writer.writeFeature(report.data(), n)) { return; }
-    }
 }
 
 // The DualSense's firmware-info feature report, which picks its rumble mode. HidD_GetFeature wants
@@ -648,26 +591,19 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         return ClaimResult::fail(reason, /*frameworkStolen=*/false);
     }
 
-    // The Steam Controller ships emulating a keyboard and mouse; quiet mode
-    // switches that off and enables the IMU. This is the one family whose init
-    // persistently reconfigures the device, so a failure restores the defaults
-    // before giving up — a partly-applied init must never strand the pad mute.
-    // A receiver's slot is asked what it holds instead, and its controller is
-    // quieted when it arrives (controllerArrived), the way SDL's InitDevice and
-    // hid-steam's probe start a receiver.
-    // The 2026 pad's quiet settings are its output worker's to send, at once and
-    // every 3 s after, because its firmware undoes them unless they keep coming.
+    // A Steam Controller's settings (lizard mode off, the IMU on) are its output
+    // worker's to put on the pad and to take off again, so the claim writes
+    // nothing to a pad. A 2015 receiver's slot is asked what it holds, the way
+    // SDL's InitDevice and hid-steam's probe start a receiver; the answer is its
+    // controller's connect or disconnect event, on the read loop.
     const int featureReportLen = caps.FeatureReportByteLength;
     const bool isSteam2015 = parser == input::usbparse::HidParser::SteamController;
     const bool receiverSlot = input::usbparse::isReceiver(device.vendorId, device.productId);
-    if (isSteam2015 && receiverSlot && !askSteamReceiverSlot(opened, featureReportLen)) {
-        return abandonClaim(opened, preparsed);
-    }
-    if (isSteam2015 && !receiverSlot) {
-        if (!runSteamConfig(opened, featureReportLen, input::usbparse::SteamConfig::Quiet)) {
-            runSteamConfig(opened, featureReportLen, input::usbparse::SteamConfig::Restore);
-            return abandonClaim(opened, preparsed);
-        }
+    auto claim = std::make_unique<Claimed>();
+    if (isSteam2015 && receiverSlot) {
+        HandleReportWriter writer(
+            opened, 0, static_cast<std::size_t>(std::max(featureReportLen, 0)), &claim->writeMtx);
+        if (!askSteamReceiverSlot(writer)) { return abandonClaim(opened, preparsed); }
     }
 
     // Read once at the claim, the way hid-playstation reads it at probe.
@@ -677,7 +613,6 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
             : input::usbout::Ds5FirmwareInfo{};
 
     const int syntheticId = nextSyntheticId_.fetch_sub(1);
-    auto claim = std::make_unique<Claimed>();
     claim->path = device.name;
     claim->handle = opened;
     claim->onReport = std::move(onReport);
@@ -685,7 +620,6 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->productId = device.productId;
     claim->parser = parser;
     claim->featureReportLen = featureReportLen;
-    claim->quieted = isSteam2015 && !receiverSlot;
     claim->linked.store(!receiverSlot);
     claim->outputReportLen = caps.OutputReportByteLength;
     if (parser == input::usbparse::HidParser::GenericHid) {
@@ -781,11 +715,11 @@ UsbReport toUsbReport(const input::usbparse::ParsedReport& parsed, const bool mi
 
 // True when the packet was a dongle event rather than input, and the loop should take the next
 // report. Connect and disconnect interleave with input on the Steam dongle.
-bool WinHidGateway::handleSteamWirelessEvent(void* handle, Claimed* c, const std::uint8_t* data,
+bool WinHidGateway::handleSteamWirelessEvent(Claimed* c, const std::uint8_t* data,
                                              std::size_t len) {
     switch (input::usbparse::checkWirelessEvent(c->parser, data, len)) {
     case input::usbparse::WirelessEvent::Connect:
-        controllerArrived(handle, c);
+        controllerArrived(c);
         return true;
     case input::usbparse::WirelessEvent::Disconnect:
         controllerLeft(c);
@@ -796,20 +730,16 @@ bool WinHidGateway::handleSteamWirelessEvent(void* handle, Claimed* c, const std
     return false;
 }
 
-// A returning pad has rebooted, so its settings are gone and the 2015 pad is quieted again. The
-// 2026 pad's come back with its output worker's next settings write, within 3 s, so this thread
-// never writes to it.
-void WinHidGateway::controllerArrived(void* handle, Claimed* c) {
-    if (c->parser == input::usbparse::HidParser::SteamController) {
-        c->quieted = quietSteamPad(static_cast<HANDLE>(handle), c->featureReportLen);
-    }
+// A returning pad has rebooted, so its settings are gone: the manager has the slot's output
+// worker put them back, off this thread, which only says the pad is there.
+void WinHidGateway::controllerArrived(Claimed* c) {
     c->linked.store(true, std::memory_order_release);
+    if (c->onReport) { c->onReport(padLinkReport(PadLinkEvent::ControllerArrived)); }
 }
 
-// A pad that left keeps none of the settings a release would restore; what its leaving means
-// for its last input and its readings is the manager's (UsbGamepadManager's publisher).
+// What a controller's leaving means for its last input, its readings and its settings is the
+// manager's (UsbGamepadManager's publisher, and the slot's output worker).
 void WinHidGateway::controllerLeft(Claimed* c) {
-    c->quieted = false;
     c->linked.store(false, std::memory_order_release);
     if (c->onReport) { c->onReport(padLinkReport(PadLinkEvent::ControllerLeft)); }
 }
@@ -855,7 +785,7 @@ void WinHidGateway::readLoop(Claimed* c) {
             stripPrependedReportId(data, len);
         }
         if (input::usbparse::parserHasWirelessEvents(c->parser) &&
-            handleSteamWirelessEvent(handle, c, data, len)) {
+            handleSteamWirelessEvent(c, data, len)) {
             continue;
         }
 
@@ -865,7 +795,7 @@ void WinHidGateway::readLoop(Claimed* c) {
         if (!decodeOneReport(c, data, len, parsed)) { continue; }
         c->decoded.fetch_add(1);
         // A report means a controller is there, its connect event missed or not.
-        if (!c->linked.load(std::memory_order_relaxed)) { controllerArrived(handle, c); }
+        if (!c->linked.load(std::memory_order_relaxed)) { controllerArrived(c); }
         if (c->onReport) {
             c->onReport(toUsbReport(parsed, c->micMute.muted.load(std::memory_order_relaxed)));
         }
@@ -887,21 +817,9 @@ void WinHidGateway::releaseClaim(int syntheticId) {
     auto* handle = static_cast<HANDLE>(claim->handle);
     if (handle != nullptr && handle != INVALID_HANDLE_VALUE) { CancelIoEx(handle, nullptr); }
     if (claim->reader.joinable()) { claim->reader.join(); }
-    if (handle != nullptr && handle != INVALID_HANDLE_VALUE) {
-        // Quiet mode persists on the device, so every release path restores the
-        // stand-alone keyboard/mouse identity before the handle closes; skipping
-        // it would hand back a controller that no longer works as a desktop
-        // mouse. Best-effort by design — an unplugged pad cannot be written to.
-        // A receiver's slot whose controller left, or never came, has nothing
-        // to restore.
-        if (claim->quieted) {
-            runSteamConfig(handle, claim->featureReportLen, input::usbparse::SteamConfig::Restore);
-        }
-        if (claim->parser == input::usbparse::HidParser::SteamTriton) {
-            restoreTriton(handle, claim->featureReportLen, &claim->writeMtx);
-        }
-        CloseHandle(handle);
-    }
+    // The settings the pad held of ours came off it when the manager stopped the claim's output
+    // worker, before this; nothing is written to the pad here.
+    if (handle != nullptr && handle != INVALID_HANDLE_VALUE) { CloseHandle(handle); }
 }
 
 bool WinHidGateway::isClaimAlive(int syntheticId) const {
@@ -954,12 +872,13 @@ WinHidGateway::Claimed* WinHidGateway::claimedFor(int syntheticId) const {
 }
 
 // The claim's own handle and write lock; the manager stops the worker that holds the writer
-// before it releases the claim, which is what closes the handle.
+// before it releases the claim, which is what closes the handle. A collection with feature
+// reports but no OUT report (the 2015 Steam Controller's) gets the writer for its settings.
 std::unique_ptr<HidReportWriter> WinHidGateway::openReportWriter(int syntheticId) {
     Claimed* c = claimedFor(syntheticId);
-    if (c == nullptr || c->outputReportLen <= 0) {
-        return UsbDeviceGateway::openReportWriter(syntheticId);
-    }
+    if (c == nullptr) { return UsbDeviceGateway::openReportWriter(syntheticId); }
+    const bool takesReports = c->outputReportLen > 0 || c->featureReportLen > 0;
+    if (!takesReports) { return UsbDeviceGateway::openReportWriter(syntheticId); }
     return std::make_unique<HandleReportWriter>(
         c->handle, static_cast<std::size_t>(c->outputReportLen),
         static_cast<std::size_t>(std::max(c->featureReportLen, 0)), &c->writeMtx);
