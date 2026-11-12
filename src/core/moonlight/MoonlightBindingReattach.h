@@ -19,6 +19,8 @@ namespace dish::moonlight {
 struct PresentPad {
     QString slotId;
     QString identity;
+    // A slot that carries no binding (a receiver's card) is never a destination.
+    bool bindable = true;
 };
 
 struct Reattach {
@@ -36,7 +38,7 @@ inline QList<Reattach> bindingsToReattach(const QList<models::MoonlightBinding>&
     for (const auto& binding : standing) {
         const PresentPad* pad = nullptr;
         for (const auto& candidate : present) {
-            if (claimed.contains(candidate.slotId)) { continue; }
+            if (!candidate.bindable || claimed.contains(candidate.slotId)) { continue; }
             const bool byIdentity =
                 !binding.padIdentity.isEmpty() && candidate.identity == binding.padIdentity;
             const bool bySlot = binding.padIdentity.isEmpty() && candidate.slotId == binding.slotId;

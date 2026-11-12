@@ -58,6 +58,7 @@ class WinHidGateway : public UsbDeviceGateway {
     void releaseClaim(int syntheticId) override;
     bool isKnownFastLaneModel(int vendorId, int productId) const override;
     bool isClaimAlive(int syntheticId) const override;
+    bool isPadLinked(int syntheticId) const override;
     std::int64_t completionCount(int syntheticId) const override;
     std::int64_t decodedCount(int syntheticId) const override;
     bool writeOutputReport(int syntheticId, const std::uint8_t* data, std::size_t len) override;
@@ -84,6 +85,10 @@ class WinHidGateway : public UsbDeviceGateway {
         std::atomic<bool> running{false};
         // Cleared by the reader as it exits, whatever ended it.
         std::atomic<bool> alive{true};
+        // Whether a controller is there: from the claim for a model's own pad, and for a
+        // receiver's slot from its controller's connect event or first report until its
+        // disconnect event. Written by the reader, read by isPadLinked.
+        std::atomic<bool> linked{true};
         std::atomic<std::int64_t> completions{0};
         std::atomic<std::int64_t> decoded{0};
         std::function<void(const UsbReport&)> onReport;
@@ -103,8 +108,9 @@ class WinHidGateway : public UsbDeviceGateway {
         input::usbparse::MicMuteLatch micMute;
         // GENERIC-HID only: the caps-derived decode map (read-loop-thread-only).
         std::unique_ptr<HidPDecode> hidp;
-        // Feature-report buffer length from HIDP_CAPS, for the Steam Controller
-        // config sequences (id byte included).
+        // Feature-report buffer length from HIDP_CAPS (id byte included), for the
+        // claim's feature writes: the 2015 receiver's state request and the
+        // output worker's settings.
         int featureReportLen = 0;
         // Output-report buffer length from HIDP_CAPS (id byte included). The
         // Windows HID stack rejects a WriteFile whose length is not exactly
@@ -121,11 +127,11 @@ class WinHidGateway : public UsbDeviceGateway {
 
     void readLoop(Claimed* c);
 
-    // True when the packet was a dongle event rather than input. `handle` is the claim's raw
-    // device handle; this header does not include <windows.h>, which is why Claimed::handle is a
-    // void* too.
-    static bool handleSteamWirelessEvent(void* handle, Claimed* c, const std::uint8_t* data,
-                                         std::size_t len);
+    // True when the packet was a dongle event rather than input. Neither arm writes to the pad:
+    // the read thread only says whether a controller is there.
+    static bool handleSteamWirelessEvent(Claimed* c, const std::uint8_t* data, std::size_t len);
+    static void controllerArrived(Claimed* c);
+    static void controllerLeft(Claimed* c);
     static bool decodeOneReport(Claimed* c, const std::uint8_t* data, std::size_t len,
                                 input::usbparse::ParsedReport& parsed);
 
