@@ -681,6 +681,7 @@ void stripPrependedReportId(const std::uint8_t*& data, std::size_t& len) {
 UsbReport toUsbReport(const input::usbparse::ParsedReport& parsed, const bool micMuted) {
     UsbReport report{};
     report.wButtons = parsed.wButtons;
+    report.extButtons = parsed.extButtons;
     report.micMuted = micMuted;
     report.lt = parsed.lt;
     report.rt = parsed.rt;

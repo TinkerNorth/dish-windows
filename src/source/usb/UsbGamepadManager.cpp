@@ -146,6 +146,7 @@ class ClaimedPadPublisher {
     void publishInput(const UsbReport& r) const {
         input::GamepadInputProcessor::DeviceState st;
         st.wButtons = r.wButtons;
+        st.extButtons = r.extButtons;
         st.lt = r.lt;
         st.rt = r.rt;
         st.lx = r.lx;

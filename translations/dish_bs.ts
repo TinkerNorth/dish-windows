@@ -146,6 +146,10 @@
         <translation>Svjetlosna traka</translation>
     </message>
     <message>
+        <source>Extra buttons</source>
+        <translation>Dodatna dugmad</translation>
+    </message>
+    <message>
         <source>buttons or sticks</source>
         <translation>dugmad ili palice</translation>
     </message>

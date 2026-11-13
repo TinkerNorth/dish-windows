@@ -146,6 +146,10 @@
         <translation>Barra de luz</translation>
     </message>
     <message>
+        <source>Extra buttons</source>
+        <translation>Botões extras</translation>
+    </message>
+    <message>
         <source>buttons or sticks</source>
         <translation>botões ou analógicos</translation>
     </message>
