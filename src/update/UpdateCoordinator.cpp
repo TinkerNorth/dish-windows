@@ -26,6 +26,8 @@
 
 namespace dish::update {
 
+namespace sched = dish::reducer::update_schedule;
+
 namespace {
 
 Q_LOGGING_CATEGORY(lcDishUpdate, "dish.update")
@@ -181,7 +183,7 @@ void UpdateCoordinator::start() {
 
 void UpdateCoordinator::checkNow() {
     const qint64 now = nowMs();
-    if (lastManualCheckMs_ != 0 && now - lastManualCheckMs_ < reducer::kManualMinGapMs) { return; }
+    if (lastManualCheckMs_ != 0 && now - lastManualCheckMs_ < sched::kManualMinGapMs) { return; }
     lastManualCheckMs_ = now;
     checkTimer_->stop();
     pendingCheckDelayMs_ = -1;
@@ -283,11 +285,11 @@ void UpdateCoordinator::scheduleStartupCheck() {
     const qint64 sinceLast = now - last;
     // A recorded time far in the FUTURE means the clock moved, not that a check
     // just happened; check anyway rather than going quiet for a day.
-    const bool clockJumped = last > now + reducer::kFutureSkewEscapeMs;
-    const bool withinGap = last > 0 && !clockJumped && sinceLast < reducer::kMinCheckGapMs;
+    const bool clockJumped = last > now + sched::kFutureSkewEscapeMs;
+    const bool withinGap = last > 0 && !clockJumped && sinceLast < sched::kMinCheckGapMs;
 
     checkTimer_->stop();
-    pendingCheckDelayMs_ = withinGap ? reducer::kPeriodicIntervalMs : reducer::kStartupDelayMs;
+    pendingCheckDelayMs_ = withinGap ? sched::kPeriodicIntervalMs : sched::kStartupDelayMs;
     checkTimer_->start(pendingCheckDelayMs_);
 }
 
@@ -383,7 +385,7 @@ void UpdateCoordinator::executeScheduleNextCheck(
     int delay = schedule.delayMs;
     if (status_.value().phase == reducer::UpdatePhase::Failed) {
         const double unit = QRandomGenerator::global()->generateDouble();
-        delay = reducer::jitteredDelayMs(delay, unit);
+        delay = sched::jitteredDelayMs(delay, unit);
     }
     pendingCheckDelayMs_ = delay;
     checkTimer_->start(delay);

@@ -249,6 +249,7 @@ set(DISH_TEST_SOURCES
     test_update_version.cpp
     test_update_manifest.cpp
     test_update_machine.cpp
+    test_backoff_ladders.cpp
     test_update_staging_store.cpp
     test_update_coordinator.cpp
     test_update_handoff.cpp
