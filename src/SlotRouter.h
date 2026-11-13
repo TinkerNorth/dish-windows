@@ -94,6 +94,9 @@ class SlotRouter final : public input::GamepadInputProcessor::InputSink {
         // The pad sources the protocol 4 extended-buttons word: the model table
         // for a Direct pad, SDL's mapping for a Standard one.
         bool hasExtendedButtons = false;
+        // A Steam Controller's trackpads, which the per-slot pick routes; the model
+        // table for a Direct pad, none for a Standard one.
+        input::usbparse::SteamTrackpads steamTrackpads = input::usbparse::SteamTrackpads::None;
     };
 
     explicit SlotRouter(const Dependencies& deps);
