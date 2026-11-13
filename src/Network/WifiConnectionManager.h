@@ -262,7 +262,11 @@ class WifiConnectionManager : public QObject {
     void handleServerClose(WifiConnection* conn, const models::DiscoveredServer& server,
                            std::uint8_t reason);
     // Never runs for UserInitiated; a user tap resets the curve.
-    void scheduleRetry(const models::DiscoveredServer& server, ConnectIntent intent);
+    void scheduleRetry(const models::DiscoveredServer& server, ConnectIntent intent,
+                       reducer::TransportFailure failure = reducer::TransportFailure::None);
+    void logRetryCause(const QString& id, reducer::TransportFailure failure, int attempt,
+                       std::int64_t delayMs);
+    void resetRetry(const QString& id);
     void onRetryDue(const QString& id, const models::DiscoveredServer& server);
     QObject* retryScopeFor(const QString& id);
     void cancelPendingRetries(const QString& id);
@@ -304,6 +308,8 @@ class WifiConnectionManager : public QObject {
     QSet<QString> pairingInFlight_;
     // Drives the backoff. Reset on a successful session or any user action.
     QHash<QString, int> retryAttempts_;
+    // The cause last logged for each satellite's backoff, reset with it.
+    QHash<QString, reducer::TransportFailure> lastFailure_;
     // Per satellite, the context every pending silent retry is armed under. Children of this
     // manager; a user's disconnect deletes one to cancel its retries.
     QHash<QString, QObject*> retryScopes_;

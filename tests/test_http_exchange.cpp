@@ -10,6 +10,7 @@
 // The last case is a use-after-free when the exchange does touch itself afterwards, which the
 // debug heap turns into a crash here and AddressSanitizer reports wherever it runs.
 
+#include "core/reducer/RestOutcome.h"
 #include "source/http/HttpExchange.h"
 
 #include "FakeHttpsListener.h"
@@ -30,6 +31,7 @@ using dish::http::exchangeHttp;
 using dish::http::HttpDone;
 using dish::http::HttpRequest;
 using dish::http::HttpResult;
+using dish::reducer::TransportFailure;
 using dish::test::FakeHttpsListener;
 using dish::test::spinUntil;
 
@@ -141,5 +143,5 @@ TEST_CASE("exchange: a port nothing listens on is refused, however long the dial
 
     REQUIRE(spinUntil([&outcome] { return outcome.has_value(); }, kDialEndsMs));
     CHECK(outcome->response.status == 0);
-    CHECK(outcome->error == QStringLiteral("Connection refused"));
+    CHECK(outcome->failure == TransportFailure::Refused);
 }

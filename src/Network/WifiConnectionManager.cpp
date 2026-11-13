@@ -17,6 +17,7 @@
 #include "core/wire/SessionCrypto.h"
 
 #include <QHostInfo>
+#include <QLoggingCategory>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QTimer>
@@ -30,6 +31,9 @@
 namespace dish::net {
 
 namespace {
+
+// Info, so a retry's change of cause is logged and the ticks that only repeat it are not.
+Q_LOGGING_CATEGORY(lcNet, "dish.net", QtInfoMsg)
 
 ConnectionEvent makeError(const QString& msg) { return {ConnectionEventKind::Error, {}, msg}; }
 
@@ -55,12 +59,50 @@ reducer::RestReply restReplyOf(const models::SessionResponse& resp, bool pinMism
     rr.bodyParsed = resp.reachable;
     rr.code = resp.code.value_or(QString()).toStdString();
     rr.pinMismatch = pinMismatch;
+    rr.failure = resp.failure;
     return rr;
 }
 
 QString unreachableMsg() {
     return WifiConnectionManager::tr(
         "Server unreachable — check it's powered on and on the same Wi-Fi.");
+}
+QString unreachableMsgFor(reducer::TransportFailure failure) {
+    switch (failure) {
+    case reducer::TransportFailure::Refused:
+        return WifiConnectionManager::tr("That machine is reachable, but no satellite is listening "
+                                         "on it. Start Satellite there, then try again.");
+    case reducer::TransportFailure::TimedOut:
+        return WifiConnectionManager::tr("The satellite stopped responding. It may have gone to "
+                                         "sleep or left the network.");
+    case reducer::TransportFailure::Tls:
+        return WifiConnectionManager::tr("Could not set up a secure connection to the satellite.");
+    case reducer::TransportFailure::None:
+    case reducer::TransportFailure::Unreachable:
+    case reducer::TransportFailure::Aborted:
+    case reducer::TransportFailure::Other:
+        break;
+    }
+    return unreachableMsg();
+}
+const char* failureName(reducer::TransportFailure failure) {
+    switch (failure) {
+    case reducer::TransportFailure::None:
+        return "none";
+    case reducer::TransportFailure::Unreachable:
+        return "unreachable";
+    case reducer::TransportFailure::Refused:
+        return "connection refused";
+    case reducer::TransportFailure::TimedOut:
+        return "timed out";
+    case reducer::TransportFailure::Tls:
+        return "TLS failure";
+    case reducer::TransportFailure::Aborted:
+        return "aborted";
+    case reducer::TransportFailure::Other:
+        return "other";
+    }
+    return "other";
 }
 QString rePairMsg() {
     return WifiConnectionManager::tr(
@@ -287,7 +329,7 @@ void WifiConnectionManager::connectTo(const models::DiscoveredServer& server,
     if (refusesHost(server, intent)) { return; }
     if (heldByUser(WifiConnection::idFor(server), intent)) { return; }
     auto* conn = ensureConnection(server);
-    if (intent == ConnectIntent::UserInitiated) { retryAttempts_.remove(conn->id()); }
+    if (intent == ConnectIntent::UserInitiated) { resetRetry(conn->id()); }
     if (conn->state() == SessionState::Live || conn->state() == SessionState::Linking) {
         conn->updateServer(server);
         return;
@@ -312,7 +354,7 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
     }
     heldByUser(WifiConnection::idFor(server), ConnectIntent::UserInitiated);
     auto* conn = ensureConnection(server);
-    retryAttempts_.remove(conn->id());
+    resetRetry(conn->id());
     if (conn->state() == SessionState::Live) { return; }
     conn->updateServer(server);
     conn->markConnecting();
@@ -485,7 +527,7 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     heldByUser(WifiConnection::idFor(server), ConnectIntent::UserInitiated);
 
     auto* conn = ensureConnection(server);
-    retryAttempts_.remove(conn->id());
+    resetRetry(conn->id());
     conn->updateServer(server);
     armReverseAttempt(server);
 
@@ -733,7 +775,7 @@ void WifiConnectionManager::onSessionRefused(WifiConnection* conn,
         // takes a Forget to drop it. Falling through would park this on the
         // backoff curve as if the box were merely offline.
         conn->markDisconnected();
-        retryAttempts_.remove(conn->id());
+        resetRetry(conn->id());
         emitErrorIfUserInitiated(intent, identityChangedMsg());
         return;
     case reducer::RestVerdict::Ok:
@@ -743,11 +785,11 @@ void WifiConnectionManager::onSessionRefused(WifiConnection* conn,
         // Unreachable, 503 or malformed: park and back off.
         if (intent == ConnectIntent::UserInitiated) {
             conn->markDisconnected();
-            emit connectionEvent(makeError(unreachableMsg()));
+            emit connectionEvent(makeError(unreachableMsgFor(resp.failure)));
         } else {
             conn->markStale();
         }
-        scheduleRetry(server, intent);
+        scheduleRetry(server, intent, resp.failure);
         return;
     }
 }
@@ -767,7 +809,7 @@ void WifiConnectionManager::startSession(WifiConnection* conn,
     conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
     client->setConnectionParams(material.token, material.sessionKey, negotiated.settledVersion);
     store_->remember(server);
-    retryAttempts_.remove(id);
+    resetRetry(id);
 
     conn->markConnected(
         client, connectionId, resp.epoch, resp.mouseControl.granted,
@@ -1043,14 +1085,34 @@ void WifiConnectionManager::handleServerClose(WifiConnection* conn,
 }
 
 void WifiConnectionManager::scheduleRetry(const models::DiscoveredServer& server,
-                                          ConnectIntent intent) {
+                                          ConnectIntent intent, reducer::TransportFailure failure) {
     if (intent == ConnectIntent::UserInitiated) { return; }
     const QString id = server.id();
     const int attempt = retryAttempts_.value(id, 0) + 1;
     retryAttempts_.insert(id, attempt);
     const auto delay = reducer::backoffDelayMs(attempt);
+    logRetryCause(id, failure, attempt, delay);
     effects_.after(static_cast<int>(delay), retryScopeFor(id),
                    [this, id, server] { onRetryDue(id, server); });
+}
+
+void WifiConnectionManager::logRetryCause(const QString& id, reducer::TransportFailure failure,
+                                          int attempt, std::int64_t delayMs) {
+    const bool causeChanged = lastFailure_.value(id, reducer::TransportFailure::None) != failure;
+    const auto delaySeconds = static_cast<long long>(delayMs / 1000);
+    if (!causeChanged) {
+        qCDebug(lcNet, "satellite %s: still %s; retry %d in %llds", qUtf8Printable(id),
+                failureName(failure), attempt, delaySeconds);
+        return;
+    }
+    lastFailure_.insert(id, failure);
+    qCInfo(lcNet, "satellite %s: %s; retrying in %llds", qUtf8Printable(id), failureName(failure),
+           delaySeconds);
+}
+
+void WifiConnectionManager::resetRetry(const QString& id) {
+    retryAttempts_.remove(id);
+    lastFailure_.remove(id);
 }
 
 void WifiConnectionManager::onRetryDue(const QString& id, const models::DiscoveredServer& server) {
@@ -1097,7 +1159,7 @@ void WifiConnectionManager::onTerminalAuthFailure(WifiConnection* conn, const QS
     // so the retry curve stops here rather than hammering a revoked device.
     conn->markStale();
     store_->forgetKey(id);
-    retryAttempts_.remove(id);
+    resetRetry(id);
     emitErrorIfUserInitiated(intent, rePairMsg());
 }
 
@@ -1168,7 +1230,7 @@ void WifiConnectionManager::forget(const QString& id) {
     }
     closeSession(id);
     store_->forget(id);
-    retryAttempts_.remove(id);
+    resetRetry(id);
     userDisconnected_.remove(id);
     reconcileInFlight_.remove(id);
     if (auto* taken = connections_.take(id)) {
@@ -1198,6 +1260,7 @@ void WifiConnectionManager::resumeFromSleep() {
     // A backoff curve armed before the suspend is measuring wall clock the
     // machine spent asleep, so the first attempt after a resume starts over.
     retryAttempts_.clear();
+    lastFailure_.clear();
     // Rescan before reconnecting: a laptop that resumes on another network has
     // a stale remembered IP, and only discovery can relearn it.
     startDiscovery();

@@ -12,12 +12,14 @@
 #include "Network/WifiConnectionManager.h"
 #include "core/model/Protocol.h"
 #include "core/net/Tofu.h"
+#include "core/reducer/RestOutcome.h"
 #include "core/wire/SessionCrypto.h"
 
 #include "FakeHttpsListener.h"
 #include "FakeSatelliteRest.h"
 #include "FakeWifiEffects.h"
 #include "InstalledCatalog.h"
+#include "LogCapture.h"
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -46,10 +48,12 @@ using dish::net::ConnectionEvent;
 using dish::net::ConnectionEventKind;
 using dish::net::ReversePairingPhase;
 using dish::net::SessionState;
+using dish::reducer::TransportFailure;
 using dish::test::CannedAnswer;
 using dish::test::FakeSatelliteRest;
 using dish::test::FakeWifiEffects;
 using dish::test::InstalledCatalog;
+using dish::test::LogCapture;
 using dish::test::PlainTextPort;
 
 namespace {
@@ -62,6 +66,8 @@ constexpr std::size_t kPairingKeySize = 32;
 constexpr int kReplyTimeoutMs = 5000;
 // Past the first silent retry's 1 s backoff (reducer::backoffDelayMs(1)).
 constexpr int kPastFirstBackoffMs = 1100;
+// Past the second one's 2 s.
+constexpr int kPastSecondBackoffMs = 2100;
 // The version a satellite one protocol behind this build answers a 409 with.
 constexpr int kOneBehind = dish::proto::kProtocolVersion - 1;
 
@@ -88,6 +94,12 @@ const QString kVersionMsg =
 const QString kIdentityChangedMsg =
     QStringLiteral("This satellite's security identity changed. If it was reinstalled, forget it "
                    "here and pair again.");
+const QString kNotListeningMsg =
+    QStringLiteral("That machine is reachable, but no satellite is listening on it. Start "
+                   "Satellite there, then try again.");
+const QString kStoppedRespondingMsg =
+    QStringLiteral("The satellite stopped responding. It may have gone to sleep or left the "
+                   "network.");
 const QString kNoSecureLinkMsg =
     QStringLiteral("Could not set up a secure connection to the satellite.");
 const QString kLoopbackIp = QStringLiteral("127.0.0.1");
@@ -257,6 +269,12 @@ struct ManagerFixture {
         key.fill(kPairingKeyByte);
         const std::string deviceId = store->getOrCreateDeviceId().toStdString();
         return dish::wire::computeHmacProof(key.data(), deviceId);
+    }
+
+    // Lets the silent retry armed now fall due, and its reply land.
+    void retryAfter(int ms) {
+        effects.advance(ms);
+        REQUIRE(pumpUntil([this] { return rest->allAnswered(); }));
     }
 
     // A silent connect that the satellite turns away with a 503, which parks the
@@ -820,6 +838,56 @@ TEST_CASE("wifi manager: a user connect to a port that does not speak TLS says n
 
     REQUIRE(pumpUntil([&f] { return !f.events.empty(); }));
     requireOneError(f.events, kNoSecureLinkMsg);
+}
+
+TEST_CASE("wifi manager: a user connect nothing answers names the cause, where it is one to act on",
+          "[manager][transport]") {
+    const auto [failure, message] = GENERATE(table<TransportFailure, QString>({
+        {TransportFailure::Refused, kNotListeningMsg},
+        {TransportFailure::TimedOut, kStoppedRespondingMsg},
+        {TransportFailure::Tls, kNoSecureLinkMsg},
+        {TransportFailure::Unreachable, kUnreachableMsg},
+        {TransportFailure::Aborted, kUnreachableMsg},
+        {TransportFailure::Other, kUnreachableMsg},
+        {TransportFailure::None, kUnreachableMsg},
+    }));
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{0, {}, failure});
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(f.settles());
+    requireOneError(f, message);
+}
+
+TEST_CASE("wifi manager: a satellite that stays refused logs the cause once, not every retry",
+          "[manager][transport]") {
+    LogCapture logged;
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{0, {}, TransportFailure::Refused});
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(f.settles());
+
+    f.retryAfter(kPastFirstBackoffMs);
+    f.retryAfter(kPastSecondBackoffMs);
+
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 3);
+    REQUIRE(logged.countContaining(QStringLiteral("connection refused")) == 1);
+}
+
+TEST_CASE("wifi manager: a retry that meets a new cause logs it", "[manager][transport]") {
+    LogCapture logged;
+    ManagerFixture f;
+    f.rest->answerOnce("PUT", kSessionsPath, CannedAnswer{0, {}, TransportFailure::Refused});
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{0, {}, TransportFailure::TimedOut});
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(f.settles());
+
+    f.retryAfter(kPastFirstBackoffMs);
+
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 2);
+    REQUIRE(logged.countContaining(QStringLiteral("connection refused")) == 1);
+    REQUIRE(logged.countContaining(QStringLiteral("timed out")) == 1);
 }
 
 // ---- Silent retries ----

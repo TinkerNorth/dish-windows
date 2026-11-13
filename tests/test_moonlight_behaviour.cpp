@@ -27,6 +27,7 @@
 #include "repository/MoonlightHostRepository.h"
 #include "source/connection/NvstreamDiscovery.h"
 
+#include "LogCapture.h"
 #include "MoonlightFakeHost.h"
 #include "MoonlightRequestLog.h"
 #include "MoonlightSessionTestAccess.h"
@@ -61,6 +62,7 @@ using dish::net::MoonlightManager;
 using dish::net::MoonlightSession;
 using dish::net::MoonlightSessionTestAccess;
 using dish::repository::MoonlightHostRepository;
+using dish::test::LogCapture;
 using dish::test::makeSharedSettings;
 using dish::test::MoonlightFakeHost;
 using dish::test::MoonlightRequestLog;
@@ -231,44 +233,6 @@ class HangUpPort : public QObject {
     }
 
     QTcpServer server_;
-};
-
-// Collects what the app actually logged, which is where "name the phase that
-// failed" is answered: the copy the user sees is fixed by the UX spec, so the
-// diagnostic is the log line or it is nowhere.
-class LogCapture {
-  public:
-    LogCapture() {
-        instance() = this;
-        previous_ = qInstallMessageHandler(&LogCapture::handle);
-    }
-    ~LogCapture() {
-        qInstallMessageHandler(previous_);
-        instance() = nullptr;
-    }
-    LogCapture(const LogCapture&) = delete;
-    LogCapture& operator=(const LogCapture&) = delete;
-
-    bool sawContaining(const QString& needle) const {
-        for (const auto& line : lines_) {
-            if (line.contains(needle)) { return true; }
-        }
-        return false;
-    }
-
-  private:
-    static LogCapture*& instance() {
-        static LogCapture* current = nullptr;
-        return current;
-    }
-    static void handle(QtMsgType type, const QMessageLogContext& context, const QString& message) {
-        if (auto* self = instance()) { self->lines_.append(message); }
-        Q_UNUSED(type);
-        Q_UNUSED(context);
-    }
-
-    QStringList lines_;
-    QtMessageHandler previous_ = nullptr;
 };
 
 } // namespace
@@ -683,6 +647,8 @@ TEST_CASE("A refused pairing stops at the phase that refused it and writes nothi
     h.httpPort = fake.port();
     h.httpsPort = fake.port();
 
+    // The copy the user sees is fixed by the UX spec, so the phase that failed is named in the log
+    // or nowhere.
     LogCapture logged;
     MoonlightSession session(h, *identity, &repo);
     int finished = 0;

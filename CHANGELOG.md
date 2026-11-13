@@ -84,6 +84,16 @@ share a version number.
 
 ### Changed
 
+- **A satellite that cannot be reached says why.** A refused connection, one
+  that got no answer and one that could not be secured all read "Server
+  unreachable — check it's powered on and on the same Wi-Fi". Now a refused
+  connection says the machine is on but Satellite is not running there, one
+  that got no answer says the satellite stopped responding, and a failed
+  secure connection says that. Every other cause keeps the old sentence, and
+  Dish retries each of them exactly as before. A remembered satellite that
+  stays off is logged once, and again only when the reason changes, instead of
+  on every retry.
+
 - **A host is sent the lower of the controller's battery and the PC's.** When
   two batteries compete, the controller's own and the PC's, the lower one is
   what the host sees, on every path and on a Moonlight host too. A controller

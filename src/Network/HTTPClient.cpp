@@ -87,7 +87,8 @@ HTTPClient::HTTPClient(http::HttpTransport* transport, QObject* parent)
 
 HTTPClient::~HTTPClient() = default;
 
-// A status is the server answering, whatever it said; without one the transport failed.
+// A status is the server answering, whatever it said; without one the transport failed, and the
+// failure says how.
 HTTPClient::RawReply HTTPClient::rawReplyOf(const http::HttpResult& result, bool pinMismatch) {
     RawReply out;
     out.status = result.response.status;
@@ -95,6 +96,7 @@ HTTPClient::RawReply HTTPClient::rawReplyOf(const http::HttpResult& result, bool
     out.body = QByteArray::fromStdString(result.response.body);
     out.etag = QString::fromStdString(result.response.header("etag"));
     out.pinMismatch = pinMismatch;
+    out.failure = result.failure;
     return out;
 }
 
@@ -144,6 +146,7 @@ void HTTPClient::putSession(const QString& ip, int port, const QString& deviceId
         if (r.reachable) { resp = models::SessionResponse::fromJson(parseObject(r.body)); }
         resp.httpStatus = r.status;
         resp.reachable = r.reachable;
+        resp.failure = r.failure;
         cb(resp, r.pinMismatch);
     });
 }

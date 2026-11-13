@@ -5261,6 +5261,18 @@
         <translation>Server nije dostupan. Provjerite je li uključen i na istoj Wi-Fi mreži.</translation>
     </message>
     <message>
+        <source>That machine is reachable, but no satellite is listening on it. Start Satellite there, then try again.</source>
+        <translation>Taj računar je dostupan, ali na njemu nijedan satelit ne osluškuje. Pokrenite Satellite tamo, pa pokušajte ponovo.</translation>
+    </message>
+    <message>
+        <source>The satellite stopped responding. It may have gone to sleep or left the network.</source>
+        <translation>Satelit je prestao odgovarati. Možda je u mirovanju ili je napustio mrežu.</translation>
+    </message>
+    <message>
+        <source>Could not set up a secure connection to the satellite.</source>
+        <translation>Nije moguće uspostaviti sigurnu vezu sa satelitom.</translation>
+    </message>
+    <message>
         <source>This satellite no longer recognizes this device. Re-pair needed.</source>
         <translation>Ovaj satelit više ne prepoznaje ovaj uređaj. Potrebno je ponovo upariti.</translation>
     </message>
