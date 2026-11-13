@@ -41,14 +41,19 @@ inline constexpr std::string_view trackpadPickName(TrackpadPick pick) {
     return kTrackpadPickNames[3];
 }
 
-// Case-sensitive, like the touchpad mode strings: only a genuine name parses.
+inline constexpr std::array<TrackpadPick, 4> kTrackpadPicks{TrackpadPick::Stick, TrackpadPick::Pad,
+                                                            TrackpadPick::Mouse, TrackpadPick::Off};
+
+// Case-sensitive, like the touchpad mode strings: only a genuine name is found.
+inline std::array<TrackpadPick, 4>::const_iterator findTrackpadPick(std::string_view name) {
+    return std::find_if(kTrackpadPicks.begin(), kTrackpadPicks.end(),
+                        [name](TrackpadPick pick) { return trackpadPickName(pick) == name; });
+}
+
 inline std::optional<TrackpadPick> trackpadPickFromName(std::string_view name) {
-    constexpr std::array<TrackpadPick, 4> kPicks{TrackpadPick::Stick, TrackpadPick::Pad,
-                                                 TrackpadPick::Mouse, TrackpadPick::Off};
-    for (const TrackpadPick pick : kPicks) {
-        if (trackpadPickName(pick) == name) { return pick; }
-    }
-    return std::nullopt;
+    const auto found = findTrackpadPick(name);
+    if (found == kTrackpadPicks.end()) { return std::nullopt; }
+    return *found;
 }
 
 inline bool isValidTrackpadPickName(std::string_view name) {
@@ -96,15 +101,24 @@ inline TrackpadPick defaultTrackpadPick(SteamTrackpads model, bool typeOffersDs4
 // default, then held to what the path can carry. A pad surface needs the
 // emulated type to have one and mouse needs the host's grant; either falls to
 // off, never to a surface the satellite would dead-letter.
+// The stored pick where it is a genuine name the model offers, else `fallback`.
+// No optional pick on this path: GCC 13 at -O2 (the TSan lanes) cannot see that
+// one guarded by has_value() is set, and fails the build on it.
+inline TrackpadPick askedTrackpadPick(const std::optional<std::string>& stored,
+                                      SteamTrackpads model, TrackpadPick fallback) {
+    if (!stored.has_value()) { return fallback; }
+    const auto found = findTrackpadPick(*stored);
+    if (found == kTrackpadPicks.end()) { return fallback; }
+    const std::vector<TrackpadPick> choices = trackpadPickChoices(model);
+    const bool offered = std::find(choices.begin(), choices.end(), *found) != choices.end();
+    return offered ? *found : fallback;
+}
+
 inline TrackpadPick effectiveTrackpadPick(const std::optional<std::string>& stored,
                                           SteamTrackpads model, bool typeOffersDs4,
                                           bool mouseAvailable) {
-    const std::optional<TrackpadPick> parsed =
-        stored.has_value() ? trackpadPickFromName(*stored) : std::nullopt;
-    const std::vector<TrackpadPick> choices = trackpadPickChoices(model);
-    const bool offered =
-        parsed.has_value() && std::find(choices.begin(), choices.end(), *parsed) != choices.end();
-    const TrackpadPick wanted = offered ? *parsed : defaultTrackpadPick(model, typeOffersDs4);
+    const TrackpadPick wanted =
+        askedTrackpadPick(stored, model, defaultTrackpadPick(model, typeOffersDs4));
     switch (wanted) {
     case TrackpadPick::Stick:
         return TrackpadPick::Stick;
