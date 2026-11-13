@@ -10,9 +10,10 @@
 #include "source/system/ThreadPriority.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
-// then the HID + SetupAPI headers, which depend on the base Win32 types.
+// then the HID, SetupAPI and device-tree headers, which depend on the base Win32 types.
 #include <windows.h>
 
+#include <cfgmgr32.h>
 #include <hidsdi.h>
 #include <setupapi.h>
 
@@ -64,6 +65,36 @@ std::string wideToUtf8(const wchar_t* w) {
     return out;
 }
 
+// A device node's instance id, or empty.
+std::string instanceIdOf(DEVINST node) {
+    std::array<wchar_t, MAX_DEVICE_ID_LEN + 1> id{};
+    if (CM_Get_Device_IDW(node, id.data(), static_cast<ULONG>(id.size()), 0) != CR_SUCCESS) {
+        return {};
+    }
+    return wideToUtf8(id.data());
+}
+
+std::optional<DEVINST> parentOf(DEVINST node) {
+    DEVINST parent = 0;
+    if (CM_Get_Parent(&parent, node, 0) != CR_SUCCESS) { return std::nullopt; }
+    return parent;
+}
+
+bool isAnInterfaceNode(DEVINST node) {
+    return input::hidInterfaceNumberFromPath(instanceIdOf(node)).has_value();
+}
+
+// The USB device a HID collection belongs to, by its instance id: the collection's parent, or the
+// parent's parent where that is one interface of a composite device (its id names the interface,
+// "USB\VID_054C&PID_0CE6&MI_03\..."). The PnP manager keeps one id per device while it stays
+// plugged in, so every collection of a device names the same one and two devices never share it.
+std::string usbDeviceOf(DEVINST collection) {
+    const std::optional<DEVINST> parent = parentOf(collection);
+    if (!parent.has_value()) { return {}; }
+    const std::optional<DEVINST> device = isAnInterfaceNode(*parent) ? parentOf(*parent) : parent;
+    return device.has_value() ? instanceIdOf(*device) : std::string{};
+}
+
 // Read a HID device's friendly product string, falling back to the path.
 std::string productName(HANDLE h, const std::string& fallbackPath) {
     std::array<wchar_t, 256> buf{};
@@ -100,12 +131,9 @@ bool pathCarriesPad(const std::string& path, int vendorId, int productId) {
     return input::usbparse::interfaceCarriesPad(vendorId, productId, iface);
 }
 
-// A receiver's claim opens the slot it was asked for, because each slot is a pad of its own; any
-// other model's opens the first collection that carries its pad.
-bool pathIsTheClaimedPad(const std::string& path, const UsbDeviceInfo& device) {
-    if (!input::usbparse::isReceiver(device.vendorId, device.productId)) { return true; }
+bool pathIsTheClaimedPad(const std::string& path, DEVINST collection, const UsbDeviceInfo& device) {
     const int iface = input::hidInterfaceNumberFromPath(path).value_or(kNoInterface);
-    return iface == device.interfaceNumber;
+    return isTheClaimedPad(usbDeviceOf(collection), iface, device);
 }
 
 // A 2015 receiver's slot answers with the connect or disconnect event for its controller, on
@@ -143,19 +171,27 @@ input::usbout::Ds5FirmwareInfo readDs5FirmwareInfo(HANDLE h, int featureLen) {
                                                input::usbout::kDs5FirmwareInfoReportBytes);
 }
 
-// The interface's wide device path, or empty when the two-call size query does not produce one.
-// Wide because CreateFileW wants it that way; the utf8 form is only for the admission checks.
-std::wstring interfacePathOf(HDEVINFO devInfo, SP_DEVICE_INTERFACE_DATA& ifData) {
+// A HID interface's wide device path and the collection's device node, or an empty path when the
+// two-call size query does not produce one. Wide because CreateFileW wants it that way; the utf8
+// form is only for the admission checks.
+struct HidInterface {
+    std::wstring path;
+    DEVINST collection = 0;
+};
+
+HidInterface interfaceOf(HDEVINFO devInfo, SP_DEVICE_INTERFACE_DATA& ifData) {
     DWORD needed = 0;
     SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
     if (needed == 0) { return {}; }
     std::vector<std::uint8_t> detailBuf(needed);
     auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
     detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-    if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) == 0) {
+    SP_DEVINFO_DATA node{};
+    node.cbSize = sizeof(node);
+    if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, &node) == 0) {
         return {};
     }
-    return detail->DevicePath;
+    return HidInterface{detail->DevicePath, node.DevInst};
 }
 
 // Admission is per model family: the collection the model's parser actually decodes. Everything
@@ -175,9 +211,10 @@ bool isClaimCandidate(HANDLE h, HIDD_ATTRIBUTES& attrs, HIDP_CAPS& caps) {
 }
 
 // What the claim machinery needs to know about a device it has not opened for reading yet.
-UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const HIDD_ATTRIBUTES& attrs,
-                             const HIDP_CAPS& caps) {
+UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const std::string& usbDevice,
+                             const HIDD_ATTRIBUTES& attrs, const HIDP_CAPS& caps) {
     UsbDeviceInfo info;
+    info.devicePath = usbDevice;
     info.vendorId = attrs.VendorID;
     info.productId = attrs.ProductID;
     // The catalog name is deterministic where one exists; it also names models whose own product
@@ -199,8 +236,8 @@ UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const HIDD_ATTRI
 }
 
 // Null for an interface that is not a claim candidate at all.
-std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
-    const std::string path = wideToUtf8(widePath.c_str());
+std::optional<UsbDeviceInfo> probeInterface(const HidInterface& hid) {
+    const std::string path = wideToUtf8(hid.path.c_str());
     // A Bluetooth-connected pad is a HID device too (same VID:PID as its USB identity) but is NOT
     // a USB-direct claim candidate: the raw-HID claim is a USB feature, the per-model decoders
     // parse the USB report layout (the BT layout differs, since a DS4 streams the short 0x01
@@ -210,7 +247,7 @@ std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
 
     // Opened for query only, with no read/write share, so probing does not disturb other readers.
     // The actual claim re-opens with read access.
-    HANDLE h = CreateFileW(widePath.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+    HANDLE h = CreateFileW(hid.path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                            OPEN_EXISTING, 0, nullptr);
     if (h == INVALID_HANDLE_VALUE) { return std::nullopt; }
 
@@ -219,7 +256,7 @@ std::optional<UsbDeviceInfo> probeInterface(const std::wstring& widePath) {
     HIDP_CAPS caps{};
     std::optional<UsbDeviceInfo> info;
     if (isClaimCandidate(h, attrs, caps) && pathCarriesPad(path, attrs.VendorID, attrs.ProductID)) {
-        info = describeDevice(h, path, attrs, caps);
+        info = describeDevice(h, path, usbDeviceOf(hid.collection), attrs, caps);
     }
     CloseHandle(h);
     return info;
@@ -494,9 +531,9 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
     ifData.cbSize = sizeof(ifData);
     for (DWORD i = 0; SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
          ++i) {
-        const std::wstring widePath = interfacePathOf(devInfo, ifData);
-        if (widePath.empty()) { continue; }
-        auto info = probeInterface(widePath);
+        const HidInterface hid = interfaceOf(devInfo, ifData);
+        if (hid.path.empty()) { continue; }
+        auto info = probeInterface(hid);
         if (!info.has_value()) { continue; }
         // Microsoft-VID gamepad collections are skipped: Xbox pads belong to XInput, not this
         // raw-HID path, and should not be fought over.
@@ -510,7 +547,7 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
 
 ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
                                  std::function<void(const UsbReport&)> onReport) {
-    // Re-find the device path by VID:PID (enumerate() returned descriptors, not
+    // Re-find the device path by VID:PID and device (enumerate() returned descriptors, not
     // handles, so the claim owns the open). Open with read access this time.
     GUID hidGuid{};
     HidD_GetHidGuid(&hidGuid);
@@ -530,24 +567,16 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     for (DWORD i = 0; opened == INVALID_HANDLE_VALUE &&
                       SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
          ++i) {
-        DWORD needed = 0;
-        SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, nullptr, 0, &needed, nullptr);
-        if (needed == 0) { continue; }
-        std::vector<std::uint8_t> detailBuf(needed);
-        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(detailBuf.data());
-        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-        if (SetupDiGetDeviceInterfaceDetailW(devInfo, &ifData, detail, needed, nullptr, nullptr) ==
-            0) {
-            continue;
-        }
+        const HidInterface hid = interfaceOf(devInfo, ifData);
+        if (hid.path.empty()) { continue; }
         // Same VID:PID can be present over BOTH transports at once (a pad
         // charging over USB while still BT-paired); never claim the Bluetooth
         // interface — enumerate() filtered it, so the claim must match. A
         // receiver's claim takes only the slot it was asked for.
-        const std::string utf8Path = wideToUtf8(detail->DevicePath);
+        const std::string utf8Path = wideToUtf8(hid.path.c_str());
         if (input::isBluetoothHidDevicePath(utf8Path)) { continue; }
-        if (!pathIsTheClaimedPad(utf8Path, device)) { continue; }
-        HANDLE h = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
+        if (!pathIsTheClaimedPad(utf8Path, hid.collection, device)) { continue; }
+        HANDLE h = CreateFileW(hid.path.c_str(), GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                FILE_FLAG_OVERLAPPED, nullptr);
         if (h == INVALID_HANDLE_VALUE) { continue; }

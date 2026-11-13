@@ -65,3 +65,14 @@ TEST_CASE("HidTransport: a path without an interface part names none", "[hidtran
     REQUIRE_FALSE(hidInterfaceNumberFromPath(R"(\\?\hid#vid_28de&pid_1304&mi_)").has_value());
     REQUIRE_FALSE(hidInterfaceNumberFromPath(R"(\\?\hid#vid_28de&pid_1304&mi_zz#8)").has_value());
 }
+
+TEST_CASE("HidTransport: a composite device's interface node names its interface, the device none",
+          "[hidtransport]") {
+    // The device-tree walk (WinHidGateway's usbDeviceOf) goes one node past a collection's parent
+    // when the parent's instance id names an interface, which is how it reaches the USB device.
+    REQUIRE(hidInterfaceNumberFromPath(R"(USB\VID_28DE&PID_1142&MI_03\7&2A9A2E0B&0&0003)") == 3);
+    REQUIRE_FALSE(
+        hidInterfaceNumberFromPath(R"(USB\VID_28DE&PID_1142\6&1B3C9D2F&0&4)").has_value());
+    REQUIRE_FALSE(
+        hidInterfaceNumberFromPath(R"(USB\VID_054C&PID_0CE6\5&37E2D6B1&0&2)").has_value());
+}
