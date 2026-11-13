@@ -50,6 +50,7 @@ using dish::test::CannedAnswer;
 using dish::test::FakeSatelliteRest;
 using dish::test::FakeWifiEffects;
 using dish::test::InstalledCatalog;
+using dish::test::PlainTextPort;
 
 namespace {
 
@@ -87,6 +88,9 @@ const QString kVersionMsg =
 const QString kIdentityChangedMsg =
     QStringLiteral("This satellite's security identity changed. If it was reinstalled, forget it "
                    "here and pair again.");
+const QString kNoSecureLinkMsg =
+    QStringLiteral("Could not set up a secure connection to the satellite.");
+const QString kLoopbackIp = QStringLiteral("127.0.0.1");
 
 const QByteArray kGrant = R"({"connectionId":"conn_1","token":"00000001",)"
                           R"("sessionSalt":"0102030405060708","epoch":1})";
@@ -277,10 +281,14 @@ void requireGrantReleased(const ManagerFixture& f) {
     REQUIRE(release.hmacProof.toStdString() == f.expectedProof());
 }
 
+void requireOneError(const std::vector<ConnectionEvent>& events, const QString& message) {
+    REQUIRE(events.size() == 1);
+    REQUIRE(events.front().kind == ConnectionEventKind::Error);
+    REQUIRE(events.front().message.toStdString() == message.toStdString());
+}
+
 void requireOneError(const ManagerFixture& f, const QString& message) {
-    REQUIRE(f.events.size() == 1);
-    REQUIRE(f.events.front().kind == ConnectionEventKind::Error);
-    REQUIRE(f.events.front().message.toStdString() == message.toStdString());
+    requireOneError(f.events, message);
 }
 
 void requireNoRetry(ManagerFixture& f) {
@@ -288,6 +296,36 @@ void requireNoRetry(ManagerFixture& f) {
     f.effects.advance(kPastFirstBackoffMs);
     REQUIRE(f.rest->count("PUT", kSessionsPath) == 1);
 }
+
+DiscoveredServer loopbackSatelliteOn(int httpPort) {
+    DiscoveredServer s = satelliteAt(kLoopbackIp, QStringLiteral("m1"));
+    s.httpPort = httpPort;
+    return s;
+}
+
+// The manager on the app's own transport, dialling a paired satellite on a loopback port: only a
+// real socket can say why nothing answered.
+struct LoopbackManagerFixture {
+    DiscoveredServer server;
+    std::shared_ptr<QSettings> settings;
+    std::unique_ptr<dish::net::ConnectionStore> store;
+    FakeWifiEffects effects;
+    std::unique_ptr<dish::net::WifiConnectionManager> manager;
+    std::vector<ConnectionEvent> events;
+
+    explicit LoopbackManagerFixture(int httpPort)
+        : server(loopbackSatelliteOn(httpPort)), settings(dish::test::makeSharedSettings()) {
+        dish::test::ensureApp();
+        store = std::make_unique<dish::net::ConnectionStore>(
+            std::make_unique<QSettings>(settings->fileName(), QSettings::IniFormat));
+        const QString key(static_cast<int>(kPairingKeySize) * 2, QLatin1Char('1'));
+        store->setSharedKey(key, dish::net::WifiConnection::idFor(server));
+        manager = std::make_unique<dish::net::WifiConnectionManager>(
+            store.get(), new dish::net::HTTPClient, effects.effects(), nullptr);
+        QObject::connect(manager.get(), &dish::net::WifiConnectionManager::connectionEvent,
+                         manager.get(), [this](const ConnectionEvent& e) { events.push_back(e); });
+    }
+};
 
 } // namespace
 
@@ -766,6 +804,22 @@ TEST_CASE("wifi manager: an approval poll that meets a changed certificate ends 
 
     REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::IdentityChanged);
     requireOneError(f, kIdentityChangedMsg);
+}
+
+// ---- Why nothing answered ----
+
+TEST_CASE("wifi manager: a user connect to a port that does not speak TLS says no secure "
+          "connection could be set up",
+          "[manager][transport]") {
+    REQUIRE(dish::test::useTestTlsBackend());
+    PlainTextPort plain;
+    REQUIRE(plain.listening());
+    LoopbackManagerFixture f(plain.port());
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(pumpUntil([&f] { return !f.events.empty(); }));
+    requireOneError(f.events, kNoSecureLinkMsg);
 }
 
 // ---- Silent retries ----

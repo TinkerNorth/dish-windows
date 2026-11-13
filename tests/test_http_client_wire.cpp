@@ -30,6 +30,7 @@ using dish::models::SessionResponse;
 using dish::net::HTTPClient;
 using dish::test::FakeHttpsListener;
 using dish::test::HttpsAnswer;
+using dish::test::PlainTextPort;
 using dish::test::SeenRequest;
 
 namespace {
@@ -83,29 +84,6 @@ struct GrantingListener : FakeHttpsListener {
     GrantingListener() {
         respond = [](const SeenRequest&) { return HttpsAnswer{200, kGrant}; };
     }
-};
-
-// A port that answers a TLS hello with plain text, the way an HTTP server does when it is dialled
-// on the wrong port.
-class PlainTextPort {
-  public:
-    PlainTextPort() {
-        listening_ = server_.listen(QHostAddress::LocalHost, 0);
-        QObject::connect(&server_, &QTcpServer::newConnection, &server_, [this] { answer(); });
-    }
-
-    bool listening() const { return listening_; }
-    int port() const { return static_cast<int>(server_.serverPort()); }
-
-  private:
-    void answer() {
-        while (QTcpSocket* sock = server_.nextPendingConnection()) {
-            sock->write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-        }
-    }
-
-    QTcpServer server_;
-    bool listening_ = false;
 };
 
 } // namespace
