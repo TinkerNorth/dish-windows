@@ -52,16 +52,16 @@
 #endif
 #include <windows.h>
 
-using dish::reducer::backoffDelayMs;
-using dish::reducer::kBackoffJitter;
-using dish::reducer::kManualMinGapMs;
-using dish::reducer::kMinCheckGapMs;
-using dish::reducer::kPeriodicIntervalMs;
-using dish::reducer::kStartupDelayMs;
 using dish::reducer::UpdateError;
 using dish::reducer::UpdateNotice;
 using dish::reducer::UpdatePhase;
 using dish::reducer::UpdateStatus;
+using dish::reducer::update_schedule::backoffDelayMs;
+using dish::reducer::update_schedule::kBackoffJitter;
+using dish::reducer::update_schedule::kManualMinGapMs;
+using dish::reducer::update_schedule::kMinCheckGapMs;
+using dish::reducer::update_schedule::kPeriodicIntervalMs;
+using dish::reducer::update_schedule::kStartupDelayMs;
 using dish::source::kKeyUpdatesLastCheckUtcMs;
 using dish::source::kKeyUpdatesLastRunVersion;
 using dish::source::UpdatePreferences;

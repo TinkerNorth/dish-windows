@@ -110,25 +110,22 @@ struct UpdateStatus {
     bool operator!=(const UpdateStatus& o) const { return !(*this == o); }
 };
 
-// ── Scheduling constants ────────────────────────────────────────────────────
+// ── Scheduling ──────────────────────────────────────────────────────────────
 // Startup is delayed so the check never competes with the first frame; the min
 // gap keeps a relaunch loop from hammering the permalink, and the future-jump
 // escape means a clock that reads 2099 costs one extra check, not silence.
 
+namespace update_schedule {
+
 inline constexpr int kStartupDelayMs = 15'000;
-inline constexpr qint64 kMinCheckGapMs = 60LL * 60 * 1000;            // 1 h
-inline constexpr qint64 kFutureSkewEscapeMs = 24LL * 60 * 60 * 1000;  // 24 h
-inline constexpr int kPeriodicIntervalMs = 4 * 60 * 60 * 1000;        // 4 h
-inline constexpr int kBackoffBaseMs = 10 * 60 * 1000;                 // 10 min
-inline constexpr int kBackoffCapMs = 6 * 60 * 60 * 1000;              // 6 h
-inline constexpr double kBackoffJitter = 0.2;                         // +-20 percent
-inline constexpr int kManualMinGapMs = 10'000;                        // manual rate limit
-inline constexpr int kReconnectCheckDelayMs = 30'000;                 // after Online returns
-inline constexpr qint64 kDownloadHeadroomBytes = 200LL * 1024 * 1024; // free-space preflight
-inline constexpr int kStallTimeoutMs = 60'000;                        // no bytes for 60 s
-inline constexpr qint64 kOverrunAllowanceBytes = 1LL * 1024 * 1024;   // declared size + 1 MiB
-inline constexpr qint64 kStagingPartMaxAgeMs = 24LL * 60 * 60 * 1000; // .part sweep age
-inline constexpr int kMaxApplyAttemptsPerVersion = 2;                 // then quarantine
+inline constexpr qint64 kMinCheckGapMs = 60LL * 60 * 1000;           // 1 h
+inline constexpr qint64 kFutureSkewEscapeMs = 24LL * 60 * 60 * 1000; // 24 h
+inline constexpr int kPeriodicIntervalMs = 4 * 60 * 60 * 1000;       // 4 h
+inline constexpr int kBackoffBaseMs = 10 * 60 * 1000;                // 10 min
+inline constexpr int kBackoffCapMs = 6 * 60 * 60 * 1000;             // 6 h
+inline constexpr double kBackoffJitter = 0.2;                        // +-20 percent
+inline constexpr int kManualMinGapMs = 10'000;                       // manual rate limit
+inline constexpr int kReconnectCheckDelayMs = 30'000;                // after Online returns
 
 // 10, 20, 40 ... 360 min. `failures` is the count INCLUDING the one just
 // recorded, so the first failure waits kBackoffBaseMs.
@@ -152,6 +149,16 @@ constexpr int jitteredDelayMs(int baseMs, double unit) {
     const double scaled = static_cast<double>(baseMs) * factor;
     return scaled < 0.0 ? 0 : static_cast<int>(scaled);
 }
+
+} // namespace update_schedule
+
+// ── Download and apply limits ───────────────────────────────────────────────
+
+inline constexpr qint64 kDownloadHeadroomBytes = 200LL * 1024 * 1024; // free-space preflight
+inline constexpr int kStallTimeoutMs = 60'000;                        // no bytes for 60 s
+inline constexpr qint64 kOverrunAllowanceBytes = 1LL * 1024 * 1024;   // declared size + 1 MiB
+inline constexpr qint64 kStagingPartMaxAgeMs = 24LL * 60 * 60 * 1000; // .part sweep age
+inline constexpr int kMaxApplyAttemptsPerVersion = 2;                 // then quarantine
 
 // ── Events ──────────────────────────────────────────────────────────────────
 

@@ -54,7 +54,8 @@ UpdateReduction settleFailure(const UpdateStatus& s, UpdateError error,
     }
     n.meteredDeferred = false;
     std::vector<UpdateEffect> fx = std::move(before);
-    fx.push_back(update_effect::ScheduleNextCheck{backoffDelayMs(n.consecutiveFailures)});
+    fx.push_back(
+        update_effect::ScheduleNextCheck{update_schedule::backoffDelayMs(n.consecutiveFailures)});
     return UpdateReduction{std::move(n), std::move(fx)};
 }
 
@@ -92,7 +93,8 @@ static UpdateReduction onPrefsChanged(const UpdateStatus& s, const update_event:
         n.phase = UpdatePhase::Idle;
         return UpdateReduction{
             std::move(n),
-            {update_effect::SweepStaging{}, update_effect::ScheduleNextCheck{kStartupDelayMs}}};
+            {update_effect::SweepStaging{},
+             update_effect::ScheduleNextCheck{update_schedule::kStartupDelayMs}}};
     }
     // Turning auto-download on while an update is merely announced starts
     // it now rather than at the next 4 h tick: the toggle is the consent.
@@ -119,7 +121,8 @@ static UpdateReduction onCheckRequested(const UpdateStatus& s,
     if (s.phase == UpdatePhase::Downloading || s.phase == UpdatePhase::Verifying) {
         // Re-arm rather than drop the cadence: a 40 MB download on a slow
         // link can outlive a periodic tick.
-        return UpdateReduction{s, {update_effect::ScheduleNextCheck{kPeriodicIntervalMs}}};
+        return UpdateReduction{
+            s, {update_effect::ScheduleNextCheck{update_schedule::kPeriodicIntervalMs}}};
     }
     if (!s.online) {
         // The reachability gate answers WITHOUT touching the network, which
@@ -158,7 +161,7 @@ static UpdateReduction onManifestArrived(const UpdateStatus& s,
         n.totalBytes = 0;
         n.receivedBytes = 0;
         n.meteredDeferred = false;
-        fx.push_back(update_effect::ScheduleNextCheck{kPeriodicIntervalMs});
+        fx.push_back(update_effect::ScheduleNextCheck{update_schedule::kPeriodicIntervalMs});
         return UpdateReduction{std::move(n), std::move(fx)};
     }
 
@@ -175,7 +178,7 @@ static UpdateReduction onManifestArrived(const UpdateStatus& s,
         n.phase = UpdatePhase::Ready;
         n.receivedBytes = n.totalBytes;
         fx.push_back(update_effect::Notify{UpdateNotice::Ready, m.version});
-        fx.push_back(update_effect::ScheduleNextCheck{kPeriodicIntervalMs});
+        fx.push_back(update_effect::ScheduleNextCheck{update_schedule::kPeriodicIntervalMs});
         return UpdateReduction{std::move(n), std::move(fx)};
     }
 
@@ -185,7 +188,7 @@ static UpdateReduction onManifestArrived(const UpdateStatus& s,
         fx.push_back(update_effect::StartDownload{m.setupAsset.url, m.setupAsset.sha256,
                                                   static_cast<quint64>(m.setupAsset.size),
                                                   m.version});
-        fx.push_back(update_effect::ScheduleNextCheck{kPeriodicIntervalMs});
+        fx.push_back(update_effect::ScheduleNextCheck{update_schedule::kPeriodicIntervalMs});
         return UpdateReduction{std::move(n), std::move(fx)};
     }
 
@@ -195,7 +198,7 @@ static UpdateReduction onManifestArrived(const UpdateStatus& s,
     n.receivedBytes = 0;
     n.meteredDeferred = s.metered && s.autoDownload && !s.portable;
     fx.push_back(update_effect::Notify{UpdateNotice::Available, m.version});
-    fx.push_back(update_effect::ScheduleNextCheck{kPeriodicIntervalMs});
+    fx.push_back(update_effect::ScheduleNextCheck{update_schedule::kPeriodicIntervalMs});
     return UpdateReduction{std::move(n), std::move(fx)};
 }
 
@@ -364,8 +367,9 @@ static UpdateReduction onReachabilityChanged(const UpdateStatus& s,
     const bool wasOfflineGated =
         s.phase == UpdatePhase::Failed && s.error == UpdateError::Offline && s.checksEnabled;
     if (e.online && wasOfflineGated) {
-        return UpdateReduction{std::move(n),
-                               {update_effect::ScheduleNextCheck{kReconnectCheckDelayMs}}};
+        return UpdateReduction{
+            std::move(n),
+            {update_effect::ScheduleNextCheck{update_schedule::kReconnectCheckDelayMs}}};
     }
     return stay(std::move(n));
 }

@@ -95,6 +95,14 @@ share a version number.
 
 ### Fixed
 
+- **The update-check schedule and the satellite reconnect schedule no longer
+  share two names.** Each defined its own `backoffDelayMs` and `kBackoffBaseMs`
+  in the same namespace, one counting seconds for a satellite and the other
+  minutes for the release host. A source file that needed both would not
+  compile, and a MinGW build could have merged the two at link time. The update
+  schedule now has a namespace of its own, as in dish-linux. How often Dish
+  checks for updates and retries a satellite is unchanged.
+
 - **Two of the same controller on USB direct are two controllers, not yet tried
   with two real ones.** Two devices of one model plugged in at once (two
   DualSense controllers, two Steam Controller receivers) shared one entry: only
