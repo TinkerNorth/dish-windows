@@ -158,6 +158,7 @@ set(DISH_TEST_SOURCES
     test_satellite_client_motion.cpp
     test_satellite_client_touchpad.cpp
     test_satellite_client_pointer.cpp
+    test_satellite_client_input.cpp
     test_satellite_client_session.cpp
     test_satellite_client_lightbar.cpp
     test_satellite_client_send_counter.cpp
@@ -229,6 +230,7 @@ set(DISH_TEST_SOURCES
     test_audio_enabled_store.cpp
     test_audio_preference_repository.cpp
     test_wifi_connection_audio.cpp
+    test_wifi_connection_descriptor.cpp
     test_pad_audio_matcher.cpp
     test_audio_engine_policy.cpp
     test_mic_capture_engine.cpp

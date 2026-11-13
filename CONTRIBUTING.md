@@ -582,6 +582,9 @@ server and must produce byte-identical traffic. Protocol 1:
   counter(4 BE)`; AAD is `token(4 BE)`.
 - Packet layout: `token(4) | counter(4 BE) | ciphertext+tag`.
 - XUSB report: 12 bytes, little-endian.
+- INPUT (0x0001): ctrlIdx + the XUSB report, and on a session settled at
+  protocol 4 the extended-buttons word (u32 LE) behind it. The frame shape
+  keys on the SETTLED version; the receiver reads it by length.
 
 The authoritative opcode catalogue is
 [`satellite/docs/contract.md`](https://github.com/TinkerNorth/satellite/blob/main/docs/contract.md);

@@ -146,6 +146,10 @@
         <translation>Lightbar</translation>
     </message>
     <message>
+        <source>Extra buttons</source>
+        <translation>Extra buttons</translation>
+    </message>
+    <message>
         <source>buttons or sticks</source>
         <translation>buttons or sticks</translation>
     </message>

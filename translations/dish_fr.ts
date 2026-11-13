@@ -146,6 +146,10 @@
         <translation>Barre lumineuse</translation>
     </message>
     <message>
+        <source>Extra buttons</source>
+        <translation>Boutons supplémentaires</translation>
+    </message>
+    <message>
         <source>buttons or sticks</source>
         <translation>boutons ou sticks</translation>
     </message>
