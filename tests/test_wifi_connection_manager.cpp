@@ -21,6 +21,7 @@
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <QCoreApplication>
 #include <QDeadlineTimer>
@@ -70,12 +71,15 @@ const QString kGrantedSessionPath = QStringLiteral("/api/connections/conn_1");
 const QString kPrivateIp = QStringLiteral("10.0.0.5");
 const QString kOtherPrivateIp = QStringLiteral("10.0.0.6");
 const QString kIpv6Ip = QStringLiteral("[fd00::5]");
+// TEST-NET-3 (RFC 5737): public, and never a real host.
+const QString kPublicIp = QStringLiteral("203.0.113.5");
 const char* const kManagerContext = "dish::net::WifiConnectionManager";
 
 const QString kWireFailedMsg =
     QStringLiteral("The satellite accepted, but the controller link would not open. Try again.");
 const QString kIpv6Msg = QStringLiteral("Satellite can only be reached over IPv4, and this address "
                                         "(%1) is IPv6. Scan again to find its IPv4 address.");
+const QString kNonLocalMsg = QStringLiteral("Refusing to connect to a non-local address (%1).");
 const QString kUnreachableMsg =
     QStringLiteral("Server unreachable — check it's powered on and on the same Wi-Fi.");
 const QString kVersionMsg =
@@ -997,6 +1001,42 @@ TEST_CASE("wifi manager: an approval request to an IPv6 satellite is refused bef
     REQUIRE_FALSE(f.manager->isPairingInFlight(f.id));
     REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::Idle);
     requireOneError(f, kIpv6Msg.arg(kIpv6Ip));
+}
+
+// ---- The satellite is on this network ----
+
+TEST_CASE("wifi manager: a user connect to a public address is refused before any request",
+          "[manager][non-local]") {
+    ManagerFixture f(kPublicIp);
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(f.rest->requests().empty());
+    REQUIRE(f.manager->get(f.id) == nullptr);
+    requireOneError(f, kNonLocalMsg.arg(kPublicIp));
+}
+
+TEST_CASE("wifi manager: a silent connect to a public address is refused quietly",
+          "[manager][non-local]") {
+    const ConnectIntent intent =
+        GENERATE(ConnectIntent::AutoReconnect, ConnectIntent::RetryAfterDeath);
+    ManagerFixture f(kPublicIp);
+
+    f.manager->connectTo(f.server, intent);
+
+    REQUIRE(f.rest->requests().empty());
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: pairing with a public address is refused before any request",
+          "[manager][non-local]") {
+    ManagerFixture f(kPublicIp);
+
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+
+    REQUIRE_FALSE(f.manager->isPairingInFlight(f.id));
+    REQUIRE(f.pairingFailures == std::vector<QString>{QStringLiteral("unreachable")});
+    requireOneError(f, kNonLocalMsg.arg(kPublicIp));
 }
 
 // ---- What the user reads is in their language ----
