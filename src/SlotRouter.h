@@ -91,6 +91,9 @@ class SlotRouter final : public input::GamepadInputProcessor::InputSink {
         bool hasMicLed = false;
         // SDL_GameControllerSendEffect lands only in SDL's own HIDAPI drivers.
         bool sdlEffects = false;
+        // The pad sources the protocol 4 extended-buttons word: the model table
+        // for a Direct pad, SDL's mapping for a Standard one.
+        bool hasExtendedButtons = false;
     };
 
     explicit SlotRouter(const Dependencies& deps);

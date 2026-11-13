@@ -619,6 +619,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->vendorId = device.vendorId;
     claim->productId = device.productId;
     claim->parser = parser;
+    claim->sticks.productId = device.productId;
     claim->featureReportLen = featureReportLen;
     claim->linked.store(!receiverSlot);
     claim->outputReportLen = caps.OutputReportByteLength;
