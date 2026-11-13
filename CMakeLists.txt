@@ -629,9 +629,11 @@ target_link_libraries(dish_core
         winmm
         # ThreadPriority: the MMCSS Games task (AvSetMmThreadCharacteristicsW).
         avrt
-        # Raw-HID claim path: SetupAPI enumeration + the HID class API.
+        # Raw-HID claim path: SetupAPI enumeration, the HID class API, and the
+        # device tree that names the USB device a HID collection belongs to.
         setupapi
         hid
+        cfgmgr32
         # BluetoothRadioProbe. Its header also carries a #pragma comment(lib)
         # under MSVC; naming it here keeps the link set owned by one file.
         bthprops

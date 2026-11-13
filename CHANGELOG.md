@@ -88,6 +88,18 @@ share a version number.
 
 ### Fixed
 
+- **Two of the same controller on USB direct are two controllers, not yet tried
+  with two real ones.** Two devices of one model plugged in at once (two
+  DualSense controllers, two Steam Controller receivers) shared one entry: only
+  one of them was taken over on the direct path, and the claim opened whichever
+  matching device the system listed first, which was not always the one meant.
+  Each device is now tracked and claimed on its own, told apart by the device
+  instance Windows gives it, so unplugging one leaves the other's controllers
+  where they were, and a pad that fails to claim keeps only itself off the
+  direct path. The first device of a model keeps the card it always had, so its
+  binding and saved settings carry over; a second one gets a card of its own.
+  The direct-path pick is still one per model.
+
 - **The seqlock race test no longer depends on its reader ever finding a gap
   between writes.** Its writer rewrote the value in a loop that never paused
   and the test asserted that at least one of 200,000 reads had landed; a read

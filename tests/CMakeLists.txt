@@ -203,6 +203,7 @@ set(DISH_TEST_SOURCES
     test_output_cadence.cpp
     test_usb_gamepad_manager_feedback.cpp
     test_usb_receiver_slots.cpp
+    test_usb_same_model_devices.cpp
     test_usb_hid_items.cpp
     test_usb_hid_layout.cpp
     test_usb_hid_layout_orders.cpp
