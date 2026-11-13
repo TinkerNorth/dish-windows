@@ -107,6 +107,9 @@ QString reverseDeclinedMsg() {
 QString reverseTimedOutMsg() {
     return WifiConnectionManager::tr("Timed out waiting for approval on the satellite. Try again.");
 }
+QString nonLocalMsg(const QString& ip) {
+    return WifiConnectionManager::tr("Refusing to connect to a non-local address (%1).").arg(ip);
+}
 QString ipv6Msg(const QString& ip) {
     return WifiConnectionManager::tr("Satellite can only be reached over IPv4, and this address "
                                      "(%1) is IPv6. Scan again to find its IPv4 address.")
@@ -252,8 +255,7 @@ bool WifiConnectionManager::refusesHost(const models::DiscoveredServer& server,
     case SatelliteHostVerdict::Reachable:
         return false;
     case SatelliteHostVerdict::NotLocal:
-        emit connectionEvent(
-            makeError(tr("Refusing to connect to a non-local address (%1).").arg(server.ip)));
+        emitErrorIfUserInitiated(intent, nonLocalMsg(server.ip));
         return true;
     case SatelliteHostVerdict::NotIpv4:
         emitErrorIfUserInitiated(intent, ipv6Msg(server.ip));
