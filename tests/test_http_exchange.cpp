@@ -10,6 +10,7 @@
 // The last case is a use-after-free when the exchange does touch itself afterwards, which the
 // debug heap turns into a crash here and AddressSanitizer reports wherever it runs.
 
+#include "core/reducer/RestOutcome.h"
 #include "source/http/HttpExchange.h"
 
 #include "FakeHttpsListener.h"
@@ -24,11 +25,13 @@
 #include <QUrl>
 
 #include <memory>
+#include <optional>
 
 using dish::http::exchangeHttp;
 using dish::http::HttpDone;
 using dish::http::HttpRequest;
 using dish::http::HttpResult;
+using dish::reducer::TransportFailure;
 using dish::test::FakeHttpsListener;
 using dish::test::spinUntil;
 
@@ -61,6 +64,9 @@ HttpDone countingInto(Delivered& delivered) {
         delivered.status = result.response.status;
     };
 }
+
+// Long enough for a dial the peer refuses to end on its own, retries and all, with no deadline.
+constexpr int kDialEndsMs = 30000;
 
 // Lets whatever is still queued land, for the assertions that nothing more happened.
 void settle(int ms = 300) {
@@ -124,4 +130,18 @@ TEST_CASE("exchange: the outcome may destroy the owner it is delivered to", "[ht
     CHECK(delivered.count == 1);
     CHECK(delivered.status == 200);
     CHECK(owner == nullptr);
+}
+
+TEST_CASE("exchange: a port nothing listens on is refused, however long the dial takes to say so",
+          "[http][exchange]") {
+    REQUIRE(dish::test::useTestTlsBackend());
+    QObject owner;
+    std::optional<HttpResult> outcome;
+
+    exchangeHttp(&owner, getFrom(dish::test::closedLoopbackPort(), true), {},
+                 [&outcome](const HttpResult& result) { outcome = result; });
+
+    REQUIRE(spinUntil([&outcome] { return outcome.has_value(); }, kDialEndsMs));
+    CHECK(outcome->response.status == 0);
+    CHECK(outcome->failure == TransportFailure::Refused);
 }

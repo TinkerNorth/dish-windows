@@ -32,6 +32,7 @@
 #include <QSslSocket>
 #include <QString>
 #include <QTcpServer>
+#include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
@@ -76,6 +77,29 @@ inline int closedLoopbackPort() {
     probe.close();
     return port;
 }
+
+// A port that answers a TLS hello with plain text, the way an HTTP server does when it is dialled
+// on the wrong port.
+class PlainTextPort {
+  public:
+    PlainTextPort() {
+        listening_ = server_.listen(QHostAddress::LocalHost, 0);
+        QObject::connect(&server_, &QTcpServer::newConnection, &server_, [this] { answer(); });
+    }
+
+    bool listening() const { return listening_; }
+    int port() const { return static_cast<int>(server_.serverPort()); }
+
+  private:
+    void answer() {
+        while (QTcpSocket* sock = server_.nextPendingConnection()) {
+            sock->write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+        }
+    }
+
+    QTcpServer server_;
+    bool listening_ = false;
+};
 
 // One request as the listener received it.
 struct SeenRequest {

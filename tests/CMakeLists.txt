@@ -99,6 +99,7 @@ set(DISH_TEST_SOURCES
     test_http_client_wire.cpp
     test_http_exchange.cpp
     test_rest_control_plane.cpp
+    test_transport_failure.cpp
     test_reverse_pairing.cpp
     test_battery_ui.cpp
     test_config_blocker.cpp

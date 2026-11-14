@@ -5239,6 +5239,18 @@
         <translation>Serveur injoignable. Vérifiez qu&apos;il est allumé et sur le même Wi-Fi.</translation>
     </message>
     <message>
+        <source>That machine is reachable, but no satellite is listening on it. Start Satellite there, then try again.</source>
+        <translation>Cette machine est joignable, mais aucun satellite n&apos;y écoute. Lancez Satellite dessus, puis réessayez.</translation>
+    </message>
+    <message>
+        <source>The satellite stopped responding. It may have gone to sleep or left the network.</source>
+        <translation>Le satellite ne répond plus. Il est peut-être en veille ou a quitté le réseau.</translation>
+    </message>
+    <message>
+        <source>Could not set up a secure connection to the satellite.</source>
+        <translation>Impossible d&apos;établir une connexion sécurisée avec le satellite.</translation>
+    </message>
+    <message>
         <source>This satellite no longer recognizes this device. Re-pair needed.</source>
         <translation>Ce satellite ne reconnaît plus cet appareil. Un nouvel appairage est nécessaire.</translation>
     </message>

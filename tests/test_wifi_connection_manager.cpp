@@ -12,12 +12,14 @@
 #include "Network/WifiConnectionManager.h"
 #include "core/model/Protocol.h"
 #include "core/net/Tofu.h"
+#include "core/reducer/RestOutcome.h"
 #include "core/wire/SessionCrypto.h"
 
 #include "FakeHttpsListener.h"
 #include "FakeSatelliteRest.h"
 #include "FakeWifiEffects.h"
 #include "InstalledCatalog.h"
+#include "LogCapture.h"
 #include "QSettingsFixture.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -46,10 +48,13 @@ using dish::net::ConnectionEvent;
 using dish::net::ConnectionEventKind;
 using dish::net::ReversePairingPhase;
 using dish::net::SessionState;
+using dish::reducer::TransportFailure;
 using dish::test::CannedAnswer;
 using dish::test::FakeSatelliteRest;
 using dish::test::FakeWifiEffects;
 using dish::test::InstalledCatalog;
+using dish::test::LogCapture;
+using dish::test::PlainTextPort;
 
 namespace {
 
@@ -61,6 +66,8 @@ constexpr std::size_t kPairingKeySize = 32;
 constexpr int kReplyTimeoutMs = 5000;
 // Past the first silent retry's 1 s backoff (reducer::backoffDelayMs(1)).
 constexpr int kPastFirstBackoffMs = 1100;
+// Past the second one's 2 s.
+constexpr int kPastSecondBackoffMs = 2100;
 // The version a satellite one protocol behind this build answers a 409 with.
 constexpr int kOneBehind = dish::proto::kProtocolVersion - 1;
 
@@ -87,6 +94,15 @@ const QString kVersionMsg =
 const QString kIdentityChangedMsg =
     QStringLiteral("This satellite's security identity changed. If it was reinstalled, forget it "
                    "here and pair again.");
+const QString kNotListeningMsg =
+    QStringLiteral("That machine is reachable, but no satellite is listening on it. Start "
+                   "Satellite there, then try again.");
+const QString kStoppedRespondingMsg =
+    QStringLiteral("The satellite stopped responding. It may have gone to sleep or left the "
+                   "network.");
+const QString kNoSecureLinkMsg =
+    QStringLiteral("Could not set up a secure connection to the satellite.");
+const QString kLoopbackIp = QStringLiteral("127.0.0.1");
 
 const QByteArray kGrant = R"({"connectionId":"conn_1","token":"00000001",)"
                           R"("sessionSalt":"0102030405060708","epoch":1})";
@@ -255,6 +271,12 @@ struct ManagerFixture {
         return dish::wire::computeHmacProof(key.data(), deviceId);
     }
 
+    // Lets the silent retry armed now fall due, and its reply land.
+    void retryAfter(int ms) {
+        effects.advance(ms);
+        REQUIRE(pumpUntil([this] { return rest->allAnswered(); }));
+    }
+
     // A silent connect that the satellite turns away with a 503, which parks the
     // row Stale and arms the first backoff retry.
     void failSilently() {
@@ -277,10 +299,14 @@ void requireGrantReleased(const ManagerFixture& f) {
     REQUIRE(release.hmacProof.toStdString() == f.expectedProof());
 }
 
+void requireOneError(const std::vector<ConnectionEvent>& events, const QString& message) {
+    REQUIRE(events.size() == 1);
+    REQUIRE(events.front().kind == ConnectionEventKind::Error);
+    REQUIRE(events.front().message.toStdString() == message.toStdString());
+}
+
 void requireOneError(const ManagerFixture& f, const QString& message) {
-    REQUIRE(f.events.size() == 1);
-    REQUIRE(f.events.front().kind == ConnectionEventKind::Error);
-    REQUIRE(f.events.front().message.toStdString() == message.toStdString());
+    requireOneError(f.events, message);
 }
 
 void requireNoRetry(ManagerFixture& f) {
@@ -288,6 +314,36 @@ void requireNoRetry(ManagerFixture& f) {
     f.effects.advance(kPastFirstBackoffMs);
     REQUIRE(f.rest->count("PUT", kSessionsPath) == 1);
 }
+
+DiscoveredServer loopbackSatelliteOn(int httpPort) {
+    DiscoveredServer s = satelliteAt(kLoopbackIp, QStringLiteral("m1"));
+    s.httpPort = httpPort;
+    return s;
+}
+
+// The manager on the app's own transport, dialling a paired satellite on a loopback port: only a
+// real socket can say why nothing answered.
+struct LoopbackManagerFixture {
+    DiscoveredServer server;
+    std::shared_ptr<QSettings> settings;
+    std::unique_ptr<dish::net::ConnectionStore> store;
+    FakeWifiEffects effects;
+    std::unique_ptr<dish::net::WifiConnectionManager> manager;
+    std::vector<ConnectionEvent> events;
+
+    explicit LoopbackManagerFixture(int httpPort)
+        : server(loopbackSatelliteOn(httpPort)), settings(dish::test::makeSharedSettings()) {
+        dish::test::ensureApp();
+        store = std::make_unique<dish::net::ConnectionStore>(
+            std::make_unique<QSettings>(settings->fileName(), QSettings::IniFormat));
+        const QString key(static_cast<int>(kPairingKeySize) * 2, QLatin1Char('1'));
+        store->setSharedKey(key, dish::net::WifiConnection::idFor(server));
+        manager = std::make_unique<dish::net::WifiConnectionManager>(
+            store.get(), new dish::net::HTTPClient, effects.effects(), nullptr);
+        QObject::connect(manager.get(), &dish::net::WifiConnectionManager::connectionEvent,
+                         manager.get(), [this](const ConnectionEvent& e) { events.push_back(e); });
+    }
+};
 
 } // namespace
 
@@ -766,6 +822,72 @@ TEST_CASE("wifi manager: an approval poll that meets a changed certificate ends 
 
     REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::IdentityChanged);
     requireOneError(f, kIdentityChangedMsg);
+}
+
+// ---- Why nothing answered ----
+
+TEST_CASE("wifi manager: a user connect to a port that does not speak TLS says no secure "
+          "connection could be set up",
+          "[manager][transport]") {
+    REQUIRE(dish::test::useTestTlsBackend());
+    PlainTextPort plain;
+    REQUIRE(plain.listening());
+    LoopbackManagerFixture f(plain.port());
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(pumpUntil([&f] { return !f.events.empty(); }));
+    requireOneError(f.events, kNoSecureLinkMsg);
+}
+
+TEST_CASE("wifi manager: a user connect nothing answers names the cause, where it is one to act on",
+          "[manager][transport]") {
+    const auto [failure, message] = GENERATE(table<TransportFailure, QString>({
+        {TransportFailure::Refused, kNotListeningMsg},
+        {TransportFailure::TimedOut, kStoppedRespondingMsg},
+        {TransportFailure::Tls, kNoSecureLinkMsg},
+        {TransportFailure::Unreachable, kUnreachableMsg},
+        {TransportFailure::Aborted, kUnreachableMsg},
+        {TransportFailure::Other, kUnreachableMsg},
+        {TransportFailure::None, kUnreachableMsg},
+    }));
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{0, {}, failure});
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+
+    REQUIRE(f.settles());
+    requireOneError(f, message);
+}
+
+TEST_CASE("wifi manager: a satellite that stays refused logs the cause once, not every retry",
+          "[manager][transport]") {
+    LogCapture logged;
+    ManagerFixture f;
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{0, {}, TransportFailure::Refused});
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(f.settles());
+
+    f.retryAfter(kPastFirstBackoffMs);
+    f.retryAfter(kPastSecondBackoffMs);
+
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 3);
+    REQUIRE(logged.countContaining(QStringLiteral("connection refused")) == 1);
+}
+
+TEST_CASE("wifi manager: a retry that meets a new cause logs it", "[manager][transport]") {
+    LogCapture logged;
+    ManagerFixture f;
+    f.rest->answerOnce("PUT", kSessionsPath, CannedAnswer{0, {}, TransportFailure::Refused});
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{0, {}, TransportFailure::TimedOut});
+    f.manager->connectTo(f.server, ConnectIntent::AutoReconnect);
+    REQUIRE(f.settles());
+
+    f.retryAfter(kPastFirstBackoffMs);
+
+    REQUIRE(f.rest->count("PUT", kSessionsPath) == 2);
+    REQUIRE(logged.countContaining(QStringLiteral("connection refused")) == 1);
+    REQUIRE(logged.countContaining(QStringLiteral("timed out")) == 1);
 }
 
 // ---- Silent retries ----

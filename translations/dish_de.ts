@@ -5239,6 +5239,18 @@
         <translation>Server nicht erreichbar. Prüfe, ob er eingeschaltet und im selben WLAN ist.</translation>
     </message>
     <message>
+        <source>That machine is reachable, but no satellite is listening on it. Start Satellite there, then try again.</source>
+        <translation>Dieser Rechner ist erreichbar, aber dort lauscht kein Satellit. Starte Satellite dort und versuche es dann erneut.</translation>
+    </message>
+    <message>
+        <source>The satellite stopped responding. It may have gone to sleep or left the network.</source>
+        <translation>Der Satellit reagiert nicht mehr. Möglicherweise ist er im Ruhezustand oder hat das Netzwerk verlassen.</translation>
+    </message>
+    <message>
+        <source>Could not set up a secure connection to the satellite.</source>
+        <translation>Es konnte keine sichere Verbindung zum Satelliten hergestellt werden.</translation>
+    </message>
+    <message>
         <source>This satellite no longer recognizes this device. Re-pair needed.</source>
         <translation>Dieser Satellit erkennt dieses Gerät nicht mehr. Bitte neu koppeln.</translation>
     </message>

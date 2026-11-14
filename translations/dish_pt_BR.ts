@@ -5239,6 +5239,18 @@
         <translation>Servidor inacessível. Confira se ele está ligado e no mesmo Wi-Fi.</translation>
     </message>
     <message>
+        <source>That machine is reachable, but no satellite is listening on it. Start Satellite there, then try again.</source>
+        <translation>Essa máquina está acessível, mas nenhum satélite está escutando nela. Inicie o Satellite lá e tente novamente.</translation>
+    </message>
+    <message>
+        <source>The satellite stopped responding. It may have gone to sleep or left the network.</source>
+        <translation>O satélite parou de responder. Ele pode ter entrado em suspensão ou saído da rede.</translation>
+    </message>
+    <message>
+        <source>Could not set up a secure connection to the satellite.</source>
+        <translation>Não foi possível estabelecer uma conexão segura com o satélite.</translation>
+    </message>
+    <message>
         <source>This satellite no longer recognizes this device. Re-pair needed.</source>
         <translation>Este satélite não reconhece mais este dispositivo. É preciso parear de novo.</translation>
     </message>

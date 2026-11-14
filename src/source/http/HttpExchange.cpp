@@ -47,7 +47,7 @@ class Exchange : public QObject {
     void onError(QAbstractSocket::SocketError error);
     void onDeadline();
     void readResponse(bool peerClosed);
-    void fail(const QString& error);
+    void fail(reducer::TransportFailure failure, const QString& error);
     void finish(HttpResult result);
     void deliver();
 
@@ -99,7 +99,8 @@ void Exchange::dialEncrypted(const QSslConfiguration& tls) {
 void Exchange::onEncrypted() {
     const bool trusted = !peerCheck_ || peerCheck_(socket_->peerCertificate().toDer());
     if (!trusted) {
-        fail(QStringLiteral("the peer certificate was refused"));
+        fail(reducer::TransportFailure::Aborted,
+             QStringLiteral("the peer certificate was refused"));
         return;
     }
     send();
@@ -127,11 +128,12 @@ void Exchange::onDisconnected() {
 // body with no declared length ends.
 void Exchange::onError(QAbstractSocket::SocketError error) {
     if (error == QAbstractSocket::RemoteHostClosedError) { return; }
-    fail(socket_->errorString());
+    fail(transportFailureOf(error), socket_->errorString());
 }
 
 void Exchange::onDeadline() {
-    fail(QStringLiteral("no answer within %1 ms").arg(request_.timeoutMs));
+    fail(reducer::TransportFailure::TimedOut,
+         QStringLiteral("no answer within %1 ms").arg(request_.timeoutMs));
 }
 
 void Exchange::readResponse(bool peerClosed) {
@@ -140,15 +142,18 @@ void Exchange::readResponse(bool peerClosed) {
     case wire::HttpParse::State::Incomplete:
         return;
     case wire::HttpParse::State::Malformed:
-        fail(QStringLiteral("the answer was not a whole HTTP response"));
+        fail(reducer::TransportFailure::Other,
+             QStringLiteral("the answer was not a whole HTTP response"));
         return;
     case wire::HttpParse::State::Complete:
-        finish(HttpResult{std::move(parse.response), QString()});
+        finish(HttpResult{std::move(parse.response), reducer::TransportFailure::None, QString()});
         return;
     }
 }
 
-void Exchange::fail(const QString& error) { finish(HttpResult{wire::HttpResponse{}, error}); }
+void Exchange::fail(reducer::TransportFailure failure, const QString& error) {
+    finish(HttpResult{wire::HttpResponse{}, failure, error});
+}
 
 // The socket stops talking to this the moment the outcome is settled, so nothing can arrive after
 // it; the socket is closed, and the outcome handed over, from the event loop rather than from
@@ -175,6 +180,41 @@ void Exchange::deliver() {
 void exchangeHttp(QObject* owner, HttpRequest request, PeerCheck peerCheck, HttpDone done) {
     auto* exchange = new Exchange(std::move(request), std::move(peerCheck), std::move(done), owner);
     exchange->start();
+}
+
+// Every socket error is named, so a new one is a decision rather than a default. Only a refusal and
+// a failed handshake are causes a user can act on; the rest are the ways a dial comes to nothing.
+reducer::TransportFailure transportFailureOf(QAbstractSocket::SocketError error) {
+    switch (error) {
+    case QAbstractSocket::ConnectionRefusedError:
+        return reducer::TransportFailure::Refused;
+    case QAbstractSocket::SslHandshakeFailedError:
+        return reducer::TransportFailure::Tls;
+    case QAbstractSocket::RemoteHostClosedError:
+    case QAbstractSocket::HostNotFoundError:
+    case QAbstractSocket::SocketAccessError:
+    case QAbstractSocket::SocketResourceError:
+    case QAbstractSocket::SocketTimeoutError:
+    case QAbstractSocket::DatagramTooLargeError:
+    case QAbstractSocket::NetworkError:
+    case QAbstractSocket::AddressInUseError:
+    case QAbstractSocket::SocketAddressNotAvailableError:
+    case QAbstractSocket::UnsupportedSocketOperationError:
+    case QAbstractSocket::UnfinishedSocketOperationError:
+    case QAbstractSocket::ProxyAuthenticationRequiredError:
+    case QAbstractSocket::ProxyConnectionRefusedError:
+    case QAbstractSocket::ProxyConnectionClosedError:
+    case QAbstractSocket::ProxyConnectionTimeoutError:
+    case QAbstractSocket::ProxyNotFoundError:
+    case QAbstractSocket::ProxyProtocolError:
+    case QAbstractSocket::OperationError:
+    case QAbstractSocket::SslInternalError:
+    case QAbstractSocket::SslInvalidUserDataError:
+    case QAbstractSocket::TemporaryError:
+    case QAbstractSocket::UnknownSocketError:
+        break;
+    }
+    return reducer::TransportFailure::Unreachable;
 }
 
 } // namespace dish::http

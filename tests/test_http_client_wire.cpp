@@ -9,11 +9,14 @@
 #include "Models/Models.h"
 #include "Network/HTTPClient.h"
 #include "core/model/Protocol.h"
+#include "core/reducer/RestOutcome.h"
+#include "source/http/HttpExchange.h"
 
 #include "FakeHttpsListener.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <QAbstractSocket>
 #include <QByteArray>
 #include <QHostAddress>
 #include <QJsonDocument>
@@ -28,8 +31,10 @@
 using dish::models::CatalogDto;
 using dish::models::SessionResponse;
 using dish::net::HTTPClient;
+using dish::reducer::TransportFailure;
 using dish::test::FakeHttpsListener;
 using dish::test::HttpsAnswer;
+using dish::test::PlainTextPort;
 using dish::test::SeenRequest;
 
 namespace {
@@ -83,29 +88,6 @@ struct GrantingListener : FakeHttpsListener {
     GrantingListener() {
         respond = [](const SeenRequest&) { return HttpsAnswer{200, kGrant}; };
     }
-};
-
-// A port that answers a TLS hello with plain text, the way an HTTP server does when it is dialled
-// on the wrong port.
-class PlainTextPort {
-  public:
-    PlainTextPort() {
-        listening_ = server_.listen(QHostAddress::LocalHost, 0);
-        QObject::connect(&server_, &QTcpServer::newConnection, &server_, [this] { answer(); });
-    }
-
-    bool listening() const { return listening_; }
-    int port() const { return static_cast<int>(server_.serverPort()); }
-
-  private:
-    void answer() {
-        while (QTcpSocket* sock = server_.nextPendingConnection()) {
-            sock->write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-        }
-    }
-
-    QTcpServer server_;
-    bool listening_ = false;
 };
 
 } // namespace
@@ -254,9 +236,10 @@ TEST_CASE("HTTPClient wire: an answer cut short is no answer", "[http][wire]") {
 
     CHECK_FALSE(got.response.reachable);
     CHECK(got.response.httpStatus == 0);
+    CHECK(got.response.failure == TransportFailure::Other);
 }
 
-TEST_CASE("HTTPClient wire: a satellite that never answers is given up on", "[http][wire]") {
+TEST_CASE("HTTPClient wire: a satellite that never answers times out", "[http][wire]") {
     REQUIRE(dish::test::useTestTlsBackend());
     GrantingListener listener;
     REQUIRE(listener.listening());
@@ -269,20 +252,28 @@ TEST_CASE("HTTPClient wire: a satellite that never answers is given up on", "[ht
     CHECK(listener.requests().size() == 1);
     CHECK_FALSE(got.response.reachable);
     CHECK(got.response.httpStatus == 0);
+    CHECK(got.response.failure == TransportFailure::TimedOut);
 }
 
-TEST_CASE("HTTPClient wire: a port with nothing on it is unreachable", "[http][wire]") {
+// Windows retries a dial the peer refuses, and on the CI runner the refusal comes about 4.5 s in,
+// against the client's 5 s deadline, so either can answer first. test_http_exchange.cpp waits the
+// refusal out with no deadline.
+TEST_CASE("HTTPClient wire: a port with nothing on it is refused or outwaited", "[http][wire]") {
     REQUIRE(dish::test::useTestTlsBackend());
     HTTPClient client;
     client.setPinVerifier(trustingVerifier);
 
     const SessionReply got = putSessionTo(client, dish::test::closedLoopbackPort());
 
+    const bool refused = got.response.failure == TransportFailure::Refused;
+    const bool outwaited = got.response.failure == TransportFailure::TimedOut;
+    const bool refusedOrOutwaited = refused || outwaited;
     CHECK_FALSE(got.response.reachable);
+    CHECK(refusedOrOutwaited);
     CHECK_FALSE(got.pinMismatch);
 }
 
-TEST_CASE("HTTPClient wire: a port that does not speak TLS is unreachable", "[http][wire]") {
+TEST_CASE("HTTPClient wire: a port that does not speak TLS fails the handshake", "[http][wire]") {
     REQUIRE(dish::test::useTestTlsBackend());
     PlainTextPort plain;
     REQUIRE(plain.listening());
@@ -292,6 +283,7 @@ TEST_CASE("HTTPClient wire: a port that does not speak TLS is unreachable", "[ht
     const SessionReply got = putSessionTo(client, plain.port());
 
     CHECK_FALSE(got.response.reachable);
+    CHECK(got.response.failure == TransportFailure::Tls);
     CHECK_FALSE(got.pinMismatch);
 }
 
@@ -311,4 +303,13 @@ TEST_CASE("HTTPClient wire: a changed certificate hangs up before a byte is writ
     CHECK(listener.requests().empty());
     CHECK(got.pinMismatch);
     CHECK_FALSE(got.response.reachable);
+    CHECK(got.response.failure == TransportFailure::Aborted);
+}
+
+TEST_CASE("transport failure: each socket error is the cause a user can act on", "[http][wire]") {
+    using dish::http::transportFailureOf;
+    CHECK(transportFailureOf(QAbstractSocket::ConnectionRefusedError) == TransportFailure::Refused);
+    CHECK(transportFailureOf(QAbstractSocket::SslHandshakeFailedError) == TransportFailure::Tls);
+    CHECK(transportFailureOf(QAbstractSocket::HostNotFoundError) == TransportFailure::Unreachable);
+    CHECK(transportFailureOf(QAbstractSocket::NetworkError) == TransportFailure::Unreachable);
 }

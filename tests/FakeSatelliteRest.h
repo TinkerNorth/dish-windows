@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "core/reducer/RestOutcome.h"
 #include "source/http/HttpTransport.h"
 
 #include <QByteArray>
@@ -34,6 +35,8 @@ namespace dish::test {
 struct CannedAnswer {
     int status = 0; // 0 = the transport never produced a response
     QByteArray body;
+    // Why, when the status is 0.
+    dish::reducer::TransportFailure failure = dish::reducer::TransportFailure::None;
 };
 
 struct RecordedRequest {
@@ -75,6 +78,7 @@ class CannedReply : public QObject {
         // ends at once, with no status and no body.
         const bool refused = handshake_ && peerCheck_ && !peerCheck_(QByteArray());
         dish::http::HttpResult result;
+        result.failure = refused ? dish::reducer::TransportFailure::Aborted : answer_.failure;
         if (!refused) {
             result.response.status = answer_.status;
             result.response.body = answer_.body.toStdString();

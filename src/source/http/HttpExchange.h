@@ -10,8 +10,10 @@
 
 #pragma once
 
+#include "core/reducer/RestOutcome.h"
 #include "core/wire/HttpFraming.h"
 
+#include <QAbstractSocket>
 #include <QByteArray>
 #include <QSslConfiguration>
 #include <QString>
@@ -38,9 +40,10 @@ struct HttpRequest {
 };
 
 struct HttpResult {
-    // Status 0 when nothing answered.
+    // Status 0 when nothing answered, and `failure` then says why.
     wire::HttpResponse response;
-    // Why nothing answered, in words, for a log line.
+    reducer::TransportFailure failure = reducer::TransportFailure::None;
+    // The failure in words, for a log line.
     QString error;
 };
 
@@ -53,5 +56,8 @@ using HttpDone = std::function<void(const HttpResult&)>;
 // inside this call. Destroying `owner` first cancels the exchange without calling `done`. The
 // exchange is a child of `owner` named for its URL while it runs.
 void exchangeHttp(QObject* owner, HttpRequest request, PeerCheck peerCheck, HttpDone done);
+
+// The transport failure a socket error stands for, exposed so the mapping can be tested.
+reducer::TransportFailure transportFailureOf(QAbstractSocket::SocketError error);
 
 } // namespace dish::http

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Models/Models.h"
+#include "core/reducer/RestOutcome.h"
 
 #include <QByteArray>
 #include <QObject>
@@ -115,6 +116,8 @@ class HTTPClient : public QObject {
         QByteArray body;
         QString etag;
         bool pinMismatch = false;
+        // Why the transport failed, when it did. None whenever `reachable`.
+        reducer::TransportFailure failure = reducer::TransportFailure::None;
     };
 
     static RawReply rawReplyOf(const http::HttpResult& result, bool pinMismatch);
