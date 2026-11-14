@@ -105,6 +105,11 @@ share a version number.
 
 ### Fixed
 
+- **The privacy policy names the computer's own battery.** Since a
+  controller reports the lower of its battery and the computer's, Dish reads
+  this computer's battery level and charging state from Windows' power status
+  and sends it to the bound satellite; the policy listed only the
+  controller's readings. It now lists both.
 - **The update-check schedule and the satellite reconnect schedule no longer
   share two names.** Each defined its own `backoffDelayMs` and `kBackoffBaseMs`
   in the same namespace, one counting seconds for a satellite and the other
