@@ -21,7 +21,7 @@ share a version number.
 
 ---
 
-## [Unreleased]
+## [2.7.0] - 2026-11-15
 
 ### Added
 
@@ -79,8 +79,9 @@ share a version number.
   haptics, repeated while it runs because the controller stops it on its own.
   Letting go of the controller turns its keyboard-and-mouse mode back on. Like
   the 2015 Steam Controller it is never taken over automatically, only when you
-  pick direct on its card. The trackpads, the back paddles and the
-  quick-access button are not forwarded yet.
+  pick direct on its card. Its trackpads follow its Trackpads pick, and its
+  back paddles and quick-access button reach the host as extra buttons on
+  protocol 4.
 
 ### Changed
 
@@ -1064,7 +1065,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.6.0...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.7.0...main
+[2.7.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.0
 [2.6.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.6.0
 [2.5.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.5.0
 [2.4.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.4.0
