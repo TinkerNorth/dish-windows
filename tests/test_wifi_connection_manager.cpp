@@ -1080,6 +1080,103 @@ TEST_CASE("wifi manager: a user disconnect while the 409 is in flight is not und
     REQUIRE(f.events.empty());
 }
 
+// ---- A pair meets the same 409 first, and re-offers the same way ----
+
+namespace {
+
+std::vector<dish::test::RecordedRequest> pairPosts(const ManagerFixture& f) {
+    std::vector<dish::test::RecordedRequest> posts;
+    for (const auto& r : f.rest->requests()) {
+        if (r.verb == "POST" && r.path == kPairPath) { posts.push_back(r); }
+    }
+    return posts;
+}
+
+QString fieldOf(const dish::test::RecordedRequest& post, const QString& field) {
+    return QJsonDocument::fromJson(post.body).object().value(field).toString();
+}
+
+} // namespace
+
+TEST_CASE("wifi manager: a connect with no key re-offers the satellite's version after the pair's "
+          "409 and goes on at it",
+          "[manager][protocol]") {
+    ManagerFixture f;
+    f.store->forgetKey(f.id);
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{409, versionConflict(kOneBehind)});
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{503, kShuttingDown});
+
+    f.manager->connectTo(f.server, ConnectIntent::UserInitiated);
+    REQUIRE(pumpUntil([&f] { return f.rest->count("PUT", kSessionsPath) == 1; }));
+    REQUIRE(f.settles());
+
+    const auto posts = pairPosts(f);
+    REQUIRE(posts.size() == 2);
+    REQUIRE(offeredVersionOf(posts[0]) == dish::proto::kProtocolVersion);
+    REQUIRE(offeredVersionOf(posts[1]) == kOneBehind);
+    REQUIRE(f.store->sharedKey(f.id).has_value());
+    REQUIRE(offeredVersionOf(f.sessionPuts()[0]) == kOneBehind);
+    requireOneError(f, kUnreachableMsg);
+}
+
+TEST_CASE(
+    "wifi manager: a PIN pair re-offers the satellite's version after a 409 with the same PIN",
+    "[manager][protocol]") {
+    ManagerFixture f;
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{409, versionConflict(kOneBehind)});
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, kPairGranted});
+    f.rest->answer("PUT", kSessionsPath, CannedAnswer{503, kShuttingDown});
+
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+    REQUIRE(pumpUntil([&f] { return f.rest->count("PUT", kSessionsPath) == 1; }));
+    REQUIRE(f.settles());
+
+    const auto posts = pairPosts(f);
+    REQUIRE(posts.size() == 2);
+    REQUIRE(offeredVersionOf(posts[1]) == kOneBehind);
+    REQUIRE(fieldOf(posts[1], QStringLiteral("pin")) == QStringLiteral("1234"));
+    REQUIRE(f.pairingFailures.empty());
+    REQUIRE(offeredVersionOf(f.sessionPuts()[0]) == kOneBehind);
+}
+
+TEST_CASE("wifi manager: an approval request re-offers the satellite's version after a 409 and "
+          "keeps the PIN on screen",
+          "[manager][protocol]") {
+    ManagerFixture f;
+    f.rest->answerOnce("POST", kPairPath, CannedAnswer{409, versionConflict(kOneBehind)});
+    f.rest->answer("POST", kPairPath, CannedAnswer{200, R"({"ok":false,"pending":true})"});
+
+    f.manager->requestReversePairing(f.server);
+    const QString shown = f.manager->reversePairingPin();
+    REQUIRE(pumpUntil([&f] {
+        return f.rest->count("POST", kPairPath) == 2 && !f.manager->isPairingInFlight(f.id);
+    }));
+
+    REQUIRE(f.manager->reversePairingPhase() == ReversePairingPhase::AwaitingApproval);
+    REQUIRE(f.manager->reversePairingPin() == shown);
+    const auto posts = pairPosts(f);
+    REQUIRE(offeredVersionOf(posts[1]) == kOneBehind);
+    REQUIRE(fieldOf(posts[1], QStringLiteral("clientPin")) == shown);
+    REQUIRE(f.events.empty());
+}
+
+TEST_CASE("wifi manager: a pair's 409 that names no lower version ends the attempt instead of "
+          "looping",
+          "[manager][protocol]") {
+    ManagerFixture f;
+    f.rest->answer("POST", kPairPath,
+                   CannedAnswer{409, versionConflict(dish::proto::kProtocolVersion)});
+
+    f.manager->pairWithPin(f.server, QStringLiteral("1234"));
+    REQUIRE(f.settles());
+
+    REQUIRE(f.rest->count("POST", kPairPath) == 1);
+    REQUIRE(f.state() == SessionState::Idle);
+    REQUIRE(f.pairingFailures == std::vector<QString>{QStringLiteral("versionMismatch")});
+    requireOneError(f, kVersionMsg);
+}
+
 // ---- The satellite is IPv4 only ----
 
 TEST_CASE("wifi manager: a user connect to an IPv6 satellite is refused before any request",

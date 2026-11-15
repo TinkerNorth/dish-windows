@@ -358,13 +358,19 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
     if (conn->state() == SessionState::Live) { return; }
     conn->updateServer(server);
     conn->markConnecting();
+    sendPinPair(conn, server, pin);
+}
 
+void WifiConnectionManager::sendPinPair(WifiConnection* conn,
+                                        const models::DiscoveredServer& server,
+                                        const QString& pin) {
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
     http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, pin, QString(),
-                [this, id = conn->id(), sentOn = QPointer<WifiConnection>(conn),
-                 server](const models::PairResponse& response, bool pinMismatch) {
-                    onPinPairReply(id, sentOn, server,
+                conn->offeredProtocolVersion(),
+                [this, id = conn->id(), sentOn = QPointer<WifiConnection>(conn), server,
+                 pin](const models::PairResponse& response, bool pinMismatch) {
+                    onPinPairReply(id, sentOn, server, pin,
                                    PairingOutcome::classify(response, pinMismatch));
                 });
 }
@@ -373,7 +379,7 @@ void WifiConnectionManager::pairWithPin(const models::DiscoveredServer& server,
 void WifiConnectionManager::onPinPairReply(const QString& id,
                                            const QPointer<WifiConnection>& sentOn,
                                            const models::DiscoveredServer& server,
-                                           const PairingOutcome::Arm& outcome) {
+                                           const QString& pin, const PairingOutcome::Arm& outcome) {
     endPairingRequest(id, sentOn);
     // Forgotten while the POST was out, or forgotten and paired afresh: keeping the key would pair
     // a satellite the user removed, or key a newer attempt with an older answer.
@@ -392,9 +398,13 @@ void WifiConnectionManager::onPinPairReply(const QString& id,
                 conn->markDisconnected();
                 emit connectionEvent(makeError(identityChangedMsg()));
             } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
-                conn->markDisconnected();
-                emit connectionEvent(makeError(versionMsg()));
-                emit pairingFailed(id, QStringLiteral("versionMismatch"));
+                // Refused before the satellite reads the PIN, so the same PIN is still good.
+                if (lowerOfferOrFail(conn, ConnectIntent::UserInitiated, arm.supported,
+                                     arm.supportedMin)) {
+                    sendPinPair(conn, server, pin);
+                } else {
+                    emit pairingFailed(id, QStringLiteral("versionMismatch"));
+                }
             } else if constexpr (std::is_same_v<T, PairingOutcome::AuthRequired>) {
                 // Reachable and parsed but no key granted, so the PIN was
                 // wrong or expired.
@@ -492,8 +502,14 @@ void WifiConnectionManager::applyReverseOutcome(const models::DiscoveredServer& 
             } else if constexpr (std::is_same_v<T, PairingOutcome::Pending>) {
                 startReversePoll();
             } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
-                emit connectionEvent(makeError(versionMsg()));
-                finishReverse(ReversePairingPhase::VersionMismatch);
+                // Refused before the satellite reads the PIN, so the code on screen stays.
+                auto* conn = ensureConnection(server);
+                if (lowerOfferOrFail(conn, ConnectIntent::UserInitiated, arm.supported,
+                                     arm.supportedMin)) {
+                    sendReversePair(conn, server, reversePin_);
+                } else {
+                    finishReverse(ReversePairingPhase::VersionMismatch);
+                }
             } else if constexpr (std::is_same_v<T, PairingOutcome::IdentityChanged>) {
                 emit connectionEvent(makeError(identityChangedMsg()));
                 finishReverse(ReversePairingPhase::IdentityChanged);
@@ -530,13 +546,18 @@ void WifiConnectionManager::requestReversePairing(const models::DiscoveredServer
     resetRetry(conn->id());
     conn->updateServer(server);
     armReverseAttempt(server);
+    sendReversePair(conn, server, reversePin_);
+}
 
-    const QString pin = reversePin_;
+void WifiConnectionManager::sendReversePair(WifiConnection* conn,
+                                            const models::DiscoveredServer& server,
+                                            const QString& pin) {
     // The happy-path reply is {ok:false, pending:true}, which then gets polled.
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
     // Empty operator pin, displayed pin as clientPin: that is what selects Path B server-side.
     http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, QString(), pin,
+                conn->offeredProtocolVersion(),
                 [this, id = conn->id(), sentOn = QPointer<WifiConnection>(conn), server,
                  pin](const models::PairResponse& response, bool pinMismatch) {
                     onReversePairReply(id, sentOn, server, pin, response, pinMismatch);
@@ -650,6 +671,7 @@ void WifiConnectionManager::pairAndConnect(WifiConnection* conn,
     pairingInFlight_.insert(conn->id());
     emit pairingInFlightChanged();
     http_->pair(server.ip, server.pairPort, deviceId_, deviceName_, QString(), QString(),
+                conn->offeredProtocolVersion(),
                 [this, id = conn->id(), sentOn = QPointer<WifiConnection>(conn), server,
                  intent](const models::PairResponse& response, bool pinMismatch) {
                     onConnectPairReply(id, sentOn, server, intent,
@@ -683,8 +705,9 @@ void WifiConnectionManager::onConnectPairReply(const QString& id,
                     conn->markStale();
                 }
             } else if constexpr (std::is_same_v<T, PairingOutcome::VersionMismatch>) {
-                conn->markDisconnected();
-                emitErrorIfUserInitiated(intent, versionMsg());
+                if (lowerOfferOrFail(conn, intent, arm.supported, arm.supportedMin)) {
+                    pairAndConnect(conn, server, intent);
+                }
             } else if constexpr (std::is_same_v<T, PairingOutcome::IdentityChanged>) {
                 conn->markDisconnected();
                 emitErrorIfUserInitiated(intent, identityChangedMsg());
@@ -852,8 +875,14 @@ void WifiConnectionManager::onVersionRejected(WifiConnection* conn,
                                               const models::DiscoveredServer& server,
                                               ConnectIntent intent,
                                               const models::SessionResponse& resp) {
-    const auto negotiated =
-        reducer::settleRejected(resp.supportedProtocol, resp.supportedProtocolMin);
+    if (lowerOfferOrFail(conn, intent, resp.supportedProtocol, resp.supportedProtocolMin)) {
+        openSession(conn, server, intent);
+    }
+}
+
+bool WifiConnectionManager::lowerOfferOrFail(WifiConnection* conn, ConnectIntent intent,
+                                             int supported, int supportedMin) {
+    const auto negotiated = reducer::settleRejected(supported, supportedMin);
     const bool rangesOverlap = negotiated.verdict == reducer::ProtocolVerdict::RetryLower;
     // Strictly lower, so a satellite that rejects its own ceiling ends the attempt, not loops.
     const bool offersSomethingNew = negotiated.settledVersion < conn->offeredProtocolVersion();
@@ -861,14 +890,14 @@ void WifiConnectionManager::onVersionRejected(WifiConnection* conn,
         // Re-offered at once, for every intent, as dish-android does: the answer is already
         // known, so a backoff would only delay it. The lowered offer sticks to this connection.
         conn->setOfferedProtocolVersion(negotiated.settledVersion);
-        openSession(conn, server, intent);
-        return;
+        return true;
     }
     // The row keeps saying which end must update after the attempt is torn down; an unreadable
     // 409 leaves the chip alone.
     conn->setProtocolCompat(reducer::compatForOutcome(negotiated));
     conn->markDisconnected();
     emitErrorIfUserInitiated(intent, versionMsgFor(negotiated.verdict));
+    return false;
 }
 
 void WifiConnectionManager::reconcile(WifiConnection* conn,
