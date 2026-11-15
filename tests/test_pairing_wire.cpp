@@ -81,11 +81,12 @@ struct PairingWire {
         client->setPinVerifier(verifier);
     }
 
-    // The one pair most cases send: device dev-1, named Den PC, with the operator's PIN.
-    std::optional<Delivered> pairDen() {
-        return await([this](HTTPClient::PairCb cb) {
+    // The one pair most cases send: device dev-1, named Den PC, with the operator's PIN, offering
+    // this build's protocol version unless told otherwise.
+    std::optional<Delivered> pairDen(int protocolVersion = dish::proto::kProtocolVersion) {
+        return await([this, protocolVersion](HTTPClient::PairCb cb) {
             client->pair(kSatelliteIp, kPairPort, QStringLiteral("dev-1"), QStringLiteral("Den PC"),
-                         QStringLiteral("1234"), QString(), std::move(cb));
+                         QStringLiteral("1234"), QString(), protocolVersion, std::move(cb));
         });
     }
 
@@ -158,6 +159,33 @@ TEST_CASE("pairing wire: the transport status is stamped onto the parsed reply",
     REQUIRE(reply.has_value());
     CHECK(reply->response.httpStatus == 409);
     CHECK(classifiesAs<PairingOutcome::VersionMismatch>(*reply));
+}
+
+TEST_CASE("pairing wire: a pair posts the version it is told to offer", "[pairing][wire]") {
+    PairingWire wire;
+    wire.rest->answer("POST", kPairPath, CannedAnswer{200, R"({"ok":false,"pending":true})"});
+
+    const auto reply = wire.pairDen(dish::proto::kProtocolVersion - 1);
+
+    REQUIRE(reply.has_value());
+    CHECK(wire.sentBody().value(QStringLiteral("protocolVersion")).toInt() ==
+          dish::proto::kProtocolVersion - 1);
+}
+
+TEST_CASE("pairing wire: a 409 carries the satellite's range for the re-offer", "[pairing][wire]") {
+    PairingWire wire;
+    wire.rest->answer(
+        "POST", kPairPath,
+        CannedAnswer{409,
+                     R"({"error":"protocol version unsupported","supported":3,"supportedMin":1})"});
+
+    const auto reply = wire.pairDen();
+
+    REQUIRE(reply.has_value());
+    const auto arm = PairingOutcome::classify(reply->response, reply->pinMismatch);
+    REQUIRE(std::holds_alternative<PairingOutcome::VersionMismatch>(arm));
+    CHECK(std::get<PairingOutcome::VersionMismatch>(arm).supported == 3);
+    CHECK(std::get<PairingOutcome::VersionMismatch>(arm).supportedMin == 1);
 }
 
 TEST_CASE("pairing wire: a pair nobody answers reads as unreachable", "[pairing][wire]") {
