@@ -96,6 +96,14 @@ std::string usbDeviceOf(DEVINST collection) {
 }
 
 // Read a HID device's friendly product string, falling back to the path.
+// The device's own manufacturer string, empty when it reports none.
+std::string manufacturerName(HANDLE h) {
+    std::array<wchar_t, 256> buf{};
+    const auto bytes = static_cast<ULONG>(buf.size() * sizeof(wchar_t));
+    if (HidD_GetManufacturerString(h, buf.data(), bytes) == 0) { return {}; }
+    return wideToUtf8(buf.data());
+}
+
 std::string productName(HANDLE h, const std::string& fallbackPath) {
     std::array<wchar_t, 256> buf{};
     if (HidD_GetProductString(h, buf.data(), static_cast<ULONG>(buf.size() * sizeof(wchar_t))) !=
@@ -228,6 +236,10 @@ UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const std::strin
     info.endpointInMaxPacket = caps.InputReportByteLength > 0 ? caps.InputReportByteLength : 64;
     info.endpointInInterval = 1;
     info.hasOutEndpoint = caps.OutputReportByteLength > 0;
+    info.product = productName(h, std::string());
+    info.manufacturer = manufacturerName(h);
+    info.inputReportBytes = caps.InputReportByteLength;
+    info.outputReportBytes = caps.OutputReportByteLength;
     // Derived from the per-model decoder family so it tracks the parser selection rather than a
     // hard-coded VID list.
     info.hasImu = input::usbparse::parserHasImu(

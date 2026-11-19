@@ -1,6 +1,6 @@
 # Dish for Windows: Privacy Policy
 
-**Effective date:** 2026-11-13.
+**Effective date:** 2026-11-19.
 **Canonical copy:** this file, at
 [`https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md`](https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md).
 The app links to it from Help, and the privacy index on
@@ -24,12 +24,17 @@ read one as describing the other.
   Controller input goes from your PC, over your own network, to the host you
   paired with. It does not stream to any TinkerNorth-operated server.
   TinkerNorth does not operate a server for Dish at all.
-- **Two things can leave your PC**, and you can turn both off: an update
-  check against GitHub, described in section 2.4, and, when the app crashes,
+- **Three things can leave your PC on their own**, and you can turn each one
+  off: an update check against GitHub, described in section 2.4; a check for
+  a newer list of the controllers Dish recognises, against
+  `dish.tinkernorth.com`, described in section 2.5; and, when the app crashes,
   one crash report to Sentry, described in section 3. There is no analytics
   SDK, no telemetry, no advertising identifier, no usage reporting and no
-  account. The update check asks GitHub for one file and sends no identifier
-  with the request.
+  account. Both checks ask for files and send no identifier with the request.
+- **Diagnostics by email** (section 2.6) happens only when you press *Email
+  diagnostics*: Dish saves a file and opens your own mail app with it
+  attached, addressed to `support@tinkernorth.com`. Nothing is sent until you
+  press Send in your mail app.
 - Crash diagnostics are always written to your own disk, under
   `%LOCALAPPDATA%\Dish\`. With *Share crash reports* on (the default), an
   official build also sends one report per crash to Sentry: a stack trace, a
@@ -92,6 +97,23 @@ bookkeeping. None of them is transmitted anywhere.
 | `updates_last_check_utc_ms` | Timestamp | Not checking more than once an hour at startup |
 | `updates_handoff_version`, `updates_handoff_attempts` | A version string and a small counter | Internal apply bookkeeping: which staged update is being installed at the next start, and how many times it has been tried, so a broken update is abandoned after two attempts instead of looping |
 | `updates_last_run_version` | A version string | Noticing that the app just updated, so it can say so once |
+
+Five more values in the same hive cover the controller database check
+described in section 2.5. None of them is transmitted anywhere either; the
+ETag is the value the server itself handed back, and goes back to it only as
+the `If-None-Match` of the next check.
+
+| Registry value | Holds | Used for |
+|---|---|---|
+| `controller_db_check_enabled` | Boolean, default `true` | The *Check for controller updates automatically* switch. When off, the app makes no request for the controller list at all. |
+| `controller_db_last_check_utc_ms`, `controller_db_last_check_result` | Timestamp and a word (`upToDate`, `updated`, `offline`, `invalid`, `off`) | Showing on the Diagnostics page when the last check ran and how it ended |
+| `controller_db_manifest_etag`, `controller_db_manifest_etag_version` | The server's ETag for the manifest, and the list version it belongs to | Asking "anything newer?" without downloading the manifest again |
+
+A newer controller list, when one has been downloaded, is kept under
+`%LOCALAPPDATA%\Dish\controllers\v1\`: the list, its strings in six
+languages and the manifest they came with. A diagnostics file you save or
+email is kept under `%LOCALAPPDATA%\Dish\diagnostics\` until you delete it
+(section 2.6).
 
 The app also keeps a folder at `%LOCALAPPDATA%\Dish\updates\`. It holds the
 downloaded `dish-setup.exe`, a copy of the release manifest that described it,
@@ -200,17 +222,20 @@ There is no TinkerNorth server for this app to talk to. The one thing that
 reaches us is a crash report, through Sentry, and only if you leave *Share
 crash reports* on.
 
-Two things leave your network by default, and you can turn both off. The
-update check described in **section 2.4** goes to GitHub: a plain HTTPS
-request for a file on the public releases page, with no identifier. A crash
-report, described in **section 3**, goes to Sentry, which processes it for
-us, and only when the app has actually crashed.
+Three things leave your network by default, and you can turn each one off.
+The update check described in **section 2.4** goes to GitHub: a plain HTTPS
+request for a file on the public releases page, with no identifier. The
+controller database check described in **section 2.5** goes to
+`dish.tinkernorth.com`, the same way. A crash report, described in
+**section 3**, goes to Sentry, which processes it for us, and only when the
+app has actually crashed. A fourth, the diagnostics email in **section 2.6**,
+never leaves on its own: you send it from your own mail app.
 
 Beyond those there is no analytics library, no error tracking beyond the
-crash report, and no advertising identifier. Apart from the updater and the
-crash reporter, the only component in the app that makes an outbound HTTPS
-request is the satellite API client, and it only ever addresses the IP of a
-satellite you selected.
+crash report, and no advertising identifier. Apart from the updater, the
+controller database check and the crash reporter, the only component in the
+app that makes an outbound HTTPS request is the satellite API client, and it
+only ever addresses the IP of a satellite you selected.
 
 The other way this app causes a request to a TinkerNorth or third-party
 address is if you click a link, which hands the URL to your default browser
@@ -265,6 +290,74 @@ all; it only tells you one exists.
 
 The registry values behind these switches are in section 2.1, and the
 `%LOCALAPPDATA%\Dish\updates\` folder is described there too.
+
+### 2.5 Controller database updates
+
+Dish ships with a list of the controllers it recognises: their USB and
+Bluetooth ids, how each one talks, and the known issues its Diagnostics card
+shows. So that a newly supported controller does not wait for an app release,
+the app checks for a newer list. About ten seconds after launch, and then every
+six hours while it runs, it fetches a small manifest from
+`https://dish.tinkernorth.com/controllers/v1/` that names the newest version.
+Only when that version is newer than the one the app has does it fetch the
+rest: the controller list and its text in each language. These files are data,
+never code. The app checks each one's size and SHA-256 checksum against the
+manifest before using it, and keeps the copy it has when anything does not
+match. A newer list is stored under `%LOCALAPPDATA%\Dish\controllers\v1\`
+and applies to a controller the next time it is plugged in.
+
+`dish.tinkernorth.com` is an Amazon S3 bucket behind Amazon CloudFront,
+operated for TinkerNorth by Amazon Web Services. The requests carry no
+identifier, no cookie and no query, and use the system's default
+`User-Agent`, not the update check's `Dish/<version>` one. The only header
+the app adds is `If-None-Match`, carrying the ETag the server gave the last
+time, so an unchanged manifest is not sent again. What the host's access logs
+can see is what any web server sees: the IP address the request came from,
+and the time. We use those logs as we use the rest of the website's: for
+capacity planning and abuse detection only.
+
+*Check for controller updates automatically* in Settings, on by default, turns
+the check off. With it off, no request for the controller list leaves your
+PC, and the app keeps using the copy it has. *Check now* runs one check when
+you click it, and does nothing while the switch is off. The portable zip and
+the installed app both make this check; it is separate from the update check
+in section 2.4, and turning one off leaves the other alone.
+
+### 2.6 Diagnostics by email
+
+The Diagnostics page (Settings, then *Diagnostics…*) has *Email diagnostics*
+and *Save diagnostics*. Both write one file,
+`dish-diagnostics-dish-windows-<date>-<time>.json`, under
+`%LOCALAPPDATA%\Dish\diagnostics\`. *Save diagnostics* then shows it in
+Explorer. *Email diagnostics* opens your own mail app (through Windows'
+Simple MAPI) with a new message to `support@tinkernorth.com`, the subject
+`Dish diagnostics: Dish for Windows <version> on <PC model>`, a summary of
+the Diagnostics page in your language, and the file attached; when no mail
+app answers MAPI, a `mailto:` link opens with the same subject and summary
+and Explorer shows the file for you to attach. Nothing is sent by the app:
+the mail leaves only when you press Send in your mail app, and you can read
+or edit it before you do. If you send it, TinkerNorth receives it at that
+address and uses it only to answer you and fix what it shows.
+
+**What the file holds.** The app's version; this PC's model as its firmware
+names it, the Windows version and the processor architecture; the controller
+database's bundled and active versions and the time and result of its last
+check; for each controller, the database record it matched, that record's
+verification state, its transport (USB or Bluetooth) and path (Direct or the
+system's), its USB vendor and product ids, the product and manufacturer
+strings it reports, the HID report lengths Dish read off it, any mismatch
+between the record and what Dish saw, the last report Dish wrote to it (the
+report id, whether it went through and the Windows error code when it did
+not), and your answers to *Did it work?* after a rumble test; for each paired
+satellite, an alias ("Host 1", "Host 2"), its kind, the protocol version the
+session settled on, its link state and which controller-audio directions it
+grants; and this run's event log of hosts and controllers appearing,
+changing state, binding and leaving, with every host named only by its alias.
+
+**What it never holds.** Pairing keys, pairing secrets, certificate
+fingerprints, IP addresses, Wi-Fi names, the names of your hosts, this
+install's `deviceId`, your controller input, and anything from a
+controller's microphone or speaker.
 
 ---
 
@@ -383,6 +476,12 @@ version running. A per-user install, which is the default, never prompts.
   automatically*. Off means no update-related request leaves your machine, at
   any time, for any reason. Leaving it on but turning off *Download updates
   automatically* keeps the check and stops the download.
+- **Stop the controller database check.** Settings, Updates, *Check for
+  controller updates automatically*. Off means no request for the controller
+  list leaves your machine; the app keeps the list it has.
+- **Delete the controller list and diagnostics files.**
+  `%LOCALAPPDATA%\Dish\controllers\` and `%LOCALAPPDATA%\Dish\diagnostics\`
+  can go at any time; the app falls back to the list it shipped with.
 - **Delete the update cache.** `%LOCALAPPDATA%\Dish\updates\` can go at any
   time. The app recreates it only when it downloads an update, and deleting a
   partly-downloaded update simply makes it start over.
@@ -408,7 +507,8 @@ version running. A per-user install, which is the default, never prompts.
 ## 6. Children's privacy
 
 Dish is suitable for general audiences. The app collects nothing from anyone,
-of any age, beyond the crash report described in section 3, so there is no
+of any age, beyond the crash report described in section 3 and a diagnostics
+email you choose to send (section 2.6), so there is no
 children's data for us to hold. If you believe that is wrong in some way we
 have not anticipated, contact `privacy@tinkernorth.com`.
 
@@ -417,7 +517,10 @@ have not anticipated, contact `privacy@tinkernorth.com`.
 ## 7. International transfers
 
 Crash reports, when enabled, are stored by Sentry in the United States
-(section 3). The update check goes to GitHub, also in the United States.
+(section 3). The update check goes to GitHub, also in the United States. The
+controller database check goes to `dish.tinkernorth.com`, served by Amazon
+CloudFront from the edge location nearest you. A diagnostics email you choose
+to send travels through your own mail provider to `support@tinkernorth.com`.
 Nothing else leaves your machine to us.
 
 ---

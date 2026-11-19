@@ -41,6 +41,13 @@ struct UsbDeviceInfo {
     // The physical device the pad rides, as the gateway names it: one name for every interface of
     // a device and another for each device of the same model, unchanged while it stays plugged in.
     std::string devicePath;
+    // The hardware facts Diagnostics and the bundle show (docs/diagnostics-bundle.md): the
+    // device's own product and manufacturer strings, and the HID collection's input and output
+    // report lengths, which stand for the IN and OUT endpoints the HID class API never shows.
+    std::string product;
+    std::string manufacturer;
+    int inputReportBytes = 0;
+    int outputReportBytes = 0;
 
     int vpKey() const { return (vendorId << 16) | (productId & 0xFFFF); }
 };

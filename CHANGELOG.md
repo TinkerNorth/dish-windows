@@ -21,6 +21,65 @@ share a version number.
 
 ---
 
+## [2.8.0] - 2026-11-19
+
+### Added
+
+- **The fleet's controller database, bundled and kept current.** Dish ships
+  dbVersion 1 of the controller database the whole fleet now shares
+  (`dish.tinkernorth.com/controllers/v1/`, 272 controllers), as Qt resources
+  checked against their own manifest at every start. About ten seconds after
+  launch and every six hours while it runs, Dish asks for the manifest with
+  `If-None-Match`; only a newer version is downloaded, each file checked
+  against its SHA-256 and size, parsed, checked for schema 1 and then swapped
+  in atomically under `%LOCALAPPDATA%\Dish\controllers\v1\`. Any failure
+  keeps the list in force. A newer list applies to a controller at its next
+  attach.
+- **Settings: "Check for controller updates automatically"** (on by default)
+  and **"Check now"**. With the switch off, no request for the list leaves the
+  PC, "Check now" included. The request carries no identifier, no query and
+  the system's default `User-Agent`.
+- **Each controller's record on the Diagnostics card.** The record it matched,
+  its name from the database's strings in your language (English where a
+  language has none), a chip for its verification state (Verified, Layout
+  guessed, Flagged), and any known issue for this transport on this PC model,
+  with its title and text.
+- **Hardware check at attach.** On the Direct path the record's `expect` is
+  compared with what Windows' HID stack shows (an output report length above
+  zero stands for the OUT endpoint, which HID never shows), and each mismatch
+  is a Diagnostics row and a line in the diagnostics file.
+- **"Last write" on a Direct controller's card**: the route, the report id,
+  whether the pad took it and the Windows error code when it did not, recorded
+  by the claim's output worker without a lock or an allocation.
+- **"Did it work?" after each rumble test** in the controller inspector. The
+  answer is kept per controller, the last twenty, for this run, and the last
+  one shows on the inspector and the Diagnostics card.
+- **A "Controller database" card on Diagnostics**: the bundled and active
+  versions, where the active one came from, the last check's time and
+  result, and "Check now".
+- **Email diagnostics and Save diagnostics.** Both write
+  `dish-diagnostics-dish-windows-<yyyyMMdd-HHmmss>.json` (the fleet's
+  `dish-diagnostics.v1` shape) under `%LOCALAPPDATA%\Dish\diagnostics\`.
+  Email opens your own mail app through Simple MAPI, addressed to
+  `support@tinkernorth.com`, with the Diagnostics summary in your language
+  and the file attached; where no mail app answers MAPI, a `mailto:` link
+  opens and Explorer shows the file. Nothing is sent until you press Send.
+  The file never holds pairing keys, certificate fingerprints, IP addresses,
+  Wi-Fi names or the names of your hosts: hosts appear as "Host 1", "Host 2".
+
+### Changed
+
+- **PRIVACY.md** gains "Controller database updates" (2.5) and "Diagnostics by
+  email" (2.6), and its effective date moves to 2026-11-19.
+
+### Notes
+
+- The compiled Direct tables (`kKnownModels`, the fast-lane vendors) stay, and
+  a test now requires every row to match its database record. Served records
+  are classified for ids those tables lack, but the claim still takes its
+  parser from the compiled tables in this release (`tests/PARITY.md`).
+- No wire change.
+
 ## [2.7.1] - 2026-11-19
 
 ### Fixed

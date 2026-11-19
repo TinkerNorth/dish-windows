@@ -26,6 +26,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -345,6 +346,20 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         controllerActivity_.sampleAt(steadyNowMs());
     });
 
+    // The database in force before the first rebuild matches a pad to it. Loading reads the
+    // bundled resource and the cache, about half a megabyte; the first network check is ten
+    // seconds after start().
+    controllerDbStore_ = std::make_unique<source::controllerdb::ControllerDbStore>(
+        &controllerDbPrefs_, QString::fromLatin1(source::controllerdb::kBundledDbDir),
+        source::controllerdb::controllerDbCacheRoot());
+    controllerDbStore_->load();
+    controllerDbGateway_ = std::make_unique<source::controllerdb::HttpControllerDbGateway>();
+    controllerDbCoordinator_ =
+        new composer::ControllerDbCoordinator(controllerDbStore_.get(), &controllerDbPrefs_,
+                                              controllerDbGateway_.get(), &wallClockMs, this);
+    machine_ = source::readMachineIdentity();
+    diagnosticsHandoff_ = new source::DiagnosticsHandoff(this);
+
     rebuild();
 }
 
@@ -373,6 +388,9 @@ AppModel::~AppModel() {
     motionSwitchSub_ = arch::Observable<source::MotionEnabledMap>::Subscription{};
     usbManager_.reset();
     usbGateway_.reset();
+    // Before the gateway and the store it talks to, which are members and go first otherwise.
+    delete controllerDbCoordinator_;
+    controllerDbCoordinator_ = nullptr;
 }
 
 void AppModel::installRumbleHandlers() {
@@ -402,6 +420,8 @@ void AppModel::start() {
     // Last: the janitor pass and the staged-update scan are disk IO, and the
     // first check is 15 s out, so nothing here delays the first frame.
     updateCoordinator_.start();
+    // Ten seconds out, then every six hours; nothing at all while its switch is off.
+    controllerDbCoordinator_->start();
 }
 
 void AppModel::clearPairingTarget() {
@@ -936,6 +956,7 @@ void AppModel::rebuild() {
     reconcileAudioEngines();
 
     diagnosticsRecorder_.observeSlots(state_.slotList);
+    refreshAttachedIdentities();
     emit stateChanged();
 
     // Rides the same rebuild the Live transition triggered; the reducer's edge guard makes the
@@ -1594,6 +1615,57 @@ void AppModel::prewarmCatalogs() {
                 }
             });
     }
+}
+
+// A pad is matched once, when its slot appears: a database that lands later applies at its next
+// attach. Only the Direct path observes the hardware, so only a Direct slot is checked.
+void AppModel::refreshAttachedIdentities() {
+    const controllerdb::CatalogPtr catalog =
+        controllerDbStore_ != nullptr ? controllerDbStore_->active() : nullptr;
+    if (catalog == nullptr) {
+        attachedIdentities_.clear();
+        return;
+    }
+    std::vector<controllerdb::PadAttach> present;
+    for (const auto& slot : state_.slotList) {
+        const bool identified = slot.vendorId != 0 || slot.productId != 0;
+        if (!identified) { continue; }
+        controllerdb::PadAttach pad;
+        pad.slotId = slot.id.toStdString();
+        pad.id = controllerdb::DeviceId{static_cast<std::uint16_t>(slot.vendorId),
+                                        static_cast<std::uint16_t>(slot.productId)};
+        pad.bluetooth = slot.bluetooth;
+        if (slot.usbDirect) {
+            const std::optional<source::usb::UsbDeviceInfo> device = directDeviceFor(slot.id);
+            if (device.has_value()) {
+                pad.observed = controllerdb::observedFromHidCaps(device->inputReportBytes,
+                                                                 device->outputReportBytes);
+            }
+        }
+        present.push_back(std::move(pad));
+    }
+    attachedIdentities_ = controllerdb::reconcileAttached(attachedIdentities_, present, *catalog);
+}
+
+std::optional<controllerdb::AttachedIdentity>
+AppModel::attachedIdentity(const QString& slotId) const {
+    const auto it = attachedIdentities_.find(slotId.toStdString());
+    if (it == attachedIdentities_.end()) { return std::nullopt; }
+    return it->second;
+}
+
+std::optional<source::usb::UsbDeviceInfo> AppModel::directDeviceFor(const QString& slotId) const {
+    const std::optional<reducer::DirectPadKey> pad =
+        reducer::parseDirectSlotId(slotId.toStdString());
+    if (!pad.has_value() || usbManager_ == nullptr) { return std::nullopt; }
+    return usbManager_->claimedDevice(*pad);
+}
+
+std::optional<diagnostics::WriteVerdict> AppModel::lastDirectWrite(const QString& slotId) const {
+    const std::optional<reducer::DirectPadKey> pad =
+        reducer::parseDirectSlotId(slotId.toStdString());
+    if (!pad.has_value() || usbManager_ == nullptr) { return std::nullopt; }
+    return usbManager_->lastWrite(*pad);
 }
 
 } // namespace dish

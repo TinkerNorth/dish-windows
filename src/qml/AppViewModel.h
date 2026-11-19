@@ -18,9 +18,13 @@
 #include "core/reducer/UpdateMachine.h"
 #include "qml/ConnectionListModel.h"
 #include "qml/SlotListModel.h"
+#include "composer/DiagnosticsBundle.h"
+#include "source/controllerdb/ControllerDbStore.h"
 #include "source/store/BackgroundPreferenceStore.h"
+#include "source/store/ControllerDbPreferenceStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/OnboardingPreferenceStore.h"
+#include "source/store/PadTestOutcomeStore.h"
 #include "source/store/ThemePreferenceStore.h"
 #include "source/store/UiPreferenceStore.h"
 #include "source/store/UpdatePreferenceStore.h"
@@ -201,6 +205,16 @@ class AppViewModel : public QObject {
                    updatePrefsChanged)
     Q_PROPERTY(bool updateAutoDownload READ updateAutoDownload WRITE setUpdateAutoDownload NOTIFY
                    updatePrefsChanged)
+
+    // ── Controller database (docs/controller-db.md section 6) ────────────────
+    // "Check for controller updates automatically", default on.
+    Q_PROPERTY(bool controllerDbChecksEnabled READ controllerDbChecksEnabled WRITE
+                   setControllerDbChecksEnabled NOTIFY controllerDbChanged)
+    // qml/DiagnosticsMaps.h's controllerDbRow.
+    Q_PROPERTY(QVariantMap controllerDb READ controllerDb NOTIFY controllerDbChanged)
+    // The machine as the diagnostics bundle names it: "AYN Thor", "Windows 11 ... (10.0.22631)".
+    Q_PROPERTY(QString machineModel READ machineModel CONSTANT)
+    Q_PROPERTY(QString osVersion READ osVersion CONSTANT)
 
     // ── Diagnostics: the input inspector ─────────────────────────────────────
     // Republished at the poll rate while an inspection is armed; the shapes are
@@ -632,6 +646,32 @@ class AppViewModel : public QObject {
     QVariantMap inputSnapshot() const { return inputSnapshot_; }
     QVariantMap stickTest() const { return stickTest_; }
 
+    // ── The controller database and the levels of Diagnostics ────────────────
+    bool controllerDbChecksEnabled() const;
+    Q_INVOKABLE void setControllerDbChecksEnabled(bool enabled);
+    QVariantMap controllerDb() const;
+    // One check now; nothing leaves the PC while the switch is off.
+    Q_INVOKABLE void checkControllerDbNow();
+    QString machineModel() const;
+    QString osVersion() const;
+    // The slot's record facts (DiagnosticsMaps' controllerRecordRow) plus `lastWrite`, the Direct
+    // claim's last write verdict (writeVerdictRow). Re-pull on stateChanged and telemetryChanged.
+    Q_INVOKABLE QVariantMap controllerRecordFacts(const QString& slotId) const;
+    // The answer to "Did it work?" after a test buzz on `motor` ("weak" / "strong" / "both").
+    Q_INVOKABLE void recordTestOutcome(const QString& slotId, const QString& motor, bool worked);
+    // testOutcomeRow of the slot's last answer; {} before any.
+    Q_INVOKABLE QVariantMap lastTestOutcome(const QString& slotId) const;
+    // One row per controller for the mail's summary: { name, recordId, chip, usbDirect, bluetooth
+    // }, `recordId` "" and `chip` "" for a pad no record lists.
+    Q_INVOKABLE QVariantList diagnosticsControllers() const;
+    // Writes the bundle under %LOCALAPPDATA%\Dish\diagnostics and shows it in Explorer. The
+    // file's path, or "" when it could not be written.
+    Q_INVOKABLE QString saveDiagnostics();
+    // Writes the bundle, then opens the person's mail client addressed to support with `body`,
+    // the summary the page composed in the person's language. False when the file could not be
+    // written or a compose window from the last one is still open.
+    Q_INVOKABLE bool emailDiagnostics(const QString& body);
+
   signals:
     // Folds AppModel's stateChanged and the coordinator's connectionsChanged.
     void stateChanged();
@@ -709,6 +749,11 @@ class AppViewModel : public QObject {
     void diagnosticsLogChanged();
     void inputSnapshotChanged();
     void stickTestChanged();
+    void controllerDbChanged();
+    void testOutcomesChanged();
+    // After emailDiagnostics: true when the mail client took it, false when the mailto: fallback
+    // opened and Explorer shows the file to attach.
+    void diagnosticsMailHandedOff(bool viaMailClient);
 
   private:
     void onStateChanged();
@@ -853,6 +898,13 @@ class AppViewModel : public QObject {
     QVariantMap inputSnapshot_;
     QVariantMap stickTest_;
     arch::Observable<std::vector<reducer::DiagnosticsEvent>>::Subscription diagnosticsLogSub_;
+
+    // The bundle's facts, gathered from what the page shows, and the file it is written to.
+    composer::BundleFacts diagnosticsBundleFacts() const;
+    QString writeDiagnosticsBundle();
+    arch::Observable<source::controllerdb::ControllerDbStatus>::Subscription controllerDbSub_;
+    arch::Observable<source::ControllerDbPreferences>::Subscription controllerDbPrefsSub_;
+    arch::Observable<source::PadTestOutcomeMap>::Subscription outcomesSub_;
 };
 
 } // namespace dish::qml
