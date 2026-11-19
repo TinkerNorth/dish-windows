@@ -245,6 +245,7 @@ set(DISH_CORE_SOURCES
     src/core/audio/AudioCodec.h
     src/core/audio/PadAudioMatcher.h
     src/core/audio/AudioEnginePolicy.h
+    src/core/audio/AudioRefusal.h
     src/source/audio/OpusAudioCodec.h
     src/source/audio/OpusAudioCodec.cpp
     src/source/audio/AudioDeviceGateway.h
