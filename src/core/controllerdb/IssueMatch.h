@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Dish contributors.
 //
 // Which of a record's `support.issues` show on a pad's card here
-// (docs/controller-db.md section 4.1): the issue's transport is the pad's,
-// and its `device` and `os` are this machine's or absent. `device` is the
-// machine's model as the bundle names it ("AYN Thor"), compared without case
-// or surrounding space; an `os` map names its platforms, and only a `windows`
-// entry whose version is this Windows' major version matches here.
+// (docs/controller-db.md section 4.1): the issue is `open`, its transport is
+// the pad's, and its `device` and `os` are this machine's or absent. `device`
+// is the machine's model as the bundle names it ("AYN Thor"), compared without
+// case or surrounding space; an `os` map is keyed by platform, and only its
+// `windows` entry, read as a major version ("11", or "11.0" as a string), can
+// match here. `fixed` and `wontfix` issues are history and never show.
 
 #pragma once
 
@@ -47,21 +48,33 @@ inline bool deviceMatches(const std::optional<std::string>& device, const HostFa
     return foldedForMatch(*device) == foldedForMatch(host.model);
 }
 
+// The leading whole number of a version, "11" of "11.0.22631"; -1 when it starts with none.
+inline int majorVersionOf(std::string_view version) {
+    int major = -1;
+    for (const char ch : version) {
+        if (ch < '0' || ch > '9') { break; }
+        major = (major < 0 ? 0 : major * 10) + (ch - '0');
+    }
+    return major;
+}
+
 inline bool osMatches(const std::vector<IssueOs>& os, const HostFacts& host) {
     if (os.empty()) { return true; }
-    const std::string major = std::to_string(host.windowsMajor);
-    return std::any_of(os.begin(), os.end(), [&major](const IssueOs& entry) {
-        return entry.name == kPlatformName && entry.version == major;
+    return std::any_of(os.begin(), os.end(), [&host](const IssueOs& entry) {
+        return entry.name == kPlatformName && majorVersionOf(entry.version) == host.windowsMajor;
     });
 }
 
 } // namespace detail
 
+inline constexpr std::string_view kOpenStatus = "open";
+
 inline bool issueApplies(const Issue& issue, Transport padTransport, const HostFacts& host) {
+    const bool open = issue.status == kOpenStatus;
     const bool sameTransport = issue.transport == padTransport;
     const bool thisMachine = detail::deviceMatches(issue.device, host);
     const bool thisSystem = detail::osMatches(issue.os, host);
-    return sameTransport && thisMachine && thisSystem;
+    return open && sameTransport && thisMachine && thisSystem;
 }
 
 inline std::vector<Issue> applicableIssues(const ControllerRecord& record, Transport padTransport,

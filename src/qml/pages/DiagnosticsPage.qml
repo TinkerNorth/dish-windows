@@ -362,7 +362,7 @@ Kit.Page {
     }
 
     function testText(outcome) {
-        const result = outcome.result === "felt" ? qsTr("felt") : qsTr("not felt");
+        const result = outcome.result === "worked" ? qsTr("felt") : qsTr("not felt");
         return qsTr("%1 · %2 · %3").arg(page.testName(outcome.test)).arg(result)
                                    .arg(page.clockText(outcome.atMs));
     }

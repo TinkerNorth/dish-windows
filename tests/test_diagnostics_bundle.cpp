@@ -62,7 +62,7 @@ struct BundleFixture {
         pad.expectMismatch = {"endpoints.out: expected true, found false"};
         pad.lastWrite = dish::diagnostics::WriteVerdict{
             true, dish::diagnostics::WriteRoute::InterruptOut, 0x02, false, 1167, 1795122250000};
-        pad.outcomes = {{"rumble.strong", "felt", 1795122240000}};
+        pad.outcomes = {{"rumble.strong", "worked", 1795122240000}};
         facts.controllers.push_back(pad);
 
         BundleHost host;
@@ -172,7 +172,7 @@ TEST_CASE("diagnostics bundle: a controller with its record, hardware, write and
     CHECK(write[QStringLiteral("err")].toString() == QStringLiteral("ERROR_DEVICE_NOT_CONNECTED"));
     const QJsonObject outcome = pad[QStringLiteral("outcomes")].toArray()[0].toObject();
     CHECK(outcome[QStringLiteral("test")].toString() == QStringLiteral("rumble.strong"));
-    CHECK(outcome[QStringLiteral("result")].toString() == QStringLiteral("felt"));
+    CHECK(outcome[QStringLiteral("result")].toString() == QStringLiteral("worked"));
     CHECK(pad[QStringLiteral("lastFeedback")].isNull());
 }
 

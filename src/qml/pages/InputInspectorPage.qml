@@ -71,7 +71,7 @@ Kit.Page {
     function lastOutcomeText() {
         if (page.lastOutcome.test === undefined)
             return "";
-        const result = page.lastOutcome.result === "felt" ? qsTr("felt") : qsTr("not felt");
+        const result = page.lastOutcome.result === "worked" ? qsTr("felt") : qsTr("not felt");
         return qsTr("Last test: %1 · %2 · %3").arg(page.motorName(page.lastOutcome.test))
                                                .arg(result)
                                                .arg(Qt.formatTime(new Date(page.lastOutcome.atMs),

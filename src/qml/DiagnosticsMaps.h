@@ -132,7 +132,7 @@ QVariantMap controllerDbRow(const source::controllerdb::ControllerDbStatus& stat
 QVariantMap writeVerdictRow(const std::optional<diagnostics::WriteVerdict>& verdict);
 
 // {} before any test, else { test, result, atMs }: `test` `rumble.weak` / `rumble.strong` /
-// `rumble.both`, `result` `felt` / `notFelt`.
+// `rumble.both`, `result` `worked` / `didNotWork`.
 QVariantMap testOutcomeRow(const std::optional<diagnostics::TestOutcome>& outcome);
 
 struct RecordCardInputs {

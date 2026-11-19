@@ -63,15 +63,15 @@ TEST_CASE("write verdict: worded the way the card and the bundle show it", "[dia
 TEST_CASE("test outcomes: the last twenty, oldest first", "[diagnostics][outcomes]") {
     OutcomeLog log;
     for (int i = 0; i < 25; ++i) {
-        log = appendOutcome(log, TestOutcome{"rumble.weak", "felt", i});
+        log = appendOutcome(log, TestOutcome{"rumble.weak", "worked", i});
     }
     REQUIRE(log.size() == kOutcomesKept);
     CHECK(kOutcomesKept == 20U);
     CHECK(log.front().atMs == 5);
     CHECK(log.back().atMs == 24);
     SECTION("below the bound nothing is dropped") {
-        const OutcomeLog two = appendOutcome(appendOutcome({}, TestOutcome{"a", "felt", 1}),
-                                             TestOutcome{"b", "notFelt", 2});
+        const OutcomeLog two = appendOutcome(appendOutcome({}, TestOutcome{"a", "worked", 1}),
+                                             TestOutcome{"b", "didNotWork", 2});
         REQUIRE(two.size() == 2U);
         CHECK(two[0].test == "a");
         CHECK(two[1].test == "b");
@@ -84,20 +84,20 @@ TEST_CASE("test outcomes: the bench's motors name the test, the answer names the
     CHECK(rumbleTestName("strong") == std::optional<std::string>("rumble.strong"));
     CHECK(rumbleTestName("both") == std::optional<std::string>("rumble.both"));
     CHECK_FALSE(rumbleTestName("lightbar").has_value());
-    CHECK(outcomeResult(true) == "felt");
-    CHECK(outcomeResult(false) == "notFelt");
+    CHECK(outcomeResult(true) == "worked");
+    CHECK(outcomeResult(false) == "didNotWork");
 }
 
 TEST_CASE("test outcomes: the store keeps each slot's apart", "[diagnostics][outcomes]") {
     dish::source::PadTestOutcomeStore store;
     CHECK_FALSE(store.lastFor("a").has_value());
-    store.record("a", TestOutcome{"rumble.weak", "felt", 1});
-    store.record("b", TestOutcome{"rumble.both", "notFelt", 2});
-    store.record("a", TestOutcome{"rumble.strong", "notFelt", 3});
+    store.record("a", TestOutcome{"rumble.weak", "worked", 1});
+    store.record("b", TestOutcome{"rumble.both", "didNotWork", 2});
+    store.record("a", TestOutcome{"rumble.strong", "didNotWork", 3});
     CHECK(store.outcomesFor("a").size() == 2U);
     CHECK(store.lastFor("a")->test == "rumble.strong");
-    CHECK(store.lastFor("b")->result == "notFelt");
-    for (int i = 0; i < 30; ++i) { store.record("a", TestOutcome{"rumble.weak", "felt", i}); }
+    CHECK(store.lastFor("b")->result == "didNotWork");
+    for (int i = 0; i < 30; ++i) { store.record("a", TestOutcome{"rumble.weak", "worked", i}); }
     CHECK(store.outcomesFor("a").size() == kOutcomesKept);
 }
 

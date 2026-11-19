@@ -310,7 +310,15 @@ TEST_CASE("controller db: an issue shows for its transport on its machine and sy
     Issue issue;
     issue.id = "thor-ds5-rumble-usb";
     issue.transport = Transport::Usb;
+    issue.status = "open";
     const HostFacts thor{"AYN Thor", 11};
+
+    SECTION("only an open issue shows; fixed and wontfix are history") {
+        issue.status = "fixed";
+        CHECK_FALSE(issueApplies(issue, Transport::Usb, thor));
+        issue.status = "wontfix";
+        CHECK_FALSE(issueApplies(issue, Transport::Usb, thor));
+    }
 
     SECTION("no device and no os: every machine") {
         CHECK(issueApplies(issue, Transport::Usb, thor));
@@ -330,6 +338,18 @@ TEST_CASE("controller db: an issue shows for its transport on its machine and sy
         issue.os = {IssueOs{"android", "15"}, IssueOs{"windows", "11"}};
         CHECK(issueApplies(issue, Transport::Usb, thor));
         CHECK_FALSE(issueApplies(issue, Transport::Usb, HostFacts{"AYN Thor", 10}));
+    }
+    SECTION("a windows version given as a string is read by its major number") {
+        issue.os = {IssueOs{"windows", "11.0"}};
+        CHECK(issueApplies(issue, Transport::Usb, thor));
+        issue.os = {IssueOs{"windows", "10"}};
+        CHECK_FALSE(issueApplies(issue, Transport::Usb, thor));
+        issue.os = {IssueOs{"windows", "latest"}};
+        CHECK_FALSE(issueApplies(issue, Transport::Usb, thor));
+    }
+    SECTION("macos is another platform's key") {
+        issue.os = {IssueOs{"macos", "11"}};
+        CHECK_FALSE(issueApplies(issue, Transport::Usb, thor));
     }
     SECTION("applicableIssues keeps the matching ones in order") {
         ControllerRecord r = recordOf("sony-dualsense", Family::DualSense, {kDualSense});

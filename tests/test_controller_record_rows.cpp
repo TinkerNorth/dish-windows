@@ -37,7 +37,11 @@ ControllerRecord dualSense() {
     thor.id = "thor-ds5-rumble-usb";
     thor.device = "AYN Thor";
     thor.transport = Transport::Usb;
-    r.issues = {thor};
+    thor.status = "open";
+    Issue fixedOne = thor;
+    fixedOne.id = "fixed-one";
+    fixedOne.status = "fixed";
+    r.issues = {thor, fixedOne};
     return r;
 }
 
@@ -142,9 +146,9 @@ TEST_CASE("record row: the last write and the last test, or nothing yet",
 
     CHECK(dish::qml::testOutcomeRow(std::nullopt).isEmpty());
     const QVariantMap test =
-        dish::qml::testOutcomeRow(dish::diagnostics::TestOutcome{"rumble.both", "notFelt", 7});
+        dish::qml::testOutcomeRow(dish::diagnostics::TestOutcome{"rumble.both", "didNotWork", 7});
     CHECK(test.value(QStringLiteral("test")).toString() == QStringLiteral("rumble.both"));
-    CHECK(test.value(QStringLiteral("result")).toString() == QStringLiteral("notFelt"));
+    CHECK(test.value(QStringLiteral("result")).toString() == QStringLiteral("didNotWork"));
 }
 
 TEST_CASE("record row: the database's account of itself", "[diagnostics][record-row]") {

@@ -46,6 +46,6 @@ inline std::optional<std::string> rumbleTestName(std::string_view motor) {
     return "rumble." + std::string(motor);
 }
 
-inline std::string_view outcomeResult(bool worked) { return worked ? "felt" : "notFelt"; }
+inline std::string_view outcomeResult(bool worked) { return worked ? "worked" : "didNotWork"; }
 
 } // namespace dish::diagnostics

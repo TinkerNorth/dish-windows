@@ -182,3 +182,23 @@ TEST_CASE("bundled controller db: a tampered file fails the manifest and is not 
     files.files[QStringLiteral("strings/de.json")].append(' ');
     CHECK(catalogFromFiles(files, DbSource::Bundled) == nullptr);
 }
+
+TEST_CASE(
+    "bundled controller db: the 2026 Steam Controller takes output reports and leaves OUT open",
+    "[controllerdb][bundled]") {
+    // dbVersion 1 as republished on 2026-11-19: Dish writes the pad's haptic rumble as an output
+    // report, so its records promise the interrupt OUT route and leave the OUT endpoint unknown.
+    const CatalogPtr catalog = bundledCatalog();
+    REQUIRE(catalog != nullptr);
+    for (const std::uint16_t pid : std::initializer_list<std::uint16_t>{0x1302, 0x1304, 0x1305}) {
+        INFO(pid);
+        const ControllerRecord* record = catalog->findUsb(DeviceId{0x28DE, pid});
+        REQUIRE(record != nullptr);
+        CHECK(record->family == Family::SteamTriton);
+        CHECK(record->route == OutputRoute::InterruptOut);
+        CHECK(record->expect.endpointOut == Expectation::Unknown);
+    }
+    const ControllerRecord* bluetooth = catalog->findBluetooth(DeviceId{0x28DE, 0x1303});
+    REQUIRE(bluetooth != nullptr);
+    CHECK(bluetooth->expect.endpointOut == Expectation::Unknown);
+}
