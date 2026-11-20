@@ -36,6 +36,7 @@ enum class SnapshotError : std::uint8_t {
     OlderSatellite,
     Timeout,
     UnknownConnection,
+    BadReply,
 };
 
 inline constexpr std::array<int, 3> kFirstSnapshotVersion{2, 3, 0};
@@ -68,8 +69,8 @@ struct SnapshotReply {
     bool bodyIsSnapshot = false;
 };
 
-// A 200 that is not a snapshot (an older build answering with its SPA page, a proxy) and a 5xx are
-// the same as no answer for this purpose: there is nothing from the host to embed.
+// `Offline` is a host that never answered. One that answered with something unusable (a 5xx, or a
+// 200 whose body is not a snapshot: a proxy, a page) is `BadReply`.
 inline SnapshotError snapshotErrorOf(const SnapshotReply& reply) {
     constexpr int kNotFound = 404;
     constexpr int kUnauthorized = 401;
@@ -81,7 +82,8 @@ inline SnapshotError snapshotErrorOf(const SnapshotReply& reply) {
     }
     const bool answered = reply.status >= 200 && reply.status <= 299;
     if (answered && reply.bodyIsSnapshot) { return SnapshotError::None; }
-    return SnapshotError::Offline;
+    if (reply.status == 0) { return SnapshotError::Offline; }
+    return SnapshotError::BadReply;
 }
 
 inline std::optional<std::string_view> snapshotErrorToken(SnapshotError error) {
@@ -98,6 +100,8 @@ inline std::optional<std::string_view> snapshotErrorToken(SnapshotError error) {
         return "timeout";
     case SnapshotError::UnknownConnection:
         return "unknownConnection";
+    case SnapshotError::BadReply:
+        return "badReply";
     }
     return std::nullopt;
 }

@@ -141,9 +141,10 @@ TEST_CASE("host snapshot: what each answer to the diagnostics route means",
     CHECK(snapshotErrorOf(SnapshotReply{403, false, false}) == SnapshotError::Unauthorized);
     CHECK(snapshotErrorOf(SnapshotReply{0, true, false}) == SnapshotError::Timeout);
     CHECK(snapshotErrorOf(SnapshotReply{0, false, false}) == SnapshotError::Offline);
-    SECTION("an answer that is not a snapshot is no answer") {
-        CHECK(snapshotErrorOf(SnapshotReply{200, false, false}) == SnapshotError::Offline);
-        CHECK(snapshotErrorOf(SnapshotReply{503, false, false}) == SnapshotError::Offline);
+    SECTION("an answer that is not a snapshot is a bad reply, not an unreachable host") {
+        CHECK(snapshotErrorOf(SnapshotReply{200, false, false}) == SnapshotError::BadReply);
+        CHECK(snapshotErrorOf(SnapshotReply{503, false, false}) == SnapshotError::BadReply);
+        CHECK(snapshotErrorOf(SnapshotReply{500, false, true}) == SnapshotError::BadReply);
     }
 }
 
@@ -159,6 +160,8 @@ TEST_CASE("host snapshot: the error tokens are the contract's, and no error writ
     CHECK(snapshotErrorToken(SnapshotError::Timeout) == std::optional<std::string_view>("timeout"));
     CHECK(snapshotErrorToken(SnapshotError::UnknownConnection) ==
           std::optional<std::string_view>("unknownConnection"));
+    CHECK(snapshotErrorToken(SnapshotError::BadReply) ==
+          std::optional<std::string_view>("badReply"));
     CHECK(dish::diagnostics::kSnapshotTimeoutMs == 2000);
 }
 
@@ -223,7 +226,7 @@ TEST_CASE("host snapshot collector: a body that is no snapshot is dropped, never
         {"sat-a"}, [&collected](HostSnapshots snapshots) { collected.take(std::move(snapshots)); });
     gateway.answer("sat-a", SnapshotFetchReply{200, false, std::nullopt});
     REQUIRE(collected.calls == 1);
-    CHECK(collected.last.at("sat-a").error == SnapshotError::Offline);
+    CHECK(collected.last.at("sat-a").error == SnapshotError::BadReply);
     CHECK_FALSE(collected.last.at("sat-a").snapshot.has_value());
 }
 

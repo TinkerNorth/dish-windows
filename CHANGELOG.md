@@ -81,7 +81,8 @@ share a version number.
   older Satellite, told by the version its capabilities reported, is not
   asked: the file carries what Dish already fetched from it and says
   `olderSatellite`; one that cannot answer says `offline`, `timeout`,
-  `unauthorized` or `unknownConnection`. A paired Moonlight host is listed
+  `unauthorized`, `unknownConnection` or
+  `badReply`. A paired Moonlight host is listed
   too, with the version its serverinfo gave. Every host also carries Dish's
   own view of the session: each controller slot (record, type asked for and
   applied, backend, apply result, touchpad mode), the last heartbeat ack, the
