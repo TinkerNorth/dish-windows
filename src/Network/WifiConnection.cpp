@@ -353,6 +353,7 @@ void WifiConnection::applyResults(const QList<models::ControllerApplyDto>& resul
 
 std::vector<WifiConnection::SlotReport> WifiConnection::slotReports() const {
     std::vector<SlotReport> reports;
+    reports.reserve(slots_.size());
     for (const auto& [slotId, b] : slots_) {
         reports.push_back(SlotReport{slotId, b.controllerIndex, b.controllerType, b.appliedType,
                                      b.applyResult, b.touchpadMode});
