@@ -19,6 +19,7 @@
 #include <MAPI.h>
 #include <objbase.h>
 
+#include <cstring>
 #include <optional>
 #include <string>
 
@@ -36,11 +37,17 @@ using SendMailW = ULONG(WINAPI*)(ULONG_PTR session, ULONG_PTR uiParam, MapiMessa
 std::optional<unsigned long> sendThroughMapi(const DiagnosticsMail& mail) {
     HMODULE mapi = ::LoadLibraryW(L"mapi32.dll");
     if (mapi == nullptr) { return std::nullopt; }
-    const auto send = reinterpret_cast<SendMailW>(::GetProcAddress(mapi, "MAPISendMailW"));
-    if (send == nullptr) {
+    const FARPROC proc = ::GetProcAddress(mapi, "MAPISendMailW");
+    if (proc == nullptr) {
         ::FreeLibrary(mapi);
         return std::nullopt;
     }
+    // Copied, not cast: a function-pointer cast trips -Wcast-function-type-mismatch and laundering
+    // through void* trips bugprone-casting-through-void (FramelessWindowChrome does the same).
+    static_assert(sizeof(SendMailW) == sizeof(FARPROC),
+                  "MAPISendMailW and FARPROC must be the same width to copy between them");
+    SendMailW send = nullptr;
+    std::memcpy(static_cast<void*>(&send), static_cast<const void*>(&proc), sizeof(send));
 
     std::wstring subject = mail.subject.toStdWString();
     std::wstring body = mail.body.toStdWString();
