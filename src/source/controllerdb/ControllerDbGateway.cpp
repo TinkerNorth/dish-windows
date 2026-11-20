@@ -27,7 +27,7 @@ constexpr int kPayloadTooLarge = 413;
 QUrl urlFor(const QString& path) {
     const QString base =
         QString::fromLatin1(cdb::kDbBaseUrl.data(), static_cast<qsizetype>(cdb::kDbBaseUrl.size()));
-    return QUrl(base + path);
+    return {base + path};
 }
 
 qint64 capFor(const QString& path) {

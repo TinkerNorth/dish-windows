@@ -84,7 +84,7 @@ QString diagnosticsFolder() {
 QString saveDiagnosticsFile(const QString& folder, const QString& fileName,
                             const QByteArray& bundle) {
     if (folder.isEmpty() || !QDir().mkpath(folder)) { return {}; }
-    const QString path = folder + QLatin1Char('/') + fileName;
+    QString path = folder + QLatin1Char('/') + fileName;
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) { return {}; }
     const bool wrote = file.write(bundle) == bundle.size();

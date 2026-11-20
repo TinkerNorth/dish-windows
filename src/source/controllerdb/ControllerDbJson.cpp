@@ -55,7 +55,7 @@ std::optional<int> positiveInt(const QJsonValue& value) {
 std::optional<std::vector<std::string>> stringList(const QJsonValue& value) {
     if (!value.isArray()) { return std::nullopt; }
     std::vector<std::string> out;
-    for (const QJsonValue& item : value.toArray()) {
+    for (const auto& item : value.toArray()) {
         if (!item.isString()) { return std::nullopt; }
         out.push_back(utf8(item));
     }
@@ -209,7 +209,7 @@ bool readSupport(const QJsonObject& record, cdb::ControllerRecord& out) {
     if (!state.has_value() || !transport.has_value()) { return false; }
     out.verification = *state;
     out.verificationTransport = *transport;
-    for (const QJsonValue& item : member(support, "issues").toArray()) {
+    for (const auto& item : member(support, "issues").toArray()) {
         if (auto issue = issueOf(item)) { out.issues.push_back(std::move(*issue)); }
     }
     return true;
@@ -246,7 +246,7 @@ std::variant<cdb::ControllerDb, DbParseError> parseControllerDb(const QByteArray
 
     cdb::ControllerDb db;
     db.dbVersion = *version;
-    for (const QJsonValue& item : records.toArray()) {
+    for (const auto& item : records.toArray()) {
         if (auto record = recordOf(item)) {
             db.records.push_back(std::move(*record));
         } else {

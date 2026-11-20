@@ -11,10 +11,10 @@ namespace dish::diagnostics {
 
 namespace {
 
-constexpr int kIndentWidth = 2;
+constexpr std::size_t kIndentWidth = 2;
 
 void indent(std::string& out, int depth) {
-    out.append(static_cast<std::size_t>(depth * kIndentWidth), ' ');
+    out.append(static_cast<std::size_t>(depth) * kIndentWidth, ' ');
 }
 
 // The two-character escapes JSON names; every other control character is \u00XX.
