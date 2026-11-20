@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Copyright (C) 2026 Dish contributors.
 //
-// The Windows end of "Save diagnostics" and "Email diagnostics"
+// The Windows end of "Save diagnostics" and "Report a problem"
 // (docs/diagnostics-bundle.md, "The mail"): the bundle is written under
 // %LOCALAPPDATA%\Dish\diagnostics\, then handed to the person's own mail
 // client through Simple MAPI (MAPISendMailW, with the compose window shown so

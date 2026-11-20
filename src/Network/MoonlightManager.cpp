@@ -683,6 +683,11 @@ std::optional<moonlight::SessionPhase> MoonlightManager::sessionPhase(const QStr
     return std::nullopt;
 }
 
+QString MoonlightManager::serverAppVersion(const QString& id) const {
+    if (auto* session = sessions_.value(id, nullptr)) { return session->serverAppVersion(); }
+    return {};
+}
+
 // ── Per-slot input routing ──────────────────────────────────────────────────
 
 moonlight::BindOutcome MoonlightManager::bindSlot(const QString& slotId, const QString& hostId,

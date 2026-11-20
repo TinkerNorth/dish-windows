@@ -153,6 +153,11 @@ class MoonlightSession : public QObject {
     // pairing question is asked by a mutual-TLS call and by nothing else.
     void probe();
 
+    // The host's own version as the last answered /serverinfo gave it ("7.1.431.-1"), for the
+    // support report; empty before one answered. Its state and PairStatus are not kept: over
+    // plaintext they describe an unpaired asker, not this client.
+    QString serverAppVersion() const { return serverAppVersion_; }
+
     // Hot path: forward one controller's state. No-op unless streaming.
     void sendControllerState(const moonlight::ControllerState& state);
 
@@ -288,6 +293,7 @@ class MoonlightSession : public QObject {
     // Per-install, from the repository; the fallback constant only for a
     // session built with no store, which only tests do.
     QString uniqueId_;
+    QString serverAppVersion_;
     repository::MoonlightHostRepository* repo_;
 
     MoonlightHttpClient* http_;

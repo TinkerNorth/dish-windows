@@ -1908,14 +1908,6 @@
         <translation>Adaptateur</translation>
     </message>
     <message>
-        <source>Your mail app has the message. Nothing is sent until you press Send.</source>
-        <translation>Votre application de messagerie a le message. Rien n’est envoyé tant que vous n’appuyez pas sur Envoyer.</translation>
-    </message>
-    <message>
-        <source>Your mail app opened without the file: attach the one Explorer shows.</source>
-        <translation>Votre application de messagerie s’est ouverte sans le fichier : joignez celui qu’affiche l’Explorateur.</translation>
-    </message>
-    <message>
         <source>Verified</source>
         <translation>Vérifié</translation>
     </message>
@@ -2068,14 +2060,6 @@
         <translation>Hôte %1 : %2</translation>
     </message>
     <message>
-        <source>The attached file holds the app and Windows versions, this PC&apos;s model, the controller database&apos;s state, each controller&apos;s identity, last write and test results, each host&apos;s kind and link state, and this run&apos;s event log; it never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your hosts.</source>
-        <translation>Le fichier joint contient les versions de l’appli et de Windows, le modèle de ce PC, l’état de la base de données des manettes, l’identité, la dernière écriture et les résultats des tests de chaque manette, le type et l’état de connexion de chaque hôte et le journal des événements de cette session ; il ne contient jamais de clés d’appairage, d’empreintes de certificats, d’adresses IP, de noms de réseaux Wi-Fi ni les noms de vos hôtes.</translation>
-    </message>
-    <message>
-        <source>The diagnostics file could not be written, or a mail from the last one is still open.</source>
-        <translation>Le fichier de diagnostic n’a pas pu être écrit, ou un message de la fois précédente est encore ouvert.</translation>
-    </message>
-    <message>
         <source>Diagnostics saved. Explorer shows the file.</source>
         <translation>Diagnostic enregistré. L’Explorateur affiche le fichier.</translation>
     </message>
@@ -2100,16 +2084,24 @@
         <translation>Envoyer au support</translation>
     </message>
     <message>
-        <source>Email diagnostics saves a file of what this page shows and opens your own mail app addressed to support@tinkernorth.com, with the file attached. Nothing is sent until you press Send.</source>
-        <translation>Envoyer le diagnostic par e-mail enregistre un fichier de ce que montre cette page et ouvre votre propre application de messagerie adressée à support@tinkernorth.com, avec le fichier en pièce jointe. Rien n’est envoyé tant que vous n’appuyez pas sur Envoyer.</translation>
-    </message>
-    <message>
-        <source>Email diagnostics</source>
-        <translation>Envoyer le diagnostic par e-mail</translation>
-    </message>
-    <message>
         <source>Save diagnostics</source>
         <translation>Enregistrer le diagnostic</translation>
+    </message>
+    <message>
+        <source>The attached file holds this page and its log, each controller&apos;s input and output counts, Dish&apos;s own view of each session and what each Satellite says about it; it never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your PCs and devices.</source>
+        <translation>Le fichier joint contient cette page et son journal, les compteurs d’entrée et de sortie de chaque manette, la vue de Dish sur chaque session et ce que chaque Satellite en dit ; il ne contient jamais de clés d’appairage, d’empreintes de certificats, d’adresses IP, de noms de réseaux Wi-Fi ni les noms de vos PC et appareils.</translation>
+    </message>
+    <message>
+        <source>Ask a question</source>
+        <translation>Poser une question</translation>
+    </message>
+    <message>
+        <source>Report a problem</source>
+        <translation>Signaler un problème</translation>
+    </message>
+    <message>
+        <source>Report a problem writes a file of what this page shows and what each Satellite says about its side, and opens your own mail app addressed to support@tinkernorth.com with the file attached. Nothing is sent until you click Send.</source>
+        <translation>Signaler un problème écrit un fichier de ce que montre cette page et de ce que chaque Satellite dit de son côté, puis ouvre votre propre application de messagerie adressée à support@tinkernorth.com, avec le fichier joint. Rien n’est envoyé tant que vous ne cliquez pas sur Envoyer.</translation>
     </message>
 </context>
 <context>
@@ -3885,6 +3877,121 @@
     <message>
         <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
         <translation>L&apos;identité de sécurité de ce satellite a changé. S&apos;il a été réinstallé, oubliez-le ici et appairez-le de nouveau.</translation>
+    </message>
+</context>
+<context>
+    <name>ReportProblemPage</name>
+    <message>
+        <source>Ask a question</source>
+        <translation>Poser une question</translation>
+    </message>
+    <message>
+        <source>Report a problem</source>
+        <translation>Signaler un problème</translation>
+    </message>
+    <message>
+        <source>Controller not recognised</source>
+        <translation>Manette non reconnue</translation>
+    </message>
+    <message>
+        <source>No rumble or feedback</source>
+        <translation>Pas de vibration ni de retour</translation>
+    </message>
+    <message>
+        <source>Connection or latency</source>
+        <translation>Connexion ou latence</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation>Audio</translation>
+    </message>
+    <message>
+        <source>Something else</source>
+        <translation>Autre chose</translation>
+    </message>
+    <message>
+        <source>A question</source>
+        <translation>Une question</translation>
+    </message>
+    <message>
+        <source>Your mail app has the message. Nothing is sent until you click Send.</source>
+        <translation>Votre application de messagerie a le message. Rien n’est envoyé tant que vous ne cliquez pas sur Envoyer.</translation>
+    </message>
+    <message>
+        <source>Your mail app opened without the file: attach the one Explorer shows.</source>
+        <translation>Votre application de messagerie s’est ouverte sans le fichier : joignez celui qu’affiche l’Explorateur.</translation>
+    </message>
+    <message>
+        <source>The diagnostics file could not be written, or a mail from the last one is still open.</source>
+        <translation>Le fichier de diagnostic n’a pas pu être écrit, ou un message de la fois précédente est encore ouvert.</translation>
+    </message>
+    <message>
+        <source>Ask us anything about Dish. Your question goes to support@tinkernorth.com from your own mail app, with a file of what Dish sees so we can answer for your setup.</source>
+        <translation>Posez-nous n’importe quelle question sur Dish. Votre question part vers support@tinkernorth.com depuis votre propre application de messagerie, avec un fichier de ce que voit Dish pour que nous répondions selon votre configuration.</translation>
+    </message>
+    <message>
+        <source>Tell us what went wrong. Dish writes a file of what it sees and opens your own mail app addressed to support@tinkernorth.com, with the file attached.</source>
+        <translation>Dites-nous ce qui n’a pas marché. Dish écrit un fichier de ce qu’il voit et ouvre votre propre application de messagerie adressée à support@tinkernorth.com, avec le fichier joint.</translation>
+    </message>
+    <message>
+        <source>Category</source>
+        <translation>Catégorie</translation>
+    </message>
+    <message>
+        <source>What happened, and what did you expect?</source>
+        <translation>Que s’est-il passé, et qu’attendiez-vous ?</translation>
+    </message>
+    <message>
+        <source>Controller</source>
+        <translation>Manette</translation>
+    </message>
+    <message>
+        <source>No particular controller</source>
+        <translation>Aucune manette en particulier</translation>
+    </message>
+    <message>
+        <source>What the file holds</source>
+        <translation>Ce que contient le fichier</translation>
+    </message>
+    <message>
+        <source>Your words and the category you picked.</source>
+        <translation>Vos mots et la catégorie choisie.</translation>
+    </message>
+    <message>
+        <source>Dish&apos;s version, this PC&apos;s model and Windows version, and its battery and battery saver state.</source>
+        <translation>La version de Dish, le modèle et la version de Windows de ce PC, ainsi que l’état de sa batterie et de l’économiseur de batterie.</translation>
+    </message>
+    <message>
+        <source>Each controller&apos;s identity, the path Dish reads it on, and what went in and out of it, as counts and last values.</source>
+        <translation>L’identité de chaque manette, la voie par laquelle Dish la lit, et ce qui y est entré et en est sorti, en compteurs et dernières valeurs.</translation>
+    </message>
+    <message>
+        <source>Each host&apos;s kind, version and link state, Dish&apos;s own view of each session, and what each Satellite says about it.</source>
+        <translation>Le type, la version et l’état de connexion de chaque hôte, la vue de Dish sur chaque session et ce que chaque Satellite en dit.</translation>
+    </message>
+    <message>
+        <source>The controller database&apos;s state and this run&apos;s event log.</source>
+        <translation>L’état de la base de données des manettes et le journal des événements de cette session.</translation>
+    </message>
+    <message>
+        <source>It never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your PCs and devices. Nothing is sent until you click Send in your mail app.</source>
+        <translation>Il ne contient jamais de clés d’appairage, d’empreintes de certificats, d’adresses IP, de noms de réseaux Wi-Fi ni les noms de vos PC et appareils. Rien n’est envoyé tant que vous ne cliquez pas sur Envoyer dans votre application de messagerie.</translation>
+    </message>
+    <message>
+        <source>Asking each Satellite for its side of the session…</source>
+        <translation>Chaque Satellite est interrogé sur son côté de la session…</translation>
+    </message>
+    <message>
+        <source>Continue in your mail app</source>
+        <translation>Continuer dans votre application de messagerie</translation>
+    </message>
+    <message>
+        <source>Hide file</source>
+        <translation>Masquer le fichier</translation>
+    </message>
+    <message>
+        <source>Preview file</source>
+        <translation>Aperçu du fichier</translation>
     </message>
 </context>
 <context>

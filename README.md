@@ -311,9 +311,9 @@ report to Sentry (a stack trace, a minidump of the crashed process, and the app
 and Windows versions). All three are on by default and can be turned off in
 Settings; the installer asks about the update check and crash reports on a
 first install, and silent installs take `/UPDATECHECK=no` and
-`/CRASHREPORTS=no`. *Email diagnostics* on the Diagnostics page sends nothing
+`/CRASHREPORTS=no`. *Report a problem* on the Diagnostics page sends nothing
 itself: it opens your own mail app with a diagnostics file attached, and the
-mail leaves only when you press Send. There is no analytics, no telemetry and
+mail leaves only when you click Send. There is no analytics, no telemetry and
 no account.
 
 **Third-party components in the signed package.** Qt 6 (LGPL-3.0), SDL2

@@ -174,6 +174,8 @@ class MoonlightManager : public QObject {
     void forgetHost(const QString& id);
 
     std::optional<moonlight::SessionPhase> sessionPhase(const QString& id) const;
+    // The host's version as its last answered /serverinfo gave it; empty before one answered.
+    QString serverAppVersion(const QString& id) const;
 
     // ── Per-slot input routing ───────────────────────────────────────────────
     // A PARALLEL seam to the Satellite path's routing tables in AppModel, which

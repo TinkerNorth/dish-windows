@@ -57,20 +57,54 @@ share a version number.
 - **A "Controller database" card on Diagnostics**: the bundled and active
   versions, where the active one came from, the last check's time and
   result, and "Check now".
-- **Email diagnostics and Save diagnostics.** Both write
+- **Report a problem and Ask a question.** The Diagnostics page's way to
+  support is now a report: pick what it is about (controller not recognised,
+  no rumble or feedback, connection or latency, audio, something else, or a
+  question), write what happened and what you expected, and name the
+  controller it concerns (an attached one is picked for you). The page says
+  in plain words what the file will hold and what it never holds, *Preview
+  file* shows the file itself, and *Continue in your mail app* writes
   `dish-diagnostics-dish-windows-<yyyyMMdd-HHmmss>.json` (the fleet's
-  `dish-diagnostics.v1` shape) under `%LOCALAPPDATA%\Dish\diagnostics\`.
-  Email opens your own mail app through Simple MAPI, addressed to
-  `support@tinkernorth.com`, with the Diagnostics summary in your language
-  and the file attached; where no mail app answers MAPI, a `mailto:` link
-  opens and Explorer shows the file. Nothing is sent until you press Send.
-  The file never holds pairing keys, certificate fingerprints, IP addresses,
-  Wi-Fi names or the names of your hosts: hosts appear as "Host 1", "Host 2".
+  `dish-diagnostics.v1` shape) under `%LOCALAPPDATA%\Dish\diagnostics\` and
+  opens your own mail app through Simple MAPI, addressed to
+  `support@tinkernorth.com`, subject `Dish support: <category> · Dish for
+  Windows <version> on <PC model>` (the prefix stays English so the mailbox
+  can sort on it), your words first and the Diagnostics summary after, the
+  file attached; where no mail app answers MAPI, a `mailto:` link opens and
+  Explorer shows the file. *Save diagnostics* writes the same file without a
+  report. Nothing is sent until you click Send.
+- **Both ends of every host in the file.** While the report page is open,
+  each live Satellite of 2.3.0 or later is asked for its own account of the
+  session (`GET /api/connections/{id}/diagnostics`, over the session's pinned
+  HTTPS and proof, two seconds at most) and the answer is embedded with that
+  host's name and address replaced by its alias wherever they appear. An
+  older Satellite, told by the version its capabilities reported, is not
+  asked: the file carries what Dish already fetched from it and says
+  `olderSatellite`; one that cannot answer says `offline`, `timeout`,
+  `unauthorized` or `unknownConnection`. A paired Moonlight host is listed
+  too, with the version its serverinfo gave. Every host also carries Dish's
+  own view of the session: each controller slot (record, type asked for and
+  applied, backend, apply result, touchpad mode), the last heartbeat ack, the
+  round-trip percentiles and how many messages of each kind went each way.
+- **Every controller path, input and output.** Each controller in the file
+  carries its input frames, rate and last report, and per output lane
+  (rumble, light bar, player lights, trigger effects, mute lamp) how many
+  reached it, where they went (`directUsb`, `framework`, `none`) and the last
+  value with its time; its speaker and haptics streams' state; and for a
+  Bluetooth pad whether the link is classic or low energy, never its address.
+- **The PC's battery and battery saver** in the file, from
+  `GetSystemPowerStatus`. There is no thermal state on Windows, and Wi-Fi
+  facts are not read (`tests/PARITY.md`).
+- The file never holds pairing keys, certificate fingerprints, IP addresses,
+  Bluetooth addresses, Wi-Fi names or the names of your PCs and devices: hosts
+  appear as "Host 1", "Host 2".
 
 ### Changed
 
-- **PRIVACY.md** gains "Controller database updates" (2.5) and "Diagnostics by
-  email" (2.6), and its effective date moves to 2026-11-19.
+- **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
+  problem" (2.6), which describes your own words in the report and the
+  Satellite connection snapshot, what each holds and never holds; its
+  effective date moves to 2026-11-19.
 
 ### Notes
 
@@ -78,7 +112,10 @@ share a version number.
   a test now requires every row to match its database record. Served records
   are classified for ids those tables lack, but the claim still takes its
   parser from the compiled tables in this release (`tests/PARITY.md`).
-- No wire change.
+- Hot path: the session counts each message kind it sends and receives, and
+  the router counts each pad's output lanes, with relaxed atomics only; no
+  thread on the input, USB, receive or mic path takes a new lock.
+- No wire change. The snapshot route is a new REST call to Satellite 2.3.0.
 
 ## [2.7.1] - 2026-11-19
 

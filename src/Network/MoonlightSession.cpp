@@ -747,6 +747,9 @@ void MoonlightSession::probe() {
                            << r.value(QStringLiteral("PairStatus")) << "uniqueid" << uniqueId;
                        // An error from whatever holds the port is not the host answering.
                        const bool hostAnswered = r.reachable && r.ok();
+                       if (hostAnswered) {
+                           serverAppVersion_ = r.value(QStringLiteral("appversion"));
+                       }
                        emit probeFinished(hostAnswered, uniqueId);
                    });
 }

@@ -329,6 +329,13 @@ class AppModel : public QObject {
     source::PadTestOutcomeStore* padOutcomes() { return &padOutcomes_; }
     const source::MachineIdentity& machine() const { return machine_; }
     source::DiagnosticsHandoff* diagnosticsHandoff() { return diagnosticsHandoff_; }
+    // The support report's second cut: each pad's lanes and the targets they go to, its voices, and
+    // the catalog cached per satellite. GUI thread.
+    const SlotRouter* router() const { return router_.get(); }
+    const source::audio::SpeakerPlayoutEngine& speakerEngine() const { return speakerEngine_; }
+    std::optional<models::CatalogDto> cachedCatalog(const QString& connectionId) const {
+        return catalogRepo_.cached(connectionId);
+    }
 
   signals:
     // Emitted after any field of state() changes.

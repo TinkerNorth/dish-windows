@@ -31,10 +31,10 @@ read one as describing the other.
   one crash report to Sentry, described in section 3. There is no analytics
   SDK, no telemetry, no advertising identifier, no usage reporting and no
   account. Both checks ask for files and send no identifier with the request.
-- **Diagnostics by email** (section 2.6) happens only when you press *Email
-  diagnostics*: Dish saves a file and opens your own mail app with it
-  attached, addressed to `support@tinkernorth.com`. Nothing is sent until you
-  press Send in your mail app.
+- **Report a problem** (section 2.6) happens only when you click *Report a
+  problem* or *Ask a question*: Dish saves a file and opens your own mail app
+  with it attached, addressed to `support@tinkernorth.com`. Nothing is sent
+  until you click Send in your mail app.
 - Crash diagnostics are always written to your own disk, under
   `%LOCALAPPDATA%\Dish\`. With *Share crash reports* on (the default), an
   official build also sends one report per crash to Sentry: a stack trace, a
@@ -112,7 +112,7 @@ the `If-None-Match` of the next check.
 A newer controller list, when one has been downloaded, is kept under
 `%LOCALAPPDATA%\Dish\controllers\v1\`: the list, its strings in six
 languages and the manifest they came with. A diagnostics file you save or
-email is kept under `%LOCALAPPDATA%\Dish\diagnostics\` until you delete it
+send is kept under `%LOCALAPPDATA%\Dish\diagnostics\` until you delete it
 (section 2.6).
 
 The app also keeps a folder at `%LOCALAPPDATA%\Dish\updates\`. It holds the
@@ -228,7 +228,7 @@ request for a file on the public releases page, with no identifier. The
 controller database check described in **section 2.5** goes to
 `dish.tinkernorth.com`, the same way. A crash report, described in
 **section 3**, goes to Sentry, which processes it for us, and only when the
-app has actually crashed. A fourth, the diagnostics email in **section 2.6**,
+app has actually crashed. A fourth, the support report in **section 2.6**,
 never leaves on its own: you send it from your own mail app.
 
 Beyond those there is no analytics library, no error tracking beyond the
@@ -323,40 +323,81 @@ you click it, and does nothing while the switch is off. The portable zip and
 the installed app both make this check; it is separate from the update check
 in section 2.4, and turning one off leaves the other alone.
 
-### 2.6 Diagnostics by email
+### 2.6 Report a problem
 
-The Diagnostics page (Settings, then *Diagnostics…*) has *Email diagnostics*
-and *Save diagnostics*. Both write one file,
-`dish-diagnostics-dish-windows-<date>-<time>.json`, under
-`%LOCALAPPDATA%\Dish\diagnostics\`. *Save diagnostics* then shows it in
-Explorer. *Email diagnostics* opens your own mail app (through Windows'
-Simple MAPI) with a new message to `support@tinkernorth.com`, the subject
-`Dish diagnostics: Dish for Windows <version> on <PC model>`, a summary of
-the Diagnostics page in your language, and the file attached; when no mail
-app answers MAPI, a `mailto:` link opens with the same subject and summary
-and Explorer shows the file for you to attach. Nothing is sent by the app:
-the mail leaves only when you press Send in your mail app, and you can read
+The Diagnostics page (Settings, then *Diagnostics…*) has *Report a problem*,
+*Ask a question* and *Save diagnostics*. The first two open the same page in
+a different category: you pick what it is about (a controller not
+recognised, no rumble or feedback, connection or latency, audio, something
+else, or a question), write what happened and what you expected, and may name
+the controller it concerns. The page lists in plain words what the file will
+hold, *Preview file* shows you the file itself, and *Continue in your mail
+app* writes `dish-diagnostics-dish-windows-<date>-<time>.json` under
+`%LOCALAPPDATA%\Dish\diagnostics\` and opens your own mail app (through
+Windows' Simple MAPI) with a new message to `support@tinkernorth.com`. The
+subject is `Dish support: <the category, in your language> · Dish for Windows
+<version> on <PC model>`; the body is your own words first, then a summary of
+the Diagnostics page in your language; the file is attached. When no mail app
+answers MAPI, a `mailto:` link opens with the same subject and body and
+Explorer shows the file for you to attach. *Save diagnostics* writes the same
+file without a report and shows it in Explorer. Nothing is sent by the app:
+the mail leaves only when you click Send in your mail app, and you can read
 or edit it before you do. If you send it, TinkerNorth receives it at that
 address and uses it only to answer you and fix what it shows.
 
-**What the file holds.** The app's version; this PC's model as its firmware
-names it, the Windows version and the processor architecture; the controller
-database's bundled and active versions and the time and result of its last
-check; for each controller, the database record it matched, that record's
-verification state, its transport (USB or Bluetooth) and path (Direct or the
-system's), its USB vendor and product ids, the product and manufacturer
-strings it reports, the HID report lengths Dish read off it, any mismatch
-between the record and what Dish saw, the last report Dish wrote to it (the
-report id, whether it went through and the Windows error code when it did
-not), and your answers to *Did it work?* after a rumble test; for each paired
-satellite, an alias ("Host 1", "Host 2"), its kind, the protocol version the
-session settled on, its link state and which controller-audio directions it
-grants; and this run's event log of hosts and controllers appearing,
+**Your own words.** What you write and the category you pick go into the
+mail and into the file as `report`, with the database record or product name
+of the controller you named. Dish does not read, check or keep them anywhere
+else; they exist only in the file and in the mail you send.
+
+**The Satellite connection snapshot.** When the page opens, Dish asks each
+Satellite it has a live session with, version 2.3.0 or later, for that
+session's own account of itself: one request to
+`GET /api/connections/<id>/diagnostics` on the PC you paired with, over the
+same encrypted, pinned connection and pairing proof every session request
+uses, given up after two seconds. Nothing goes anywhere else, and nothing is
+asked of a Satellite older than 2.3.0, which has no such route; for that one,
+and for any that does not answer, the file holds what Dish already had from
+it (its version, protocol, backends and audio switches) and says why. The
+snapshot holds that Satellite's version, platform and uptime, its virtual
+controller backends and their driver versions, each virtual pad of this
+session (the type asked for and the one made, its features, its touchpad mode,
+and how many reports went in and out of it), the audio switches it grants, its
+message counters, the state of its own controller list, and this connection's
+lines of its log. Satellite removes from it every machine name, every other
+client's name and address and every secret, and names your device "this
+connection"; Dish then replaces that host's name and address with its alias
+wherever either still appears. A Moonlight host (Sunshine, Apollo, Wolf) is
+not asked anything: the file holds the version its last answer to Dish gave.
+
+**What the file holds.** Your report, as above; the app's version; this PC's
+model as its firmware names it, the Windows version, the processor
+architecture, its battery level and whether it is charging, and whether
+battery saver is on; the controller database's bundled and active versions
+and the time and result of its last check; for each controller, the database
+record it matched, that record's verification state, its transport (USB or
+Bluetooth) and path (Direct or the system's), whether a Bluetooth link is
+classic or low energy, its USB vendor and product ids, the product and
+manufacturer strings it reports, the HID report lengths Dish read off it, any
+mismatch between the record and what Dish saw, how many input reports it sent
+and at what rate, the last one (the buttons, sticks and triggers at that
+moment), for each kind of output (rumble, light bar, player lights, trigger
+effects, mute lamp) how many reached it, where they went and the last value
+with its time, whether its speaker and haptics streams are open, the last
+report Dish wrote to it (the report id, whether it went through and the
+Windows error code when it did not), and your answers to *Did it work?* after
+a rumble test; for each paired Satellite or Moonlight host, an alias ("Host
+1", "Host 2"), its kind and version, the protocol version the session settled
+on, its link state and which controller-audio directions it grants, Dish's own
+view of the session (each controller slot, the last heartbeat's facts, round
+trip times, and how many messages of each kind went each way) and the
+snapshot above; and this run's event log of hosts and controllers appearing,
 changing state, binding and leaving, with every host named only by its alias.
 
 **What it never holds.** Pairing keys, pairing secrets, certificate
-fingerprints, IP addresses, Wi-Fi names, the names of your hosts, this
-install's `deviceId`, your controller input, and anything from a
+fingerprints, IP addresses, Bluetooth addresses, Wi-Fi names, the names of
+your hosts, PCs and devices, this install's `deviceId`, a stream of your
+controller input (only the counts and the last report), and anything from a
 controller's microphone or speaker.
 
 ---
@@ -507,8 +548,8 @@ version running. A per-user install, which is the default, never prompts.
 ## 6. Children's privacy
 
 Dish is suitable for general audiences. The app collects nothing from anyone,
-of any age, beyond the crash report described in section 3 and a diagnostics
-email you choose to send (section 2.6), so there is no
+of any age, beyond the crash report described in section 3 and a support
+report you choose to send (section 2.6), so there is no
 children's data for us to hold. If you believe that is wrong in some way we
 have not anticipated, contact `privacy@tinkernorth.com`.
 

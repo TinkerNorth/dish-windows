@@ -274,6 +274,9 @@ set(DISH_TEST_SOURCES
     test_controller_record_rows.cpp
     test_diagnostics_levels.cpp
     test_diagnostics_bundle.cpp
+    # The support report: the report, both ends of each host, every path.
+    test_support_report.cpp
+    test_connection_snapshot_gateway.cpp
     test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})

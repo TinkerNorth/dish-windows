@@ -1908,14 +1908,6 @@
         <translation>Adaptador</translation>
     </message>
     <message>
-        <source>Your mail app has the message. Nothing is sent until you press Send.</source>
-        <translation>Seu app de e-mail está com a mensagem. Nada é enviado até você clicar em Enviar.</translation>
-    </message>
-    <message>
-        <source>Your mail app opened without the file: attach the one Explorer shows.</source>
-        <translation>Seu app de e-mail abriu sem o arquivo: anexe o que o Explorador mostra.</translation>
-    </message>
-    <message>
         <source>Verified</source>
         <translation>Verificado</translation>
     </message>
@@ -2068,14 +2060,6 @@
         <translation>Host %1: %2</translation>
     </message>
     <message>
-        <source>The attached file holds the app and Windows versions, this PC&apos;s model, the controller database&apos;s state, each controller&apos;s identity, last write and test results, each host&apos;s kind and link state, and this run&apos;s event log; it never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your hosts.</source>
-        <translation>O arquivo anexado contém as versões do app e do Windows, o modelo deste PC, o estado do banco de dados de controles, a identidade, a última gravação e os resultados de teste de cada controle, o tipo e o estado da conexão de cada host e o registro de eventos desta execução; ele nunca contém chaves de pareamento, impressões digitais de certificados, endereços IP, nomes de redes Wi-Fi nem os nomes dos seus hosts.</translation>
-    </message>
-    <message>
-        <source>The diagnostics file could not be written, or a mail from the last one is still open.</source>
-        <translation>Não foi possível gravar o arquivo de diagnóstico, ou um e-mail da vez anterior ainda está aberto.</translation>
-    </message>
-    <message>
         <source>Diagnostics saved. Explorer shows the file.</source>
         <translation>Diagnóstico salvo. O Explorador mostra o arquivo.</translation>
     </message>
@@ -2100,16 +2084,24 @@
         <translation>Enviar ao suporte</translation>
     </message>
     <message>
-        <source>Email diagnostics saves a file of what this page shows and opens your own mail app addressed to support@tinkernorth.com, with the file attached. Nothing is sent until you press Send.</source>
-        <translation>Enviar diagnóstico por e-mail salva um arquivo com o que esta página mostra e abre o seu próprio app de e-mail endereçado a support@tinkernorth.com, com o arquivo anexado. Nada é enviado até você clicar em Enviar.</translation>
-    </message>
-    <message>
-        <source>Email diagnostics</source>
-        <translation>Enviar diagnóstico por e-mail</translation>
-    </message>
-    <message>
         <source>Save diagnostics</source>
         <translation>Salvar diagnóstico</translation>
+    </message>
+    <message>
+        <source>The attached file holds this page and its log, each controller&apos;s input and output counts, Dish&apos;s own view of each session and what each Satellite says about it; it never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your PCs and devices.</source>
+        <translation>O arquivo anexado contém esta página e seu registro, os contadores de entrada e saída de cada controle, a visão do próprio Dish de cada sessão e o que cada Satélite diz sobre ela; ele nunca contém chaves de pareamento, impressões digitais de certificados, endereços IP, nomes de redes Wi-Fi nem os nomes dos seus PCs e dispositivos.</translation>
+    </message>
+    <message>
+        <source>Ask a question</source>
+        <translation>Fazer uma pergunta</translation>
+    </message>
+    <message>
+        <source>Report a problem</source>
+        <translation>Relatar um problema</translation>
+    </message>
+    <message>
+        <source>Report a problem writes a file of what this page shows and what each Satellite says about its side, and opens your own mail app addressed to support@tinkernorth.com with the file attached. Nothing is sent until you click Send.</source>
+        <translation>Relatar um problema grava um arquivo com o que esta página mostra e o que cada Satélite diz sobre o lado dele, e abre seu próprio app de e-mail endereçado a support@tinkernorth.com com o arquivo anexado. Nada é enviado até você clicar em Enviar.</translation>
     </message>
 </context>
 <context>
@@ -3885,6 +3877,121 @@
     <message>
         <source>This satellite&apos;s security identity changed. If it was reinstalled, forget it here and pair again.</source>
         <translation>A identidade de segurança deste satélite mudou. Se ele foi reinstalado, esqueça-o aqui e pareie de novo.</translation>
+    </message>
+</context>
+<context>
+    <name>ReportProblemPage</name>
+    <message>
+        <source>Ask a question</source>
+        <translation>Fazer uma pergunta</translation>
+    </message>
+    <message>
+        <source>Report a problem</source>
+        <translation>Relatar um problema</translation>
+    </message>
+    <message>
+        <source>Controller not recognised</source>
+        <translation>Controle não reconhecido</translation>
+    </message>
+    <message>
+        <source>No rumble or feedback</source>
+        <translation>Sem vibração ou resposta</translation>
+    </message>
+    <message>
+        <source>Connection or latency</source>
+        <translation>Conexão ou latência</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation>Áudio</translation>
+    </message>
+    <message>
+        <source>Something else</source>
+        <translation>Outra coisa</translation>
+    </message>
+    <message>
+        <source>A question</source>
+        <translation>Uma pergunta</translation>
+    </message>
+    <message>
+        <source>Your mail app has the message. Nothing is sent until you click Send.</source>
+        <translation>Seu app de e-mail está com a mensagem. Nada é enviado até você clicar em Enviar.</translation>
+    </message>
+    <message>
+        <source>Your mail app opened without the file: attach the one Explorer shows.</source>
+        <translation>Seu app de e-mail abriu sem o arquivo: anexe o que o Explorador mostra.</translation>
+    </message>
+    <message>
+        <source>The diagnostics file could not be written, or a mail from the last one is still open.</source>
+        <translation>Não foi possível gravar o arquivo de diagnóstico, ou um e-mail da vez anterior ainda está aberto.</translation>
+    </message>
+    <message>
+        <source>Ask us anything about Dish. Your question goes to support@tinkernorth.com from your own mail app, with a file of what Dish sees so we can answer for your setup.</source>
+        <translation>Pergunte o que quiser sobre o Dish. Sua pergunta vai para support@tinkernorth.com pelo seu próprio app de e-mail, com um arquivo do que o Dish vê para respondermos de acordo com a sua configuração.</translation>
+    </message>
+    <message>
+        <source>Tell us what went wrong. Dish writes a file of what it sees and opens your own mail app addressed to support@tinkernorth.com, with the file attached.</source>
+        <translation>Conte o que deu errado. O Dish grava um arquivo do que vê e abre seu próprio app de e-mail endereçado a support@tinkernorth.com, com o arquivo anexado.</translation>
+    </message>
+    <message>
+        <source>Category</source>
+        <translation>Categoria</translation>
+    </message>
+    <message>
+        <source>What happened, and what did you expect?</source>
+        <translation>O que aconteceu e o que você esperava?</translation>
+    </message>
+    <message>
+        <source>Controller</source>
+        <translation>Controle</translation>
+    </message>
+    <message>
+        <source>No particular controller</source>
+        <translation>Nenhum controle específico</translation>
+    </message>
+    <message>
+        <source>What the file holds</source>
+        <translation>O que o arquivo contém</translation>
+    </message>
+    <message>
+        <source>Your words and the category you picked.</source>
+        <translation>Suas palavras e a categoria que você escolheu.</translation>
+    </message>
+    <message>
+        <source>Dish&apos;s version, this PC&apos;s model and Windows version, and its battery and battery saver state.</source>
+        <translation>A versão do Dish, o modelo e a versão do Windows deste PC, e o estado da bateria e da economia de bateria.</translation>
+    </message>
+    <message>
+        <source>Each controller&apos;s identity, the path Dish reads it on, and what went in and out of it, as counts and last values.</source>
+        <translation>A identidade de cada controle, o caminho pelo qual o Dish o lê e o que entrou e saiu dele, como contagens e últimos valores.</translation>
+    </message>
+    <message>
+        <source>Each host&apos;s kind, version and link state, Dish&apos;s own view of each session, and what each Satellite says about it.</source>
+        <translation>O tipo, a versão e o estado da conexão de cada host, a visão do próprio Dish de cada sessão e o que cada Satélite diz sobre ela.</translation>
+    </message>
+    <message>
+        <source>The controller database&apos;s state and this run&apos;s event log.</source>
+        <translation>O estado do banco de dados de controles e o registro de eventos desta execução.</translation>
+    </message>
+    <message>
+        <source>It never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your PCs and devices. Nothing is sent until you click Send in your mail app.</source>
+        <translation>Ele nunca contém chaves de pareamento, impressões digitais de certificados, endereços IP, nomes de redes Wi-Fi nem os nomes dos seus PCs e dispositivos. Nada é enviado até você clicar em Enviar no seu app de e-mail.</translation>
+    </message>
+    <message>
+        <source>Asking each Satellite for its side of the session…</source>
+        <translation>Perguntando a cada Satélite sobre o lado dele da sessão…</translation>
+    </message>
+    <message>
+        <source>Continue in your mail app</source>
+        <translation>Continuar no seu app de e-mail</translation>
+    </message>
+    <message>
+        <source>Hide file</source>
+        <translation>Ocultar arquivo</translation>
+    </message>
+    <message>
+        <source>Preview file</source>
+        <translation>Visualizar arquivo</translation>
     </message>
 </context>
 <context>
