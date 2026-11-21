@@ -210,6 +210,7 @@ set(DISH_TEST_SOURCES
     test_usb_hid_layout_orders.cpp
     test_usb_twin_dedup.cpp
     test_hid_transport.cpp
+    test_win_usb_topology.cpp
     test_catalog_prewarm.cpp
     test_onboarding_store.cpp
     test_license_manifest.cpp

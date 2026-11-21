@@ -65,6 +65,7 @@ class WinHidGateway : public UsbDeviceGateway {
     std::unique_ptr<HidReportWriter> openReportWriter(int syntheticId) override;
     bool setPadMicMuted(int syntheticId, bool muted) override;
     bool setTrackpadPick(int syntheticId, input::usbparse::TrackpadPick pick) override;
+    UsbHardwareReading readHardware(const UsbDeviceInfo& device) override;
 
   private:
     // The HidP-driven field map for GENERIC-HID pads, built once at claim time

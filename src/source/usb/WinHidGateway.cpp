@@ -8,6 +8,7 @@
 #include "core/input/UsbOutputReports.h"
 #include "core/input/UsbReportParsers.h"
 #include "source/system/ThreadPriority.h"
+#include "source/usb/WinUsbHardware.h"
 
 // <windows.h> first (NOMINMAX / WIN32_LEAN_AND_MEAN come from the build defs),
 // then the HID, SetupAPI and device-tree headers, which depend on the base Win32 types.
@@ -240,6 +241,7 @@ UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const std::strin
     info.manufacturer = manufacturerName(h);
     info.inputReportBytes = caps.InputReportByteLength;
     info.outputReportBytes = caps.OutputReportByteLength;
+    info.bcdDevice = attrs.VersionNumber;
     // Derived from the per-model decoder family so it tracks the parser selection rather than a
     // hard-coded VID list.
     info.hasImu = input::usbparse::parserHasImu(
@@ -917,6 +919,11 @@ bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
     // touching the edge tracker could swallow or double a real press racing in.
     it->second->micMute.muted.store(muted, std::memory_order_relaxed);
     return true;
+}
+
+// The device node enumerate() named, read through the device tree and the pad's hub.
+UsbHardwareReading WinHidGateway::readHardware(const UsbDeviceInfo& device) {
+    return readUsbHardware(device.devicePath);
 }
 
 // Null when nothing claims the id. The claim map's lock is released before the caller writes: a

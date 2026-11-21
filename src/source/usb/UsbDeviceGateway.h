@@ -15,6 +15,7 @@
 #include "core/input/UsbReportParsers.h"
 #include "core/reducer/DirectClaimFailure.h"
 #include "source/usb/HidReportWriter.h"
+#include "source/usb/UsbHardwareReading.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -48,6 +49,9 @@ struct UsbDeviceInfo {
     std::string manufacturer;
     int inputReportBytes = 0;
     int outputReportBytes = 0;
+    // bcdDevice, the device's release number, as the HID class driver reports it
+    // (HIDD_ATTRIBUTES::VersionNumber).
+    int bcdDevice = 0;
 
     int vpKey() const { return (vendorId << 16) | (productId & 0xFFFF); }
 };
@@ -231,6 +235,11 @@ class UsbDeviceGateway {
     // The claim's OUT reports for its output worker. The default writes through
     // writeOutputReport; a gateway with the handle at hand returns a writer on it.
     virtual std::unique_ptr<HidReportWriter> openReportWriter(int syntheticId);
+
+    // The pad's raw hardware facts: its interfaces and, through its hub, its own descriptors.
+    // Several control transfers, so never on the read, write or scan paths. The default reads
+    // nothing, for fakes and for a gateway that cannot.
+    virtual UsbHardwareReading readHardware(const UsbDeviceInfo& /*device*/) { return {}; }
 };
 
 // writeOutputReport, as a writer.

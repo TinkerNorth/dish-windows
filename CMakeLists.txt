@@ -438,6 +438,12 @@ set(DISH_CORE_SOURCES
     src/source/usb/UsbDeviceGateway.h
     src/source/usb/WinHidGateway.h
     src/source/usb/WinHidGateway.cpp
+    # The pad's raw hardware through its hub (USBView's method): the topology and the request in
+    # core, the device-tree walk and the hub's IOCTL at the source edge.
+    src/core/input/WinUsbTopology.h
+    src/source/usb/UsbHardwareReading.h
+    src/source/usb/WinUsbHardware.h
+    src/source/usb/WinUsbHardware.cpp
     src/source/usb/UsbGamepadManager.h
     src/source/usb/UsbGamepadManager.cpp
     src/source/usb/HidReportWriter.h
