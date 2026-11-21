@@ -146,6 +146,7 @@ project it so the type picker can tell loading from empty from failed.
 | `machineModel` | `string` | CONSTANT | This PC's model as the diagnostics file names it (firmware manufacturer and product), `Unknown PC` when the firmware names none. |
 | `osVersion` | `string` | CONSTANT | The Windows release and kernel version, `Windows 11 Version 24H2 (10.0.26100)`. |
 | `reportReady` | `bool` | `reportReadyChanged` | Every live Satellite has answered the snapshot request `prepareReport()` sent, or let it time out; until then "Preview file" and "Continue in your mail app" wait. |
+| `controllerCapture` | `QVariantMap` | `controllerCaptureChanged` | "Capture this controller" for the pad last asked for: `{ slotId, state }`, `state` one of `idle`, `capturing`, `captured`, `failed`. |
 | `donateSponsorsUrl` | `string` | CONSTANT | GitHub Sponsors URL. |
 | `donateKofiUrl` | `string` | CONSTANT | Ko-fi URL. |
 | `donateBmacUrl` | `string` | CONSTANT | Buy Me a Coffee URL. |
@@ -220,6 +221,7 @@ Republished at the inspector's 33 ms poll while an inspection is armed (see
 | `controllerDbChanged` | | `controllerDb` or `controllerDbChecksEnabled` moved. |
 | `testOutcomesChanged` | | An answer to "Did it work?" was recorded. Re-pull `lastTestOutcome()` and `controllerRecordFacts()`. |
 | `reportReadyChanged` | | `reportReady` moved. |
+| `controllerCaptureChanged` | | `controllerCapture` moved. |
 | `diagnosticsMailHandedOff` | `bool viaMailClient` | After `sendReport`: `true` when the mail client took the message, `false` when the `mailto:` fallback opened and Explorer shows the file to attach. |
 | `inputSnapshotChanged` | | `inputSnapshot` moved. |
 | `stickTestChanged` | | `stickTest` moved. |
@@ -465,6 +467,7 @@ every ack answer reads `unknown` until then.
 | `diagnosticsControllers()` | One row per controller for the mail's summary and the report's controller picker: `{ slotId, name, recordId, chip, usbDirect, bluetooth }`, `recordId` and `chip` `""` for a pad no record lists. |
 | `saveDiagnostics()` | Writes `dish-diagnostics-dish-windows-<yyyyMMdd-HHmmss>.json` under `%LOCALAPPDATA%\Dish\diagnostics` and shows it in Explorer. Returns the path, `""` when it could not be written. |
 | `prepareReport()` | "Report a problem" / "Ask a question" opened: asks every live Satellite for its own snapshot of the session (`GET /api/connections/{id}/diagnostics`, two seconds at most) and reads the PC's power facts. `reportReady` turns `true` when every answer is in. |
+| `captureController(slotId)` | "Capture this controller" for a Direct pad: arms its claim's read loop to keep its next twenty input reports, then polls ten times a second for two seconds at most; the pad's USB descriptors as its hub returned them, its maker and product strings, its report descriptor where the pad gave it and the reports it sent are kept for the run and written, as `capture` in format `usb-descriptors-v1`, only into a report whose `slotId` is this pad. `false` for a pad with no live Direct claim, or while a capture runs. |
 | `reportPreview(category, text, slotId)` | The file as `sendReport` would write it, as text. `category` is `notRecognised` / `noFeedback` / `connection` / `audio` / `other` / `question`, `text` the person's words, `slotId` the controller it concerns or `""`. |
 | `sendReport(category, categoryWords, text, slotId, summary)` | Writes the file with the report in it, then opens the person's mail app addressed to `support@tinkernorth.com`: subject `Dish support: <categoryWords> · Dish for Windows <version> on <model>`, body `text`, a blank line, then `summary` (the Diagnostics page's summary in the person's language). `false` when the file could not be written or a compose window from the last mail is still open; `diagnosticsMailHandedOff` follows. |
 | `startInputInspection(slotId)` | Arm the inspector on one slot: `inputSnapshot` and `stickTest` republish until `stopInputInspection()`. Arming another slot re-points it and drops the last slot's stick test. |

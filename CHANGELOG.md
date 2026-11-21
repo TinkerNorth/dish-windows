@@ -45,9 +45,30 @@ share a version number.
   guessed, Flagged), and any known issue for this transport on this PC model,
   with its title and text.
 - **Hardware check at attach.** On the Direct path the record's `expect` is
-  compared with what Windows' HID stack shows (an output report length above
-  zero stands for the OUT endpoint, which HID never shows), and each mismatch
-  is a Diagnostics row and a line in the diagnostics file.
+  compared with the claimed interface's endpoints, as the configuration
+  descriptor the pad's hub returns lists them (where the hub refuses, the HID
+  report lengths stand for them), and each mismatch is a Diagnostics row and a
+  line in the diagnostics file.
+- **A served record drives how a Direct pad decodes.** A pad's model is
+  resolved once when it attaches, from the compiled tables first, then its
+  record in the controller list in force, then the vendor's guess, and pinned
+  for as long as it stays: the capability solve, the claim, its read loop, its
+  output worker and the health judgement all read that one model, and a list
+  that lands while the pad is in use applies at its next attach. A served row
+  whose family or operation this build lacks shows its name and issues and
+  leaves the bundled row in force; a flagged one gives way to a live bundled
+  row.
+- **The pad's own descriptors in the file.** For a Direct pad Dish reads, once
+  per attach and through its USB hub, its device descriptor and every
+  configuration, and the file's `hardware` gains `bcdDevice`, every interface
+  with its endpoints, the claimed interface's endpoints and `descriptorSha256`,
+  the SHA-256 of those descriptors, the same name dish-android and dish-linux
+  give the same pad. The serial number is never read.
+- **Capture this controller.** On Report a problem, for a controller Dish reads
+  directly: its USB descriptors, its maker and product strings, its HID report
+  descriptor where the pad gives it, and twenty input reports taken while it
+  lies still, written as `capture` (`usb-descriptors-v1`) only into a report
+  about that controller.
 - **"Last write" on a Direct controller's card**: the route, the report id,
   whether the pad took it and the Windows error code when it did not, recorded
   by the claim's output worker without a lock or an allocation.
@@ -116,6 +137,16 @@ share a version number.
 
 ### Changed
 
+- **The bundled controller list now drives Direct.** Thirteen third-party
+  DualShock 4 pads the list marks verified and `auto` (Hori Real Arcade Pro 4,
+  Real Arcade Pro 4 V and Fighting Commander, Hori Wired Mini, Nacon Revolution
+  Pro, Pro v2, Infinite and Daija, Razer Panthera, Raiju, Raiju Tournament and
+  Raiju Ultimate, Armor3 Titan) now go Direct by themselves and decode as a
+  DualShock 4, where they waited for a pick and decoded as generic HID.
+  `054c:05c5`, imported and `optIn`, now waits for a pick where Sony's fast
+  lane claimed it. Thirty-four more imported `optIn` pads of the DualShock 4
+  and DualSense families still wait for a pick, and once picked decode with
+  their family instead of as generic HID. A record outranks the vendor's guess.
 - **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
   problem" (2.6), which describes your own words in the report and the
   Satellite connection snapshot, what each holds and never holds; its
@@ -124,12 +155,16 @@ share a version number.
 ### Notes
 
 - The compiled Direct tables (`kKnownModels`, the fast-lane vendors) stay, and
-  a test now requires every row to match its database record. Served records
-  are classified for ids those tables lack, but the claim still takes its
-  parser from the compiled tables in this release (`tests/PARITY.md`).
+  a test requires every row to match its database record; they answer first,
+  and a served record speaks for the ids they lack (`tests/PARITY.md`).
 - Hot path: the session counts each message kind it sends and receives, and
   the router counts each pad's output lanes, with relaxed atomics only; no
-  thread on the input, USB, receive or mic path takes a new lock.
+  thread on the input, USB, receive or mic path takes a new lock. The raw-HID
+  read loop loads one relaxed word per report where it loaded its running flag,
+  which also says whether a capture is armed, and while one is it copies at
+  most 64 bytes into a slot fixed with the claim, for twenty reports. The SDL
+  thread reads each pad's family pinned at attach instead of looking it up per
+  output command.
 - No wire change. The snapshot route is a new REST call to Satellite 2.3.0.
 
 ## [2.7.1] - 2026-11-19

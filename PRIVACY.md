@@ -382,8 +382,11 @@ and the time and result of its last check; for each controller, the database
 record it matched, that record's verification state, its transport (USB or
 Bluetooth) and path (Direct or the system's), whether a Bluetooth link is
 classic or low energy, its USB vendor and product ids, the product and
-manufacturer strings it reports, the HID report lengths Dish read off it, any
-mismatch between the record and what Dish saw, how many input reports it sent
+manufacturer strings it reports, the HID report lengths Dish read off it, and
+for a controller Dish reads directly its release number, its USB interfaces
+and their endpoints and the SHA-256 checksum of its USB descriptors, which Dish
+asks the controller's USB hub for once when it is plugged in, any mismatch
+between the record and what Dish saw, how many input reports it sent
 and at what rate, the last one (the buttons, sticks and triggers at that
 moment), for each kind of output (rumble, light bar, player lights, trigger
 effects, mute lamp) how many reached it, where they went and the last value
@@ -398,11 +401,21 @@ trip times, and how many messages of each kind went each way) and the
 snapshot above; and this run's event log of hosts and controllers appearing,
 changing state, binding and leaving, with every host named only by its alias.
 
+**A controller you capture.** For a controller Dish reads directly, the page
+offers *Capture this controller*: put the controller down, leave it untouched,
+and Dish keeps its next twenty input reports with the time each arrived. The
+file then also holds, for that controller only and only in a report that names
+it, its USB device and configuration descriptors, its maker's and product's
+names as it reports them, its HID report descriptor where the controller gives
+it, and those twenty reports. The capture stays in memory until the app quits
+and leaves the PC only inside a report you send.
+
 **What it never holds.** Pairing keys, pairing secrets, certificate
 fingerprints, IP addresses, Bluetooth addresses, Wi-Fi names, the names of
-your hosts, PCs and devices, this install's `deviceId`, a stream of your
-controller input (only the counts and the last report), and anything from a
-controller's microphone or speaker.
+your hosts, PCs and devices, this install's `deviceId`, a controller's serial
+number, a stream of your controller input (only the counts and the last
+report, and the twenty reports at rest of a controller you captured), and
+anything from a controller's microphone or speaker.
 
 ---
 
