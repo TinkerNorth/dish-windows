@@ -4,7 +4,7 @@
 # option of FetchContent_Declare, which keeps /W4 /WX off Catch2's headers.
 cmake_minimum_required(VERSION 3.25)
 project(Dish
-    VERSION 2.7.1
+    VERSION 2.8.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
     # C is enabled for the vendored ENet fork (Moonlight control stream), whose
     # backend is pure C; everything first-party is C++.
@@ -202,6 +202,71 @@ set(DISH_CORE_SOURCES
     src/core/update/UpdateVersion.cpp
     src/core/update/UpdateManifest.h
     src/core/update/UpdateManifest.cpp
+    # The fleet's controller database (dish-website docs/controller-db.md): the records, the
+    # index, the strings fallback and every decision over them in core; the Qt JSON reader, the
+    # store and the network gateway at the source edge; the check's sequencing in composer.
+    src/core/controllerdb/ControllerRecord.h
+    src/core/controllerdb/Vocabulary.h
+    src/core/controllerdb/ControllerCatalog.h
+    src/core/controllerdb/ControllerCatalog.cpp
+    src/core/controllerdb/DirectModel.h
+    src/core/controllerdb/ExpectCheck.h
+    src/core/controllerdb/IssueMatch.h
+    src/core/controllerdb/DbFetch.h
+    src/core/controllerdb/AttachedRecords.h
+    # The third cut: a pad's model resolved once at attach and pinned (served rows drive Direct),
+    # its descriptors parsed, and the capture's twenty reports at rest.
+    src/core/controllerdb/PadModel.h
+    src/core/controllerdb/PadModel.cpp
+    src/core/diagnostics/UsbDescriptors.h
+    src/core/diagnostics/UsbDescriptors.cpp
+    src/core/diagnostics/ReportCapture.h
+    src/core/diagnostics/ReportCapture.cpp
+    src/core/input/BluetoothServices.h
+    src/source/controllerdb/ControllerDbJson.h
+    src/source/controllerdb/ControllerDbJson.cpp
+    src/source/controllerdb/ControllerDbStore.h
+    src/source/controllerdb/ControllerDbStore.cpp
+    src/source/controllerdb/ControllerDbGateway.h
+    src/source/controllerdb/ControllerDbGateway.cpp
+    src/source/store/ControllerDbPreferenceStore.h
+    src/composer/ControllerDbCoordinator.h
+    src/composer/ControllerDbCoordinator.cpp
+    # Diagnostics at every level and the bundle by email (docs/diagnostics-bundle.md): the
+    # write verdict, the test outcomes, the mail decisions and the JSON writer in core, the
+    # bundle builder in composer, the MAPI hand-off and the machine's identity at the system edge.
+    src/core/diagnostics/WriteVerdict.h
+    src/core/diagnostics/PadTestOutcomes.h
+    src/core/diagnostics/MailHandoff.h
+    src/core/diagnostics/HostIdentity.h
+    src/core/diagnostics/Json.h
+    src/core/diagnostics/Json.cpp
+    src/source/store/PadTestOutcomeStore.h
+    src/composer/DiagnosticsBundle.h
+    src/composer/DiagnosticsBundle.cpp
+    src/source/system/MachineIdentity.h
+    src/source/system/MachineIdentity.cpp
+    src/source/system/DiagnosticsHandoff.h
+    src/source/system/DiagnosticsHandoff.cpp
+    # The support report's second cut (docs/diagnostics-bundle.md, "Second cut"): the report's
+    # category, the host-snapshot decisions, the wire and lane counters and the PC's power facts in
+    # core, the snapshot collector in composer, the snapshot route's reader and the power-status
+    # read at the source edge.
+    src/core/diagnostics/ReportForm.h
+    src/core/diagnostics/HostSnapshot.h
+    src/core/diagnostics/WireCounters.h
+    src/core/diagnostics/PadLanes.h
+    src/core/diagnostics/DeviceFacts.h
+    src/composer/HostSnapshotCollector.h
+    src/composer/HostSnapshotCollector.cpp
+    src/source/http/ConnectionSnapshotGateway.h
+    src/source/http/ConnectionSnapshotGateway.cpp
+    src/source/system/PowerStatus.h
+    src/source/system/PowerStatus.cpp
+    # The third cut: usbHost measured (SetupAPI's host controller interfaces, decided in core).
+    src/core/diagnostics/UsbHost.h
+    src/source/system/UsbHostProbe.h
+    src/source/system/UsbHostProbe.cpp
     src/core/reducer/RestOutcome.h
     src/core/reducer/Backoff.h
     src/core/reducer/KeepAwake.h
@@ -382,6 +447,13 @@ set(DISH_CORE_SOURCES
     src/source/usb/UsbDeviceGateway.h
     src/source/usb/WinHidGateway.h
     src/source/usb/WinHidGateway.cpp
+    # The pad's raw hardware through its hub (USBView's method): the topology and the request in
+    # core, the device-tree walk and the hub's IOCTL at the source edge.
+    src/core/input/WinUsbTopology.h
+    src/source/usb/UsbHardwareReading.h
+    src/source/usb/UsbHardwareReading.cpp
+    src/source/usb/WinUsbHardware.h
+    src/source/usb/WinUsbHardware.cpp
     src/source/usb/UsbGamepadManager.h
     src/source/usb/UsbGamepadManager.cpp
     src/source/usb/HidReportWriter.h
@@ -644,6 +716,8 @@ target_link_libraries(dish_core
         # window, menu and cursor calls.
         shell32
         user32
+        # DiagnosticsHandoff: the apartment Simple MAPI is called from (CoInitializeEx).
+        ole32
     PRIVATE
         dish_warnings
         dish_strict)
@@ -766,6 +840,7 @@ qt_add_qml_module(Dish
         src/qml/pages/ConfigureBindingPage.qml
         src/qml/pages/DiagnosticsPage.qml
         src/qml/pages/InputInspectorPage.qml
+        src/qml/pages/ReportProblemPage.qml
         src/qml/pages/PairingDialog.qml
         src/qml/onboarding/OnboardingFlow.qml
         src/qml/onboarding/WelcomeScreen.qml

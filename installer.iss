@@ -40,6 +40,8 @@
 ;
 ;  Switches beyond Inno's standard set (/VERYSILENT, /DIR=, /LOG=, ...):
 ;    /OTA    boot-handoff apply; wait for the app to exit, then own relaunch
+;    /UPDATECHECK=yes|no, /CRASHREPORTS=yes|no, /CONTROLLERUPDATES=yes|no
+;            the Privacy page's three answers on a run that shows no page
 ; ============================================================================
 
 #ifndef MyAppVersion
@@ -140,38 +142,43 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 [CustomMessages]
 english.PrivacyTitle=Privacy
 english.PrivacySubtitle=What leaves this PC, and your choices
-english.PrivacyDescription=Dish talks only to the host you pair with, on your own network. Two things can leave this PC, and you can turn both off: an update check against GitHub (about every four hours while Dish runs) and, when Dish crashes, one crash report to Sentry (a stack trace and version numbers, nothing else).
+english.PrivacyDescription=Dish talks only to the host you pair with, on your own network. Three things can leave this PC, and you can turn each one off: an update check against GitHub (about every four hours while Dish runs); when Dish crashes, one crash report to Sentry (a stack trace, a minidump of the crashed process and version numbers); and a check for a newer controller list against dish.tinkernorth.com, hosted by Amazon Web Services (about ten seconds after launch, then every six hours). Report a problem never sends anything by itself: you send the mail from your own mail app.
 english.PrivacyUpdateCheck=Check for updates automatically (contacts GitHub)
 english.PrivacyCrashReports=Send a crash report when Dish crashes (Sentry)
-english.PrivacyKept=Your existing choices are kept. Change them at any time in Settings: Check for updates automatically, and Share crash reports.
+english.PrivacyControllerUpdates=Check for controller updates automatically (contacts dish.tinkernorth.com)
+english.PrivacyKept=Your existing choices are kept. Change them at any time in Settings: Check for updates automatically, Share crash reports, and Check for controller updates automatically.
 english.PrivacyPolicyLink=Full privacy policy:
 german.PrivacyTitle=Datenschutz
 german.PrivacySubtitle=Was diesen PC verlässt, und was Sie entscheiden
-german.PrivacyDescription=Dish spricht nur mit dem Host, den Sie in Ihrem eigenen Netzwerk koppeln. Zwei Dinge können diesen PC verlassen, und beide lassen sich abschalten: eine Update-Prüfung bei GitHub (etwa alle vier Stunden, solange Dish läuft) und, wenn Dish abstürzt, ein Absturzbericht an Sentry (nur Stacktrace und Versionsnummern, sonst nichts).
+german.PrivacyDescription=Dish spricht nur mit dem Host, den Sie in Ihrem eigenen Netzwerk koppeln. Drei Dinge können diesen PC verlassen, und jedes lässt sich abschalten: eine Update-Prüfung bei GitHub (etwa alle vier Stunden, solange Dish läuft); wenn Dish abstürzt, ein Absturzbericht an Sentry (ein Stacktrace, ein Minidump des abgestürzten Prozesses und Versionsnummern); und eine Prüfung bei dish.tinkernorth.com auf eine neuere Controller-Liste, gehostet von Amazon Web Services (etwa zehn Sekunden nach dem Start, dann alle sechs Stunden). Ein Problem melden sendet nie etwas von selbst: Sie senden die Mail aus Ihrer eigenen Mail-App.
 german.PrivacyUpdateCheck=Automatisch nach Updates suchen (kontaktiert GitHub)
 german.PrivacyCrashReports=Bei einem Absturz einen Absturzbericht senden (Sentry)
-german.PrivacyKept=Ihre bisherigen Einstellungen bleiben erhalten. Sie können sie jederzeit in den Einstellungen ändern: Automatisch nach Updates suchen, und Absturzberichte senden.
+german.PrivacyControllerUpdates=Automatisch nach Controller-Updates suchen (kontaktiert dish.tinkernorth.com)
+german.PrivacyKept=Ihre bisherigen Einstellungen bleiben erhalten. Sie können sie jederzeit in den Einstellungen ändern: Automatisch nach Updates suchen, Absturzberichte senden und Automatisch nach Controller-Updates suchen.
 german.PrivacyPolicyLink=Vollständige Datenschutzerklärung:
 spanish.PrivacyTitle=Privacidad
 spanish.PrivacySubtitle=Qué sale de este PC, y qué decide usted
-spanish.PrivacyDescription=Dish solo habla con el host que usted empareja, en su propia red. Dos cosas pueden salir de este PC, y ambas se pueden desactivar: una comprobación de actualizaciones en GitHub (cada cuatro horas aproximadamente mientras Dish está abierto) y, si Dish falla, un informe de fallo a Sentry (solo la traza de pila y los números de versión, nada más).
+spanish.PrivacyDescription=Dish solo habla con el host que usted empareja, en su propia red. Tres cosas pueden salir de este PC, y cada una se puede desactivar: una comprobación de actualizaciones en GitHub (cada cuatro horas aproximadamente mientras Dish está abierto); si Dish falla, un informe de fallo a Sentry (una traza de pila, un minivolcado del proceso que falló y los números de versión); y una consulta a dish.tinkernorth.com, alojado en Amazon Web Services, por una lista de mandos más reciente (unos diez segundos después de arrancar y luego cada seis horas). Informar de un problema nunca envía nada por sí solo: usted envía el correo desde su propia app de correo.
 spanish.PrivacyUpdateCheck=Buscar actualizaciones automáticamente (contacta con GitHub)
 spanish.PrivacyCrashReports=Enviar un informe de fallo cuando Dish falle (Sentry)
-spanish.PrivacyKept=Se conservan sus opciones actuales. Puede cambiarlas en cualquier momento en Ajustes: Buscar actualizaciones automáticamente, y Compartir informes de fallos.
+spanish.PrivacyControllerUpdates=Buscar actualizaciones de mandos automáticamente (contacta con dish.tinkernorth.com)
+spanish.PrivacyKept=Se conservan sus opciones actuales. Puede cambiarlas en cualquier momento en Ajustes: Buscar actualizaciones automáticamente, Compartir informes de fallos y Buscar actualizaciones de mandos automáticamente.
 spanish.PrivacyPolicyLink=Política de privacidad completa:
 french.PrivacyTitle=Confidentialité
 french.PrivacySubtitle=Ce qui quitte ce PC, et vos choix
-french.PrivacyDescription=Dish ne communique qu'avec l'hôte que vous associez, sur votre propre réseau. Deux choses peuvent quitter ce PC, et vous pouvez désactiver les deux : une vérification des mises à jour auprès de GitHub (environ toutes les quatre heures tant que Dish est ouvert) et, si Dish plante, un rapport de plantage envoyé à Sentry (uniquement la pile d'appels et les numéros de version, rien d'autre).
+french.PrivacyDescription=Dish ne communique qu'avec l'hôte que vous associez, sur votre propre réseau. Trois choses peuvent quitter ce PC, et vous pouvez désactiver chacune d'elles : une vérification des mises à jour auprès de GitHub (environ toutes les quatre heures tant que Dish est ouvert) ; si Dish plante, un rapport de plantage envoyé à Sentry (la pile d'appels, un minidump du processus planté et les numéros de version) ; et une recherche d'une liste de manettes plus récente auprès de dish.tinkernorth.com, hébergé par Amazon Web Services (environ dix secondes après le démarrage, puis toutes les six heures). Signaler un problème n'envoie jamais rien de lui-même : c'est vous qui envoyez le message depuis votre propre application de messagerie.
 french.PrivacyUpdateCheck=Rechercher les mises à jour automatiquement (contacte GitHub)
 french.PrivacyCrashReports=Envoyer un rapport de plantage quand Dish plante (Sentry)
-french.PrivacyKept=Vos choix actuels sont conservés. Vous pouvez les modifier à tout moment dans les Paramètres : Rechercher les mises à jour automatiquement, et Partager les rapports de plantage.
+french.PrivacyControllerUpdates=Rechercher les mises à jour des manettes automatiquement (contacte dish.tinkernorth.com)
+french.PrivacyKept=Vos choix actuels sont conservés. Vous pouvez les modifier à tout moment dans les Paramètres : Rechercher les mises à jour automatiquement, Partager les rapports de plantage et Rechercher les mises à jour des manettes automatiquement.
 french.PrivacyPolicyLink=Politique de confidentialité complète :
 brazilianportuguese.PrivacyTitle=Privacidade
 brazilianportuguese.PrivacySubtitle=O que sai deste PC, e o que você decide
-brazilianportuguese.PrivacyDescription=O Dish só fala com o host que você emparelha, na sua própria rede. Duas coisas podem sair deste PC, e ambas podem ser desativadas: uma verificação de atualizações no GitHub (cerca de a cada quatro horas enquanto o Dish está aberto) e, se o Dish travar, um relatório de falha para o Sentry (apenas o rastreamento de pilha e os números de versão, nada mais).
+brazilianportuguese.PrivacyDescription=O Dish só fala com o host que você emparelha, na sua própria rede. Três coisas podem sair deste PC, e cada uma pode ser desativada: uma verificação de atualizações no GitHub (cerca de a cada quatro horas enquanto o Dish está aberto); se o Dish travar, um relatório de falha para o Sentry (o rastreamento de pilha, um minidump do processo que travou e os números de versão); e uma consulta a dish.tinkernorth.com, hospedado na Amazon Web Services, em busca de uma lista de controles mais nova (cerca de dez segundos depois de iniciar e, depois, a cada seis horas). Relatar um problema nunca envia nada sozinho: é você quem envia o e-mail pelo seu próprio app de e-mail.
 brazilianportuguese.PrivacyUpdateCheck=Verificar atualizações automaticamente (contata o GitHub)
 brazilianportuguese.PrivacyCrashReports=Enviar um relatório de falha quando o Dish travar (Sentry)
-brazilianportuguese.PrivacyKept=Suas escolhas atuais são mantidas. Você pode alterá-las a qualquer momento em Configurações: Verificar atualizações automaticamente, e Compartilhar relatórios de falhas.
+brazilianportuguese.PrivacyControllerUpdates=Verificar atualizações de controles automaticamente (contata dish.tinkernorth.com)
+brazilianportuguese.PrivacyKept=Suas escolhas atuais são mantidas. Você pode alterá-las a qualquer momento em Configurações: Verificar atualizações automaticamente, Compartilhar relatórios de falhas e Verificar atualizações de controles automaticamente.
 brazilianportuguese.PrivacyPolicyLink=Política de privacidade completa:
 
 [Tasks]
@@ -193,6 +200,7 @@ Root: HKA; Subkey: "{#InstallDefaultsKey}"; Flags: deletekey; Check: WritesInsta
 Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: string; ValueName: "Stamp"; ValueData: "{code:InstallStamp}"; Flags: uninsdeletekey; Check: WritesInstallDefaults
 Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: dword; ValueName: "UpdateCheck"; ValueData: "{code:UpdateCheckValue}"; Check: WritesUpdateCheck
 Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: dword; ValueName: "CrashReports"; ValueData: "{code:CrashReportsValue}"; Check: WritesCrashReports
+Root: HKA; Subkey: "{#InstallDefaultsKey}"; ValueType: dword; ValueName: "ControllerUpdates"; ValueData: "{code:ControllerUpdatesValue}"; Check: WritesControllerUpdates
 
 [Run]
 ; Interactive installs offer a launch checkbox (the old wizard's default-on
@@ -273,7 +281,8 @@ end;
 function WritesInstallDefaults: Boolean;
 begin
   Result := (not WantsOTA) and
-    ((not UpgradeInstall) or SwitchGiven('UPDATECHECK') or SwitchGiven('CRASHREPORTS'));
+    ((not UpgradeInstall) or SwitchGiven('UPDATECHECK') or SwitchGiven('CRASHREPORTS') or
+     SwitchGiven('CONTROLLERUPDATES'));
 end;
 
 function WritesUpdateCheck: Boolean;
@@ -284,6 +293,11 @@ end;
 function WritesCrashReports: Boolean;
 begin
   Result := WritesInstallDefaults and ((not UpgradeInstall) or SwitchGiven('CRASHREPORTS'));
+end;
+
+function WritesControllerUpdates: Boolean;
+begin
+  Result := WritesInstallDefaults and ((not UpgradeInstall) or SwitchGiven('CONTROLLERUPDATES'));
 end;
 
 function DwordText(const Enabled: Boolean): String;
@@ -315,6 +329,14 @@ begin
     Result := DwordText(SwitchEnabled('CRASHREPORTS'));
 end;
 
+function ControllerUpdatesValue(Param: String): String;
+begin
+  if PrivacyChoicesOffered then
+    Result := DwordText(PrivacyPage.Values[2])
+  else
+    Result := DwordText(SwitchEnabled('CONTROLLERUPDATES'));
+end;
+
 procedure PrivacyLinkClick(Sender: TObject);
 var
   ErrorCode: Integer;
@@ -326,8 +348,10 @@ procedure AddPrivacyChoices;
 begin
   PrivacyPage.Add(CustomMessage('PrivacyUpdateCheck'));
   PrivacyPage.Add(CustomMessage('PrivacyCrashReports'));
+  PrivacyPage.Add(CustomMessage('PrivacyControllerUpdates'));
   PrivacyPage.Values[0] := SwitchEnabled('UPDATECHECK');
   PrivacyPage.Values[1] := SwitchEnabled('CRASHREPORTS');
+  PrivacyPage.Values[2] := SwitchEnabled('CONTROLLERUPDATES');
   PrivacyChoicesOffered := True;
 end;
 

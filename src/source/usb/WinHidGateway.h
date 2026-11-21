@@ -32,6 +32,8 @@
 
 #include "source/usb/UsbDeviceGateway.h"
 
+#include "core/controllerdb/PadModel.h"
+#include "core/diagnostics/ReportCapture.h"
 #include "core/input/UsbReportParsers.h"
 #include "core/thread/TrackedMutex.h"
 
@@ -56,7 +58,6 @@ class WinHidGateway : public UsbDeviceGateway {
     ClaimResult claim(const UsbDeviceInfo& device,
                       std::function<void(const UsbReport&)> onReport) override;
     void releaseClaim(int syntheticId) override;
-    bool isKnownFastLaneModel(int vendorId, int productId) const override;
     bool isClaimAlive(int syntheticId) const override;
     bool isPadLinked(int syntheticId) const override;
     std::int64_t completionCount(int syntheticId) const override;
@@ -65,6 +66,14 @@ class WinHidGateway : public UsbDeviceGateway {
     std::unique_ptr<HidReportWriter> openReportWriter(int syntheticId) override;
     bool setPadMicMuted(int syntheticId, bool muted) override;
     bool setTrackpadPick(int syntheticId, input::usbparse::TrackpadPick pick) override;
+    UsbHardwareReading readHardware(const UsbDeviceInfo& device) override;
+    bool armCapture(int syntheticId) override;
+    std::vector<diagnostics::CapturedReport> capturedReports(int syntheticId) const override;
+    // Before the first scan: what a pad's model is resolved through when it attaches. None
+    // resolves with no database.
+    void setModelResolver(const dish::controllerdb::PadModelResolver* resolver) {
+        resolver_ = resolver;
+    }
 
   private:
     // The HidP-driven field map for GENERIC-HID pads, built once at claim time
@@ -83,7 +92,14 @@ class WinHidGateway : public UsbDeviceGateway {
         std::string path;       // the HID device interface path.
         void* handle = nullptr; // HANDLE from CreateFile (opaque here).
         std::thread reader;     // the ReadFile loop.
-        std::atomic<bool> running{false};
+        // Whether the reader keeps reading, and whether a capture is armed: the one word it loads
+        // per report.
+        diagnostics::ReadLoopWord loop;
+        // Fixed with the claim, before anything can arm it.
+        diagnostics::ReportCapture capture;
+        // The collection's input reports carry no report id, so ReadFile's leading 0x00 is
+        // Windows', not the pad's.
+        bool idLessInput = false;
         // Cleared by the reader as it exits, whatever ended it.
         std::atomic<bool> alive{true};
         // Whether a controller is there: from the claim for a model's own pad, and for a
@@ -140,10 +156,15 @@ class WinHidGateway : public UsbDeviceGateway {
     static void controllerLeft(Claimed* c);
     static bool decodeOneReport(Claimed* c, const std::uint8_t* data, std::size_t len,
                                 input::usbparse::ParsedReport& parsed);
+    static void keepForCapture(Claimed* c, const std::uint8_t* data, std::size_t len);
 
     // The next synthetic id to hand out. Negative + decreasing, mirroring the
     // android synthetic-id space (so they never collide with positive SDL ids).
     std::atomic<int> nextSyntheticId_{-1000};
+    const dish::controllerdb::PadModelResolver* resolver_ = nullptr;
+    // enumerate()'s own, by each HID collection's interface path: the model its attach pinned,
+    // forgotten when a scan no longer lists the path, so a scan resolves only what is new.
+    dish::controllerdb::ModelPins pins_;
 
     mutable thread::TrackedMutex mtx_{"hid.claims"};
     std::map<int, std::unique_ptr<Claimed>> claimed_; // syntheticId -> claim.

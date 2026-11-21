@@ -55,6 +55,11 @@ translations/*.ts text
 *.cmake text
 CMakeLists.txt text
 
+# The controller database is vendored byte for byte from dish.tinkernorth.com and checked against
+# the SHA-256 in its own manifest at every load: a CRLF checkout would fail that check on every
+# Windows clone and ship an app that refuses its bundled copy. Never normalised.
+assets/controllers/** -text
+
 # Binaries: never normalise, never diff.
 *.ttf   binary
 *.otf   binary
@@ -83,5 +88,6 @@ translations/*.ts linguist-generated=true linguist-language=XML
 # this project's code.
 packaging/fonts/**  linguist-vendored=true
 assets/licenses/**  linguist-vendored=true
+assets/controllers/** linguist-vendored=true
 LICENSE             linguist-vendored=true
 COPYING.GPL3        linguist-vendored=true

@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -32,6 +33,25 @@ inline bool isBluetoothHidDevicePath(std::string_view path) {
     return lower.find("bthenum") != std::string::npos ||
            lower.find("bthledevice") != std::string::npos ||
            lower.find("{00001124-0000-1000-8000-00805f9b34fb}") != std::string::npos;
+}
+
+// Which Bluetooth link a HID path's instance id names, for the support report's `bluetooth` block:
+// classic BT carries the HID service class {00001124-...} (or enumerates under BTHENUM), BLE the
+// HID-over-GATT service {00001812-...} (or BTHLEDevice). Only this verdict leaves; the path itself
+// embeds the pad's Bluetooth address.
+enum class BluetoothLink : std::uint8_t { None, Classic, LowEnergy };
+
+inline BluetoothLink bluetoothLinkOfHidPath(std::string_view path) {
+    std::string lower(path);
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    const bool lowEnergy =
+        lower.find("bthledevice") != std::string::npos ||
+        lower.find("{00001812-0000-1000-8000-00805f9b34fb}") != std::string::npos;
+    if (lowEnergy) { return BluetoothLink::LowEnergy; }
+    const bool classic = lower.find("bthenum") != std::string::npos ||
+                         lower.find("{00001124-0000-1000-8000-00805f9b34fb}") != std::string::npos;
+    return classic ? BluetoothLink::Classic : BluetoothLink::None;
 }
 
 // The USB interface a HID device-interface path belongs to. A composite device's collections

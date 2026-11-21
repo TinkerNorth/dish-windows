@@ -56,17 +56,22 @@ are the product decisions:
   has no official Inno catalogue and is an open follow-up; the app itself
   ships all six.
 
-After the tasks page comes a **Privacy** page. It states the two things that
-can leave the PC (the update check against GitHub and, after a crash, one
-report to Sentry, both described in [`PRIVACY.md`](../PRIVACY.md)), offers
-them as two checkboxes that are on by default, *Check for updates
-automatically (contacts GitHub)* and *Send a crash report when Dish crashes
-(Sentry)*, and links the full policy. On an upgrade over an existing install
-(the AppId's uninstall key exists in the install scope's hive) the checkboxes
-give way to one line saying the existing choices are kept and where to change
-them in Settings. The page is never shown on a silent or `/OTA` run; silent
-installs answer it with the two switches in section 3. The text is translated
-through `[CustomMessages]` for the five wizard languages.
+After the tasks page comes a **Privacy** page. It states the three things
+that can leave the PC on their own (the update check against GitHub, the check
+for a newer controller list against `dish.tinkernorth.com` and, after a crash,
+one report to Sentry, all described in [`PRIVACY.md`](../PRIVACY.md)) and that
+Report a problem sends nothing by itself, offers them as three checkboxes that
+are on by default, *Check for updates automatically (contacts GitHub)*, *Send a
+crash report when Dish crashes (Sentry)* and *Check for controller updates
+automatically (contacts dish.tinkernorth.com)*, and links the full policy. On
+an upgrade over an existing install (the AppId's uninstall key exists in the
+install scope's hive) the checkboxes give way to one line saying the existing
+choices are kept and naming the three Settings switches that change them. The
+page is never shown on a silent or `/OTA` run; silent installs answer it with
+the three switches in section 3. The text is translated through
+`[CustomMessages]` for the five wizard languages, and
+`tests/test_install_defaults.cpp` fails when a message is missing from one of
+them or the upgrade note stops naming a switch the way Settings words it.
 
 ### What it writes
 
@@ -84,20 +89,24 @@ directory and scope automatically through Inno's own recorded state.
 One more key carries the privacy page's answers to the app:
 `<hive>\Software\TinkerNorth\Dish\InstallDefaults`, with `Stamp` (`REG_SZ`,
 the date and time plus a random number, unique per installer run),
-`UpdateCheck` and `CrashReports` (`REG_DWORD`, `1` or `0`). The hive follows
+`UpdateCheck`, `CrashReports` and `ControllerUpdates` (`REG_DWORD`, `1` or
+`0`). The hive follows
 the install scope like the uninstall key does (`Root: HKA`), and the
 uninstaller deletes the key (`uninsdeletekey`). It is written on a first
-install, and on any install where `/UPDATECHECK=` or `/CRASHREPORTS=` was given
-explicitly, in which case only the values that were given are written; an
-upgrade with neither switch does not touch it, and an `/OTA` run never does.
+install, and on any install where `/UPDATECHECK=`, `/CRASHREPORTS=` or
+`/CONTROLLERUPDATES=` was given explicitly, in which case only the values that
+were given are written; an upgrade with none of the three does not touch it,
+and an `/OTA` run never does. `scripts/test-installer-roundtrip.ps1` checks
+each of these against a real install in CI.
 
 The app applies it once. At startup, right after it sets its organisation and
 application names and before anything reads a preference, `dish.exe` reads the
 user-scope key, then the system-scope one (the user scope wins when both
 exist). If the `Stamp` differs from the one recorded under
 `HKCU\Software\TinkerNorth\Dish\install_defaults_stamp`, it writes `UpdateCheck`
-to `updates_check_enabled` and `CrashReports` to
-`crashlytics_collection_enabled`, through the same stores Settings uses, then
+to `updates_check_enabled`, `CrashReports` to `crashlytics_collection_enabled`
+and `ControllerUpdates` to `controller_db_check_enabled`, through the same
+stores Settings uses, then
 records the stamp and logs one line under the `dish.install` category. A
 matching stamp changes nothing, which is what keeps a repair or reinstall from
 undoing a choice made in Settings since
@@ -120,14 +129,16 @@ dish-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
     [/LOG="file.log"]             full install log; without it one lands in %TEMP%
     [/UPDATECHECK=yes|no]         the privacy page's update-check choice; default yes
     [/CRASHREPORTS=yes|no]        the privacy page's crash-report choice; default yes
+    [/CONTROLLERUPDATES=yes|no]   the privacy page's controller-list choice; default yes
     [/OTA]                        internal: the auto-updater's boot handoff (section 5)
 ```
 
-`/UPDATECHECK` and `/CRASHREPORTS` stand in for the privacy page a silent run
-never shows (section 2). Both are case-insensitive, and a value other than
-`yes` or `no` is ignored. On a first install both are written, defaulting to
-`yes`; on an upgrade only a switch given explicitly is written, and it
-overrides that one choice at the app's next start.
+`/UPDATECHECK`, `/CRASHREPORTS` and `/CONTROLLERUPDATES` stand in for the
+privacy page a silent run never shows (section 2). All three are
+case-insensitive, and a value other than `yes` or `no` is ignored. On a first
+install all three are written, defaulting to `yes`; on an upgrade only a switch
+given explicitly is written, and it overrides that one choice at the app's next
+start.
 
 `/SILENT` shows a progress bar with no questions; `/VERYSILENT` shows nothing.
 A re-run over the same version is a repair; a newer setup over an older

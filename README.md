@@ -301,14 +301,20 @@ request or from a fork is ever signed. The signed artifacts are
 and `crashpad_handler.exe`. The rest of the install image is the unmodified
 third-party runtime listed below.
 
-**Privacy.** [`PRIVACY.md`](PRIVACY.md) is the policy. Two things can leave
-the PC: an update check against GitHub (one request for `latest.json` on this
-project's releases page, with no identifier attached) and, when the app
-crashes and *Share crash reports* is on, one crash report to Sentry (a stack
-trace, a minidump of the crashed process, and the app and Windows versions).
-Both are on by default, both can be turned off in Settings, and the installer
-asks about both on a first install; silent installs take `/UPDATECHECK=no` and
-`/CRASHREPORTS=no`. There is no analytics, no telemetry and no account.
+**Privacy.** [`PRIVACY.md`](PRIVACY.md) is the policy. Three things can leave
+the PC on their own: an update check against GitHub (one request for
+`latest.json` on this project's releases page, with no identifier attached), a
+check against `dish.tinkernorth.com` for a newer list of the controllers Dish
+recognises (a manifest, and the list only when it is newer, with no identifier
+attached), and, when the app crashes and *Share crash reports* is on, one crash
+report to Sentry (a stack trace, a minidump of the crashed process, and the app
+and Windows versions). All three are on by default and can be turned off in
+Settings; the installer asks about all three on a first install, and silent
+installs take `/UPDATECHECK=no`, `/CRASHREPORTS=no` and
+`/CONTROLLERUPDATES=no`. *Report a problem* on the Diagnostics page sends nothing
+itself: it opens your own mail app with a diagnostics file attached, and the
+mail leaves only when you click Send. There is no analytics, no telemetry and
+no account.
 
 **Third-party components in the signed package.** Qt 6 (LGPL-3.0), SDL2
 (Zlib), libsodium (ISC), OpenSSL `libcrypto` (Apache-2.0; the Moonlight path

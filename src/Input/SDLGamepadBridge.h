@@ -6,7 +6,9 @@
 #include "ControllerShadow.h"
 #include "GamepadInputProcessor.h"
 #include "JoystickMapping.h"
+#include "core/controllerdb/PadModel.h"
 #include "core/input/DirtySet.h"
+#include "core/input/HidTransport.h"
 #include "core/input/OutputMailbox.h"
 #include "core/input/UsbOutputReports.h"
 #include "core/input/PumpPacing.h"
@@ -52,6 +54,9 @@ class SDLGamepadBridge : public QObject {
 
     // The policy is read once here; the SDL thread is its only reader.
     void start(pump::PumpPolicy policy = {});
+    // Before start: what each pad's family is resolved through when it attaches, and pinned for
+    // as long as it stays (docs/controller-db.md section 6.5). None resolves with no database.
+    void setModelResolver(const controllerdb::PadModelResolver* resolver) { resolver_ = resolver; }
     void stop();
 
     // A snapshot of one attached device. Every field is classified once at
@@ -87,6 +92,12 @@ class SDLGamepadBridge : public QObject {
         // False when SDL reports no path (the XInput fallback), which leaves
         // the wired presentation in place and so fails safe.
         bool bluetooth = false;
+        // Which Bluetooth link the same path names, for the support report; the path itself never
+        // leaves, because it embeds the pad's address.
+        dish::input::BluetoothLink bluetoothLink = dish::input::BluetoothLink::None;
+        // The family its USB identity resolved to at attach, pinned: the effect builders and the
+        // capability solve read it, so a database that lands meanwhile applies at its next attach.
+        usbparse::HidParser parser = usbparse::HidParser::None;
         // GUID plus the serial where the driver exposes one (a Sony pad's is its
         // Bluetooth address), else the HID path, which Windows derives from the
         // port the pad sits on: a standing binding follows the pad and not the
@@ -229,6 +240,7 @@ class SDLGamepadBridge : public QObject {
     void applySdlHints();
     bool initSdl();
     void onControllerAdded(const SDL_Event& ev);
+    usbparse::HidParser resolvedFamily(int vendorId, int productId) const;
     void onControllerRemoved(const SDL_Event& ev);
     void onJoystickAdded(const SDL_Event& ev);
     void onJoystickRemoved(const SDL_Event& ev);
@@ -281,6 +293,7 @@ class SDLGamepadBridge : public QObject {
     std::thread thread_;
     std::atomic<bool> running_{false};
     pump::PumpPolicy policy_{};
+    const controllerdb::PadModelResolver* resolver_ = nullptr;
 
     // SDL thread only.
     std::array<Pad, kMaxPads> pads_{};

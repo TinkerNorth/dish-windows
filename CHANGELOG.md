@@ -21,6 +21,152 @@ share a version number.
 
 ---
 
+## [2.8.0] - 2026-11-19
+
+### Added
+
+- **The fleet's controller database, bundled and kept current.** Dish ships
+  dbVersion 1 of the controller database the whole fleet now shares
+  (`dish.tinkernorth.com/controllers/v1/`, 272 controllers), as Qt resources
+  checked against their own manifest at every start. About ten seconds after
+  launch and every six hours while it runs, Dish asks for the manifest with
+  `If-None-Match`; only a newer version is downloaded, each file checked
+  against its SHA-256 and size, parsed, checked for schema 1 and then swapped
+  in atomically under `%LOCALAPPDATA%\Dish\controllers\v1\`. Any failure
+  keeps the list in force. A newer list applies to a controller at its next
+  attach.
+- **Settings: "Check for controller updates automatically"** (on by default)
+  and **"Check now"**. With the switch off, no request for the list leaves the
+  PC, "Check now" included. The request carries no identifier, no query and
+  the system's default `User-Agent`.
+- **Each controller's record on the Diagnostics card.** The record it matched,
+  its name from the database's strings in your language (English where a
+  language has none), a chip for its verification state (Verified, Layout
+  guessed, Flagged), and any known issue for this transport on this PC model,
+  with its title and text.
+- **Hardware check at attach.** On the Direct path the record's `expect` is
+  compared with the claimed interface's endpoints, as the configuration
+  descriptor the pad's hub returns lists them (where the hub refuses, the HID
+  report lengths stand for them), and each mismatch is a Diagnostics row and a
+  line in the diagnostics file.
+- **A served record drives how a Direct pad decodes.** A pad's model is
+  resolved once when it attaches, from the compiled tables first, then its
+  record in the controller list in force, then the vendor's guess, and pinned
+  for as long as it stays: the capability solve, the claim, its read loop, its
+  output worker and the health judgement all read that one model, and a list
+  that lands while the pad is in use applies at its next attach. A served row
+  whose family or operation this build lacks shows its name and issues and
+  leaves the bundled row in force; a flagged one gives way to a live bundled
+  row.
+- **The pad's own descriptors in the file.** For a Direct pad Dish reads, once
+  per attach and through its USB hub, its device descriptor and every
+  configuration, and the file's `hardware` gains `bcdDevice`, every interface
+  with its endpoints, the claimed interface's endpoints and `descriptorSha256`,
+  the SHA-256 of those descriptors, the same name dish-android and dish-linux
+  give the same pad. The serial number is never read.
+- **Capture this controller.** On Report a problem, for a controller Dish reads
+  directly: its USB descriptors, its maker and product strings, its HID report
+  descriptor where the pad gives it, and twenty input reports taken while it
+  lies still, written as `capture` (`usb-descriptors-v1`) only into a report
+  about that controller.
+- **"Last write" on a Direct controller's card**: the route, the report id,
+  whether the pad took it and the Windows error code when it did not, recorded
+  by the claim's output worker without a lock or an allocation.
+- **"Did it work?" after each rumble test** in the controller inspector. The
+  answer is kept per controller, the last twenty, for this run, and the last
+  one shows on the inspector and the Diagnostics card.
+- **A "Controller database" card on Diagnostics**: the bundled and active
+  versions, where the active one came from, the last check's time and
+  result, and "Check now".
+- **Report a problem and Ask a question.** The Diagnostics page's way to
+  support is now a report: pick what it is about (controller not recognised,
+  no rumble or feedback, connection or latency, audio, something else, or a
+  question), write what happened and what you expected, and name the
+  controller it concerns (an attached one is picked for you). The page says
+  in plain words what the file will hold and what it never holds, *Preview
+  file* shows the file itself, and *Continue in your mail app* writes
+  `dish-diagnostics-dish-windows-<yyyyMMdd-HHmmss>.json` (the fleet's
+  `dish-diagnostics.v1` shape) under `%LOCALAPPDATA%\Dish\diagnostics\` and
+  opens your own mail app through Simple MAPI, addressed to
+  `support@tinkernorth.com`, subject `Dish support: <category> · Dish for
+  Windows <version> on <PC model>` (the prefix stays English so the mailbox
+  can sort on it), your words first and the Diagnostics summary after, the
+  file attached; where no mail app answers MAPI, a `mailto:` link opens and
+  Explorer shows the file. *Save diagnostics* writes the same file without a
+  report. Nothing is sent until you click Send.
+- **Both ends of every host in the file.** While the report page is open,
+  each live Satellite of 2.3.0 or later is asked for its own account of the
+  session (`GET /api/connections/{id}/diagnostics`, over the session's pinned
+  HTTPS and proof, two seconds at most) and the answer is embedded with that
+  host's name and address replaced by its alias wherever they appear. An
+  older Satellite, told by the version its capabilities reported, is not
+  asked: the file carries what Dish already fetched from it and says
+  `olderSatellite`; one that cannot answer says `offline`, `timeout`,
+  `unauthorized`, `unknownConnection` or
+  `badReply`. A paired Moonlight host is listed
+  too, with the version its serverinfo gave. Every host also carries Dish's
+  own view of the session: each controller slot (record, type asked for and
+  applied, backend, apply result, touchpad mode), the last heartbeat ack, the
+  round-trip percentiles and how many messages of each kind went each way.
+- **Every controller path, input and output.** Each controller in the file
+  carries its input frames, rate and last report, and per output lane
+  (rumble, light bar, player lights, trigger effects, mute lamp) how many
+  reached it, where they went (`directUsb`, `framework`, `none`) and the last
+  value with its time; its speaker and haptics streams' state; and for a
+  Bluetooth pad whether the link is classic or low energy, never its address.
+- **The PC's battery and battery saver** in the file, from
+  `GetSystemPowerStatus`. There is no thermal state on Windows, and Wi-Fi
+  facts are not read (`tests/PARITY.md`).
+- **Whether the PC has a USB host controller, measured.** The file's
+  `device.usbHost` is what SetupAPI lists of the
+  `GUID_DEVINTERFACE_USB_HOST_CONTROLLER` interface class: `true` for one or
+  more, `false` for none (a virtual machine without one), `null` when Windows
+  gives no answer. *Save diagnostics* reads it, and the battery, itself, as the
+  report page does.
+- **The installer's Privacy page asks about the controller list too.** A third
+  checkbox, *Check for controller updates automatically (contacts
+  dish.tinkernorth.com)*, on by default, is kept under `InstallDefaults` as
+  `ControllerUpdates` beside the other two and applied once at the app's next
+  start; a silent install answers it with `/CONTROLLERUPDATES=yes|no`. The page
+  now names all three things that can leave the PC, says that a crash report
+  carries a minidump, and that Report a problem sends nothing by itself; on an
+  upgrade it names all three Settings switches.
+- The file never holds pairing keys, certificate fingerprints, IP addresses,
+  Bluetooth addresses, Wi-Fi names or the names of your PCs and devices: hosts
+  appear as "Host 1", "Host 2".
+
+### Changed
+
+- **The bundled controller list now drives Direct.** Thirteen third-party
+  DualShock 4 pads the list marks verified and `auto` (Hori Real Arcade Pro 4,
+  Real Arcade Pro 4 V and Fighting Commander, Hori Wired Mini, Nacon Revolution
+  Pro, Pro v2, Infinite and Daija, Razer Panthera, Raiju, Raiju Tournament and
+  Raiju Ultimate, Armor3 Titan) now go Direct by themselves and decode as a
+  DualShock 4, where they waited for a pick and decoded as generic HID.
+  `054c:05c5`, imported and `optIn`, now waits for a pick where Sony's fast
+  lane claimed it. Thirty-four more imported `optIn` pads of the DualShock 4
+  and DualSense families still wait for a pick, and once picked decode with
+  their family instead of as generic HID. A record outranks the vendor's guess.
+- **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
+  problem" (2.6), which describes your own words in the report and the
+  Satellite connection snapshot, what each holds and never holds; its
+  effective date moves to 2026-11-20.
+
+### Notes
+
+- The compiled Direct tables (`kKnownModels`, the fast-lane vendors) stay, and
+  a test requires every row to match its database record; they answer first,
+  and a served record speaks for the ids they lack (`tests/PARITY.md`).
+- Hot path: the session counts each message kind it sends and receives, and
+  the router counts each pad's output lanes, with relaxed atomics only; no
+  thread on the input, USB, receive or mic path takes a new lock. The raw-HID
+  read loop loads one relaxed word per report where it loaded its running flag,
+  which also says whether a capture is armed, and while one is it copies at
+  most 64 bytes into a slot fixed with the claim, for twenty reports. The SDL
+  thread reads each pad's family pinned at attach instead of looking it up per
+  output command.
+- No wire change. The snapshot route is a new REST call to Satellite 2.3.0.
+
 ## [2.7.1] - 2026-11-19
 
 ### Fixed

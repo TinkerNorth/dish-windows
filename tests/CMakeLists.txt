@@ -210,6 +210,7 @@ set(DISH_TEST_SOURCES
     test_usb_hid_layout_orders.cpp
     test_usb_twin_dedup.cpp
     test_hid_transport.cpp
+    test_win_usb_topology.cpp
     test_catalog_prewarm.cpp
     test_onboarding_store.cpp
     test_license_manifest.cpp
@@ -266,6 +267,20 @@ set(DISH_TEST_SOURCES
     test_diagnostics_recorder.cpp
     test_diagnostics_maps.cpp
     test_feedback_bench.cpp
+    # The controller database and diagnostics at every level.
+    test_controller_db_core.cpp
+    test_pad_model.cpp
+    test_usb_hardware.cpp
+    test_usb_served_models.cpp
+    test_controller_db_json.cpp
+    test_controller_db_bundled.cpp
+    test_controller_db_fetch.cpp
+    test_controller_record_rows.cpp
+    test_diagnostics_levels.cpp
+    test_diagnostics_bundle.cpp
+    # The support report: the report, both ends of each host, every path.
+    test_support_report.cpp
+    test_connection_snapshot_gateway.cpp
     test_translations.cpp)
 
 add_executable(DishTests ${DISH_TEST_SOURCES})
@@ -292,6 +307,10 @@ target_compile_definitions(DishTests PRIVATE
     DISH_TS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../translations")
 target_compile_definitions(DishTests PRIVATE
     DISH_INSTALLER_ISS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../installer.iss")
+# The bundled controller database is a resource of the Dish exe too, so its tests read the
+# vendored folder the resource is built from.
+target_compile_definitions(DishTests PRIVATE
+    DISH_CONTROLLER_DB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/controllers/v1")
 # The `release_translations` dependency is wired from the TOP-LEVEL CMakeLists:
 # that target does not exist until this directory scope is finalized.
 

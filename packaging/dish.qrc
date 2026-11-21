@@ -32,6 +32,20 @@
          to this .qrc, so it reaches up into ../assets/. -->
     <file alias="licenses.json">../assets/licenses/licenses.json</file>
   </qresource>
+  <qresource prefix="/controllers/v1">
+    <!-- The controller database (dish-website docs/controller-db.md), one published dbVersion
+         vendored byte for byte from dish.tinkernorth.com/controllers/v1/: never edited here, and
+         checked against its own manifest at every load. A newer download in the app's data
+         folder replaces it while its dbVersion is greater. -->
+    <file alias="manifest.json">../assets/controllers/v1/manifest.json</file>
+    <file alias="controllers.json">../assets/controllers/v1/controllers.json</file>
+    <file alias="strings/en.json">../assets/controllers/v1/strings/en.json</file>
+    <file alias="strings/bs.json">../assets/controllers/v1/strings/bs.json</file>
+    <file alias="strings/de.json">../assets/controllers/v1/strings/de.json</file>
+    <file alias="strings/es.json">../assets/controllers/v1/strings/es.json</file>
+    <file alias="strings/fr.json">../assets/controllers/v1/strings/fr.json</file>
+    <file alias="strings/pt-BR.json">../assets/controllers/v1/strings/pt-BR.json</file>
+  </qresource>
   <qresource prefix="/brand">
     <file alias="bluetooth.svg">brand/bluetooth.svg</file>
     <file alias="bluetooth-connected.svg">brand/bluetooth-connected.svg</file>

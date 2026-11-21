@@ -394,6 +394,7 @@ bool SatelliteClient::sendEncrypted(std::uint16_t msgType, const std::uint8_t* p
                                     static_cast<int>(kHeaderSize + cipherLen), MSG_NOSIGNAL,
                                     reinterpret_cast<const sockaddr*>(&dest_), sizeof(dest_));
             sent = rc != SOCKET_ERROR;
+            if (sent) { wireCounters_.countSent(msgType); }
             if (!sent && ::WSAGetLastError() == WSAEWOULDBLOCK) {
                 softDrops_.fetch_add(1, std::memory_order_relaxed);
             }
@@ -555,6 +556,7 @@ void SatelliteClient::onSessionClose(const std::uint8_t* body, std::size_t bodyL
 void SatelliteClient::dispatchIncoming(std::uint16_t msgType, const std::uint8_t* body,
                                        std::size_t bodyLen) {
     if (auto next = handlersBox_.take()) { handlers_ = std::move(next); }
+    wireCounters_.countReceived(msgType);
     const Handlers& h = *handlers_;
     switch (msgType) {
     case kMsgHeartbeatAck:
