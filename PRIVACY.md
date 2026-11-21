@@ -375,8 +375,9 @@ not asked anything: the file holds the version its last answer to Dish gave.
 
 **What the file holds.** Your report, as above; the app's version; this PC's
 model as its firmware names it, the Windows version, the processor
-architecture, its battery level and whether it is charging, and whether
-battery saver is on; the controller database's bundled and active versions
+architecture, its battery level and whether it is charging, whether battery
+saver is on, and whether Windows lists a USB host controller (a virtual
+machine may have none); the controller database's bundled and active versions
 and the time and result of its last check; for each controller, the database
 record it matched, that record's verification state, its transport (USB or
 Bluetooth) and path (Direct or the system's), whether a Bluetooth link is

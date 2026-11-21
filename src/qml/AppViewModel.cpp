@@ -21,6 +21,7 @@
 #include "core/diagnostics/MailHandoff.h"
 #include "core/diagnostics/PadLanes.h"
 #include "core/diagnostics/ReportForm.h"
+#include "core/diagnostics/UsbHost.h"
 #include "core/input/HidTransport.h"
 #include "core/model/Protocol.h"
 #include "core/reducer/FeedbackRouting.h"
@@ -52,6 +53,7 @@
 #include "source/store/TouchpadModeStore.h"
 #include "source/system/DiagnosticsHandoff.h"
 #include "source/system/PowerStatus.h"
+#include "source/system/UsbHostProbe.h"
 #include "source/audio/SpeakerPlayoutEngine.h"
 #include "SlotRouter.h"
 #include "UI/Theme.h"
@@ -2555,6 +2557,7 @@ AppViewModel::diagnosticsBundleFacts(std::optional<composer::BundleReport> repor
     facts.os = machine.os.toStdString();
     facts.arch = machine.arch.toStdString();
     facts.power = diagnostics::powerFactsOf(powerStatus_);
+    facts.usbHost = diagnostics::usbHostFromCount(usbHostControllers_);
     facts.controllerDb = bundleDbOf(model_->controllerDbStatus().value());
 
     for (const models::ControllerSlot& slot : model_->state().slotList) {
@@ -2588,7 +2591,15 @@ QString AppViewModel::writeDiagnosticsBundle(const composer::BundleFacts& facts)
                                        QByteArray::fromStdString(bundle));
 }
 
+// What the PC says about itself at the moment a file is prepared, for Save diagnostics and the
+// report page alike.
+void AppViewModel::readDeviceFacts() {
+    powerStatus_ = source::readPowerStatus();
+    usbHostControllers_ = source::countUsbHostControllers();
+}
+
 QString AppViewModel::saveDiagnostics() {
+    readDeviceFacts();
     const QString path = writeDiagnosticsBundle(diagnosticsBundleFacts(std::nullopt));
     if (!path.isEmpty()) { source::revealInExplorer(path); }
     return path;
@@ -2598,7 +2609,7 @@ QString AppViewModel::saveDiagnostics() {
 
 void AppViewModel::prepareReport() {
     const int generation = ++reportGeneration_;
-    powerStatus_ = source::readPowerStatus();
+    readDeviceFacts();
     if (reportReady_) {
         reportReady_ = false;
         emit reportReadyChanged();

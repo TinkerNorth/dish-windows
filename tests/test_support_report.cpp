@@ -13,6 +13,7 @@
 #include "core/diagnostics/Json.h"
 #include "core/diagnostics/PadLanes.h"
 #include "core/diagnostics/ReportForm.h"
+#include "core/diagnostics/UsbHost.h"
 #include "core/diagnostics/WireCounters.h"
 #include "core/input/HidTransport.h"
 #include "core/model/Protocol.h"
@@ -368,6 +369,19 @@ TEST_CASE("device facts: the power-status call that failed says nothing", "[diag
     const auto facts = dish::diagnostics::powerFactsOf(std::nullopt);
     CHECK_FALSE(facts.battery.has_value());
     CHECK_FALSE(facts.powerSave.has_value());
+}
+
+TEST_CASE("device facts: a USB host controller counted is a USB host, and none is not",
+          "[diagnostics][device]") {
+    CHECK(dish::diagnostics::usbHostFromCount(std::size_t{1}) == std::optional<bool>(true));
+    CHECK(dish::diagnostics::usbHostFromCount(std::size_t{3}) == std::optional<bool>(true));
+    // A virtual machine with no USB controller passed through.
+    CHECK(dish::diagnostics::usbHostFromCount(std::size_t{0}) == std::optional<bool>(false));
+}
+
+TEST_CASE("device facts: a USB host count the platform could not take says nothing",
+          "[diagnostics][device]") {
+    CHECK_FALSE(dish::diagnostics::usbHostFromCount(std::nullopt).has_value());
 }
 
 // ── Bluetooth ───────────────────────────────────────────────────────────────

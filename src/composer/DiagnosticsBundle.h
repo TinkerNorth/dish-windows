@@ -225,6 +225,8 @@ struct BundleFacts {
     std::string os;
     std::string arch;
     diagnostics::PowerFacts power;
+    // Whether Windows lists a USB host controller; empty when it gave no answer.
+    std::optional<bool> usbHost;
     BundleControllerDb controllerDb;
     std::vector<BundleController> controllers;
     std::vector<BundleHost> hosts;

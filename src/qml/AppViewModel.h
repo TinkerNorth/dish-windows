@@ -39,6 +39,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 
@@ -936,12 +937,14 @@ class AppViewModel : public QObject {
     composer::BundleSession bundleSessionOf(const net::WifiConnection& conn) const;
     composer::BundleHost bundleMoonlightOf(const net::MoonlightHostRow& row) const;
     QString writeDiagnosticsBundle(const composer::BundleFacts& facts);
+    void readDeviceFacts();
     void onHostSnapshots(int generation, composer::HostSnapshots snapshots);
     // The gateway before the collector, which holds it by reference and must go first.
     std::unique_ptr<source::ConnectionSnapshotGateway> snapshotGateway_;
     std::unique_ptr<composer::HostSnapshotCollector> snapshotCollector_;
     composer::HostSnapshots hostSnapshots_;
     std::optional<diagnostics::PowerStatusBytes> powerStatus_;
+    std::optional<std::size_t> usbHostControllers_;
     bool reportReady_ = false;
     // A preparation answered after a newer one started is not the one on screen.
     int reportGeneration_ = 0;

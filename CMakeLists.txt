@@ -254,6 +254,10 @@ set(DISH_CORE_SOURCES
     src/source/http/ConnectionSnapshotGateway.cpp
     src/source/system/PowerStatus.h
     src/source/system/PowerStatus.cpp
+    # The third cut: usbHost measured (SetupAPI's host controller interfaces, decided in core).
+    src/core/diagnostics/UsbHost.h
+    src/source/system/UsbHostProbe.h
+    src/source/system/UsbHostProbe.cpp
     src/core/reducer/RestOutcome.h
     src/core/reducer/Backoff.h
     src/core/reducer/KeepAwake.h

@@ -67,7 +67,7 @@ Json batteryJson(const std::optional<diagnostics::BatteryFacts>& battery) {
 }
 
 // Windows names no thermal state to an app, and this client does not link the WLAN API, so
-// `thermal` and `wifi` are null (tests/PARITY.md); a PC is always a USB host.
+// `thermal` and `wifi` are null (tests/PARITY.md).
 Json deviceJson(const BundleFacts& facts) {
     Json device = Json::object();
     device.set("model", facts.model);
@@ -77,7 +77,7 @@ Json deviceJson(const BundleFacts& facts) {
     device.set("thermal", Json());
     device.set("powerSave", Json::orNull(facts.power.powerSave));
     device.set("wifi", Json());
-    device.set("usbHost", true);
+    device.set("usbHost", Json::orNull(facts.usbHost));
     return device;
 }
 

@@ -96,6 +96,12 @@ share a version number.
 - **The PC's battery and battery saver** in the file, from
   `GetSystemPowerStatus`. There is no thermal state on Windows, and Wi-Fi
   facts are not read (`tests/PARITY.md`).
+- **Whether the PC has a USB host controller, measured.** The file's
+  `device.usbHost` is what SetupAPI lists of the
+  `GUID_DEVINTERFACE_USB_HOST_CONTROLLER` interface class: `true` for one or
+  more, `false` for none (a virtual machine without one), `null` when Windows
+  gives no answer. *Save diagnostics* reads it, and the battery, itself, as the
+  report page does.
 - **The installer's Privacy page asks about the controller list too.** A third
   checkbox, *Check for controller updates automatically (contacts
   dish.tinkernorth.com)*, on by default, is kept under `InstallDefaults` as

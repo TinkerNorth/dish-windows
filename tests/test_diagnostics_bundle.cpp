@@ -20,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 
 #include <initializer_list>
 #include <string>
@@ -501,8 +502,31 @@ TEST_CASE("diagnostics bundle: the PC's battery and power saver, and no thermal 
     CHECK(device[QStringLiteral("powerSave")].isBool());
     CHECK(device[QStringLiteral("thermal")].isNull());
     CHECK(device[QStringLiteral("wifi")].isNull());
-    CHECK(device[QStringLiteral("usbHost")].toBool());
     const QJsonObject desktop = BundleFixture().parsed()[QStringLiteral("device")].toObject();
     CHECK(desktop[QStringLiteral("battery")].isNull());
     CHECK(desktop[QStringLiteral("powerSave")].isNull());
+}
+
+TEST_CASE("diagnostics bundle: usbHost is what Windows measured, never assumed",
+          "[diagnostics][bundle]") {
+    BundleFixture fixture;
+    SECTION("a host controller was counted") {
+        fixture.facts.usbHost = true;
+        const QJsonValue usbHost =
+            fixture.parsed()[QStringLiteral("device")][QStringLiteral("usbHost")];
+        CHECK(usbHost.isBool());
+        CHECK(usbHost.toBool());
+    }
+    SECTION("none was, as in a virtual machine without a USB controller") {
+        fixture.facts.usbHost = false;
+        const QJsonValue usbHost =
+            fixture.parsed()[QStringLiteral("device")][QStringLiteral("usbHost")];
+        CHECK(usbHost.isBool());
+        CHECK_FALSE(usbHost.toBool());
+    }
+    SECTION("the count could not be taken") {
+        const QJsonValue usbHost =
+            fixture.parsed()[QStringLiteral("device")][QStringLiteral("usbHost")];
+        CHECK(usbHost.isNull());
+    }
 }
