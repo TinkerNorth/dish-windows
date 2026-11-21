@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include <cstddef>
 #include <optional>
 
 namespace dish::source {
 
 // Empty when SetupAPI gave no answer.
-std::optional<std::size_t> countUsbHostControllers();
+std::optional<int> countUsbHostControllers();
 
 } // namespace dish::source

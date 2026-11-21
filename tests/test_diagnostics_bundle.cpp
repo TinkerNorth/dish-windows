@@ -11,6 +11,7 @@
 #include "composer/DiagnosticsBundle.h"
 #include "core/diagnostics/Json.h"
 #include "core/diagnostics/PadLanes.h"
+#include "core/diagnostics/UsbDescriptors.h"
 #include "core/diagnostics/WireCounters.h"
 #include "core/model/Protocol.h"
 
@@ -25,6 +26,7 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using dish::composer::buildDiagnosticsBundle;
 using dish::composer::BundleController;
@@ -505,6 +507,94 @@ TEST_CASE("diagnostics bundle: the PC's battery and power saver, and no thermal 
     const QJsonObject desktop = BundleFixture().parsed()[QStringLiteral("device")].toObject();
     CHECK(desktop[QStringLiteral("battery")].isNull());
     CHECK(desktop[QStringLiteral("powerSave")].isNull());
+}
+
+TEST_CASE("diagnostics bundle: a Direct pad's hardware from its descriptors, a SDL pad's null",
+          "[diagnostics][bundle]") {
+    BundleFixture fixture;
+    BundleController& pad = fixture.facts.controllers.front();
+    pad.hardware.bcdDevice = 0x0107;
+    dish::diagnostics::UsbInterface hid;
+    hid.number = 3;
+    hid.interfaceClass = 0x03;
+    hid.endpoints = {{0x84, dish::diagnostics::EndpointType::Interrupt, 64, 6}};
+    pad.hardware.interfaces = std::vector<dish::diagnostics::UsbInterface>{hid};
+    pad.hardware.descriptorSha256 = std::string(64, 'a');
+    const QJsonObject hardware = fixture.parsed()[QStringLiteral("controllers")]
+                                     .toArray()[0]
+                                     .toObject()[QStringLiteral("hardware")]
+                                     .toObject();
+    CHECK(hardware[QStringLiteral("bcdDevice")].toString() == QStringLiteral("0107"));
+    const QJsonObject intf = hardware[QStringLiteral("interfaces")].toArray()[0].toObject();
+    CHECK(intf[QStringLiteral("number")].toInt() == 3);
+    CHECK(intf[QStringLiteral("class")].toString() == QStringLiteral("03"));
+    const QJsonObject ep = intf[QStringLiteral("endpoints")].toArray()[0].toObject();
+    CHECK(ep[QStringLiteral("address")].toString() == QStringLiteral("84"));
+    CHECK(ep[QStringLiteral("type")].toString() == QStringLiteral("interrupt"));
+    CHECK(hardware[QStringLiteral("descriptorSha256")].toString().size() == 64);
+    CHECK(hardware[QStringLiteral("firmware")].isNull());
+
+    const QJsonObject bare = BundleFixture()
+                                 .parsed()[QStringLiteral("controllers")]
+                                 .toArray()[0]
+                                 .toObject()[QStringLiteral("hardware")]
+                                 .toObject();
+    CHECK(bare[QStringLiteral("bcdDevice")].isNull());
+    CHECK(bare[QStringLiteral("interfaces")].isNull());
+    CHECK(bare[QStringLiteral("descriptorSha256")].isNull());
+}
+
+TEST_CASE("diagnostics bundle: the claimed interface's endpoints once its hub named them",
+          "[diagnostics][bundle]") {
+    BundleFixture fixture;
+    BundleController& pad = fixture.facts.controllers.front();
+    pad.hardware.endpointsRead = true;
+    pad.hardware.endpointIn = 0x84;
+    const QJsonObject endpoints = fixture.parsed()[QStringLiteral("controllers")]
+                                      .toArray()[0]
+                                      .toObject()[QStringLiteral("hardware")]
+                                      .toObject()[QStringLiteral("endpoints")]
+                                      .toObject();
+    CHECK(endpoints[QStringLiteral("in")].toString() == QStringLiteral("84"));
+    CHECK(endpoints[QStringLiteral("out")].isNull());
+    const QJsonObject unread = BundleFixture()
+                                   .parsed()[QStringLiteral("controllers")]
+                                   .toArray()[0]
+                                   .toObject()[QStringLiteral("hardware")]
+                                   .toObject();
+    CHECK(unread[QStringLiteral("endpoints")].isNull());
+}
+
+TEST_CASE("diagnostics bundle: a capture rides its controller", "[diagnostics][bundle]") {
+    BundleFixture fixture;
+    dish::diagnostics::Json capture = dish::diagnostics::Json::object();
+    capture.set("format", "usb-descriptors-v1");
+    fixture.facts.controllers.front().capture = capture;
+    const QJsonObject pad = fixture.parsed()[QStringLiteral("controllers")].toArray()[0].toObject();
+    CHECK(pad[QStringLiteral("capture")].toObject()[QStringLiteral("format")].toString() ==
+          QStringLiteral("usb-descriptors-v1"));
+    CHECK(BundleFixture()
+              .parsed()[QStringLiteral("controllers")]
+              .toArray()[0]
+              .toObject()[QStringLiteral("capture")]
+              .isNull());
+}
+
+TEST_CASE("diagnostics bundle: a Bluetooth link nothing could read is null, the profile stays",
+          "[diagnostics][bundle]") {
+    BundleFixture fixture;
+    BundleController pad;
+    pad.transport = "bluetooth";
+    pad.path = "sdl";
+    pad.bluetooth = dish::composer::BundleBluetooth{"hid", ""};
+    fixture.facts.controllers = {pad};
+    const QJsonObject bluetooth = fixture.parsed()[QStringLiteral("controllers")]
+                                      .toArray()[0]
+                                      .toObject()[QStringLiteral("bluetooth")]
+                                      .toObject();
+    CHECK(bluetooth[QStringLiteral("profile")].toString() == QStringLiteral("hid"));
+    CHECK(bluetooth.contains(QStringLiteral("transportLayer")));
+    CHECK(bluetooth[QStringLiteral("transportLayer")].isNull());
 }
 
 TEST_CASE("diagnostics bundle: usbHost is what Windows measured, never assumed",

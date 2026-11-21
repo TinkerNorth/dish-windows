@@ -89,6 +89,14 @@ QString padIdentity(SDL_Joystick* js) {
 
 } // namespace
 
+// The family a pad's USB identity resolves to through the database in force when it attaches.
+usbparse::HidParser SDLGamepadBridge::resolvedFamily(int vendorId, int productId) const {
+    if (resolver_ == nullptr) {
+        return controllerdb::modelWithoutDatabase(vendorId, productId).parser;
+    }
+    return resolver_->resolve(vendorId, productId).parser;
+}
+
 SDLGamepadBridge::SDLGamepadBridge(GamepadInputProcessor* processor, QObject* parent)
     : QObject(parent), processor_(processor) {}
 
@@ -260,6 +268,7 @@ void SDLGamepadBridge::onControllerAdded(const SDL_Event& ev) {
     d.bluetooth = devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
     d.bluetoothLink = devPath != nullptr ? dish::input::bluetoothLinkOfHidPath(devPath)
                                          : dish::input::BluetoothLink::None;
+    d.parser = resolvedFamily(d.vendorId, d.productId);
     d.identity = padIdentity(js);
     pad->shadow.seed(gc);
 
@@ -319,6 +328,7 @@ void SDLGamepadBridge::onJoystickAdded(const SDL_Event& ev) {
     d.bluetooth = devPath != nullptr && dish::input::isBluetoothHidDevicePath(devPath);
     d.bluetoothLink = devPath != nullptr ? dish::input::bluetoothLinkOfHidPath(devPath)
                                          : dish::input::BluetoothLink::None;
+    d.parser = resolvedFamily(d.vendorId, d.productId);
     d.hasRumble = SDL_JoystickHasRumble(js) == SDL_TRUE;
     d.isRawJoystick = true;
     d.identity = padIdentity(js);
@@ -701,10 +711,10 @@ void SDLGamepadBridge::applyOutput(Pad& pad, const OutputMailbox::Taken& taken) 
         SDL_GameControllerRumble(pad.gc, s.strong, s.weak, s.durationMs);
     }
     if ((taken.kinds & output::kLightbar) != 0) { SDL_GameControllerSetLED(pad.gc, s.r, s.g, s.b); }
-    // The family from the pad's USB identity, which a Bluetooth pad reports too. The builders
-    // answer 0 for any family without the surface, and the router only sends a DualSense here.
-    const usbparse::HidParser parser =
-        usbparse::parserForDevice(pad.device.vendorId, pad.device.productId);
+    // The family pinned at attach from the pad's USB identity, which a Bluetooth pad reports too.
+    // The builders answer 0 for any family without the surface, and the router only sends a
+    // DualSense here.
+    const usbparse::HidParser parser = pad.device.parser;
     std::array<std::uint8_t, usbout::kMaxOutputReportBytes> report{};
     if ((taken.kinds & output::kTriggerEffects) != 0) {
         sendEffect(pad,

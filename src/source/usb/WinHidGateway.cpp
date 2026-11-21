@@ -47,16 +47,6 @@ constexpr int kNoInterface = -1;
 // collections defensively so we never fight XInput for an Xbox pad.
 constexpr int kVidMicrosoft = 0x045E;
 
-// Known HID-class "fast-lane" controller vendor ids worth auto-claiming Direct
-// on Windows: Sony (DualSense/DS4), Nintendo (Switch Pro), 8BitDo. Xbox pads are
-// deliberately absent — they live on XInput, not raw HID. Models from the
-// known-model table (PDP Switch pads, the Steam Controller) are reached only
-// through an explicit Direct pick, never auto-claimed: the Steam Controller
-// claim reconfigures a device its owner may be using as a desktop mouse.
-constexpr int kVidSony = 0x054C;
-constexpr int kVidNintendo = 0x057E;
-constexpr int kVid8BitDo = 0x2DC8;
-
 std::string wideToUtf8(const wchar_t* w) {
     if (w == nullptr) { return {}; }
     const int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
@@ -134,10 +124,10 @@ bool collectionMatchesParser(const HIDP_CAPS& caps, input::usbparse::HidParser p
 
 // Whether the collection at this path carries a pad: every one does but a Steam Controller
 // receiver's keyboard, comms and pogo-pin interfaces, whose pads ride its slots only.
-bool pathCarriesPad(const std::string& path, int vendorId, int productId) {
-    if (!input::usbparse::isReceiver(vendorId, productId)) { return true; }
+bool pathCarriesPad(const std::string& path, const dish::controllerdb::PadModel& model) {
+    if (!model.isReceiver()) { return true; }
     const int iface = input::hidInterfaceNumberFromPath(path).value_or(kNoInterface);
-    return input::usbparse::interfaceCarriesPad(vendorId, productId, iface);
+    return model.receiverSlots().holds(iface);
 }
 
 bool pathIsTheClaimedPad(const std::string& path, DEVINST collection, const UsbDeviceInfo& device) {
@@ -203,33 +193,28 @@ HidInterface interfaceOf(HDEVINFO devInfo, SP_DEVICE_INTERFACE_DATA& ifData) {
     return HidInterface{detail->DevicePath, node.DevInst};
 }
 
-// Admission is per model family: the collection the model's parser actually decodes. Everything
-// without a table row has to stay "gamepad-shaped"; the Steam Controller's game interface is
-// admitted by model despite its vendor usage page.
-bool isClaimCandidate(HANDLE h, HIDD_ATTRIBUTES& attrs, HIDP_CAPS& caps) {
+// The collection's attributes and caps, false when either cannot be read. Admission is per model
+// family, against the model the collection's attach pinned (collectionMatchesParser).
+bool readCollection(HANDLE h, HIDD_ATTRIBUTES& attrs, HIDP_CAPS& caps) {
     if (HidD_GetAttributes(h, &attrs) == 0) { return false; }
     PHIDP_PREPARSED_DATA preparsed = nullptr;
     if (HidD_GetPreparsedData(h, &preparsed) == 0) { return false; }
-    bool accepted = false;
-    if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
-        const auto parser = input::usbparse::parserForDevice(attrs.VendorID, attrs.ProductID);
-        accepted = collectionMatchesParser(caps, parser);
-    }
+    const bool read = HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS;
     HidD_FreePreparsedData(preparsed);
-    return accepted;
+    return read;
 }
 
 // What the claim machinery needs to know about a device it has not opened for reading yet.
 UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const std::string& usbDevice,
-                             const HIDD_ATTRIBUTES& attrs, const HIDP_CAPS& caps) {
+                             const HIDD_ATTRIBUTES& attrs, const HIDP_CAPS& caps,
+                             const dish::controllerdb::PadModel& model) {
     UsbDeviceInfo info;
     info.devicePath = usbDevice;
     info.vendorId = attrs.VendorID;
     info.productId = attrs.ProductID;
-    // The catalog name is deterministic where one exists; it also names models whose own product
-    // string is generic or empty.
-    const auto* model = input::usbparse::lookupKnownModel(attrs.VendorID, attrs.ProductID);
-    info.name = model != nullptr ? model->name : productName(h, path);
+    // The compiled row's name is deterministic where one exists; it also names models whose own
+    // product string is generic or empty.
+    info.name = model.compiledName != nullptr ? model.compiledName : productName(h, path);
     info.interfaceNumber = input::hidInterfaceNumberFromPath(path).value_or(0);
     // The input report length is the max-packet proxy; bInterval is not exposed by the HID class
     // API, so it defaults to 1 ms (the common gamepad case) and the poll-rate sampler measures the
@@ -242,15 +227,19 @@ UsbDeviceInfo describeDevice(HANDLE h, const std::string& path, const std::strin
     info.inputReportBytes = caps.InputReportByteLength;
     info.outputReportBytes = caps.OutputReportByteLength;
     info.bcdDevice = attrs.VersionNumber;
-    // Derived from the per-model decoder family so it tracks the parser selection rather than a
-    // hard-coded VID list.
-    info.hasImu = input::usbparse::parserHasImu(
-        input::usbparse::parserForDevice(info.vendorId, info.productId));
+    // Derived from the pinned family so it tracks the parser selection rather than a hard-coded
+    // VID list.
+    info.hasImu = input::usbparse::parserHasImu(model.parser);
+    info.model = model;
     return info;
 }
 
-// Null for an interface that is not a claim candidate at all.
-std::optional<UsbDeviceInfo> probeInterface(const HidInterface& hid) {
+// Null for an interface that is not a claim candidate at all. A collection read for the first time
+// is resolved through `resolver` and pinned under its path; one seen before keeps its pin.
+std::optional<UsbDeviceInfo> probeInterface(const HidInterface& hid,
+                                            dish::controllerdb::ModelPins& pins,
+                                            const dish::controllerdb::PadModelResolver* resolver,
+                                            std::vector<std::string>& seen) {
     const std::string path = wideToUtf8(hid.path.c_str());
     // A Bluetooth-connected pad is a HID device too (same VID:PID as its USB identity) but is NOT
     // a USB-direct claim candidate: the raw-HID claim is a USB feature, the per-model decoders
@@ -269,11 +258,45 @@ std::optional<UsbDeviceInfo> probeInterface(const HidInterface& hid) {
     attrs.Size = sizeof(attrs);
     HIDP_CAPS caps{};
     std::optional<UsbDeviceInfo> info;
-    if (isClaimCandidate(h, attrs, caps) && pathCarriesPad(path, attrs.VendorID, attrs.ProductID)) {
-        info = describeDevice(h, path, usbDeviceOf(hid.collection), attrs, caps);
+    // Microsoft-VID gamepad collections are skipped: Xbox pads belong to XInput, not this raw-HID
+    // path, and should not be fought over.
+    const bool readable = readCollection(h, attrs, caps) && attrs.VendorID != kVidMicrosoft;
+    if (readable) {
+        seen.push_back(path);
+        const dish::controllerdb::PadModel& model =
+            pins.pinFor(path, attrs.VendorID, attrs.ProductID, resolver);
+        const bool admitted =
+            collectionMatchesParser(caps, model.parser) && pathCarriesPad(path, model);
+        if (admitted) {
+            info = describeDevice(h, path, usbDeviceOf(hid.collection), attrs, caps, model);
+        }
     }
     CloseHandle(h);
     return info;
+}
+
+// Whether every input report of the collection goes without a report id, which ReadFile then
+// prepends as 0x00: each input value and button cap names report 0.
+bool inputHasNoReportId(PHIDP_PREPARSED_DATA preparsed, const HIDP_CAPS& caps) {
+    std::vector<HIDP_VALUE_CAPS> values(caps.NumberInputValueCaps);
+    std::vector<HIDP_BUTTON_CAPS> buttons(caps.NumberInputButtonCaps);
+    USHORT valueCount = caps.NumberInputValueCaps;
+    USHORT buttonCount = caps.NumberInputButtonCaps;
+    const bool valuesRead =
+        valueCount == 0 ||
+        HidP_GetValueCaps(HidP_Input, values.data(), &valueCount, preparsed) == HIDP_STATUS_SUCCESS;
+    const bool buttonsRead =
+        buttonCount == 0 || HidP_GetButtonCaps(HidP_Input, buttons.data(), &buttonCount,
+                                               preparsed) == HIDP_STATUS_SUCCESS;
+    const bool anyCaps = valueCount > 0 || buttonCount > 0;
+    if (!valuesRead || !buttonsRead || !anyCaps) { return false; }
+    values.resize(valueCount);
+    buttons.resize(buttonCount);
+    const bool valuesHaveNoId = std::all_of(
+        values.begin(), values.end(), [](const HIDP_VALUE_CAPS& v) { return v.ReportID == 0; });
+    const bool buttonsHaveNoId = std::all_of(
+        buttons.begin(), buttons.end(), [](const HIDP_BUTTON_CAPS& b) { return b.ReportID == 0; });
+    return valuesHaveNoId && buttonsHaveNoId;
 }
 
 } // namespace
@@ -364,7 +387,7 @@ struct WinHidGateway::HidPDecode {
         slot->scale.logicalMax = vc.LogicalMax;
     }
 
-    void build(int vendorId, int productId) {
+    void build(input::usbhid::ButtonOrder buttonOrder) {
         HIDP_CAPS caps{};
         if (HidP_GetCaps(preparsed, &caps) != HIDP_STATUS_SUCCESS) { return; }
 
@@ -397,7 +420,7 @@ struct WinHidGateway::HidPDecode {
             }
         }
 
-        order = input::usbparse::buttonOrderForDevice(vendorId, productId);
+        order = buttonOrder;
         // Same validity rule as parseReportDescriptor: something gamepad-like
         // must exist, else the fixed-offset fallback stays in charge.
         valid = lx.present || ly.present || hasButtons || hasHat;
@@ -528,10 +551,6 @@ WinHidGateway::~WinHidGateway() {
     }
 }
 
-bool WinHidGateway::isKnownFastLaneModel(int vendorId, int /*productId*/) const {
-    return vendorId == kVidSony || vendorId == kVidNintendo || vendorId == kVid8BitDo;
-}
-
 std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
     std::vector<UsbDeviceInfo> out;
 
@@ -543,19 +562,18 @@ std::vector<UsbDeviceInfo> WinHidGateway::enumerate() {
 
     SP_DEVICE_INTERFACE_DATA ifData{};
     ifData.cbSize = sizeof(ifData);
+    std::vector<std::string> seen;
     for (DWORD i = 0; SetupDiEnumDeviceInterfaces(devInfo, nullptr, &hidGuid, i, &ifData) != 0;
          ++i) {
         const HidInterface hid = interfaceOf(devInfo, ifData);
         if (hid.path.empty()) { continue; }
-        auto info = probeInterface(hid);
+        auto info = probeInterface(hid, pins_, resolver_, seen);
         if (!info.has_value()) { continue; }
-        // Microsoft-VID gamepad collections are skipped: Xbox pads belong to XInput, not this
-        // raw-HID path, and should not be fought over.
-        if (info->vendorId == kVidMicrosoft) { continue; }
         out.push_back(std::move(*info));
     }
 
     SetupDiDestroyDeviceInfoList(devInfo);
+    pins_.keepOnly(seen);
     return out;
 }
 
@@ -571,7 +589,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
         return ClaimResult::fail(reducer::DirectClaimFailure::Busy, /*frameworkStolen=*/false);
     }
 
-    const auto parser = input::usbparse::parserForDevice(device.vendorId, device.productId);
+    const auto parser = device.model.parser;
     HANDLE opened = INVALID_HANDLE_VALUE;
     PHIDP_PREPARSED_DATA preparsed = nullptr;
     HIDP_CAPS caps{};
@@ -641,7 +659,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     // controller's connect or disconnect event, on the read loop.
     const int featureReportLen = caps.FeatureReportByteLength;
     const bool isSteam2015 = parser == input::usbparse::HidParser::SteamController;
-    const bool receiverSlot = input::usbparse::isReceiver(device.vendorId, device.productId);
+    const bool receiverSlot = device.model.isReceiver();
     auto claim = std::make_unique<Claimed>();
     if (isSteam2015 && receiverSlot) {
         HandleReportWriter writer(
@@ -666,16 +684,17 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
     claim->featureReportLen = featureReportLen;
     claim->linked.store(!receiverSlot);
     claim->outputReportLen = caps.OutputReportByteLength;
+    claim->idLessInput = inputHasNoReportId(preparsed, caps);
     if (parser == input::usbparse::HidParser::GenericHid) {
         // The caps-derived field map replaces the fixed-offset guess wherever
         // the collection declares real usages; the guess stays as the fallback.
         claim->hidp = std::make_unique<HidPDecode>();
         claim->hidp->preparsed = preparsed;
-        claim->hidp->build(device.vendorId, device.productId);
+        claim->hidp->build(device.model.order);
         preparsed = nullptr;
     }
     if (preparsed != nullptr) { HidD_FreePreparsedData(preparsed); }
-    claim->running.store(true);
+    claim->loop.start();
     Claimed* raw = claim.get();
     {
         std::lock_guard<thread::TrackedMutex> lock(mtx_);
@@ -687,7 +706,7 @@ ClaimResult WinHidGateway::claim(const UsbDeviceInfo& device,
 
 namespace {
 
-// Short enough that running=false is observed promptly, long enough that an idle pad does not spin
+// Short enough that a release is observed promptly, long enough that an idle pad does not spin
 // the read thread.
 constexpr DWORD kReadWaitMs = 100;
 
@@ -812,9 +831,16 @@ bool WinHidGateway::setTrackpadPick(int syntheticId, input::usbparse::TrackpadPi
     return true;
 }
 
+// The report as the pad sent it, for a capture: an id-less collection's leading 0x00 is Windows'.
+void WinHidGateway::keepForCapture(Claimed* c, const std::uint8_t* data, std::size_t len) {
+    if (c->idLessInput) { stripPrependedReportId(data, len); }
+    c->capture.offer(c->loop, data, len, diagnostics::captureClockMs());
+}
+
 // Plain C++ on its own thread: no allocation per report, no Qt. Each HID input report is decoded
 // into a normalised XUSB report via the pure core/input/UsbReportParsers decoders and handed to
-// onReport, which publishes through GamepadInputProcessor.
+// onReport, which publishes through GamepadInputProcessor. The loop's word is loaded once per
+// report; a capture armed while a read waited keeps the report after it.
 //
 // Allocation discipline: the read buffer and the ParsedReport scratch live on this thread's stack
 // and are reused every iteration; the decoder is a pure function over those, mutating the device's
@@ -832,7 +858,9 @@ void WinHidGateway::readLoop(Claimed* c) {
     std::array<std::uint8_t, 128> buf{};
     OVERLAPPED ov{};
     ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    while (c->running.load()) {
+    for (;;) {
+        const std::uint8_t word = c->loop.load();
+        if (!diagnostics::ReadLoopWord::running(word)) { break; }
         DWORD read = 0;
         const ReadOutcome outcome = readOneReport(handle, ov, buf, read);
         if (outcome == ReadOutcome::Stop) { break; }
@@ -841,6 +869,7 @@ void WinHidGateway::readLoop(Claimed* c) {
 
         const std::uint8_t* data = buf.data();
         auto len = static_cast<std::size_t>(read);
+        if (diagnostics::ReadLoopWord::capturing(word)) { keepForCapture(c, data, len); }
         if (c->parser == input::usbparse::HidParser::SteamController) {
             stripPrependedReportId(data, len);
         }
@@ -873,7 +902,7 @@ void WinHidGateway::releaseClaim(int syntheticId) {
         claim = std::move(it->second);
         claimed_.erase(it);
     }
-    claim->running.store(false);
+    claim->loop.stop();
     auto* handle = static_cast<HANDLE>(claim->handle);
     if (handle != nullptr && handle != INVALID_HANDLE_VALUE) { CancelIoEx(handle, nullptr); }
     if (claim->reader.joinable()) { claim->reader.join(); }
@@ -924,6 +953,20 @@ bool WinHidGateway::setPadMicMuted(int syntheticId, bool muted) {
 // The device node enumerate() named, read through the device tree and the pad's hub.
 UsbHardwareReading WinHidGateway::readHardware(const UsbDeviceInfo& device) {
     return readUsbHardware(device.devicePath);
+}
+
+bool WinHidGateway::armCapture(int syntheticId) {
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    if (it == claimed_.end()) { return false; }
+    return it->second->capture.arm(it->second->loop);
+}
+
+std::vector<diagnostics::CapturedReport> WinHidGateway::capturedReports(int syntheticId) const {
+    std::lock_guard<thread::TrackedMutex> lock(mtx_);
+    const auto it = claimed_.find(syntheticId);
+    if (it == claimed_.end()) { return {}; }
+    return it->second->capture.kept();
 }
 
 // Null when nothing claims the id. The claim map's lock is released before the caller writes: a

@@ -20,6 +20,8 @@
 #include "qml/SlotListModel.h"
 #include "composer/ConnectionsComposer.h"
 #include "composer/DiagnosticsBundle.h"
+#include "core/diagnostics/ReportCapture.h"
+#include "core/diagnostics/UsbDescriptors.h"
 #include "composer/HostSnapshotCollector.h"
 #include "source/http/ConnectionSnapshotGateway.h"
 #include "source/controllerdb/ControllerDbStore.h"
@@ -41,7 +43,10 @@
 
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <memory>
+#include <optional>
+#include <vector>
 
 class QTimer;
 
@@ -228,6 +233,9 @@ class AppViewModel : public QObject {
     // "Report a problem" (docs/diagnostics-bundle.md, "Second cut"): true once every live
     // Satellite has answered the snapshot request prepareReport sent, or let it time out.
     Q_PROPERTY(bool reportReady READ reportReady NOTIFY reportReadyChanged)
+    // "Capture this controller" (docs/diagnostics-bundle.md, Capture): { slotId, state }, state one
+    // of `idle`, `capturing`, `captured`, `failed`, for the pad last asked for.
+    Q_PROPERTY(QVariantMap controllerCapture READ controllerCapture NOTIFY controllerCaptureChanged)
 
     // ── Diagnostics: the input inspector ─────────────────────────────────────
     // Republished at the poll rate while an inspection is armed; the shapes are
@@ -696,6 +704,11 @@ class AppViewModel : public QObject {
     // when the file could not be written or a compose window from the last one is still open.
     Q_INVOKABLE bool sendReport(const QString& category, const QString& categoryWords,
                                 const QString& text, const QString& slotId, const QString& summary);
+    // A Direct pad's descriptors and its next twenty input reports, taken while it lies still,
+    // kept for this run and written only into a report about that pad. False for a pad Dish does
+    // not read directly, or while a capture is running.
+    Q_INVOKABLE bool captureController(const QString& slotId);
+    QVariantMap controllerCapture() const;
 
   signals:
     // Folds AppModel's stateChanged and the coordinator's connectionsChanged.
@@ -780,6 +793,7 @@ class AppViewModel : public QObject {
     // and Explorer shows the file to attach.
     void diagnosticsMailHandedOff(bool viaMailClient);
     void reportReadyChanged();
+    void controllerCaptureChanged();
 
   private:
     void onStateChanged();
@@ -927,8 +941,11 @@ class AppViewModel : public QObject {
 
     // The bundle's facts, gathered from what the page shows and what each host said, and the file
     // it is written to.
-    composer::BundleFacts
-    diagnosticsBundleFacts(std::optional<composer::BundleReport> report) const;
+    // `reportSlotId` is the controller the report names, the only one whose capture rides.
+    composer::BundleFacts diagnosticsBundleFacts(std::optional<composer::BundleReport> report,
+                                                 const QString& reportSlotId = QString()) const;
+    std::optional<diagnostics::Json> captureFor(const QString& slotId,
+                                                const QString& reportSlotId) const;
     std::optional<composer::BundleReport> reportOf(const QString& category, const QString& text,
                                                    const QString& slotId) const;
     composer::BundleController bundleControllerOf(const models::ControllerSlot& slot) const;
@@ -944,10 +961,22 @@ class AppViewModel : public QObject {
     std::unique_ptr<composer::HostSnapshotCollector> snapshotCollector_;
     composer::HostSnapshots hostSnapshots_;
     std::optional<diagnostics::PowerStatusBytes> powerStatus_;
-    std::optional<std::size_t> usbHostControllers_;
+    std::optional<int> usbHostControllers_;
     bool reportReady_ = false;
     // A preparation answered after a newer one started is not the one on screen.
     int reportGeneration_ = 0;
+    // The capture in progress, polled until its reports are in, and the captures taken this run.
+    struct StoredCapture {
+        diagnostics::UsbHardwareFacts hardware;
+        std::vector<diagnostics::RestReport> reports;
+    };
+    void onCaptureTick();
+    void finishCapture(diagnostics::CaptureProgress progress);
+    QTimer* captureTimer_ = nullptr;
+    QString captureSlotId_;
+    int capturePolls_ = 0;
+    std::optional<diagnostics::CaptureProgress> captureProgress_;
+    std::map<QString, StoredCapture> captures_;
     arch::Observable<source::controllerdb::ControllerDbStatus>::Subscription controllerDbSub_;
     arch::Observable<source::ControllerDbPreferences>::Subscription controllerDbPrefsSub_;
     arch::Observable<source::PadTestOutcomeMap>::Subscription outcomesSub_;

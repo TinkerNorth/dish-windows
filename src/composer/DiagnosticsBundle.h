@@ -24,6 +24,7 @@
 #include "core/diagnostics/Json.h"
 #include "core/diagnostics/PadLanes.h"
 #include "core/diagnostics/PadTestOutcomes.h"
+#include "core/diagnostics/UsbDescriptors.h"
 #include "core/diagnostics/WireCounters.h"
 #include "core/diagnostics/WriteVerdict.h"
 
@@ -51,6 +52,16 @@ struct BundleHardware {
     // The Direct path's HID report lengths; absent for a pad another path carries.
     std::optional<int> inputReportBytes;
     std::optional<int> outputReportBytes;
+    // The claimed interface's interrupt endpoints, from the configuration descriptor its hub
+    // returned; not read for a pad another path carries or whose hub has not answered.
+    bool endpointsRead = false;
+    std::optional<std::uint8_t> endpointIn;
+    std::optional<std::uint8_t> endpointOut;
+    // What the pad's own descriptors say, read once per attach through its hub; empty for a pad
+    // another path carries.
+    std::optional<std::uint16_t> bcdDevice;
+    std::optional<std::vector<diagnostics::UsbInterface>> interfaces;
+    std::optional<std::string> descriptorSha256;
 };
 
 // The last report a pad published, as it went on the wire.
@@ -97,7 +108,7 @@ struct BundleOutput {
 // Never an address: the profile and the link layer only.
 struct BundleBluetooth {
     std::string profile;        // "hid" | "ble"
-    std::string transportLayer; // "classic" | "le"
+    std::string transportLayer; // "classic" | "le", "" where the link is not known
 };
 
 struct BundleController {
@@ -112,6 +123,9 @@ struct BundleController {
     std::optional<BundleInput> input;
     std::optional<BundleOutput> output;
     std::optional<BundleBluetooth> bluetooth;
+    // The person's capture of this pad (usb-descriptors-v1), only for the controller their report
+    // names.
+    std::optional<diagnostics::Json> capture;
 };
 
 // One controller slot of a session, as this client asked for it and the host applied it. Each

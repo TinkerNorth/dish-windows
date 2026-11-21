@@ -7,8 +7,11 @@
 
 #pragma once
 
+#include "core/diagnostics/UsbDescriptors.h"
+
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace dish::source::usb {
@@ -46,5 +49,30 @@ struct UsbHardwareReading {
     // is ever rebuilt from the HID class driver's preparsed data.
     std::vector<UsbReportDescriptor> reportDescriptors;
 };
+
+// What the shared descriptor parsers make of a hub reading, for the interface a pad was claimed
+// on: the device descriptor and every configuration as the hub returned them, or none unless it
+// returned all of them; the configuration's interfaces, or the device tree's classes where the
+// hub gave none; the device descriptor's bcdDevice, else the HID class driver's release number;
+// the HID class driver's maker and product strings, placed by the device descriptor's indices
+// (never the serial number's) where the hub gave one; and the claimed interface's report
+// descriptor where the pad answered for it, read off the pad itself.
+diagnostics::UsbHardwareFacts hardwareFactsOf(const UsbHardwareReading& reading,
+                                              int claimedInterface, int hidVersionNumber,
+                                              const std::string& manufacturer,
+                                              const std::string& product);
+
+// The claimed interface's first interrupt IN and OUT endpoints, as its configuration descriptor
+// lists them for the default alternate setting; not read when the hub gave no configuration.
+struct ClaimedEndpoints {
+    bool read = false;
+    int inAddress = -1;
+    int outAddress = -1;
+
+    bool operator==(const ClaimedEndpoints&) const = default;
+};
+
+ClaimedEndpoints claimedEndpointsOf(const diagnostics::UsbHardwareFacts& facts,
+                                    int claimedInterface);
 
 } // namespace dish::source::usb

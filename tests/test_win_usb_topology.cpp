@@ -131,14 +131,19 @@ TEST_CASE("usb topology: the device descriptor request", "[winusb]") {
 TEST_CASE("usb topology: the configuration descriptor request, its head and then the whole",
           "[winusb]") {
     const Bytes head = winusb::descriptorRequestBuffer(
-        2, winusb::configurationDescriptorRequest(winusb::kConfigurationHeaderBytes));
+        2, winusb::configurationDescriptorRequest(0, winusb::kConfigurationHeaderBytes));
     CHECK(headerOf(head) ==
           Bytes{0x02, 0x00, 0x00, 0x00, 0x80, 0x06, 0x00, 0x02, 0x00, 0x00, 0x09, 0x00});
     const Bytes whole =
-        winusb::descriptorRequestBuffer(2, winusb::configurationDescriptorRequest(0x00E3));
+        winusb::descriptorRequestBuffer(2, winusb::configurationDescriptorRequest(0, 0x00E3));
     CHECK(headerOf(whole) ==
           Bytes{0x02, 0x00, 0x00, 0x00, 0x80, 0x06, 0x00, 0x02, 0x00, 0x00, 0xE3, 0x00});
     CHECK(whole.size() == winusb::kDescriptorRequestHeaderBytes + 0x00E3);
+    // A second configuration is asked for by its index in wValue's low byte.
+    const Bytes second = winusb::descriptorRequestBuffer(
+        2, winusb::configurationDescriptorRequest(1, winusb::kConfigurationHeaderBytes));
+    CHECK(headerOf(second) ==
+          Bytes{0x02, 0x00, 0x00, 0x00, 0x80, 0x06, 0x01, 0x02, 0x00, 0x00, 0x09, 0x00});
 }
 
 TEST_CASE("usb topology: the report descriptor request names the interface as its recipient",

@@ -176,9 +176,10 @@ constexpr SetupPacket deviceDescriptorRequest() {
             kDeviceDescriptorBytes};
 }
 
-constexpr SetupPacket configurationDescriptorRequest(std::uint16_t length) {
-    return {kStandardDeviceIn, kGetDescriptor, descriptorValue(kConfigurationDescriptorType, 0), 0,
-            length};
+// The configuration at `index`, counted from 0 as the device descriptor's bNumConfigurations does.
+constexpr SetupPacket configurationDescriptorRequest(std::uint8_t index, std::uint16_t length) {
+    return {kStandardDeviceIn, kGetDescriptor, descriptorValue(kConfigurationDescriptorType, index),
+            0, length};
 }
 
 // The interface is the recipient, as HID 1.11 §7.1.1 has it. The hub request cannot carry that:

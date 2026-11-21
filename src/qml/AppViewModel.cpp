@@ -20,7 +20,9 @@
 #include "core/diagnostics/HostSnapshot.h"
 #include "core/diagnostics/MailHandoff.h"
 #include "core/diagnostics/PadLanes.h"
+#include "core/diagnostics/ReportCapture.h"
 #include "core/diagnostics/ReportForm.h"
+#include "core/diagnostics/UsbDescriptors.h"
 #include "core/diagnostics/UsbHost.h"
 #include "core/input/HidTransport.h"
 #include "core/model/Protocol.h"
@@ -341,6 +343,9 @@ constexpr int kApplyTickMs = 250;
 // The input inspector's poll: about thirty readings a second, the rate
 // dish-android's inspector draws at.
 constexpr int kInspectionPollMs = 33;
+// "Capture this controller" asks the claim for what it kept this often, this many times.
+constexpr int kCapturePollMs = 100;
+constexpr int kCapturePolls = 20;
 
 // The stick tests' clock. Monotonic, so a wall-clock step cannot end a capture.
 std::int64_t steadyNowMs() {
@@ -576,6 +581,10 @@ AppViewModel::AppViewModel(dish::AppModel* model, QObject* parent)
     inspectionTimer_ = new QTimer(this);
     inspectionTimer_->setInterval(kInspectionPollMs);
     QObject::connect(inspectionTimer_, &QTimer::timeout, this, &AppViewModel::onInspectionTick);
+    // Idle until the report page asks for a capture.
+    captureTimer_ = new QTimer(this);
+    captureTimer_->setInterval(kCapturePollMs);
+    QObject::connect(captureTimer_, &QTimer::timeout, this, &AppViewModel::onCaptureTick);
 
     onStateChanged();
     onConnectionsChanged();
@@ -2324,6 +2333,25 @@ bundleInputStateOf(const input::GamepadInputProcessor::DeviceState& state) {
                                       state.ry,       state.lt, state.rt, state.extButtons};
 }
 
+// An endpoint address as the bundle writes it; none where the interface has no such endpoint.
+std::optional<std::uint8_t> endpointAddressOf(int address) {
+    if (address < 0) { return std::nullopt; }
+    return static_cast<std::uint8_t>(address);
+}
+
+// The Direct path's view of the pad's own descriptors, read through its hub once per attach: the
+// claimed interface's endpoints and what the descriptors say, with the HID class driver's release
+// number standing in until the hub has answered.
+void addDescriptorFacts(composer::BundleHardware& hw, const source::usb::UsbDeviceInfo& device) {
+    const diagnostics::UsbHardwareFacts& facts = device.hardware;
+    hw.endpointsRead = device.endpointsRead;
+    hw.endpointIn = endpointAddressOf(device.endpointInAddress);
+    hw.endpointOut = endpointAddressOf(device.endpointOutAddress);
+    hw.bcdDevice = facts.bcdDevice.value_or(static_cast<std::uint16_t>(device.bcdDevice));
+    if (!facts.interfaces.empty()) { hw.interfaces = facts.interfaces; }
+    hw.descriptorSha256 = diagnostics::rawDescriptorsSha256(facts);
+}
+
 std::optional<composer::BundleBluetooth> bundleBluetoothOf(input::BluetoothLink link) {
     switch (link) {
     case input::BluetoothLink::Classic:
@@ -2433,6 +2461,7 @@ AppViewModel::bundleControllerOf(const models::ControllerSlot& slot) const {
         c.hardware.manufacturer = device->manufacturer;
         c.hardware.inputReportBytes = device->inputReportBytes;
         c.hardware.outputReportBytes = device->outputReportBytes;
+        addDescriptorFacts(c.hardware, *device);
         c.lastWrite = model_->lastDirectWrite(slot.id);
     } else {
         c.hardware.product = slot.name.toStdString();
@@ -2546,8 +2575,18 @@ composer::BundleHost AppViewModel::bundleMoonlightOf(const net::MoonlightHostRow
 
 // Nothing that identifies a host (its name, its address, its keys) is written: the labels and
 // addresses go in only to be aliased in the log and scrubbed from a host's own snapshot.
+// Only the capture of the controller the report names enters the file.
+std::optional<diagnostics::Json> AppViewModel::captureFor(const QString& slotId,
+                                                          const QString& reportSlotId) const {
+    if (reportSlotId.isEmpty() || slotId != reportSlotId) { return std::nullopt; }
+    const auto kept = captures_.find(slotId);
+    if (kept == captures_.end()) { return std::nullopt; }
+    return diagnostics::captureJson(kept->second.hardware, kept->second.reports);
+}
+
 composer::BundleFacts
-AppViewModel::diagnosticsBundleFacts(std::optional<composer::BundleReport> report) const {
+AppViewModel::diagnosticsBundleFacts(std::optional<composer::BundleReport> report,
+                                     const QString& reportSlotId) const {
     composer::BundleFacts facts;
     facts.createdAtMs = QDateTime::currentMSecsSinceEpoch();
     facts.report = std::move(report);
@@ -2557,11 +2596,13 @@ AppViewModel::diagnosticsBundleFacts(std::optional<composer::BundleReport> repor
     facts.os = machine.os.toStdString();
     facts.arch = machine.arch.toStdString();
     facts.power = diagnostics::powerFactsOf(powerStatus_);
-    facts.usbHost = diagnostics::usbHostFromCount(usbHostControllers_);
+    facts.usbHost = diagnostics::usbHostOf(usbHostControllers_);
     facts.controllerDb = bundleDbOf(model_->controllerDbStatus().value());
 
     for (const models::ControllerSlot& slot : model_->state().slotList) {
-        facts.controllers.push_back(bundleControllerOf(slot));
+        composer::BundleController c = bundleControllerOf(slot);
+        c.capture = captureFor(slot.id, reportSlotId);
+        facts.controllers.push_back(std::move(c));
     }
     for (const auto& link : model_->connections()->connections().value()) {
         facts.hosts.push_back(bundleSatelliteOf(link));
@@ -2603,6 +2644,76 @@ QString AppViewModel::saveDiagnostics() {
     const QString path = writeDiagnosticsBundle(diagnosticsBundleFacts(std::nullopt));
     if (!path.isEmpty()) { source::revealInExplorer(path); }
     return path;
+}
+
+// ── Capture this controller ─────────────────────────────────────────────────
+
+namespace {
+
+std::string_view captureStateToken(const std::optional<diagnostics::CaptureProgress>& progress) {
+    if (!progress.has_value()) { return "idle"; }
+    switch (*progress) {
+    case diagnostics::CaptureProgress::Capturing:
+        return "capturing";
+    case diagnostics::CaptureProgress::Captured:
+        return "captured";
+    case diagnostics::CaptureProgress::Failed:
+        return "failed";
+    }
+    return "idle";
+}
+
+} // namespace
+
+bool AppViewModel::captureController(const QString& slotId) {
+    const bool running = captureProgress_ == diagnostics::CaptureProgress::Capturing;
+    if (running || !model_->armDirectCapture(slotId)) { return false; }
+    captureSlotId_ = slotId;
+    capturePolls_ = 0;
+    captureProgress_ = diagnostics::CaptureProgress::Capturing;
+    captureTimer_->start();
+    emit controllerCaptureChanged();
+    return true;
+}
+
+QVariantMap AppViewModel::controllerCapture() const {
+    const std::string_view state = captureStateToken(captureProgress_);
+    QVariantMap row;
+    row[QStringLiteral("slotId")] = captureSlotId_;
+    row[QStringLiteral("state")] =
+        QString::fromLatin1(state.data(), static_cast<qsizetype>(state.size()));
+    return row;
+}
+
+// Twenty polls a tenth of a second apart, as dish-android's capturer waits: a pad that streams
+// fills its twenty slots well inside that, and one that reports only on change has sent what it
+// will at rest.
+void AppViewModel::onCaptureTick() {
+    ++capturePolls_;
+    const std::size_t kept = model_->directCapturedReports(captureSlotId_).size();
+    const bool live = model_->directDeviceFor(captureSlotId_).has_value();
+    const diagnostics::CaptureProgress progress =
+        diagnostics::captureProgress(kept, capturePolls_, kCapturePolls, live);
+    if (progress == diagnostics::CaptureProgress::Capturing) { return; }
+    finishCapture(progress);
+}
+
+void AppViewModel::finishCapture(diagnostics::CaptureProgress progress) {
+    captureTimer_->stop();
+    captureProgress_ = progress;
+    const std::optional<source::usb::UsbDeviceInfo> device =
+        model_->directDeviceFor(captureSlotId_);
+    if (progress == diagnostics::CaptureProgress::Captured && device.has_value()) {
+        captures_[captureSlotId_] =
+            StoredCapture{device->hardware,
+                          diagnostics::restReportsOf(model_->directCapturedReports(captureSlotId_),
+                                                     diagnostics::captureClockMs(),
+                                                     QDateTime::currentMSecsSinceEpoch())};
+    } else {
+        captures_.erase(captureSlotId_);
+        captureProgress_ = diagnostics::CaptureProgress::Failed;
+    }
+    emit controllerCaptureChanged();
 }
 
 // ── Report a problem ────────────────────────────────────────────────────────
@@ -2653,15 +2764,15 @@ AppViewModel::reportOf(const QString& category, const QString& text, const QStri
 
 QString AppViewModel::reportPreview(const QString& category, const QString& text,
                                     const QString& slotId) const {
-    const std::string bundle =
-        composer::buildDiagnosticsBundle(diagnosticsBundleFacts(reportOf(category, text, slotId)));
+    const std::string bundle = composer::buildDiagnosticsBundle(
+        diagnosticsBundleFacts(reportOf(category, text, slotId), slotId));
     return QString::fromStdString(bundle);
 }
 
 bool AppViewModel::sendReport(const QString& category, const QString& categoryWords,
                               const QString& text, const QString& slotId, const QString& summary) {
     const QString path =
-        writeDiagnosticsBundle(diagnosticsBundleFacts(reportOf(category, text, slotId)));
+        writeDiagnosticsBundle(diagnosticsBundleFacts(reportOf(category, text, slotId), slotId));
     if (path.isEmpty()) { return false; }
     source::DiagnosticsMail mail;
     mail.to = QString::fromLatin1(diagnostics::kSupportAddress.data(),

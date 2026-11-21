@@ -214,6 +214,15 @@ set(DISH_CORE_SOURCES
     src/core/controllerdb/IssueMatch.h
     src/core/controllerdb/DbFetch.h
     src/core/controllerdb/AttachedRecords.h
+    # The third cut: a pad's model resolved once at attach and pinned (served rows drive Direct),
+    # its descriptors parsed, and the capture's twenty reports at rest.
+    src/core/controllerdb/PadModel.h
+    src/core/controllerdb/PadModel.cpp
+    src/core/diagnostics/UsbDescriptors.h
+    src/core/diagnostics/UsbDescriptors.cpp
+    src/core/diagnostics/ReportCapture.h
+    src/core/diagnostics/ReportCapture.cpp
+    src/core/input/BluetoothServices.h
     src/source/controllerdb/ControllerDbJson.h
     src/source/controllerdb/ControllerDbJson.cpp
     src/source/controllerdb/ControllerDbStore.h
@@ -442,6 +451,7 @@ set(DISH_CORE_SOURCES
     # core, the device-tree walk and the hub's IOCTL at the source edge.
     src/core/input/WinUsbTopology.h
     src/source/usb/UsbHardwareReading.h
+    src/source/usb/UsbHardwareReading.cpp
     src/source/usb/WinUsbHardware.h
     src/source/usb/WinUsbHardware.cpp
     src/source/usb/UsbGamepadManager.h

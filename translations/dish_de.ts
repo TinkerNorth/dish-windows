@@ -3914,6 +3914,22 @@
         <translation>Eine Frage</translation>
     </message>
     <message>
+        <source>Recording its reports. Leave the controller untouched…</source>
+        <translation>Die Berichte werden aufgezeichnet. Den Controller nicht berühren…</translation>
+    </message>
+    <message>
+        <source>Captured: the file now holds this controller&apos;s descriptors and the reports it sent while it lay still.</source>
+        <translation>Aufgezeichnet: Die Datei enthält jetzt die Deskriptoren dieses Controllers und die Berichte, die er in Ruhe gesendet hat.</translation>
+    </message>
+    <message>
+        <source>The capture did not finish: Dish no longer reads this controller directly.</source>
+        <translation>Die Aufzeichnung wurde nicht abgeschlossen: Dish liest diesen Controller nicht mehr direkt.</translation>
+    </message>
+    <message>
+        <source>Dish can add this controller&apos;s USB descriptors and twenty reports taken while it lies still. Put it down, leave it untouched, then capture.</source>
+        <translation>Dish kann die USB-Deskriptoren dieses Controllers und zwanzig in Ruhe aufgenommene Berichte hinzufügen. Leg ihn hin, berühre ihn nicht und starte dann die Aufzeichnung.</translation>
+    </message>
+    <message>
         <source>Your mail app has the message. Nothing is sent until you click Send.</source>
         <translation>Deine Mail-App hat die Nachricht. Nichts wird gesendet, bis du auf Senden klickst.</translation>
     </message>
@@ -3950,6 +3966,10 @@
         <translation>Kein bestimmter Controller</translation>
     </message>
     <message>
+        <source>Capture this controller</source>
+        <translation>Diesen Controller aufzeichnen</translation>
+    </message>
+    <message>
         <source>What the file holds</source>
         <translation>Was die Datei enthält</translation>
     </message>
@@ -3972,6 +3992,10 @@
     <message>
         <source>The controller database&apos;s state and this run&apos;s event log.</source>
         <translation>Den Stand der Controller-Datenbank und das Ereignisprotokoll dieses Laufs.</translation>
+    </message>
+    <message>
+        <source>For a controller you captured: its USB descriptors and the reports it sent while it lay still.</source>
+        <translation>Für einen Controller, den du aufgezeichnet hast: seine USB-Deskriptoren und die Berichte, die er in Ruhe gesendet hat.</translation>
     </message>
     <message>
         <source>It never holds pairing keys, certificate fingerprints, IP addresses, Wi-Fi names or the names of your PCs and devices. Nothing is sent until you click Send in your mail app.</source>

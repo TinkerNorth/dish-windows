@@ -215,7 +215,7 @@ class SlotRouter final : public input::GamepadInputProcessor::InputSink {
     class MicLease;
 
     std::unique_ptr<const RouteTable> build(const QStringList& slotIds) const;
-    static SlotHardware syntheticHardware(int vendorId, int productId);
+    SlotHardware syntheticHardware(const reducer::DirectPadKey& pad) const;
     SlotHardware sdlHardware(const QString& slotId) const;
 
     // The receive thread's half: the session's route, read inside a bracket on its participant.

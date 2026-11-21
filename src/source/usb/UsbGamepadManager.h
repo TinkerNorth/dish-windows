@@ -22,6 +22,8 @@
 #include "source/usb/OutputWorker.h"
 #include "source/usb/UsbDeviceGateway.h"
 
+#include "core/controllerdb/PadModel.h"
+#include "core/diagnostics/ReportCapture.h"
 #include "core/diagnostics/WriteVerdict.h"
 #include "core/input/UsbOutputReports.h"
 #include "core/reducer/DirectPadKey.h"
@@ -31,6 +33,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -235,6 +238,17 @@ class UsbGamepadManager {
     std::optional<UsbDeviceInfo> claimedDevice(const reducer::DirectPadKey& pad) const;
     std::optional<diagnostics::WriteVerdict> lastWrite(const reducer::DirectPadKey& pad) const;
 
+    // The model a tracked pad's attach pinned, which every question about the pad reads; by
+    // model, its first tracked device's. Empty for a pad the manager does not track.
+    std::optional<dish::controllerdb::PadModel> modelFor(const reducer::DirectPadKey& pad) const;
+    std::optional<dish::controllerdb::PadModel> modelOf(int vendorId, int productId) const;
+
+    // "Capture this controller", for a pad with a live claim: false when it has none or is
+    // capturing already. The reports come back on the read loop's clock.
+    bool armCapture(const reducer::DirectPadKey& pad);
+    std::vector<diagnostics::CapturedReport>
+    capturedReports(const reducer::DirectPadKey& pad) const;
+
   private:
     static int vpKey(int vendorId, int productId) {
         return (vendorId << 16) | (productId & 0xFFFF);
@@ -252,9 +266,23 @@ class UsbGamepadManager {
         bool linked = false;
     };
 
-    // Resolve a device's desired path from its model's stored pick and fast-lane
-    // verdict and its own prior failure (the pure resolvePathChoice policy).
-    reducer::PathChoice resolvePath(const reducer::DirectPadKey& device) const;
+    // Resolve a device's desired path from its model's stored pick, the pinned model's verdict on
+    // going Direct by itself, and its own prior failure (the pure resolvePathChoice policy).
+    reducer::PathChoice resolvePath(const reducer::DirectPadKey& device, bool autoClaims) const;
+    const dish::controllerdb::PadModel* deviceModel(const reducer::DirectPadKey& device) const;
+    bool autoClaimsOf(const reducer::DirectPadKey& device) const;
+
+    // The pad's hardware, read once per attach through the gateway on a thread of its own (a
+    // hub's control transfers can take a sleeping pad's time), and collected by the scan after it
+    // lands: each pad of the device takes its facts, on the record a claim reads and on the claims
+    // already open.
+    void startHardwareRead(const reducer::DirectPadKey& device, const UsbDeviceInfo& first);
+    void collectHardware();
+    void applyHardware(const reducer::DirectPadKey& device, const UsbHardwareReading& reading);
+    // Under mtx_: a scanned pad as the manager keeps it, with its device's pinned model and
+    // whatever hardware has landed for it.
+    UsbDeviceInfo keptPad(const reducer::DirectPadKey& pad, const reducer::DirectPadKey& device,
+                          const UsbDeviceInfo& scanned) const;
 
     // The key a scanned device goes by (reducer::deviceKeyOf): the one it is
     // tracked under, or a new one on the first unit of its model no tracked
@@ -357,6 +385,19 @@ class UsbGamepadManager {
     // The last-known device descriptor per tracked pad (for re-claim): a device's own, or each
     // slot of a receiver.
     std::map<reducer::DirectPadKey, UsbDeviceInfo> devices_;
+    // The model each tracked device was pinned to when ensureTracked first met it; every later
+    // scan's pads carry it, whatever the scan said, until the device goes.
+    std::map<reducer::DirectPadKey, dish::controllerdb::PadModel> devicePins_;
+    // Each tracked pad's hardware facts and claimed endpoints, once its device's read landed.
+    struct PadHardware {
+        diagnostics::UsbHardwareFacts facts;
+        ClaimedEndpoints endpoints;
+    };
+    std::map<reducer::DirectPadKey, PadHardware> padHardware_;
+    // A tracked device's read in flight, and the reads of devices gone since they started, kept
+    // until they finish so no destructor waits on a hub.
+    std::map<reducer::DirectPadKey, std::future<UsbHardwareReading>> hardwareReads_;
+    std::vector<std::future<UsbHardwareReading>> abandonedReads_;
     // In-memory prior-failure tracking per device (android keeps this on the
     // registry; we fold it in so the manager is self-contained).
     std::map<reducer::DirectPadKey, reducer::DirectClaimFailure> priorFailures_;

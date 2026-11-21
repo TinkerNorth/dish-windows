@@ -140,10 +140,14 @@ TEST_CASE("controller db: a string missing in the person's language falls back t
 TEST_CASE("controller db: the strings locale is the first UI language the database has",
           "[controllerdb]") {
     CHECK(stringsLocaleFor({"de-DE", "en-US"}) == "de");
+    CHECK(stringsLocaleFor({"de-AT"}) == "de");
     CHECK(stringsLocaleFor({"pt-BR"}) == "pt-BR");
     CHECK(stringsLocaleFor({"pt-PT"}) == "pt-BR");
     CHECK(stringsLocaleFor({"bs-Latn-BA"}) == "bs");
+    CHECK(stringsLocaleFor({"fr-CA"}) == "fr");
     CHECK(stringsLocaleFor({"ja-JP", "fr-CA"}) == "fr");
+    CHECK(stringsLocaleFor({"es-419"}) == "es");
+    CHECK(stringsLocaleFor({"en-GB"}) == "en");
     CHECK(stringsLocaleFor({"ja-JP"}) == "en");
     CHECK(stringsLocaleFor({}) == "en");
 }
@@ -231,6 +235,13 @@ TEST_CASE("controller db: an inert served row leaves the bundled row for the sam
         CHECK(directRecordFor(&lonely, *bundled) == nullptr);
     }
     SECTION("no row at all") { CHECK(directRecordFor(nullptr, *bundled) == nullptr); }
+    SECTION("a flagged served row gives way to the live bundled row, and applies without one") {
+        ControllerRecord flagged = recordOf("pad", Family::DualSense, {kThirdPartyPad});
+        flagged.verification = Verification::Flagged;
+        CHECK(directRecordFor(&flagged, *bundled) == bundled->findById("pad"));
+        const auto empty = catalogOf(1, {});
+        CHECK(directRecordFor(&flagged, *empty) == &flagged);
+    }
 }
 
 TEST_CASE("controller db: the compiled tables outrank a record for an id they name",

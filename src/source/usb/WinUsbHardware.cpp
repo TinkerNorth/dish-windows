@@ -3,6 +3,7 @@
 
 #include "source/usb/WinUsbHardware.h"
 
+#include "core/diagnostics/UsbDescriptors.h"
 #include "core/input/HidTransport.h"
 #include "core/input/WinUsbTopology.h"
 
@@ -183,15 +184,37 @@ HubDescriptor askHub(HANDLE hub, std::uint32_t port, const winusb::SetupPacket& 
 
 // Its first nine bytes for the total length, then the whole, as USBView's GetConfigDescriptor
 // asks.
-HubDescriptor configurationOf(HANDLE hub, std::uint32_t port) {
-    const HubDescriptor head = askHub(
-        hub, port, winusb::configurationDescriptorRequest(winusb::kConfigurationHeaderBytes));
+HubDescriptor configurationOf(HANDLE hub, std::uint32_t port, std::uint8_t index) {
+    const HubDescriptor head =
+        askHub(hub, port,
+               winusb::configurationDescriptorRequest(index, winusb::kConfigurationHeaderBytes));
     if (head.refusal.has_value()) { return HubDescriptor{{}, head.refusal}; }
     const std::optional<std::uint16_t> total = winusb::configurationTotalLength(head.bytes);
     if (!total.has_value()) {
         return HubDescriptor{{}, static_cast<std::uint32_t>(ERROR_INVALID_DATA)};
     }
-    return askHub(hub, port, winusb::configurationDescriptorRequest(*total));
+    return askHub(hub, port, winusb::configurationDescriptorRequest(index, *total));
+}
+
+// How many configurations the device descriptor names; one where the hub gave none, so the first
+// is still asked for its interfaces.
+std::uint8_t configurationCountOf(const HubDescriptor& device) {
+    const std::optional<diagnostics::UsbDeviceDescriptor> parsed =
+        diagnostics::parseDeviceDescriptor(device.bytes);
+    if (!parsed.has_value() || parsed->configurations == 0) { return 1; }
+    return parsed->configurations;
+}
+
+// Every configuration in index order, as the bus hands them to Android's getRawDescriptors() and to
+// sysfs's descriptors file; a refusal of any of them is the answer for all.
+HubDescriptor configurationsOf(HANDLE hub, std::uint32_t port, std::uint8_t count) {
+    HubDescriptor all;
+    for (std::uint8_t index = 0; index < count; ++index) {
+        const HubDescriptor one = configurationOf(hub, port, index);
+        if (one.refusal.has_value()) { return HubDescriptor{{}, one.refusal}; }
+        all.bytes.insert(all.bytes.end(), one.bytes.begin(), one.bytes.end());
+    }
+    return all;
 }
 
 std::vector<UsbReportDescriptor>
@@ -230,7 +253,8 @@ UsbHardwareReading readUsbHardware(const std::string& usbDeviceInstanceId) {
         return reading;
     }
     reading.device = askHub(hub, connection->port, winusb::deviceDescriptorRequest());
-    reading.configuration = configurationOf(hub, connection->port);
+    reading.configuration =
+        configurationsOf(hub, connection->port, configurationCountOf(reading.device));
     reading.reportDescriptors = reportDescriptorsOf(hub, connection->port, reading.interfaces);
     CloseHandle(hub);
     return reading;

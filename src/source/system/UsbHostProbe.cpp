@@ -15,11 +15,11 @@
 
 namespace dish::source {
 
-std::optional<std::size_t> countUsbHostControllers() {
+std::optional<int> countUsbHostControllers() {
     const HDEVINFO set = SetupDiGetClassDevsW(&GUID_DEVINTERFACE_USB_HOST_CONTROLLER, nullptr,
                                               nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
     if (set == INVALID_HANDLE_VALUE) { return std::nullopt; }
-    std::size_t count = 0;
+    int count = 0;
     SP_DEVICE_INTERFACE_DATA entry{};
     entry.cbSize = sizeof(entry);
     while (SetupDiEnumDeviceInterfaces(set, nullptr, &GUID_DEVINTERFACE_USB_HOST_CONTROLLER,
