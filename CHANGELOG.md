@@ -96,6 +96,14 @@ share a version number.
 - **The PC's battery and battery saver** in the file, from
   `GetSystemPowerStatus`. There is no thermal state on Windows, and Wi-Fi
   facts are not read (`tests/PARITY.md`).
+- **The installer's Privacy page asks about the controller list too.** A third
+  checkbox, *Check for controller updates automatically (contacts
+  dish.tinkernorth.com)*, on by default, is kept under `InstallDefaults` as
+  `ControllerUpdates` beside the other two and applied once at the app's next
+  start; a silent install answers it with `/CONTROLLERUPDATES=yes|no`. The page
+  now names all three things that can leave the PC, says that a crash report
+  carries a minidump, and that Report a problem sends nothing by itself; on an
+  upgrade it names all three Settings switches.
 - The file never holds pairing keys, certificate fingerprints, IP addresses,
   Bluetooth addresses, Wi-Fi names or the names of your PCs and devices: hosts
   appear as "Host 1", "Host 2".
@@ -105,7 +113,7 @@ share a version number.
 - **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
   problem" (2.6), which describes your own words in the report and the
   Satellite connection snapshot, what each holds and never holds; its
-  effective date moves to 2026-11-19.
+  effective date moves to 2026-11-20.
 
 ### Notes
 

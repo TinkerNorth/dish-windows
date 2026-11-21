@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "source/store/ControllerDbPreferenceStore.h"
 #include "source/store/CrashReportingStore.h"
 #include "source/store/UpdatePreferenceStore.h"
 
@@ -17,15 +18,19 @@ namespace dish::source {
 inline constexpr const char* kKeyInstallDefaultsStamp = "InstallDefaults/Stamp";
 inline constexpr const char* kKeyInstallDefaultsUpdateCheck = "InstallDefaults/UpdateCheck";
 inline constexpr const char* kKeyInstallDefaultsCrashReports = "InstallDefaults/CrashReports";
+inline constexpr const char* kKeyInstallDefaultsControllerUpdates =
+    "InstallDefaults/ControllerUpdates";
 inline constexpr const char* kKeyInstallDefaultsApplied = "install_defaults_stamp";
 
 struct InstallDefaults {
     QString stamp;
     std::optional<bool> updateCheck;
     std::optional<bool> crashReports;
+    std::optional<bool> controllerUpdates;
 
     bool operator==(const InstallDefaults& o) const {
-        return stamp == o.stamp && updateCheck == o.updateCheck && crashReports == o.crashReports;
+        return stamp == o.stamp && updateCheck == o.updateCheck && crashReports == o.crashReports &&
+               controllerUpdates == o.controllerUpdates;
     }
     bool operator!=(const InstallDefaults& o) const { return !(*this == o); }
 };
@@ -37,7 +42,8 @@ std::optional<InstallDefaults> applyInstallDefaultsOnce(const QSettings& userSco
                                                         const QSettings& systemScope,
                                                         QSettings& appSettings,
                                                         UpdatePreferenceStore& updates,
-                                                        CrashReportingStore& crashReports);
+                                                        CrashReportingStore& crashReports,
+                                                        ControllerDbPreferenceStore& controllerDb);
 
 std::optional<InstallDefaults> applyInstallDefaultsFromRegistry();
 

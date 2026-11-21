@@ -1,6 +1,6 @@
 # Dish for Windows: Privacy Policy
 
-**Effective date:** 2026-11-19.
+**Effective date:** 2026-11-20.
 **Canonical copy:** this file, at
 [`https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md`](https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md).
 The app links to it from Help, and the privacy index on
@@ -131,16 +131,17 @@ under
 display name, version, publisher, install location, uninstall command and
 estimated size that Windows shows you in Installed apps. It creates the
 shortcuts you asked for: a Start Menu entry and, if you turned it on, a
-desktop one. And it records the two choices its Privacy page asks for, under
+desktop one. And it records the three choices its Privacy page asks for, under
 `HKEY_CURRENT_USER\Software\TinkerNorth\Dish\InstallDefaults` (or the
-`HKEY_LOCAL_MACHINE` equivalent for an all-users install): `UpdateCheck` and
-`CrashReports`, each `1` or `0`, plus a `Stamp` naming that installer run. The
-app reads the key at its next start and applies the pair exactly once,
-remembering the stamp as `install_defaults_stamp` under
+`HKEY_LOCAL_MACHINE` equivalent for an all-users install): `UpdateCheck`,
+`CrashReports` and `ControllerUpdates`, each `1` or `0`, plus a `Stamp` naming
+that installer run. The app reads the key at its next start and applies the
+choices exactly once, remembering the stamp as `install_defaults_stamp` under
 `HKEY_CURRENT_USER\Software\TinkerNorth\Dish`, so a choice you make in
 Settings afterwards is never undone by it. The key is written on a first
-install, or on any install where `/UPDATECHECK=` or `/CRASHREPORTS=` was given
-on the command line; an upgrade with neither leaves your settings alone. The
+install, or on any install where `/UPDATECHECK=`, `/CRASHREPORTS=` or
+`/CONTROLLERUPDATES=` was given on the command line; an upgrade with none of
+them leaves your settings alone. The
 uninstaller (`unins000.exe`, beside `dish.exe`) removes all three.
 [`docs/INSTALLER.md`](docs/INSTALLER.md) has the details.
 
@@ -319,9 +320,11 @@ capacity planning and abuse detection only.
 *Check for controller updates automatically* in Settings, on by default, turns
 the check off. With it off, no request for the controller list leaves your
 PC, and the app keeps using the copy it has. *Check now* runs one check when
-you click it, and does nothing while the switch is off. The portable zip and
-the installed app both make this check; it is separate from the update check
-in section 2.4, and turning one off leaves the other alone.
+you click it, and does nothing while the switch is off. The installer asks the
+same question on a first install, and a silent install can answer it with
+`/CONTROLLERUPDATES=no`. The portable zip and the installed app both make this
+check; it is separate from the update check in section 2.4, and turning one
+off leaves the other alone.
 
 ### 2.6 Report a problem
 

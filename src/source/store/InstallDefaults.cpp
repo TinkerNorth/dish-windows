@@ -27,6 +27,7 @@ std::optional<InstallDefaults> readScope(const QSettings& scope) {
     defaults.stamp = stamp;
     defaults.updateCheck = readChoice(scope, kKeyInstallDefaultsUpdateCheck);
     defaults.crashReports = readChoice(scope, kKeyInstallDefaultsCrashReports);
+    defaults.controllerUpdates = readChoice(scope, kKeyInstallDefaultsControllerUpdates);
     return defaults;
 }
 
@@ -48,7 +49,8 @@ std::optional<InstallDefaults> applyInstallDefaultsOnce(const QSettings& userSco
                                                         const QSettings& systemScope,
                                                         QSettings& appSettings,
                                                         UpdatePreferenceStore& updates,
-                                                        CrashReportingStore& crashReports) {
+                                                        CrashReportingStore& crashReports,
+                                                        ControllerDbPreferenceStore& controllerDb) {
     auto defaults = readInstallDefaults(userScope, systemScope);
     if (!defaults.has_value()) { return std::nullopt; }
 
@@ -57,14 +59,17 @@ std::optional<InstallDefaults> applyInstallDefaultsOnce(const QSettings& userSco
 
     if (defaults->updateCheck.has_value()) { updates.setChecksEnabled(*defaults->updateCheck); }
     if (defaults->crashReports.has_value()) { crashReports.setEnabled(*defaults->crashReports); }
+    if (defaults->controllerUpdates.has_value()) {
+        controllerDb.setChecksEnabled(*defaults->controllerUpdates);
+    }
     appSettings.setValue(QLatin1String(kKeyInstallDefaultsApplied), defaults->stamp);
     appSettings.sync();
 
     qCInfo(lcInstall).noquote()
-        << QStringLiteral(
-               "installer defaults applied: update check %1, crash reports %2 (stamp %3)")
+        << QStringLiteral("installer defaults applied: update check %1, crash reports %2, "
+                          "controller updates %3 (stamp %4)")
                .arg(describe(defaults->updateCheck), describe(defaults->crashReports),
-                    defaults->stamp);
+                    describe(defaults->controllerUpdates), defaults->stamp);
     return defaults;
 }
 
@@ -79,7 +84,9 @@ std::optional<InstallDefaults> applyInstallDefaultsFromRegistry() {
     QSettings appSettings;
     UpdatePreferenceStore updates;
     CrashReportingStore crashReports;
-    return applyInstallDefaultsOnce(userScope, systemScope, appSettings, updates, crashReports);
+    ControllerDbPreferenceStore controllerDb;
+    return applyInstallDefaultsOnce(userScope, systemScope, appSettings, updates, crashReports,
+                                    controllerDb);
 }
 
 } // namespace dish::source

@@ -309,9 +309,9 @@ recognises (a manifest, and the list only when it is newer, with no identifier
 attached), and, when the app crashes and *Share crash reports* is on, one crash
 report to Sentry (a stack trace, a minidump of the crashed process, and the app
 and Windows versions). All three are on by default and can be turned off in
-Settings; the installer asks about the update check and crash reports on a
-first install, and silent installs take `/UPDATECHECK=no` and
-`/CRASHREPORTS=no`. *Report a problem* on the Diagnostics page sends nothing
+Settings; the installer asks about all three on a first install, and silent
+installs take `/UPDATECHECK=no`, `/CRASHREPORTS=no` and
+`/CONTROLLERUPDATES=no`. *Report a problem* on the Diagnostics page sends nothing
 itself: it opens your own mail app with a diagnostics file attached, and the
 mail leaves only when you click Send. There is no analytics, no telemetry and
 no account.

@@ -19,6 +19,13 @@
          entry. The uninstaller's tail is asynchronous (it deletes itself via
          a helper), so removal is polled for up to 30 s.
 
+    Along the way it checks the Privacy page's answers under InstallDefaults,
+    the key the app applies once at its next start
+    (src/source/store/InstallDefaults.cpp): a first install writes all three
+    as 1, a re-run with no privacy switch leaves the key alone, a re-run with
+    /CONTROLLERUPDATES=no writes that one answer under a new stamp, and the
+    uninstall removes the key.
+
     Everything happens under a scratch directory and HKCU; no machine state,
     no elevation, no prompts.
 
@@ -39,6 +46,9 @@ $ErrorActionPreference = 'Stop'
 # Inno derives the per-user ARP key from the AppId in installer.iss.
 $appId = '{0B4F3D3C-9526-4953-9CCA-BAAD2AF4A5A1}'
 $arpKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\${appId}_is1"
+# The Privacy page's answers (installer.iss [Registry]), one DWORD per switch.
+$defaultsKey = 'HKCU:\Software\TinkerNorth\Dish\InstallDefaults'
+$privacyValues = @('UpdateCheck', 'CrashReports', 'ControllerUpdates')
 
 $Setup = (Resolve-Path $Setup).Path
 if (-not $WorkRoot) { $WorkRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP } }
@@ -71,6 +81,16 @@ try {
     $unins = Get-ChildItem -Path $installDir -Filter 'unins*.exe' -ErrorAction SilentlyContinue
     Assert ($null -ne $unins -and $unins.Count -ge 1) 'uninstaller present (the installed-vs-portable probe)'
 
+    # A first silent install answers every Privacy choice with its default, on.
+    $defaults = Get-ItemProperty $defaultsKey -ErrorAction SilentlyContinue
+    Assert ($null -ne $defaults) 'InstallDefaults key written'
+    $firstStamp = if ($null -ne $defaults) { $defaults.Stamp } else { $null }
+    Assert (-not [string]::IsNullOrWhiteSpace($firstStamp)) 'InstallDefaults stamp recorded'
+    foreach ($name in $privacyValues) {
+        $value = if ($null -ne $defaults) { $defaults.$name } else { $null }
+        Assert ($value -eq 1) "InstallDefaults $name is 1 (got '$value')"
+    }
+
     # --- 2. ARP entry --------------------------------------------------------
     'step 2: Add/Remove Programs entry'
     Assert (Test-Path $arpKey) 'per-user ARP key exists'
@@ -93,6 +113,25 @@ try {
     Assert ($code -eq 0) "re-run exits 0 (got $code)"
     Assert (Test-Path (Join-Path $installDir 'dish.exe')) 'dish.exe still present after re-run'
     Assert (Test-Path $arpKey) 'ARP key survives the re-run'
+    $defaults = Get-ItemProperty $defaultsKey -ErrorAction SilentlyContinue
+    $stamp = if ($null -ne $defaults) { $defaults.Stamp } else { $null }
+    Assert ($stamp -eq $firstStamp) "a re-run with no privacy switch leaves InstallDefaults alone (stamp '$stamp')"
+
+    # --- 3b. A re-run that answers one Privacy choice ------------------------
+    # Only the answered choice is written, under a new stamp, so the app's next
+    # start applies that one and keeps whatever Settings holds for the others.
+    'step 3b: silent re-run with /CONTROLLERUPDATES=no'
+    $log3 = Join-Path $sandbox 'install-3.log'
+    $code = Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CONTROLLERUPDATES=no', "/LOG=`"$log3`"")
+    Assert ($code -eq 0) "re-run with /CONTROLLERUPDATES=no exits 0 (got $code)"
+    $defaults = Get-ItemProperty $defaultsKey -ErrorAction SilentlyContinue
+    $stamp = if ($null -ne $defaults) { $defaults.Stamp } else { $null }
+    Assert ((-not [string]::IsNullOrWhiteSpace($stamp)) -and ($stamp -ne $firstStamp)) "the answered re-run records a new stamp (got '$stamp')"
+    $controllerUpdates = if ($null -ne $defaults) { $defaults.ControllerUpdates } else { $null }
+    Assert ($controllerUpdates -eq 0) "InstallDefaults ControllerUpdates is 0 (got '$controllerUpdates')"
+    $updateCheck = if ($null -ne $defaults) { $defaults.UpdateCheck } else { $null }
+    $crashReports = if ($null -ne $defaults) { $defaults.CrashReports } else { $null }
+    Assert (($null -eq $updateCheck) -and ($null -eq $crashReports)) "the choices the re-run did not answer are not written (UpdateCheck '$updateCheck', CrashReports '$crashReports')"
 
     # --- 4. Silent uninstall -------------------------------------------------
     'step 4: silent uninstall'
@@ -102,12 +141,13 @@ try {
     # The uninstaller deletes itself and the directory through a helper after
     # exiting; poll rather than assert immediately.
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
-    while ([DateTime]::UtcNow -lt $deadline -and ((Test-Path $installDir) -or (Test-Path $arpKey))) {
+    while ([DateTime]::UtcNow -lt $deadline -and ((Test-Path $installDir) -or (Test-Path $arpKey) -or (Test-Path $defaultsKey))) {
         Start-Sleep -Milliseconds 500
     }
     Assert (-not (Test-Path (Join-Path $installDir 'dish.exe'))) 'dish.exe removed'
     Assert (-not (Test-Path $installDir)) 'install directory removed'
     Assert (-not (Test-Path $arpKey)) 'ARP key removed'
+    Assert (-not (Test-Path $defaultsKey)) 'InstallDefaults key removed'
 }
 finally {
     if (Test-Path $installDir) {
