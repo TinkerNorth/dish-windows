@@ -267,6 +267,8 @@ set(DISH_TEST_SOURCES
     test_diagnostics_recorder.cpp
     test_diagnostics_maps.cpp
     test_feedback_bench.cpp
+    test_bench_surfaces.cpp
+    test_bench_audio.cpp
     # The controller database and diagnostics at every level.
     test_controller_db_core.cpp
     test_pad_model.cpp
