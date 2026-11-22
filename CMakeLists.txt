@@ -533,6 +533,9 @@ set(DISH_CORE_SOURCES
     src/composer/WakeStateController.cpp
     src/composer/RumbleSwitchController.h
     src/composer/RumbleSwitchController.cpp
+    src/composer/BenchActuators.h
+    src/composer/FeedbackBenchCoordinator.h
+    src/composer/FeedbackBenchCoordinator.cpp
     # Running in the background: the close policy, the tray item and the
     # suspend/resume edge (the port of dish-linux's tray and sleep handling).
     src/core/reducer/BackgroundMode.h
