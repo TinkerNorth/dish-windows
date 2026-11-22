@@ -134,6 +134,35 @@ share a version number.
 - The file never holds pairing keys, certificate fingerprints, IP addresses,
   Bluetooth addresses, Wi-Fi names or the names of your PCs and devices: hosts
   appear as "Host 1", "Host 2".
+- **The controller inspector tests every item a controller's path carries**
+  (dish-website `docs/diagnostics-bundle.md`, "The bench"), from Dish alone
+  with no host in the loop, at the strengths and times every client uses:
+  rumble and trigger rumble (48000 for 400 ms), the light bar (red, green,
+  blue, 400 ms each), the player LEDs (each in turn, 400 ms each), the
+  adaptive triggers (full rigid resistance for 2 s), the mic lamp (on, or
+  pulsing, for 2 s), the speaker's test tone and the same tone on the HD
+  haptics (660 Hz then 880 Hz, 800 ms), the microphone's level (live, up to
+  8 s) and the two stick tests. A row shows only where the path carries its
+  item, by the same answer the game's own writes pass; `tests/PARITY.md` §5b
+  gives Windows's evidence for each one a path cannot carry. Trigger rumble
+  rides SDL alone (`SDL_GameControllerRumbleTriggers`, where
+  `SDL_GameControllerHasRumbleTriggers` says the driver drives the motors,
+  which SDL's HIDAPI Xbox One driver does and its XInput backend, where every
+  wired Xbox pad lands, does not). The player LEDs are the contract's five
+  masks on both paths, which both write the mask byte. The tone and the
+  microphone open the pad's own WASAPI endpoint through the SDL audio gateway
+  for the test and close it after; nothing is sent.
+- **A test gives back what it borrowed.** The light bar, player LEDs,
+  adaptive triggers and mic lamp go back to what the game last sent when a
+  test ends, or dark and off where the game never set them (Windows cannot
+  read back what the pad showed), and a value the game sends during the test
+  is held until the test ends instead of being written over it. The other
+  surfaces keep following the game. A test's own writes are not counted in the
+  file's output lanes, so a rumble test never reads as the host's rumble; a
+  game's value held back during a test is counted when it arrives.
+- After every test the inspector asks "Did it work?" once; the answer is kept
+  under the test's contract name (`triggerRumble.left`, `lightbar.cycle`,
+  `stick.drift`, ...) with the time the test ended, and rides in the file.
 
 ### Changed
 
@@ -149,8 +178,10 @@ share a version number.
   their family instead of as generic HID. A record outranks the vendor's guess.
 - **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
   problem" (2.6), which describes your own words in the report and the
-  Satellite connection snapshot, what each holds and never holds; its
-  effective date moves to 2026-11-20.
+  Satellite connection snapshot, what each holds and never holds, and says
+  what the controller inspector's tests touch, the microphone test included,
+  and that their answers ride in the file; its effective date moves to
+  2026-11-22.
 
 ### Notes
 
@@ -165,6 +196,14 @@ share a version number.
   most 64 bytes into a slot fixed with the claim, for twenty reports. The SDL
   thread reads each pad's family pinned at attach instead of looking it up per
   output command.
+- Hot path (the bench): each light-bar, player-LED, trigger-effect and
+  mic-lamp message a session's receive thread routes now passes its slot's
+  ledger first: one flag taken for a few sequentially consistent stores, and
+  one load of the test's hold bits, never a lock or an allocation. Moonlight's
+  light bar and the mute lamp take the same ledger on the GUI thread. Rumble
+  messages and input reports are untouched. The SDL output mailbox gains a
+  trigger-rumble kind; its fields are reordered so its state still copies as
+  five words.
 - No wire change. The snapshot route is a new REST call to Satellite 2.3.0.
 
 ## [2.7.1] - 2026-11-19

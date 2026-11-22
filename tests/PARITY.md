@@ -32,7 +32,7 @@
 | Runs in the background / window closed | ⚠️ Moonlight sessions stay up (foreground service) · satellite streaming stops when the app leaves the screen, by design: the phone is the pad | ✅ tray | ✅ tray |
 | Survives PC sleep and resume | – | ✅ Satellite · ❌ Moonlight | ✅ Satellite · ❌ Moonlight |
 | Keep-awake is user-configurable | ❌ (always on while streaming) | ✅ | ✅ |
-| Diagnostics screen | ✅ | ✅ (rumble-only bench, see §5) | ✅ (rumble-only bench, see §5) |
+| Diagnostics screen | ✅ | ✅ (every item its paths carry, see §5b) | ✅ (every item its paths carry, dish-linux#122) |
 | Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ (on the section header) | ✅ | ✅ |
 | Protocol chip ("Satellite update recommended / required", "Dish update required") | ✅ | ✅ | ✅ |
 | App-wide microphone chip with mute-all | ✅ | ✅ | ✅ |
@@ -236,14 +236,142 @@ receiver has been on hand: how an empty slot answers the feature reports (the
   source, and the USB card because each controller card already shows its path
   and poll rate, while the endpoint packet facts Android adds have no desktop
   source.
-- The Diagnostics feature bench drives rumble only, through the ungated path, so
-  a pad whose rumble switch is off can still be tested. The lightbar, player
-  LEDs, trigger effects and mic lamp are host-owned state a test would
-  overwrite, and the lamp is the mute indicator. Controller audio has no test
-  tone in the desktop engines.
+- The Diagnostics bench tests every item a pad's path carries (§5b), through
+  the ungated path, so a pad whose rumble switch is off can still be tested.
 - The Diagnostics event log is localized like every other desktop string: the
   C++ vends tokens and the QML words them. Android keeps its log in English as
   export material for bug reports.
+
+## 5b. The Diagnostics bench (dish-website `docs/diagnostics-bundle.md`, "The bench")
+
+The controller inspector offers each item only where the pad's path carries it,
+by the router's own answer for the game's writes (`reducer::benchOffers`), and
+drives it from this client alone at the contract's strengths and times
+(`core/reducer/BenchSteps.h`, dish-linux's shared core byte for byte). The light
+bar, the player LEDs, the adaptive triggers and the mic lamp go back to what the
+game last sent, or dark and off when it never sent one, and a value the game
+sends during the test is held until the test ends (`core/reducer/BenchSurfaces.h`).
+⚠️ throughout until a hardware pass: no pad has been on the bench yet. The SDL
+citations below are SDL 2.32.10's sources, the version vcpkg pins here
+(THIRD_PARTY.md).
+
+| Item | USB Direct | USB Standard (SDL) | Bluetooth (SDL) |
+|---|---|---|---|
+| Rumble (`rumble.*`) | ⚠️ DS4, DualSense, Switch Pro, 2026 Steam Controller | ⚠️ where `SDL_GameControllerHasRumble` (g) | ⚠️ where `SDL_GameControllerHasRumble` (g) |
+| Trigger rumble (`triggerRumble.*`) | ❌ (a) | ⚠️ where `SDL_GameControllerHasRumbleTriggers` (b) | ⚠️ where `SDL_GameControllerHasRumbleTriggers` (b) |
+| Light bar (`lightbar.cycle`) | ⚠️ DS4, DualSense | ⚠️ where `SDL_GameControllerHasLED` | ⚠️ where `SDL_GameControllerHasLED` |
+| Player LEDs (`playerLeds.cycle`) | ⚠️ DualSense, Switch Pro (h) | ⚠️ DualSense under SDL's HIDAPI driver only (c) | ⚠️ DualSense under SDL's HIDAPI driver only (c) |
+| Adaptive triggers (`trigger.pulse`) | ⚠️ DualSense | ⚠️ DualSense under SDL's HIDAPI driver only (d) | ⚠️ DualSense under SDL's HIDAPI driver only (d) |
+| Mic lamp (`lamp.on`, `lamp.pulse`) | ⚠️ DualSense | ⚠️ DualSense under SDL's HIDAPI driver only (d) | ⚠️ DualSense under SDL's HIDAPI driver only (d) |
+| Speaker (`tone.play`) | ⚠️ the pad's own endpoint | ⚠️ the pad's own endpoint | ❌ (e) |
+| HD haptics (`haptics.play`) | ⚠️ a 4-channel endpoint (f) | ⚠️ a 4-channel endpoint (f) | ❌ (e) |
+| Microphone (`mic.level`) | ⚠️ the pad's own endpoint | ⚠️ the pad's own endpoint | ❌ (e) |
+| Sticks (`stick.drift`, `stick.range`) | ✅ | ✅ | ✅ |
+
+(a) No Direct family has trigger motors. The one that does, the Xbox One/Series
+pad, never reaches raw HID here: Windows' Xbox driver owns it and presents only
+an XInput-compatible HID collection (`IG_` in its device path), whose reports
+are not the pad's own (§4, "XUSB owns it"; `usbout::FeedbackState`). SDL's own
+hidapi skips those collections for the same reason ("XInput devices don't get
+real HID reports", `src/hidapi/windows/hid.c:439-442`).
+(b) SDL decides per pad, from its driver's `SDL_JOYCAP_RUMBLE_TRIGGERS`
+(`SDL_JoystickHasRumbleTriggers`, `src/joystick/SDL_joystick.c:1511-1522`).
+Every wired Xbox pad rides SDL's XInput backend here, because Dish turns
+RAWINPUT off (`SDLGamepadBridge::applySdlHints`, the USER-object leak), and that
+backend has no trigger motors: `WINDOWS_JoystickRumbleTriggers` returns
+`SDL_Unsupported()` (`src/joystick/windows/SDL_windowsjoystick.c:718-721`), the
+XInput backend reports `SDL_JOYCAP_RUMBLE` alone
+(`src/joystick/windows/SDL_xinputjoystick.c:415-418`), and XInput's
+`XINPUT_VIBRATION` names the two body motors only (`wLeftMotorSpeed` and
+`wRightMotorSpeed`, set at lines 407-408). Windows.Gaming.Input does
+carry them (`GamepadVibration.LeftTrigger` / `RightTrigger`,
+`WGI_JoystickRumbleTriggers`, `src/joystick/windows/SDL_windows_gaming_input.c:859-877`),
+but SDL leaves it every pad that XInput, DirectInput, RAWINPUT or HIDAPI
+already holds (same file, 503-519), which on a desktop is every pad. The driver
+that answers yes here is SDL's HIDAPI Xbox One driver, for every Microsoft pad
+it opens (`ControllerHasTriggerRumble`, `src/joystick/hidapi/SDL_hidapi_xboxone.c:154-159`,
+capability at 553-555): a pad whose HID interface is not an XInput collection.
+No host message carries trigger rumble, so the bench is its only writer.
+(c) The SDL path carries the player LEDs as the game's own writes do, through
+`SDL_GameControllerSendEffect` for a DualSense SDL's HIDAPI driver owns, which
+takes the mask byte itself (`test_bench_paths`). `SDL_GameControllerSetPlayerIndex`
+is not used for any other pad. It lights nothing on SDL's XInput, DirectInput
+and Windows.Gaming.Input backends (`WINDOWS_JoystickSetDevicePlayerIndex` and
+`WGI_JoystickSetDevicePlayerIndex` are empty, `SDL_windowsjoystick.c:650-652`,
+`SDL_windows_gaming_input.c:754-756`), and an XInput pad's ring shows the slot
+Windows assigned it, which XInput has no call to set. SDL's HIDAPI drivers that
+do light LEDs choose their own patterns, not the contract's masks (PS5:
+`0x04, 0x0A, 0x15, 0x1B, 0x1F`, `SDL_hidapi_ps5.c:331-348`; Switch:
+`1 << (index % 4)`, `SDL_hidapi_switch.c:720-730`), and the PS4 driver recolours
+the light bar instead (`SetLedsForPlayerIndex`, `SDL_hidapi_ps4.c:659-664`). SDL2
+has no query for whether a driver lights anything for an index
+(`SDL_gamecontroller.h` offers `HasLED`, `HasRumble` and `HasRumbleTriggers`,
+lines 1007-1033), and the call moves SDL's own player-index table
+(`SDL_SetJoystickIDForPlayerIndex`, `SDL_joystick.c:1398`). A Switch Pro on the
+SDL path is therefore not offered the test, as the game's player LEDs do not
+reach it there either.
+(d) Only `SDL_GameControllerSendEffect` reaches these, and on Windows only SDL's
+HIDAPI drivers implement it: the XInput and DirectInput backends and
+Windows.Gaming.Input return `SDL_Unsupported()`
+(`SDL_windowsjoystick.c:737-740`, `SDL_windows_gaming_input.c:896-899`). For any
+family but the DualSense the body would be the wrong report
+(`core/reducer/FeedbackRouting.h`), and a DualSense SDL's HIDAPI driver does
+not hold has no effect body (`SlotRouter::sdlHardware`).
+(e) The speaker, the haptic lanes and the microphone are the pad's USB Audio
+Class function, which only the USB link carries: over Bluetooth the pad is a HID
+device to Windows (its HID collection's parent is the `BTHENUM` HID service,
+§5a `bluetooth`), and the pad audio matcher routes USB pads only
+(`AppModel::resolveAudioRoutes`; `SlotRouter::audioRouteForSlot` answers none
+for a Bluetooth pad).
+(f) The haptic lanes are channels 3 and 4 of the DualSense's own 4-channel
+render endpoint, the mix format SDL reports for it
+(`SdlAudioGateway::playbackDeviceChannels`, `SDL_GetAudioDeviceSpec`). A stereo
+endpoint, a DualShock 4's headset jack, has no actuator pair, so the matcher
+names no haptic route for it and `audio::benchTone` writes nothing there.
+(g) Not yet: a pad SDL opens as a raw joystick (no game-controller mapping)
+reports `SDL_JoystickHasRumble`, so the bench offers it rumble as the
+descriptor offers the host, but the SDL thread applies feedback to game
+controllers only (`SDLGamepadBridge::drainMailboxes`), so neither the game's
+rumble nor the bench's lands on it. dish-linux shares the gap.
+(h) The Switch Pro has four player lights, and the claim masks the byte to them
+(`usbout::buildPlayerLedsReport`), so the cycle's fifth mask, `10`, lights none
+on it (`test_bench_paths`).
+
+How the contract's per-path choices land here:
+
+- Player LEDs are the five masks (`01` to `10`) on both paths, because both
+  write the mask byte themselves: the claim's OUT report and the effect body
+  `SDL_GameControllerSendEffect` takes (`test_bench_paths`, "the player LED cycle
+  reaches both of a DualSense's paths as the contract's five masks"). Neither
+  lights them by a player number, so the contract's players 1 to 4 apply to no
+  path here.
+- Rumble offers all three tests: SDL's rumble call always takes both motors,
+  and every Direct family with rumble has two actuators
+  (`usbout::buildRumbleReport`).
+- The bench needs no host: a pad bound to none is offered what its path carries
+  (`test_slot_router`, "a bar the game never set goes back dark when the bench
+  gives it back").
+- A surface the game never set goes back to the idle state, not to what the pad
+  showed when the test began, because Windows cannot read that: the HID class
+  API reads input and feature reports only (`HidD_GetInputReport`,
+  `HidD_GetFeature`; `hidsdi.h` declares no output-report read and `hidclass.h`
+  no `IOCTL_HID_GET_OUTPUT_REPORT`), these surfaces live only in the pad's
+  output report, which neither the claim nor SDL's drivers read back, and SDL2
+  has no getter for a colour, player lights or a trigger effect. Where Dish
+  itself set the surface before the test (the mute lamp), that value is the one
+  put back.
+- A test's writes are not the game's: the `output` lanes in the file count none
+  of them, and a game's value the test held back is counted when it arrives
+  (`test_slot_router`). `lastWrite` is the claim's last write, a test's included.
+
+What only a person with a pad on a Windows PC can prove: that each test is
+felt, seen or heard; that the bar, the LEDs, the triggers and the lamp come back
+to the game's state after a test during a game; that the tone reaches a
+DualSense's speaker and its actuators on their own pairs of its WASAPI endpoint
+and nothing of it is cut by the close; that the microphone's level moves with
+the voice with Windows' microphone access on for desktop apps; and that a
+Microsoft pad SDL's HIDAPI Xbox One driver opens answers
+`SDL_GameControllerHasRumbleTriggers` and feels the trigger buzz.
 
 ## 5a. Controller database and diagnostics (dish-website `docs/controller-db.md`, `docs/diagnostics-bundle.md`)
 
@@ -263,7 +391,7 @@ this client does not do what the contracts say, the row says so and why.
 | `expect.endpoints` at attach | ⚠️ against the claimed interface's interrupt endpoints, as the configuration descriptor the pad's hub returned lists them (`UsbDeviceInfo::observedEndpoints`), as dish-android's check reads its claim's endpoint pair. The hub's answer lands after the claim, so a Direct slot is matched once it has; where the hub refused, `InputReportByteLength > 0` and `OutputReportByteLength > 0` still stand for `endpoints.in` and `endpoints.out`, the one view of the pipes the HID class API gives. Checked on the Direct path only |
 | "Last write" (route, report id, ok, OS error, time) | ⚠️ from each claim's output worker. `route` is `interruptOut` for an output report (`WriteFile`) and `setReport` for a feature report (`HidD_SetFeature`); which pipe the HID class driver used for a `WriteFile` is not observable, and it falls back to SET_REPORT(Output) on an interface with no OUT endpoint |
 | "Last feedback" (host to client) | ⚠️ the top-level `lastFeedback` stays `null`; the same facts are now per lane under `output` (below) |
-| Pad tests with "Did it work?" outcomes, last twenty, in memory | ⚠️ `rumble.weak`, `rumble.strong`, `rumble.both` with `worked` / `didNotWork`, on the inspector's existing bench; the bundle contract's other tests (trigger pulse, lamp, tone, mic level, the stick tests) are not offered (§5 says why the other surfaces have no bench here) |
+| Pad tests with "Did it work?" outcomes, last twenty, in memory | ⚠️ every test the contract names that the pad's path carries (§5b), with `worked` / `didNotWork` stamped with the time the test ended, one answer per run |
 | Issue shown while `open`, for this transport on this machine model | ⚠️ `fixed` and `wontfix` never show; the model is the firmware's SystemManufacturer + SystemProductName; an `os` map matches only through its `windows` key, read by its major version (a number, or a string such as `11.0`) |
 | Diagnostics: bundled / active `dbVersion`, source, last check time and result, per controller record id, verification and mismatches | ⚠️ |
 | Bundle `dish-diagnostics.v1` | ⚠️ `path` is `direct` or `sdl` (the contract's `framework` is SDL here, and there is no `standard` block: SDL is the reader); a Direct pad's `hardware` carries vid, pid, `bcdDevice`, product, manufacturer, every interface with its endpoints, the claimed interface's `endpoints` and `descriptorSha256`, the SHA-256 of the device descriptor and every configuration as the hub returned them, which is the hash dish-android and dish-linux give the same pad (`test_usb_hardware` on a DualSense's real bytes); `firmware` is `null`, and the two HID report lengths stay beside them. `capture` is the row below; a Satellite's `version` is the `serverVersion` its capabilities last reported, `null` before any; `app.flavor` is `github` for the installer and the portable zip alike |
@@ -277,7 +405,7 @@ this client does not do what the contracts say, the row says so and why.
 | `moonlight-serverinfo` | ⚠️ `appVersion` only, from the last answered `/serverinfo`; `state` and `pairStatus` are `null`, because this client asks `/serverinfo` only over plaintext, where Sunshine reports every host free and `PairStatus` 0 for every caller. Moonlight's `session` lists its bindings (record, the emulated-device pick as `requestedType`) and is `null` for ack, round trips and counts: GameStream reports nothing back and this client counts nothing on that path |
 | `hosts[i].session`: slots, ack, RTT, `sent`/`received` per kind | ⚠️ `requestedType`/`appliedType` are the satellite catalog's slug, or the wire number while no catalog is cached; `backend` is the host's active backend from its capabilities (the apply result names none per slot); `rtt` is the heartbeat window's p50/p99. `sent`/`received` are new relaxed counters in `SatelliteClient` (hot path); the heartbeat and its ack are not counted |
 | Controller `input` (frames, rateHz, last) | ⚠️ the processor's existing per-device counter and seqlocked last wire report; `rateHz` the slot's current gamepad rate |
-| Controller `output` per lane: count, target, last, `lastWrite` | ⚠️ new relaxed counters in `SlotRouter` (hot path), counted when the router hands a lane to the pad, the host's and the bench's alike; `target` is `directUsb` / `framework` (SDL) / `none`; `lastWrite` rides `rumble`. `triggerRumble` is `null`: no desktop path delivers one. The trigger-effect lane keeps only when, not its 22 bytes |
+| Controller `output` per lane: count, target, last, `lastWrite` | ⚠️ new relaxed counters in `SlotRouter` (hot path), counted when the router hands a host's message for a lane to the pad, one a bench test holds back included; the bench's own writes are not counted (§5b); `target` is `directUsb` / `framework` (SDL) / `none`; `lastWrite` rides `rumble` and is the claim's last write, a test's included. `triggerRumble` is `null`: no host message carries one, and the bench's trigger buzz is not the game's. The trigger-effect lane keeps only when, not its 22 bytes |
 | `speaker` / `haptics` voices | ⚠️ `open` / `closed` / `refused` from the playout engine, `device` `pad` while open (it opens only the pad's endpoint); `frames` is `null`, no per-voice count is kept; `null` for a pad with no such lane on this PC |
 | `bluetooth` | ⚠️ `{ hid, classic }` or `{ ble, le }` from the HID path's service class or enumerator, read at attach on the SDL path; the path never leaves. Evidence for the rule: hidapi decides the same from the HID collection's parent node, whose compatible ids name `BTHENUM` for a classic link and `BTHLEDEVICE` for an LE one, flagged `HID_API_BUS_FLAG_BLE` (`hid_internal_detect_bus_type`, libusb/hidapi `windows/hid.c` at 16a3ce9, lines 686 to 695). That parent is the HID service (0x1124) under BTHENUM and HID over GATT (0x1812) under BTHLEDEVICE, and the collection's own instance id, which its path embeds, names the same service, so the path rule and hidapi's agree and behaviour is unchanged |
 | `device.battery`, `powerSave` | ⚠️ `GetSystemPowerStatus`: no battery is `null`, an unknown level is `null`, `charging` is the battery flag's charging bit, `powerSave` is battery saver |

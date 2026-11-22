@@ -1,6 +1,6 @@
 # Dish for Windows: Privacy Policy
 
-**Effective date:** 2026-11-20.
+**Effective date:** 2026-11-22.
 **Canonical copy:** this file, at
 [`https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md`](https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md).
 The app links to it from Help, and the privacy index on
@@ -165,6 +165,18 @@ USB-direct mode, by reading raw HID input reports itself. It also writes back to
 them: rumble and light-bar colour are sent through SDL2. The USB-direct path is
 read-only. All of this is device IO on your own machine. It requires no
 administrator rights and no driver install.
+
+**The controller inspector's tests.** From the Diagnostics page, a
+controller's inspector can test each thing its connection carries: rumble and
+trigger rumble run for a moment; the light bar, the player lights, the
+adaptive triggers and the mute lamp change for a moment and then go back to
+what the game had set; the test tone plays on the controller's own speaker, or
+on its haptics; and the microphone test opens the controller's own microphone
+for up to eight seconds to show how loud it hears you. What the microphone
+hears stays in the app and goes no further: it is not recorded, kept or sent,
+and only its level is shown. Your answer to *Did it work?* is kept in memory
+for this run, and leaves the PC only inside a diagnostics file you save or send
+(section 2.6).
 
 ### 2.2 Sent to your own LAN, not to TinkerNorth
 
@@ -389,17 +401,19 @@ asks the controller's USB hub for once when it is plugged in, any mismatch
 between the record and what Dish saw, how many input reports it sent
 and at what rate, the last one (the buttons, sticks and triggers at that
 moment), for each kind of output (rumble, light bar, player lights, trigger
-effects, mute lamp) how many reached it, where they went and the last value
-with its time, whether its speaker and haptics streams are open, the last
-report Dish wrote to it (the report id, whether it went through and the
-Windows error code when it did not), and your answers to *Did it work?* after
-a rumble test; for each paired Satellite or Moonlight host, an alias ("Host
-1", "Host 2"), its kind and version, the protocol version the session settled
-on, its link state and which controller-audio directions it grants, Dish's own
-view of the session (each controller slot, the last heartbeat's facts, round
-trip times, and how many messages of each kind went each way) and the
-snapshot above; and this run's event log of hosts and controllers appearing,
-changing state, binding and leaving, with every host named only by its alias.
+effects, mute lamp) how many a host sent it, where they went and the last value
+with its time (an inspector test's own output is not counted), whether its
+speaker and haptics streams are open, the last report Dish wrote to it (the
+report id, whether it went through and the Windows error code when it did
+not), and your answers to *Did it work?* after each test in the controller
+inspector, with the test's name and when it ended; for each paired Satellite
+or Moonlight host, an alias ("Host 1", "Host 2"), its kind and version, the
+protocol version the session settled on, its link state and which
+controller-audio directions it grants, Dish's own view of the session (each
+controller slot, the last heartbeat's facts, round trip times, and how many
+messages of each kind went each way) and the snapshot above; and this run's
+event log of hosts and controllers appearing, changing state, binding and
+leaving, with every host named only by its alias.
 
 **A controller you capture.** For a controller Dish reads directly, the page
 offers *Capture this controller*: put the controller down, leave it untouched,
