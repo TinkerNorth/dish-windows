@@ -178,10 +178,21 @@ share a version number.
   their family instead of as generic HID. A record outranks the vendor's guess.
 - **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
   problem" (2.6), which describes your own words in the report and the
-  Satellite connection snapshot, what each holds and never holds, and says
-  what the controller inspector's tests touch, the microphone test included,
-  and that their answers ride in the file; its effective date moves to
-  2026-11-22.
+  Satellite connection snapshot, what each holds and never holds; its
+  effective date moves to 2026-11-22.
+- **PRIVACY.md** now describes what the app does with a controller as the code
+  does it: it writes the player lights, adaptive-trigger effects and the mute
+  lamp as well as rumble and the light bar, in USB-direct mode too, which it
+  called read-only; a DualSense's or DualShock 4's own speaker plays what a
+  satellite sends for it, and its own microphone opens only with that
+  controller's Microphone switch on, streaming to a satellite that carries it,
+  and not muted; the gamepad stream's list names those frames; the
+  capabilities table names the controller's own audio device, which the app
+  opens through SDL2's audio over WASAPI; and the inspector's tests, the
+  microphone test among them, are described, with their answers in the file.
+  The sentence that the app does not access the microphone or the clipboard is
+  replaced: the only microphone it ever opens is a controller's own, and it
+  writes to the clipboard only for *Copy events* on the Diagnostics page.
 
 ### Notes
 

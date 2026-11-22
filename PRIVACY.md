@@ -159,12 +159,31 @@ the satellite you bound the controller to:
   battery and the computer's, or the computer's when the controller has none.
   A computer without a battery counts as fully charged on mains power.
 - Raw HID reports read from a controller in USB-direct mode.
+- What a controller's own microphone hears, only while it is open as described
+  below. It is encoded as it arrives (the inspector's test only measures how
+  loud it is), and never recorded or kept.
 
 The app reads input from connected game controllers, through SDL2 and, in
 USB-direct mode, by reading raw HID input reports itself. It also writes back to
-them: rumble and light-bar colour are sent through SDL2. The USB-direct path is
-read-only. All of this is device IO on your own machine. It requires no
-administrator rights and no driver install.
+them what the game sends through a satellite or a Moonlight host: rumble, the
+light-bar colour, the player lights, adaptive-trigger effects and the mute
+lamp, which also lights when you mute a controller. It writes them through SDL2
+or, in USB-direct mode, as HID output reports it writes itself. All of this is
+device IO on your own machine. It requires no administrator rights and no
+driver install.
+
+**A controller's own speaker and microphone.** A DualSense or DualShock 4 on a
+USB cable has an audio device of its own, which Windows lists beside your PC's
+under the controller's name (such as "Speakers (Wireless Controller)"). While
+that controller's *Speaker* switch is on, which is the default, the sound a
+satellite sends for it, and on a DualSense the haptics, play on that device.
+Apart from the inspector's test below, its microphone is opened only while all
+of these hold: that controller's *Microphone* switch is on, which it is not
+until you turn it on; the controller is streaming to a satellite that carries
+the microphone; and it is not muted. What it hears is then sent to that
+satellite, as section 2.2 describes. Turning the switch off, muting it or
+ending the stream closes the microphone. The app never opens your PC's own
+microphone, or any microphone but a controller's own.
 
 **The controller inspector's tests.** From the Diagnostics page, a
 controller's inspector can test each thing its connection carries: rumble and
@@ -205,9 +224,12 @@ on an address you can see in the app.
 - **Gamepad stream.** The data plane is raw UDP to the satellite, port 9876
   by default, encrypted and authenticated with ChaCha20-Poly1305 under a
   session key derived from the pairing key (the pairing key itself never
-  travels over UDP). Upstream frames carry controller state, motion, battery,
-  and touchpad. Downstream frames carry rumble, light-bar colour, heartbeat
-  acknowledgements, and session close.
+  travels over UDP). Upstream frames carry controller state, motion, battery
+  and touchpad and, while a controller's microphone is open as section 2.1
+  describes, what it hears, as 20 ms Opus frames. Downstream frames carry
+  rumble, the light-bar colour, the player lights, adaptive-trigger effects,
+  the mute lamp, the sound and haptics for a controller's own speaker,
+  heartbeat acknowledgements, and session close.
 - **Moonlight hosts.** Dish can also be the controller for a Sunshine, Apollo
   or Wolf host, speaking the Moonlight (GameStream) protocol instead of the
   satellite one. Hosts are found over mDNS (`_nvstream._tcp`) or added by
@@ -516,7 +538,8 @@ apps do, so this is the equivalent list of what the app touches.
 |---|---|
 | Network sockets: UDP multicast, UDP broadcast listen, UDP unicast, TCP, TLS over TCP | Discovery, pairing, control plane, gamepad stream, for satellites and Moonlight hosts alike. All to your LAN. |
 | HTTPS to `github.com` | The update check and, if enabled, the update download. Section 2.4. Only while *Check for updates automatically* is on. |
-| Game-controller device enumeration and IO | Reading controller input, and writing rumble and light-bar output back to the controller. Raw HID access is used for reading in USB-direct mode. |
+| Game-controller device enumeration and IO | Reading controller input, and writing rumble, light, trigger and lamp output back to the controller. Raw HID access is used for reading and writing in USB-direct mode. |
+| A controller's own audio device, through SDL2's audio over WASAPI | Playing the sound and haptics a satellite sends for that controller, and the inspector's test tone, and opening its microphone only as section 2.1 describes. Never your PC's own microphone. |
 | `SetThreadExecutionState` | Preventing sleep while a controller is actively streaming, so input latency stays low. Released when streaming stops. |
 | `HKEY_CURRENT_USER` registry read and write | Settings and pairing state, as listed in section 2.1. |
 | `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, and the `updates\` folder described in section 2.1. |
@@ -525,7 +548,9 @@ apps do, so this is the equivalent list of what the app touches.
 
 The app runs as a normal user. It does not request elevation, does not
 install a service or a driver, does not read your files, and does not access
-the microphone, camera, location, contacts, or clipboard. The one exception to
+the camera, location or contacts. It writes to the clipboard only when you
+press *Copy events* on the Diagnostics page, and the only microphone it ever
+opens is a controller's own (section 2.1). The one exception to
 elevation is an all-users install: applying an update to an installation under
 `Program Files` needs administrator rights, so the installer asks for them once
 with the standard Windows prompt, and a declined prompt simply leaves the old
