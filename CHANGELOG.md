@@ -194,6 +194,15 @@ share a version number.
   replaced: the only microphone it ever opens is a controller's own, and it
   writes to the clipboard only for *Copy events* on the Diagnostics page.
 
+### Fixed
+
+- **A pad SDL has no mapping for now rumbles.** A controller SDL opens as a
+  raw joystick reported rumble to the host and was offered the bench's rumble
+  tests, but its output was never applied, so neither the game's rumble nor
+  the bench's reached it. Its rumble now goes out through the joystick's own
+  handle (`SDL_JoystickRumble`). Rumble is all such a pad claims, so nothing
+  else is ever written to it.
+
 ### Notes
 
 - The compiled Direct tables (`kKnownModels`, the fast-lane vendors) stay, and
@@ -215,6 +224,10 @@ share a version number.
   messages and input reports are untouched. The SDL output mailbox gains a
   trigger-rumble kind; its fields are reordered so its state still copies as
   five words.
+- Hot path (the raw joystick's rumble): the SDL thread now drains a raw
+  joystick's output mailbox each pump cycle, as it does a game controller's,
+  and picks the pad's handle by a switch on the kind already in its record;
+  no lock, no allocation and no extra lookup per command.
 - No wire change. The snapshot route is a new REST call to Satellite 2.3.0.
 
 ## [2.7.1] - 2026-11-19

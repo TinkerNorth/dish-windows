@@ -328,11 +328,13 @@ render endpoint, the mix format SDL reports for it
 (`SdlAudioGateway::playbackDeviceChannels`, `SDL_GetAudioDeviceSpec`). A stereo
 endpoint, a DualShock 4's headset jack, has no actuator pair, so the matcher
 names no haptic route for it and `audio::benchTone` writes nothing there.
-(g) Not yet: a pad SDL opens as a raw joystick (no game-controller mapping)
-reports `SDL_JoystickHasRumble`, so the bench offers it rumble as the
-descriptor offers the host, but the SDL thread applies feedback to game
-controllers only (`SDLGamepadBridge::drainMailboxes`), so neither the game's
-rumble nor the bench's lands on it. dish-linux shares the gap.
+(g) A pad SDL opens as a raw joystick (no game-controller mapping) is offered
+rumble where `SDL_JoystickHasRumble`, and the game's rumble and the bench's
+both land on it through `SDL_JoystickRumble`, from the same mailbox the SDL
+thread drains for a game controller (`SDLGamepadBridge::applyJoystickOutput`).
+Rumble is all such a pad claims: its light bar, trigger motors and effect body
+are never offered and never written (`test_slot_router`, over an SDL virtual
+joystick that `SDL_IsGameController` refuses). dish-linux does the same.
 (h) The Switch Pro has four player lights, and the claim masks the byte to them
 (`usbout::buildPlayerLedsReport`), so the cycle's fifth mask, `10`, lights none
 on it (`test_bench_paths`).
