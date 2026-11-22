@@ -270,6 +270,7 @@ set(DISH_TEST_SOURCES
     test_bench_surfaces.cpp
     test_bench_audio.cpp
     test_feedback_bench_coordinator.cpp
+    test_bench_paths.cpp
     # The controller database and diagnostics at every level.
     test_controller_db_core.cpp
     test_pad_model.cpp
