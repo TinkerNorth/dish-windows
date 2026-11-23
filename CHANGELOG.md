@@ -1353,7 +1353,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.7.1...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.8.0...main
+[2.8.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.8.0
 [2.7.1]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.1
 [2.7.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.0
 [2.6.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.6.0
