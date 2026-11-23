@@ -256,6 +256,7 @@ set(DISH_TEST_SOURCES
     test_update_staging_store.cpp
     test_update_coordinator.cpp
     test_update_handoff.cpp
+    test_update_request.cpp
     test_ui_preference_store.cpp
     test_update_preference_store.cpp
     test_install_defaults.cpp
@@ -267,6 +268,10 @@ set(DISH_TEST_SOURCES
     test_diagnostics_recorder.cpp
     test_diagnostics_maps.cpp
     test_feedback_bench.cpp
+    test_bench_surfaces.cpp
+    test_bench_audio.cpp
+    test_feedback_bench_coordinator.cpp
+    test_bench_paths.cpp
     # The controller database and diagnostics at every level.
     test_controller_db_core.cpp
     test_pad_model.cpp
@@ -275,9 +280,11 @@ set(DISH_TEST_SOURCES
     test_controller_db_json.cpp
     test_controller_db_bundled.cpp
     test_controller_db_fetch.cpp
+    test_controller_db_gateway.cpp
     test_controller_record_rows.cpp
     test_diagnostics_levels.cpp
     test_diagnostics_bundle.cpp
+    test_diagnostics_handoff.cpp
     # The support report: the report, both ends of each host, every path.
     test_support_report.cpp
     test_connection_snapshot_gateway.cpp
@@ -311,6 +318,10 @@ target_compile_definitions(DishTests PRIVATE
 # vendored folder the resource is built from.
 target_compile_definitions(DishTests PRIVATE
     DISH_CONTROLLER_DB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets/controllers/v1")
+# The future-reader set: a dbVersion 2 the website may publish later, byte for byte as the
+# website's contract round gave it, which test_controller_db_fetch serves to the check.
+target_compile_definitions(DishTests PRIVATE
+    DISH_FUTURE_DB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/controllerdb-future")
 # The `release_translations` dependency is wired from the TOP-LEVEL CMakeLists:
 # that target does not exist until this directory scope is finalized.
 

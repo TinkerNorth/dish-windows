@@ -305,15 +305,16 @@ third-party runtime listed below.
 the PC on their own: an update check against GitHub (one request for
 `latest.json` on this project's releases page, with no identifier attached), a
 check against `dish.tinkernorth.com` for a newer list of the controllers Dish
-recognises (a manifest, and the list only when it is newer, with no identifier
-attached), and, when the app crashes and *Share crash reports* is on, one crash
+recognises, shortly after launch and every six hours (a manifest, and the list
+only when it is newer, with no identifier attached), and, when the app crashes and *Share crash reports* is on, one crash
 report to Sentry (a stack trace, a minidump of the crashed process, and the app
 and Windows versions). All three are on by default and can be turned off in
 Settings; the installer asks about all three on a first install, and silent
 installs take `/UPDATECHECK=no`, `/CRASHREPORTS=no` and
 `/CONTROLLERUPDATES=no`. *Report a problem* on the Diagnostics page sends nothing
-itself: it opens your own mail app with a diagnostics file attached, and the
-mail leaves only when you click Send. There is no analytics, no telemetry and
+itself: it opens your own mail app with a diagnostics file attached where the
+mail app takes it (the new Outlook and the Mail app take none), and shows the
+file in Explorer either way; the mail leaves only when you click Send. There is no analytics, no telemetry and
 no account.
 
 **Third-party components in the signed package.** Qt 6 (LGPL-3.0), SDL2

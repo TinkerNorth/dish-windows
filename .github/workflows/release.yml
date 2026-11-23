@@ -242,6 +242,13 @@ jobs:
         shell: pwsh
         run: ./scripts/test-portable-bundle.ps1 -Bundle dish-windows
 
+      # dish-setup.exe ships build-release/setup-image verbatim, staged by
+      # cmake/DishSetupImage.cmake rather than stage-bundle.ps1; the round-trip
+      # below installs it but never starts it.
+      - name: Install image smoke test (it must start)
+        shell: pwsh
+        run: ./scripts/test-portable-bundle.ps1 -Bundle build-release/setup-image
+
       # Licence texts (LGPLv3 s4(b), OFL-1.1 s2) are staged by
       # scripts/stage-bundle.ps1 above.
 

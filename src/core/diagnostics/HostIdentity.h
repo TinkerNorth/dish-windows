@@ -40,10 +40,12 @@ inline bool startsWithIgnoringCase(std::string_view text, std::string_view prefi
     });
 }
 
-// Firmware placeholders that name nothing ("To Be Filled By O.E.M.", "System Product Name").
+// Firmware placeholders that name nothing ("To Be Filled By O.E.M.", "System Product Name"), and
+// the words DMI holds where a board left the field unset.
 inline bool isPlaceholder(std::string_view text) {
-    constexpr std::array<std::string_view, 4> kPlaceholders{
-        "To Be Filled By O.E.M.", "System Product Name", "System manufacturer", "Default string"};
+    constexpr std::array<std::string_view, 7> kPlaceholders{
+        "To Be Filled By O.E.M.", "System Product Name", "System manufacturer", "Default string",
+        "Not Specified",          "Not Applicable",      "Type1ProductConfigId"};
     return std::any_of(kPlaceholders.begin(), kPlaceholders.end(),
                        [text](std::string_view p) { return startsWithIgnoringCase(text, p); });
 }

@@ -299,6 +299,11 @@ set(DISH_CORE_SOURCES
     src/core/input/InputReadout.h
     src/core/input/StickHealth.h
     src/core/reducer/FeedbackBench.h
+    src/core/reducer/BenchItems.h
+    src/core/reducer/BenchSteps.h
+    src/core/reducer/BenchSurfaces.h
+    src/core/reducer/BenchRuns.h
+    src/core/audio/BenchAudio.h
     src/core/reducer/CapabilitySolver.h
     src/core/reducer/CapabilitySolver.cpp
     src/core/reducer/HostAudioVerdict.h
@@ -528,6 +533,9 @@ set(DISH_CORE_SOURCES
     src/composer/WakeStateController.cpp
     src/composer/RumbleSwitchController.h
     src/composer/RumbleSwitchController.cpp
+    src/composer/BenchActuators.h
+    src/composer/FeedbackBenchCoordinator.h
+    src/composer/FeedbackBenchCoordinator.cpp
     # Running in the background: the close policy, the tray item and the
     # suspend/resume edge (the port of dish-linux's tray and sleep handling).
     src/core/reducer/BackgroundMode.h
@@ -825,6 +833,7 @@ qt_add_qml_module(Dish
         ${DISH_KIT_QML_FILES}
         src/qml/shared/BindingDraft.qml
         src/qml/shared/LinkVocabulary.qml
+        src/qml/shared/ControllerDbVocabulary.qml
         src/qml/shared/MoonlightVocabulary.qml
         src/qml/pages/HomePage.qml
         src/qml/pages/ControllersPage.qml

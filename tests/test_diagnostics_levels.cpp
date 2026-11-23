@@ -78,12 +78,7 @@ TEST_CASE("test outcomes: the last twenty, oldest first", "[diagnostics][outcome
     }
 }
 
-TEST_CASE("test outcomes: the bench's motors name the test, the answer names the result",
-          "[diagnostics][outcomes]") {
-    CHECK(rumbleTestName("weak") == std::optional<std::string>("rumble.weak"));
-    CHECK(rumbleTestName("strong") == std::optional<std::string>("rumble.strong"));
-    CHECK(rumbleTestName("both") == std::optional<std::string>("rumble.both"));
-    CHECK_FALSE(rumbleTestName("lightbar").has_value());
+TEST_CASE("test outcomes: the answer names the result", "[diagnostics][outcomes]") {
     CHECK(outcomeResult(true) == "worked");
     CHECK(outcomeResult(false) == "didNotWork");
 }
@@ -116,9 +111,9 @@ TEST_CASE("mail: UTC times from epoch milliseconds", "[diagnostics][mail]") {
 }
 
 TEST_CASE("mail: which way the mail goes after Simple MAPI answers", "[diagnostics][mail]") {
-    CHECK(nextStepAfterMapi(0UL) == MailStep::Done);
+    CHECK(nextStepAfterMapi(0UL) == MailStep::RevealFolder);
     // The person closed the compose window: their answer, not a missing client.
-    CHECK(nextStepAfterMapi(1UL) == MailStep::Done);
+    CHECK(nextStepAfterMapi(1UL) == MailStep::RevealFolder);
     // MAPI_E_FAILURE, MAPI_E_LOGIN_FAILURE, MAPI_E_NOT_SUPPORTED: no client answered.
     CHECK(nextStepAfterMapi(2UL) == MailStep::OpenMailtoAndRevealFolder);
     CHECK(nextStepAfterMapi(3UL) == MailStep::OpenMailtoAndRevealFolder);
@@ -151,6 +146,8 @@ TEST_CASE("host identity: the machine's model from its firmware strings",
     CHECK(machineModelOf("  Dell Inc. ", " XPS 13 9310 ") == "Dell Inc. XPS 13 9310");
     CHECK(machineModelOf("System manufacturer", "System Product Name") == "Unknown PC");
     CHECK(machineModelOf("To Be Filled By O.E.M.", "Thor") == "Thor");
+    CHECK(machineModelOf("Not Specified", "Not Applicable") == "Unknown PC");
+    CHECK(machineModelOf("AYN", "Type1ProductConfigId") == "AYN");
     CHECK(machineModelOf("AYN", "") == "AYN");
     CHECK(machineModelOf("", "") == "Unknown PC");
 }

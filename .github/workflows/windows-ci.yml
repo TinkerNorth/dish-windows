@@ -205,6 +205,13 @@ jobs:
         shell: pwsh
         run: ./scripts/test-portable-bundle.ps1 -Bundle artifact
 
+      # The installer ships build-release/setup-image verbatim, and cmake/DishSetupImage.cmake
+      # stages it, not stage-bundle.ps1: a second staging path, which the round-trip below installs
+      # but never starts. The same smoke test, over the files the installer carries.
+      - name: Install image smoke test (it must start)
+        shell: pwsh
+        run: ./scripts/test-portable-bundle.ps1 -Bundle build-release/setup-image
+
       # Compiling the .iss on every PR is what catches a broken installer
       # before a release does. Same recipe as release.yml and satellite.
       # Version-pinned like clang-format above: 6.7.3 renames a per-user

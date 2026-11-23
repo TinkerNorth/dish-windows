@@ -18,6 +18,7 @@
 #include "composer/ConnectionCoordinator.h"
 #include "composer/CrashReportingBackend.h"
 #include "composer/DiagnosticsRecorder.h"
+#include "composer/FeedbackBenchCoordinator.h"
 #include "composer/BackgroundCoordinator.h"
 #include "composer/CrashReportingController.h"
 #include "composer/RumbleSwitchController.h"
@@ -35,7 +36,7 @@
 #include "core/model/Protocol.h"
 #include "core/reducer/BindingPresence.h"
 #include "core/reducer/BatteryRouting.h"
-#include "core/reducer/FeedbackBench.h"
+#include "core/reducer/BenchItems.h"
 #include "core/reducer/FeedbackRouting.h"
 #include "core/reducer/HostAudioVerdict.h"
 #include "core/reducer/MicIndicatorState.h"
@@ -278,12 +279,10 @@ class AppModel : public QObject {
     // Stores the pick, hands it to the pad's decoder and re-declares the slot.
     void setSlotTrackpadPick(const QString& slotId, const std::string& pick);
 
-    // The Diagnostics bench. Whether the slot's pad can rumble on the path it is
-    // on now, and a test buzz that goes straight to the actuator: ungated by the
-    // binding's rumble switch, as dish-android's testBuzz is, so a pad whose
-    // rumble is switched off can still be tested.
-    bool slotCarriesRumble(const QString& slotId) const;
-    void testRumble(const QString& slotId, reducer::TestBuzz buzz);
+    // The Diagnostics bench: whether the slot's pad is offered an item on the path it is on now
+    // (rule 1, the router's own answer), and the runs that test it.
+    bool benchOffers(const QString& slotId, reducer::BenchItem item) const;
+    composer::FeedbackBenchCoordinator* bench() { return bench_.get(); }
 
     // Per-slot hardware truth read from the source layer that owns the slot: the parser family
     // for a synthetic (USB-direct) id, the SDL probe for a framework id.
@@ -574,8 +573,6 @@ class AppModel : public QObject {
     // writes into the store, so it comes after both and is destroyed first.
     source::DiagnosticsLogStore diagnosticsLog_;
     composer::DiagnosticsRecorder diagnosticsRecorder_;
-    // The Diagnostics bench's buzzes, so a stop ends only the buzz it was set for.
-    reducer::TestBuzzTickets buzzTickets_;
     // Self-contained: owns its own repo/identity/sessions and shares nothing with
     // the Satellite hot path, so the Moonlight path can never regress it.
     net::MoonlightManager moonlight_;
@@ -808,6 +805,13 @@ class AppModel : public QObject {
     source::PadTestOutcomeStore padOutcomes_;
     source::MachineIdentity machine_;
     source::DiagnosticsHandoff* diagnosticsHandoff_ = nullptr;
+    // The Diagnostics bench drives pads through router_ and the audio gateway and records into
+    // padOutcomes_; made once the router exists, and let go first in the destructor, the clock
+    // before the bench so no step falls due on a bench that is gone, and the bench before the
+    // rest so a test still running gives its pad back while everything it writes through is
+    // still there.
+    std::unique_ptr<composer::QtBenchClock> benchClock_;
+    std::unique_ptr<composer::FeedbackBenchCoordinator> bench_;
 };
 
 } // namespace dish

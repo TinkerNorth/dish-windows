@@ -21,7 +21,7 @@ share a version number.
 
 ---
 
-## [2.8.0] - 2026-11-19
+## [2.8.0] - 2026-11-23
 
 ### Added
 
@@ -34,11 +34,24 @@ share a version number.
   against its SHA-256 and size, parsed, checked for schema 1 and then swapped
   in atomically under `%LOCALAPPDATA%\Dish\controllers\v1\`. Any failure
   keeps the list in force. A newer list applies to a controller at its next
-  attach.
+  attach. A later list is taken as this build can read it: a strings file for
+  a language the build does not ship is left out rather than refusing the
+  list, and a record that uses a word this build does not know stays in the
+  list, inert, so the bundled record for that controller stays in force. The
+  log says at start which list was bundled and which is in force, and CI
+  starts both the portable bundle and the install image and refuses either
+  when its bundled list did not load.
 - **Settings: "Check for controller updates automatically"** (on by default)
   and **"Check now"**. With the switch off, no request for the list leaves the
-  PC, "Check now" included. The request carries no identifier, no query and
-  the system's default `User-Agent`.
+  PC, "Check now" included. The request carries no identifier, no query,
+  Qt's default `User-Agent` (`Mozilla/5.0`) and a fixed `Accept-Language: *`
+  in place of the system's languages, which Qt would otherwise send. The
+  update check sends the same fixed `Accept-Language` now. A check whose
+  answer is not 200 or 304 (the list not published yet, a timeout, a busy
+  server) is "could not reach dish.tinkernorth.com", never "the download did
+  not verify", which is kept for bytes that arrived and failed their check.
+  Settings shows the last check's result beside its time, as Diagnostics
+  does.
 - **Each controller's record on the Diagnostics card.** The record it matched,
   its name from the database's strings in your language (English where a
   language has none), a chip for its verification state (Verified, Layout
@@ -54,10 +67,12 @@ share a version number.
   record in the controller list in force, then the vendor's guess, and pinned
   for as long as it stays: the capability solve, the claim, its read loop, its
   output worker and the health judgement all read that one model, and a list
-  that lands while the pad is in use applies at its next attach. A served row
-  whose family or operation this build lacks shows its name and issues and
-  leaves the bundled row in force; a flagged one gives way to a live bundled
-  row.
+  that lands while the pad is in use applies at its next attach. The record's
+  init kind and output route are read but drive nothing: a pad's init and its
+  write route follow its family, which is right for every family the desktops
+  run. A served row whose family or operation this build lacks, or that uses a
+  word this build does not read, shows its name and issues and leaves the
+  bundled row in force; a flagged one gives way to a live bundled row.
 - **The pad's own descriptors in the file.** For a Direct pad Dish reads, once
   per attach and through its USB hub, its device descriptor and every
   configuration, and the file's `hardware` gains `bcdDevice`, every interface
@@ -72,7 +87,7 @@ share a version number.
 - **"Last write" on a Direct controller's card**: the route, the report id,
   whether the pad took it and the Windows error code when it did not, recorded
   by the claim's output worker without a lock or an allocation.
-- **"Did it work?" after each rumble test** in the controller inspector. The
+- **"Did it work?" after every test** in the controller inspector. The
   answer is kept per controller, the last twenty, for this run, and the last
   one shows on the inspector and the Diagnostics card.
 - **A "Controller database" card on Diagnostics**: the bundled and active
@@ -90,15 +105,21 @@ share a version number.
   opens your own mail app through Simple MAPI, addressed to
   `support@tinkernorth.com`, subject `Dish support: <category> · Dish for
   Windows <version> on <PC model>` (the prefix stays English so the mailbox
-  can sort on it), your words first and the Diagnostics summary after, the
-  file attached; where no mail app answers MAPI, a `mailto:` link opens and
-  Explorer shows the file. *Save diagnostics* writes the same file without a
-  report. Nothing is sent until you click Send.
+  can sort on it; a firmware placeholder such as "To Be Filled By O.E.M." or
+  "Not Specified" names no model), your words first and the Diagnostics
+  summary after, the file attached; where no mail app answers MAPI (the new
+  Outlook and the Mail app answer none), a `mailto:` link opens without the
+  file. Explorer shows the file after either, and the page names it, since a
+  mail app may still leave it out. *Save diagnostics* writes the same file
+  without a report. Nothing is sent until you click Send.
 - **Both ends of every host in the file.** While the report page is open,
   each live Satellite of 2.3.0 or later is asked for its own account of the
   session (`GET /api/connections/{id}/diagnostics`, over the session's pinned
-  HTTPS and proof, two seconds at most) and the answer is embedded with that
-  host's name and address replaced by its alias wherever they appear. An
+  HTTPS and proof, two seconds at most) and the answer is embedded with the
+  name and address of every host the file lists replaced by that host's
+  alias wherever they appear, in every snapshot and every log line, keys
+  included, never inside a longer word or number; a host's name and its
+  address are one alias. An
   older Satellite, told by the version its capabilities reported, is not
   asked: the file carries what Dish already fetched from it and says
   `olderSatellite`; one that cannot answer says `offline`, `timeout`,
@@ -134,6 +155,39 @@ share a version number.
 - The file never holds pairing keys, certificate fingerprints, IP addresses,
   Bluetooth addresses, Wi-Fi names or the names of your PCs and devices: hosts
   appear as "Host 1", "Host 2".
+- **The controller inspector tests every item a controller's path carries**
+  (dish-website `docs/diagnostics-bundle.md`, "The bench"), from Dish alone
+  with no host in the loop, at the strengths and times every client uses:
+  rumble and trigger rumble (48000 for 400 ms), the light bar (red, green,
+  blue, 400 ms each), the player LEDs (each in turn, 400 ms each), the
+  adaptive triggers (full rigid resistance for 2 s), the mic lamp (on, or
+  pulsing, for 2 s), the speaker's test tone and the same tone on the HD
+  haptics (660 Hz then 880 Hz, 800 ms), the microphone's level (live, up to
+  8 s) and the two stick tests. A row shows only where the path carries its
+  item, and a test runs only there (the haptics tone only where the pad's
+  haptics lane is), by the same answer the game's own writes pass;
+  `tests/PARITY.md` §5b
+  gives Windows's evidence for each one a path cannot carry. Trigger rumble
+  rides SDL alone (`SDL_GameControllerRumbleTriggers`, where
+  `SDL_GameControllerHasRumbleTriggers` says the driver drives the motors,
+  which SDL's HIDAPI Xbox One driver does and its XInput backend, where every
+  wired Xbox pad lands, does not). The player LEDs are the contract's five
+  masks on both paths, which both write the mask byte. The tone and the
+  microphone open the pad's own WASAPI endpoint through the SDL audio gateway
+  for the test and close it after; nothing is sent.
+- **A test gives back what it borrowed.** The light bar, player LEDs,
+  adaptive triggers and mic lamp go back to what the game last sent when a
+  test ends, or dark and off where the game never set them (Windows cannot
+  read back what the pad showed), and a value the game sends during the test
+  is held until the test ends instead of being written over it. The other
+  surfaces keep following the game. A test's own writes are not counted in the
+  file's output lanes, so a rumble test never reads as the host's rumble; a
+  game's value held back during a test is counted when it arrives. A stick
+  test's end never cuts short another test started meanwhile, and a test
+  still holding a surface at quit gives it back before the pads close.
+- After every test the inspector asks "Did it work?" once; the answer is kept
+  under the test's contract name (`triggerRumble.left`, `lightbar.cycle`,
+  `stick.drift`, ...) with the time the test ended, and rides in the file.
 
 ### Changed
 
@@ -150,21 +204,75 @@ share a version number.
 - **PRIVACY.md** gains "Controller database updates" (2.5) and "Report a
   problem" (2.6), which describes your own words in the report and the
   Satellite connection snapshot, what each holds and never holds; its
-  effective date moves to 2026-11-20.
+  effective date moves to 2026-11-22.
+- **PRIVACY.md** now describes what the app does with a controller as the code
+  does it: it writes the player lights, adaptive-trigger effects and the mute
+  lamp as well as rumble and the light bar, in USB-direct mode too, which it
+  called read-only; a DualSense's or DualShock 4's own speaker plays what a
+  satellite sends for it, and its own microphone opens only with that
+  controller's Microphone switch on, streaming to a satellite that carries it,
+  and not muted; the gamepad stream's list names those frames; the
+  capabilities table names the controller's own audio device, which the app
+  opens through SDL2's audio over WASAPI; and the inspector's tests, the
+  microphone test among them, are described, with their answers in the file.
+  The sentence that the app does not access the microphone or the clipboard is
+  replaced: the only microphone it ever opens is a controller's own, and it
+  writes to the clipboard only for *Copy events* on the Diagnostics page.
+- **PRIVACY.md** lists every header the update check and the controller
+  database check send; says a mail app may leave the report's file out and
+  that Explorer then shows it; and its capabilities table gains
+  `dish.tinkernorth.com`, the registry values read under
+  `HKEY_LOCAL_MACHINE`, the mail hand-off, the controller and diagnostics
+  folders, the descriptors read through a controller's USB hub, the USB host
+  and power reads, and the Bluetooth radio check.
+
+### Fixed
+
+- **A pad SDL has no mapping for now rumbles.** A controller SDL opens as a
+  raw joystick reported rumble to the host and was offered the bench's rumble
+  tests, but its output was never applied, so neither the game's rumble nor
+  the bench's reached it. Its rumble now goes out through the joystick's own
+  handle (`SDL_JoystickRumble`). Rumble is all such a pad claims, so nothing
+  else is ever written to it.
 
 ### Notes
 
-- The compiled Direct tables (`kKnownModels`, the fast-lane vendors) stay, and
-  a test requires every row to match its database record; they answer first,
-  and a served record speaks for the ids they lack (`tests/PARITY.md`).
-- Hot path: the session counts each message kind it sends and receives, and
-  the router counts each pad's output lanes, with relaxed atomics only; no
-  thread on the input, USB, receive or mic path takes a new lock. The raw-HID
+- The compiled Direct tables stay, and a test requires every row to match its
+  database record. `kKnownModels` and Sony's five named pads answer first; for
+  every other id, the Nintendo, Sony and other vendor guesses included, a
+  record in force decides how the pad is read at its next attach
+  (`tests/PARITY.md`). dbVersion 1 changes the 48 ids named
+  under Changed.
+- Hot path: the session counts each message kind it sends and receives with
+  relaxed atomics. The router records each pad's output lane on every rumble,
+  light-bar, player-LED, trigger-effect and mic-lamp message it routes
+  (`SlotRouter::recordLane`): one `system_clock::now()` read and three relaxed
+  atomics. A Direct pad's output worker records a verdict after every write
+  (`OutputWorker::recordVerdict`): one clock read, one seqlock write of the
+  verdict, and the report writer's store of the call's `GetLastError` (or of
+  0). No thread on the input, USB, receive or mic path takes
+  a new lock. The raw-HID
   read loop loads one relaxed word per report where it loaded its running flag,
   which also says whether a capture is armed, and while one is it copies at
   most 64 bytes into a slot fixed with the claim, for twenty reports. The SDL
   thread reads each pad's family pinned at attach instead of looking it up per
   output command.
+- Hot path (the bench): each light-bar, player-LED, trigger-effect and
+  mic-lamp message a session's receive thread routes now passes its slot's
+  surface ledger first (`SurfaceLedger::rememberWith`): the senders' turn flag
+  (a compare-and-swap that yields only when two senders of one pad meet), a
+  generation bumped around about five sequentially consistent word stores,
+  and one load of the test's hold bits. Moonlight's light bar and the mute
+  lamp take the same ledger on the GUI thread. No `TrackedMutex`, no
+  allocation, and the ledger's readers never hold a sender up; rumble
+  messages pass no ledger, and input reports are untouched. The SDL output
+  mailbox gains a trigger-rumble kind; its fields are reordered so its state
+  still copies as five words. At quit the SDL thread drains its pads'
+  mailboxes once more, after the loop and before the pads close.
+- Hot path (the raw joystick's rumble): the SDL thread now drains a raw
+  joystick's output mailbox each pump cycle, as it does a game controller's,
+  and picks the pad's handle by a switch on the kind already in its record;
+  no lock, no allocation and no extra lookup per command.
 - No wire change. The snapshot route is a new REST call to Satellite 2.3.0.
 
 ## [2.7.1] - 2026-11-19
@@ -1245,7 +1353,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.7.1...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.8.0...main
+[2.8.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.8.0
 [2.7.1]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.1
 [2.7.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.0
 [2.6.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.6.0

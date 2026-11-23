@@ -289,6 +289,9 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
         hub_, wifi_, &processor_, bridge_, usbManager_.get(), &moonlight_, &motionEnabledStore_,
         &rumbleEnabledStore_, featureSettings_, &speakerEngine_});
     router_->attach();
+    benchClock_ = std::make_unique<composer::QtBenchClock>();
+    bench_ = std::make_unique<composer::FeedbackBenchCoordinator>(router_.get(), &audioGateway_,
+                                                                  &padOutcomes_, benchClock_.get());
     // The rumble switch rides the published routes, so a flip republishes them.
     rumbleSwitchSub_ = rumbleEnabledStore_.state().subscribe(
         [this](const source::RumbleEnabledMap&) { republishRouting(); }, /*emitCurrent=*/false);
@@ -372,6 +375,8 @@ AppModel::AppModel(std::unique_ptr<source::WakeInhibitor> inhibitor, QObject* pa
 }
 
 AppModel::~AppModel() {
+    benchClock_.reset();
+    bench_.reset();
     // Order matters. Stop the input thread first so no further SDL report races
     // teardown; then every session, so no feedback reaches the router, the USB
     // manager or the playout engine as they go; the timers next so no queued
@@ -1078,19 +1083,8 @@ void AppModel::syncTrackpadPicks() {
     }
 }
 
-bool AppModel::slotCarriesRumble(const QString& slotId) const {
-    return reducer::slotCarriesFeedback(feedbackInputs(slotId), reducer::FeedbackKind::Rumble);
-}
-
-// The raw-HID path has no duration and runs the motors until the next write, so
-// the buzz always ends with an explicit stop, which SDL takes harmlessly. A stop
-// ends only its own buzz: one started meanwhile runs its full length.
-void AppModel::testRumble(const QString& slotId, reducer::TestBuzz buzz) {
-    const std::uint64_t ticket = buzzTickets_.issue(slotId.toStdString());
-    actuateRumble(slotId, buzz.strong, buzz.weak, buzz.durationMs);
-    QTimer::singleShot(buzz.durationMs, this, [this, slotId, ticket] {
-        if (buzzTickets_.isLatest(slotId.toStdString(), ticket)) { actuateRumble(slotId, 0, 0, 0); }
-    });
+bool AppModel::benchOffers(const QString& slotId, reducer::BenchItem item) const {
+    return reducer::benchOffers(feedbackInputs(slotId), item);
 }
 
 reducer::HostAudioVerdict AppModel::hostControllerAudioFor(const QString& hostId) const {

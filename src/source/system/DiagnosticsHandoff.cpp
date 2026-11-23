@@ -22,6 +22,7 @@
 #include <cstring>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace dish::source {
 
@@ -80,6 +81,10 @@ std::optional<unsigned long> sendThroughMapi(const DiagnosticsMail& mail) {
     return answer;
 }
 
+void openMailtoUrl(const QByteArray& url) {
+    QDesktopServices::openUrl(QUrl::fromEncoded(url, QUrl::StrictMode));
+}
+
 } // namespace
 
 QString diagnosticsFolder() {
@@ -104,7 +109,15 @@ void revealInExplorer(const QString& filePath) {
                             {QStringLiteral("/select,"), QDir::toNativeSeparators(filePath)});
 }
 
-DiagnosticsHandoff::DiagnosticsHandoff(QObject* parent) : QObject(parent) {}
+MailShell windowsMailShell() {
+    return MailShell{&sendThroughMapi, &openMailtoUrl, &revealInExplorer};
+}
+
+DiagnosticsHandoff::DiagnosticsHandoff(QObject* parent)
+    : DiagnosticsHandoff(windowsMailShell(), parent) {}
+
+DiagnosticsHandoff::DiagnosticsHandoff(MailShell shell, QObject* parent)
+    : QObject(parent), shell_(std::move(shell)) {}
 
 DiagnosticsHandoff::~DiagnosticsHandoff() {
     if (worker_.joinable()) { worker_.join(); }
@@ -120,7 +133,7 @@ bool DiagnosticsHandoff::send(const DiagnosticsMail& mail) {
 // The worker's body: Simple MAPI wants an apartment of its own on the thread that calls it.
 void DiagnosticsHandoff::runMapi(const DiagnosticsMail& mail) {
     const HRESULT com = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    const std::optional<unsigned long> answer = sendThroughMapi(mail);
+    const std::optional<unsigned long> answer = shell_.sendThroughMapi(mail);
     if (SUCCEEDED(com)) { ::CoUninitialize(); }
     QMetaObject::invokeMethod(
         this, [this, mail, answer] { onMapiAnswered(mail, answer); }, Qt::QueuedConnection);
@@ -129,13 +142,15 @@ void DiagnosticsHandoff::runMapi(const DiagnosticsMail& mail) {
 void DiagnosticsHandoff::onMapiAnswered(const DiagnosticsMail& mail,
                                         std::optional<unsigned long> answer) {
     busy_.store(false);
+    const QString fileName = QFileInfo(mail.attachmentPath).fileName();
     switch (diagnostics::nextStepAfterMapi(answer)) {
-    case diagnostics::MailStep::Done:
-        emit handedOff(true);
+    case diagnostics::MailStep::RevealFolder:
+        shell_.reveal(mail.attachmentPath);
+        emit handedOff(true, fileName);
         return;
     case diagnostics::MailStep::OpenMailtoAndRevealFolder:
         openMailtoAndReveal(mail);
-        emit handedOff(false);
+        emit handedOff(false, fileName);
         return;
     }
 }
@@ -143,8 +158,8 @@ void DiagnosticsHandoff::onMapiAnswered(const DiagnosticsMail& mail,
 void DiagnosticsHandoff::openMailtoAndReveal(const DiagnosticsMail& mail) {
     const std::string url = diagnostics::mailtoUrl(
         mail.to.toStdString(), mail.subject.toStdString(), mail.body.toStdString());
-    QDesktopServices::openUrl(QUrl::fromEncoded(QByteArray::fromStdString(url), QUrl::StrictMode));
-    revealInExplorer(mail.attachmentPath);
+    shell_.openMailto(QByteArray::fromStdString(url));
+    shell_.reveal(mail.attachmentPath);
 }
 
 } // namespace dish::source

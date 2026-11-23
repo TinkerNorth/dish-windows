@@ -1,6 +1,6 @@
 # Dish for Windows: Privacy Policy
 
-**Effective date:** 2026-11-20.
+**Effective date:** 2026-11-22.
 **Canonical copy:** this file, at
 [`https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md`](https://github.com/TinkerNorth/dish-windows/blob/main/PRIVACY.md).
 The app links to it from Help, and the privacy index on
@@ -32,9 +32,10 @@ read one as describing the other.
   SDK, no telemetry, no advertising identifier, no usage reporting and no
   account. Both checks ask for files and send no identifier with the request.
 - **Report a problem** (section 2.6) happens only when you click *Report a
-  problem* or *Ask a question*: Dish saves a file and opens your own mail app
-  with it attached, addressed to `support@tinkernorth.com`. Nothing is sent
-  until you click Send in your mail app.
+  problem* or *Ask a question*: Dish saves a file, opens your own mail app
+  with a message to `support@tinkernorth.com` that should carry it, and shows
+  the file in Explorer in case the mail app left it out. Nothing is sent until
+  you click Send in your mail app.
 - Crash diagnostics are always written to your own disk, under
   `%LOCALAPPDATA%\Dish\`. With *Share crash reports* on (the default), an
   official build also sends one report per crash to Sentry: a stack trace, a
@@ -147,7 +148,10 @@ uninstaller (`unins000.exe`, beside `dish.exe`) removes all three.
 
 The app also **reads** (never writes)
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
-to follow your Windows light/dark setting.
+to follow your Windows light/dark setting, and
+`HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\BIOS` for the
+manufacturer and product names your PC's firmware gives it, which name this
+PC's model in a diagnostics file (section 2.6) and nowhere else.
 
 Held in memory only, never written and never transmitted anywhere except to
 the satellite you bound the controller to:
@@ -159,12 +163,43 @@ the satellite you bound the controller to:
   battery and the computer's, or the computer's when the controller has none.
   A computer without a battery counts as fully charged on mains power.
 - Raw HID reports read from a controller in USB-direct mode.
+- What a controller's own microphone hears, only while it is open as described
+  below. It is encoded as it arrives (the inspector's test only measures how
+  loud it is), and never recorded or kept.
 
 The app reads input from connected game controllers, through SDL2 and, in
 USB-direct mode, by reading raw HID input reports itself. It also writes back to
-them: rumble and light-bar colour are sent through SDL2. The USB-direct path is
-read-only. All of this is device IO on your own machine. It requires no
-administrator rights and no driver install.
+them what the game sends through a satellite or a Moonlight host: rumble, the
+light-bar colour, the player lights, adaptive-trigger effects and the mute
+lamp, which also lights when you mute a controller. It writes them through SDL2
+or, in USB-direct mode, as HID output reports it writes itself. All of this is
+device IO on your own machine. It requires no administrator rights and no
+driver install.
+
+**A controller's own speaker and microphone.** A DualSense or DualShock 4 on a
+USB cable has an audio device of its own, which Windows lists beside your PC's
+under the controller's name (such as "Speakers (Wireless Controller)"). While
+that controller's *Speaker* switch is on, which is the default, the sound a
+satellite sends for it, and on a DualSense the haptics, play on that device.
+Apart from the inspector's test below, its microphone is opened only while all
+of these hold: that controller's *Microphone* switch is on, which it is not
+until you turn it on; the controller is streaming to a satellite that carries
+the microphone; and it is not muted. What it hears is then sent to that
+satellite, as section 2.2 describes. Turning the switch off, muting it or
+ending the stream closes the microphone. The app never opens your PC's own
+microphone, or any microphone but a controller's own.
+
+**The controller inspector's tests.** From the Diagnostics page, a
+controller's inspector can test each thing its connection carries: rumble and
+trigger rumble run for a moment; the light bar, the player lights, the
+adaptive triggers and the mute lamp change for a moment and then go back to
+what the game had set; the test tone plays on the controller's own speaker, or
+on its haptics; and the microphone test opens the controller's own microphone
+for up to eight seconds to show how loud it hears you. What the microphone
+hears stays in the app and goes no further: it is not recorded, kept or sent,
+and only its level is shown. Your answer to *Did it work?* is kept in memory
+for this run, and leaves the PC only inside a diagnostics file you save or send
+(section 2.6).
 
 ### 2.2 Sent to your own LAN, not to TinkerNorth
 
@@ -193,9 +228,12 @@ on an address you can see in the app.
 - **Gamepad stream.** The data plane is raw UDP to the satellite, port 9876
   by default, encrypted and authenticated with ChaCha20-Poly1305 under a
   session key derived from the pairing key (the pairing key itself never
-  travels over UDP). Upstream frames carry controller state, motion, battery,
-  and touchpad. Downstream frames carry rumble, light-bar colour, heartbeat
-  acknowledgements, and session close.
+  travels over UDP). Upstream frames carry controller state, motion, battery
+  and touchpad and, while a controller's microphone is open as section 2.1
+  describes, what it hears, as 20 ms Opus frames. Downstream frames carry
+  rumble, the light-bar colour, the player lights, adaptive-trigger effects,
+  the mute lamp, the sound and haptics for a controller's own speaker,
+  heartbeat acknowledgements, and session close.
 - **Moonlight hosts.** Dish can also be the controller for a Sunshine, Apollo
   or Wolf host, speaking the Moonlight (GameStream) protocol instead of the
   satellite one. Hosts are found over mDNS (`_nvstream._tcp`) or added by
@@ -234,9 +272,9 @@ never leaves on its own: you send it from your own mail app.
 
 Beyond those there is no analytics library, no error tracking beyond the
 crash report, and no advertising identifier. Apart from the updater, the
-controller database check and the crash reporter, the only component in the
-app that makes an outbound HTTPS request is the satellite API client, and it
-only ever addresses the IP of a satellite you selected.
+controller database check and the crash reporter, the only components in the
+app that make an outbound HTTPS request are the satellite API client and the
+Moonlight client, and they only ever address a host you selected.
 
 The other way this app causes a request to a TinkerNorth or third-party
 address is if you click a link, which hands the URL to your default browser
@@ -268,8 +306,12 @@ no service, no scheduled task, and no update agent.
 
 **What the request carries.** Your IP address, as GitHub sees it, which is
 unavoidable for any HTTPS request. A `User-Agent` header of the form
-`Dish/<version> (Windows; x64)`. Nothing else. No device id, no account data,
-no settings, no usage data, no cookies, no query parameters, and no
+`Dish/<version> (Windows; x64)`, `Accept: application/json`, and
+`Accept-Language: *`, which is the same for everyone and never your system's
+languages. Beside those, only the headers Qt puts on every request: the host
+name, the compressions it can read (`Accept-Encoding`), `Cache-Control` and
+`Pragma` asking for a fresh copy, and `Connection`. No device id, no account
+data, no settings, no usage data, no cookies, no query parameters, and no
 conditional-request identifiers. GitHub's own
 [privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)
 governs what GitHub logs about the request.
@@ -277,7 +319,7 @@ governs what GitHub logs about the request.
 **Downloading.** With *Download updates automatically* also on, the app then
 fetches `dish-setup.exe` from the same GitHub release, to
 `%LOCALAPPDATA%\Dish\updates\`. That is one more request to the same host, with
-the same headers, and the downloaded file is checked against the SHA-256 in the
+the same headers except `Accept`, and the downloaded file is checked against the SHA-256 in the
 manifest before it is ever run. Metered connections are skipped until you are
 on an unmetered one. With that switch off, the app tells you a new version
 exists and downloads nothing until you ask.
@@ -309,12 +351,15 @@ and applies to a controller the next time it is plugged in.
 
 `dish.tinkernorth.com` is an Amazon S3 bucket behind Amazon CloudFront,
 operated for TinkerNorth by Amazon Web Services. The requests carry no
-identifier, no cookie and no query, and use the system's default
-`User-Agent`, not the update check's `Dish/<version>` one. The only header
-the app adds is `If-None-Match`, carrying the ETag the server gave the last
-time, so an unchanged manifest is not sent again. What the host's access logs
-can see is what any web server sees: the IP address the request came from,
-and the time. We use those logs as we use the rest of the website's: for
+identifier, no cookie and no query. Each one carries exactly these headers:
+the host name; Qt's default `User-Agent`, `Mozilla/5.0`, not the update
+check's `Dish/<version>` one; `Accept-Language: *`, the same for everyone and
+never your system's languages; the compressions Qt can read
+(`Accept-Encoding`); `Cache-Control` and `Pragma` asking for a fresh copy;
+`Connection`; and, on the manifest only, `If-None-Match`, carrying the ETag
+the server gave the last time, so an unchanged manifest is not sent again.
+What the host's access logs can see is what any web server sees: the IP
+address the request came from, and the time. We use those logs as we use the rest of the website's: for
 capacity planning and abuse detection only.
 
 *Check for controller updates automatically* in Settings, on by default, turns
@@ -340,10 +385,13 @@ app* writes `dish-diagnostics-dish-windows-<date>-<time>.json` under
 Windows' Simple MAPI) with a new message to `support@tinkernorth.com`. The
 subject is `Dish support: <the category, in your language> · Dish for Windows
 <version> on <PC model>`; the body is your own words first, then a summary of
-the Diagnostics page in your language; the file is attached. When no mail app
-answers MAPI, a `mailto:` link opens with the same subject and body and
-Explorer shows the file for you to attach. *Save diagnostics* writes the same
-file without a report and shows it in Explorer. Nothing is sent by the app:
+the Diagnostics page in your language, which names each host only by its
+alias; the file is attached. When no mail app answers MAPI, which is the case
+for the new Outlook and the Mail app, a `mailto:` link opens with the same
+subject and body but no file. Either way Explorer then shows the file, and
+the page names it, so that you can attach it yourself when the mail does not
+carry it. *Save diagnostics* writes the same file without a report and shows
+it in Explorer. Nothing is sent by the app:
 the mail leaves only when you click Send in your mail app, and you can read
 or edit it before you do. If you send it, TinkerNorth receives it at that
 address and uses it only to answer you and fix what it shows.
@@ -369,8 +417,10 @@ and how many reports went in and out of it), the audio switches it grants, its
 message counters, the state of its own controller list, and this connection's
 lines of its log. Satellite removes from it every machine name, every other
 client's name and address and every secret, and names your device "this
-connection"; Dish then replaces that host's name and address with its alias
-wherever either still appears. A Moonlight host (Sunshine, Apollo, Wolf) is
+connection"; Dish then replaces the name and the address of every host it
+lists with that host's alias wherever either still appears, in every
+snapshot and every line of the log, a host's name and its address being one
+alias. A Moonlight host (Sunshine, Apollo, Wolf) is
 not asked anything: the file holds the version its last answer to Dish gave.
 
 **What the file holds.** Your report, as above; the app's version; this PC's
@@ -389,17 +439,19 @@ asks the controller's USB hub for once when it is plugged in, any mismatch
 between the record and what Dish saw, how many input reports it sent
 and at what rate, the last one (the buttons, sticks and triggers at that
 moment), for each kind of output (rumble, light bar, player lights, trigger
-effects, mute lamp) how many reached it, where they went and the last value
-with its time, whether its speaker and haptics streams are open, the last
-report Dish wrote to it (the report id, whether it went through and the
-Windows error code when it did not), and your answers to *Did it work?* after
-a rumble test; for each paired Satellite or Moonlight host, an alias ("Host
-1", "Host 2"), its kind and version, the protocol version the session settled
-on, its link state and which controller-audio directions it grants, Dish's own
-view of the session (each controller slot, the last heartbeat's facts, round
-trip times, and how many messages of each kind went each way) and the
-snapshot above; and this run's event log of hosts and controllers appearing,
-changing state, binding and leaving, with every host named only by its alias.
+effects, mute lamp) how many a host sent it, where they went and the last value
+with its time (an inspector test's own output is not counted), whether its
+speaker and haptics streams are open, the last report Dish wrote to it (the
+report id, whether it went through and the Windows error code when it did
+not), and your answers to *Did it work?* after each test in the controller
+inspector, with the test's name and when it ended; for each paired Satellite
+or Moonlight host, an alias ("Host 1", "Host 2"), its kind and version, the
+protocol version the session settled on, its link state and which
+controller-audio directions it grants, Dish's own view of the session (each
+controller slot, the last heartbeat's facts, round trip times, and how many
+messages of each kind went each way) and the snapshot above; and this run's
+event log of hosts and controllers appearing, changing state, binding and
+leaving, with every host named only by its alias.
 
 **A controller you capture.** For a controller Dish reads directly, the page
 offers *Capture this controller*: put the controller down, leave it untouched,
@@ -502,16 +554,25 @@ apps do, so this is the equivalent list of what the app touches.
 |---|---|
 | Network sockets: UDP multicast, UDP broadcast listen, UDP unicast, TCP, TLS over TCP | Discovery, pairing, control plane, gamepad stream, for satellites and Moonlight hosts alike. All to your LAN. |
 | HTTPS to `github.com` | The update check and, if enabled, the update download. Section 2.4. Only while *Check for updates automatically* is on. |
-| Game-controller device enumeration and IO | Reading controller input, and writing rumble and light-bar output back to the controller. Raw HID access is used for reading in USB-direct mode. |
+| HTTPS to `dish.tinkernorth.com` | The controller database check and, when a newer list exists, its download. Section 2.5. Only while *Check for controller updates automatically* is on, or when you click *Check now* with it on. |
+| Game-controller device enumeration and IO | Reading controller input, and writing rumble, light, trigger and lamp output back to the controller. Raw HID access is used for reading and writing in USB-direct mode. |
+| A controller's own audio device, through SDL2's audio over WASAPI | Playing the sound and haptics a satellite sends for that controller, and the inspector's test tone, and opening its microphone only as section 2.1 describes. Never your PC's own microphone. |
 | `SetThreadExecutionState` | Preventing sleep while a controller is actively streaming, so input latency stays low. Released when streaming stops. |
 | `HKEY_CURRENT_USER` registry read and write | Settings and pairing state, as listed in section 2.1. |
-| `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, and the `updates\` folder described in section 2.1. |
+| `HKEY_LOCAL_MACHINE` registry read | The firmware's manufacturer and product names (section 2.1), and the installer's three answers after an all-users install. Never written. |
+| `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, the `updates\` folder, a newer controller list under `controllers\v1\` and the diagnostics files under `diagnostics\`, as section 2.1 describes. |
+| Simple MAPI (`mapi32.dll`), the default `mailto:` handler, and Explorer | *Continue in your mail app* hands the message and its file to your mail app, or opens a `mailto:` link when none answers MAPI, then shows the file in Explorer; *Save diagnostics* shows the file it wrote. Section 2.6. Only when you click one of them. |
+| The device tree and a controller's USB hub | For a controller Dish reads directly, once when it is plugged in, its USB device, configuration and HID report descriptors, asked of the hub it is plugged into, as Windows' own USB tools do; never its serial number. Section 2.6. |
+| SetupAPI and Windows' power status | Whether Windows lists a USB host controller, and this PC's battery level, charging state and battery saver (`GetSystemPowerStatus`), read when a diagnostics file is prepared and, for the battery, while a controller streams (section 2.1). |
+| SetupAPI and the Bluetooth API | Whether this PC has a Bluetooth radio and whether it is on, for the Diagnostics page and the setup wizard. Nothing is read about the devices paired with it. |
 | `%LOCALAPPDATA%\TinkerNorth\Dish\sentry\` file write | The crash reporter's run state and any report not yet sent (section 3), only while *Share crash reports* is on. |
 | Default browser launch | Opening the links listed in section 2.3, only when you click one. |
 
 The app runs as a normal user. It does not request elevation, does not
 install a service or a driver, does not read your files, and does not access
-the microphone, camera, location, contacts, or clipboard. The one exception to
+the camera, location or contacts. It writes to the clipboard only when you
+press *Copy events* on the Diagnostics page, and the only microphone it ever
+opens is a controller's own (section 2.1). The one exception to
 elevation is an all-users install: applying an update to an installation under
 `Program Files` needs administrator rights, so the installer asks for them once
 with the standard Windows prompt, and a declined prompt simply leaves the old

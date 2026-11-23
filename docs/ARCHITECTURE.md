@@ -360,10 +360,15 @@ changes reaches them in one of four ways, each with one owner:
   so one kept past the router reads no table and sends nothing.
 - **A seqlock.** A session's key and token
   ([`SatelliteClient`](../src/Network/SatelliteClient.h)), a device's record in
-  the processor (which the inspector copies), and a pad's
-  [`OutputMailbox`](../src/core/input/OutputMailbox.h). A sender draws its
-  counter inside a compare-and-swap gate held to `sendto`'s return, so counter
-  order is wire order; the socket never blocks.
+  the processor (which the inspector copies), a pad's
+  [`OutputMailbox`](../src/core/input/OutputMailbox.h), and a slot's
+  [`SurfaceLedger`](../src/core/reducer/BenchSurfaces.h), the game's last light
+  bar, player LEDs, trigger effect and mic lamp, which the receive thread writes
+  on its way to the pad and the Diagnostics bench reads to give a surface back.
+  A sender draws its counter inside a compare-and-swap gate held to `sendto`'s
+  return, so counter order is wire order; the socket never blocks. The
+  mailbox's and the ledger's writers take turns the same way, on a flag held for
+  a few stores.
 - **A single-consumer handoff.** The bridge's device list goes to the GUI and
   the GUI's suppressed ids and remaps go to the SDL thread through
   [`LatestValue`](../src/core/thread/LatestValue.h); a session's handlers reach

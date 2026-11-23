@@ -5,9 +5,11 @@
 // (docs/diagnostics-bundle.md, "The mail"): the bundle is written under
 // %LOCALAPPDATA%\Dish\diagnostics\, then handed to the person's own mail
 // client through Simple MAPI (MAPISendMailW, with the compose window shown so
-// nothing is sent until they press Send). When no MAPI client answers, a
-// mailto: link opens with the subject and body and Explorer shows the file so
-// it can be attached by hand. Which of the two runs is
+// nothing is sent until they press Send). When no MAPI client answers (the
+// new Outlook and the Mail app are none: MAPISendMailW answers MAPI_E_FAILURE),
+// a mailto: link opens with the subject and body. Explorer shows the file after
+// either, because a MAPI provider may still leave the attachment out and the
+// person then attaches it by hand. Which of the two runs is
 // core/diagnostics/MailHandoff.h's decision.
 //
 // MAPISendMailW blocks until the compose window closes, so it runs on a thread
@@ -20,6 +22,7 @@
 #include <QString>
 
 #include <atomic>
+#include <functional>
 #include <optional>
 #include <thread>
 
@@ -42,10 +45,22 @@ struct DiagnosticsMail {
     QString attachmentPath;
 };
 
+// What the hand-off calls on the machine: MAPISendMailW (its answer, nullopt when no MAPI entry
+// point loads), opening a mailto: link, and Explorer on a file. A test hands it recorders.
+struct MailShell {
+    std::function<std::optional<unsigned long>(const DiagnosticsMail&)> sendThroughMapi;
+    std::function<void(const QByteArray& mailtoUrl)> openMailto;
+    std::function<void(const QString& filePath)> reveal;
+};
+
+// The real one: mapi32.dll, QDesktopServices, explorer.exe.
+MailShell windowsMailShell();
+
 class DiagnosticsHandoff : public QObject {
     Q_OBJECT
   public:
     explicit DiagnosticsHandoff(QObject* parent = nullptr);
+    DiagnosticsHandoff(MailShell shell, QObject* parent);
     ~DiagnosticsHandoff() override;
 
     DiagnosticsHandoff(const DiagnosticsHandoff&) = delete;
@@ -57,14 +72,16 @@ class DiagnosticsHandoff : public QObject {
     bool send(const DiagnosticsMail& mail);
 
   signals:
-    // `viaMailClient` is true when MAPI took it, false when the mailto: fallback ran.
-    void handedOff(bool viaMailClient);
+    // `viaMailClient` is true when MAPI took it, false when the mailto: fallback ran; Explorer
+    // shows the file in both cases, and `fileName` is the file.
+    void handedOff(bool viaMailClient, const QString& fileName);
 
   private:
     void runMapi(const DiagnosticsMail& mail);
     void onMapiAnswered(const DiagnosticsMail& mail, std::optional<unsigned long> answer);
     void openMailtoAndReveal(const DiagnosticsMail& mail);
 
+    const MailShell shell_;
     std::thread worker_;
     std::atomic<bool> busy_{false};
 };
