@@ -21,6 +21,46 @@ share a version number.
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Qt 6.12.1, the LTS line, replaces Qt 6.7.3**, which left open-source
+  support in 2024. The build, `windeployqt` and the translation gate's lupdate
+  are one Qt again; CMake requires Qt 6.12. The minimum Windows stays Windows
+  10 1809.
+- **The vcpkg baseline moves to the vcpkg master of 2026-11-23**: OpenSSL
+  3.6.5, Opus 1.6.1 and sentry-native 0.17.6. `THIRD_PARTY.md` and the in-app
+  Licenses screen now list Opus, which was linked and shipped without a notice,
+  and name the sentry-native version the build really carries (they said
+  0.16.3; the old baseline built 0.16.0).
+- **Every toolchain pin lives in `scripts/tools.ps1`**, read by the workflows,
+  `scripts/install-deps.ps1`, `scripts/build.ps1` and `scripts/ci-local.ps1`
+  alike. The MSVC environment comes from an in-repo script instead of an
+  unmaintained third-party action, Inno Setup 6.7.4 is fetched from upstream
+  and checked against its published SHA-256, sentry-cli is 3.8.2, and
+  clang-format 23.1.5 checks the tree (it formats every file as 22.1.4 did).
+  The format gate now refuses any other clang-format: Visual Studio's
+  bundled 19.1.5 sat ahead of the pinned one on CI's PATH.
+- `scripts/ci-local.ps1` runs the version gate, passes the translation gate the
+  build Qt's lupdate, and gains `-Quick`. `install-dependencies.bat` is gone;
+  `scripts/install-deps.ps1` is the one installer and checks vcpkg out at the
+  baseline CI uses.
+- `version-consistency.yml` runs `scripts/check-versions.ps1`, which also fails
+  a change whose `CHANGELOG.md` heading, `THIRD_PARTY.md`, licenses manifest,
+  tool pins in `CONTRIBUTING.md` or protocol number stop matching their
+  source.
+
+### Fixed
+
+- `SECURITY.md`, `CONTRIBUTING.md`, `docs/INSTALLER.md` and `installer.iss` no
+  longer describe a release of five unsigned files: a release carries cosign
+  signatures, SPDX and CycloneDX SBOMs and SLSA provenance, and the installer
+  is signed whenever a certificate is configured. `SECURITY.md` has a
+  verification recipe that was run against 2.8.0.
+- `docs/contract.md` maps the Satellite contract (protocol 4) onto this
+  client, as the other clients' copies do.
+
 ## [2.8.0] - 2026-11-23
 
 ### Added

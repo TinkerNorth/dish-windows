@@ -1,6 +1,7 @@
 ; ============================================================================
 ;  Dish Inno Setup Installer Script
-;  Requires: Inno Setup 6.5+ (https://jrsoftware.org/isinfo.php)
+;  Requires: Inno Setup 6.5+ (https://jrsoftware.org/isinfo.php). CI and
+;  release.yml compile with the 6.7.4 that scripts/tools.ps1 pins.
 ;
 ;  Build:  cmake --build build-release --target Dish dish_setup_image
 ;          iscc /DMyAppVersion=1.0.0 installer.iss
@@ -10,8 +11,9 @@
 ;
 ;  The payload is the staged install image, not the build tree: [Files] ships
 ;  {#ImageDir}\* verbatim, and cmake/DishSetupImage.cmake is what decides the
-;  image's contents (dish.exe, windeployqt output, libsodium/SDL2, the five
-;  app-local CRT DLLs, licenses/). Keeping that in one reviewed script is what
+;  image's contents (dish.exe, windeployqt output, libsodium/SDL2/opus/
+;  libcrypto, sentry.dll and crashpad_handler.exe, the five app-local CRT
+;  DLLs, licenses/). Keeping that in one reviewed script is what
 ;  stops the installer and the portable zip drifting apart file by file.
 ;
 ;  Notes:
@@ -31,9 +33,10 @@
 ;    * SetupLogging=yes preserves logs under %TEMP% for every interactive
 ;      run; the OTA path passes an explicit /LOG into the staging directory,
 ;      which is where PRIVACY.md says the last apply log lives.
-;    * Signing is not wired up yet (no certificate; see SECURITY.md). When it
-;      lands: define a SignTool named "signtool" via `iscc /Ssigntool=...`
-;      and add `SignTool=signtool` plus `sign` flags here, as satellite does.
+;    * Signing happens after compile, not here: release.yml signs
+;      dist\dish-setup.exe with signtool when the WIN_SIGN_* secrets exist,
+;      before the round-trip, so the bytes tested are the bytes shipped. The
+;      uninstaller inside it is not signed (that would need SignTool= here).
 ;    * Bosnian: the app ships bs, but Inno has no official Bosnian.isl. The
 ;      installer runs in the other five app languages; vendoring the
 ;      community Bosnian.isl is an open follow-up.

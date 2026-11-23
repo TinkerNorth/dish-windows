@@ -13,32 +13,39 @@
 > does not.
 >
 > Legend: ✅ works · ⚠️ shipped, not yet verified on real hardware · ❌ not
-> available · – not applicable. Verified against the code on 2026-09-29.
+> available · – not applicable. The Windows column was verified against the
+> code on 2026-09-29; sections 5a and 5b were written with their features in
+> 2026-11.
 
 ## 1. What works, per client
 
-| Feature | Android | Windows (this) | Linux |
-|---|---|---|---|
-| Satellite host, protocol 4 | ✅ | ✅ | ✅ |
-| Moonlight host (Sunshine / Apollo / Wolf) | ✅ | ✅ | ✅ |
-| Mouse mode on the host | ✅ | ❌ (deferred: `reducer::kClientRoutesTouchpadAsMouse`) | ❌ |
-| Steam Controller trackpad pick (stick / pad / mouse / off) | ⚠️ | ⚠️ (mouse behind the deferral above) | ⚠️ (mouse behind the deferral above) |
-| Controller audio (mic + speaker) | ✅ | ✅ | ✅ |
-| DualSense HD haptics | ⚠️ | ⚠️ | ⚠️ |
-| Adaptive triggers, player LEDs, mic lamp | ✅ | ✅ | ✅ |
-| Lightbar, motion, touchpad, battery | ✅ | ✅ | ✅ |
-| Crash reports (opt-out) | ✅ Crashlytics | ✅ Sentry | ✅ Sentry |
-| Update notice | – Play (the store updates it) · ✅ GitHub build | ✅ | ✅ |
-| Runs in the background / window closed | ⚠️ Moonlight sessions stay up (foreground service) · satellite streaming stops when the app leaves the screen, by design: the phone is the pad | ✅ tray | ✅ tray |
-| Survives PC sleep and resume | – | ✅ Satellite · ❌ Moonlight | ✅ Satellite · ❌ Moonlight |
-| Keep-awake is user-configurable | ❌ (always on while streaming) | ✅ | ✅ |
-| Diagnostics screen | ✅ | ✅ (every item its paths carry, see §5b) | ✅ (every item its paths carry, dish-linux#122) |
-| Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ (on the section header) | ✅ | ✅ |
-| Protocol chip ("Satellite update recommended / required", "Dish update required") | ✅ | ✅ | ✅ |
-| App-wide microphone chip with mute-all | ✅ | ✅ | ✅ |
-| Capability verdict word "Supported" | ✅ | ✅ | ✅ |
-| Pairing secrets stored encrypted | ✅ Moonlight key (Keystore) · ❌ Satellite key (app-private prefs) | ✅ DPAPI | ✅ Satellite key (Secret Service, else a 0600 file) · ❌ Moonlight key (0600 file) |
-| Six languages (en, bs, de, es, fr, pt-BR) | ✅ | ✅ | ✅ |
+| Feature | Android | Windows (this) | Linux | macOS |
+|---|---|---|---|---|
+| Satellite host, protocol 4 | ✅ | ✅ | ✅ | ✅ |
+| Moonlight host (Sunshine / Apollo / Wolf) | ✅ | ✅ | ✅ | ⚠️ |
+| Mouse mode on the host | ✅ | ❌ (deferred: `reducer::kClientRoutesTouchpadAsMouse`) | ❌ | ✅ |
+| Steam Controller trackpad pick (stick / pad / mouse / off) | ⚠️ | ⚠️ (mouse behind the deferral above) | ⚠️ (mouse behind the deferral above) | ⚠️ |
+| Controller audio (mic + speaker) | ✅ | ✅ | ✅ | ⚠️ |
+| DualSense HD haptics | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| Adaptive triggers, player LEDs, mic lamp | ✅ | ✅ | ✅ | ⚠️ |
+| Lightbar, motion, touchpad, battery | ✅ | ✅ | ✅ | ✅ |
+| Crash reports (opt-out) | ✅ Crashlytics | ✅ Sentry | ✅ Sentry | ✅ |
+| Update notice | – Play (the store updates it) · ✅ GitHub build | ✅ | ✅ | ✅ |
+| Runs in the background / window closed | ⚠️ Moonlight sessions stay up (foreground service) · satellite streaming stops when the app leaves the screen, by design: the phone is the pad | ✅ tray | ✅ tray | ✅ |
+| Survives PC sleep and resume | – | ✅ Satellite · ❌ Moonlight | ✅ Satellite · ❌ Moonlight | ✅ |
+| Keep-awake is user-configurable | ❌ (always on while streaming) | ✅ | ✅ | ✅ |
+| Diagnostics screen | ✅ | ✅ (every item its paths carry, see §5b) | ✅ (every item its paths carry, dish-linux#122) | ✅ |
+| Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ (on the section header) | ✅ | ✅ | ✅ |
+| Protocol chip ("Satellite update recommended / required", "Dish update required") | ✅ | ✅ | ✅ | ✅ |
+| App-wide microphone chip with mute-all | ✅ | ✅ | ✅ | ✅ |
+| Capability verdict word "Supported" | ✅ | ✅ | ✅ | ✅ |
+| Pairing secrets stored encrypted | ✅ Moonlight key (Keystore) · ❌ Satellite key (app-private prefs) | ✅ DPAPI | ✅ Satellite key (Secret Service, else a 0600 file) · ❌ Moonlight key (0600 file) | ✅ |
+| Six languages (en, bs, de, es, fr, pt-BR) | ✅ | ✅ | ✅ | ✅ |
+
+The macOS column is the mark dish-mac's own ledger (`Tests/PARITY.md`) gives
+each row on 2026-11-23; its cells there say what each mark covers. Dish for
+iOS keeps its ledger in another shape (`Tests/PARITY.md` in dish-ios, one row
+per feature with its build status) and is not a column here.
 
 ## 2. Input, pad → host, by path (cell = USB Direct · USB Standard · Bluetooth)
 
