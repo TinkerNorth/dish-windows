@@ -9,7 +9,8 @@
     debug preset's configure + build + ctest, the measurements report's tests,
     qmllint with CI's flags, the QML literal scanner, the translation gate, clang-tidy four wide over CI's file
     set, the release preset build (Dish + dish_setup_image), the staged-bundle
-    portable smoke test, and (opt-in) the installer compile + silent
+    portable smoke test and the same test over the install image, and
+    (opt-in) the installer compile + silent
     round-trip.
 
         scripts/ci-local.ps1
@@ -193,6 +194,10 @@ if ($builds) {
         Step 'Portable bundle smoke test (it must start)'
         & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-portable-bundle.ps1') -Bundle artifact
         if ($LASTEXITCODE -ne 0) { throw 'portable bundle smoke test failed' }
+
+        Step 'Install image smoke test (it must start)'
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'test-portable-bundle.ps1') -Bundle build-release/setup-image
+        if ($LASTEXITCODE -ne 0) { throw 'install image smoke test failed' }
     }
 
     if ($WithInstaller) {

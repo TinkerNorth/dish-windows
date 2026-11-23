@@ -13,6 +13,8 @@
 #include "source/controllerdb/ControllerDbStore.h"
 #include "source/store/ControllerDbPreferenceStore.h"
 
+#include "LogCapture.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <QCryptographicHash>
@@ -259,6 +261,29 @@ TEST_CASE("controller db check: the bundled copy is in force before any check",
     CHECK(status.activeVersion == 1);
     CHECK(status.source == DbSource::Bundled);
     CHECK_FALSE(status.lastCheckResult.has_value());
+}
+
+// The bundle smoke test (scripts/test-portable-bundle.ps1) reads this line off the deployed
+// dish.exe's stderr: a binary that lost the compiled-in resource still starts, and only this line
+// says so.
+TEST_CASE("controller db check: the store names the bundled database it loaded at start",
+          "[controllerdb][check]") {
+    SECTION("the real bundled copy") {
+        const dish::test::LogCapture log;
+        CheckRig rig;
+        CHECK(log.sawContaining(QStringLiteral(
+            "controller database: bundled dbVersion 1 with 272 records; in force dbVersion 1")));
+    }
+    SECTION("a folder with nothing in it") {
+        const dish::test::LogCapture log;
+        const QTemporaryDir empty;
+        ControllerDbPreferenceStore prefs{std::make_unique<QSettings>(
+            empty.filePath(QStringLiteral("prefs.ini")), QSettings::IniFormat)};
+        ControllerDbStore store{&prefs, empty.filePath(QStringLiteral("bundled")), QString()};
+        store.load();
+        CHECK(log.sawContaining(QStringLiteral(
+            "controller database: bundled dbVersion 0 with 0 records; in force dbVersion 0")));
+    }
 }
 
 TEST_CASE("controller db check: the manifest for the version in force is up to date",

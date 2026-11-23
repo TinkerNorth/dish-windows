@@ -4,7 +4,10 @@
     starts, from a directory that is not the build tree.
 
 .DESCRIPTION
-    The only gate that runs the DEPLOYED app. ctest, qmllint, clang-tidy and
+    The only gate that runs the DEPLOYED app, run twice by CI: over the
+    portable bundle (scripts/stage-bundle.ps1) and over the install image
+    (cmake/DishSetupImage.cmake, which installer.iss ships verbatim), since
+    the two are staged by different code. ctest, qmllint, clang-tidy and
     the installer round-trip all exercise a dish.exe sitting in its build
     directory, and the build directory is exactly what hides a missing
     deployment file: Qt resolves QML modules from applicationDirPath first, so
@@ -26,7 +29,8 @@
 
 .PARAMETER Bundle
     The staged bundle directory to test (release.yml: dish-windows,
-    windows-ci.yml: artifact). Must contain dish.exe.
+    windows-ci.yml: artifact; both: build-release/setup-image, the install
+    image). Must contain dish.exe.
 
 .PARAMETER WorkRoot
     Where the scratch copy lives. Defaults to RUNNER_TEMP (CI) or TEMP.
@@ -177,6 +181,19 @@ foreach ($pattern in @('failed to load component', 'contains no type named', 'is
     if ($stderrText -match $pattern) { Fail "dish.exe reported a QML load failure matching '$pattern'" }
 }
 Ok 'no QML load failures on stderr'
+
+# The brand glyphs are SVGs, and imageformats/qsvg.dll is what decodes them: without it the app
+# runs with no iconography at all, and the only symptom is this line per glyph.
+if ($stderrText -match 'Error decoding:') { Fail 'dish.exe could not decode its brand SVGs (imageformats/qsvg.dll missing or unloadable)' }
+Ok 'the brand SVGs decode'
+
+# The controller database is a resource compiled into dish.exe. A binary that lost it still starts,
+# with no controller list and "bundled version 0" on Diagnostics, so only its start-up line can
+# tell (ControllerDbStore::load, pinned by test_controller_db_fetch.cpp).
+if ($stderrText -notmatch 'controller database: bundled dbVersion [1-9][0-9]* with [1-9][0-9]* records') {
+    Fail 'dish.exe did not report loading its bundled controller database'
+}
+Ok 'the bundled controller database loaded'
 
 if (-not $KeepWorkDir) {
     Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
