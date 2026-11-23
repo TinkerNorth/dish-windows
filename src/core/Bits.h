@@ -105,6 +105,18 @@ constexpr std::uint32_t asUint32(std::int32_t v) noexcept {
     return std::bit_cast<std::uint32_t>(v);
 }
 
+// Two 16-bit ids in one int key, `high` above `low`: (high << 16) | (low & 0xFFFF), shifted
+// unsigned, so a high id of 0x8000 or more reaches the sign bit by design rather than by a signed
+// shift.
+constexpr std::int32_t packHigh16Low16(std::int32_t high, std::int32_t low) noexcept {
+    return asInt32((asUint32(high) << 16U) | (asUint32(low) & 0xFFFFU));
+}
+
+// Two 32-bit ids in one 64-bit key, `high` above `low`.
+constexpr std::int64_t packHigh32Low32(std::int32_t high, std::int32_t low) noexcept {
+    return static_cast<std::int64_t>((u64(asUint32(high)) << 32U) | u64(asUint32(low)));
+}
+
 // 2 to the power `exponent`, for a doubling written as one; exponent < 63.
 constexpr std::int64_t pow2(unsigned exponent) noexcept {
     return static_cast<std::int64_t>(std::uint64_t{1} << exponent);
