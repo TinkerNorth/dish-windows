@@ -220,7 +220,7 @@ function Get-OsvScanner {
 }
 
 # The pinned gitleaks, fetched once into $DishSecurityToolsDir; returns its path.
-function Get-Gitleaks {
+function Get-GitleaksTool {
     $dir = Join-Path $DishSecurityToolsDir "gitleaks-$DishGitleaksVersion"
     $exe = Join-Path $dir 'gitleaks.exe'
     if (-not (Test-Path $exe)) {

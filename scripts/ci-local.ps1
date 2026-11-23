@@ -132,7 +132,7 @@ if ($bash -and (Have 'python')) {
     if ($LASTEXITCODE -ne 0) { throw 'OSV-Scanner failed' }
 
     Step 'Secret scan (gitleaks)'
-    & (Get-Gitleaks) git --config=.gitleaks.toml --redact --exit-code=1 .
+    & (Get-GitleaksTool) git --config=.gitleaks.toml --redact --exit-code=1 .
     if ($LASTEXITCODE -ne 0) { throw 'gitleaks found a secret' }
 }
 

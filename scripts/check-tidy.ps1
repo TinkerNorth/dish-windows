@@ -131,12 +131,13 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
         Start-Job -ScriptBlock {
             Set-Location $using:root
             $ErrorActionPreference = 'Continue'
-            foreach ($f in $using:chunk) {
+            $using:chunk | ForEach-Object {
+                $file = $_
                 try {
-                    $out = & $using:clangTidy -p $using:tidyDir --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $f 2>&1
-                    [pscustomobject]@{ File = $f; Code = $LASTEXITCODE; Out = ($out | ForEach-Object { "$_" }) }
+                    $out = & $using:clangTidy -p $using:tidyDir --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $file 2>&1
+                    [pscustomobject]@{ File = $file; Code = $LASTEXITCODE; Out = ($out | ForEach-Object { "$_" }) }
                 } catch {
-                    [pscustomobject]@{ File = $f; Code = 1; Out = @("$_") }
+                    [pscustomobject]@{ File = $file; Code = 1; Out = @("$_") }
                 }
             }
         }

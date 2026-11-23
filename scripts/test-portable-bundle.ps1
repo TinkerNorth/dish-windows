@@ -75,7 +75,7 @@ $script:Checks = 0
 
 function Ok([string]$text) {
     $script:Checks++
-    Write-Host "   ok  $text"
+    Write-Output "   ok  $text"
 }
 
 function Fail([string]$text) {
@@ -93,7 +93,7 @@ function Assert-True([bool]$condition, [string]$text) {
 
 if (-not (Test-Path -LiteralPath $Bundle)) { Fail "no bundle directory at $Bundle" }
 $bundleRoot = (Resolve-Path -LiteralPath $Bundle).Path
-Write-Host "== Portable bundle: $bundleRoot" -ForegroundColor Cyan
+Write-Output "== Portable bundle: $bundleRoot"
 
 Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot 'dish.exe')) 'dish.exe is in the bundle'
 
@@ -160,7 +160,7 @@ $exe = Join-Path $runDir 'dish.exe'
 # System.Diagnostics.Process rather than Start-Process, for the exit code:
 # Windows PowerShell 5.1's `Start-Process -PassThru` hands back a Process
 # object whose ExitCode is always $null, and 0xc0000135 (a runtime DLL missing
-# from the bundle) produces no output at all — the exit code is the whole
+# from the bundle) produces no output at all; the exit code is the whole
 # diagnosis. Reading both streams with ReadToEndAsync also means a chatty
 # startup cannot fill a pipe buffer and deadlock the app we are timing.
 $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -194,9 +194,9 @@ $stdoutRead.Result | Out-Null
 if ($null -eq $stderrText) { $stderrText = '' }
 
 if ($stderrText.Trim()) {
-    Write-Host '   --- dish.exe stderr ---'
-    $stderrText.TrimEnd() -split "`r?`n" | ForEach-Object { Write-Host "   | $_" }
-    Write-Host '   -----------------------'
+    Write-Output '   --- dish.exe stderr ---'
+    $stderrText.TrimEnd() -split "`r?`n" | ForEach-Object { Write-Output "   | $_" }
+    Write-Output '   -----------------------'
 }
 
 if ($exitedEarly) {
@@ -243,5 +243,5 @@ if ($workDir -and -not $KeepWorkDir) {
     Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host ''
-Write-Host "PORTABLE BUNDLE OK - $script:Checks checks passed" -ForegroundColor Green
+Write-Output ''
+Write-Output "PORTABLE BUNDLE OK - $script:Checks checks passed"
