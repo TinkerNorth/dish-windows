@@ -341,14 +341,13 @@ void MoonlightManager::onSessionProbeFinished(const QString& id, bool answered,
 
 // False when the client identity cannot be had, which is the one failure that makes every
 // Moonlight command impossible and the one nobody would guess at from the outside.
-bool MoonlightManager::ensureIdentity() {
-    if (identity_.has_value()) { return true; }
-    identity_ = repo_->getOrCreateIdentity();
-    if (identity_.has_value()) { return true; }
+const moonlight::Identity* MoonlightManager::ensureIdentity() {
+    if (!identity_.has_value()) { identity_ = repo_->getOrCreateIdentity(); }
+    if (identity_.has_value()) { return &identity_.value(); }
     qCCritical(lcMoonlightManager)
         << "no client identity: generating or loading the Moonlight certificate failed."
         << "Nothing can pair, probe or bind until that succeeds.";
-    return false;
+    return nullptr;
 }
 
 // Each lambda exists only to bind the host id, which the signal does not carry.
@@ -376,9 +375,10 @@ void MoonlightManager::wireSession(const QString& id, MoonlightSession* session)
 MoonlightSession* MoonlightManager::ensureSession(const models::MoonlightHost& host) {
     const QString id = host.id();
     if (auto* existing = sessions_.value(id, nullptr)) { return existing; }
-    if (!ensureIdentity()) { return nullptr; }
+    const moonlight::Identity* identity = ensureIdentity();
+    if (identity == nullptr) { return nullptr; }
 
-    auto* session = new MoonlightSession(host, *identity_, repo_.get(), this);
+    auto* session = new MoonlightSession(host, *identity, repo_.get(), this);
     sessions_.insert(id, session);
     wireSession(id, session);
     return session;
