@@ -484,6 +484,8 @@ TEST_CASE("a bar the game never set goes back dark when the bench gives it back"
 // that has it now.
 TEST_CASE("a host that binds the pad while the bench holds the bar gets the bar back after it",
           "[slot-router][bench]") {
+    dish::test::ensureApp();
+    const dish::net::WinsockInit winsock;
     Seen seen;
     hp::HotPathRig rig(2, countInto(seen));
     REQUIRE(rig.startBridge());
@@ -521,6 +523,8 @@ TEST_CASE("a host that binds the pad while the bench holds the bar gets the bar 
 TEST_CASE("a pad that leaves while the bench holds its bar is given back, and the next pad takes "
           "the game's colour",
           "[slot-router][bench]") {
+    dish::test::ensureApp();
+    const dish::net::WinsockInit winsock;
     Seen seen;
     hp::HotPathRig rig(1, countInto(seen));
     REQUIRE(rig.startBridge());
@@ -558,6 +562,8 @@ TEST_CASE("a pad that leaves while the bench holds its bar is given back, and th
 // window is a few hundred nanoseconds wide, so this pins the quit path rather than the race.
 TEST_CASE("a give-back posted just before the SDL thread stops reaches the pad",
           "[slot-router][bench]") {
+    dish::test::ensureApp();
+    const dish::net::WinsockInit winsock;
     Seen seen;
     hp::HotPathRig rig(1, countInto(seen));
     REQUIRE(rig.startBridge());
