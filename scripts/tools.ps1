@@ -109,7 +109,9 @@ function Install-InnoSetup {
     }
     $setup = Join-Path ([IO.Path]::GetTempPath()) "innosetup-$DishInnoSetupVersion.exe"
     Get-PinnedFile -Url $DishInnoSetupUrl -Sha256 $DishInnoSetupSha256 -OutFile $setup
-    $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=$DishInnoSetupDir")
+    # Start-Process joins its arguments with spaces and quotes none of them, so
+    # the directory, which has a space in it, carries its own quotes.
+    $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=`"$DishInnoSetupDir`"")
     $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru
     Remove-Item $setup -Force
     if ($process.ExitCode -ne 0) { throw "the Inno Setup $DishInnoSetupVersion installer exited with $($process.ExitCode)" }
