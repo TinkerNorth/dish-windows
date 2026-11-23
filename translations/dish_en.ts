@@ -1033,6 +1033,29 @@
     </message>
 </context>
 <context>
+    <name>ControllerDbVocabulary</name>
+    <message>
+        <source>up to date</source>
+        <translation>up to date</translation>
+    </message>
+    <message>
+        <source>updated</source>
+        <translation>updated</translation>
+    </message>
+    <message>
+        <source>could not reach dish.tinkernorth.com</source>
+        <translation>could not reach dish.tinkernorth.com</translation>
+    </message>
+    <message>
+        <source>the download did not verify</source>
+        <translation>the download did not verify</translation>
+    </message>
+    <message>
+        <source>checks are off</source>
+        <translation>checks are off</translation>
+    </message>
+</context>
+<context>
     <name>ControllersPage</name>
     <message>
         <source>Controllers</source>
@@ -2038,26 +2061,6 @@
     <message>
         <source>Last test</source>
         <translation>Last test</translation>
-    </message>
-    <message>
-        <source>up to date</source>
-        <translation>up to date</translation>
-    </message>
-    <message>
-        <source>updated</source>
-        <translation>updated</translation>
-    </message>
-    <message>
-        <source>could not reach dish.tinkernorth.com</source>
-        <translation>could not reach dish.tinkernorth.com</translation>
-    </message>
-    <message>
-        <source>the download did not verify</source>
-        <translation>the download did not verify</translation>
-    </message>
-    <message>
-        <source>checks are off</source>
-        <translation>checks are off</translation>
     </message>
     <message>
         <source>%1 · downloaded</source>
@@ -4547,6 +4550,10 @@
     <message>
         <source>Controller list v%1 · last checked %2</source>
         <translation>Controller list v%1 · last checked %2</translation>
+    </message>
+    <message>
+        <source>Controller list v%1 · last checked %2: %3</source>
+        <translation>Controller list v%1 · last checked %2: %3</translation>
     </message>
     <message>
         <source>Check for controller updates automatically</source>
