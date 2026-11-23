@@ -281,7 +281,7 @@ because that is not a release tag, so verify it with cosign:
 
 ```bash
 cosign verify-blob-attestation \
-  --bundle dish-windows.intoto.jsonl --new-bundle-format --type slsaprovenance \
+  --bundle dish-windows.intoto.jsonl --type slsaprovenance \
   --certificate-identity "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   dish-setup.exe
