@@ -111,9 +111,9 @@ TEST_CASE("mail: UTC times from epoch milliseconds", "[diagnostics][mail]") {
 }
 
 TEST_CASE("mail: which way the mail goes after Simple MAPI answers", "[diagnostics][mail]") {
-    CHECK(nextStepAfterMapi(0UL) == MailStep::Done);
+    CHECK(nextStepAfterMapi(0UL) == MailStep::RevealFolder);
     // The person closed the compose window: their answer, not a missing client.
-    CHECK(nextStepAfterMapi(1UL) == MailStep::Done);
+    CHECK(nextStepAfterMapi(1UL) == MailStep::RevealFolder);
     // MAPI_E_FAILURE, MAPI_E_LOGIN_FAILURE, MAPI_E_NOT_SUPPORTED: no client answered.
     CHECK(nextStepAfterMapi(2UL) == MailStep::OpenMailtoAndRevealFolder);
     CHECK(nextStepAfterMapi(3UL) == MailStep::OpenMailtoAndRevealFolder);

@@ -5,9 +5,9 @@
 // docs/diagnostics-bundle.md "The mail"): the file is saved under the app's
 // data folder, then handed to the person's own mail client through Simple
 // MAPI; when no MAPI client answers, a mailto: link opens with the subject and
-// the body and the folder is revealed, so the person attaches the file. Nothing
-// leaves the machine until they press Send. The decisions are here; the Win32
-// calls are the system layer's.
+// the body. Either way the folder is revealed, so the person can attach the
+// file when the mail app leaves it out. Nothing leaves the machine until they
+// press Send. The decisions are here; the Win32 calls are the system layer's.
 
 #pragma once
 
@@ -97,14 +97,16 @@ inline std::string bundleFileName(const CivilTime& local) {
 inline constexpr unsigned long kMapiSuccess = 0;
 inline constexpr unsigned long kMapiUserAbort = 1;
 
-enum class MailStep : std::uint8_t { Done, OpenMailtoAndRevealFolder };
+// RevealFolder follows a hand-off that went: a MAPI provider may still leave the attachment out,
+// and the new Outlook and the Mail app answer no Simple MAPI at all.
+enum class MailStep : std::uint8_t { RevealFolder, OpenMailtoAndRevealFolder };
 
 // `mapiAnswer` is nullopt when no MAPI entry point could be loaded at all. A closed compose
 // window is the person's answer, not a missing client, so it does not fall back.
 inline MailStep nextStepAfterMapi(std::optional<unsigned long> mapiAnswer) {
     if (!mapiAnswer.has_value()) { return MailStep::OpenMailtoAndRevealFolder; }
     const bool handedOver = *mapiAnswer == kMapiSuccess || *mapiAnswer == kMapiUserAbort;
-    return handedOver ? MailStep::Done : MailStep::OpenMailtoAndRevealFolder;
+    return handedOver ? MailStep::RevealFolder : MailStep::OpenMailtoAndRevealFolder;
 }
 
 namespace detail {

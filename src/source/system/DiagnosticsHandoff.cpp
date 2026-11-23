@@ -144,7 +144,7 @@ void DiagnosticsHandoff::onMapiAnswered(const DiagnosticsMail& mail,
     busy_.store(false);
     const QString fileName = QFileInfo(mail.attachmentPath).fileName();
     switch (diagnostics::nextStepAfterMapi(answer)) {
-    case diagnostics::MailStep::Done:
+    case diagnostics::MailStep::RevealFolder:
         shell_.reveal(mail.attachmentPath);
         emit handedOff(true, fileName);
         return;
