@@ -90,7 +90,7 @@ try {
     if (-not $lupdate) {
         Write-Error 'lupdate not found. Pass -LinguistBin <qt>/bin, or set QT_ROOT_DIR.'
     }
-    Write-Host "Using $lupdate"
+    Write-Output "Using $lupdate"
 
     # Before 6.9, lupdate loses a class's namespace after an enum with a base type that a
     # struct follows (Network/WifiConnectionManager.h), and re-files that class's tr()
@@ -146,26 +146,26 @@ try {
     $stale = @(Invoke-Git diff --name-only -- 'translations')
     if ($stale.Count -gt 0) {
         Invoke-Git --no-pager diff --stat -- 'translations'
-        Write-Host ''
-        Write-Host 'Translation catalogues are stale.' -ForegroundColor Red
-        Write-Host ''
-        Write-Host '  A user-facing string was added, changed or removed without'
-        Write-Host '  refreshing translations/. Until the catalogues are updated, the'
-        Write-Host '  new wording ships in English to every non-English user.'
-        Write-Host ''
-        Write-Host '  Fix:  cmake --build <build-dir> --target update_translations'
-        Write-Host '        git add translations/'
-        Write-Host ''
+        Write-Output ''
+        Write-Output 'Translation catalogues are stale.'
+        Write-Output ''
+        Write-Output '  A user-facing string was added, changed or removed without'
+        Write-Output '  refreshing translations/. Until the catalogues are updated, the'
+        Write-Output '  new wording ships in English to every non-English user.'
+        Write-Output ''
+        Write-Output '  Fix:  cmake --build <build-dir> --target update_translations'
+        Write-Output '        git add translations/'
+        Write-Output ''
         # ASCII only below: Windows PowerShell reads a BOM-less UTF-8 script as
         # the system codepage, and this is the message that has to be legible.
-        Write-Host '  Then translate the new entries, or leave them for a translator.'
-        Write-Host '  An untranslated entry falls back to English, which is what'
-        Write-Host '  happens today anyway - only now it is visible.'
+        Write-Output '  Then translate the new entries, or leave them for a translator.'
+        Write-Output '  An untranslated entry falls back to English, which is what'
+        Write-Output '  happens today anyway - only now it is visible.'
         exit 1
     }
 
-    Write-Host ''
-    Write-Host 'Catalogues are in sync. Coverage:'
+    Write-Output ''
+    Write-Output 'Catalogues are in sync. Coverage:'
     $incomplete = @()
     # XPath rather than dotted property access: under Set-StrictMode the dotted
     # form throws on any slightly differently shaped catalogue, and a coverage
@@ -194,21 +194,21 @@ try {
         }
         $percent = if ($total -gt 0) { [math]::Floor(100 * $translated / $total) } else { 0 }
         $name = Split-Path -Leaf $ts
-        Write-Host ("  {0,-18} {1,4}/{2,-4} {3,3}%" -f $name, $translated, $total, $percent)
+        Write-Output ("  {0,-18} {1,4}/{2,-4} {3,3}%" -f $name, $translated, $total, $percent)
         if ($translated -lt $total) {
             $incomplete += ("{0} ({1} missing)" -f $name, ($total - $translated))
         }
     }
 
     if ($incomplete.Count -gt 0) {
-        Write-Host ''
-        Write-Host 'Untranslated strings remain:' -ForegroundColor Red
-        foreach ($entry in $incomplete) { Write-Host ("  " + $entry) }
-        Write-Host ''
+        Write-Output ''
+        Write-Output 'Untranslated strings remain:'
+        foreach ($entry in $incomplete) { Write-Output ("  " + $entry) }
+        Write-Output ''
         # ASCII only below, same reason as the message above.
-        Write-Host '  Every catalogue must be complete before merge. A missing'
-        Write-Host '  translation is not a blank - it is English shown to someone'
-        Write-Host '  who does not read English.'
+        Write-Output '  Every catalogue must be complete before merge. A missing'
+        Write-Output '  translation is not a blank - it is English shown to someone'
+        Write-Output '  who does not read English.'
         exit 1
     }
 }

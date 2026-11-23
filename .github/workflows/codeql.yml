@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: read
@@ -34,9 +34,7 @@ jobs:
         language: [cpp]
 
     env:
-      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       VCPKG_DEFAULT_TRIPLET: x64-windows
-      QT_VERSION: "6.7.3"
       # Job-level so lukka/run-vcpkg sees it already defined and leaves it
       # alone: its default (clear;x-gha,readwrite) has never restored a
       # package here, so every run rebuilt OpenSSL from source. The files
@@ -55,10 +53,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-        with:
-          arch: x64
+      # The MSVC environment and the pins (Qt, vcpkg baseline, cache key):
+      # scripts/ci-env.ps1, shared with windows-ci.yml.
+      - name: Toolchain environment and pins
+        shell: pwsh
+        run: ./scripts/ci-env.ps1
 
       - name: Install Ninja
         run: choco install ninja --no-progress --yes
@@ -69,21 +68,16 @@ jobs:
           version: ${{ env.QT_VERSION }}
           host: windows
           target: desktop
-          arch: win64_msvc2019_64
+          arch: ${{ env.QT_ARCH }}
           modules: ""
+          aqtsource: ${{ env.AQT_SOURCE }}
           cache: true
 
       # ImageVersion is in the cache key because a runner-image update can
       # carry a new MSVC, which changes vcpkg's ABI hashes: under a fixed key
       # the cache would go permanently stale — restored but never hit, rebuilt
       # but never saved, since actions/cache does not update an existing key.
-      # The directory must exist before vcpkg first writes into it.
-      - name: Prepare vcpkg binary cache
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
-          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
-
+      # scripts/ci-env.ps1 exports IMAGE_VERSION and creates vcpkg-bincache.
       - name: Restore vcpkg binary cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

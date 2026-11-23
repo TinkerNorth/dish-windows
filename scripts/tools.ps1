@@ -1,0 +1,118 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (C) 2026 Dish contributors.
+#
+# The toolchain pins, in one place. Dot-sourced by every script that installs
+# or checks a tool (install-deps.ps1, ci-local.ps1, ci-env.ps1, build.ps1,
+# check-format.ps1, build-installer.ps1) and, through ci-env.ps1, by every
+# Windows workflow, so a bump is one edit here. The vcpkg baseline is the one
+# pin that lives elsewhere: vcpkg.json's builtin-baseline, which vcpkg itself
+# reads and Get-VcpkgBaseline hands to CI.
+#
+# scripts/check-versions.ps1 fails a change whose documents (CONTRIBUTING.md,
+# THIRD_PARTY.md, assets/licenses/licenses.json) stop naming these versions.
+#
+# Every downloaded binary carries the SHA-256 its upstream publishes; the
+# fetch helpers refuse anything else.
+
+# Qt, the build and the runtime windeployqt ships. AQT_SOURCE empty means
+# install-qt-action's own aqtinstall from PyPI.
+$script:DishQtVersion = '6.7.3'
+$script:DishQtArch = 'win64_msvc2019_64'
+$script:DishQtArchDir = 'msvc2019_64'
+$script:DishAqtSource = ''
+
+# The PyPI wheel, not LLVM's own build: clang-format versions disagree on
+# braced-init lists, so the gate checks the version before the files.
+$script:DishClangFormatVersion = '22.1.4'
+
+# Inno Setup 6. The digest is the file-hash of upstream's
+# innosetup-6.7.4.exe.issig. 7.x is a separate move.
+$script:DishInnoSetupVersion = '6.7.4'
+$script:DishInnoSetupUrl = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe'
+$script:DishInnoSetupSha256 = 'a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c'
+
+# sentry-cli, release.yml only (symbol upload on Windows, the Sentry release on
+# Linux). Digests as GitHub records them for the release assets, one per line:
+# a 64-hex value on the same line as the word "sentry" reads to gitleaks as a
+# Sentry access token.
+$script:DishSentryCli = @{
+    Version = '3.8.2'
+    WindowsSha256 =
+        '50009f23c49d6e9ff7624204c7035855303b49c5e326708ee783c1fdf783ac83'
+    LinuxSha256 =
+        'c958865f9d4000183509ea21b1f04925d5390de6d8d87386b9e69f2b305070c3'
+}
+
+# Where Install-InnoSetup puts it: a per-user install, so the same call works
+# on a runner and on a developer box without elevation.
+$script:DishInnoSetupDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Inno Setup 6'
+
+function Get-VcpkgBaseline {
+    param([string]$RepoRoot = (Split-Path -Parent $PSScriptRoot))
+    $manifest = Get-Content (Join-Path $RepoRoot 'vcpkg.json') -Raw | ConvertFrom-Json
+    $baseline = $manifest.'builtin-baseline'
+    if ($baseline -notmatch '^[0-9a-f]{40}$') { throw "vcpkg.json builtin-baseline is not a 40-character commit: '$baseline'" }
+    return $baseline
+}
+
+# Downloads $Url to $OutFile and refuses it unless its SHA-256 is $Sha256.
+function Get-PinnedFile {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$Sha256,
+        [Parameter(Mandatory)][string]$OutFile
+    )
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
+    $actual = (Get-FileHash -Algorithm SHA256 $OutFile).Hash.ToLowerInvariant()
+    if ($actual -ne $Sha256) {
+        Remove-Item $OutFile -Force
+        throw "checksum mismatch for $Url`: expected $Sha256, got $actual"
+    }
+}
+
+# The vcvars64 environment of the newest Visual Studio with the x64 C++ tools,
+# as a name -> value map. vswhere's -products * is load-bearing: without it a
+# machine with only the standalone Build Tools reports no compiler at all.
+function Get-MsvcEnvironment {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found at $vswhere; install Visual Studio 2022 or its Build Tools (scripts/install-deps.ps1)." }
+    $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if (-not $install) { throw 'vswhere found no Visual Studio with the x64 C++ tools.' }
+    $vcvars = Join-Path $install 'VC\Auxiliary\Build\vcvars64.bat'
+    if (-not (Test-Path $vcvars)) { throw "No vcvars64.bat at $vcvars" }
+    Write-Information "MSVC environment from $vcvars" -InformationAction Continue
+    $environment = [ordered]@{}
+    foreach ($line in (cmd.exe /c "`"$vcvars`" >nul && set")) {
+        if ($line -match '^([^=]+)=(.*)$') { $environment[$Matches[1]] = $Matches[2] }
+    }
+    if ($LASTEXITCODE -ne 0 -or -not $environment.Contains('VCToolsInstallDir')) { throw "$vcvars did not produce an MSVC environment" }
+    return $environment
+}
+
+# Imports that environment into this process.
+function Import-MsvcEnvironment {
+    $environment = Get-MsvcEnvironment
+    foreach ($name in $environment.Keys) { Set-Item -Path "Env:$name" -Value $environment[$name] }
+}
+
+# Installs the pinned Inno Setup per user unless that version is already there,
+# and returns the path of its ISCC.exe.
+function Install-InnoSetup {
+    $iscc = Join-Path $DishInnoSetupDir 'ISCC.exe'
+    if ((Test-Path $iscc) -and ((Get-Item $iscc).VersionInfo.ProductVersion -like "$DishInnoSetupVersion*")) {
+        Write-Information "Inno Setup $DishInnoSetupVersion already at $DishInnoSetupDir" -InformationAction Continue
+        return $iscc
+    }
+    $setup = Join-Path ([IO.Path]::GetTempPath()) "innosetup-$DishInnoSetupVersion.exe"
+    Get-PinnedFile -Url $DishInnoSetupUrl -Sha256 $DishInnoSetupSha256 -OutFile $setup
+    $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', "/DIR=$DishInnoSetupDir")
+    $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru
+    Remove-Item $setup -Force
+    if ($process.ExitCode -ne 0) { throw "the Inno Setup $DishInnoSetupVersion installer exited with $($process.ExitCode)" }
+    if (-not (Test-Path $iscc)) { throw "Inno Setup installed but $iscc is missing" }
+    $installed = (Get-Item $iscc).VersionInfo.ProductVersion
+    if ($installed -notlike "$DishInnoSetupVersion*") { throw "ISCC.exe reports $installed, not $DishInnoSetupVersion" }
+    Write-Information "Inno Setup $installed at $DishInnoSetupDir" -InformationAction Continue
+    return $iscc
+}

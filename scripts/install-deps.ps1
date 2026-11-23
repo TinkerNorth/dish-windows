@@ -3,24 +3,28 @@
     Install the Windows build toolchain for Dish: scripts/install-deps.ps1
 
 .DESCRIPTION
-    Installs everything needed to build dish.exe and run the test suite, in
-    five idempotent steps (the same set install-dependencies.bat installed;
-    that file now forwards here):
+    Installs what the Windows workflows install, at the versions
+    scripts/tools.ps1 pins, in six idempotent steps:
 
       [1] Visual Studio 2022 Build Tools (Desktop C++ workload + Win11 SDK)
       [2] CMake + Ninja
-      [3] LLVM (clang-tidy) + clang-format 22.1.4 via pip, the exact pin CI
-          checks with (LLVM's own clang-format floats and 18 vs 22 disagree
-          on braced-init lists)
-      [4] Python 3 + aqtinstall + Qt 6.7.3 to C:\Qt (headless; Qt's own
-          installer needs an account and a UI)
-      [5] vcpkg to %USERPROFILE%\vcpkg (manifest mode: the first cmake
-          configure reads vcpkg.json through the toolchain file and builds
-          libsodium/openssl/opus/SDL2 then)
+      [3] LLVM (clang-tidy) + the pinned clang-format via pip (the PyPI
+          wheel CI checks with; LLVM's own clang-format floats)
+      [4] Python 3.12 + aqtinstall + the pinned Qt to C:\Qt (headless; Qt's
+          own installer needs an account and a UI). The same Qt carries the
+          Linguist tools the translation gate runs.
+      [5] vcpkg to %USERPROFILE%\vcpkg, checked out at vcpkg.json's
+          builtin-baseline, the commit CI checks out (manifest mode: the
+          first cmake configure builds libsodium/openssl/opus/SDL2/
+          sentry-native from vcpkg.json then)
+      [6] The pinned Inno Setup, per user (scripts/install-inno-setup.ps1)
 
     It persists VCPKG_ROOT and CMAKE_PREFIX_PATH as user environment
     variables at the end, so later shells find Qt and vcpkg. HEADS UP: both
     are REPLACED, not appended to.
+
+    Not pinned, here or in CI: Visual Studio, CMake, Ninja and LLVM come from
+    the runner image and from winget's current packages.
 
     Total: roughly 12 GB of downloads, 30-60 min wall-clock on a fresh box.
     Re-running is safe: every step short-circuits on an existing install.
@@ -33,9 +37,9 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-$qtVersion = '6.7.3'
-$qtArch = 'win64_msvc2019_64'
+. (Join-Path $PSScriptRoot 'tools.ps1')
 $qtRoot = 'C:\Qt'
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $vcpkgRootDefault = Join-Path $env:USERPROFILE 'vcpkg'
 
 function Step([string]$Text) { Write-Output ''; Write-Output "=== $Text ===" }
@@ -55,7 +59,7 @@ function Find-VsInstall {
     # -products * is required to see BuildTools.
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path $vswhere)) { return $null }
-    return & $vswhere -latest -prerelease -products * `
+    return & $vswhere -latest -products * `
         -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
         -property installationPath
 }
@@ -66,7 +70,7 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 }
 Write-Output '[OK]  winget available'
 
-Step '[1/5] Visual Studio 2022 Build Tools'
+Step '[1/6] Visual Studio 2022 Build Tools'
 $vsInstall = Find-VsInstall
 if ($vsInstall) {
     Write-Output "[OK]  Visual Studio with VC++ tools found at: $vsInstall"
@@ -87,14 +91,14 @@ if ($vsInstall) {
     Write-Output "[OK]  Visual Studio with VC++ tools found at: $vsInstall"
 }
 
-Step '[2/5] CMake + Ninja'
+Step '[2/6] CMake + Ninja'
 Invoke-Winget 'Kitware.CMake'
 Invoke-Winget 'Ninja-build.Ninja'
 
-Step '[3/5] LLVM (clang-tidy) + pinned clang-format 22.1.4'
+Step "[3/6] LLVM (clang-tidy) + clang-format $DishClangFormatVersion"
 Invoke-Winget 'LLVM.LLVM'
 
-Step '[4/5] Python 3 + Qt 6.7.3 (aqtinstall)'
+Step "[4/6] Python 3 + Qt $DishQtVersion (aqtinstall)"
 # On Windows 11 `python` can resolve to the WindowsApps alias stub that opens
 # the Microsoft Store; the py.exe launcher is not aliased, so probe with that.
 $py = $null
@@ -124,36 +128,51 @@ Write-Output "[OK]  Python launcher: $py"
 
 # The pinned clang-format CI checks with. Installed via the Python that step
 # 4 guarantees; LLVM's floating clang-format stays available for clang-tidy.
-& $py -3 -m pip install --user --upgrade 'clang-format==22.1.4'
-if ($LASTEXITCODE -ne 0) { Write-Error 'pip install clang-format==22.1.4 failed' }
+& $py -3 -m pip install --user "clang-format==$DishClangFormatVersion"
+if ($LASTEXITCODE -ne 0) { Write-Error "pip install clang-format==$DishClangFormatVersion failed" }
 
-if (Test-Path (Join-Path $qtRoot "$qtVersion\msvc2019_64\bin\Qt6Core.dll")) {
-    Write-Output "[OK]  Qt $qtVersion already installed at $qtRoot"
+$qtPrefix = Join-Path $qtRoot (Join-Path $DishQtVersion $DishQtArchDir)
+if (Test-Path (Join-Path $qtPrefix 'bin\Qt6Core.dll')) {
+    Write-Output "[OK]  Qt $DishQtVersion already installed at $qtPrefix"
 } else {
-    Write-Output '[INFO] Installing aqtinstall (pip --user)'
-    & $py -3 -m pip install --user --upgrade aqtinstall
+    # The aqtinstall jurplel/install-qt-action uses in CI: the source
+    # scripts/tools.ps1 names, or that action's default PyPI line.
+    $aqt = if ($DishAqtSource) { $DishAqtSource } else { 'aqtinstall==3.3.*' }
+    Write-Output "[INFO] Installing $aqt (pip --user)"
+    & $py -3 -m pip install --user $aqt
     if ($LASTEXITCODE -ne 0) { Write-Error 'pip install aqtinstall failed' }
-    Write-Output "[INFO] Downloading Qt $qtVersion $qtArch to $qtRoot (~3 GB)"
-    # Pinned so a re-run cannot quietly move you to a Qt CI has never built
-    # against.
-    & $py -3 -m aqt install-qt windows desktop $qtVersion $qtArch --outputdir $qtRoot
+    Write-Output "[INFO] Downloading Qt $DishQtVersion $DishQtArch to $qtRoot (~3 GB)"
+    & $py -3 -m aqt install-qt windows desktop $DishQtVersion $DishQtArch --outputdir $qtRoot
     if ($LASTEXITCODE -ne 0) { Write-Error 'aqt install-qt failed' }
 }
 
-Step '[5/5] vcpkg (libsodium/openssl/opus/SDL2 build on first cmake configure)'
+Step '[5/6] vcpkg at the builtin-baseline of vcpkg.json'
+$baseline = Get-VcpkgBaseline -RepoRoot $repoRoot
 $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { $vcpkgRootDefault }
+if (-not (Test-Path (Join-Path $vcpkgRoot '.git'))) {
+    Write-Output "[INFO] Cloning microsoft/vcpkg to $vcpkgRoot"
+    & git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+    if ($LASTEXITCODE -ne 0) { Write-Error 'git clone vcpkg failed' }
+}
+$head = (& git -C $vcpkgRoot rev-parse HEAD).Trim()
+if ($head -ne $baseline) {
+    Write-Output "[INFO] Checking out vcpkg $baseline (CI's commit)"
+    & git -C $vcpkgRoot fetch --quiet origin
+    if ($LASTEXITCODE -ne 0) { Write-Error 'git fetch vcpkg failed' }
+    & git -C $vcpkgRoot checkout --quiet --detach $baseline
+    if ($LASTEXITCODE -ne 0) { Write-Error "git checkout $baseline failed in $vcpkgRoot" }
+    Remove-Item (Join-Path $vcpkgRoot 'vcpkg.exe') -ErrorAction SilentlyContinue
+}
 if (Test-Path (Join-Path $vcpkgRoot 'vcpkg.exe')) {
-    Write-Output "[OK]  vcpkg already bootstrapped at $vcpkgRoot"
+    Write-Output "[OK]  vcpkg $baseline bootstrapped at $vcpkgRoot"
 } else {
-    if (-not (Test-Path (Join-Path $vcpkgRoot '.git'))) {
-        Write-Output "[INFO] Cloning microsoft/vcpkg to $vcpkgRoot"
-        & git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-        if ($LASTEXITCODE -ne 0) { Write-Error 'git clone vcpkg failed' }
-    }
     Write-Output '[INFO] Bootstrapping vcpkg'
     & (Join-Path $vcpkgRoot 'bootstrap-vcpkg.bat') -disableMetrics
     if ($LASTEXITCODE -ne 0) { Write-Error 'bootstrap-vcpkg failed' }
 }
+
+Step "[6/6] Inno Setup $DishInnoSetupVersion"
+& (Join-Path $PSScriptRoot 'install-inno-setup.ps1')
 
 Step 'Persisting env vars (user scope)'
 $curVcpkg = [Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'User')
@@ -163,7 +182,6 @@ if ($curVcpkg -ne $vcpkgRoot) {
 } else {
     Write-Output '[OK]  VCPKG_ROOT already set'
 }
-$qtPrefix = Join-Path $qtRoot "$qtVersion\msvc2019_64"
 $curPrefix = [Environment]::GetEnvironmentVariable('CMAKE_PREFIX_PATH', 'User')
 if ($curPrefix -ne $qtPrefix) {
     [Environment]::SetEnvironmentVariable('CMAKE_PREFIX_PATH', $qtPrefix, 'User')

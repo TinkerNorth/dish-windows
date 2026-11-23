@@ -137,9 +137,7 @@ jobs:
     timeout-minutes: 60
 
     env:
-      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       VCPKG_DEFAULT_TRIPLET: x64-windows
-      QT_VERSION: "6.7.3"
       WIN_SIGN_CERT_BASE64: ${{ secrets.WIN_SIGN_CERT_BASE64 }}
 
     steps:
@@ -153,10 +151,11 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.tag }}
 
-      - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-        with:
-          arch: x64
+      # The MSVC environment and the pins (Qt, vcpkg baseline, cache key):
+      # scripts/ci-env.ps1, shared with windows-ci.yml.
+      - name: Toolchain environment and pins
+        shell: pwsh
+        run: ./scripts/ci-env.ps1
 
       - name: Install Ninja
         run: choco install ninja --no-progress --yes
@@ -167,8 +166,9 @@ jobs:
           version: ${{ env.QT_VERSION }}
           host: windows
           target: desktop
-          arch: win64_msvc2019_64
+          arch: ${{ env.QT_ARCH }}
           modules: ""
+          aqtsource: ${{ env.AQT_SOURCE }}
           cache: true
 
       - name: Set up vcpkg + install dependencies
@@ -213,10 +213,10 @@ jobs:
           }
           if (-not $env:SENTRY_ORG -and ($env:SENTRY_DSN -match '@o(\d+)\.')) { $env:SENTRY_ORG = $Matches[1] }
           if (-not $env:SENTRY_PROJECT) { $env:SENTRY_PROJECT = ($env:SENTRY_DSN -split '/')[-1] }
+          . ./scripts/tools.ps1
           $cli = Join-Path $env:RUNNER_TEMP 'sentry-cli.exe'
-          Invoke-WebRequest -Uri 'https://github.com/getsentry/sentry-cli/releases/download/3.7.0/sentry-cli-Windows-x86_64.exe' -OutFile $cli
-          $hash = (Get-FileHash -Algorithm SHA256 $cli).Hash.ToLowerInvariant()
-          if ($hash -ne '8643986aec8d8cf8d69cd476d67427578e5dbbda378eba506d199681082abe5a') { throw "sentry-cli checksum mismatch: $hash" }
+          Get-PinnedFile -Url "https://github.com/getsentry/sentry-cli/releases/download/$($DishSentryCli.Version)/sentry-cli-Windows-x86_64.exe" `
+            -Sha256 $DishSentryCli.WindowsSha256 -OutFile $cli
           & $cli debug-files upload --include-sources build-release/dish.exe build-release/dish.pdb
           if ($LASTEXITCODE -ne 0) { throw "sentry-cli exited $LASTEXITCODE" }
 
@@ -253,25 +253,25 @@ jobs:
       # Licence texts (LGPLv3 s4(b), OFL-1.1 s2) are staged by
       # scripts/stage-bundle.ps1 above.
 
-      # Pinned to the engine CI's round-trip gate runs (see windows-ci.yml):
-      # a release must not be compiled by an engine no PR was tested with.
-      - name: Install Inno Setup
-        run: choco install innosetup --version=6.7.1 --no-progress --yes
+      # The engine CI's round-trip gate runs (scripts/tools.ps1): a release
+      # must not be compiled by an engine no PR was tested with.
+      - name: Install Inno Setup (pinned)
+        shell: pwsh
+        run: ./scripts/install-inno-setup.ps1
 
       # Beside the zip, not inside it: dish-setup.exe is a release asset in its
       # own right, and the portable bundle stays exactly what it was. The
-      # version is stamped from the tag via /D, so the setup exe, the payload
-      # and latest.json agree; the version asserts below prove the tag matches
-      # project(Dish VERSION ...) and the built dish.exe.
+      # version is stamped from the tag, so the setup exe, the payload and
+      # latest.json agree; the version asserts below prove the tag matches
+      # project(Dish VERSION ...) and the built dish.exe. The same script PR CI
+      # compiles the installer with.
       - name: Compile installer (Inno Setup)
         shell: pwsh
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          $tag = $env:TAG
-          $num = ($tag -replace '^v','') -replace '[-+].*$',''
-          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build-release\setup-image" installer.iss
-          if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
+          $num = ($env:TAG -replace '^v','') -replace '[-+].*$',''
+          ./scripts/build-installer.ps1 -BuildDir build-release -Version $num
           Copy-Item dist/dish-setup.exe "$PWD/dish-setup.exe"
 
       # Ported from satellite's release pipeline: sign when the cert exists,
@@ -533,9 +533,12 @@ jobs:
             SENTRY_PROJECT="${SENTRY_DSN##*/}"; export SENTRY_PROJECT
           fi
           version="dish-windows@${TAG#v}"
+          # The pin and its digest live in scripts/tools.ps1 with the Windows one.
+          pins="$(pwsh -NoProfile -Command ". ./scripts/tools.ps1; \"\$(\$DishSentryCli.Version) \$(\$DishSentryCli.LinuxSha256)\"")"
+          read -r cli_version cli_sha <<<"$pins"
           cli="${RUNNER_TEMP}/sentry-cli"
-          curl -fsSL --retry 3 -o "$cli" https://github.com/getsentry/sentry-cli/releases/download/3.7.0/sentry-cli-Linux-x86_64
-          echo "cec71d46a7cc394c94b6e75f1601985c710d457376c546ef3975567b3671563b  $cli" | sha256sum -c -
+          curl -fsSL --retry 3 -o "$cli" "https://github.com/getsentry/sentry-cli/releases/download/${cli_version}/sentry-cli-Linux-x86_64"
+          echo "${cli_sha}  $cli" | sha256sum -c -
           chmod +x "$cli"
           "$cli" releases new "$version"
           "$cli" releases set-commits "$version" --auto

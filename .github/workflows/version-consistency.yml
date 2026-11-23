@@ -1,49 +1,44 @@
 name: Version consistency
 
-# A PR-time text-consistency gate, not a build. The version lives in
-# CMakeLists.txt (`project(Dish VERSION ...)`, the source) and is hand-mirrored
-# into packaging/dish.rc and vcpkg.json; the vcpkg baseline lives in vcpkg.json
-# (the source) and is hand-mirrored into the VCPKG_COMMITID pins of four
-# workflows and documented in THIRD_PARTY.md section 3. This job fails the pull
-# request that moves one copy without the others. release.yml keeps its own
-# check: only it can compare the tag and the built dish.exe.
+# A PR-time text-consistency gate, not a build. scripts/check-versions.ps1
+# holds every rule (its header lists each source of truth and its copies: the
+# app version, the vcpkg baseline and what it resolves, the FetchContent pins,
+# the tool pins in scripts/tools.ps1, the protocol number); scripts/ci-local.ps1
+# runs the same script. release.yml keeps its own check: only it can compare
+# the tag and the built dish.exe.
 
 on:
   push:
     branches: [main]
-    paths:
+    paths: &version-paths
       - CMakeLists.txt
-      - packaging/dish.rc
-      - vcpkg.json
+      - CHANGELOG.md
+      - CONTRIBUTING.md
       - THIRD_PARTY.md
-      - .github/workflows/windows-ci.yml
-      - .github/workflows/release.yml
-      - .github/workflows/codeql.yml
-      - .github/workflows/measurements.yml
-      - .github/workflows/version-consistency.yml
+      - assets/licenses/licenses.json
+      - docs/contract.md
+      - packaging/dish.rc
+      - src/core/model/Protocol.h
+      - tests/CMakeLists.txt
+      - vcpkg.json
+      - scripts/tools.ps1
+      - scripts/check-versions.ps1
+      - .github/pull_request_template.md
+      - .github/workflows/**
   pull_request:
     branches: [main]
-    paths:
-      - CMakeLists.txt
-      - packaging/dish.rc
-      - vcpkg.json
-      - THIRD_PARTY.md
-      - .github/workflows/windows-ci.yml
-      - .github/workflows/release.yml
-      - .github/workflows/codeql.yml
-      - .github/workflows/measurements.yml
-      - .github/workflows/version-consistency.yml
+    paths: *version-paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
   check:
-    name: CMakeLists.txt / dish.rc / vcpkg.json / workflow pins
+    name: Versions, pins and documented facts
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -52,54 +47,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Compare the version mirrors
-        run: |
-          set -euo pipefail
-          fail=0
-          err() { echo "::error::$1"; fail=1; }
-
-          # Source of truth: the VERSION argument of project(Dish ...).
-          ver=$(awk '/^project\(Dish/ { inproj = 1 }
-                     inproj && /^[[:space:]]*VERSION[[:space:]]/ { print $2; exit }' CMakeLists.txt)
-          if ! echo "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            err "could not read a MAJOR.MINOR.PATCH version from project(Dish VERSION ...) in CMakeLists.txt (got '$ver')"
-            exit 1
-          fi
-          IFS=. read -r maj min pat <<< "$ver"
-          echo "CMakeLists.txt declares $ver"
-
-          # packaging/dish.rc: two numeric tuples, two display strings.
-          grep -Eq "^[[:space:]]*FILEVERSION[[:space:]]+$maj,$min,$pat,0[[:space:]]*$" packaging/dish.rc \
-            || err "packaging/dish.rc FILEVERSION is not $maj,$min,$pat,0"
-          grep -Eq "^[[:space:]]*PRODUCTVERSION[[:space:]]+$maj,$min,$pat,0[[:space:]]*$" packaging/dish.rc \
-            || err "packaging/dish.rc PRODUCTVERSION is not $maj,$min,$pat,0"
-          grep -Eq "\"FileVersion\",[[:space:]]*\"$ver\"" packaging/dish.rc \
-            || err "packaging/dish.rc StringFileInfo FileVersion is not \"$ver\""
-          grep -Eq "\"ProductVersion\",[[:space:]]*\"$ver\"" packaging/dish.rc \
-            || err "packaging/dish.rc StringFileInfo ProductVersion is not \"$ver\""
-
-          # vcpkg.json: the manifest's own version string.
-          grep -Fq "\"version-string\": \"$ver\"" vcpkg.json \
-            || err "vcpkg.json version-string is not \"$ver\""
-
-          # vcpkg baseline: vcpkg.json is the source; the four workflows pin
-          # the same commit for their vcpkg checkout, and THIRD_PARTY.md
-          # section 3 names it as what the dependency versions resolve from.
-          base=$(sed -nE 's/.*"builtin-baseline":[[:space:]]*"([0-9a-f]{40})".*/\1/p' vcpkg.json)
-          if [ -z "$base" ]; then
-            err "could not read builtin-baseline from vcpkg.json"
-          else
-            echo "vcpkg.json builtin-baseline is $base"
-            for wf in windows-ci release codeql measurements; do
-              grep -Fq "VCPKG_COMMITID: \"$base\"" ".github/workflows/$wf.yml" \
-                || err ".github/workflows/$wf.yml VCPKG_COMMITID does not match the vcpkg.json builtin-baseline"
-            done
-            grep -Fq "$base" THIRD_PARTY.md \
-              || err "THIRD_PARTY.md does not mention the current vcpkg baseline; section 3 and the summary table still describe the old one"
-          fi
-
-          if [ "$fail" -ne 0 ]; then
-            echo "::error::Version sources drifted. CMakeLists.txt is the version source and vcpkg.json the baseline source; packaging/dish.rc, vcpkg.json, the VCPKG_COMMITID pins and THIRD_PARTY.md are hand-mirrored. CONTRIBUTING.md, 'Cutting a release', has the list."
-            exit 1
-          fi
-          echo "All version mirrors agree."
+      - name: Compare every copy with its source
+        shell: pwsh
+        run: ./scripts/check-versions.ps1

@@ -5,7 +5,7 @@
     {
       "name": "debug",
       "displayName": "Debug (tests, what windows-ci.yml builds first)",
-      "description": "The Debug lane windows-ci.yml configures: Ninja, tests on, translations required, compile_commands.json exported for the clang-tidy gate. Requires VCPKG_ROOT (install-dependencies / scripts/install-deps.ps1) and a Qt prefix on CMAKE_PREFIX_PATH. DISH_REQUIRE_TRANSLATIONS is ON here, unlike CMakeLists' local-friendly OFF default, because local == CI is the point of the preset; a box without Qt Linguist fails configure exactly like CI would.",
+      "description": "The Debug lane windows-ci.yml configures: Ninja, tests on, translations required, compile_commands.json exported for the clang-tidy gate. Requires VCPKG_ROOT (scripts/install-deps.ps1) and a Qt prefix on CMAKE_PREFIX_PATH. DISH_REQUIRE_TRANSLATIONS is ON here, unlike CMakeLists' local-friendly OFF default, because local == CI is the point of the preset; a box without Qt Linguist fails configure exactly like CI would.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
