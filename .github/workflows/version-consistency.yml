@@ -16,6 +16,7 @@ on:
       - CONTRIBUTING.md
       - THIRD_PARTY.md
       - assets/licenses/licenses.json
+      - packaging/licenses/**
       - docs/contract.md
       - packaging/dish.rc
       - src/core/model/Protocol.h

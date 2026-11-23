@@ -78,6 +78,15 @@ and carry the same license.
 Build-time only, not redistributed: `Qt6::LinguistTools` (`lupdate`, `lrelease`),
 `qmllint`, `qmlcachegen`, `qmltyperegistrar`, `windeployqt`.
 
+Qt is installed for CI and by `scripts/install-deps.ps1` with
+[aqtinstall](https://github.com/miurahr/aqtinstall) (`MIT`, build machine only).
+Qt 6.12's online repository splits each architecture into its own directory,
+which aqtinstall 3.3.0, the newest release on PyPI on 2026-11-23, cannot read;
+the support is merged (miurahr/aqtinstall#1048) but unreleased, so both install
+it from commit `4c759852b1108cc801d8e24979136b895b5155d4`
+(`scripts/tools.ps1`, `$DishAqtSource`). Return to a PyPI version once a
+release carries #1048.
+
 Qt modules that are GPL-only rather than LGPL, such as Qt Charts, are not used.
 
 ### TLS
@@ -115,7 +124,8 @@ must:**
    LGPL. Shipping this file alongside the binary does that.
 2. Ship a copy of the GNU LGPLv3 and the GNU GPLv3 with the binary. Those are
    [`LICENSE`](LICENSE) and [`COPYING.GPL3`](COPYING.GPL3) in this repository.
-   They are not currently inside the release zip, so add them if you build your
+   Both shipped artifacts carry them under `licenses\`
+   (`LICENSE.LGPL-3.0.txt`, `LICENSE.GPL-3.0.txt`); keep them if you build your
    own distribution.
 3. Preserve the copyright notices in the material you redistribute, and include
    a reference to the LGPL in your documentation.
@@ -141,6 +151,13 @@ obligations on redistribution.
 ---
 
 ## 3. Bundled runtime libraries
+
+Each library's own licence text, at the version below, ships in the bundle's
+`licenses\` folder beside the LGPL and GPL texts and this file, staged from
+`packaging/licenses/<name>.txt` by both `scripts/stage-bundle.ps1` and
+`cmake/DishSetupImage.cmake`: `SDL2.txt`, `libsodium.txt`, `openssl.txt`,
+`opus.txt`, `sentry-native.txt`, `crashpad.txt` and `enet.txt`.
+`scripts/check-versions.ps1` fails a change that ships a library without one.
 
 SDL2, libsodium, OpenSSL, Opus and sentry-native are declared in
 [`vcpkg.json`](vcpkg.json) and resolved against the pinned `builtin-baseline`

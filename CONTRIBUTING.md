@@ -17,7 +17,11 @@ You need Visual Studio 2022 Build Tools (C++ workload), CMake, Ninja, LLVM
 translation gate runs), vcpkg, clang-format 23.1.5 and Inno Setup 6.7.4.
 `scripts\install-deps.ps1` installs all of it, at the versions CI uses: every
 pin lives in `scripts/tools.ps1`, and vcpkg is checked out at the
-`builtin-baseline` of `vcpkg.json`, the commit CI checks out.
+`builtin-baseline` of `vcpkg.json`, the commit CI checks out. Qt comes from
+aqtinstall at commit `4c759852b1108cc801d8e24979136b895b5155d4`, both in CI and
+locally: the newest aqtinstall release (3.3.0) cannot read Qt 6.12's online
+repository, and the support (miurahr/aqtinstall#1048) is not released yet. Move
+`$DishAqtSource` back to a PyPI version once a release carries it.
 
 ```powershell
 scripts\build.ps1 debug test   # configure the debug preset (build\), build, run ctest

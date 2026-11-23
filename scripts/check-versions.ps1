@@ -24,6 +24,11 @@
         no workflow pins a Qt version of its own.
       * kProtocolVersion in src/core/model/Protocol.h -> CONTRIBUTING.md
         ("Touching the wire protocol") and docs/contract.md.
+      * Every assets/licenses/licenses.json entry that ships -> a licence
+        text the bundles stage (packaging/licenses/<artifact>.txt, LICENSE for
+        Qt, Inter-LICENSE.txt for Inter), and no text without an entry.
+      * scripts/tools.ps1's aqtinstall commit -> CONTRIBUTING.md and
+        THIRD_PARTY.md, pinned by a full 40-character SHA.
 
     Every failure is printed before the script exits non-zero, so one run
     lists all the drift. It needs network access for the vcpkg port files.
@@ -168,6 +173,36 @@ Test-DocumentText 'CONTRIBUTING.md' "C:\Qt\$DishQtVersion\$DishQtArchDir" 'the Q
 Test-DocumentText 'CONTRIBUTING.md' "clang-format $DishClangFormatVersion" 'the pinned clang-format'
 Test-DocumentText 'CONTRIBUTING.md' "Inno Setup $DishInnoSetupVersion" 'the pinned Inno Setup'
 Test-DocumentText '.github/pull_request_template.md' "clang-format==$DishClangFormatVersion" 'the pinned clang-format'
+
+# --- Every shipped library carries its licence text ------------------------------
+# A licenses.json entry is a component that ships (Catch2 excepted: test-only, never in a
+# bundle); each needs a licence text in the bundle's licenses/ folder, staged from one of these.
+$licenceTexts = @{ 'qtbase' = 'LICENSE'; 'inter' = 'packaging/fonts/Inter-LICENSE.txt' }
+foreach ($library in $licenses) {
+    $artifact = [string]$library.artifact
+    if ($artifact -eq 'Catch2') { continue }
+    $text = if ($licenceTexts.ContainsKey($artifact)) { $licenceTexts[$artifact] } else { "packaging/licenses/$artifact.txt" }
+    $full = Join-Path $repoRoot $text
+    if (-not (Test-Path $full) -or (Get-Item $full).Length -eq 0) {
+        Fail "$artifact ships (assets/licenses/licenses.json) but has no licence text at $text"
+    }
+}
+foreach ($file in Get-ChildItem (Join-Path $repoRoot 'packaging/licenses') -Filter '*.txt') {
+    if (@($licenses | Where-Object { $_.artifact -eq $file.BaseName }).Count -ne 1) {
+        Fail "packaging/licenses/$($file.Name) names no assets/licenses/licenses.json entry"
+    }
+}
+
+# --- aqtinstall from a commit, until a release reads Qt 6.12 -----------------------
+if ($DishAqtSource) {
+    if ($DishAqtSource -notmatch '^git\+https://github\.com/miurahr/aqtinstall\.git@([0-9a-f]{40})$') {
+        Fail "scripts/tools.ps1 DishAqtSource is not aqtinstall pinned by a 40-character commit: $DishAqtSource"
+    } else {
+        $aqtCommit = $Matches[1]
+        Test-DocumentText 'CONTRIBUTING.md' $aqtCommit 'the aqtinstall commit Qt is installed with'
+        Test-DocumentText 'THIRD_PARTY.md' $aqtCommit 'the aqtinstall commit Qt is installed with'
+    }
+}
 
 # --- The wire protocol ----------------------------------------------------------
 if ((Read-Text 'src/core/model/Protocol.h') -notmatch 'kProtocolVersion\s*=\s*(\d+);') { throw 'no kProtocolVersion in src/core/model/Protocol.h' }

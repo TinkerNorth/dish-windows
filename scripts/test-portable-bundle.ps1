@@ -129,6 +129,12 @@ foreach ($dll in 'libsodium.dll', 'SDL2.dll', 'opus.dll',
 # the bundle (cmake/DishSetupImage.cmake section 7), so Qt could not load one.
 Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot 'tls/qschannelbackend.dll')) 'tls/qschannelbackend.dll is in the bundle'
 
+# Every library licence text the bundle owes (packaging/licenses/, staged by both paths), so a
+# staging change cannot ship a linked library without its notice.
+foreach ($licence in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '../packaging/licenses') -Filter '*.txt') {
+    Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot "licenses/$($licence.Name)")) "licenses/$($licence.Name) is in the bundle"
+}
+
 # --- 2. Copy it out of the build tree ---------------------------------------
 
 if ($RequireOnlineCheck -and $SettleSeconds -lt 30) { $SettleSeconds = 30 }
