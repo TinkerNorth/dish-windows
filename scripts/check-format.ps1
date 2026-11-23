@@ -21,19 +21,8 @@ Set-Location (Split-Path -Parent $PSScriptRoot)
 
 # The pinned one wherever it sits on PATH: Visual Studio's vcvars puts its own
 # bundled clang-format (19.x with VS 17.14) ahead of pip's, and so does LLVM.
-function Get-ClangFormatVersion([string]$Exe) {
-    $line = (& $Exe --version | Out-String)
-    if ($LASTEXITCODE -ne 0 -or $line -notmatch 'version (\d+\.\d+\.\d+)') { return '' }
-    return $Matches[1]
-}
-$found = @(Get-Command clang-format -All -CommandType Application -ErrorAction SilentlyContinue)
-$clangFormat = $null
 $seen = @()
-foreach ($candidate in $found) {
-    $candidateVersion = Get-ClangFormatVersion $candidate.Source
-    $seen += "$($candidate.Source) ($candidateVersion)"
-    if ($candidateVersion -eq $DishClangFormatVersion) { $clangFormat = $candidate.Source; break }
-}
+$clangFormat = Find-PinnedTool -Name 'clang-format' -Version $DishClangFormatVersion -Seen ([ref]$seen)
 if (-not $clangFormat) {
     $onPath = if ($seen) { $seen -join ', ' } else { 'none' }
     throw "no clang-format $DishClangFormatVersion on PATH (found: $onPath). pip install clang-format==$DishClangFormatVersion."

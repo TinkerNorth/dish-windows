@@ -51,9 +51,6 @@ jobs:
         shell: pwsh
         run: ./scripts/ci-env.ps1
 
-      - name: Install Ninja
-        run: choco install ninja --no-progress --yes
-
       - name: Install Qt
         uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
@@ -90,12 +87,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Version-pinned from PyPI (scripts/tools.ps1), not the runner image:
-      # clang-format versions disagree on braced-init lists, so an unpinned
-      # check flaps. check-format.ps1 refuses any other version.
-      - name: Install clang-format (pinned)
+      # Version-pinned from PyPI (scripts/tools.ps1), not the runner image or
+      # Visual Studio's bundled LLVM: versions disagree on formatting and on
+      # the checks, so an unpinned gate flaps. check-format.ps1 and
+      # check-tidy.ps1 pick the pinned binaries and refuse any other version.
+      - name: Install clang-format and clang-tidy (pinned)
         shell: pwsh
-        run: pipx install "clang-format==$env:CLANG_FORMAT_VERSION"
+        run: |
+          pipx install "clang-format==$env:CLANG_FORMAT_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'pipx install clang-format failed' }
+          pipx install "clang-tidy==$env:CLANG_TIDY_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'pipx install clang-tidy failed' }
 
       # The gate itself lives in scripts/check-format.ps1 so this workflow and
       # scripts/ci-local.ps1 cannot drift on the file set or the invocation.

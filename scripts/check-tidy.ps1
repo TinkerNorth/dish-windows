@@ -53,6 +53,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $PSScriptRoot 'tools.ps1')
+
+# The pinned clang-tidy wherever it sits on PATH: Visual Studio's vcvars puts its bundled LLVM
+# ahead of pip's, and a different clang-tidy is a different set of checks.
+$seen = @()
+$clangTidy = Find-PinnedTool -Name 'clang-tidy' -Version $DishClangTidyVersion -Seen ([ref]$seen)
+if (-not $clangTidy) {
+    $onPath = if ($seen) { $seen -join ', ' } else { 'none' }
+    throw "no clang-tidy $DishClangTidyVersion on PATH (found: $onPath). pip install clang-tidy==$DishClangTidyVersion."
+}
+Write-Output "Using $clangTidy ($DishClangTidyVersion)"
 
 $database = Join-Path $BuildDir 'compile_commands.json'
 if (-not (Test-Path $database)) {
@@ -98,7 +109,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
     $files | ForEach-Object -Parallel {
         $ErrorActionPreference = 'Continue'
         try {
-            $out = clang-tidy -p $using:bd --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $_ 2>&1
+            $out = & $using:clangTidy -p $using:bd --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $_ 2>&1
             [pscustomobject]@{ File = $_; Code = $LASTEXITCODE; Out = $out }
         } catch {
             [pscustomobject]@{ File = $_; Code = 1; Out = @("$_") }
@@ -122,7 +133,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
             $ErrorActionPreference = 'Continue'
             foreach ($f in $using:chunk) {
                 try {
-                    $out = clang-tidy -p $using:tidyDir --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $f 2>&1
+                    $out = & $using:clangTidy -p $using:tidyDir --quiet --warnings-as-errors='*' --header-filter=$using:headerFilter $f 2>&1
                     [pscustomobject]@{ File = $f; Code = $LASTEXITCODE; Out = ($out | ForEach-Object { "$_" }) }
                 } catch {
                     [pscustomobject]@{ File = $f; Code = 1; Out = @("$_") }

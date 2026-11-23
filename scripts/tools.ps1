@@ -28,6 +28,18 @@ $script:DishAqtSource = 'git+https://github.com/miurahr/aqtinstall.git@4c759852b
 # braced-init lists, so the gate checks the version before the files.
 $script:DishClangFormatVersion = '23.1.5'
 
+# clang-tidy, the PyPI wheel too (it carries its own clang resource headers), for
+# the same reason: Visual Studio's vcvars puts its bundled LLVM ahead of
+# anything else on PATH, so the gates pick the pinned one by version
+# (Find-PinnedTool) instead of whichever comes first.
+$script:DishClangTidyVersion = '23.1.4'
+
+# Ninja, the release zip from ninja-build/ninja; the digest is GitHub's record
+# of the asset, checked against the download.
+$script:DishNinjaVersion = '1.13.2'
+$script:DishNinjaUrl = 'https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip'
+$script:DishNinjaSha256 = '07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65'
+
 # Inno Setup 6. The digest is the file-hash of upstream's
 # innosetup-6.7.4.exe.issig. 7.x is a separate move.
 $script:DishInnoSetupVersion = '6.7.4'
@@ -45,6 +57,9 @@ $script:DishSentryCli = @{
     LinuxSha256 =
         'c958865f9d4000183509ea21b1f04925d5390de6d8d87386b9e69f2b305070c3'
 }
+
+# Where Install-Ninja puts it, per user like Inno Setup.
+$script:DishNinjaDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "Programs\Ninja $DishNinjaVersion"
 
 # Where Install-InnoSetup puts it: a per-user install, so the same call works
 # on a runner and on a developer box without elevation.
@@ -93,10 +108,12 @@ function Get-MsvcEnvironment {
     return $environment
 }
 
-# Imports that environment into this process.
+# Imports that environment into this process, with the pinned Ninja ahead of the
+# one vcvars64 puts on PATH (scripts/install-deps.ps1 installs it).
 function Import-MsvcEnvironment {
     $environment = Get-MsvcEnvironment
     foreach ($name in $environment.Keys) { Set-Item -Path "Env:$name" -Value $environment[$name] }
+    if (Test-Path (Join-Path $DishNinjaDir 'ninja.exe')) { $env:PATH = "$DishNinjaDir;$env:PATH" }
 }
 
 # The version of the Inno Setup installed per user at $DishInnoSetupDir, from
@@ -138,4 +155,45 @@ function Install-InnoSetup {
     if ($installed -ne $DishInnoSetupVersion) { throw "the Inno Setup at $DishInnoSetupDir records version '$installed', not $DishInnoSetupVersion" }
     Write-Information "Inno Setup $installed at $DishInnoSetupDir" -InformationAction Continue
     return $iscc
+}
+
+# The first $Name on PATH whose `--version` reports $Version, or '' when none
+# does. The versions found on the way go to $Seen, for the error message.
+function Find-PinnedTool {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Version,
+        [ref]$Seen
+    )
+    $found = @()
+    foreach ($candidate in @(Get-Command $Name -All -CommandType Application -ErrorAction SilentlyContinue)) {
+        $line = (& $candidate.Source --version 2>&1 | Out-String)
+        $candidateVersion = if ($line -match 'version (\d+\.\d+\.\d+)') { $Matches[1] } else { '' }
+        $found += "$($candidate.Source) ($candidateVersion)"
+        if ($candidateVersion -eq $Version) {
+            if ($Seen) { $Seen.Value = $found }
+            return $candidate.Source
+        }
+    }
+    if ($Seen) { $Seen.Value = $found }
+    return ''
+}
+
+# Installs the pinned Ninja per user unless that version is already there, and
+# returns the directory holding ninja.exe.
+function Install-Ninja {
+    $ninja = Join-Path $DishNinjaDir 'ninja.exe'
+    if (Test-Path $ninja) {
+        $present = (& $ninja --version | Out-String).Trim()
+        if ($present -eq $DishNinjaVersion) { return $DishNinjaDir }
+    }
+    $zip = Join-Path ([IO.Path]::GetTempPath()) "ninja-$DishNinjaVersion-win.zip"
+    Get-PinnedFile -Url $DishNinjaUrl -Sha256 $DishNinjaSha256 -OutFile $zip
+    New-Item -ItemType Directory -Force -Path $DishNinjaDir | Out-Null
+    Expand-Archive -Path $zip -DestinationPath $DishNinjaDir -Force
+    Remove-Item $zip -Force
+    $installed = (& $ninja --version | Out-String).Trim()
+    if ($installed -ne $DishNinjaVersion) { throw "ninja.exe at $DishNinjaDir reports $installed, not $DishNinjaVersion" }
+    Write-Information "Ninja $installed at $DishNinjaDir" -InformationAction Continue
+    return $DishNinjaDir
 }

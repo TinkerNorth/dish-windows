@@ -53,7 +53,7 @@ ran locally. Every one of them fails the build.
       `cmake --build <build-dir> --target update_translations`, then commit the
       changed `.ts` files. A new `%n` plural also needs its singular and plural
       written into `translations/dish_en.ts` by hand.
-- [ ] **`scripts/check-tidy.ps1`** (`clang-tidy` over `src/*.cpp` excluding
+- [ ] **`scripts/check-tidy.ps1`** (clang-tidy 23.1.4, `pipx install clang-tidy==23.1.4`, over `src/*.cpp` excluding
       `src/UI/*`, against the same Debug tree). Findings fail the step: it
       passes `--warnings-as-errors='*'`, the way `dish-linux` gates its sweep,
       while the fleet-canonical `.clang-tidy` keeps `WarningsAsErrors: ''`.

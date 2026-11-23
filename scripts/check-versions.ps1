@@ -172,7 +172,10 @@ Test-DocumentText 'CONTRIBUTING.md' "Qt $DishQtVersion" 'the pinned Qt'
 Test-DocumentText 'CONTRIBUTING.md' "C:\Qt\$DishQtVersion\$DishQtArchDir" 'the Qt prefix install-deps.ps1 creates'
 Test-DocumentText 'CONTRIBUTING.md' "clang-format $DishClangFormatVersion" 'the pinned clang-format'
 Test-DocumentText 'CONTRIBUTING.md' "Inno Setup $DishInnoSetupVersion" 'the pinned Inno Setup'
+Test-DocumentText 'CONTRIBUTING.md' "clang-tidy $DishClangTidyVersion" 'the pinned clang-tidy'
+Test-DocumentText 'CONTRIBUTING.md' "Ninja $DishNinjaVersion" 'the pinned Ninja'
 Test-DocumentText '.github/pull_request_template.md' "clang-format==$DishClangFormatVersion" 'the pinned clang-format'
+Test-DocumentText '.github/pull_request_template.md' "clang-tidy==$DishClangTidyVersion" 'the pinned clang-tidy'
 
 # --- Every shipped library carries its licence text ------------------------------
 # A licenses.json entry is a component that ships (Catch2 excepted: test-only, never in a

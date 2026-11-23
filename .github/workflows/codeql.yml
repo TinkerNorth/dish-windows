@@ -59,9 +59,6 @@ jobs:
         shell: pwsh
         run: ./scripts/ci-env.ps1
 
-      - name: Install Ninja
-        run: choco install ninja --no-progress --yes
-
       - name: Install Qt
         uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:

@@ -4,27 +4,27 @@
 
 .DESCRIPTION
     Installs what the Windows workflows install, at the versions
-    scripts/tools.ps1 pins, in six idempotent steps:
+    scripts/tools.ps1 pins, in five idempotent steps:
 
       [1] Visual Studio 2022 Build Tools (Desktop C++ workload + Win11 SDK)
-      [2] CMake + Ninja
-      [3] LLVM (clang-tidy) + the pinned clang-format via pip (the PyPI
-          wheel CI checks with; LLVM's own clang-format floats)
-      [4] Python 3.12 + aqtinstall + the pinned Qt to C:\Qt (headless; Qt's
-          own installer needs an account and a UI). The same Qt carries the
-          Linguist tools the translation gate runs.
-      [5] vcpkg to %USERPROFILE%\vcpkg, checked out at vcpkg.json's
+      [2] CMake, and the pinned Ninja per user (Install-Ninja)
+      [3] Python 3.12, the pinned clang-format and clang-tidy via pip (the
+          PyPI wheels CI checks with; Visual Studio's and LLVM's own float),
+          aqtinstall and the pinned Qt to C:\Qt (headless; Qt's own installer
+          needs an account and a UI). The same Qt carries the Linguist tools
+          the translation gate runs.
+      [4] vcpkg to %USERPROFILE%\vcpkg, checked out at vcpkg.json's
           builtin-baseline, the commit CI checks out (manifest mode: the
           first cmake configure builds libsodium/openssl/opus/SDL2/
           sentry-native from vcpkg.json then)
-      [6] The pinned Inno Setup, per user (scripts/install-inno-setup.ps1)
+      [5] The pinned Inno Setup, per user (scripts/install-inno-setup.ps1)
 
     It persists VCPKG_ROOT and CMAKE_PREFIX_PATH as user environment
     variables at the end, so later shells find Qt and vcpkg. HEADS UP: both
     are REPLACED, not appended to.
 
-    Not pinned, here or in CI: Visual Studio, CMake, Ninja and LLVM come from
-    the runner image and from winget's current packages.
+    Not pinned, here or in CI: Visual Studio and CMake come from the runner
+    image and from winget's current packages.
 
     Total: roughly 12 GB of downloads, 30-60 min wall-clock on a fresh box.
     Re-running is safe: every step short-circuits on an existing install.
@@ -70,7 +70,7 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 }
 Write-Output '[OK]  winget available'
 
-Step '[1/6] Visual Studio 2022 Build Tools'
+Step '[1/5] Visual Studio 2022 Build Tools'
 $vsInstall = Find-VsInstall
 if ($vsInstall) {
     Write-Output "[OK]  Visual Studio with VC++ tools found at: $vsInstall"
@@ -91,14 +91,13 @@ if ($vsInstall) {
     Write-Output "[OK]  Visual Studio with VC++ tools found at: $vsInstall"
 }
 
-Step '[2/6] CMake + Ninja'
+Step '[2/5] CMake + Ninja'
 Invoke-Winget 'Kitware.CMake'
-Invoke-Winget 'Ninja-build.Ninja'
+$ninjaDir = Install-Ninja
+Write-Output "[OK]  Ninja $DishNinjaVersion at $ninjaDir"
 
-Step "[3/6] LLVM (clang-tidy) + clang-format $DishClangFormatVersion"
-Invoke-Winget 'LLVM.LLVM'
 
-Step "[4/6] Python 3 + Qt $DishQtVersion (aqtinstall)"
+Step "[3/5] Python 3, clang-format $DishClangFormatVersion, clang-tidy $DishClangTidyVersion, Qt $DishQtVersion"
 # On Windows 11 `python` can resolve to the WindowsApps alias stub that opens
 # the Microsoft Store; the py.exe launcher is not aliased, so probe with that.
 $py = $null
@@ -126,10 +125,10 @@ if (-not $py) {
 }
 Write-Output "[OK]  Python launcher: $py"
 
-# The pinned clang-format CI checks with. Installed via the Python that step
-# 4 guarantees; LLVM's floating clang-format stays available for clang-tidy.
-& $py -3 -m pip install --user "clang-format==$DishClangFormatVersion"
-if ($LASTEXITCODE -ne 0) { Write-Error "pip install clang-format==$DishClangFormatVersion failed" }
+# The pinned clang-format and clang-tidy CI checks with, through the Python
+# this step guarantees.
+& $py -3 -m pip install --user "clang-format==$DishClangFormatVersion" "clang-tidy==$DishClangTidyVersion"
+if ($LASTEXITCODE -ne 0) { Write-Error "pip install clang-format==$DishClangFormatVersion clang-tidy==$DishClangTidyVersion failed" }
 
 $qtPrefix = Join-Path $qtRoot (Join-Path $DishQtVersion $DishQtArchDir)
 if (Test-Path (Join-Path $qtPrefix 'bin\Qt6Core.dll')) {
@@ -146,7 +145,7 @@ if (Test-Path (Join-Path $qtPrefix 'bin\Qt6Core.dll')) {
     if ($LASTEXITCODE -ne 0) { Write-Error 'aqt install-qt failed' }
 }
 
-Step '[5/6] vcpkg at the builtin-baseline of vcpkg.json'
+Step '[4/5] vcpkg at the builtin-baseline of vcpkg.json'
 $baseline = Get-VcpkgBaseline -RepoRoot $repoRoot
 $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { $vcpkgRootDefault }
 if (-not (Test-Path (Join-Path $vcpkgRoot '.git'))) {
@@ -171,7 +170,7 @@ if (Test-Path (Join-Path $vcpkgRoot 'vcpkg.exe')) {
     if ($LASTEXITCODE -ne 0) { Write-Error 'bootstrap-vcpkg failed' }
 }
 
-Step "[6/6] Inno Setup $DishInnoSetupVersion"
+Step "[5/5] Inno Setup $DishInnoSetupVersion"
 & (Join-Path $PSScriptRoot 'install-inno-setup.ps1')
 
 Step 'Persisting env vars (user scope)'

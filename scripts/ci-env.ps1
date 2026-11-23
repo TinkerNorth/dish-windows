@@ -14,8 +14,9 @@
       * every variable vcvars64 adds or changes; new PATH entries go through
         GITHUB_PATH so they stay ahead of the runner's own (Git's usr\bin
         carries a link.exe of its own);
-      * QT_VERSION, QT_ARCH, QT_ARCH_DIR, AQT_SOURCE, CLANG_FORMAT_VERSION
-        from scripts/tools.ps1;
+      * QT_VERSION, QT_ARCH, QT_ARCH_DIR, AQT_SOURCE, CLANG_FORMAT_VERSION,
+        CLANG_TIDY_VERSION from scripts/tools.ps1;
+      * the pinned Ninja (Install-Ninja), first on PATH;
       * VCPKG_COMMITID, read from vcpkg.json's builtin-baseline, its one copy;
       * IMAGE_VERSION, the runner image, which keys the vcpkg binary cache
         because an image update can carry a new MSVC and so new ABI hashes.
@@ -51,14 +52,20 @@ $exports['QT_ARCH'] = $DishQtArch
 $exports['QT_ARCH_DIR'] = $DishQtArchDir
 $exports['AQT_SOURCE'] = $DishAqtSource
 $exports['CLANG_FORMAT_VERSION'] = $DishClangFormatVersion
+$exports['CLANG_TIDY_VERSION'] = $DishClangTidyVersion
 $exports['VCPKG_COMMITID'] = Get-VcpkgBaseline -RepoRoot $repoRoot
 $exports['IMAGE_VERSION'] = if ($env:ImageVersion) { $env:ImageVersion } else { 'local' }
 
 New-Item -ItemType Directory -Force (Join-Path $repoRoot 'vcpkg-bincache') | Out-Null
 
+# The pinned Ninja, ahead of everything: the image carries one and vcvars64 adds
+# Visual Studio's own, and CMake takes whichever comes first.
+$ninjaDir = Install-Ninja
+
 if (-not $env:GITHUB_ENV) {
     foreach ($name in $exports.Keys) { Write-Output "$name=$($exports[$name])" }
     foreach ($entry in $newPathEntries) { Write-Output "PATH+=$entry" }
+    Write-Output "PATH+=$ninjaDir (first)"
     return
 }
 
@@ -77,6 +84,8 @@ if ($newPathEntries.Count -gt 0) {
     [array]::Reverse($newPathEntries)
     Add-Content -Path $env:GITHUB_PATH -Value $newPathEntries -Encoding utf8
 }
+# Written last, so it lands first.
+Add-Content -Path $env:GITHUB_PATH -Value $ninjaDir -Encoding utf8
 
 Write-Output "Exported $($exports.Count) variables and $($newPathEntries.Count) PATH entries."
 Write-Output "Qt $DishQtVersion ($DishQtArch), vcpkg $($exports['VCPKG_COMMITID']), image $($exports['IMAGE_VERSION'])"

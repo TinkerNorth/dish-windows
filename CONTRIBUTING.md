@@ -12,9 +12,12 @@ issues, pull requests, and review threads. Reports go to
 
 ## Getting set up
 
-You need Visual Studio 2022 Build Tools (C++ workload), CMake, Ninja, LLVM
-(clang-tidy), Python 3.12, Qt 6.12.1 (which carries the Linguist tools the
-translation gate runs), vcpkg, clang-format 23.1.5 and Inno Setup 6.7.4.
+You need Visual Studio 2022 Build Tools (C++ workload), CMake, Ninja 1.13.2,
+Python 3.12, Qt 6.12.1 (which carries the Linguist tools the translation gate
+runs), vcpkg, clang-format 23.1.5, clang-tidy 23.1.4 and Inno Setup 6.7.4. The
+two LLVM tools are the PyPI wheels, picked out of PATH by version: Visual
+Studio's own clang-format and clang-tidy (19.x) sit ahead of them once vcvars
+has run.
 `scripts\install-deps.ps1` installs all of it, at the versions CI uses: every
 pin lives in `scripts/tools.ps1`, and vcpkg is checked out at the
 `builtin-baseline` of `vcpkg.json`, the commit CI checks out. Qt comes from
@@ -405,7 +408,8 @@ same sources):
 1. `scripts/ci-env.ps1`: the MSVC environment (vswhere + vcvars64) and the
    pins from `scripts/tools.ps1` and `vcpkg.json`; then Qt 6.12.1 through
    `jurplel/install-qt-action`, vcpkg at the baseline, and clang-format
-   23.1.5 through pipx.
+   23.1.5 and clang-tidy 23.1.4 through pipx; Ninja 1.13.2 comes from
+   `ci-env.ps1` itself, first on PATH.
 2. `scripts/check-format.ps1`: `clang-format --dry-run --Werror` over `src/`
    and `tests/`, refusing any clang-format but the pinned one.
 3. The `debug` preset (`-DDISH_BUILD_TESTS=ON -DDISH_REQUIRE_TRANSLATIONS=ON`
