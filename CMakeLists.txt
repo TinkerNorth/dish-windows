@@ -866,6 +866,20 @@ qt_add_qml_module(Dish
 # so their directory has to be on the include path for it to compile.
 target_include_directories(Dish PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/qml/chrome)
 
+# The AOT-compiled QML (qmlcachegen's *_qml.cpp, attached to Dish by
+# qt_add_qml_module above) instantiates Qt's own QJSEngine / QVariant templates,
+# whose `if constexpr` early returns leave code MSVC's optimizer reports as
+# unreachable (C4702) inside qjsengine.h, qvariant.h and qmetatype.h. That is a
+# back-end warning, which -external:W0 does not reach (documented under
+# /external, "Limitations"), so /wd47XX is the compiler's own remedy for it.
+# Scoped to the generated units only: every first-party unit in this target
+# keeps C4702 live.
+if(MSVC)
+    get_target_property(_dish_qmlcache_sources Dish SOURCES)
+    list(FILTER _dish_qmlcache_sources INCLUDE REGEX "/\\.rcc/qmlcache/")
+    set_source_files_properties(${_dish_qmlcache_sources} PROPERTIES COMPILE_OPTIONS /wd4702)
+endif()
+
 target_link_libraries(Dish PRIVATE
     Qt6::Quick Qt6::Qml Qt6::QuickControls2
     # Mica/dark mode + the shadow and resize frame.
