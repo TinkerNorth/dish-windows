@@ -148,7 +148,10 @@ uninstaller (`unins000.exe`, beside `dish.exe`) removes all three.
 
 The app also **reads** (never writes)
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
-to follow your Windows light/dark setting.
+to follow your Windows light/dark setting, and
+`HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\BIOS` for the
+manufacturer and product names your PC's firmware gives it, which name this
+PC's model in a diagnostics file (section 2.6) and nowhere else.
 
 Held in memory only, never written and never transmitted anywhere except to
 the satellite you bound the controller to:
@@ -269,9 +272,9 @@ never leaves on its own: you send it from your own mail app.
 
 Beyond those there is no analytics library, no error tracking beyond the
 crash report, and no advertising identifier. Apart from the updater, the
-controller database check and the crash reporter, the only component in the
-app that makes an outbound HTTPS request is the satellite API client, and it
-only ever addresses the IP of a satellite you selected.
+controller database check and the crash reporter, the only components in the
+app that make an outbound HTTPS request are the satellite API client and the
+Moonlight client, and they only ever address a host you selected.
 
 The other way this app causes a request to a TinkerNorth or third-party
 address is if you click a link, which hands the URL to your default browser
@@ -549,11 +552,17 @@ apps do, so this is the equivalent list of what the app touches.
 |---|---|
 | Network sockets: UDP multicast, UDP broadcast listen, UDP unicast, TCP, TLS over TCP | Discovery, pairing, control plane, gamepad stream, for satellites and Moonlight hosts alike. All to your LAN. |
 | HTTPS to `github.com` | The update check and, if enabled, the update download. Section 2.4. Only while *Check for updates automatically* is on. |
+| HTTPS to `dish.tinkernorth.com` | The controller database check and, when a newer list exists, its download. Section 2.5. Only while *Check for controller updates automatically* is on, or when you click *Check now* with it on. |
 | Game-controller device enumeration and IO | Reading controller input, and writing rumble, light, trigger and lamp output back to the controller. Raw HID access is used for reading and writing in USB-direct mode. |
 | A controller's own audio device, through SDL2's audio over WASAPI | Playing the sound and haptics a satellite sends for that controller, and the inspector's test tone, and opening its microphone only as section 2.1 describes. Never your PC's own microphone. |
 | `SetThreadExecutionState` | Preventing sleep while a controller is actively streaming, so input latency stays low. Released when streaming stops. |
 | `HKEY_CURRENT_USER` registry read and write | Settings and pairing state, as listed in section 2.1. |
-| `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, and the `updates\` folder described in section 2.1. |
+| `HKEY_LOCAL_MACHINE` registry read | The firmware's manufacturer and product names (section 2.1), and the installer's three answers after an all-users install. Never written. |
+| `%LOCALAPPDATA%\Dish\` file write | The crash dump and crash log, the `updates\` folder, a newer controller list under `controllers\v1\` and the diagnostics files under `diagnostics\`, as section 2.1 describes. |
+| Simple MAPI (`mapi32.dll`), the default `mailto:` handler, and Explorer | *Continue in your mail app* hands the message and its file to your mail app, or opens a `mailto:` link when none answers MAPI, then shows the file in Explorer; *Save diagnostics* shows the file it wrote. Section 2.6. Only when you click one of them. |
+| The device tree and a controller's USB hub | For a controller Dish reads directly, once when it is plugged in, its USB device, configuration and HID report descriptors, asked of the hub it is plugged into, as Windows' own USB tools do; never its serial number. Section 2.6. |
+| SetupAPI and Windows' power status | Whether Windows lists a USB host controller, and this PC's battery level, charging state and battery saver (`GetSystemPowerStatus`), read when a diagnostics file is prepared and, for the battery, while a controller streams (section 2.1). |
+| SetupAPI and the Bluetooth API | Whether this PC has a Bluetooth radio and whether it is on, for the Diagnostics page and the setup wizard. Nothing is read about the devices paired with it. |
 | `%LOCALAPPDATA%\TinkerNorth\Dish\sentry\` file write | The crash reporter's run state and any report not yet sent (section 3), only while *Share crash reports* is on. |
 | Default browser launch | Opening the links listed in section 2.3, only when you click one. |
 

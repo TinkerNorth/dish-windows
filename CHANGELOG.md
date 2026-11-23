@@ -37,8 +37,10 @@ share a version number.
   attach.
 - **Settings: "Check for controller updates automatically"** (on by default)
   and **"Check now"**. With the switch off, no request for the list leaves the
-  PC, "Check now" included. The request carries no identifier, no query and
-  the system's default `User-Agent`.
+  PC, "Check now" included. The request carries no identifier, no query,
+  Qt's default `User-Agent` (`Mozilla/5.0`) and a fixed `Accept-Language: *`
+  in place of the system's languages, which Qt would otherwise send. The
+  update check sends the same fixed `Accept-Language` now.
 - **Each controller's record on the Diagnostics card.** The record it matched,
   its name from the database's strings in your language (English where a
   language has none), a chip for its verification state (Verified, Layout
@@ -72,7 +74,7 @@ share a version number.
 - **"Last write" on a Direct controller's card**: the route, the report id,
   whether the pad took it and the Windows error code when it did not, recorded
   by the claim's output worker without a lock or an allocation.
-- **"Did it work?" after each rumble test** in the controller inspector. The
+- **"Did it work?" after every test** in the controller inspector. The
   answer is kept per controller, the last twenty, for this run, and the last
   one shows on the inspector and the Diagnostics card.
 - **A "Controller database" card on Diagnostics**: the bundled and active
@@ -90,10 +92,13 @@ share a version number.
   opens your own mail app through Simple MAPI, addressed to
   `support@tinkernorth.com`, subject `Dish support: <category> · Dish for
   Windows <version> on <PC model>` (the prefix stays English so the mailbox
-  can sort on it), your words first and the Diagnostics summary after, the
-  file attached; where no mail app answers MAPI, a `mailto:` link opens and
-  Explorer shows the file. *Save diagnostics* writes the same file without a
-  report. Nothing is sent until you click Send.
+  can sort on it; a firmware placeholder such as "To Be Filled By O.E.M." or
+  "Not Specified" names no model), your words first and the Diagnostics
+  summary after, the file attached; where no mail app answers MAPI (the new
+  Outlook and the Mail app answer none), a `mailto:` link opens without the
+  file. Explorer shows the file after either, and the page names it, since a
+  mail app may still leave it out. *Save diagnostics* writes the same file
+  without a report. Nothing is sent until you click Send.
 - **Both ends of every host in the file.** While the report page is open,
   each live Satellite of 2.3.0 or later is asked for its own account of the
   session (`GET /api/connections/{id}/diagnostics`, over the session's pinned
@@ -193,6 +198,13 @@ share a version number.
   The sentence that the app does not access the microphone or the clipboard is
   replaced: the only microphone it ever opens is a controller's own, and it
   writes to the clipboard only for *Copy events* on the Diagnostics page.
+- **PRIVACY.md** lists every header the update check and the controller
+  database check send; says a mail app may leave the report's file out and
+  that Explorer then shows it; and its capabilities table gains
+  `dish.tinkernorth.com`, the registry values read under
+  `HKEY_LOCAL_MACHINE`, the mail hand-off, the controller and diagnostics
+  folders, the descriptors read through a controller's USB hub, the USB host
+  and power reads, and the Bluetooth radio check.
 
 ### Fixed
 
@@ -205,12 +217,19 @@ share a version number.
 
 ### Notes
 
-- The compiled Direct tables (`kKnownModels`, the fast-lane vendors) stay, and
-  a test requires every row to match its database record; they answer first,
-  and a served record speaks for the ids they lack (`tests/PARITY.md`).
-- Hot path: the session counts each message kind it sends and receives, and
-  the router counts each pad's output lanes, with relaxed atomics only; no
-  thread on the input, USB, receive or mic path takes a new lock. The raw-HID
+- The compiled Direct tables stay, and a test requires every row to match its
+  database record. `kKnownModels` and Sony's five named pads answer first; for
+  every other id, the Nintendo, Sony and other vendor guesses included, a
+  record in force decides how the pad is read at its next attach
+  (`tests/PARITY.md`). dbVersion 1 changes the 48 ids named
+  under Changed.
+- Hot path: the session counts each message kind it sends and receives with
+  relaxed atomics. The router stamps each pad's output lanes on every feedback
+  message it routes, rumble included: one `system_clock::now()` and three
+  relaxed atomics. Each Direct write the output worker makes adds a
+  `system_clock::now()`, a seqlock write of its verdict and the writer's
+  `GetLastError` store. No thread on the input, USB, receive or mic path takes
+  a new lock. The raw-HID
   read loop loads one relaxed word per report where it loaded its running flag,
   which also says whether a capture is armed, and while one is it copies at
   most 64 bytes into a slot fixed with the claim, for twenty reports. The SDL
@@ -221,7 +240,7 @@ share a version number.
   ledger first: one flag taken for a few sequentially consistent stores, and
   one load of the test's hold bits, never a lock or an allocation. Moonlight's
   light bar and the mute lamp take the same ledger on the GUI thread. Rumble
-  messages and input reports are untouched. The SDL output mailbox gains a
+  messages pass no ledger, and input reports are untouched. The SDL output mailbox gains a
   trigger-rumble kind; its fields are reordered so its state still copies as
   five words.
 - Hot path (the raw joystick's rumble): the SDL thread now drains a raw
