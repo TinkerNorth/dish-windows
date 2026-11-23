@@ -3,6 +3,7 @@
 
 #include "source/connection/NvstreamDiscovery.h"
 
+#include "core/Bits.h"
 #include "source/connection/MdnsScan.h"
 
 #include <ws2tcpip.h>
@@ -20,9 +21,15 @@ constexpr std::uint16_t kTypePtr = 12;
 constexpr std::uint16_t kTypeSrv = 33;
 constexpr std::uint16_t kClassInQu = 0x8001;
 
-std::uint16_t read16(const std::uint8_t* p) {
-    return static_cast<std::uint16_t>((p[0] << 8) | p[1]);
+// RFC 1035 4.1.4: a label byte with its top two bits set starts a two-byte pointer to an earlier
+// name, whose offset is the low 14 bits of the pair.
+bool isCompressionPointer(std::uint8_t b) { return (bits::u32(b) & 0xC0U) == 0xC0U; }
+
+std::size_t compressionTarget(std::uint8_t b, std::uint8_t next) {
+    return static_cast<std::size_t>(((bits::u32(b) & 0x3FU) << 8U) | bits::u32(next));
 }
+
+std::uint16_t read16(const std::uint8_t* p) { return bits::loadBe16(p); }
 
 // The PTR query for `_nvstream._tcp.local.`.
 std::vector<std::uint8_t> buildQuery() {
@@ -35,10 +42,10 @@ std::vector<std::uint8_t> buildQuery() {
         q.insert(q.end(), label, label + n);
     }
     q.push_back(0);
-    q.push_back(static_cast<std::uint8_t>(kTypePtr >> 8));
-    q.push_back(static_cast<std::uint8_t>(kTypePtr & 0xFF));
-    q.push_back(static_cast<std::uint8_t>(kClassInQu >> 8));
-    q.push_back(static_cast<std::uint8_t>(kClassInQu & 0xFF));
+    q.push_back(bits::byteOf(bits::u32(kTypePtr), 1U));
+    q.push_back(bits::byteOf(bits::u32(kTypePtr), 0U));
+    q.push_back(bits::byteOf(bits::u32(kClassInQu), 1U));
+    q.push_back(bits::byteOf(bits::u32(kClassInQu), 0U));
     return q;
 }
 
@@ -57,10 +64,10 @@ std::size_t skipName(const std::uint8_t* p, std::size_t len, std::size_t off) {
             if (!jumped) { consumed += 1; }
             return consumed;
         }
-        if ((b & 0xC0) == 0xC0) {
+        if (isCompressionPointer(b)) {
             if (off + 1 >= len) { return 0; }
             if (!jumped) { consumed += 2; }
-            const std::size_t target = (static_cast<std::size_t>(b & 0x3F) << 8) | p[off + 1];
+            const std::size_t target = compressionTarget(b, p[off + 1]);
             if (target >= off) { return 0; }
             off = target;
             jumped = true;
@@ -81,9 +88,9 @@ bool readName(const std::uint8_t* p, std::size_t len, std::size_t off, std::stri
         if (++guard > len) { return false; }
         const std::uint8_t b = p[off];
         if (b == 0) { return true; }
-        if ((b & 0xC0) == 0xC0) {
+        if (isCompressionPointer(b)) {
             if (off + 1 >= len) { return false; }
-            const std::size_t target = (static_cast<std::size_t>(b & 0x3F) << 8) | p[off + 1];
+            const std::size_t target = compressionTarget(b, p[off + 1]);
             if (target >= off) { return false; }
             off = target;
             continue;
