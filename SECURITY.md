@@ -161,8 +161,11 @@ On every pull request and every push to `main`, blocking:
 - Action-pin lint. Every `uses:` line must reference a 40-char commit SHA.
 - Allowlist expiry. `.security/allowlist.yaml` entries must carry `cve`,
   `reason`, `owner`, and an unexpired `expires`.
-- OSV-Scanner over the worktree.
-- Gitleaks secret scan over the full history.
+- OSV-Scanner 2.7.1 over the worktree and over every library `dish.exe` links,
+  named by the upstream commit its pin resolves to (`scripts/osv-lockfile.sh`:
+  the vcpkg ports at the baseline, ENet, Qt), with `.security/allowlist.yaml`
+  as the only place a finding can be accepted.
+- gitleaks 8.30.1 over the full history.
 - CodeQL `cpp` analysis, `security-extended` query pack, on a Windows runner
   so MSVC-only constructs are covered; the results are uploaded to code
   scanning.
@@ -183,10 +186,12 @@ On a release tag, `release.yml`, also blocking:
   `WIN_SIGN_PASSWORD` secrets exist, and releases it unsigned with a warning
   when they do not (the repository variable `ENFORCE_RELEASE_SIGNING=true`
   turns that into a failure).
-- The shared harden workflow (`_release_harden.yml`): an Anchore Grype scan
-  that fails on CRITICAL or HIGH, Syft SBOMs in SPDX-JSON and CycloneDX-JSON,
-  `SHA256SUMS` over every asset and SBOM, and cosign keyless signatures
-  (`.sig` + `.crt`) for each of them.
+- The shared harden workflow (`_release_harden.yml`, byte-identical across
+  the fleet): Grype 0.122.1 fails on CRITICAL or HIGH, Syft 1.57.2 writes the
+  SPDX-JSON and CycloneDX-JSON SBOMs, `SHA256SUMS` covers every asset and SBOM,
+  and cosign 3.1.4 signs each file keyless into one Sigstore bundle
+  (`<file>.sigstore.json`). Every pull request runs the same workflow in
+  dry-run mode on that pull request's own installer and zip.
 - SLSA build provenance from `slsa-framework/slsa-github-generator`,
   `dish-windows.intoto.jsonl`.
 - Uploads everything to a draft release and publishes it only after the
@@ -195,59 +200,102 @@ On a release tag, `release.yml`, also blocking:
 
 ## Verifying a release artifact (consumer recipe)
 
-Run against 2.8.0 on 2026-11-23 with cosign 3.1.4; every step below printed
-what it says.
+Releases cut after the shared release-hardening workflow landed carry one
+Sigstore bundle per file (`<file>.sigstore.json`); releases up to 2.8.0 carry a
+`.sig` and a `.crt` per file and are verified the second way below. The tag is
+bare `X.Y.Z` in every command.
 
 ### 0) Pre-requisites
 
+A pinned cosign 3, checked against the upstream checksum file:
+
 ```bash
-brew install cosign gh        # macOS; or https://github.com/sigstore/cosign/releases
+curl -fsSLO https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-darwin-arm64
+echo "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4  cosign-darwin-arm64" | shasum -a 256 -c -
+chmod +x cosign-darwin-arm64 && mv cosign-darwin-arm64 cosign
+# Linux: cosign-linux-amd64, 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+# Windows: cosign-windows-amd64.exe, cbe953787074611f1334cbf37dc1cf953995bb8c45398eb4fc7bb781d29c1f2a
+# (all three from https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign_checksums.txt)
 ```
 
 ### 1) Download every file from the Release
 
 ```bash
-gh release download 2.8.0 -R TinkerNorth/dish-windows -D ./release
-cd release
+TAG=X.Y.Z
+REPO=dish-windows
+gh release download "$TAG" -R "TinkerNorth/$REPO" -D "$REPO-$TAG"
+cd "$REPO-$TAG"
 ```
 
-2.8.0 carries `dish-setup.exe`, `dish-windows.zip`, `latest.json`,
-`SHA256SUMS`, `dish-windows.sbom.spdx.json`, `dish-windows.sbom.cdx.json`, a
-`.sig` and `.crt` beside each of those, `dish-windows.intoto.jsonl` (the SLSA
-provenance) and `measurements-2.8.0.json` / `.md`. The measurements are
-attached after the harden step, so neither the checksums nor the signatures
-cover them.
+A release carries `dish-setup.exe`, `dish-windows.zip`, `latest.json`,
+`dish-windows-components.spdx.json` (the bill of materials of what the bundle
+ships, from releases after 2.8.0), `SHA256SUMS`, the Syft SBOMs
+`dish-windows.sbom.spdx.json` and `dish-windows.sbom.cdx.json`, their
+signatures, `dish-windows.intoto.jsonl` (the SLSA provenance) and
+`measurements-<version>.json` / `.md`. The measurements are attached after the
+harden step, so neither the checksums nor the signatures cover them.
 
-### 2) Verify the checksum bundle
+### 2) Releases after 2.8.0: one bundle per file
 
 ```bash
-shasum -a 256 -c SHA256SUMS     # macOS; sha256sum -c SHA256SUMS on Linux
+# SHA256SUMS was signed by this repository's release workflow, on this tag.
+cosign verify-blob \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity "https://github.com/TinkerNorth/$REPO/.github/workflows/_release_harden.yml@refs/tags/$TAG" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+
+# Every file you downloaded matches it (macOS: shasum -a 256 --ignore-missing -c).
+sha256sum --ignore-missing -c SHA256SUMS
 ```
 
-Every line says `OK`.
+The identity is exact, not a regular expression, and names
+`_release_harden.yml` because the certificate's identity is the workflow that
+ran the signing step. To verify one file on its own, run the same
+`cosign verify-blob` with `--bundle <file>.sigstore.json` and `<file>`. This
+form applies from the first release cut with it and has not been run yet: 2.8.0
+is the latest release.
 
-### 3) Verify cosign signed `SHA256SUMS` from the release workflow
+### 3) Releases up to 2.8.0: `.sig` and `.crt`
 
-The signing identity is the shared harden workflow that `release.yml` calls,
-at the release tag:
+cosign 3 still verifies them with the deprecated flags (it prints two
+deprecation lines); the identity is the same harden workflow:
 
 ```bash
 cosign verify-blob \
-  --certificate SHA256SUMS.crt \
-  --signature   SHA256SUMS.sig \
-  --certificate-identity-regexp '^https://github\.com/TinkerNorth/dish-windows/\.github/workflows/_release_harden\.yml@refs/tags/[0-9]+\.[0-9]+\.[0-9]+$' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --certificate SHA256SUMS.crt --signature SHA256SUMS.sig \
+  --certificate-identity "https://github.com/TinkerNorth/$REPO/.github/workflows/_release_harden.yml@refs/tags/$TAG" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   SHA256SUMS
+shasum -a 256 --ignore-missing -c SHA256SUMS
 ```
 
-Output ends with `Verified OK`. The same command with `dish-setup.exe`,
-`dish-windows.zip` or `latest.json` in place of `SHA256SUMS` (and its own
-`.crt` and `.sig`) verifies each asset on its own.
+Run against 2.8.0 on 2026-11-23 with the cosign 3.1.4 above: `Verified OK`, and
+every downloaded file `OK`.
 
-### 4) Check the portable bundle's own checksums
+### 4) The SLSA L3 provenance
+
+`dish-windows.intoto.jsonl` is a Sigstore bundle whose statement names every
+released file by SHA-256. It is signed by the SLSA generator at the exact
+commit `release.yml` pins, which `slsa-verifier` refuses ("invalid ref")
+because that is not a release tag, so verify it with cosign:
+
+```bash
+cosign verify-blob-attestation \
+  --bundle dish-windows.intoto.jsonl --new-bundle-format --type slsaprovenance \
+  --certificate-identity "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  dish-setup.exe
+```
+
+Run against 2.8.0's `dish-setup.exe` with cosign 3.1.4: `Verified OK`. The
+commit is the generator v2.1.0 `release.yml` pins; `scripts/check-versions.ps1`
+fails a change that moves one without the other.
+
+### 5) Check the portable bundle's own checksums
 
 The zip carries a `SHA256SUMS` of its contents. It is not signed, but the zip
-that carries it is (step 3):
+that carries it is:
 
 ```powershell
 Expand-Archive .\dish-windows.zip -DestinationPath .\dish-windows
@@ -323,26 +371,27 @@ notify-only.
 
 ## Known gaps
 
-- **No Authenticode signature yet.** `release.yml` signs `dish-setup.exe`
-  whenever the certificate secrets exist, and none is configured: the 2.8.0
+- **No Authenticode signature yet, by design until a certificate exists.**
+  Signing is optional: `release.yml` signs `dish-setup.exe` whenever the
+  `WIN_SIGN_CERT_BASE64` and `WIN_SIGN_PASSWORD` secrets exist and otherwise
+  releases it unsigned with a warning (the repository variable
+  `ENFORCE_RELEASE_SIGNING=true` turns that into a failure). Neither secret is
+  configured: 2.8.0's run warned "Stable tag 2.8.0 is being released with an
+  UNSIGNED installer. Missing: WIN_SIGN_CERT_BASE64 WIN_SIGN_PASSWORD", and its
   installer has an empty certificate table. Microsoft Defender SmartScreen
   therefore shows "Windows protected your PC" the first time a freshly
   downloaded installer from a new release runs (*More info*, then *Run
   anyway*). `dish.exe` and `crashpad_handler.exe` inside it are not signed
-  either. Automatic updates are not interposed by SmartScreen, because a file
-  an app writes itself carries no mark of the web, so the updater's checksum
-  chain is what stands between a release and an installed machine.
-- **The SLSA provenance does not verify with `slsa-verifier`.**
-  `slsa-verifier verify-artifact` (2.7.1) rejects 2.8.0's
-  `dish-windows.intoto.jsonl` with `invalid ref: "f7dd8c5...": unexpected ref
-  type`: the generator is called by commit SHA, and the verifier accepts only a
-  builder referenced by tag. The cosign signatures above are the verifiable
-  link to the workflow run until that changes.
-- **The SBOMs list almost nothing.** 2.8.0's SPDX SBOM has two packages (the
-  app and the release directory); Syft does not see the vcpkg libraries, Qt or
-  the CRT inside the bundle. [`THIRD_PARTY.md`](THIRD_PARTY.md) is the
-  complete list.
+  either. Automatic updates are not interposed by SmartScreen, because a file an
+  app writes itself carries no mark of the web, so the updater's checksum chain
+  is what stands between a release and an installed machine.
+- **The Syft SBOMs list almost nothing.** Syft scans the release directory,
+  where the libraries sit inside a zip and an installer it does not open:
+  2.8.0's SPDX SBOM has two packages. From the release after 2.8.0,
+  `dish-windows-components.spdx.json` is the complete bill of materials,
+  written from the build and checked against `assets/licenses/licenses.json`
+  on every pull request; [`THIRD_PARTY.md`](THIRD_PARTY.md) lists the same set.
 - **The in-zip `SHA256SUMS` is in-band.** It lives inside the file it
-  describes; it is worth something only after step 3 has verified the zip.
+  describes; it is worth something only after the zip itself has been verified.
 
 Nothing in this document should be read as claiming more than it states.

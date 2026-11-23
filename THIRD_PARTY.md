@@ -577,6 +577,27 @@ license and carry no third-party attribution.
 
 ---
 
+## 9. Build and release tools
+
+None of these is linked into `dish.exe` or ships in a bundle; they build,
+check, package or sign it. Each is pinned by version and checked against its
+upstream SHA-256 before it runs.
+
+| Tool | Version | Where it is pinned | Used for |
+|---|---|---|---|
+| Inno Setup | 6.7.4 | `scripts/tools.ps1` | Compiles `dish-setup.exe`. Its setup and uninstall stubs are part of the installer; Inno Setup's licence permits that distribution. |
+| aqtinstall | commit `4c759852` | `scripts/tools.ps1` | Installs Qt (section 2). |
+| clang-format, clang-tidy | 23.1.5, 23.1.4 | `scripts/tools.ps1` | The format and lint gates. |
+| Ninja | 1.13.2 | `scripts/tools.ps1` | The CMake generator. |
+| sentry-cli | 3.8.2 | `scripts/tools.ps1` | Uploads release symbols and creates the Sentry release. |
+| OSV-Scanner | 2.7.1 | `.github/workflows/_security.yml`, `scripts/tools.ps1` | Scans the libraries for known vulnerabilities. |
+| gitleaks | 8.30.1 | `.github/workflows/_security.yml`, `scripts/tools.ps1` | Scans the history for secrets. |
+| Grype | 0.122.1 | `.github/workflows/_release_harden.yml` | Scans the release assets. |
+| Syft | 1.57.2 | `.github/workflows/_release_harden.yml` | Writes the release SBOMs. |
+| cosign | 3.1.4 | `.github/workflows/_release_harden.yml` | Signs every release asset into a Sigstore bundle. |
+
+---
+
 ## Keeping this in sync
 
 [`assets/licenses/licenses.json`](assets/licenses/licenses.json) is the manifest

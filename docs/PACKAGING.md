@@ -22,9 +22,10 @@ what gets written where is in [`PRIVACY.md`](../PRIVACY.md).
 | `dish-setup.exe` | Inno Setup installer. One file, no prerequisites, per-user by default. Authenticode-signed when the release has a certificate (none is configured yet; section 6). |
 | `dish-windows.zip` | The portable bundle. Unzip and run; never self-updates. |
 | `latest.json` | The update manifest every installed copy polls. Immutable asset name. |
-| `SHA256SUMS` | Checksums of the three assets above and the two SBOMs, as a release asset in its own right. |
-| `dish-windows.sbom.spdx.json`, `dish-windows.sbom.cdx.json` | SPDX and CycloneDX SBOMs. |
-| `<asset>.sig`, `<asset>.crt` | A cosign keyless signature and its certificate for each asset above. |
+| `dish-windows-components.spdx.json` | The bill of materials of what the bundle ships, written from the build (`scripts/write-sbom.ps1`); from the release after 2.8.0. |
+| `SHA256SUMS` | Checksums of every asset above and the SBOMs, as a release asset in its own right. |
+| `dish-windows.sbom.spdx.json`, `dish-windows.sbom.cdx.json` | The SPDX and CycloneDX SBOMs Syft writes over the release directory. |
+| `<asset>.sigstore.json` | A cosign keyless signature for each asset above, as one Sigstore bundle (releases up to 2.8.0: `<asset>.sig` and `<asset>.crt`). |
 | `dish-windows.intoto.jsonl` | SLSA build provenance. |
 | `measurements-<version>.json`, `.md` | The release's input-path measurements, attached after the checksums and signatures. |
 

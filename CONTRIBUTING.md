@@ -431,7 +431,14 @@ same sources):
    over the install image, `scripts/install-inno-setup.ps1` (Inno Setup 6.7.4,
    SHA-256 checked), `scripts/build-installer.ps1`,
    `scripts/test-installer-roundtrip.ps1` against the freshly compiled
-   installer, and artifact upload.
+   installer (which also starts the installed app in place and requires its
+   controller database check over HTTPS), `scripts/package-bundle.ps1` and `scripts/write-sbom.ps1` (the
+   zip and the components SBOM, made as `release.yml` makes them, and
+   `scripts/check-sbom.ps1` over the SBOM), and artifact upload.
+9. Job `Release hardening (dry run)`: the shared `_release_harden.yml` in
+   dry-run mode over step 8's installer, zip and SBOM: Grype, the Syft SBOMs,
+   `SHA256SUMS`, and a signature per file with a throwaway key. Keyless
+   signing, the code-scanning upload and the SLSA provenance run only on a tag.
 
 `version-consistency.yml`, job `Versions, pins and documented facts`, runs
 `scripts/check-versions.ps1` when a version-carrying file moves. It fails the
@@ -454,10 +461,11 @@ the rest.
 
 Security gates:
 
-- `security.yml`, which calls the reusable `_security.yml`: action-pin lint
-  (every `uses:` must be a 40-char SHA), `.security/allowlist.yaml` expiry,
-  OSV-Scanner over the worktree, and a gitleaks secret scan of the full
-  history. All blocking. Also runs weekly on a schedule.
+- `security.yml`, which calls the reusable `_security.yml` (byte-identical to
+  satellite's): action-pin lint (every `uses:` a 40-character SHA with its
+  `# vX.Y.Z`), `.security/allowlist.yaml` expiry, OSV-Scanner 2.7.1 over the
+  worktree and the libraries `scripts/osv-lockfile.sh` names, and a gitleaks
+  scan of the full history. All blocking. Also runs weekly on a schedule.
 - `dependency-review-action`, in the same workflow, is switched off in
   `security.yml` (`dependency_review_enabled: false`): it needs the
   repository's Dependency graph setting, which is off, and fails without it.
@@ -489,42 +497,40 @@ silent suppression.
 
 ### Running the security checks locally
 
-```powershell
-# Action-pin lint: every `uses:` line must carry a 40-char SHA
-$bad = git ls-files .github/workflows/ |
-    ForEach-Object { Select-String -Path $_ -Pattern '^\s*uses:' } |
-    Where-Object { $_.Line -notmatch '@[0-9a-f]{40}\b' }
-if ($bad) { $bad; throw "unpinned actions" } else { "all pinned" }
+`scripts\ci-local.ps1` runs them through the same scripts `_security.yml`
+runs, with the same pinned scanners (fetched once into
+`%LOCALAPPDATA%\Programs\dish-security-tools`, each checked against its
+SHA-256): the pin lint `scripts/check-action-pins.sh` through Git for Windows'
+bash, `python scripts/security-allowlist.py check`, OSV-Scanner 2.7.1 through
+`scripts/osv-scan.sh --lockfile-script scripts/osv-lockfile.sh .`, and
+`gitleaks git --config=.gitleaks.toml --redact --exit-code=1 .` (8.30.1). The
+two Python scripts need PyYAML 6.0.4, which `scripts\install-deps.ps1`
+installs.
 
-# Allowlist expiry
-python -c @"
-import datetime, yaml, sys
-data = yaml.safe_load(open('.security/allowlist.yaml').read()) or {}
-for e in data.get('exceptions', []) or []:
-    if datetime.date.fromisoformat(str(e['expires'])) < datetime.date.today():
-        print('EXPIRED:', e); sys.exit(1)
-"@
-
-# OSV-Scanner (scoop install osv-scanner, or download from releases)
-osv-scanner --recursive --skip-git .
-
-# Gitleaks (scoop install gitleaks, or download from releases)
-gitleaks detect --no-banner --redact --source .
-```
+`_security.yml`, `_release_harden.yml`, `scripts/check-action-pins.sh`,
+`scripts/osv-scan.sh` and `scripts/security-allowlist.py` are byte-identical
+copies of satellite's. They are synced with `cp`, never edited here; a change
+starts in satellite.
 
 ### Verifying a release artifact
 
 A GitHub Release carries `dish-setup.exe`, `dish-windows.zip`, `latest.json`,
-`SHA256SUMS`, the SPDX and CycloneDX SBOMs, a cosign `.sig` and `.crt` for each
-of those, the SLSA provenance `dish-windows.intoto.jsonl`, and the release
-measurements. [`SECURITY.md`](SECURITY.md), "Verifying a release artifact",
-has the recipe (checksums, then cosign against the release workflow's
-identity) and what each check is worth.
+`SHA256SUMS`, the components SBOM `dish-windows-components.spdx.json`, the
+Syft SBOMs, one Sigstore bundle `<file>.sigstore.json` per file (releases up to
+2.8.0: a `.sig` and a `.crt`), the SLSA provenance `dish-windows.intoto.jsonl`,
+and the release measurements. [`SECURITY.md`](SECURITY.md), "Verifying a
+release artifact", has the recipe (cosign against the harden workflow's
+identity, the checksums, the provenance with `cosign verify-blob-attestation`)
+and what each check is worth.
 
 ## Cutting a release
 
 `release.yml` runs on a bare `MAJOR.MINOR.PATCH` tag (no `v` prefix, e.g.
-`1.2.3`) or a `workflow_dispatch` with a tag input. It re-runs the security
+`1.2.3`) or a `workflow_dispatch` with a tag input, run on the tag ref
+(`gh workflow run release.yml --ref X.Y.Z -f tag=X.Y.Z`): the signing
+certificate names the ref it ran on, and the harden job refuses anything but a
+tag, because a dispatch from `main` would sign as `refs/heads/main` and break
+every user's verification. It re-runs the security
 gates against the tagged commit, builds Release through the same preset and
 scripts as pull-request CI, uploads the debug symbols to Sentry, compiles
 `dish-setup.exe` with the pinned Inno Setup, signs it when the certificate

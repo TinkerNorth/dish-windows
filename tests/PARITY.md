@@ -423,3 +423,16 @@ this client does not do what the contracts say, the row says so and why.
 | `device.usbHost` | ⚠️ measured: the present device interfaces of class `GUID_DEVINTERFACE_USB_HOST_CONTROLLER` (`{3ABF6F2D-71C4-462A-8A92-1E6861E6AF27}`, Usbiodef.h) that `SetupDiGetClassDevsW(..., DIGCF_PRESENT \| DIGCF_DEVICEINTERFACE)` lists, counted to `ERROR_NO_MORE_ITEMS`. At least one is `true`, none is `false`, a set that would not open or a walk that ended on any other error is `null` (`diagnostics::usbHostFromCount`). Evidence: Microsoft's page for the GUID, "The system-supplied port driver for a USB host controller registers instances of GUID_DEVINTERFACE_USB_HOST_CONTROLLER to notify the operating system and applications of the presence of USB host controllers", and USBView enumerating host controllers with the same call (`enum.c` line 284). Read whenever a file is prepared, by *Save diagnostics* and the report page alike. Not yet run on a machine without a USB controller |
 | `device.thermal`, `device.wifi` | ❌ `null`: Windows names no thermal state to an app, and this client does not link the WLAN API (`wlanapi`), so band and RSSI are not read |
 | Satellite's `/api/controllers/v1` mirror | – clients do not read it in schema 1 |
+
+## 6. Suppressions, and why each is still here
+
+Inventory of 2026-11-23 (`NOLINT`, `#pragma warning(disable)`, `/wd`, `-Wno-*`,
+checks switched off in `.clang-tidy`, qmllint disables, `continue-on-error`).
+There is no `NOLINT`, no `#pragma warning(disable)`, no `-Wno-*` and no qmllint
+disable anywhere in the tree.
+
+| Where | What | Status |
+|---|---|---|
+| `CMakeLists.txt`, the qmlcachegen units | `/wd4702` on Qt's generated AOT units, for C4702 inside Qt's own `qjsengine.h` / `qvariant.h` templates under Qt 6.7.3 | Removed with the move to Qt 6.12.1; the pull request's build proves whether the generated units now compile clean |
+| `.clang-tidy` | `-bugprone-easily-swappable-parameters`, `-bugprone-narrowing-conversions`, `-cert-err58-cpp`, `-performance-no-int-to-ptr` | A fleet choice: the file is the canonical one, byte-identical to dish-linux's and the same check list as satellite's and dish-android's (only the first comment line's punctuation differs). Changing it is a fleet decision, made in satellite first |
+| `release.yml`, "Upload debug symbols to Sentry" and "Create the release and associate commits" | `continue-on-error: true` | Kept for now: both run only on a tag with the Sentry secrets, after the build, and a Sentry outage must not hold back a release whose artifacts are already verified. A pull request cannot run them, so removing the tolerance could only be proven on a release; to be decided with the maintainer before the next tag |
