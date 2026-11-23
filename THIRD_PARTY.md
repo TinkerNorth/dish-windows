@@ -25,11 +25,12 @@ today.
 | Component | Version | SPDX | How it reaches the user | Attribution obligation |
 |---|---|---|---|---|
 | [Qt 6](#2-qt-6) | 6.7.3 (CI and release); CMake requires >= 6.7 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
-| [SDL2](#sdl2) | 2.32.10#1 (vcpkg baseline `9e593bb1`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
-| [libsodium](#libsodium) | 1.0.22#1 (vcpkg baseline `9e593bb1`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
-| [OpenSSL](#openssl) | 3.x (vcpkg baseline `9e593bb1`) | `Apache-2.0` | Dynamically linked; the DLLs ship in the release zip and installer payload. Moonlight path only. | Keep the notice, ship the Apache-2.0 text |
-| [sentry-native](#sentry-native) | 0.16.3 (vcpkg baseline `9e593bb1`) | `MIT` | Dynamically linked. `sentry.dll` ships in the release zip and in the installer payload. Only official release builds compile in a Sentry address. | Keep the copyright and permission notice |
-| [Crashpad](#crashpad) | as vendored by sentry-native 0.16.3 | `Apache-2.0` (with `BSD-3-Clause` and ICU parts) | `crashpad_handler.exe` ships beside `dish.exe` in the release zip and in the installer payload; `sentry.dll` links the client library. | Keep the notice, ship the Apache-2.0 text |
+| [SDL2](#sdl2) | 2.32.10#1 (vcpkg baseline `277978ad`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
+| [libsodium](#libsodium) | 1.0.22#1 (vcpkg baseline `277978ad`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
+| [OpenSSL](#openssl) | 3.6.5#2 (vcpkg baseline `277978ad`) | `Apache-2.0` | Dynamically linked; the DLLs ship in the release zip and installer payload. Moonlight path only. | Keep the notice, ship the Apache-2.0 text |
+| [Opus](#opus) | 1.6.1 (vcpkg baseline `277978ad`) | `BSD-3-Clause` | Dynamically linked. `opus.dll` ships in the release zip and in the installer payload. Controller audio (microphone and speaker). | Reproduce the copyright notice, conditions and disclaimer |
+| [sentry-native](#sentry-native) | 0.17.6 (vcpkg baseline `277978ad`) | `MIT` | Dynamically linked. `sentry.dll` ships in the release zip and in the installer payload. Only official release builds compile in a Sentry address. | Keep the copyright and permission notice |
+| [Crashpad](#crashpad) | as vendored by sentry-native 0.17.6 | `Apache-2.0` (with `BSD-3-Clause` and ICU parts) | `crashpad_handler.exe` ships beside `dish.exe` in the release zip and in the installer payload; `sentry.dll` links the client library. | Keep the notice, ship the Apache-2.0 text |
 | [ENet (cgutman fork)](#enet-cgutman-fork) | commit `44c85e1` | `MIT` | Statically linked into `dish.exe`. Moonlight control stream. | Keep the copyright and permission notice |
 | [Inter](#4-inter) | 4.001 | `OFL-1.1` | Four `.ttf` faces embedded in `dish.exe` as Qt resources under `:/fonts/`. | Ship the license text with every copy. See section 4. |
 | [Catch2](#5-catch2) | 3.5.4 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
@@ -141,11 +142,14 @@ obligations on redistribution.
 
 ## 3. Bundled runtime libraries
 
-SDL2, libsodium and sentry-native are declared in [`vcpkg.json`](vcpkg.json)
-and resolved against the pinned `builtin-baseline`
-`9e593bb18ea69cc5095e012465dcd675a822ed0d` (vcpkg 2026.07.29), which is the same
-commit the CI workflow pins. All three are built as DLLs on the `x64-windows`
-triplet and dynamically linked.
+SDL2, libsodium, OpenSSL, Opus and sentry-native are declared in
+[`vcpkg.json`](vcpkg.json) and resolved against the pinned `builtin-baseline`
+`277978ad2eddc3b05ecf288dcd33071968cd2f79` (vcpkg master of 2026-11-23), which
+is the commit every workflow checks vcpkg out at (`scripts/ci-env.ps1` reads it
+from `vcpkg.json`). All five are built as DLLs on the `x64-windows` triplet and
+dynamically linked. `scripts/check-versions.ps1` fails a pull request whose
+versions here or in `assets/licenses/licenses.json` differ from what that
+baseline resolves.
 
 ### SDL2
 
@@ -205,7 +209,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### OpenSSL
 
-OpenSSL 3.x (vcpkg, resolved against the same pinned baseline). SPDX
+OpenSSL 3.6.5 (vcpkg port revision 2, resolved against the same pinned baseline). SPDX
 `Apache-2.0`. Upstream: <https://www.openssl.org/>. Dynamically linked. Only
 `libcrypto-3-x64.dll` ships in the release zip and installer payload; `libssl` is
 neither linked nor shipped, because TLS rides Qt's Schannel backend and the
@@ -218,9 +222,57 @@ Satellite protocol-1 path continues to use libsodium exclusively. OpenSSL 3 is
 under the Apache License 2.0; the full text travels with the binary in
 `licenses/`.
 
+### Opus
+
+Opus 1.6.1 (vcpkg port). SPDX `BSD-3-Clause`. Upstream:
+<https://opus-codec.org/>, <https://github.com/xiph/opus>.
+
+The audio codec for a controller's microphone and speaker
+(`src/source/audio/OpusAudioCodec`). `opus.dll` ships beside `dish.exe`.
+
+```
+Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic,
+                    Jean-Marc Valin, Timothy B. Terriberry,
+                    CSIRO, Gregory Maxwell, Mark Borgerding,
+                    Erik de Castro Lopo, Mozilla, Amazon
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+- Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+- Neither the name of Internet Society, IETF or IETF Trust, nor the
+names of specific contributors, may be used to endorse or promote
+products derived from this software without specific prior written
+permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+Opus is subject to the royalty-free patent licenses specified at
+<https://datatracker.ietf.org/ipr/1524/> (Xiph.Org Foundation),
+<https://datatracker.ietf.org/ipr/1914/> (Microsoft Corporation) and
+<https://datatracker.ietf.org/ipr/1526/> (Broadcom Corporation).
+
 ### sentry-native
 
-sentry-native 0.16.3 (vcpkg port). SPDX `MIT`. Upstream:
+sentry-native 0.17.6 (vcpkg port). SPDX `MIT`. Upstream:
 <https://github.com/getsentry/sentry-native>.
 
 The crash reporter behind the *Share crash reports* switch. `sentry.dll` is
@@ -254,7 +306,7 @@ SOFTWARE.
 
 ### Crashpad
 
-Crashpad, as vendored by sentry-native 0.16.3 and built by its vcpkg port.
+Crashpad, as vendored by sentry-native 0.17.6 and built by its vcpkg port.
 SPDX `Apache-2.0`; its `mini_chromium` and `getopt` parts are `BSD-3-Clause`
 and its ICU tables carry the ICU license. Upstream:
 <https://chromium.googlesource.com/crashpad/crashpad>.
@@ -512,18 +564,22 @@ license and carry no third-party attribution.
 
 [`assets/licenses/licenses.json`](assets/licenses/licenses.json) is the manifest
 the in-app Licenses screen renders, parsed by `src/UI/licenses/LicenseManifest.*`.
-It is hand-authored, not generated, so it can drift. It currently lists Qt 6,
-SDL2, libsodium, OpenSSL, ENet, sentry-native, Crashpad, Catch2 and Inter,
-which is the same set of open-source components as this file, with the same
-licenses. The Microsoft components in section 6 are deliberately absent from the
-manifest: their terms are Microsoft's and there is no license text to render.
-One further difference is worth knowing about:
+It is hand-authored, not generated. It lists Qt 6, SDL2, libsodium, OpenSSL,
+Opus, ENet, sentry-native, Crashpad, Catch2 and Inter, which is the same set of
+open-source components as this file, with the same licenses, and
+`scripts/check-versions.ps1` (run by `version-consistency.yml` and
+`scripts/ci-local.ps1`) fails when a version in either file stops matching its
+source: the vcpkg baseline, the FetchContent tags, or the Qt pin in
+`scripts/tools.ps1`. The Microsoft components in section 6 are deliberately
+absent from the manifest: their terms are Microsoft's and there is no license
+text to render. One further difference is worth knowing about:
 
 - The manifest lists Catch2, which is test-only and is not in the shipped binary.
   Showing it to a user is harmless but inaccurate.
 
 When a dependency is added, changed or dropped, update
-[`vcpkg.json`](vcpkg.json), the manifest, and this file together.
+[`vcpkg.json`](vcpkg.json), the manifest, this file and the port map in
+`scripts/check-versions.ps1` together.
 
 ---
 

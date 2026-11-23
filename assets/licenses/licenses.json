@@ -43,13 +43,26 @@
     {
       "group": "org.openssl",
       "artifact": "openssl",
-      "version": "3",
+      "version": "3.6.5",
       "name": "OpenSSL",
       "url": "https://www.openssl.org/",
       "licenses": [
         {
           "name": "Apache License 2.0",
           "url": "https://www.apache.org/licenses/LICENSE-2.0"
+        }
+      ]
+    },
+    {
+      "group": "org.opus-codec",
+      "artifact": "opus",
+      "version": "1.6.1",
+      "name": "Opus",
+      "url": "https://opus-codec.org/",
+      "licenses": [
+        {
+          "name": "BSD 3-Clause License",
+          "url": "https://opus-codec.org/license/"
         }
       ]
     },
@@ -95,7 +108,7 @@
     {
       "group": "io.sentry",
       "artifact": "sentry-native",
-      "version": "0.16.3",
+      "version": "0.17.6",
       "name": "sentry-native",
       "url": "https://github.com/getsentry/sentry-native",
       "licenses": [
@@ -108,7 +121,7 @@
     {
       "group": "org.chromium",
       "artifact": "crashpad",
-      "version": "as vendored by sentry-native 0.16.3",
+      "version": "as vendored by sentry-native 0.17.6",
       "name": "Crashpad",
       "url": "https://chromium.googlesource.com/crashpad/crashpad",
       "licenses": [

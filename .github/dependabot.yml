@@ -19,3 +19,23 @@ updates:
         patterns:
           - "*"
 
+  # The builtin-baseline in vcpkg.json, the one copy of the vcpkg pin (the
+  # workflows read it from there). A baseline bump moves every port at once,
+  # so its PR fails scripts/check-versions.ps1 until THIRD_PARTY.md and
+  # assets/licenses/licenses.json name what the new baseline resolves.
+  - package-ecosystem: "vcpkg"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      vcpkg:
+        update-types:
+          - "minor"
+          - "patch"
