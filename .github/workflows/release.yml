@@ -150,7 +150,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag }}
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
@@ -264,8 +265,10 @@ jobs:
       # project(Dish VERSION ...) and the built dish.exe.
       - name: Compile installer (Inno Setup)
         shell: pwsh
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          $tag = '${{ github.event.inputs.tag || github.ref_name }}'
+          $tag = $env:TAG
           $num = ($tag -replace '^v','') -replace '[-+].*$',''
           & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" "/DMyAppVersion=$num" "/DImageDir=build-release\setup-image" installer.iss
           if (-not (Test-Path 'dist/dish-setup.exe')) { throw 'iscc did not produce dist/dish-setup.exe' }
@@ -329,8 +332,10 @@ jobs:
       - name: Emit update manifest (latest.json, stable tags only)
         id: manifest
         shell: pwsh
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          $tag = '${{ github.event.inputs.tag || github.ref_name }}'
+          $tag = $env:TAG
           $bare = $tag -replace '^v',''
           if ($bare -match '-') {
             Write-Host "::notice::Prerelease tag ${tag}: skipping latest.json"
@@ -503,6 +508,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
@@ -513,6 +519,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_DSN:-}" ]; then
@@ -525,8 +532,7 @@ jobs:
           if [ -z "${SENTRY_PROJECT:-}" ]; then
             SENTRY_PROJECT="${SENTRY_DSN##*/}"; export SENTRY_PROJECT
           fi
-          tag="${{ inputs.tag || github.ref_name }}"
-          version="dish-windows@${tag#v}"
+          version="dish-windows@${TAG#v}"
           cli="${RUNNER_TEMP}/sentry-cli"
           curl -fsSL --retry 3 -o "$cli" https://github.com/getsentry/sentry-cli/releases/download/3.7.0/sentry-cli-Linux-x86_64
           echo "cec71d46a7cc394c94b6e75f1601985c710d457376c546ef3975567b3671563b  $cli" | sha256sum -c -
