@@ -800,9 +800,9 @@ class AppViewModel : public QObject {
     void testOutcomesChanged();
     // A bench run started, stepped, ended or was answered, or the microphone's level moved.
     void benchChanged();
-    // After sendReport: true when the mail client took it, false when the mailto: fallback opened
-    // and Explorer shows the file to attach.
-    void diagnosticsMailHandedOff(bool viaMailClient);
+    // After sendReport: true when the mail client took it, false when the mailto: fallback opened.
+    // Explorer shows the file either way; `fileName` is the file.
+    void diagnosticsMailHandedOff(bool viaMailClient, const QString& fileName);
     void reportReadyChanged();
     void controllerCaptureChanged();
 

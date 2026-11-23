@@ -222,7 +222,7 @@ Republished at the inspector's 33 ms poll while an inspection is armed (see
 | `testOutcomesChanged` | | An answer to "Did it work?" was recorded. Re-pull `lastTestOutcome()` and `controllerRecordFacts()`. |
 | `reportReadyChanged` | | `reportReady` moved. |
 | `controllerCaptureChanged` | | `controllerCapture` moved. |
-| `diagnosticsMailHandedOff` | `bool viaMailClient` | After `sendReport`: `true` when the mail client took the message, `false` when the `mailto:` fallback opened and Explorer shows the file to attach. |
+| `diagnosticsMailHandedOff` | `bool viaMailClient`, `string fileName` | After `sendReport`: `true` when the mail client took the message, `false` when the `mailto:` fallback opened. Explorer shows the file either way, since a mail app may leave it out; `fileName` is the file, which the page names. |
 | `inputSnapshotChanged` | | `inputSnapshot` moved. |
 | `stickTestChanged` | | `stickTest` moved. |
 | `benchChanged` | | A bench run started, stepped, ended or was answered, or the microphone test's level moved. Re-pull `benchState()`. |

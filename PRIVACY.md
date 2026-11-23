@@ -32,9 +32,10 @@ read one as describing the other.
   SDK, no telemetry, no advertising identifier, no usage reporting and no
   account. Both checks ask for files and send no identifier with the request.
 - **Report a problem** (section 2.6) happens only when you click *Report a
-  problem* or *Ask a question*: Dish saves a file and opens your own mail app
-  with it attached, addressed to `support@tinkernorth.com`. Nothing is sent
-  until you click Send in your mail app.
+  problem* or *Ask a question*: Dish saves a file, opens your own mail app
+  with a message to `support@tinkernorth.com` that should carry it, and shows
+  the file in Explorer in case the mail app left it out. Nothing is sent until
+  you click Send in your mail app.
 - Crash diagnostics are always written to your own disk, under
   `%LOCALAPPDATA%\Dish\`. With *Share crash reports* on (the default), an
   official build also sends one report per crash to Sentry: a stack trace, a
@@ -381,10 +382,13 @@ app* writes `dish-diagnostics-dish-windows-<date>-<time>.json` under
 Windows' Simple MAPI) with a new message to `support@tinkernorth.com`. The
 subject is `Dish support: <the category, in your language> · Dish for Windows
 <version> on <PC model>`; the body is your own words first, then a summary of
-the Diagnostics page in your language; the file is attached. When no mail app
-answers MAPI, a `mailto:` link opens with the same subject and body and
-Explorer shows the file for you to attach. *Save diagnostics* writes the same
-file without a report and shows it in Explorer. Nothing is sent by the app:
+the Diagnostics page in your language, which names each host only by its
+alias; the file is attached. When no mail app answers MAPI, which is the case
+for the new Outlook and the Mail app, a `mailto:` link opens with the same
+subject and body but no file. Either way Explorer then shows the file, and
+the page names it, so that you can attach it yourself when the mail does not
+carry it. *Save diagnostics* writes the same file without a report and shows
+it in Explorer. Nothing is sent by the app:
 the mail leaves only when you click Send in your mail app, and you can read
 or edit it before you do. If you send it, TinkerNorth receives it at that
 address and uses it only to answer you and fix what it shows.
