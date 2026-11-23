@@ -146,6 +146,8 @@ TEST_CASE("host identity: the machine's model from its firmware strings",
     CHECK(machineModelOf("  Dell Inc. ", " XPS 13 9310 ") == "Dell Inc. XPS 13 9310");
     CHECK(machineModelOf("System manufacturer", "System Product Name") == "Unknown PC");
     CHECK(machineModelOf("To Be Filled By O.E.M.", "Thor") == "Thor");
+    CHECK(machineModelOf("Not Specified", "Not Applicable") == "Unknown PC");
+    CHECK(machineModelOf("AYN", "Type1ProductConfigId") == "AYN");
     CHECK(machineModelOf("AYN", "") == "AYN");
     CHECK(machineModelOf("", "") == "Unknown PC");
 }
