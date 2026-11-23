@@ -593,7 +593,7 @@ After the workflow finishes:
   failure and back off, so it self-heals once the asset appears, but it is
   invisible from the release page.
 - **Download `dish-setup.exe` and install it by hand** at least once. The manual
-  matrix at the end of [`docs/INSTALLER.md`](docs/INSTALLER.md) is the list.
+  matrix at the end of [`docs/PACKAGING.md`](docs/PACKAGING.md) is the list.
 
 The asset names `dish-setup.exe`, `dish-windows.zip` and `latest.json` are a
 permanent API. Shipped clients construct the manifest URL from them and validate

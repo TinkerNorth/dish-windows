@@ -155,7 +155,7 @@ project it so the type picker can tell loading from empty from failed.
 ### Auto-updater
 
 Tokens and numbers only; every word is composed in QML so it stays in the
-`qsTr` catalogues. `docs/INSTALLER.md` section 5 has the behaviour.
+`qsTr` catalogues. `docs/PACKAGING.md` section 5 has the behaviour.
 
 | Property | Type | NOTIFY | Meaning |
 |---|---|---|---|

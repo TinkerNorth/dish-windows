@@ -6,7 +6,7 @@ reach for, where the code goes, and what the layering rules are.
 Related documents: [`QML_CONTRACT.md`](QML_CONTRACT.md) is the exposure surface
 the Qt Quick UI binds against, [`QML_UI_KIT.md`](QML_UI_KIT.md) is the component
 kit and design tokens, [`../src/architecture/README.md`](../src/architecture/README.md)
-documents the kernel primitives themselves, and [`INSTALLER.md`](INSTALLER.md)
+documents the kernel primitives themselves, and [`PACKAGING.md`](PACKAGING.md)
 covers `dish-setup.exe` and the auto-updater, which follow the same doctrine
 from outside the app process.
 
@@ -654,7 +654,7 @@ CI), so each needs a device-in-the-loop test pass.
   uninstall against a real disk and a real HKCU in both workflows.
   End to end, `scripts/test-installer-roundtrip.ps1` installs, repairs,
   upgrades, applies an update and uninstalls on every pull request. See
-  [`docs/INSTALLER.md`](INSTALLER.md).
+  [`docs/PACKAGING.md`](PACKAGING.md).
 - **Probes for the kernel.** `StateSourceProbe`, `ComposerProbe`, and
   `ControllerProbe` capture emission sequences rather than just final values.
   `RepositoryContract` runs the property tests every repository must pass.

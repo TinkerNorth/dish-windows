@@ -144,7 +144,7 @@ install, or on any install where `/UPDATECHECK=`, `/CRASHREPORTS=` or
 `/CONTROLLERUPDATES=` was given on the command line; an upgrade with none of
 them leaves your settings alone. The
 uninstaller (`unins000.exe`, beside `dish.exe`) removes all three.
-[`docs/INSTALLER.md`](docs/INSTALLER.md) has the details.
+[`docs/PACKAGING.md`](docs/PACKAGING.md) has the details.
 
 The app also **reads** (never writes)
 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`

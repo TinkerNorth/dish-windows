@@ -53,8 +53,9 @@ share a version number.
 
 ### Fixed
 
-- `SECURITY.md`, `CONTRIBUTING.md`, `docs/INSTALLER.md` and `installer.iss` no
-  longer describe a release of five unsigned files: a release carries cosign
+- `SECURITY.md`, `CONTRIBUTING.md`, `docs/PACKAGING.md` (renamed from
+  `docs/INSTALLER.md`, the fleet's name) and `installer.iss` no longer
+  describe a release of five unsigned files: a release carries cosign
   signatures, SPDX and CycloneDX SBOMs and SLSA provenance, and the installer
   is signed whenever a certificate is configured. `SECURITY.md` has a
   verification recipe that was run against 2.8.0.
@@ -1287,7 +1288,7 @@ release.
   failure, and the uninstaller hands its own removal to a small helper so the
   Add/Remove Programs entry outlives a cleanup that antivirus blocks. The full
   silent command line, the exit-code table and the payload format are in
-  [`docs/INSTALLER.md`](docs/INSTALLER.md); a CI round trip installs, repairs,
+  [`docs/PACKAGING.md`](docs/PACKAGING.md); a CI round trip installs, repairs,
   upgrades, applies an update and uninstalls on every pull request.
 - **Auto-update.** An installed copy asks GitHub for `latest.json` 15 seconds
   after launch and every four hours, downloads the next `dish-setup.exe` in the

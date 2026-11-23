@@ -98,7 +98,7 @@ automatically* stops every update-related network request when off, and
 notification. What the check sends is spelled out in
 [`PRIVACY.md`](PRIVACY.md) section 2.4.
 
-[`docs/INSTALLER.md`](docs/INSTALLER.md) documents the Inno Setup script, the
+[`docs/PACKAGING.md`](docs/PACKAGING.md) documents the Inno Setup script, the
 silent command line for scripted installs, the staging layout, and the apply
 handoff.
 
@@ -149,7 +149,7 @@ scripts\ci-local.ps1            # every windows-ci.yml gate before pushing
 scripts\build-installer.ps1     # dist\dish-setup.exe from the staged image
 ```
 
-`scripts\install-deps.ps1` (which `install-dependencies.bat` forwards to)
+`scripts\install-deps.ps1`
 installs everything in five idempotent steps and persists `VCPKG_ROOT` and
 `CMAKE_PREFIX_PATH`; budget roughly 12 GB and half an hour on a clean
 machine. The build script finds MSVC through `vswhere` and imports
@@ -206,7 +206,7 @@ the UI binding contract and the hardening roadmap are in
 [`docs/QML_CONTRACT.md`](docs/QML_CONTRACT.md) and
 [`docs/QML_UI_KIT.md`](docs/QML_UI_KIT.md), the design tokens in
 [`DESIGN.md`](DESIGN.md), and the installer and auto-updater in
-[`docs/INSTALLER.md`](docs/INSTALLER.md).
+[`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 ## Protocol
 

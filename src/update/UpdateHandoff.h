@@ -81,7 +81,7 @@ class UpdateHandoff {
     static void quarantine(const StagedUpdate& staged);
 
     // The documented switch tail of the apply spawn, in one place so the test
-    // suite can pin it against docs/INSTALLER.md: Inno Setup's silent set plus
+    // suite can pin it against docs/PACKAGING.md: Inno Setup's silent set plus
     // /OTA (wait for the app's mutex, own the relaunch duty) and /LOG into the
     // stage directory.
     static QString applyArguments(const StagedUpdate& staged);
