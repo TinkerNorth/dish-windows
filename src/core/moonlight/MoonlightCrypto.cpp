@@ -3,6 +3,8 @@
 
 #include "core/moonlight/MoonlightCrypto.h"
 
+#include "core/Bits.h"
+
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -22,33 +24,12 @@ using BioPtr = std::unique_ptr<BIO, decltype(&BIO_free)>;
 
 CipherCtx newCipherCtx() { return {EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free}; }
 
-void putU16Le(std::uint8_t* p, std::uint16_t v) noexcept {
-    p[0] = static_cast<std::uint8_t>(v & 0xFF);
-    p[1] = static_cast<std::uint8_t>((v >> 8) & 0xFF);
-}
-
-void putU32Le(std::uint8_t* p, std::uint32_t v) noexcept {
-    p[0] = static_cast<std::uint8_t>(v & 0xFF);
-    p[1] = static_cast<std::uint8_t>((v >> 8) & 0xFF);
-    p[2] = static_cast<std::uint8_t>((v >> 16) & 0xFF);
-    p[3] = static_cast<std::uint8_t>((v >> 24) & 0xFF);
-}
-
-std::uint16_t readU16Le(const std::uint8_t* p) noexcept {
-    return static_cast<std::uint16_t>(p[0] | (static_cast<std::uint16_t>(p[1]) << 8));
-}
-
-std::uint32_t readU32Le(const std::uint8_t* p) noexcept {
-    return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
-           (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
-}
-
 // The 16-byte control-stream IV: all zero except byte[0] = low byte of seq. This
 // matches Wolf's construction (iv_data[0] = native_to_little(seq)); the byte
 // vectors in the test suite depend on it.
 std::array<std::uint8_t, 16> controlIv(std::uint32_t seq) {
     std::array<std::uint8_t, 16> iv{};
-    iv[0] = static_cast<std::uint8_t>(seq & 0xFF);
+    iv[0] = bits::lowByte(seq);
     return iv;
 }
 
@@ -181,9 +162,9 @@ std::optional<Bytes> sealControl(const std::array<std::uint8_t, kAesKey128>& key
     // [type LE][len LE][seq LE][tag][ciphertext]. len = seq(4) + tag(16) + ct.
     const auto pktLen = static_cast<std::uint16_t>(4 + kGcmTagSize + cipher.size());
     Bytes out(4 + 4 + kGcmTagSize + cipher.size());
-    putU16Le(out.data() + 0, 0x0001);
-    putU16Le(out.data() + 2, pktLen);
-    putU32Le(out.data() + 4, seq);
+    bits::storeLe16(out.data() + 0, 0x0001);
+    bits::storeLe16(out.data() + 2, pktLen);
+    bits::storeLe32(out.data() + 4, seq);
     std::memcpy(out.data() + 8, tag.data(), kGcmTagSize);
     if (!cipher.empty()) {
         std::memcpy(out.data() + 8 + kGcmTagSize, cipher.data(), cipher.size());
@@ -195,11 +176,11 @@ std::optional<Bytes> openControl(const std::array<std::uint8_t, kAesKey128>& key
                                  const std::uint8_t* packet, std::size_t len) {
     // Minimum: type(2)+len(2)+seq(4)+tag(16) = 24.
     if (packet == nullptr || len < 24) { return std::nullopt; }
-    if (readU16Le(packet) != 0x0001) { return std::nullopt; }
-    const std::uint16_t pktLen = readU16Le(packet + 2);
+    if (bits::loadLe16(packet) != 0x0001) { return std::nullopt; }
+    const std::uint16_t pktLen = bits::loadLe16(packet + 2);
     if (static_cast<std::size_t>(pktLen) + 4 > len) { return std::nullopt; }
     if (pktLen < 4 + kGcmTagSize) { return std::nullopt; }
-    const std::uint32_t seq = readU32Le(packet + 4);
+    const std::uint32_t seq = bits::loadLe32(packet + 4);
     const std::uint8_t* tag = packet + 8;
     const std::uint8_t* cipher = packet + 8 + kGcmTagSize;
     const std::size_t cipherLen = pktLen - 4 - kGcmTagSize;
@@ -286,9 +267,9 @@ const std::uint8_t* ControlSealer::seal(std::uint32_t seq, const std::uint8_t* p
                             buffer_.data() + 8) != 1) {
         return nullptr;
     }
-    putU16Le(buffer_.data() + 0, 0x0001);
-    putU16Le(buffer_.data() + 2, static_cast<std::uint16_t>(4 + kGcmTagSize + cipherLen));
-    putU32Le(buffer_.data() + 4, seq);
+    bits::storeLe16(buffer_.data() + 0, 0x0001);
+    bits::storeLe16(buffer_.data() + 2, static_cast<std::uint16_t>(4 + kGcmTagSize + cipherLen));
+    bits::storeLe32(buffer_.data() + 4, seq);
     *outLen = 8 + kGcmTagSize + cipherLen;
     return buffer_.data();
 }
@@ -337,8 +318,8 @@ std::string hexEncode(const std::uint8_t* data, std::size_t len) {
     std::string out;
     out.reserve(len * 2);
     for (std::size_t i = 0; i < len; ++i) {
-        out.push_back(digits[(data[i] >> 4) & 0xF]);
-        out.push_back(digits[data[i] & 0xF]);
+        out.push_back(digits[bits::highNibble(data[i])]);
+        out.push_back(digits[bits::lowNibble(data[i])]);
     }
     return out;
 }
@@ -359,7 +340,8 @@ std::optional<Bytes> hexDecode(const std::string& hex) {
         const int hi = nibble(hex[i]);
         const int lo = nibble(hex[i + 1]);
         if (hi < 0 || lo < 0) { return std::nullopt; }
-        out.push_back(static_cast<std::uint8_t>((hi << 4) | lo));
+        out.push_back(
+            bits::fromNibbles(static_cast<std::uint8_t>(hi), static_cast<std::uint8_t>(lo)));
     }
     return out;
 }
