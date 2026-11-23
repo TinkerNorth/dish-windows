@@ -43,6 +43,18 @@
 .PARAMETER KeepWorkDir
     Leave the scratch copy behind for inspection.
 
+.PARAMETER InPlace
+    Launch dish.exe where it is instead of from a scratch copy: the installer
+    round-trip uses it on the installed directory, so the app under test is
+    the installed one, uninstaller beside it.
+
+.PARAMETER RequireOnlineCheck
+    Also require the app to reach dish.tinkernorth.com over HTTPS: the
+    controller database check (ten seconds after launch) must log a result of
+    upToDate or updated. That is the TLS stack the bundle ships (Qt's Schannel
+    backend and the Windows root store) doing a real handshake; "offline" fails
+    it. Raises the settle time to 30 s.
+
 .EXAMPLE
     ./scripts/test-portable-bundle.ps1 -Bundle dish-windows
 #>
@@ -51,7 +63,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Bundle,
     [string]$WorkRoot = '',
     [int]$SettleSeconds = 6,
-    [switch]$KeepWorkDir
+    [switch]$KeepWorkDir,
+    [switch]$InPlace,
+    [switch]$RequireOnlineCheck
 )
 
 Set-StrictMode -Version Latest
@@ -108,16 +122,30 @@ foreach ($dll in 'libsodium.dll', 'SDL2.dll', 'opus.dll',
     Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot $dll)) "$dll is in the bundle"
 }
 
+# Every HTTPS request the app makes (the controller database, the update check, Sentry, the
+# satellite and Moonlight control planes, Moonlight's client certificate included) runs on Qt's
+# Schannel TLS backend, a plugin windeployqt stages. Without it QSslSocket has no backend and every
+# TLS connection fails, while the app still starts. No OpenSSL TLS backend ships: libssl is not in
+# the bundle (cmake/DishSetupImage.cmake section 7), so Qt could not load one.
+Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot 'tls/qschannelbackend.dll')) 'tls/qschannelbackend.dll is in the bundle'
+
 # --- 2. Copy it out of the build tree ---------------------------------------
 
-if (-not $WorkRoot) {
-    $WorkRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+if ($RequireOnlineCheck -and $SettleSeconds -lt 30) { $SettleSeconds = 30 }
+if ($InPlace) {
+    $workDir = $null
+    $runDir = $bundleRoot
+    Ok "launching in place: $runDir"
+} else {
+    if (-not $WorkRoot) {
+        $WorkRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+    }
+    $workDir = Join-Path $WorkRoot ("dish portable smoke " + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    $runDir = Join-Path $workDir 'bundle'
+    New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+    Copy-Item -Path (Join-Path $bundleRoot '*') -Destination $runDir -Recurse -Force
+    Ok "copied to a path outside the build tree, with a space in it: $runDir"
 }
-$workDir = Join-Path $WorkRoot ("dish portable smoke " + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-$runDir = Join-Path $workDir 'bundle'
-New-Item -ItemType Directory -Force -Path $runDir | Out-Null
-Copy-Item -Path (Join-Path $bundleRoot '*') -Destination $runDir -Recurse -Force
-Ok "copied to a path outside the build tree, with a space in it: $runDir"
 
 $exe = Join-Path $runDir 'dish.exe'
 
@@ -195,7 +223,17 @@ if ($stderrText -notmatch 'controller database: bundled dbVersion [1-9][0-9]* wi
 }
 Ok 'the bundled controller database loaded'
 
-if (-not $KeepWorkDir) {
+# TLS in the shipped app: the controller database check is HTTPS to dish.tinkernorth.com through
+# Qt's TLS backend in the bundle, so a result other than offline is a handshake that worked
+# (ControllerDbStore::recordCheck, pinned by test_controller_db_fetch.cpp).
+if ($RequireOnlineCheck) {
+    if ($stderrText -notmatch 'controller database: check (upToDate|updated); in force dbVersion [1-9][0-9]*') {
+        Fail 'dish.exe did not complete a controller database check over HTTPS within the settle time'
+    }
+    Ok 'the controller database check reached dish.tinkernorth.com over HTTPS'
+}
+
+if ($workDir -and -not $KeepWorkDir) {
     Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 

@@ -11,7 +11,10 @@
          dish.exe, the Qt runtime beside it, the licence texts, and the
          uninstaller whose presence is the app's installed-vs-portable probe
          (src/update/UpdateCoordinator.cpp: any unins*.exe sibling).
-      2. The per-user ARP entry exists and points at the install.
+      2. The per-user ARP entry exists and points at the install, and the
+         installed dish.exe starts in place and completes its controller
+         database check over HTTPS (scripts/test-portable-bundle.ps1
+         -InPlace -RequireOnlineCheck).
       3. A silent re-run over the same version (Inno's repair/upgrade path,
          which is also the shape of every OTA apply) exits 0 and leaves the
          install intact.
@@ -103,6 +106,18 @@ try {
         Assert $displayOk "DisplayName is 'Dish' or 'Dish (Current user)' (got '$($arp.DisplayName)')"
         Assert ($arp.InstallLocation.TrimEnd('\') -eq $installDir) 'InstallLocation points at the sandbox install'
         Assert (-not [string]::IsNullOrWhiteSpace($arp.DisplayVersion)) 'DisplayVersion recorded'
+    }
+
+    # --- 2b. The installed app starts and speaks HTTPS ------------------------
+    # The smoke test over the installed directory, in place, with the uninstaller
+    # beside it: the app this installer leaves behind must start and finish its
+    # controller database check over TLS.
+    'step 2b: the installed app starts and checks the controller list over HTTPS'
+    try {
+        & (Join-Path $PSScriptRoot 'test-portable-bundle.ps1') -Bundle $installDir -InPlace -RequireOnlineCheck
+        Assert $true 'the installed dish.exe starts and completes an HTTPS check'
+    } catch {
+        Assert $false "the installed dish.exe starts and completes an HTTPS check ($_)"
     }
 
     # --- 3. Silent re-run over the same version ------------------------------
