@@ -39,6 +39,11 @@ constexpr std::uint16_t low16(std::uint32_t v) noexcept {
     return static_cast<std::uint16_t>(v & 0xFFFFU);
 }
 
+// Whether any bit of `mask` is set in `value`; a byte or half-word converts without promotion.
+constexpr bool anySet(std::uint32_t value, std::uint32_t mask) noexcept {
+    return (value & mask) != 0U;
+}
+
 // Byte `index` of `v`, counting from the least significant.
 constexpr std::uint8_t byteOf(std::uint32_t v, unsigned index) noexcept {
     return lowByte(v >> (8U * index));
@@ -58,6 +63,16 @@ constexpr std::uint32_t loadLe32(const std::uint8_t* p) noexcept {
 }
 constexpr std::uint32_t loadBe32(const std::uint8_t* p) noexcept {
     return (u32(p[0]) << 24U) | (u32(p[1]) << 16U) | (u32(p[2]) << 8U) | u32(p[3]);
+}
+
+// Two 12-bit fields packed into three bytes, as HID touch points and the Switch sticks carry
+// them: the low field is p[0] with the low nibble of p[1] above it, the high field the high
+// nibble of p[0] with p[1] above it (each called at the field's first byte).
+constexpr std::uint16_t loadPacked12Low(const std::uint8_t* p) noexcept {
+    return low16(u32(p[0]) | ((u32(p[1]) & 0x0FU) << 8U));
+}
+constexpr std::uint16_t loadPacked12High(const std::uint8_t* p) noexcept {
+    return low16((u32(p[0]) >> 4U) | (u32(p[1]) << 4U));
 }
 
 constexpr void storeLe16(std::uint8_t* p, std::uint16_t v) noexcept {
