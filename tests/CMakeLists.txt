@@ -57,6 +57,7 @@ set(DISH_TEST_SOURCES
     test_atomic_counter.cpp
     test_hex.cpp
     test_endian.cpp
+    test_byte_boundaries.cpp
     test_models.cpp
     test_beacon_parser.cpp
     test_mdns_discovery.cpp
