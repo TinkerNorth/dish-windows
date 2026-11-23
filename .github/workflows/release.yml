@@ -58,9 +58,8 @@ jobs:
     with:
       osv_scan_paths: .
       osv_lockfile_script: scripts/osv-lockfile.sh
-      # The Dependency graph setting is off (see security.yml); the job only runs on pull
-      # requests anyway.
-      dependency_review_enabled: false
+      # Runs only on pull requests, so on a tag it is skipped.
+      dependency_review_enabled: true
 
   # ─────────────────────────────────────────────────────────────────────
   # Signing-secret report. Advisory by default: a missing Authenticode cert
@@ -191,11 +190,12 @@ jobs:
       - name: Build
         run: cmake --build --preset release --parallel 4
 
-      # Best effort: a symbol-upload hiccup must not fail a release. The org
-      # and project fall back to the numeric ids inside the DSN, which the
-      # Sentry API accepts in place of slugs.
+      # Strict: a release whose symbols did not reach Sentry ships crash
+      # reports nobody can read, so a failed upload fails the release (with
+      # no token or DSN the step says so and skips). The org and project fall
+      # back to the numeric ids inside the DSN, which the Sentry API accepts
+      # in place of slugs.
       - name: Upload debug symbols to Sentry
-        continue-on-error: true
         shell: pwsh
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -505,8 +505,8 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
+      # Strict, like the symbol upload: a failed association fails the run.
       - name: Create the release and associate commits
-        continue-on-error: true
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

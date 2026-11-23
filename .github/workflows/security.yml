@@ -32,7 +32,6 @@ jobs:
       # OSV-Scanner reads no vcpkg manifest, so the libraries dish.exe links are named by the
       # upstream commit their pins resolve to: every vcpkg port at the baseline, ENet, Qt.
       osv_lockfile_script: scripts/osv-lockfile.sh
-      # The repository's Dependency graph setting is off, and the action fails without it.
-      # Switching it on (Settings, Code security, Dependency graph) is the maintainer's call;
-      # then this becomes true and the job blocks.
-      dependency_review_enabled: false
+      # Blocking on a high-severity finding in a pull request's dependency changes; it reads
+      # the repository's Dependency graph.
+      dependency_review_enabled: true

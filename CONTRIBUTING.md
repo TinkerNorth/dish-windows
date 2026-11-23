@@ -480,9 +480,9 @@ Security gates:
   `# vX.Y.Z`), `.security/allowlist.yaml` expiry, OSV-Scanner 2.7.1 over the
   worktree and the libraries `scripts/osv-lockfile.sh` names, and a gitleaks
   scan of the full history. All blocking. Also runs weekly on a schedule.
-- `dependency-review-action`, in the same workflow, is switched off in
-  `security.yml` (`dependency_review_enabled: false`): it needs the
-  repository's Dependency graph setting, which is off, and fails without it.
+- `dependency-review-action`, in the same workflow, on pull requests only:
+  blocking on a high-severity finding in the dependencies a pull request
+  changes.
 - `codeql.yml`, job `Analyze (cpp)`: CodeQL `cpp` analysis with the
   `security-extended` query pack, on a Windows runner so MSVC-only constructs
   are covered. Blocking, and the results are uploaded to code scanning.

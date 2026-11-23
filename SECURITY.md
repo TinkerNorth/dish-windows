@@ -169,9 +169,8 @@ On every pull request and every push to `main`, blocking:
 - CodeQL `cpp` analysis, `security-extended` query pack, on a Windows runner
   so MSVC-only constructs are covered; the results are uploaded to code
   scanning.
-- GitHub `dependency-review-action` is wired into `security.yml` but switched
-  off (`dependency_review_enabled: false`): the action needs the repository's
-  Dependency graph setting, which is off, and fails without it.
+- GitHub `dependency-review-action` on pull requests, blocking on a
+  high-severity finding in the dependencies a pull request changes.
 
 `security.yml` also runs weekly on a schedule.
 

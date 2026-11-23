@@ -37,8 +37,8 @@
     CI-only, and why:
       * CodeQL (codeql.yml): needs the CodeQL bundle and uploads to code
         scanning.
-      * Dependency review (security.yml): switched off, the repository's
-        Dependency graph setting is off.
+      * Dependency review (security.yml): it reads the pull request's
+        dependency changes from GitHub's Dependency graph.
       * The release hardening and its dry run (windows-ci.yml,
         release.yml): Linux-only tools in _release_harden.yml.
       * The input-path bench and lock laws (measurements.yml): they measure a
