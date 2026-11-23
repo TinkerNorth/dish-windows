@@ -34,13 +34,24 @@ share a version number.
   against its SHA-256 and size, parsed, checked for schema 1 and then swapped
   in atomically under `%LOCALAPPDATA%\Dish\controllers\v1\`. Any failure
   keeps the list in force. A newer list applies to a controller at its next
-  attach.
+  attach. A later list is taken as this build can read it: a strings file for
+  a language the build does not ship is left out rather than refusing the
+  list, and a record that uses a word this build does not know stays in the
+  list, inert, so the bundled record for that controller stays in force. The
+  log says at start which list was bundled and which is in force, and CI
+  starts both the portable bundle and the install image and refuses either
+  when its bundled list did not load.
 - **Settings: "Check for controller updates automatically"** (on by default)
   and **"Check now"**. With the switch off, no request for the list leaves the
   PC, "Check now" included. The request carries no identifier, no query,
   Qt's default `User-Agent` (`Mozilla/5.0`) and a fixed `Accept-Language: *`
   in place of the system's languages, which Qt would otherwise send. The
-  update check sends the same fixed `Accept-Language` now.
+  update check sends the same fixed `Accept-Language` now. A check whose
+  answer is not 200 or 304 (the list not published yet, a timeout, a busy
+  server) is "could not reach dish.tinkernorth.com", never "the download did
+  not verify", which is kept for bytes that arrived and failed their check.
+  Settings shows the last check's result beside its time, as Diagnostics
+  does.
 - **Each controller's record on the Diagnostics card.** The record it matched,
   its name from the database's strings in your language (English where a
   language has none), a chip for its verification state (Verified, Layout
@@ -56,10 +67,12 @@ share a version number.
   record in the controller list in force, then the vendor's guess, and pinned
   for as long as it stays: the capability solve, the claim, its read loop, its
   output worker and the health judgement all read that one model, and a list
-  that lands while the pad is in use applies at its next attach. A served row
-  whose family or operation this build lacks shows its name and issues and
-  leaves the bundled row in force; a flagged one gives way to a live bundled
-  row.
+  that lands while the pad is in use applies at its next attach. The record's
+  init kind and output route are read but drive nothing: a pad's init and its
+  write route follow its family, which is right for every family the desktops
+  run. A served row whose family or operation this build lacks, or that uses a
+  word this build does not read, shows its name and issues and leaves the
+  bundled row in force; a flagged one gives way to a live bundled row.
 - **The pad's own descriptors in the file.** For a Direct pad Dish reads, once
   per attach and through its USB hub, its device descriptor and every
   configuration, and the file's `hardware` gains `bcdDevice`, every interface
@@ -102,8 +115,11 @@ share a version number.
 - **Both ends of every host in the file.** While the report page is open,
   each live Satellite of 2.3.0 or later is asked for its own account of the
   session (`GET /api/connections/{id}/diagnostics`, over the session's pinned
-  HTTPS and proof, two seconds at most) and the answer is embedded with that
-  host's name and address replaced by its alias wherever they appear. An
+  HTTPS and proof, two seconds at most) and the answer is embedded with the
+  name and address of every host the file lists replaced by that host's
+  alias wherever they appear, in every snapshot and every log line, keys
+  included, never inside a longer word or number; a host's name and its
+  address are one alias. An
   older Satellite, told by the version its capabilities reported, is not
   asked: the file carries what Dish already fetched from it and says
   `olderSatellite`; one that cannot answer says `offline`, `timeout`,
@@ -148,7 +164,9 @@ share a version number.
   pulsing, for 2 s), the speaker's test tone and the same tone on the HD
   haptics (660 Hz then 880 Hz, 800 ms), the microphone's level (live, up to
   8 s) and the two stick tests. A row shows only where the path carries its
-  item, by the same answer the game's own writes pass; `tests/PARITY.md` §5b
+  item, and a test runs only there (the haptics tone only where the pad's
+  haptics lane is), by the same answer the game's own writes pass;
+  `tests/PARITY.md` §5b
   gives Windows's evidence for each one a path cannot carry. Trigger rumble
   rides SDL alone (`SDL_GameControllerRumbleTriggers`, where
   `SDL_GameControllerHasRumbleTriggers` says the driver drives the motors,
@@ -164,7 +182,9 @@ share a version number.
   is held until the test ends instead of being written over it. The other
   surfaces keep following the game. A test's own writes are not counted in the
   file's output lanes, so a rumble test never reads as the host's rumble; a
-  game's value held back during a test is counted when it arrives.
+  game's value held back during a test is counted when it arrives. A stick
+  test's end never cuts short another test started meanwhile, and a test
+  still holding a surface at quit gives it back before the pads close.
 - After every test the inspector asks "Did it work?" once; the answer is kept
   under the test's contract name (`triggerRumble.left`, `lightbar.cycle`,
   `stick.drift`, ...) with the time the test ended, and rides in the file.
@@ -224,11 +244,13 @@ share a version number.
   (`tests/PARITY.md`). dbVersion 1 changes the 48 ids named
   under Changed.
 - Hot path: the session counts each message kind it sends and receives with
-  relaxed atomics. The router stamps each pad's output lanes on every feedback
-  message it routes, rumble included: one `system_clock::now()` and three
-  relaxed atomics. Each Direct write the output worker makes adds a
-  `system_clock::now()`, a seqlock write of its verdict and the writer's
-  `GetLastError` store. No thread on the input, USB, receive or mic path takes
+  relaxed atomics. The router records each pad's output lane on every rumble,
+  light-bar, player-LED, trigger-effect and mic-lamp message it routes
+  (`SlotRouter::recordLane`): one `system_clock::now()` read and three relaxed
+  atomics. A Direct pad's output worker records a verdict after every write
+  (`OutputWorker::recordVerdict`): one clock read, one seqlock write of the
+  verdict, and the report writer's store of the call's `GetLastError` (or of
+  0). No thread on the input, USB, receive or mic path takes
   a new lock. The raw-HID
   read loop loads one relaxed word per report where it loaded its running flag,
   which also says whether a capture is armed, and while one is it copies at
@@ -237,12 +259,16 @@ share a version number.
   output command.
 - Hot path (the bench): each light-bar, player-LED, trigger-effect and
   mic-lamp message a session's receive thread routes now passes its slot's
-  ledger first: one flag taken for a few sequentially consistent stores, and
-  one load of the test's hold bits, never a lock or an allocation. Moonlight's
-  light bar and the mute lamp take the same ledger on the GUI thread. Rumble
-  messages pass no ledger, and input reports are untouched. The SDL output mailbox gains a
-  trigger-rumble kind; its fields are reordered so its state still copies as
-  five words.
+  surface ledger first (`SurfaceLedger::rememberWith`): the senders' turn flag
+  (a compare-and-swap that yields only when two senders of one pad meet), a
+  generation bumped around about five sequentially consistent word stores,
+  and one load of the test's hold bits. Moonlight's light bar and the mute
+  lamp take the same ledger on the GUI thread. No `TrackedMutex`, no
+  allocation, and the ledger's readers never hold a sender up; rumble
+  messages pass no ledger, and input reports are untouched. The SDL output
+  mailbox gains a trigger-rumble kind; its fields are reordered so its state
+  still copies as five words. At quit the SDL thread drains its pads'
+  mailboxes once more, after the loop and before the pads close.
 - Hot path (the raw joystick's rumble): the SDL thread now drains a raw
   joystick's output mailbox each pump cycle, as it does a game controller's,
   and picks the pad's handle by a switch on the kind already in its record;
