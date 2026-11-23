@@ -59,6 +59,9 @@ CMakeLists.txt text
 # the SHA-256 in its own manifest at every load: a CRLF checkout would fail that check on every
 # Windows clone and ship an app that refuses its bundled copy. Never normalised.
 assets/controllers/** -text
+# The future-reader set (a published dbVersion 2 a reader released today must take) is a fixture
+# held to its manifest's SHA-256 the same way.
+tests/fixtures/controllerdb-future/** -text
 
 # Binaries: never normalise, never diff.
 *.ttf   binary
