@@ -231,6 +231,20 @@ but not checked.
   -Wpedantic -Wshadow ...` set); `dish_strict` adds `/WX` or `-Werror` and is
   applied only to `dish_core` and `Dish` so Catch2's headers stay buildable.
   See `CMakeLists.txt` for the exact flags.
+- Bitwise operators take unsigned operands only (clang-tidy's
+  `bugprone-signed-bitwise`). A `std::uint8_t` or `std::uint16_t` is promoted
+  to `int` before an operator sees it, so bytes widen through `bits::u32()`
+  first, shift counts and masks are unsigned literals (`8U`, `0xFFU`), a
+  narrower result is taken explicitly (`bits::lowByte`, `bits::low16`), and a
+  signed value is made last by a named conversion (`bits::asInt16`). The
+  helpers, and the multi-byte loads and stores built on them, are in
+  `src/core/Bits.h`:
+
+  ```cpp
+  const std::int16_t gyroX = bits::asInt16(bits::loadLe16(buf + 13));
+  const std::uint32_t pressed = bits::u32(buf[5]) & 0xF0U;
+  ```
+
 - Match the surrounding style. Include order is project, Qt, third-party, std,
   separated by blank lines.
 - Comments state non-obvious constraints: why a lock order matters, what a
