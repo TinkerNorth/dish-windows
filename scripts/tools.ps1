@@ -26,7 +26,7 @@ $script:DishAqtSource = 'git+https://github.com/miurahr/aqtinstall.git@4c759852b
 
 # The PyPI wheel, not LLVM's own build: clang-format versions disagree on
 # braced-init lists, so the gate checks the version before the files.
-$script:DishClangFormatVersion = '22.1.4'
+$script:DishClangFormatVersion = '23.1.5'
 
 # Inno Setup 6. The digest is the file-hash of upstream's
 # innosetup-6.7.4.exe.issig. 7.x is a separate move.

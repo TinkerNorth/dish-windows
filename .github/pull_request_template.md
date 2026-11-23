@@ -17,9 +17,9 @@
 ran locally. Every one of them fails the build.
 
 - [ ] **`clang-format --dry-run --Werror`** over `src/` and `tests/`. CI pins
-      clang-format **22.1.4** from PyPI. Version 18 and version 22 disagree on
+      clang-format **23.1.5** from PyPI. Different major versions disagree on
       braced-init lists, so a different local version will flap.
-      `pipx install clang-format==22.1.4`
+      `pipx install clang-format==23.1.5`
 - [ ] **Debug build** configured with `-DDISH_BUILD_TESTS=ON
       -DDISH_REQUIRE_TRANSLATIONS=ON`, warnings clean (`/WX` is on for
       first-party code, tests included)
