@@ -125,10 +125,11 @@ if (-not $py) {
 }
 Write-Output "[OK]  Python launcher: $py"
 
-# The pinned clang-format and clang-tidy CI checks with, through the Python
+# The pinned clang-format and clang-tidy CI checks with, and the PyYAML
+# scripts/security-allowlist.py reads the allowlist with, through the Python
 # this step guarantees.
-& $py -3 -m pip install --user "clang-format==$DishClangFormatVersion" "clang-tidy==$DishClangTidyVersion"
-if ($LASTEXITCODE -ne 0) { Write-Error "pip install clang-format==$DishClangFormatVersion clang-tidy==$DishClangTidyVersion failed" }
+& $py -3 -m pip install --user "clang-format==$DishClangFormatVersion" "clang-tidy==$DishClangTidyVersion" "PyYAML==6.0.4"
+if ($LASTEXITCODE -ne 0) { Write-Error "pip install clang-format==$DishClangFormatVersion clang-tidy==$DishClangTidyVersion PyYAML==6.0.4 failed" }
 
 $qtPrefix = Join-Path $qtRoot (Join-Path $DishQtVersion $DishQtArchDir)
 if (Test-Path (Join-Path $qtPrefix 'bin\Qt6Core.dll')) {

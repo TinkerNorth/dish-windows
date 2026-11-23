@@ -1,6 +1,9 @@
 name: Security
 
-# CodeQL is not here: it needs its own matrix, so it lives in codeql.yml.
+# Security gates on every pull request, every push to main and weekly. The jobs live in the
+# shared _security.yml (action-pin lint, allowlist expiry, OSV-Scanner, dependency review,
+# gitleaks), a byte-identical copy of satellite's; CodeQL lives in codeql.yml because it has its
+# own matrix.
 
 on:
   push:
@@ -8,31 +11,28 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 6 * * 1" # weekly Monday 06:00 UTC
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Must be a superset of the permissions _security.yml declares, or the call
-# fails. See the block in that file.
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   shared:
+    # Exactly what _security.yml declares; a narrower grant fails the call at startup.
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/_security.yml
     with:
-      # Whole worktree: there is no vendored source, so OSV only has the
-      # manifests it can recognise (vcpkg.json, CMake fetch declarations).
-      osv_scan_paths: |
-        .
-      gitleaks_enabled: true
-      # Off until the repository's Dependency graph is switched on (Settings,
-      # Code security). dependency-review-action reads that graph and fails
-      # without it, so on this repository the job has never reviewed anything.
-      # Flip to true once the setting is on; the job then blocks.
+      osv_scan_paths: .
+      # OSV-Scanner reads no vcpkg manifest, so the libraries dish.exe links are named by the
+      # upstream commit their pins resolve to: every vcpkg port at the baseline, ENet, Qt.
+      osv_lockfile_script: scripts/osv-lockfile.sh
+      # The repository's Dependency graph setting is off, and the action fails without it.
+      # Switching it on (Settings, Code security, Dependency graph) is the maintainer's call;
+      # then this becomes true and the job blocks.
       dependency_review_enabled: false
-      action_pin_lint_enabled: true
-      allowlist_expiry_enabled: true

@@ -50,18 +50,17 @@ concurrency:
 jobs:
   gates:
     name: PR-time gates against tag
-    # Must be a superset of what _security.yml declares, or the call fails.
+    # Exactly what _security.yml declares; a narrower grant fails the call at startup.
     permissions:
       contents: read
       pull-requests: read
     uses: ./.github/workflows/_security.yml
     with:
-      osv_scan_paths: |
-        .
-      gitleaks_enabled: true
+      osv_scan_paths: .
+      osv_lockfile_script: scripts/osv-lockfile.sh
+      # The Dependency graph setting is off (see security.yml); the job only runs on pull
+      # requests anyway.
       dependency_review_enabled: false
-      action_pin_lint_enabled: true
-      allowlist_expiry_enabled: true
 
   # ─────────────────────────────────────────────────────────────────────
   # Signing-secret report. Advisory by default: a missing Authenticode cert
@@ -296,28 +295,24 @@ jobs:
         shell: pwsh
         run: ./scripts/test-installer-roundtrip.ps1 -Setup ./dish-setup.exe
 
-      # Manifest of the bundle's contents, shipped inside the zip. Paths are
-      # relative to the bundle root: windeployqt lays plugins out in
-      # subdirectories (platforms/, imageformats/, styles/) and basenames alone
-      # both lose that and can collide.
-      #
-      # Written as LF with no BOM. `Out-File -Encoding ascii` emits CRLF, which
-      # GNU coreutils `sha256sum -c` rejects as "no properly formatted
-      # checksum lines" — the manifest has to verify off Windows too.
-      - name: Compute bundle SHA256SUMS
+      # The bundle's own SHA256SUMS, then the zip: scripts/package-bundle.ps1,
+      # the same packaging windows-ci.yml's release-hardening dry run signs.
+      - name: Package the portable zip
         shell: pwsh
-        run: |
-          $root = (Resolve-Path dish-windows).Path
-          $lines = Get-ChildItem dish-windows -Recurse -File | ForEach-Object {
-            $rel = [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
-            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $rel"
-          }
-          [IO.File]::WriteAllText("$root/SHA256SUMS", ($lines -join "`n") + "`n", (New-Object Text.UTF8Encoding $false))
+        run: ./scripts/package-bundle.ps1 -Bundle dish-windows -Zip dish-windows.zip
 
-      - name: Zip release bundle
+      # The bill of materials of what the bundle ships, from the build's own
+      # vcpkg documents and pins (scripts/write-sbom.ps1), checked against the
+      # licenses manifest; published beside the zip, so the harden job's
+      # checksums and signatures cover it.
+      - name: Components SBOM
         shell: pwsh
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          Compress-Archive -Path dish-windows/* -DestinationPath dish-windows.zip -Force
+          $num = ($env:TAG -replace '^v','') -replace '[-+].*$',''
+          ./scripts/write-sbom.ps1 -BuildDir build-release -Bundle dish-windows -Out dish-windows-components.spdx.json -Version $num
+          ./scripts/check-sbom.ps1 -Sbom dish-windows-components.spdx.json
 
       # Auto-update manifest, fetched by dish.exe from the stable permalink
       # releases/latest/download/latest.json. Ships with every STABLE release;
@@ -383,6 +378,7 @@ jobs:
           path: |
             dish-windows.zip
             dish-setup.exe
+            dish-windows-components.spdx.json
             latest.json
           retention-days: 14
 

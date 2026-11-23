@@ -14,6 +14,7 @@ on:
       - CMakeLists.txt
       - CHANGELOG.md
       - CONTRIBUTING.md
+      - SECURITY.md
       - THIRD_PARTY.md
       - assets/licenses/licenses.json
       - packaging/licenses/**

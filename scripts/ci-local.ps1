@@ -9,7 +9,10 @@
     comes from scripts/tools.ps1:
 
       check-versions.ps1        version mirrors, pins and documented facts
-      action-pin lint           every uses: is a 40-character SHA
+      check-action-pins.sh      every uses: is a 40-character SHA (Git bash)
+      security-allowlist.py     .security/allowlist.yaml is current
+      osv-scan.sh               OSV-Scanner over the vcpkg ports, ENet and Qt
+      gitleaks git              the history holds no secret
       check-format.ps1          clang-format, at the pinned version
       preset debug              configure, build, ctest
       measurements report tests
@@ -34,9 +37,10 @@
     CI-only, and why:
       * CodeQL (codeql.yml): needs the CodeQL bundle and uploads to code
         scanning.
-      * OSV-Scanner, gitleaks and the allowlist expiry check (security.yml):
-        pinned Linux binaries in _security.yml; CONTRIBUTING.md, "Running the
-        security checks locally", has the commands.
+      * Dependency review (security.yml): switched off, the repository's
+        Dependency graph setting is off.
+      * The release hardening and its dry run (windows-ci.yml,
+        release.yml): Linux-only tools in _release_harden.yml.
       * The input-path bench and lock laws (measurements.yml): they measure a
         quiet runner; tools/bench/README.md has the local recipe.
 
@@ -102,29 +106,35 @@ Step 'Versions, pins and documented facts'
 & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check-versions.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'version consistency failed' }
 
+# The shared security gates, through the same scripts _security.yml runs. Git for Windows'
+# bash, not WSL's (C:\Windows\System32\bash.exe), which does not see this checkout's paths.
+$gitBash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
+$bash = if (Test-Path $gitBash) { $gitBash } else { $null }
+
 Step 'Action pin lint (40-char SHA required)'
-# PowerShell port of the awk in _security.yml's action-pin-lint job.
-$pinFail = $false
-Get-ChildItem -Path .github\workflows -Recurse -File -Include *.yml, *.yaml | ForEach-Object {
-    $file = $_
-    foreach ($raw in (Get-Content $file.FullName)) {
-        if ($raw -match '^\s*#') { continue }
-        $line = $raw -replace '\s+#.*$', ''
-        if ($line -notmatch '^\s*-?\s*uses:\s+(\S.*)$') { continue }
-        $ref = ($line -replace '^\s*-?\s*uses:\s+', '').TrimEnd()
-        if ($ref -match '^\./') { continue }
-        if ($ref -match '^docker://[^@]+@sha256:[0-9a-f]{64}$') { continue }
-        if ($ref -notmatch '@[0-9a-f]{40}(\s|$)') {
-            Write-Output "$($file.FullName): $ref"
-            $script:pinFail = $true
-        } elseif ($ref -match '@0{40}(\s|$)') {
-            Write-Output "$($file.FullName): $ref (forbidden all-zero placeholder pin)"
-            $script:pinFail = $true
-        }
-    }
+if ($bash) {
+    & $bash scripts/check-action-pins.sh
+    if ($LASTEXITCODE -ne 0) { throw 'unpinned action reference' }
+} elseif (-not $AllowMissing) {
+    throw "Git for Windows' bash not found at $gitBash; the security gates run through it. Install Git for Windows, or re-run with -AllowMissing."
+} else {
+    Write-Information '::notice:: no Git bash; skipping the security gates (-AllowMissing).' -InformationAction Continue
 }
-if ($pinFail) { throw 'unpinned action reference' }
-Write-Output 'action pins: OK'
+
+if ($bash -and (Have 'python')) {
+    Step 'Vulnerability allowlist expiry check'
+    & python scripts/security-allowlist.py check
+    if ($LASTEXITCODE -ne 0) { throw 'allowlist check failed' }
+
+    Step 'OSV-Scanner (vendored + manifest deps)'
+    $env:OSV_SCANNER = Get-OsvScanner
+    & $bash scripts/osv-scan.sh --lockfile-script scripts/osv-lockfile.sh .
+    if ($LASTEXITCODE -ne 0) { throw 'OSV-Scanner failed' }
+
+    Step 'Secret scan (gitleaks)'
+    & (Get-Gitleaks) git --config=.gitleaks.toml --redact --exit-code=1 .
+    if ($LASTEXITCODE -ne 0) { throw 'gitleaks found a secret' }
+}
 
 Step 'clang-format (check only)'
 if (Have 'clang-format') {

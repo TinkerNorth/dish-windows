@@ -29,6 +29,9 @@
         Qt, Inter-LICENSE.txt for Inter), and no text without an entry.
       * scripts/tools.ps1's aqtinstall commit -> CONTRIBUTING.md and
         THIRD_PARTY.md, pinned by a full 40-character SHA.
+      * The scanners and signers the shared workflows pin -> scripts/tools.ps1
+        (OSV-Scanner, gitleaks) and THIRD_PARTY.md section 9; the SLSA
+        generator commit release.yml calls -> SECURITY.md's recipe.
 
     Every failure is printed before the script exits non-zero, so one run
     lists all the drift. It needs network access for the vcpkg port files.
@@ -206,6 +209,28 @@ if ($DishAqtSource) {
         Test-DocumentText 'THIRD_PARTY.md' $aqtCommit 'the aqtinstall commit Qt is installed with'
     }
 }
+
+# --- The shared security workflow's pins equal the local copies -------------------
+$security = Read-Text '.github/workflows/_security.yml'
+foreach ($pin in @(@('OSV_SCANNER_VERSION', $DishOsvScannerVersion), @('GITLEAKS_VERSION', $DishGitleaksVersion))) {
+    if ($security -notmatch ($pin[0] + ': "' + [regex]::Escape($pin[1]) + '"')) {
+        Fail "_security.yml's $($pin[0]) is not scripts/tools.ps1's $($pin[1])"
+    }
+}
+
+# --- The release tools the documents name ------------------------------------------
+$harden = Read-Text '.github/workflows/_release_harden.yml'
+foreach ($tool in @(@('GRYPE_VERSION', 'Grype'), @('SYFT_VERSION', 'Syft'), @('COSIGN_VERSION', 'cosign'))) {
+    if ($harden -notmatch ($tool[0] + ': "([0-9.]+)"')) { Fail "_release_harden.yml has no $($tool[0])"; continue }
+    $pinned = $Matches[1]
+    Test-DocumentText 'THIRD_PARTY.md' "| $($tool[1]) | $pinned |" "the $($tool[1]) _release_harden.yml pins"
+}
+foreach ($tool in @(@($DishOsvScannerVersion, 'OSV-Scanner'), @($DishGitleaksVersion, 'gitleaks'))) {
+    Test-DocumentText 'THIRD_PARTY.md' "| $($tool[1]) | $($tool[0]) |" "the $($tool[1]) the security gates pin"
+}
+# SECURITY.md's provenance recipe names the generator commit release.yml calls.
+if ((Read-Text '.github/workflows/release.yml') -notmatch 'generator_generic_slsa3\.yml@([0-9a-f]{40})') { Fail 'release.yml calls no SHA-pinned SLSA generator' }
+else { Test-DocumentText 'SECURITY.md' "generator_generic_slsa3.yml@$($Matches[1])" 'the SLSA generator commit release.yml pins' }
 
 # --- The wire protocol ----------------------------------------------------------
 if ((Read-Text 'src/core/model/Protocol.h') -notmatch 'kProtocolVersion\s*=\s*(\d+);') { throw 'no kProtocolVersion in src/core/model/Protocol.h' }

@@ -58,6 +58,17 @@ $script:DishSentryCli = @{
         'c958865f9d4000183509ea21b1f04925d5390de6d8d87386b9e69f2b305070c3'
 }
 
+# The security scanners scripts/ci-local.ps1 runs locally, the versions
+# _security.yml pins for its Linux runners; windows-amd64 digests from the
+# upstream checksum files (osv-scanner_SHA256SUMS, gitleaks_8.30.1_checksums.txt).
+$script:DishOsvScannerVersion = '2.7.1'
+$script:DishOsvScannerUrl = 'https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_windows_amd64.exe'
+$script:DishOsvScannerSha256 = '7121dcf420aefbbf89a7f0050c4d3094e079ff93afd334dfc96f16b02ec85800'
+$script:DishGitleaksVersion = '8.30.1'
+$script:DishGitleaksUrl = 'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip'
+$script:DishGitleaksSha256 = 'd29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e'
+$script:DishSecurityToolsDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\dish-security-tools'
+
 # Where Install-Ninja puts it, per user like Inno Setup.
 $script:DishNinjaDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "Programs\Ninja $DishNinjaVersion"
 
@@ -196,4 +207,28 @@ function Install-Ninja {
     if ($installed -ne $DishNinjaVersion) { throw "ninja.exe at $DishNinjaDir reports $installed, not $DishNinjaVersion" }
     Write-Information "Ninja $installed at $DishNinjaDir" -InformationAction Continue
     return $DishNinjaDir
+}
+
+# The pinned OSV-Scanner, fetched once into $DishSecurityToolsDir; returns its path.
+function Get-OsvScanner {
+    $exe = Join-Path $DishSecurityToolsDir "osv-scanner-$DishOsvScannerVersion.exe"
+    if (-not (Test-Path $exe)) {
+        New-Item -ItemType Directory -Force -Path $DishSecurityToolsDir | Out-Null
+        Get-PinnedFile -Url $DishOsvScannerUrl -Sha256 $DishOsvScannerSha256 -OutFile $exe
+    }
+    return $exe
+}
+
+# The pinned gitleaks, fetched once into $DishSecurityToolsDir; returns its path.
+function Get-Gitleaks {
+    $dir = Join-Path $DishSecurityToolsDir "gitleaks-$DishGitleaksVersion"
+    $exe = Join-Path $dir 'gitleaks.exe'
+    if (-not (Test-Path $exe)) {
+        $zip = Join-Path ([IO.Path]::GetTempPath()) "gitleaks-$DishGitleaksVersion.zip"
+        Get-PinnedFile -Url $DishGitleaksUrl -Sha256 $DishGitleaksSha256 -OutFile $zip
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Expand-Archive -Path $zip -DestinationPath $dir -Force
+        Remove-Item $zip -Force
+    }
+    return $exe
 }
