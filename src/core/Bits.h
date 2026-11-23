@@ -39,6 +39,12 @@ constexpr std::uint16_t low16(std::uint32_t v) noexcept {
     return static_cast<std::uint16_t>(v & 0xFFFFU);
 }
 
+constexpr std::uint8_t highNibble(std::uint8_t v) noexcept { return lowByte(u32(v) >> 4U); }
+constexpr std::uint8_t lowNibble(std::uint8_t v) noexcept { return lowByte(u32(v) & 0x0FU); }
+constexpr std::uint8_t fromNibbles(std::uint8_t high, std::uint8_t low) noexcept {
+    return lowByte((u32(high) << 4U) | u32(low));
+}
+
 // Whether any bit of `mask` is set in `value`; a byte or half-word converts without promotion.
 constexpr bool anySet(std::uint32_t value, std::uint32_t mask) noexcept {
     return (value & mask) != 0U;
