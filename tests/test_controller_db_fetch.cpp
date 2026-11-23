@@ -315,6 +315,33 @@ TEST_CASE("controller db check: the manifest for the version in force is up to d
     }
 }
 
+TEST_CASE("controller db check: every result is logged with the database in force",
+          "[controllerdb][check]") {
+    SECTION("up to date") {
+        CheckRig rig;
+        rig.serve(readDbFolder(QStringLiteral(DISH_CONTROLLER_DB_DIR)), "\"v1\"");
+        const dish::test::LogCapture log;
+        rig.coordinator.checkNow();
+        CHECK(log.sawContaining(
+            QStringLiteral("controller database: check upToDate; in force dbVersion 1")));
+    }
+    SECTION("updated") {
+        CheckRig rig;
+        rig.serve(republished(readDbFolder(QStringLiteral(DISH_CONTROLLER_DB_DIR)), 2));
+        const dish::test::LogCapture log;
+        rig.coordinator.checkNow();
+        CHECK(log.sawContaining(
+            QStringLiteral("controller database: check updated; in force dbVersion 2")));
+    }
+    SECTION("offline") {
+        CheckRig rig;
+        const dish::test::LogCapture log;
+        rig.coordinator.checkNow();
+        CHECK(log.sawContaining(
+            QStringLiteral("controller database: check offline; in force dbVersion 1")));
+    }
+}
+
 TEST_CASE("controller db check: a newer database is fetched, verified and put in force",
           "[controllerdb][check]") {
     CheckRig rig;
