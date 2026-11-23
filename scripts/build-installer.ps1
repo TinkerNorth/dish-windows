@@ -22,7 +22,8 @@
 
 .PARAMETER Iscc
     Path to ISCC.exe. Defaults to the Inno Setup scripts/install-inno-setup.ps1
-    installs; any other engine must be the version scripts/tools.ps1 pins.
+    installs, which must be the version scripts/tools.ps1 pins; an engine
+    passed here is used as given.
 #>
 [CmdletBinding()]
 param(
@@ -60,9 +61,12 @@ if (-not $Iscc) { $Iscc = Join-Path $DishInnoSetupDir 'ISCC.exe' }
 if (-not (Test-Path $Iscc)) {
     throw "ISCC.exe not found at $Iscc. Run scripts/install-inno-setup.ps1 (Inno Setup $DishInnoSetupVersion), or pass -Iscc."
 }
-$isccVersion = (Get-Item $Iscc).VersionInfo.ProductVersion
-if ($isccVersion -notlike "$DishInnoSetupVersion*") {
-    throw "$Iscc is Inno Setup $isccVersion; scripts/tools.ps1 pins $DishInnoSetupVersion. Run scripts/install-inno-setup.ps1."
+# An -Iscc of your own is taken as given; the default location must hold the pin.
+if ($Iscc -eq (Join-Path $DishInnoSetupDir 'ISCC.exe')) {
+    $isccVersion = Get-InnoSetupVersion
+    if ($isccVersion -ne $DishInnoSetupVersion) {
+        throw "The Inno Setup at $DishInnoSetupDir is '$isccVersion'; scripts/tools.ps1 pins $DishInnoSetupVersion. Run scripts/install-inno-setup.ps1."
+    }
 }
 
 & $Iscc "/DMyAppVersion=$Version" "/DImageDir=$imageDir" installer.iss

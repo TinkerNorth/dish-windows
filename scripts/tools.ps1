@@ -99,11 +99,29 @@ function Import-MsvcEnvironment {
     foreach ($name in $environment.Keys) { Set-Item -Path "Env:$name" -Value $environment[$name] }
 }
 
+# The version of the Inno Setup installed per user at $DishInnoSetupDir, from
+# its uninstall entry ('' when there is none). ISCC.exe carries no version
+# resource (it reads 0.0.0.0), so the entry its installer wrote is the record.
+function Get-InnoSetupVersion {
+    $uninstall = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+    if (-not (Test-Path $uninstall)) { return '' }
+    $wanted = $DishInnoSetupDir.TrimEnd('\')
+    foreach ($key in Get-ChildItem $uninstall) {
+        $entry = Get-ItemProperty $key.PSPath
+        $location = $entry.PSObject.Properties['InstallLocation']
+        $version = $entry.PSObject.Properties['DisplayVersion']
+        if ($location -and $version -and ([string]$location.Value).TrimEnd('\') -ieq $wanted) {
+            return [string]$version.Value
+        }
+    }
+    return ''
+}
+
 # Installs the pinned Inno Setup per user unless that version is already there,
 # and returns the path of its ISCC.exe.
 function Install-InnoSetup {
     $iscc = Join-Path $DishInnoSetupDir 'ISCC.exe'
-    if ((Test-Path $iscc) -and ((Get-Item $iscc).VersionInfo.ProductVersion -like "$DishInnoSetupVersion*")) {
+    if ((Test-Path $iscc) -and ((Get-InnoSetupVersion) -eq $DishInnoSetupVersion)) {
         Write-Information "Inno Setup $DishInnoSetupVersion already at $DishInnoSetupDir" -InformationAction Continue
         return $iscc
     }
@@ -116,8 +134,8 @@ function Install-InnoSetup {
     Remove-Item $setup -Force
     if ($process.ExitCode -ne 0) { throw "the Inno Setup $DishInnoSetupVersion installer exited with $($process.ExitCode)" }
     if (-not (Test-Path $iscc)) { throw "Inno Setup installed but $iscc is missing" }
-    $installed = (Get-Item $iscc).VersionInfo.ProductVersion
-    if ($installed -notlike "$DishInnoSetupVersion*") { throw "ISCC.exe reports $installed, not $DishInnoSetupVersion" }
+    $installed = Get-InnoSetupVersion
+    if ($installed -ne $DishInnoSetupVersion) { throw "the Inno Setup at $DishInnoSetupDir records version '$installed', not $DishInnoSetupVersion" }
     Write-Information "Inno Setup $installed at $DishInnoSetupDir" -InformationAction Continue
     return $iscc
 }
