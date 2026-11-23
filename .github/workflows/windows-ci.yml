@@ -25,10 +25,6 @@ jobs:
     env:
       # Qt ships dynamic on Windows; match it or the ABI diverges.
       VCPKG_DEFAULT_TRIPLET: x64-windows
-      # The translation check's lupdate. 6.7.3 loses a class's namespace after an enum with a
-      # base type that a struct follows (Network/WifiConnectionManager.h) and re-files its tr()
-      # strings under a bare name; 6.9 reads it right, so Linguist comes from there.
-      LINGUIST_QT_VERSION: "6.9.3"
       # Job-level so lukka/run-vcpkg sees it already defined and leaves it
       # alone: its default (clear;x-gha,readwrite) has never restored a
       # package here, so both configures rebuilt OpenSSL from source (~7 min
@@ -67,21 +63,6 @@ jobs:
           arch: ${{ env.QT_ARCH }}
           modules: ""
           aqtsource: ${{ env.AQT_SOURCE }}
-          cache: true
-
-      # Only what Linguist needs, beside the build Qt and never on its PATH (set-env: false), so the
-      # build keeps linking 6.7.3 while the catalogues are read by a parser that copes. lupdate links
-      # Qt6Core and Qt6Qml, so qtbase and qtdeclarative come with qttools.
-      - name: Install Linguist ${{ env.LINGUIST_QT_VERSION }}
-        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
-        with:
-          version: ${{ env.LINGUIST_QT_VERSION }}
-          host: windows
-          target: desktop
-          arch: win64_msvc2022_64
-          archives: qtbase qtdeclarative qttools
-          dir: ${{ runner.temp }}/qt-linguist
-          set-env: false
           cache: true
 
       # ImageVersion is in the cache key because a runner-image update can
@@ -162,10 +143,12 @@ jobs:
         run: ./scripts/qml-lint-literals.ps1 -Mode error
 
       # A stale .ts is not a compile error, so nothing else catches a string
-      # added without a catalogue entry.
+      # added without a catalogue entry. The build Qt's own lupdate: since
+      # 6.12 there is no second Qt for Linguist (6.7.3's mis-filed a class's
+      # strings, see check-translations.ps1).
       - name: Translation catalogues in sync
         shell: pwsh
-        run: ./scripts/check-translations.ps1 -LinguistBin "${{ runner.temp }}/qt-linguist/Qt/${{ env.LINGUIST_QT_VERSION }}/msvc2022_64/bin"
+        run: ./scripts/check-translations.ps1 -LinguistBin "$env:QT_ROOT_DIR/bin"
 
       # Must run after Build: reuses that tree's compile_commands.json and
       # needs the generated mocs to exist. File set, flags, and the four-wide

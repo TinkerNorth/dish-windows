@@ -4,7 +4,7 @@
     {
       "group": "io.qt",
       "artifact": "qtbase",
-      "version": "6.7.3",
+      "version": "6.12.1",
       "name": "Qt 6",
       "url": "https://www.qt.io/",
       "licenses": [

@@ -26,10 +26,9 @@
     five languages plus an exception.
 
 .PARAMETER LinguistBin
-    Directory holding lupdate, 6.9 or newer. Defaults to QT_ROOT_DIR/bin (what
-    jurplel/install-qt-action sets in CI), then to whatever is on PATH; the
-    build Qt's 6.7.3 is refused below, so CI installs a newer Linguist beside
-    it and passes this.
+    Directory holding lupdate, 6.9 or newer. windows-ci.yml and
+    scripts/ci-local.ps1 pass the build Qt's own bin (the Qt scripts/tools.ps1
+    pins); without it, QT_ROOT_DIR/bin, then CMAKE_PREFIX_PATH, then PATH.
 
 .EXAMPLE
     ./scripts/check-translations.ps1
@@ -108,7 +107,7 @@ try {
     $lupdateMinor = [int]$Matches[2]
     if ($lupdateMajor -lt 6 -or ($lupdateMajor -eq 6 -and $lupdateMinor -lt 9)) {
         Write-Error ("lupdate $lupdateMajor.$lupdateMinor is too old; this gate needs 6.9 or newer. " +
-                     "Pass -LinguistBin <qt>/bin of a newer Qt (CI installs one beside the build Qt).")
+                     "Pass -LinguistBin <qt>/bin of the Qt scripts/tools.ps1 pins.")
     }
 
     $catalogues = @(Invoke-Git ls-files 'translations/*.ts')

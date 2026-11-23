@@ -84,7 +84,7 @@ find_package(Threads REQUIRED)
 # No TLS package is needed: Qt 6.2+ on Windows ships the Schannel backend, so
 # the HTTPS clients get QSsl* with no OpenSSL DLLs to deploy. A Qt built with
 # no TLS backend fails at runtime with "TLS initialization failed".
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Network Svg Quick Qml QuickControls2)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Network Svg Quick Qml QuickControls2)
 qt_standard_project_setup(REQUIRES 6.7)
 # Optional: without qttools the .ts → .qm step is skipped and every tr() falls
 # back to its English source string, which still builds a working app.

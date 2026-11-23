@@ -24,7 +24,7 @@ today.
 
 | Component | Version | SPDX | How it reaches the user | Attribution obligation |
 |---|---|---|---|---|
-| [Qt 6](#2-qt-6) | 6.7.3 (CI and release); CMake requires >= 6.7 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
+| [Qt 6](#2-qt-6) | 6.12.1 (CI and release); CMake requires >= 6.12 | `LGPL-3.0-only` | Dynamically linked. The Qt DLLs and QML plugin modules are staged into the release zip by `windeployqt`. `Qt6EntryPoint` is static. | Notice, license text, relink freedom. See section 2. |
 | [SDL2](#sdl2) | 2.32.10#1 (vcpkg baseline `277978ad`) | `Zlib` | Dynamically linked. `SDL2.dll` ships in the release zip and in the installer payload. | Keep the notice, do not claim authorship |
 | [libsodium](#libsodium) | 1.0.22#1 (vcpkg baseline `277978ad`) | `ISC` | Dynamically linked. `libsodium.dll` ships in the release zip and in the installer payload. | Keep the copyright and permission notice |
 | [OpenSSL](#openssl) | 3.6.5#2 (vcpkg baseline `277978ad`) | `Apache-2.0` | Dynamically linked; the DLLs ship in the release zip and installer payload. Moonlight path only. | Keep the notice, ship the Apache-2.0 text |

@@ -14,12 +14,15 @@
 # Every downloaded binary carries the SHA-256 its upstream publishes; the
 # fetch helpers refuse anything else.
 
-# Qt, the build and the runtime windeployqt ships. AQT_SOURCE empty means
-# install-qt-action's own aqtinstall from PyPI.
-$script:DishQtVersion = '6.7.3'
-$script:DishQtArch = 'win64_msvc2019_64'
-$script:DishQtArchDir = 'msvc2019_64'
-$script:DishAqtSource = ''
+# Qt 6.12 LTS. 6.12 is the first Qt whose online repository splits each
+# architecture into its own subdirectory, which aqtinstall 3.3.0 (the newest
+# on PyPI on 2026-11-23) cannot read: its Qt 6.12 support is merged on master
+# (miurahr/aqtinstall#1048) but unreleased, so aqtinstall is installed from
+# that commit. Move back to a PyPI version once one carries #1048.
+$script:DishQtVersion = '6.12.1'
+$script:DishQtArch = 'win64_msvc2022_64'
+$script:DishQtArchDir = 'msvc2022_64'
+$script:DishAqtSource = 'git+https://github.com/miurahr/aqtinstall.git@4c759852b1108cc801d8e24979136b895b5155d4'
 
 # The PyPI wheel, not LLVM's own build: clang-format versions disagree on
 # braced-init lists, so the gate checks the version before the files.
