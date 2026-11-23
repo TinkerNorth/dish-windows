@@ -71,7 +71,7 @@ layer together.
 | Folder | Role | May depend on | Qt? |
 |---|---|---|---|
 | `src/architecture/` | The kernel primitives | nothing | **No** |
-| `src/core/` | Pure domain: reducers and FSMs (`reducer/`), models (`model/`), the type catalog (`catalog/`), input math (`input/`), wire framing and session crypto (`wire/`), certificate trust-on-first-use pinning and address literals (`net/`), the fleet's controller database records, index and check decisions (`controllerdb/`), the levels of Diagnostics and the bundle's JSON (`diagnostics/`), plus `AsyncState` | `architecture/` | **No** |
+| `src/core/` | Pure domain: reducers and FSMs (`reducer/`), models (`model/`), the type catalog (`catalog/`), input math (`input/`), wire framing and session crypto (`wire/`), certificate trust-on-first-use pinning and address literals (`net/`), the fleet's controller database records, index and check decisions (`controllerdb/`), the levels of Diagnostics and the bundle's JSON (`diagnostics/`), the controller-audio rules and the jitter window (`audio/`), the Moonlight wire, crypto, pairing and session machine (`moonlight/`), the hot path's lock-free primitives and `TrackedMutex` (`thread/`), the update manifest (`update/`), plus `AsyncState` | `architecture/` | **No** |
 | `src/source/` | `StateSource`s (owned reactive state) and Gateways (native IO boundary) | `core/`, `repository/` | yes (IO) |
 | `src/repository/` | Durable keyed storage over QSettings, dumb and synchronous | `core/` | yes (QSettings) |
 | `src/composer/` | Composers (pure derive), Controllers (side effects), Coordinators (command services) | `core/`, `source/`, `repository/` | yes (QObject) |
@@ -80,7 +80,7 @@ layer together.
 | `src/Util/` | Leaf helpers with no domain state: endian, hex, host battery, locale install | nothing | mixed |
 | `src/UI/` | The design-token palette (`Theme`), the font-family probes (`FontStacks`), crash handling, the `SlotLiveStats` mapper, `common/ExternalLink`, `licenses/LicenseManifest` | `core/` | yes (Gui) |
 | `src/Input/` | The SDL bridge, the input processor, joystick mapping, the output command queue | `core/` | yes |
-| `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingOutcome` | `core/` | yes |
+| `src/Network/` | Sockets and the REST control plane: `SatelliteClient`, `ConnectionHub`, `WifiConnectionManager`, `HTTPClient`, `PairingOutcome`, and the Moonlight path: `MoonlightManager`, `MoonlightSession`, `MoonlightHttpClient`, `MoonlightRtspClient`, `MoonlightControlChannel` | `core/` | yes |
 | `src/update/` | The updater's IO edge: the manifest and download gateways (dedicated QNAMs), the staging store, `UpdateCoordinator`, and the pre-`main` boot handoff | `core/`, `source/` | yes |
 
 `src/Input/` and `src/Network/` predate the layer model and keep their
@@ -415,7 +415,7 @@ demands, from the claim's own output worker, which owns its `FeedbackState`
 shadow; the SDL bridge builds the same report on the SDL thread (its shadow
 lives in the pad's record there) and hands SDL the body, which SDL frames
 for the link, including the Bluetooth report id and CRC. A Direct claim that
-has gone away carries nothing — there is deliberately no fallback to Standard,
+has gone away carries nothing: there is deliberately no fallback to Standard,
 because a pad on the Direct path is not open on the SDL path at the same time.
 
 † `SlotFeedbackInputs::standardEffects`. SDL names no driver publicly, but it
@@ -435,7 +435,7 @@ every DS5 report starts from a fresh memset and the firmware applies whatever
 the valid flags claim, so each builder re-asserts the last lamp or an unrelated
 colour change would be a lamp-off write. The lamp is also driven locally the
 moment mute toggles (the button must never feel dead waiting on a host
-round-trip); a later host write repaints it — last writer wins on the PAD,
+round-trip); a later host write repaints it; last writer wins on the PAD,
 while the app UI always shows the local mute truth (`MicMuteStore`).
 
 ### Controller audio: routes, verdict, engines
@@ -450,7 +450,7 @@ The routes come from [`PadAudioMatcher`](../src/core/audio/PadAudioMatcher.h),
 which matches the pad's HID product string (read off the device by the raw-HID
 gateway's enumeration, which lists every USB pad, not just claimed ones)
 against SDL's WASAPI endpoint names and resolves EVERY ambiguity to "no route"
-(two DualSenses share a string; so does a DS4 — a wrong route is worse than
+(two DualSenses share a string; so does a DS4; a wrong route is worse than
 none). `AppModel::resolveAudioRoutes` re-runs it on USB and claim changes and
 on SDL's audio hotplug events (pumped by the bridge's event loop, forwarded as
 `audioDevicesChanged`), and a changed route re-binds the bound slots so their
@@ -461,7 +461,7 @@ borrow a USB twin's endpoint.
 The host's live verdict is a third layer: `WifiConnectionManager::probeHostAudio`
 reads `GET /api/server/capabilities` after every session PUT and folds it via
 [`HostAudioVerdict`](../src/core/reducer/HostAudioVerdict.h) into per-session
-connection state — conservative "no audio" until a probe answers, reset with
+connection state: conservative "no audio" until a probe answers, reset with
 the session. The descriptor's three audio caps read it too, with the route,
 the slot's switch and the engines' refusal ledger
 ([`AudioRefusal`](../src/core/audio/AudioRefusal.h)), because a cap is a
@@ -498,10 +498,10 @@ the family has actuators); a slot that cannot play the waveform leaves the cap
 off and the host reduces the lanes to rumble for it instead. Both talk SDL
 only through
 [`AudioDeviceGateway`](../src/source/audio/AudioDeviceGateway.h);
-`SdlAudioGateway` owns `SDL_INIT_AUDIO`'s lifecycle — deliberately NOT the SDL
+`SdlAudioGateway` owns `SDL_INIT_AUDIO`'s lifecycle, deliberately NOT the SDL
 bridge, whose gamepad subsystems stop and start without taking a live stream
 down. THE PRIVACY INVARIANT: muted or ineligible means the capture device is
-CLOSED and zero `sendMicAudio` calls happen — not silence sent in their place —
+CLOSED and zero `sendMicAudio` calls happen (not silence sent in their place),
 enforced structurally by the reconcile and per-window by the session's enabled
 flag, and pinned by the engine tests. The DualSense's own mute button is a
 decoder-owned latch (`MicMuteLatch`) folded into `wButtons` as `kXusbMicMute`
@@ -641,7 +641,7 @@ CI), so each needs a device-in-the-loop test pass.
 - **Translations are tested.** `test_translations` pins locale fallback, the
   per-language `numerusform` order, and placeholder integrity across every
   catalogue. `scripts/check-translations.ps1` re-runs `lupdate` in CI and fails
-  on any diff, so a new string cannot land without its catalogue entry — and
+  on any diff, so a new string cannot land without its catalogue entry, and
   fails again if any catalogue still has an unfinished entry, so it cannot land
   without its words either.
 - **The updater is tested the same way.** Test names are prefixed so
