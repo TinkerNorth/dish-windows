@@ -33,7 +33,7 @@ today.
 | [Crashpad](#crashpad) | as vendored by sentry-native 0.17.6 | `Apache-2.0` (with `BSD-3-Clause` and ICU parts) | `crashpad_handler.exe` ships beside `dish.exe` in the release zip and in the installer payload; `sentry.dll` links the client library. | Keep the notice, ship the Apache-2.0 text |
 | [ENet (cgutman fork)](#enet-cgutman-fork) | commit `44c85e1` | `MIT` | Statically linked into `dish.exe`. Moonlight control stream. | Keep the copyright and permission notice |
 | [Inter](#4-inter) | 4.001 | `OFL-1.1` | Four `.ttf` faces embedded in `dish.exe` as Qt resources under `:/fonts/`. | Ship the license text with every copy. See section 4. |
-| [Catch2](#5-catch2) | 3.5.4 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
+| [Catch2](#5-catch2) | 3.16.1 | `BSL-1.0` | Test binary only. Not linked into `dish.exe`, not in the release zip. | None for redistributors of the app |
 | [Visual C++ runtime](#visual-c-runtime) | 14.4x (`Microsoft.VC143.CRT`) | Proprietary, Microsoft | Five DLLs staged app-local, in the installer payload and in the release zip alike. | Microsoft Visual Studio redistributable terms |
 | [Windows SDK shader binaries](#windows-sdk-shader-binaries) | `dxcompiler.dll` 1.6.2112.16, `dxil.dll` 101.6.2112.13 | Proprietary, Microsoft | Copied into the release zip and the installer payload by `windeployqt` from the installed Windows SDK. | Microsoft Windows SDK redistribution terms |
 | [Windows system libraries](#windows-system-libraries) | OS | Proprietary, Microsoft | Import libraries only. Nothing is redistributed. | None |
@@ -431,11 +431,11 @@ What the OFL requires here:
 
 ## 5. Catch2
 
-Catch2 v3.5.4. SPDX `BSL-1.0`. Upstream: <https://github.com/catchorg/Catch2>.
+Catch2 v3.16.1. SPDX `BSL-1.0`. Upstream: <https://github.com/catchorg/Catch2>.
 
 **Test-only. Not linked into `dish.exe` and not present in the release zip.** It
 is resolved by `tests/CMakeLists.txt` through `find_package(Catch2 3)` with a
-`FetchContent` fallback pinned to tag `v3.5.4`, and it links only into the
+`FetchContent` fallback pinned to tag `v3.16.1`, and it links only into the
 `DishTests` executable, which is built when `DISH_BUILD_TESTS=ON` and is switched
 off for the release configuration.
 
