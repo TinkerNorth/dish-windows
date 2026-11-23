@@ -51,6 +51,30 @@ share a version number.
   tool pins in `CONTRIBUTING.md` or protocol number stop matching their
   source.
 
+- **Every bitwise operator takes unsigned operands** (clang-tidy 23's
+  `bugprone-signed-bitwise`, 496 sites): the report decoders, the button map,
+  the wire and Moonlight codecs, the discovery decoders and the id keys go
+  through `src/core/Bits.h`. A differential run of the old and new decoders
+  over 374,186 inputs gives byte-identical results, and no site was found
+  computing a wrong value: every signed operand was a byte or half-word
+  promoted to `int`, or a shift count written without `U`.
+- clang-tidy 23.1.4 and Ninja 1.13.2 are pinned like the other tools, and the
+  tidy gate runs the pinned clang-tidy rather than Visual Studio's. Catch2 is
+  3.16.1.
+- The release carries `dish-windows-components.spdx.json`, the bill of
+  materials of what the bundle ships, checked against the licenses manifest;
+  each shipped library's licence text now travels in `licenses\`, Opus's
+  included.
+- The shared security and release-hardening workflows are the fleet's
+  canonical copies: OSV-Scanner 2.7.1 scans every library `dish.exe` links by
+  upstream commit, dependency review runs on pull requests, release assets
+  are signed into Sigstore bundles (`<file>.sigstore.json`) by cosign 3.1.4,
+  and every pull request dry-runs the hardening on its own installer and zip.
+  The Sentry symbol upload and release association fail the release when they
+  fail.
+- The installer round trip starts the installed app and requires its
+  controller database check to complete over HTTPS.
+
 ### Fixed
 
 - `SECURITY.md`, `CONTRIBUTING.md`, `docs/PACKAGING.md` (renamed from

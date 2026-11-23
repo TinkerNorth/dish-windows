@@ -683,7 +683,7 @@ inline std::int16_t steamClampI16(std::int64_t v) {
 
 // Valve's 26000 full scale, so the throw saturates before the raw rail.
 inline std::uint8_t steamTriggerToWire(std::uint8_t raw) {
-    std::int32_t v = static_cast<std::int32_t>((bits::u32(raw) << 7U) | bits::u32(raw));
+    auto v = static_cast<std::int32_t>((bits::u32(raw) << 7U) | bits::u32(raw));
     if (v > kSteamTriggerMaxAnalog) { v = kSteamTriggerMaxAnalog; }
     return static_cast<std::uint8_t>((v * 255) / kSteamTriggerMaxAnalog);
 }
