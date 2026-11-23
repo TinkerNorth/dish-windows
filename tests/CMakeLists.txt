@@ -256,6 +256,7 @@ set(DISH_TEST_SOURCES
     test_update_staging_store.cpp
     test_update_coordinator.cpp
     test_update_handoff.cpp
+    test_update_request.cpp
     test_ui_preference_store.cpp
     test_update_preference_store.cpp
     test_install_defaults.cpp
@@ -279,6 +280,7 @@ set(DISH_TEST_SOURCES
     test_controller_db_json.cpp
     test_controller_db_bundled.cpp
     test_controller_db_fetch.cpp
+    test_controller_db_gateway.cpp
     test_controller_record_rows.cpp
     test_diagnostics_levels.cpp
     test_diagnostics_bundle.cpp

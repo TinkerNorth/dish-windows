@@ -302,8 +302,12 @@ no service, no scheduled task, and no update agent.
 
 **What the request carries.** Your IP address, as GitHub sees it, which is
 unavoidable for any HTTPS request. A `User-Agent` header of the form
-`Dish/<version> (Windows; x64)`. Nothing else. No device id, no account data,
-no settings, no usage data, no cookies, no query parameters, and no
+`Dish/<version> (Windows; x64)`, `Accept: application/json`, and
+`Accept-Language: *`, which is the same for everyone and never your system's
+languages. Beside those, only the headers Qt puts on every request: the host
+name, the compressions it can read (`Accept-Encoding`), `Cache-Control` and
+`Pragma` asking for a fresh copy, and `Connection`. No device id, no account
+data, no settings, no usage data, no cookies, no query parameters, and no
 conditional-request identifiers. GitHub's own
 [privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)
 governs what GitHub logs about the request.
@@ -311,7 +315,7 @@ governs what GitHub logs about the request.
 **Downloading.** With *Download updates automatically* also on, the app then
 fetches `dish-setup.exe` from the same GitHub release, to
 `%LOCALAPPDATA%\Dish\updates\`. That is one more request to the same host, with
-the same headers, and the downloaded file is checked against the SHA-256 in the
+the same headers except `Accept`, and the downloaded file is checked against the SHA-256 in the
 manifest before it is ever run. Metered connections are skipped until you are
 on an unmetered one. With that switch off, the app tells you a new version
 exists and downloads nothing until you ask.
@@ -343,12 +347,15 @@ and applies to a controller the next time it is plugged in.
 
 `dish.tinkernorth.com` is an Amazon S3 bucket behind Amazon CloudFront,
 operated for TinkerNorth by Amazon Web Services. The requests carry no
-identifier, no cookie and no query, and use the system's default
-`User-Agent`, not the update check's `Dish/<version>` one. The only header
-the app adds is `If-None-Match`, carrying the ETag the server gave the last
-time, so an unchanged manifest is not sent again. What the host's access logs
-can see is what any web server sees: the IP address the request came from,
-and the time. We use those logs as we use the rest of the website's: for
+identifier, no cookie and no query. Each one carries exactly these headers:
+the host name; Qt's default `User-Agent`, `Mozilla/5.0`, not the update
+check's `Dish/<version>` one; `Accept-Language: *`, the same for everyone and
+never your system's languages; the compressions Qt can read
+(`Accept-Encoding`); `Cache-Control` and `Pragma` asking for a fresh copy;
+`Connection`; and, on the manifest only, `If-None-Match`, carrying the ETag
+the server gave the last time, so an unchanged manifest is not sent again.
+What the host's access logs can see is what any web server sees: the IP
+address the request came from, and the time. We use those logs as we use the rest of the website's: for
 capacity planning and abuse detection only.
 
 *Check for controller updates automatically* in Settings, on by default, turns
