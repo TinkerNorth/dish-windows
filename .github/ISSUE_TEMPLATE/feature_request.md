@@ -23,6 +23,6 @@ assignees: ''
 <!-- Screenshots, mockups, links to how another tool does it.
 
      If this needs the satellite server to change too, say so: protocol changes
-     have to land in `satellite` and in the Android, Linux and macOS clients at
-     the same time, which is a much larger piece of work than a Windows-only
+     have to land in `satellite` and in the Android, iOS, macOS and Linux
+     clients at the same time, which is a much larger piece of work than a Windows-only
      change. -->

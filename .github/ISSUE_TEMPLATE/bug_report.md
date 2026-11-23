@@ -27,8 +27,8 @@ assignees: ''
 ## Your setup
 
 - **Windows edition and build**: <!-- run `winver`, e.g. Windows 11 Pro 24H2, build 26100.1742 -->
-- **Dish version**: <!-- Settings > About, e.g. 1.0.0 -->
-- **How you installed it**: <!-- release zip, or built from source (give the commit) -->
+- **Dish version**: <!-- Settings > About, e.g. 2.8.0 -->
+- **How you installed it**: <!-- dish-setup.exe, the portable dish-windows.zip, or built from source (give the commit) -->
 - **Satellite version and platform**: <!-- e.g. satellite 0.4.1 on Ubuntu 24.04 / Windows 11 -->
 
 ## Your controller
@@ -71,6 +71,13 @@ never seen.
 
 ```
 ```
+
+## The diagnostics file
+
+For a controller or connection problem, Settings, *Report a problem* writes a
+diagnostics file (the sessions, each controller down to the wire, and the log
+of this run) and offers to mail it. Attaching that file here, or mailing it,
+usually answers the first three questions a maintainer would ask.
 
 ## If the app crashed
 
