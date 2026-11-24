@@ -534,6 +534,33 @@ The view model and both role models live in the `dish_core` library rather than
 in the Quick target, which is what keeps them unit-testable without standing up
 a QML engine.
 
+## Sleep, the lid and keeping the PC awake
+
+Settings, *Keep the computer awake*, decides when Dish holds the PC up: *Never*,
+*While playing* (only while a bound controller is being used, let go after the
+stillness the slider sets) or *While connected* (for as long as a controller is
+streaming). The hold is `SetThreadExecutionState(ES_CONTINUOUS |
+ES_SYSTEM_REQUIRED)`, plus `ES_DISPLAY_REQUIRED` when *Keep the display awake
+too* is on ([`WakeInhibitor.cpp`](../src/source/system/WakeInhibitor.cpp)). It
+stops idle sleep and nothing else.
+
+Closing the lid still puts the PC to sleep, as the Windows power plan says.
+Microsoft's
+[`PowerSetRequest`](https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-powersetrequest)
+remarks say power requests are cleared when the user starts sleep directly,
+closing the lid included, so no application can hold the machine up against it.
+Settings says so and names Windows' *Choose what closing the lid does*, where
+*When I close the lid* can be set to *Do nothing*. `ES_AWAYMODE_REQUIRED` is
+deliberately not used: it can surface the process as "Media playing" in Task
+Scheduler.
+
+`SleepMonitor` registers for `GUID_LIDSWITCH_STATE_CHANGE` and logs each change
+under `dish.sleep`; [`LidSleep.h`](../src/core/reducer/LidSleep.h) decides from
+it. When a sleep that began with the lid closed paused a stream, the window
+shows one notice after the resume, "Streaming paused while the lid was closed",
+and the satellites reconnect as after any sleep. Moonlight sessions do not come
+back by themselves yet (`tests/PARITY.md`).
+
 ## How to add a feature
 
 1. **Name the state.** What changes over time? Is it a request (use

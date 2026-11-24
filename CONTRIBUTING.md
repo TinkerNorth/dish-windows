@@ -136,7 +136,10 @@ Six catalogues live under `translations/`: English plus Bosnian, German,
 Spanish, French, and Brazilian Portuguese, the same set dish-android ships.
 They cover the app only; the installer's wizard text comes from Inno Setup's
 own translated `.isl` catalogues (five of the six; Bosnian has no official
-`.isl` yet and is an open follow-up).
+`.isl` yet and is an open follow-up). The catalogues compile into the binary
+under `:/i18n`, and the app picks one at startup by walking
+`QLocale::uiLanguages()`, so Windows' display language wins over the regional
+format setting when the two disagree (`src/main.cpp`).
 
 **If you add, change, or delete a user-facing string, refresh the catalogues in
 the same commit.** `scripts\check-translations.ps1` re-runs `lupdate` with the
@@ -726,5 +729,7 @@ self-contained piece of work.
   on every manual download. cosign signatures, SLSA provenance and both SBOM
   formats already ship; [`SECURITY.md`](SECURITY.md), "Known gaps", says what
   each is worth today.
-- **Screenshots.** `README.md` describes the UI in prose. There are no
-  screenshots of the dashboard, the connections page, or the setup wizard.
+- **Screenshots.** `README.md` describes the UI in prose. The captures it
+  wants, taken from a release build: Home with a controller bound to a PC,
+  Connections with a paired Satellite, the setup wizard's last step, and the
+  controller inspector on the Diagnostics page.

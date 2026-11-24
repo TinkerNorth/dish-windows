@@ -85,6 +85,16 @@ share a version number.
   verification recipe that was run against 2.8.0.
 - `docs/contract.md` maps the Satellite contract (protocol 4) onto this
   client, as the other clients' copies do.
+- `README.md` is rewritten in the shape every Dish README shares. It no
+  longer calls 1.0.0 the first release, names protocol 1 or Qt 6.7.3, credits
+  a code-signing service no workflow uses, or says Dish talks to no
+  TinkerNorth server while describing the controller database check. It says
+  what the installer puts on the PC, how to get past SmartScreen and check the
+  download, what has not been confirmed on hardware, and that Dish can be the
+  controller for a Moonlight host. Its section on sleep and the lid moves to
+  `docs/ARCHITECTURE.md`. `scripts/check-versions.ps1` now holds its links,
+  the release and tool versions it names, and the blocks every Dish README
+  shares (against `tests/fixtures/readme-family/`) to the tree.
 
 ## [2.8.0] - 2026-11-23
 
