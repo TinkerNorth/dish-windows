@@ -3,7 +3,8 @@ name: Version consistency
 # A PR-time text-consistency gate, not a build. scripts/check-versions.ps1
 # holds every rule (its header lists each source of truth and its copies: the
 # app version, the vcpkg baseline and what it resolves, the FetchContent pins,
-# the tool pins in scripts/tools.ps1, the protocol number); scripts/ci-local.ps1
+# the tool pins in scripts/tools.ps1, the protocol number, README.md's links,
+# versions and shared blocks); scripts/ci-local.ps1
 # runs the same script. release.yml keeps its own check: only it can compare
 # the tag and the built dish.exe.
 
@@ -14,6 +15,7 @@ on:
       - CMakeLists.txt
       - CHANGELOG.md
       - CONTRIBUTING.md
+      - README.md
       - SECURITY.md
       - THIRD_PARTY.md
       - assets/licenses/licenses.json
@@ -22,6 +24,7 @@ on:
       - packaging/dish.rc
       - src/core/model/Protocol.h
       - tests/CMakeLists.txt
+      - tests/fixtures/readme-family/**
       - vcpkg.json
       - scripts/tools.ps1
       - scripts/check-versions.ps1

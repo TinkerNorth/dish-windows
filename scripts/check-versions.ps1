@@ -32,6 +32,12 @@
       * The scanners and signers the shared workflows pin -> scripts/tools.ps1
         (OSV-Scanner, gitleaks) and THIRD_PARTY.md section 9; the SLSA
         generator commit release.yml calls -> SECURITY.md's recipe.
+      * README.md: every relative link -> a path in the tree; "Dish for
+        Windows X.Y.Z is the current release." and every other X.Y.Z it names
+        -> the project version, except a version named after Qt, clang-format,
+        clang-tidy, Ninja or Inno Setup -> that pin in scripts/tools.ps1; the
+        blocks every Dish README shares -> tests/fixtures/readme-family/, word
+        for word (the same files as in every sibling repository).
 
     Every failure is printed before the script exits non-zero, so one run
     lists all the drift. It needs network access for the vcpkg port files.
@@ -238,6 +244,39 @@ $protocol = $Matches[1]
 Write-Output "Protocol.h speaks protocol $protocol"
 Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "speak protocol $protocol" -What 'the protocol version'
 Test-DocumentText -Path 'docs/contract.md' -Needle "protocol $protocol" -What 'the protocol version'
+
+# --- README.md against the tree -------------------------------------------------
+# Line endings follow the checkout (*.md is text), so both sides compare as LF.
+$readme = (Read-Text 'README.md') -replace "`r`n", "`n"
+foreach ($link in [regex]::Matches($readme, '\]\(([^)\s]+)\)')) {
+    $target = $link.Groups[1].Value
+    if ($target -match '^[a-z][a-z0-9+.-]*:' -or $target.StartsWith('#')) { continue }
+    $path = $target.Split('#')[0]
+    if ($path -and -not (Test-Path (Join-Path $repoRoot $path))) { Fail "README.md links to $target, which does not exist" }
+}
+if (-not $readme.Contains("Dish for Windows $version is the current release.")) {
+    Fail "README.md does not say 'Dish for Windows $version is the current release.'"
+}
+$toolPins = @{
+    'Qt'           = $DishQtVersion
+    'clang-format' = $DishClangFormatVersion
+    'clang-tidy'   = $DishClangTidyVersion
+    'Ninja'        = $DishNinjaVersion
+    'Inno Setup'   = $DishInnoSetupVersion
+}
+foreach ($named in [regex]::Matches($readme, '(?:(Qt|clang-format|clang-tidy|Ninja|Inno Setup) )?\b(\d+\.\d+\.\d+)\b')) {
+    $tool, $number = $named.Groups[1].Value, $named.Groups[2].Value
+    if ($tool) {
+        if ($number -ne $toolPins[$tool]) { Fail "README.md names $tool $number; scripts/tools.ps1 pins $($toolPins[$tool])" }
+    } elseif ($number -ne $version) {
+        Fail "README.md names version $number; the project version is $version"
+    }
+}
+$fixtures = 'tests/fixtures/readme-family'
+foreach ($fixture in Get-ChildItem (Join-Path $repoRoot $fixtures) -Filter '*.md' | Sort-Object Name) {
+    $block = ([IO.File]::ReadAllText($fixture.FullName) -replace "`r`n", "`n").TrimEnd("`n")
+    if (-not $readme.Contains($block)) { Fail "README.md does not carry the family's shared block $fixtures/$($fixture.Name) word for word" }
+}
 
 if ($script:failures.Count -gt 0) {
     Write-Output ''
