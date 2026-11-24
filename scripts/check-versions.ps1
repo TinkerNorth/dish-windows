@@ -171,14 +171,14 @@ Test-LicenseVersion 'qtbase' $DishQtVersion
 $qtMinor = ($DishQtVersion -split '\.')[0..1] -join '.'
 if ($cmake -notmatch ('find_package\(Qt6 ' + [regex]::Escape($qtMinor) + ' REQUIRED')) { Fail "CMakeLists.txt's find_package(Qt6 ...) floor is not $qtMinor" }
 Test-SummaryRow 'Qt 6' "CMake requires >= $qtMinor"
-Test-DocumentText 'CONTRIBUTING.md' "Qt $DishQtVersion" 'the pinned Qt'
-Test-DocumentText 'CONTRIBUTING.md' "C:\Qt\$DishQtVersion\$DishQtArchDir" 'the Qt prefix install-deps.ps1 creates'
-Test-DocumentText 'CONTRIBUTING.md' "clang-format $DishClangFormatVersion" 'the pinned clang-format'
-Test-DocumentText 'CONTRIBUTING.md' "Inno Setup $DishInnoSetupVersion" 'the pinned Inno Setup'
-Test-DocumentText 'CONTRIBUTING.md' "clang-tidy $DishClangTidyVersion" 'the pinned clang-tidy'
-Test-DocumentText 'CONTRIBUTING.md' "Ninja $DishNinjaVersion" 'the pinned Ninja'
-Test-DocumentText '.github/pull_request_template.md' "clang-format==$DishClangFormatVersion" 'the pinned clang-format'
-Test-DocumentText '.github/pull_request_template.md' "clang-tidy==$DishClangTidyVersion" 'the pinned clang-tidy'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "Qt $DishQtVersion" -What 'the pinned Qt'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "C:\Qt\$DishQtVersion\$DishQtArchDir" -What 'the Qt prefix install-deps.ps1 creates'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "clang-format $DishClangFormatVersion" -What 'the pinned clang-format'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "Inno Setup $DishInnoSetupVersion" -What 'the pinned Inno Setup'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "clang-tidy $DishClangTidyVersion" -What 'the pinned clang-tidy'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "Ninja $DishNinjaVersion" -What 'the pinned Ninja'
+Test-DocumentText -Path '.github/pull_request_template.md' -Needle "clang-format==$DishClangFormatVersion" -What 'the pinned clang-format'
+Test-DocumentText -Path '.github/pull_request_template.md' -Needle "clang-tidy==$DishClangTidyVersion" -What 'the pinned clang-tidy'
 
 # --- Every shipped library carries its licence text ------------------------------
 # A licenses.json entry is a component that ships (Catch2 excepted: test-only, never in a
@@ -205,8 +205,8 @@ if ($DishAqtSource) {
         Fail "scripts/tools.ps1 DishAqtSource is not aqtinstall pinned by a 40-character commit: $DishAqtSource"
     } else {
         $aqtCommit = $Matches[1]
-        Test-DocumentText 'CONTRIBUTING.md' $aqtCommit 'the aqtinstall commit Qt is installed with'
-        Test-DocumentText 'THIRD_PARTY.md' $aqtCommit 'the aqtinstall commit Qt is installed with'
+        Test-DocumentText -Path 'CONTRIBUTING.md' -Needle $aqtCommit -What 'the aqtinstall commit Qt is installed with'
+        Test-DocumentText -Path 'THIRD_PARTY.md' -Needle $aqtCommit -What 'the aqtinstall commit Qt is installed with'
     }
 }
 
@@ -223,21 +223,21 @@ $harden = Read-Text '.github/workflows/_release_harden.yml'
 foreach ($tool in @(@('GRYPE_VERSION', 'Grype'), @('SYFT_VERSION', 'Syft'), @('COSIGN_VERSION', 'cosign'))) {
     if ($harden -notmatch ($tool[0] + ': "([0-9.]+)"')) { Fail "_release_harden.yml has no $($tool[0])"; continue }
     $pinned = $Matches[1]
-    Test-DocumentText 'THIRD_PARTY.md' "| $($tool[1]) | $pinned |" "the $($tool[1]) _release_harden.yml pins"
+    Test-DocumentText -Path 'THIRD_PARTY.md' -Needle "| $($tool[1]) | $pinned |" -What "the $($tool[1]) _release_harden.yml pins"
 }
 foreach ($tool in @(@($DishOsvScannerVersion, 'OSV-Scanner'), @($DishGitleaksVersion, 'gitleaks'))) {
-    Test-DocumentText 'THIRD_PARTY.md' "| $($tool[1]) | $($tool[0]) |" "the $($tool[1]) the security gates pin"
+    Test-DocumentText -Path 'THIRD_PARTY.md' -Needle "| $($tool[1]) | $($tool[0]) |" -What "the $($tool[1]) the security gates pin"
 }
 # SECURITY.md's provenance recipe names the generator commit release.yml calls.
 if ((Read-Text '.github/workflows/release.yml') -notmatch 'generator_generic_slsa3\.yml@([0-9a-f]{40})') { Fail 'release.yml calls no SHA-pinned SLSA generator' }
-else { Test-DocumentText 'SECURITY.md' "generator_generic_slsa3.yml@$($Matches[1])" 'the SLSA generator commit release.yml pins' }
+else { Test-DocumentText -Path 'SECURITY.md' -Needle "generator_generic_slsa3.yml@$($Matches[1])" -What 'the SLSA generator commit release.yml pins' }
 
 # --- The wire protocol ----------------------------------------------------------
 if ((Read-Text 'src/core/model/Protocol.h') -notmatch 'kProtocolVersion\s*=\s*(\d+);') { throw 'no kProtocolVersion in src/core/model/Protocol.h' }
 $protocol = $Matches[1]
 Write-Output "Protocol.h speaks protocol $protocol"
-Test-DocumentText 'CONTRIBUTING.md' "speak protocol $protocol" 'the protocol version'
-Test-DocumentText 'docs/contract.md' "protocol $protocol" 'the protocol version'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "speak protocol $protocol" -What 'the protocol version'
+Test-DocumentText -Path 'docs/contract.md' -Needle "protocol $protocol" -What 'the protocol version'
 
 if ($script:failures.Count -gt 0) {
     Write-Output ''
