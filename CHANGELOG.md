@@ -21,6 +21,89 @@ share a version number.
 
 ---
 
+## [2.9.0] - 2026-11-23
+
+### Added
+
+- **A bill of materials of what the app ships.** The release carries
+  `dish-windows-components.spdx.json`, written from the build and checked
+  against the licenses manifest on every pull request.
+- **One Sigstore bundle per release file.** cosign 3.1.4 signs each asset
+  into `<file>.sigstore.json`, in place of a `.sig` and a `.crt`;
+  `SECURITY.md` verifies both forms. The in-app updater checks no signature,
+  so installed versions update as before.
+
+### Changed
+
+- **Qt 6.12.1, the LTS line, replaces Qt 6.7.3**, which left open-source
+  support in 2024. The build, `windeployqt` and the translation gate's lupdate
+  are one Qt again; CMake requires Qt 6.12. The minimum Windows stays Windows
+  10 1809.
+- **The vcpkg baseline moves to the vcpkg master of 2026-11-23**: OpenSSL
+  3.6.5, Opus 1.6.1 and sentry-native 0.17.6.
+- **Every bitwise operator takes unsigned operands** (clang-tidy 23's
+  `bugprone-signed-bitwise`, 496 sites): the report decoders, the button map,
+  the wire and Moonlight codecs, the discovery decoders and the id keys go
+  through `src/core/Bits.h`. A differential run of the old and new decoders
+  over 374,186 inputs gives byte-identical results, and no site was found
+  computing a wrong value: every signed operand was a byte or half-word
+  promoted to `int`, or a shift count written without `U`.
+- **Every toolchain pin lives in `scripts/tools.ps1`**, read by the workflows,
+  `scripts/install-deps.ps1`, `scripts/build.ps1` and `scripts/ci-local.ps1`
+  alike. The MSVC environment comes from an in-repo script instead of an
+  unmaintained third-party action, Inno Setup 6.7.4 is fetched from upstream
+  and checked against its published SHA-256, sentry-cli is 3.8.2, and
+  clang-format 23.1.5 checks the tree (it formats every file as 22.1.4 did).
+  The format gate now refuses any other clang-format: Visual Studio's
+  bundled 19.1.5 sat ahead of the pinned one on CI's PATH.
+- clang-tidy 23.1.4 and Ninja 1.13.2 are pinned like the other tools, and the
+  tidy gate runs the pinned clang-tidy rather than Visual Studio's. Catch2 is
+  3.16.1.
+- `scripts/ci-local.ps1` runs the version gate, passes the translation gate the
+  build Qt's lupdate, and gains `-Quick`. `install-dependencies.bat` is gone;
+  `scripts/install-deps.ps1` is the one installer and checks vcpkg out at the
+  baseline CI uses.
+- `version-consistency.yml` runs `scripts/check-versions.ps1`, which also fails
+  a change whose `CHANGELOG.md` heading, `THIRD_PARTY.md`, licenses manifest,
+  tool pins in `CONTRIBUTING.md`, protocol number or `README.md` stop matching
+  their source: the README's links, the release and tool versions it names,
+  and the blocks every Dish README shares (against
+  `tests/fixtures/readme-family/`).
+- The shared security and release-hardening workflows are the fleet's
+  canonical copies: OSV-Scanner 2.7.1 scans every library `dish.exe` links by
+  upstream commit, dependency review runs on pull requests, and every pull
+  request dry-runs the hardening on its own installer and zip. The Sentry
+  symbol upload and release association fail the release when they fail.
+- The installer round trip starts the installed app and requires its
+  controller database check to complete over HTTPS.
+
+### Fixed
+
+- **Every library the app ships now carries its licence notice.** Opus was
+  linked and shipped without one: `THIRD_PARTY.md` and the in-app Licenses
+  screen now list it, and its licence text travels in `licenses\` with every
+  other shipped library's. They also name the sentry-native version the build
+  really carries (they said 0.16.3; the old baseline built 0.16.0).
+- `README.md` is rewritten in the shape every Dish README shares. It no
+  longer calls 1.0.0 the first release, names protocol 1 or Qt 6.7.3, credits
+  a code-signing service no workflow uses, or says Dish talks to no
+  TinkerNorth server while describing the controller database check. It says
+  what the installer puts on the PC, how to get past SmartScreen and check the
+  download, what has not been confirmed on hardware, and that Dish can be the
+  controller for a Moonlight host. Its section on sleep and the lid moves to
+  `docs/ARCHITECTURE.md`.
+- `PRIVACY.md` no longer says TinkerNorth runs no server for Dish: its short
+  version and section 2.3 now name `dish.tinkernorth.com`, which serves the
+  controller list section 2.5 describes. Nothing the app does changed.
+- `SECURITY.md`, `CONTRIBUTING.md`, `docs/PACKAGING.md` (renamed from
+  `docs/INSTALLER.md`, the fleet's name) and `installer.iss` no longer
+  describe a release of five unsigned files: a release carries cosign
+  signatures, SPDX and CycloneDX SBOMs and SLSA provenance, and the installer
+  is signed whenever a certificate is configured. `SECURITY.md` has a
+  verification recipe that was run against 2.8.0.
+- `docs/contract.md` maps the Satellite contract (protocol 4) onto this
+  client, as the other clients' copies do.
+
 ## [2.8.0] - 2026-11-23
 
 ### Added
@@ -1247,7 +1330,7 @@ release.
   failure, and the uninstaller hands its own removal to a small helper so the
   Add/Remove Programs entry outlives a cleanup that antivirus blocks. The full
   silent command line, the exit-code table and the payload format are in
-  [`docs/INSTALLER.md`](docs/INSTALLER.md); a CI round trip installs, repairs,
+  [`docs/PACKAGING.md`](docs/PACKAGING.md); a CI round trip installs, repairs,
   upgrades, applies an update and uninstalls on every pull request.
 - **Auto-update.** An installed copy asks GitHub for `latest.json` 15 seconds
   after launch and every four hours, downloads the next `dish-setup.exe` in the
@@ -1353,7 +1436,8 @@ release.
   SHA-256 chain from `latest.json` is the only integrity anchor the auto-update
   path has.
 
-[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.8.0...main
+[Unreleased]: https://github.com/TinkerNorth/dish-windows/compare/2.9.0...main
+[2.9.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.9.0
 [2.8.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.8.0
 [2.7.1]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.1
 [2.7.0]: https://github.com/TinkerNorth/dish-windows/releases/tag/2.7.0

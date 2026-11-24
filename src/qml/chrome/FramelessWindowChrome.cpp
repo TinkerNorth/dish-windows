@@ -80,9 +80,10 @@ FramelessWindowChrome::FramelessWindowChrome(QWindow* window, QObject* parent)
     // track size through WM_GETMINMAXINFO. Both consumers construct this
     // filter after the platform window exists, so the handle is available.
     if (HWND hwnd = hwndOf(window)) {
-        const LONG_PTR style = ::GetWindowLongPtrW(hwnd, GWL_STYLE);
-        if ((style & WS_THICKFRAME) == 0) {
-            ::SetWindowLongPtrW(hwnd, GWL_STYLE, style | WS_THICKFRAME);
+        constexpr auto kThickFrame = static_cast<ULONG_PTR>(WS_THICKFRAME);
+        const auto style = static_cast<ULONG_PTR>(::GetWindowLongPtrW(hwnd, GWL_STYLE));
+        if ((style & kThickFrame) == 0U) {
+            ::SetWindowLongPtrW(hwnd, GWL_STYLE, static_cast<LONG_PTR>(style | kThickFrame));
             ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
                                SWP_FRAMECHANGED);

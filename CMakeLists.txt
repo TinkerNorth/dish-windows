@@ -4,7 +4,7 @@
 # option of FetchContent_Declare, which keeps /W4 /WX off Catch2's headers.
 cmake_minimum_required(VERSION 3.25)
 project(Dish
-    VERSION 2.8.0
+    VERSION 2.9.0
     DESCRIPTION "Dish Windows client for the Satellite gamepad-over-LAN protocol"
     # C is enabled for the vendored ENet fork (Moonlight control stream), whose
     # backend is pure C; everything first-party is C++.
@@ -84,7 +84,7 @@ find_package(Threads REQUIRED)
 # No TLS package is needed: Qt 6.2+ on Windows ships the Schannel backend, so
 # the HTTPS clients get QSsl* with no OpenSSL DLLs to deploy. A Qt built with
 # no TLS backend fails at runtime with "TLS initialization failed".
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Network Svg Quick Qml QuickControls2)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Network Svg Quick Qml QuickControls2)
 qt_standard_project_setup(REQUIRES 6.7)
 # Optional: without qttools the .ts → .qm step is skipped and every tr() falls
 # back to its English source string, which still builds a working app.

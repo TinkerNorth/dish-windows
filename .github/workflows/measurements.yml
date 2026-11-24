@@ -79,9 +79,7 @@ jobs:
     # restores the archives that lane and codeql.yml save (why the files
     # provider and not x-gha is in windows-ci.yml).
     env:
-      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       VCPKG_DEFAULT_TRIPLET: x64-windows
-      QT_VERSION: "6.7.3"
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
 
     steps:
@@ -96,6 +94,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Resolve the version label
@@ -110,13 +109,11 @@ jobs:
           }
           Add-Content -Path $env:GITHUB_ENV -Value "MEASURE_VERSION=$version"
 
-      - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-        with:
-          arch: x64
-
-      - name: Install Ninja
-        run: choco install ninja --no-progress --yes
+      # The MSVC environment and the pins (Qt, vcpkg baseline, cache key):
+      # scripts/ci-env.ps1, shared with windows-ci.yml.
+      - name: Toolchain environment and pins
+        shell: pwsh
+        run: ./scripts/ci-env.ps1
 
       - name: Install Qt
         uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
@@ -124,15 +121,10 @@ jobs:
           version: ${{ env.QT_VERSION }}
           host: windows
           target: desktop
-          arch: win64_msvc2019_64
+          arch: ${{ env.QT_ARCH }}
           modules: ""
+          aqtsource: ${{ env.AQT_SOURCE }}
           cache: true
-
-      - name: Prepare vcpkg binary cache
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
-          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
 
       - name: Restore vcpkg binary cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

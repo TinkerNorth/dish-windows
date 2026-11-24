@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "core/Bits.h"
 #include "core/moonlight/MoonlightControl.h"
 #include "core/reducer/TouchpadModeResolve.h"
 
@@ -129,22 +130,21 @@ enum class BindOutcome : std::uint8_t {
 // forwards; the rest follow the detected hardware.
 inline std::uint8_t padCapabilities(bool hasRumble, bool hasMotion, bool hasTouchpad,
                                     bool hasBattery, bool hasLightbar) {
-    std::uint8_t caps = kPadCapAnalogTriggers;
+    std::uint32_t caps = bits::u32(kPadCapAnalogTriggers);
     if (hasRumble) {
-        caps = static_cast<std::uint8_t>(caps | kPadCapRumble);
         // Trigger rumble rides the rumble bit rather than a hardware probe of
         // its own, because no pad this client can claim has impulse-trigger
         // motors: the host's RUMBLE_TRIGGERS is folded onto the body motors
         // (core/moonlight/MoonlightTriggerRumble.h), so the effect DOES land,
         // just not where the game drew it. Not advertising would make the fold
         // dead code — the host would never send the packet.
-        caps = static_cast<std::uint8_t>(caps | kPadCapTriggerRumble);
+        caps |= bits::u32(kPadCapRumble) | bits::u32(kPadCapTriggerRumble);
     }
-    if (hasMotion) { caps = static_cast<std::uint8_t>(caps | kPadCapAccel | kPadCapGyro); }
-    if (hasTouchpad) { caps = static_cast<std::uint8_t>(caps | kPadCapTouchpad); }
-    if (hasBattery) { caps = static_cast<std::uint8_t>(caps | kPadCapBattery); }
-    if (hasLightbar) { caps = static_cast<std::uint8_t>(caps | kPadCapRgbLed); }
-    return caps;
+    if (hasMotion) { caps |= bits::u32(kPadCapAccel) | bits::u32(kPadCapGyro); }
+    if (hasTouchpad) { caps |= bits::u32(kPadCapTouchpad); }
+    if (hasBattery) { caps |= bits::u32(kPadCapBattery); }
+    if (hasLightbar) { caps |= bits::u32(kPadCapRgbLed); }
+    return bits::lowByte(caps);
 }
 
 // The user's emulated-device pick (kMoonlightDevice*) as a CONTROLLER_ARRIVAL
@@ -176,8 +176,8 @@ inline std::uint8_t typeCapabilityCeiling(std::uint8_t arrivalType) {
     switch (arrivalType) {
     case kPadTypeXbox:
     case kPadTypeNintendo:
-        return static_cast<std::uint8_t>(kPadCapAnalogTriggers | kPadCapRumble |
-                                         kPadCapTriggerRumble | kPadCapBattery);
+        return bits::lowByte(bits::u32(kPadCapAnalogTriggers) | bits::u32(kPadCapRumble) |
+                             bits::u32(kPadCapTriggerRumble) | bits::u32(kPadCapBattery));
     default:
         return 0xFF;
     }
@@ -245,15 +245,16 @@ inline std::uint32_t declaredButtonFlags(std::uint8_t declaredCaps) {
 // The capability bits a host reads when a pad arrives, and at no other time. Wolf's
 // create_new_joypad (control/input_handler.cpp) reads ACCELEROMETER and GYRO and no other bit:
 // every PlayStation pad it builds is one DualSense with a touchpad whatever the arrival said.
-inline constexpr std::uint8_t kCapsReadAtArrival = kPadCapAccel | kPadCapGyro;
+inline constexpr std::uint8_t kCapsReadAtArrival =
+    bits::lowByte(bits::u32(kPadCapAccel) | bits::u32(kPadCapGyro));
 
 // Whether announcing `wanted` over the pad the host built from `held` gets the user another pad.
 // A host keeps a number it holds and skips a second arrival for it, so another pad costs a replug,
 // and a replug unplugs the pad in the game: nothing the host never reads is worth one.
 inline bool hostBuildsAnotherPad(const AnnouncedPad& held, const AnnouncedPad& wanted) {
     const bool anotherType = held.type != wanted.type;
-    const int changedBits = held.capabilities ^ wanted.capabilities;
-    const bool anotherMotion = (changedBits & kCapsReadAtArrival) != 0;
+    const std::uint32_t changedBits = bits::u32(held.capabilities) ^ bits::u32(wanted.capabilities);
+    const bool anotherMotion = bits::anySet(changedBits, kCapsReadAtArrival);
     return anotherType || anotherMotion;
 }
 

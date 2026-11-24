@@ -1,25 +1,41 @@
 version: 2
 updates:
+  # One PR per week for every action bump together: the bumps are independent
+  # one-liners, and with "require branches to be up to date" on main, N
+  # separate PRs cost N full CI cycles.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
     labels:
+      - "dependencies"
       - "ci"
-    # One PR per week for every action bump together (the way dish-android's
-    # arrive): the bumps are independent one-liners, and with "require branches
-    # to be up to date" on main, N separate PRs cost N full CI cycles.
     groups:
       github-actions:
         patterns:
           - "*"
-    ignore:
-      # v11.6 defaults vcpkg binary caching to the GHA `x-gha` source, but our
-      # manifest-mode install runs inside the CMake configure step, which never
-      # receives ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL — configure then
-      # fails outright. Lift once the workflows export those two variables into
-      # the configure step, or set VCPKG_BINARY_SOURCES explicitly.
-      - dependency-name: "lukka/run-vcpkg"
-        versions:
-          - ">=11.6"
+
+  # The builtin-baseline in vcpkg.json, the one copy of the vcpkg pin (the
+  # workflows read it from there). A baseline bump moves every port at once,
+  # so its PR fails scripts/check-versions.ps1 until THIRD_PARTY.md and
+  # assets/licenses/licenses.json name what the new baseline resolves.
+  - package-ecosystem: "vcpkg"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "ci"
+    groups:
+      vcpkg:
+        update-types:
+          - "minor"
+          - "patch"

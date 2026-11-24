@@ -3,6 +3,8 @@
 
 #include "core/moonlight/MoonlightControl.h"
 
+#include "core/Bits.h"
+
 #include <cstring>
 
 namespace dish::moonlight {
@@ -18,29 +20,6 @@ constexpr std::uint16_t kMultiTailA = 0x009C;
 constexpr std::uint16_t kMultiTailB = 0x0055;
 
 // Little-endian writers into a byte buffer at a fixed offset.
-inline void putU16Le(std::uint8_t* p, std::uint16_t v) noexcept {
-    p[0] = static_cast<std::uint8_t>(v & 0xFF);
-    p[1] = static_cast<std::uint8_t>((v >> 8) & 0xFF);
-}
-
-inline void putU32Le(std::uint8_t* p, std::uint32_t v) noexcept {
-    p[0] = static_cast<std::uint8_t>(v & 0xFF);
-    p[1] = static_cast<std::uint8_t>((v >> 8) & 0xFF);
-    p[2] = static_cast<std::uint8_t>((v >> 16) & 0xFF);
-    p[3] = static_cast<std::uint8_t>((v >> 24) & 0xFF);
-}
-
-inline void putU32Be(std::uint8_t* p, std::uint32_t v) noexcept {
-    p[0] = static_cast<std::uint8_t>((v >> 24) & 0xFF);
-    p[1] = static_cast<std::uint8_t>((v >> 16) & 0xFF);
-    p[2] = static_cast<std::uint8_t>((v >> 8) & 0xFF);
-    p[3] = static_cast<std::uint8_t>(v & 0xFF);
-}
-
-inline std::uint16_t readU16Le(const std::uint8_t* p) noexcept {
-    return static_cast<std::uint16_t>(p[0] | (static_cast<std::uint16_t>(p[1]) << 8));
-}
-
 // Writes the standard INPUT_DATA wrapper into `out` and returns the offset past
 // it. `bodyLen` is the number of payload bytes that FOLLOW the wrapper (the
 // input-type-specific struct, NOT counting the 4-byte input-type field).
@@ -51,10 +30,10 @@ std::size_t writeInputHeader(std::uint8_t* out, std::uint32_t inputType,
                              std::size_t bodyLen) noexcept {
     const auto packetLen = static_cast<std::uint16_t>(8 + bodyLen);
     const auto inputSize = static_cast<std::uint32_t>(4 + bodyLen);
-    putU16Le(out + 0, kCtrlInputData);
-    putU16Le(out + 2, packetLen);
-    putU32Be(out + 4, inputSize);
-    putU32Le(out + 8, inputType);
+    bits::storeLe16(out + 0, kCtrlInputData);
+    bits::storeLe16(out + 2, packetLen);
+    bits::storeBe32(out + 4, inputSize);
+    bits::storeLe32(out + 8, inputType);
     return 12;
 }
 
@@ -62,8 +41,8 @@ std::size_t writeInputHeader(std::uint8_t* out, std::uint32_t inputType,
 // count of everything AFTER these first 4 bytes.
 std::size_t writeControlHeader(std::uint8_t* out, std::uint16_t type,
                                std::size_t bodyLen) noexcept {
-    putU16Le(out + 0, type);
-    putU16Le(out + 2, static_cast<std::uint16_t>(bodyLen));
+    bits::storeLe16(out + 0, type);
+    bits::storeLe16(out + 2, static_cast<std::uint16_t>(bodyLen));
     return 4;
 }
 
@@ -71,7 +50,7 @@ std::size_t writeControlHeader(std::uint8_t* out, std::uint16_t type,
 void putFloatLe(std::uint8_t* p, float v) noexcept {
     std::uint32_t bits = 0;
     std::memcpy(&bits, &v, sizeof(bits));
-    putU32Le(p, bits);
+    bits::storeLe32(p, bits);
 }
 
 } // namespace
@@ -79,31 +58,31 @@ void putFloatLe(std::uint8_t* p, float v) noexcept {
 std::size_t encodeControllerMulti(const ControllerState& s, std::uint8_t* out) noexcept {
     // 26-byte struct body follows the 4-byte input-type field.
     std::size_t off = writeInputHeader(out, kInputControllerMulti, 26);
-    putU16Le(out + off, kMultiHeader);
+    bits::storeLe16(out + off, kMultiHeader);
     off += 2;
-    putU16Le(out + off, s.controllerNumber);
+    bits::storeLe16(out + off, s.controllerNumber);
     off += 2;
-    putU16Le(out + off, s.activeGamepadMask);
+    bits::storeLe16(out + off, s.activeGamepadMask);
     off += 2;
-    putU16Le(out + off, kMultiMid);
+    bits::storeLe16(out + off, kMultiMid);
     off += 2;
-    putU16Le(out + off, s.buttonFlags);
+    bits::storeLe16(out + off, s.buttonFlags);
     off += 2;
     out[off++] = s.leftTrigger;
     out[off++] = s.rightTrigger;
-    putU16Le(out + off, static_cast<std::uint16_t>(s.leftStickX));
+    bits::storeLe16(out + off, static_cast<std::uint16_t>(s.leftStickX));
     off += 2;
-    putU16Le(out + off, static_cast<std::uint16_t>(s.leftStickY));
+    bits::storeLe16(out + off, static_cast<std::uint16_t>(s.leftStickY));
     off += 2;
-    putU16Le(out + off, static_cast<std::uint16_t>(s.rightStickX));
+    bits::storeLe16(out + off, static_cast<std::uint16_t>(s.rightStickX));
     off += 2;
-    putU16Le(out + off, static_cast<std::uint16_t>(s.rightStickY));
+    bits::storeLe16(out + off, static_cast<std::uint16_t>(s.rightStickY));
     off += 2;
-    putU16Le(out + off, kMultiTailA);
+    bits::storeLe16(out + off, kMultiTailA);
     off += 2;
-    putU16Le(out + off, s.buttonFlags2);
+    bits::storeLe16(out + off, s.buttonFlags2);
     off += 2;
-    putU16Le(out + off, kMultiTailB);
+    bits::storeLe16(out + off, kMultiTailB);
     off += 2;
     return off; // == kControllerMultiBytes
 }
@@ -125,7 +104,7 @@ std::vector<std::uint8_t> encodeControllerArrival(std::uint8_t controllerNumber,
     out[off++] = controllerType;
     out[off++] = capabilities;
     out[off++] = 0;
-    putU32Le(out.data() + off, supportedButtons);
+    bits::storeLe32(out.data() + off, supportedButtons);
     return out;
 }
 
@@ -139,7 +118,7 @@ std::vector<std::uint8_t> encodeControllerTouch(std::uint8_t controllerNumber,
     out[off++] = eventType;
     out[off++] = 0;
     out[off++] = 0;
-    putU32Le(out.data() + off, pointerId);
+    bits::storeLe32(out.data() + off, pointerId);
     off += 4;
     putFloatLe(out.data() + off, x);
     off += 4;
@@ -184,12 +163,8 @@ std::vector<std::uint8_t> encodeMouseMoveRel(std::int16_t dx, std::int16_t dy) {
     // body: dx(2 BE) + dy(2 BE) = 4.
     std::vector<std::uint8_t> out(12 + 4);
     std::size_t off = writeInputHeader(out.data(), kInputMouseMoveRel, 4);
-    const auto udx = static_cast<std::uint16_t>(dx);
-    const auto udy = static_cast<std::uint16_t>(dy);
-    out[off++] = static_cast<std::uint8_t>((udx >> 8) & 0xFF);
-    out[off++] = static_cast<std::uint8_t>(udx & 0xFF);
-    out[off++] = static_cast<std::uint8_t>((udy >> 8) & 0xFF);
-    out[off++] = static_cast<std::uint8_t>(udy & 0xFF);
+    bits::storeBe16(out.data() + off, bits::asUint16(dx));
+    bits::storeBe16(out.data() + off + 2, bits::asUint16(dy));
     return out;
 }
 
@@ -204,8 +179,8 @@ constexpr std::uint32_t kPeriodicPingWord = 4;
 std::vector<std::uint8_t> encodePeriodicPing() {
     std::vector<std::uint8_t> out(4 + kPeriodicPingBody);
     const std::size_t off = writeControlHeader(out.data(), kCtrlPeriodicPing, kPeriodicPingBody);
-    putU32Le(out.data() + off, kPeriodicPingWord);
-    putU32Le(out.data() + off + 4, 0);
+    bits::storeLe32(out.data() + off, kPeriodicPingWord);
+    bits::storeLe32(out.data() + off + 4, 0);
     return out;
 }
 
@@ -218,7 +193,7 @@ std::vector<std::uint8_t> encodeRtpPing(const std::string& pingPayload, std::uin
     if (!pingPayload.empty()) {
         std::vector<std::uint8_t> out(20, 0);
         std::memcpy(out.data(), pingPayload.data(), std::min<std::size_t>(16, pingPayload.size()));
-        putU32Le(out.data() + 16, seq);
+        bits::storeLe32(out.data() + 16, seq);
         return out;
     }
     return {'P', 'I', 'N', 'G'};
@@ -229,7 +204,7 @@ std::vector<std::uint8_t> encodeTermination() {
     std::vector<std::uint8_t> out(4 + 4);
     std::size_t off = writeControlHeader(out.data(), kCtrlTermination, 4);
     // 0x80030023 big-endian (the "graceful" reason).
-    putU32Be(out.data() + off, 0x80030023u);
+    bits::storeBe32(out.data() + off, 0x80030023u);
     return out;
 }
 
@@ -243,8 +218,8 @@ std::vector<std::uint8_t> encodeTermination() {
 std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_t len) {
     if (buf == nullptr || len < 4) { return std::nullopt; }
     ServerEvent ev;
-    ev.rawType = readU16Le(buf);
-    const std::uint16_t bodyLen = readU16Le(buf + 2);
+    ev.rawType = bits::loadLe16(buf);
+    const std::uint16_t bodyLen = bits::loadLe16(buf + 2);
     const std::uint8_t* body = buf + 4;
     const std::size_t avail = len - 4;
     const std::size_t bl = bodyLen <= avail ? bodyLen : avail;
@@ -258,26 +233,26 @@ std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_
         // unused(4) + ctrl(2) + low(2) + high(2)
         if (bl >= 10) {
             ev.type = ServerEventType::Rumble;
-            ev.rumble.controllerNumber = readU16Le(body + 4);
-            ev.rumble.lowFreq = readU16Le(body + 6);
-            ev.rumble.highFreq = readU16Le(body + 8);
+            ev.rumble.controllerNumber = bits::loadLe16(body + 4);
+            ev.rumble.lowFreq = bits::loadLe16(body + 6);
+            ev.rumble.highFreq = bits::loadLe16(body + 8);
         }
         break;
     case kCtrlRumbleTriggers:
         // ctrl(2) + left(2) + right(2)
         if (bl >= 6) {
             ev.type = ServerEventType::RumbleTriggers;
-            ev.triggers.controllerNumber = readU16Le(body + 0);
-            ev.triggers.left = readU16Le(body + 2);
-            ev.triggers.right = readU16Le(body + 4);
+            ev.triggers.controllerNumber = bits::loadLe16(body + 0);
+            ev.triggers.left = bits::loadLe16(body + 2);
+            ev.triggers.right = bits::loadLe16(body + 4);
         }
         break;
     case kCtrlMotionEvent:
         // ctrl(2) + rate(2) + type(1)
         if (bl >= 5) {
             ev.type = ServerEventType::MotionEvent;
-            ev.motion.controllerNumber = readU16Le(body + 0);
-            ev.motion.reportRateHz = readU16Le(body + 2);
+            ev.motion.controllerNumber = bits::loadLe16(body + 0);
+            ev.motion.reportRateHz = bits::loadLe16(body + 2);
             ev.motion.motionType = body[4];
         }
         break;
@@ -285,7 +260,7 @@ std::optional<ServerEvent> decodeServerEvent(const std::uint8_t* buf, std::size_
         // ctrl(2) + r(1) + g(1) + b(1)
         if (bl >= 5) {
             ev.type = ServerEventType::RgbLed;
-            ev.led.controllerNumber = readU16Le(body + 0);
+            ev.led.controllerNumber = bits::loadLe16(body + 0);
             ev.led.r = body[2];
             ev.led.g = body[3];
             ev.led.b = body[4];

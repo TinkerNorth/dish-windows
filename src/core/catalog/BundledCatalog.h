@@ -107,19 +107,24 @@ inline std::optional<QStringList> typeFeatureSlugs(const QString& slug) {
 
 // An id outside the bundled range degrades to the xbox360 set, the least-capable
 // baseline, rather than claiming features an unknown type may not have.
-inline QStringList typeFeatureSlugsById(int typeId) {
+inline QLatin1StringView typeSlugById(int typeId) {
     switch (typeId) {
     case proto::kControllerTypePlayStation:
-        return *typeFeatureSlugs(kSlugDs4);
+        return kSlugDs4;
     case proto::kControllerTypeDualSense:
-        return *typeFeatureSlugs(kSlugDualSense);
+        return kSlugDualSense;
     case proto::kControllerTypeSwitchPro:
-        return *typeFeatureSlugs(kSlugSwitchPro);
+        return kSlugSwitchPro;
     case proto::kControllerTypeDualSenseEdge:
-        return *typeFeatureSlugs(kSlugDualSenseEdge);
+        return kSlugDualSenseEdge;
     default:
-        return *typeFeatureSlugs(kSlugXbox360);
+        return kSlugXbox360;
     }
+}
+
+inline QStringList typeFeatureSlugsById(int typeId) {
+    // Every slug typeSlugById names is one typeFeatureSlugs knows, so the empty set is unreachable.
+    return typeFeatureSlugs(QString(typeSlugById(typeId))).value_or(QStringList{});
 }
 
 } // namespace dish::catalog

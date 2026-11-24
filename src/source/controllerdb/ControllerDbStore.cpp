@@ -189,6 +189,12 @@ void ControllerDbStore::setChecking(bool checking) {
 void ControllerDbStore::recordCheck(std::int64_t atMs, cdb::CheckResult result) {
     prefs_->setLastCheck(ControllerDbLastCheck{atMs, pathOf(cdb::checkResultToken(result))});
     publish();
+    // Every result, so the installed-app smoke test can tell a check that reached the host over
+    // TLS (upToDate, updated) from one that did not (offline).
+    const int activeVersion = active_ != nullptr ? active_->dbVersion() : 0;
+    qCInfo(lcDishControllerDb).nospace().noquote()
+        << "controller database: check " << pathOf(cdb::checkResultToken(result))
+        << "; in force dbVersion " << activeVersion;
 }
 
 void ControllerDbStore::publish() {

@@ -10,7 +10,7 @@ if(NOT Catch2_FOUND)
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG        v3.5.4
+        GIT_TAG        v3.16.1
         SYSTEM)
     FetchContent_MakeAvailable(Catch2)
     list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
@@ -57,6 +57,8 @@ set(DISH_TEST_SOURCES
     test_atomic_counter.cpp
     test_hex.cpp
     test_endian.cpp
+    test_byte_boundaries.cpp
+    test_bits.cpp
     test_models.cpp
     test_beacon_parser.cpp
     test_mdns_discovery.cpp

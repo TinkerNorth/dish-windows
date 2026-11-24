@@ -303,7 +303,8 @@ class MoonlightManager : public QObject {
 
     // The session's six signals, each with a name. The record* pair hold their reference into
     // probes_ and emit nothing, so the emitting half cannot leave it dangling.
-    bool ensureIdentity();
+    // The client identity, loaded or created on first use; nullptr when neither worked.
+    const moonlight::Identity* ensureIdentity();
     void wireSession(const QString& id, MoonlightSession* session);
     void onSessionPhaseChanged(const QString& id, MoonlightSession* session);
     void onSessionPairingFinished(const QString& id, bool ok);

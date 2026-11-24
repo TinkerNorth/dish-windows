@@ -29,8 +29,8 @@ class QTimer;
 
 namespace dish::net {
 
-// quint8 rather than std::uint8_t on the enums here: lupdate 6.7.3, the CI pin, loses this
-// file's namespace after the "::" and re-files every tr() string in the class under a bare name.
+// quint8 rather than std::uint8_t on the enums here: lupdate before 6.9 loses this file's
+// namespace after the "::" and re-files every tr() string in the class under a bare name.
 enum class ConnectionEventKind : quint8 { PairingRequired, Error };
 
 // Reverse (host-initiated) pairing: the dish shows a clientPin, the operator

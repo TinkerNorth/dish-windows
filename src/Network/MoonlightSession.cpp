@@ -3,6 +3,7 @@
 
 #include "Network/MoonlightSession.h"
 
+#include "core/Bits.h"
 #include "core/moonlight/MoonlightCrypto.h"
 #include "core/moonlight/MoonlightPairing.h"
 #include "repository/MoonlightHostRepository.h"
@@ -58,7 +59,7 @@ constexpr std::uint32_t kSpeakerFrontRight = 0x2;
 constexpr std::uint32_t kStereoChannelCount = 2;
 
 constexpr std::uint32_t surroundAudioInfo(std::uint32_t channelMask, std::uint32_t channelCount) {
-    return (channelMask << 16) | channelCount;
+    return (channelMask << 16U) | channelCount;
 }
 
 constexpr std::uint32_t kStereoAudio =
@@ -497,10 +498,7 @@ void MoonlightSession::beginLaunch() {
     const auto rikeyBytes = moonlight::crypto::randomBytes(16);
     rikey_ = toKey16(rikeyBytes);
     const auto idBytes = moonlight::crypto::randomBytes(4);
-    rikeyId_ = static_cast<std::uint32_t>(idBytes[0]) |
-               (static_cast<std::uint32_t>(idBytes[1]) << 8) |
-               (static_cast<std::uint32_t>(idBytes[2]) << 16) |
-               (static_cast<std::uint32_t>(idBytes[3]) << 24);
+    rikeyId_ = bits::loadLe32(idBytes.data());
 
     const DisplayMode mode = requestedDisplayMode();
     const QString modeString =

@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include "core/Bits.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -163,15 +165,14 @@ struct ControllerState {
 inline constexpr std::uint16_t kSatelliteOnlyButtonBits = 0x0800;
 
 inline constexpr std::uint16_t sanitizeButtonFlags(std::uint16_t xusbButtons) {
-    return static_cast<std::uint16_t>(xusbButtons & ~kSatelliteOnlyButtonBits);
+    return bits::low16(bits::u32(xusbButtons) & ~bits::u32(kSatelliteOnlyButtonBits));
 }
 
 // The touchpad click as a pad frame carries it: BTN_TOUCHPAD (0x100000) lives in the high word,
 // so it is a buttonFlags2 bit, on for every frame while the click is held. The click has no
 // packet of its own in the protocol; a click edge is a frame.
 inline constexpr std::uint16_t touchpadClickFlags2(bool clickHeld) {
-    return clickHeld ? static_cast<std::uint16_t>(kBtnTouchpad >> 16)
-                     : static_cast<std::uint16_t>(0);
+    return clickHeld ? bits::low16(kBtnTouchpad >> 16U) : std::uint16_t{0};
 }
 
 // Hot path: encode `state` into `out` at fixed offsets, zero heap allocation.

@@ -51,8 +51,11 @@ maths is unit-tested (`test_window_hit_test`), the interaction is not.
 
 ## Setup wizard
 
-Five pages over three stages: Input, Destination, then Type, Feel and Review.
-Needs a real pad and a reachable satellite.
+Six steps over three stages: Input, Destination, then Type, Session, Feel and
+Review. The Session step (what the host will run) exists only for a Moonlight
+destination; for a satellite the wizard steps over it in both directions and
+the stage-3 pips count three, not four. Needs a real pad and a reachable
+satellite, and a Moonlight host for the Session items.
 
 - [ ] **Entry points.** The rail's `Set up` action, Home's `+ Add` card, and an
       unbound pad's `Bind…` all open the wizard, and all of them land on
@@ -61,7 +64,10 @@ Needs a real pad and a reachable satellite.
       and starts on page 2. Back to page 1 still works.
 - [ ] **Banner fills in.** The pad, wire and host slots of the banner fill as
       answers land, and the stage markers advance.
-- [ ] **Nothing writes early.** Walk pages 1 to 4 and cancel. No binding was
+- [ ] **Session step only for Moonlight.** Pick a satellite: Next on Type goes
+      straight to Feel, Back on Feel straight to Type. Pick a Moonlight host:
+      the Session step appears between them and its pip is counted.
+- [ ] **Nothing writes early.** Walk every step up to Review and cancel. No binding was
       created, no type changed, no USB path switched.
 - [ ] **Discard confirm.** With answers entered, press Esc, click a rail entry,
       and close the window. Each raises the discard confirm, and Cancel keeps
@@ -107,11 +113,10 @@ Needs a pad and a satellite. Nothing here can be faked in CI.
       then System. The whole window, including the title bar and the caption
       buttons, repaints immediately each time. No surface is left on the old
       palette.
-- [ ] **System resolves correctly.** With mode System, set Windows to Dark and
-      restart the app: the body is dark. Set Windows to Light and restart: the
-      body is light. There is no live OS-appearance watcher, so a flip while
-      the app is running is expected to take effect only on the next launch or
-      the next explicit toggle.
+- [ ] **System follows Windows live.** With mode System, switch Windows between
+      Dark and Light (Settings, Personalization, Colors) while Dish is open.
+      The whole window repaints to match without a restart, and the choice in
+      Dish still reads System.
 - [ ] **Light palette is readable.** In Light, walk every page. No text or
       glyph washes out; brand glyphs stay legible on white cards.
 - [ ] **Reduced motion.** Turn off "Show animations in Windows" in Windows
@@ -119,13 +124,59 @@ Needs a pad and a satellite. Nothing here can be faked in CI.
       become a static filled track, the rail collapse stops animating, and no
       glyph animates.
 
+## Hosts and connections
+
+- [ ] **Connections lists found and paired.** Open Connections: found
+      satellites list under Found, a paired one shows its latency and its link
+      chip, and Forget asks first ("Forget <name>?", the pairing key is
+      deleted) and Cancel keeps it.
+- [ ] **Moonlight hosts.** Connections, *Moonlight hosts*: a host on the LAN is
+      found, pairing shows the PIN to type on the host, and after pairing the
+      host's apps load and one can be started as a binding's destination.
+- [ ] **Microphone chip.** With a mic-capable pad (DualSense, DualShock 4)
+      bound and its microphone on, the header shows the microphone chip; one
+      click mutes every armed microphone and the chip says so.
+
+## Diagnostics
+
+Settings, *Diagnostics…*. Needs a pad and a satellite.
+
+- [ ] **Sessions and controllers.** The page shows each host's session
+      (protocol, epoch, round trip, missed heartbeats) and each controller down
+      to the wire, and the log under them grows as you plug a pad in and out.
+- [ ] **Controller inspector.** From a controller's card, *Controller
+      inspector*: the live input moves with the sticks and buttons, and the
+      drift and range tests each finish with a verdict.
+- [ ] **The bench.** In the inspector, run every test the pad's path offers
+      (rumble, trigger rumble, light bar, player LEDs, adaptive triggers, mic
+      lamp, speaker, HD haptics, microphone level). Each one does what its name
+      says on the pad, and its verdict (worked, did not work) is recorded on
+      the line under it. A path that cannot carry an item does not offer it.
+- [ ] **Report a problem.** Settings, *Report a problem*: pick a category, let
+      the capture record the pad at rest, and the diagnostics file is produced
+      and handed to the mail client.
+
+## Updates and the controller list
+
+- [ ] **Controller list.** Settings shows "Controller list v<N> · last checked
+      ..." with the result beside the time, and the version is the one
+      `https://dish.tinkernorth.com/controllers/v1/manifest.json` serves once
+      the app has been running a few seconds.
+- [ ] **Update pill.** Install the previous release with `dish-setup.exe`, then
+      start it: within a minute the header shows "Update available", the
+      popover offers Download, Release notes and Skip this version, and after
+      the download "Restart now" installs the new release and comes back on
+      it.
+- [ ] **Portable copy.** Run the unzipped `dish-windows.zip` of the previous
+      release: the popover offers "Open download page" instead of a download.
+
 ## Transients and guards
 
 - [ ] **Overflow menus open with a visible width.** On Connections, click the
       `⋯` on a host card: the Forget menu appears, sized to its text. On Home,
       open a slot row's context menu the same way. A Menu takes its width from
       its background, so a restyled background with no `implicitWidth` opens the
-      menu at zero width — it takes focus and draws nothing, which looks exactly
+      menu at zero width: it takes focus and draws nothing, which looks exactly
       like a dead button. Check this after any change to a Menu background.
 - [ ] **One toast host.** Trigger a failure (unplug the network mid-connect).
       Exactly one toast appears, bottom-centre, and it does not block the
@@ -160,7 +211,7 @@ SYSTEM or DISPLAY request. None of this is reachable from CI.
       back within a second.
 - [ ] **A resting pad does not hold it.** With a USB-direct DualSense or DS4
       claimed (which gets no deadzone), leave it on the desk under While
-      playing. The request must still expire — a drifting stick must not read
+      playing. The request must still expire: a drifting stick must not read
       as activity.
 - [ ] **While connected ignores stillness.** Set While connected and leave the
       pad untouched well past the window. The request stays.

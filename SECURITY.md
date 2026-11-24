@@ -1,8 +1,21 @@
 # Security policy
 
-This file covers the Dish Windows client. The same policy and the same
-reporting channel apply across the TinkerNorth clients and the
-[`satellite`](https://github.com/TinkerNorth/satellite) server.
+This file covers Dish for Windows. The same policy and the same reporting
+channel apply across the TinkerNorth family, each repository with its own copy
+of this file:
+
+- [Satellite](https://github.com/TinkerNorth/satellite), the server (Windows, Linux, macOS)
+- [Dish for Android](https://github.com/TinkerNorth/dish-android)
+- [Dish for iOS](https://github.com/TinkerNorth/dish-ios)
+- [Dish for macOS](https://github.com/TinkerNorth/dish-mac)
+- [Dish for Windows](https://github.com/TinkerNorth/dish-windows), this repository
+- [Dish for Linux](https://github.com/TinkerNorth/dish-linux)
+- The website, <https://dish.tinkernorth.com>
+
+This file is the source of truth for reporting a vulnerability in Dish for
+Windows, what happens to the report, and how anyone can verify a release.
+[`CONTRIBUTING.md`](CONTRIBUTING.md), "Security", has the local commands for
+the same checks CI runs.
 
 ## Reporting a vulnerability
 
@@ -21,7 +34,7 @@ on-LAN threat model below already assumes an attacker with packet-injection
 ability on the local network; that is the documented design boundary, not a
 bug.
 
-### Response targets
+### Response SLA
 
 | Severity | Acknowledgement | Initial assessment | Fix target |
 |---|---|---|---|
@@ -35,27 +48,37 @@ regardless.
 ### Scope
 
 In scope: this repository, the release artifacts attached to its GitHub
-Releases, the wire protocol, and the pairing flow.
+Releases, the wire protocol (protocol 4; the single source of truth is
+[`satellite/docs/contract.md`](https://github.com/TinkerNorth/satellite/blob/main/docs/contract.md),
+and [`docs/contract.md`](docs/contract.md) maps it onto this client), and the
+pairing flow.
 
 Out of scope:
 
 - Anything that requires the attacker to already have local privileges on the
   user's PC (Administrator, or the ability to write to `%LOCALAPPDATA%` or the
   install directory).
-- The ViGEmBus driver the server side depends on. File with
-  [nefarius/ViGEmBus](https://github.com/nefarius/ViGEmBus).
+- The virtual-controller drivers the server side depends on (ViGEmBus,
+  HIDMaestro). File with [nefarius/ViGEmBus](https://github.com/nefarius/ViGEmBus)
+  or the HIDMaestro project.
 - Denial of service by raw network flooding. The data plane is unauthenticated
   UDP with no rate limit, which is a deliberate latency trade-off; mitigation
   belongs in the network fabric.
 
 ## Supported versions
 
-The latest minor release is supported, the previous minor receives high and
-critical backports for 90 days, and patch releases are issued on demand for the
-latest minor. 1.0.0 is the first release, so as of it there is no previous
-minor to backport to.
+| Product | Supported | Platform floor |
+|---|---|---|
+| Dish for Windows | latest minor; previous minor for 90 days | Windows 10 1809 (build 17763) or Windows 11, x64; ARM64 runs the x64 build under emulation |
+| Satellite | latest minor; previous minor for 90 days | see its `SECURITY.md` |
+| Dish for Android | latest minor; previous minor for 90 days | Android 7.0 (API 24) |
+| Dish for iOS | latest minor; previous minor for 90 days | iOS 26 |
+| Dish for macOS | latest minor; previous minor for 90 days | macOS 13 |
+| Dish for Linux | latest minor; previous minor for 90 days | see its `SECURITY.md` |
 
-Windows 10 and Windows 11 x64 are the supported platforms.
+For Dish for Windows: the latest minor is 2.9, so 2.9.x is supported and 2.8.x
+receives high and critical fixes for 90 days after 2.9.0 is released. Patch
+releases (`X.Y.Z+1`) are issued on demand for the latest minor.
 
 ## Threat model
 
@@ -130,72 +153,157 @@ server spend cycles on packets that fail authentication.
   DPAPI for your account, which keeps another account or a copied hive out
   and does nothing against a program running as you.
 
-## How CI keeps vulnerable code out
+## How CI prevents vulnerable code from shipping
 
 On every pull request and every push to `main`, blocking:
 
 - Action-pin lint. Every `uses:` line must reference a 40-char commit SHA.
 - Allowlist expiry. `.security/allowlist.yaml` entries must carry `cve`,
   `reason`, `owner`, and an unexpired `expires`.
-- OSV-Scanner over the worktree.
-- Gitleaks secret scan.
+- OSV-Scanner 2.7.1 over the worktree and over every library `dish.exe` links,
+  named by the upstream commit its pin resolves to (`scripts/osv-lockfile.sh`:
+  the vcpkg ports at the baseline, ENet, Qt), with `.security/allowlist.yaml`
+  as the only place a finding can be accepted.
+- gitleaks 8.30.1 over the full history.
 - CodeQL `cpp` analysis, `security-extended` query pack, on a Windows runner
   so MSVC-only constructs are covered; the results are uploaded to code
   scanning.
-- GitHub `dependency-review-action` on pull requests, once the repository's
-  Dependency graph is enabled in its settings; until then the job is switched
-  off in `security.yml`, because the action fails without the graph.
+- GitHub `dependency-review-action` on pull requests, blocking on a
+  high-severity finding in the dependencies a pull request changes.
 
-`security.yml` also runs weekly on a schedule. On a release tag, `release.yml`
-re-runs the action-pin lint, allowlist expiry, OSV-Scanner, and gitleaks jobs
-against the tagged commit before it builds anything.
+`security.yml` also runs weekly on a schedule.
 
-## What a release actually contains
+On a release tag, `release.yml`, also blocking:
 
-A GitHub Release for a `MAJOR.MINOR.PATCH` tag carries five files:
+- Re-runs the action-pin lint, allowlist expiry, OSV-Scanner and gitleaks
+  against the tagged commit before it builds anything.
+- Builds through the same presets and scripts as pull-request CI, runs the
+  portable bundle and the install image, and round-trips the installer it is
+  about to publish.
+- Signs `dish-setup.exe` with Authenticode when the `WIN_SIGN_CERT_BASE64` and
+  `WIN_SIGN_PASSWORD` secrets exist, and releases it unsigned with a warning
+  when they do not (the repository variable `ENFORCE_RELEASE_SIGNING=true`
+  turns that into a failure).
+- The shared harden workflow (`_release_harden.yml`, byte-identical across
+  the fleet): Grype 0.122.1 fails on CRITICAL or HIGH, Syft 1.57.2 writes the
+  SPDX-JSON and CycloneDX-JSON SBOMs, `SHA256SUMS` covers every asset and SBOM,
+  and cosign 3.1.4 signs each file keyless into one Sigstore bundle
+  (`<file>.sigstore.json`). Every pull request runs the same workflow in
+  dry-run mode on that pull request's own installer and zip.
+- SLSA build provenance from `slsa-framework/slsa-github-generator`,
+  `dish-windows.intoto.jsonl`.
+- Uploads everything to a draft release and publishes it only after the
+  release measurements pass, so `releases/latest` never points at a
+  half-uploaded release.
 
-- `dish-setup.exe`: the installer, compiled by Inno Setup from
-  [`installer.iss`](installer.iss). A single self-extracting exe carrying the
-  whole install image; behaviour and command line are documented in
-  [`docs/INSTALLER.md`](docs/INSTALLER.md).
-- `dish-windows.zip`: `dish.exe`, the Qt runtime DLLs and QML modules staged by
-  `windeployqt`, and a `SHA256SUMS` text file listing every other file in the
-  bundle.
-- `latest.json`: the update manifest every installed copy polls. It names the
-  version, and the URL, size and SHA-256 of the two downloadable assets.
-- `SHA256SUMS`: a release asset in its own right, listing the SHA-256 of
-  `dish-setup.exe`, `dish-windows.zip`, `latest.json` and the SBOM. This is a
-  different file from the one inside the zip, which covers the bundle's
-  contents.
-- `dish-windows.spdx.json`: an SPDX-JSON SBOM of the bundle, generated by Syft
-  via `anchore/sbom-action`.
+## Verifying a release artifact (consumer recipe)
 
-Verify the installer:
+Releases cut after the shared release-hardening workflow landed carry one
+Sigstore bundle per file (`<file>.sigstore.json`); releases up to 2.8.0 carry a
+`.sig` and a `.crt` per file and are verified the second way below. The tag is
+bare `X.Y.Z` in every command.
 
-```powershell
-$expected = (Get-Content .\SHA256SUMS |
-    Where-Object { $_ -match 'dish-setup\.exe' }).Split()[0]
-$actual = (Get-FileHash .\dish-setup.exe -Algorithm SHA256).Hash.ToLower()
-if ($expected -ne $actual) { throw "checksum mismatch" } else { "ok" }
+### 0) Pre-requisites
+
+A pinned cosign 3, checked against the upstream checksum file:
+
+```bash
+curl -fsSLO https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-darwin-arm64
+echo "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4  cosign-darwin-arm64" | shasum -a 256 -c -
+chmod +x cosign-darwin-arm64 && mv cosign-darwin-arm64 cosign
+# Linux: cosign-linux-amd64, 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+# Windows: cosign-windows-amd64.exe, cbe953787074611f1334cbf37dc1cf953995bb8c45398eb4fc7bb781d29c1f2a
+# (all three from https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign_checksums.txt)
 ```
 
-Or the portable bundle, whose checksums travel inside it:
+### 1) Download every file from the Release
+
+```bash
+TAG=X.Y.Z
+REPO=dish-windows
+gh release download "$TAG" -R "TinkerNorth/$REPO" -D "$REPO-$TAG"
+cd "$REPO-$TAG"
+```
+
+A release carries `dish-setup.exe`, `dish-windows.zip`, `latest.json`,
+`dish-windows-components.spdx.json` (the bill of materials of what the bundle
+ships, from releases after 2.8.0), `SHA256SUMS`, the Syft SBOMs
+`dish-windows.sbom.spdx.json` and `dish-windows.sbom.cdx.json`, their
+signatures, `dish-windows.intoto.jsonl` (the SLSA provenance) and
+`measurements-<version>.json` / `.md`. The measurements are attached after the
+harden step, so neither the checksums nor the signatures cover them.
+
+### 2) Releases after 2.8.0: one bundle per file
+
+```bash
+# SHA256SUMS was signed by this repository's release workflow, on this tag.
+cosign verify-blob \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity "https://github.com/TinkerNorth/$REPO/.github/workflows/_release_harden.yml@refs/tags/$TAG" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+
+# Every file you downloaded matches it (macOS: shasum -a 256 --ignore-missing -c).
+sha256sum --ignore-missing -c SHA256SUMS
+```
+
+The identity is exact, not a regular expression, and names
+`_release_harden.yml` because the certificate's identity is the workflow that
+ran the signing step. To verify one file on its own, run the same
+`cosign verify-blob` with `--bundle <file>.sigstore.json` and `<file>`. This
+form applies from 2.9.0, the first release cut with it. It had not been run when
+2.9.0 was prepared, because only the release workflow writes the bundles.
+
+### 3) Releases up to 2.8.0: `.sig` and `.crt`
+
+cosign 3 still verifies them with the deprecated flags (it prints two
+deprecation lines); the identity is the same harden workflow:
+
+```bash
+cosign verify-blob \
+  --certificate SHA256SUMS.crt --signature SHA256SUMS.sig \
+  --certificate-identity "https://github.com/TinkerNorth/$REPO/.github/workflows/_release_harden.yml@refs/tags/$TAG" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+shasum -a 256 --ignore-missing -c SHA256SUMS
+```
+
+Run against 2.8.0 on 2026-11-23 with the cosign 3.1.4 above: `Verified OK`, and
+every downloaded file `OK`.
+
+### 4) The SLSA L3 provenance
+
+`dish-windows.intoto.jsonl` is a Sigstore bundle whose statement names every
+released file by SHA-256. It is signed by the SLSA generator at the exact
+commit `release.yml` pins, which `slsa-verifier` refuses ("invalid ref")
+because that is not a release tag, so verify it with cosign:
+
+```bash
+cosign verify-blob-attestation \
+  --bundle dish-windows.intoto.jsonl --type slsaprovenance \
+  --certificate-identity "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  dish-setup.exe
+```
+
+Run against 2.8.0's `dish-setup.exe` with cosign 3.1.4: `Verified OK`. The
+commit is the generator v2.1.0 `release.yml` pins; `scripts/check-versions.ps1`
+fails a change that moves one without the other.
+
+### 5) Check the portable bundle's own checksums
+
+The zip carries a `SHA256SUMS` of its contents. It is not signed, but the zip
+that carries it is:
 
 ```powershell
 Expand-Archive .\dish-windows.zip -DestinationPath .\dish-windows
-$expected = Get-Content .\dish-windows\SHA256SUMS |
-    Where-Object { $_ -match 'dish\.exe' } |
-    ForEach-Object { $_.Split()[0] }
-$actual = (Get-FileHash .\dish-windows\dish.exe -Algorithm SHA256).Hash.ToLower()
-if ($expected -ne $actual) { throw "checksum mismatch" } else { "ok" }
+Push-Location .\dish-windows
+Get-Content .\SHA256SUMS | ForEach-Object {
+    $hash, $path = $_ -split '  ', 2
+    if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLower() -ne $hash) { throw "mismatch: $path" }
+}
+Pop-Location
 ```
-
-Understand what those checks are worth. Nothing signs `SHA256SUMS`, in either
-location, and the in-zip copy lives inside the file it describes. They catch a
-truncated or corrupted download. They do not prove an artifact came from this
-project, because anyone who could replace an asset could replace the checksum
-file next to it. Until the gaps below are closed, the trust anchor is the GitHub
-Release page itself.
 
 ## Auto-update trust model
 
@@ -235,9 +343,11 @@ less than or equal to a staged version discards that stage. The window in which
 a pulled build can still be applied is a cold start before the next successful
 check. The build applied in that window is authentic, just withdrawn.
 
-**What this does not give you.** The binaries are unsigned, so nothing in the
-chain proves authorship; it proves that the file the manifest described is the
-file that ran. The manifest itself is only as trustworthy as HTTPS to
+**What this does not give you.** The binaries carry no Authenticode signature
+(see Known gaps), so nothing the updater checks proves authorship; it proves
+that the file the manifest described is the file that ran. The cosign
+signatures on the release assets do prove it, but the updater does not check
+them. The manifest itself is only as trustworthy as HTTPS to
 github.com and GitHub's control of the release. The staging directory is
 `%LOCALAPPDATA%\Dish\updates\`, which is user-writable by construction: a
 process already running as you can replace the staged installer, and the boot
@@ -247,10 +357,10 @@ class of finding is out of scope above.
 
 **Elevation.** A per-user install never raises UAC, at install or at update. An
 all-users install applies its update by self-elevating exactly once, and that
-prompt asks the user to consent to an unsigned binary running from a
-user-writable directory. That is inherent without code signing, it is stated
-here rather than buried, and it is one more reason the per-user scope is the
-default.
+prompt asks the user to consent to a binary with no Authenticode signature
+running from a user-writable directory. That is inherent until the installer is
+signed, it is stated here rather than buried, and it is one more reason the
+per-user scope is the default.
 
 **Turning it off.** *Check for updates automatically* in Settings stops every
 update-related request. The portable zip has no updater at all: it detects the
@@ -259,24 +369,27 @@ notify-only.
 
 ## Known gaps
 
-- **No release signing.** Neither `dish-setup.exe` nor `dish.exe` is
-  Authenticode-signed, so Microsoft Defender SmartScreen shows "Windows
-  protected your PC" the first time a freshly downloaded installer from a new
-  release is run, and the way through is *More info*, then *Run anyway*. There
-  are no cosign keyless signatures for any asset. Automatic updates are not
-  interposed by SmartScreen, because a file an app writes itself carries no mark
-  of the web; that makes the checksum chain above the only thing standing
-  between a release and an installed machine, which is the strongest argument
-  for closing this gap.
-- **No build provenance.** SLSA provenance is not generated. There is no
-  cryptographic link from an artifact back to the workflow run and commit that
-  produced it.
-- **No artifact vulnerability scan at release.** Dependencies are scanned in
-  source form by OSV-Scanner and the dependency review; the built bundle is not
-  scanned by Grype or an equivalent.
-- **One SBOM format.** SPDX-JSON only. There is no CycloneDX SBOM.
-- **`SHA256SUMS` is unsigned and in-band.** See above.
+- **No Authenticode signature yet, by design until a certificate exists.**
+  Signing is optional: `release.yml` signs `dish-setup.exe` whenever the
+  `WIN_SIGN_CERT_BASE64` and `WIN_SIGN_PASSWORD` secrets exist and otherwise
+  releases it unsigned with a warning (the repository variable
+  `ENFORCE_RELEASE_SIGNING=true` turns that into a failure). Neither secret is
+  configured: 2.8.0's run warned "Stable tag 2.8.0 is being released with an
+  UNSIGNED installer. Missing: WIN_SIGN_CERT_BASE64 WIN_SIGN_PASSWORD", and its
+  installer has an empty certificate table. Microsoft Defender SmartScreen
+  therefore shows "Windows protected your PC" the first time a freshly
+  downloaded installer from a new release runs (*More info*, then *Run
+  anyway*). `dish.exe` and `crashpad_handler.exe` inside it are not signed
+  either. Automatic updates are not interposed by SmartScreen, because a file an
+  app writes itself carries no mark of the web, so the updater's checksum chain
+  is what stands between a release and an installed machine.
+- **The Syft SBOMs list almost nothing.** Syft scans the release directory,
+  where the libraries sit inside a zip and an installer it does not open:
+  2.8.0's SPDX SBOM has two packages. From the release after 2.8.0,
+  `dish-windows-components.spdx.json` is the complete bill of materials,
+  written from the build and checked against `assets/licenses/licenses.json`
+  on every pull request; [`THIRD_PARTY.md`](THIRD_PARTY.md) lists the same set.
+- **The in-zip `SHA256SUMS` is in-band.** It lives inside the file it
+  describes; it is worth something only after the zip itself has been verified.
 
-These are tracked in the roadmap section of
-[`CONTRIBUTING.md`](CONTRIBUTING.md). Nothing in this document should be read
-as claiming any of them exists today.
+Nothing in this document should be read as claiming more than it states.

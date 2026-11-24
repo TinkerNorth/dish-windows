@@ -8,6 +8,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cstdint>
+
 namespace layout = dish::input::layout;
 
 namespace {
@@ -34,13 +36,13 @@ constexpr int HAT_SW = 6;
 constexpr int HAT_W = 7;
 constexpr int HAT_NW = 8;
 
-void assertHid(int wButtons, int expectedHid, int expectedHat) {
-    const int packed = layout::xusbToHid(wButtons);
+void assertHid(std::uint32_t wButtons, std::uint32_t expectedHid, int expectedHat) {
+    const std::uint32_t packed = layout::xusbToHid(wButtons);
     REQUIRE(layout::hidButtonsOf(packed) == expectedHid);
     REQUIRE(layout::hidHatOf(packed) == expectedHat);
 }
 
-void assertXusb(int hidButtons, int hat, int expected) {
+void assertXusb(std::uint32_t hidButtons, int hat, std::uint32_t expected) {
     REQUIRE(layout::hidToXusb(hidButtons, hat) == expected);
 }
 
@@ -166,10 +168,11 @@ TEST_CASE("HID hat NW maps to xusb dpad up+left", "[input][layout]") {
 }
 
 TEST_CASE("xusbToHid then hidToXusb is identity for every canonical bit", "[input][layout]") {
-    const int xusbBits[] = {0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
-                            0x0100, 0x0200, 0x0400, 0x1000, 0x2000, 0x4000, 0x8000};
-    for (const int bit : xusbBits) {
-        const int packed = layout::xusbToHid(bit);
+    const std::uint32_t xusbBits[] = {0x0001, 0x0002, 0x0004, 0x0008, 0x0010,
+                                      0x0020, 0x0040, 0x0080, 0x0100, 0x0200,
+                                      0x0400, 0x1000, 0x2000, 0x4000, 0x8000};
+    for (const std::uint32_t bit : xusbBits) {
+        const std::uint32_t packed = layout::xusbToHid(bit);
         REQUIRE(layout::hidToXusb(layout::hidButtonsOf(packed), layout::hidHatOf(packed)) == bit);
     }
 }

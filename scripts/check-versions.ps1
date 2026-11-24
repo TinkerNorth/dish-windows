@@ -1,0 +1,286 @@
+<#
+.SYNOPSIS
+    Version-consistency gate: every fact a document or mirror repeats from a
+    source of truth still equals it.
+
+.DESCRIPTION
+    version-consistency.yml runs this on every pull request that touches a
+    version-carrying file, and scripts/ci-local.ps1 runs it first. Each rule
+    names its source and its copy:
+
+      * project(Dish VERSION ...) in CMakeLists.txt -> packaging/dish.rc (two
+        tuples, two strings), vcpkg.json version-string, and a CHANGELOG.md
+        heading "## [X.Y.Z] - YYYY-MM-DD".
+      * vcpkg.json builtin-baseline -> THIRD_PARTY.md, and no workflow pins a
+        commit of its own (scripts/ci-env.ps1 reads it from vcpkg.json).
+      * What that baseline resolves for each port vcpkg.json declares (read
+        from microsoft/vcpkg's ports/<name>/vcpkg.json at that commit) ->
+        THIRD_PARTY.md's summary row and assets/licenses/licenses.json.
+        Crashpad comes with sentry-native, so its rows name the same version.
+      * ENet's and Catch2's FetchContent tags -> THIRD_PARTY.md and
+        licenses.json.
+      * scripts/tools.ps1's Qt, clang-format and Inno Setup pins ->
+        THIRD_PARTY.md, licenses.json, CONTRIBUTING.md and the PR template;
+        no workflow pins a Qt version of its own.
+      * kProtocolVersion in src/core/model/Protocol.h -> CONTRIBUTING.md
+        ("Touching the wire protocol") and docs/contract.md.
+      * Every assets/licenses/licenses.json entry that ships -> a licence
+        text the bundles stage (packaging/licenses/<artifact>.txt, LICENSE for
+        Qt, Inter-LICENSE.txt for Inter), and no text without an entry.
+      * scripts/tools.ps1's aqtinstall commit -> CONTRIBUTING.md and
+        THIRD_PARTY.md, pinned by a full 40-character SHA.
+      * The scanners and signers the shared workflows pin -> scripts/tools.ps1
+        (OSV-Scanner, gitleaks) and THIRD_PARTY.md section 9; the SLSA
+        generator commit release.yml calls -> SECURITY.md's recipe.
+      * README.md: every relative link -> a path in the tree; "Dish for
+        Windows X.Y.Z is the current release." and every other X.Y.Z it names
+        -> the project version, except a version named after Qt, clang-format,
+        clang-tidy, Ninja or Inno Setup -> that pin in scripts/tools.ps1; the
+        blocks every Dish README shares -> tests/fixtures/readme-family/, word
+        for word (the same files as in every sibling repository).
+
+    Every failure is printed before the script exits non-zero, so one run
+    lists all the drift. It needs network access for the vcpkg port files.
+#>
+[CmdletBinding()]
+param()
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
+. (Join-Path $PSScriptRoot 'tools.ps1')
+
+$script:failures = [System.Collections.Generic.List[string]]::new()
+function Fail([string]$Message) {
+    $script:failures.Add($Message)
+    # The information stream, not the pipeline: Fail is called from functions
+    # whose pipeline output is their return value.
+    Write-Information "::error::$Message" -InformationAction Continue
+}
+function Read-Text([string]$Path) {
+    $full = Join-Path $repoRoot $Path
+    if (-not (Test-Path $full)) { Fail "$Path does not exist"; return '' }
+    return [IO.File]::ReadAllText($full)
+}
+function Test-DocumentText([string]$Path, [string]$Needle, [string]$What) {
+    if (-not (Read-Text $Path).Contains($Needle)) { Fail "$Path does not say $What ('$Needle')" }
+}
+
+$thirdParty = Read-Text 'THIRD_PARTY.md'
+$licenses = (Read-Text 'assets/licenses/licenses.json' | ConvertFrom-Json).libraries
+
+# The summary table row whose first cell links the component's name.
+function Get-SummaryRow([string]$Component) {
+    $pattern = '(?m)^\| \[' + [regex]::Escape($Component) + '\]\([^)]*\) \|.*$'
+    $match = [regex]::Match($thirdParty, $pattern)
+    if (-not $match.Success) { Fail "THIRD_PARTY.md has no summary row for $Component"; return '' }
+    return $match.Value
+}
+function Get-LicenseVersion([string]$Artifact) {
+    $entry = @($licenses | Where-Object { $_.artifact -eq $Artifact })
+    if ($entry.Count -ne 1) { Fail "assets/licenses/licenses.json has $($entry.Count) entries for $Artifact, not one"; return '' }
+    return [string]$entry[0].version
+}
+function Test-LicenseVersion([string]$Artifact, [string]$Expected) {
+    $actual = Get-LicenseVersion $Artifact
+    if ($actual -and $actual -ne $Expected) { Fail "assets/licenses/licenses.json lists $Artifact $actual; the source says $Expected" }
+}
+function Test-SummaryRow([string]$Component, [string]$Expected) {
+    $row = Get-SummaryRow $Component
+    if ($row -and -not $row.Contains($Expected)) { Fail "THIRD_PARTY.md's $Component row does not name $Expected" }
+}
+
+# --- The app version and its mirrors -----------------------------------------
+$cmake = Read-Text 'CMakeLists.txt'
+if ($cmake -notmatch 'project\(\s*Dish\s+VERSION\s+(\d+)\.(\d+)\.(\d+)') { throw 'no project(Dish VERSION X.Y.Z) in CMakeLists.txt' }
+$major, $minor, $patch = $Matches[1], $Matches[2], $Matches[3]
+$version = "$major.$minor.$patch"
+Write-Output "CMakeLists.txt declares $version"
+
+$rc = Read-Text 'packaging/dish.rc'
+foreach ($tuple in 'FILEVERSION', 'PRODUCTVERSION') {
+    if ($rc -notmatch "(?m)^\s*$tuple\s+$major,$minor,$patch,0\s*$") { Fail "packaging/dish.rc $tuple is not $major,$minor,$patch,0" }
+}
+foreach ($field in 'FileVersion', 'ProductVersion') {
+    if ($rc -notmatch ('"' + $field + '",\s*"' + [regex]::Escape($version) + '"')) { Fail "packaging/dish.rc StringFileInfo $field is not `"$version`"" }
+}
+
+$manifest = Read-Text 'vcpkg.json' | ConvertFrom-Json
+if ($manifest.'version-string' -ne $version) { Fail "vcpkg.json version-string is $($manifest.'version-string'), not $version" }
+
+$changelog = Read-Text 'CHANGELOG.md'
+if ($changelog -notmatch ('(?m)^## \[' + [regex]::Escape($version) + '\] - \d{4}-\d{2}-\d{2}\s*$')) {
+    Fail "CHANGELOG.md has no '## [$version] - YYYY-MM-DD' heading"
+}
+
+# --- The vcpkg baseline and what it resolves ---------------------------------
+$baseline = Get-VcpkgBaseline -RepoRoot $repoRoot
+$short = $baseline.Substring(0, 8)
+Write-Output "vcpkg.json builtin-baseline is $baseline"
+if (-not $thirdParty.Contains($baseline)) { Fail "THIRD_PARTY.md does not name the vcpkg baseline $baseline" }
+
+foreach ($workflow in Get-ChildItem .github/workflows -Filter *.yml) {
+    $text = [IO.File]::ReadAllText($workflow.FullName)
+    if ($text -match '(?m)^\s*VCPKG_COMMITID:') { Fail "$($workflow.Name) pins VCPKG_COMMITID itself; scripts/ci-env.ps1 reads it from vcpkg.json" }
+    if ($text -match '(?m)^\s*(LINGUIST_)?QT_VERSION:') { Fail "$($workflow.Name) pins a Qt version itself; scripts/tools.ps1 holds it" }
+}
+
+# Port name in vcpkg.json -> (THIRD_PARTY.md summary row, licenses.json artifact).
+$ports = [ordered]@{
+    'libsodium'     = @('libsodium', 'libsodium')
+    'openssl'       = @('OpenSSL', 'openssl')
+    'opus'          = @('Opus', 'opus')
+    'sdl2'          = @('SDL2', 'SDL2')
+    'sentry-native' = @('sentry-native', 'sentry-native')
+}
+foreach ($dependency in $manifest.dependencies) {
+    $name = if ($dependency -is [string]) { $dependency } else { $dependency.name }
+    if (-not $ports.Contains($name)) { Fail "vcpkg.json declares $name, which this gate does not map to THIRD_PARTY.md and licenses.json" }
+}
+foreach ($port in $ports.Keys) {
+    $url = "https://raw.githubusercontent.com/microsoft/vcpkg/$baseline/ports/$port/vcpkg.json"
+    $recipe = Invoke-RestMethod -Uri $url -UseBasicParsing
+    $upstream = @('version', 'version-semver', 'version-date', 'version-string' |
+        Where-Object { $recipe.PSObject.Properties.Name -contains $_ } |
+        ForEach-Object { [string]$recipe.$_ })[0]
+    $portVersion = if ($recipe.PSObject.Properties.Name -contains 'port-version') { [int]$recipe.'port-version' } else { 0 }
+    $resolved = if ($portVersion -gt 0) { "$upstream#$portVersion" } else { $upstream }
+    Write-Output "baseline resolves $port $resolved"
+    $row, $artifact = $ports[$port]
+    Test-SummaryRow $row "$resolved (vcpkg baseline ``$short``)"
+    Test-LicenseVersion $artifact $upstream
+    if ($port -eq 'sentry-native') {
+        Test-SummaryRow 'Crashpad' "as vendored by sentry-native $upstream"
+        Test-LicenseVersion 'crashpad' "as vendored by sentry-native $upstream"
+    }
+}
+
+# --- FetchContent pins --------------------------------------------------------
+if ($cmake -notmatch 'GIT_REPOSITORY\s+https://github.com/cgutman/enet\.git\s+GIT_TAG\s+([0-9a-f]{40})') { Fail 'no ENet GIT_TAG in CMakeLists.txt' }
+else {
+    $enet = $Matches[1]
+    if (-not $thirdParty.Contains($enet)) { Fail "THIRD_PARTY.md does not name ENet commit $enet" }
+    Test-SummaryRow 'ENet (cgutman fork)' "``$($enet.Substring(0, 7))``"
+    Test-LicenseVersion 'enet' $enet.Substring(0, 7)
+}
+if ((Read-Text 'tests/CMakeLists.txt') -notmatch 'GIT_TAG\s+v(\d+\.\d+\.\d+)') { Fail 'no Catch2 GIT_TAG in tests/CMakeLists.txt' }
+else {
+    $catch2 = $Matches[1]
+    Test-SummaryRow 'Catch2' $catch2
+    Test-LicenseVersion 'Catch2' $catch2
+}
+
+# --- Tool pins (scripts/tools.ps1) ---------------------------------------------
+Test-SummaryRow 'Qt 6' "$DishQtVersion (CI and release)"
+Test-LicenseVersion 'qtbase' $DishQtVersion
+$qtMinor = ($DishQtVersion -split '\.')[0..1] -join '.'
+if ($cmake -notmatch ('find_package\(Qt6 ' + [regex]::Escape($qtMinor) + ' REQUIRED')) { Fail "CMakeLists.txt's find_package(Qt6 ...) floor is not $qtMinor" }
+Test-SummaryRow 'Qt 6' "CMake requires >= $qtMinor"
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "Qt $DishQtVersion" -What 'the pinned Qt'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "C:\Qt\$DishQtVersion\$DishQtArchDir" -What 'the Qt prefix install-deps.ps1 creates'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "clang-format $DishClangFormatVersion" -What 'the pinned clang-format'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "Inno Setup $DishInnoSetupVersion" -What 'the pinned Inno Setup'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "clang-tidy $DishClangTidyVersion" -What 'the pinned clang-tidy'
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "Ninja $DishNinjaVersion" -What 'the pinned Ninja'
+Test-DocumentText -Path '.github/pull_request_template.md' -Needle "clang-format==$DishClangFormatVersion" -What 'the pinned clang-format'
+Test-DocumentText -Path '.github/pull_request_template.md' -Needle "clang-tidy==$DishClangTidyVersion" -What 'the pinned clang-tidy'
+
+# --- Every shipped library carries its licence text ------------------------------
+# A licenses.json entry is a component that ships (Catch2 excepted: test-only, never in a
+# bundle); each needs a licence text in the bundle's licenses/ folder, staged from one of these.
+$licenceTexts = @{ 'qtbase' = 'LICENSE'; 'inter' = 'packaging/fonts/Inter-LICENSE.txt' }
+foreach ($library in $licenses) {
+    $artifact = [string]$library.artifact
+    if ($artifact -eq 'Catch2') { continue }
+    $text = if ($licenceTexts.ContainsKey($artifact)) { $licenceTexts[$artifact] } else { "packaging/licenses/$artifact.txt" }
+    $full = Join-Path $repoRoot $text
+    if (-not (Test-Path $full) -or (Get-Item $full).Length -eq 0) {
+        Fail "$artifact ships (assets/licenses/licenses.json) but has no licence text at $text"
+    }
+}
+foreach ($file in Get-ChildItem (Join-Path $repoRoot 'packaging/licenses') -Filter '*.txt') {
+    if (@($licenses | Where-Object { $_.artifact -eq $file.BaseName }).Count -ne 1) {
+        Fail "packaging/licenses/$($file.Name) names no assets/licenses/licenses.json entry"
+    }
+}
+
+# --- aqtinstall from a commit, until a release reads Qt 6.12 -----------------------
+if ($DishAqtSource) {
+    if ($DishAqtSource -notmatch '^git\+https://github\.com/miurahr/aqtinstall\.git@([0-9a-f]{40})$') {
+        Fail "scripts/tools.ps1 DishAqtSource is not aqtinstall pinned by a 40-character commit: $DishAqtSource"
+    } else {
+        $aqtCommit = $Matches[1]
+        Test-DocumentText -Path 'CONTRIBUTING.md' -Needle $aqtCommit -What 'the aqtinstall commit Qt is installed with'
+        Test-DocumentText -Path 'THIRD_PARTY.md' -Needle $aqtCommit -What 'the aqtinstall commit Qt is installed with'
+    }
+}
+
+# --- The shared security workflow's pins equal the local copies -------------------
+$security = Read-Text '.github/workflows/_security.yml'
+foreach ($pin in @(@('OSV_SCANNER_VERSION', $DishOsvScannerVersion), @('GITLEAKS_VERSION', $DishGitleaksVersion))) {
+    if ($security -notmatch ($pin[0] + ': "' + [regex]::Escape($pin[1]) + '"')) {
+        Fail "_security.yml's $($pin[0]) is not scripts/tools.ps1's $($pin[1])"
+    }
+}
+
+# --- The release tools the documents name ------------------------------------------
+$harden = Read-Text '.github/workflows/_release_harden.yml'
+foreach ($tool in @(@('GRYPE_VERSION', 'Grype'), @('SYFT_VERSION', 'Syft'), @('COSIGN_VERSION', 'cosign'))) {
+    if ($harden -notmatch ($tool[0] + ': "([0-9.]+)"')) { Fail "_release_harden.yml has no $($tool[0])"; continue }
+    $pinned = $Matches[1]
+    Test-DocumentText -Path 'THIRD_PARTY.md' -Needle "| $($tool[1]) | $pinned |" -What "the $($tool[1]) _release_harden.yml pins"
+}
+foreach ($tool in @(@($DishOsvScannerVersion, 'OSV-Scanner'), @($DishGitleaksVersion, 'gitleaks'))) {
+    Test-DocumentText -Path 'THIRD_PARTY.md' -Needle "| $($tool[1]) | $($tool[0]) |" -What "the $($tool[1]) the security gates pin"
+}
+# SECURITY.md's provenance recipe names the generator commit release.yml calls.
+if ((Read-Text '.github/workflows/release.yml') -notmatch 'generator_generic_slsa3\.yml@([0-9a-f]{40})') { Fail 'release.yml calls no SHA-pinned SLSA generator' }
+else { Test-DocumentText -Path 'SECURITY.md' -Needle "generator_generic_slsa3.yml@$($Matches[1])" -What 'the SLSA generator commit release.yml pins' }
+
+# --- The wire protocol ----------------------------------------------------------
+if ((Read-Text 'src/core/model/Protocol.h') -notmatch 'kProtocolVersion\s*=\s*(\d+);') { throw 'no kProtocolVersion in src/core/model/Protocol.h' }
+$protocol = $Matches[1]
+Write-Output "Protocol.h speaks protocol $protocol"
+Test-DocumentText -Path 'CONTRIBUTING.md' -Needle "speak protocol $protocol" -What 'the protocol version'
+Test-DocumentText -Path 'docs/contract.md' -Needle "protocol $protocol" -What 'the protocol version'
+
+# --- README.md against the tree -------------------------------------------------
+# Line endings follow the checkout (*.md is text), so both sides compare as LF.
+$readme = (Read-Text 'README.md') -replace "`r`n", "`n"
+foreach ($link in [regex]::Matches($readme, '\]\(([^)\s]+)\)')) {
+    $target = $link.Groups[1].Value
+    if ($target -match '^[a-z][a-z0-9+.-]*:' -or $target.StartsWith('#')) { continue }
+    $path = $target.Split('#')[0]
+    if ($path -and -not (Test-Path (Join-Path $repoRoot $path))) { Fail "README.md links to $target, which does not exist" }
+}
+if (-not $readme.Contains("Dish for Windows $version is the current release.")) {
+    Fail "README.md does not say 'Dish for Windows $version is the current release.'"
+}
+$toolPins = @{
+    'Qt'           = $DishQtVersion
+    'clang-format' = $DishClangFormatVersion
+    'clang-tidy'   = $DishClangTidyVersion
+    'Ninja'        = $DishNinjaVersion
+    'Inno Setup'   = $DishInnoSetupVersion
+}
+foreach ($named in [regex]::Matches($readme, '(?:(Qt|clang-format|clang-tidy|Ninja|Inno Setup) )?\b(\d+\.\d+\.\d+)\b')) {
+    $tool, $number = $named.Groups[1].Value, $named.Groups[2].Value
+    if ($tool) {
+        if ($number -ne $toolPins[$tool]) { Fail "README.md names $tool $number; scripts/tools.ps1 pins $($toolPins[$tool])" }
+    } elseif ($number -ne $version) {
+        Fail "README.md names version $number; the project version is $version"
+    }
+}
+$fixtures = 'tests/fixtures/readme-family'
+foreach ($fixture in Get-ChildItem (Join-Path $repoRoot $fixtures) -Filter '*.md' | Sort-Object Name) {
+    $block = ([IO.File]::ReadAllText($fixture.FullName) -replace "`r`n", "`n").TrimEnd("`n")
+    if (-not $readme.Contains($block)) { Fail "README.md does not carry the family's shared block $fixtures/$($fixture.Name) word for word" }
+}
+
+if ($script:failures.Count -gt 0) {
+    Write-Output ''
+    Write-Output "$($script:failures.Count) version fact(s) drifted from their source. The header of scripts/check-versions.ps1 lists each source and its copies."
+    exit 1
+}
+Write-Output 'All version facts agree with their sources.'

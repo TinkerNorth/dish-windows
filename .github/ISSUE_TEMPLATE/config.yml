@@ -8,4 +8,4 @@ contact_links:
     about: Dish needs a Satellite server on your LAN. If the server is what is misbehaving, report it there.
   - name: Problem with another Dish client
     url: https://github.com/TinkerNorth
-    about: The Android, Linux and macOS clients have their own repositories and their own issue trackers.
+    about: Dish for Android, iOS, macOS and Linux have their own repositories and their own issue trackers.

@@ -71,6 +71,7 @@ It adds no behaviour of its own.
 | `keepAwakeReach` | `string` | `stateChanged` | How far the hold currently reaches: `off`, `system` (the machine only), `display` (machine and screen). Derived by `composer::WakeStateComposer` from the preferences, the streaming count and controller activity, so it reports what is actually being asked for. Drives the streaming pill's suffix and the quit confirm's body. |
 | `micIndicator` | `string` | `stateChanged` | The app-wide microphone chip: `hidden` (no bound pad has an armed mic), `live` (at least one armed mic is delivering), `muted` (armed, and every armed mic is muted). Folded by `core/reducer/MicIndicatorState.h` from the same `AudioSlotFacts` the capture engine reads, so it cannot disagree with the engine. The shell renders it beside the streaming pill on every page. |
 | `busy` | `bool` | `stateChanged` | A controller is registering. |
+| `defaultPadSlotId` | `string` | `stateChanged` | The pad the setup wizard adopts when nothing seeded it; `""` with no pads. |
 
 Header sub-lines are assembled in QML from these primitives, so the wording
 stays in the `qsTr` catalogues. Pages own their own copy; see the per-page
@@ -138,7 +139,7 @@ project it so the type picker can tell loading from empty from failed.
 | `lightbarFollowGame` | `bool` (RW) | `lightbarChanged` | Light-bar forwarding: true is "Follow game", false is "Off". |
 | `keepAwakeMode` | `int` (RW) | `keepAwakePrefsChanged` | `0` Never, `1` While playing (streaming **and** a controller actuated inside the idle window), `2` While connected (streaming, however long the pad sits still). Out-of-range reads back as `1`: a bad value must never pin the machine awake. |
 | `keepAwakeTimeoutMinutes` | `int` (RW) | `keepAwakePrefsChanged` | Minutes of stillness before mode `1` lets go. Clamped to 1..180 on both read and write, so a hand-edited config cannot produce a zero-minute or unbounded window. Inert in modes `0` and `2`. |
-| `keepDisplayAwake` | `bool` (RW) | `keepAwakePrefsChanged` | Whether the hold covers the screen as well as the machine. Default off — forwarding a pad needs the machine, not the panel. Widens a hold; never creates one. |
+| `keepDisplayAwake` | `bool` (RW) | `keepAwakePrefsChanged` | Whether the hold covers the screen as well as the machine. Default off: forwarding a pad needs the machine, not the panel. Widens a hold; never creates one. |
 | `onboardingNeeded` | `bool` | `onboardingNeededChanged` | The first-run welcome has not completed. Flips false after `markOnboardingComplete()`. |
 | `appVersion` | `string` | CONSTANT | The CMake project version. |
 | `controllerDbChecksEnabled` | `bool` (RW) | `controllerDbChanged` | "Check for controller updates automatically". Default on. Off means no request for the controller list leaves the PC, `checkControllerDbNow()` included. |
@@ -150,6 +151,28 @@ project it so the type picker can tell loading from empty from failed.
 | `donateSponsorsUrl` | `string` | CONSTANT | GitHub Sponsors URL. |
 | `donateKofiUrl` | `string` | CONSTANT | Ko-fi URL. |
 | `donateBmacUrl` | `string` | CONSTANT | Buy Me a Coffee URL. |
+
+### Auto-updater
+
+Tokens and numbers only; every word is composed in QML so it stays in the
+`qsTr` catalogues. `docs/PACKAGING.md` section 5 has the behaviour.
+
+| Property | Type | NOTIFY | Meaning |
+|---|---|---|---|
+| `updatePhase` | `string` | `updateChanged` | `disabled` / `idle` / `checking` / `upToDate` / `available` / `downloading` / `verifying` / `ready` / `failed`. |
+| `updateVersion` | `string` | `updateChanged` | The target version, `""` when there is nothing to offer. |
+| `updateProgress` | `double` | `updateChanged` | `0..1`, or `-1` for indeterminate (verifying, or a download with no length). |
+| `updateReceivedText` | `string` | `updateChanged` | Bytes received so far, formatted. |
+| `updateTotalText` | `string` | `updateChanged` | The download's size, formatted. |
+| `updateErrorToken` | `string` | `updateChanged` | `""` / `offline` / `http` / `manifestInvalid` / `corrupt` / `diskFull` / `io` / `stalled` / `applyFailed`; empty in every phase but `failed`. |
+| `updateNotesUrl` | `string` | `updateChanged` | The manifest's release-notes URL. |
+| `updateRequired` | `bool` | `updateChanged` | The running build is below the manifest's `minimumSupportedVersion`. |
+| `updatePortable` | `bool` | `updateChanged` | No uninstaller beside the exe: check and notify only, never download or apply. |
+| `updateMeteredDeferred` | `bool` | `updateChanged` | A download is waiting for an unmetered connection. |
+| `updateLastCheck` | `QDateTime` | `updateChanged` | Invalid means never checked. |
+| `updatedFromVersion` | `string` | `updateChanged` | The one-shot "updated to" moment: the version this run upgraded from, `""` once acknowledged. |
+| `updateChecksEnabled` | `bool` (RW) | `updatePrefsChanged` | "Check for updates automatically". |
+| `updateAutoDownload` | `bool` (RW) | `updatePrefsChanged` | Download an offered update without asking. |
 
 ### Bluetooth radio
 
@@ -226,6 +249,12 @@ Republished at the inspector's 33 ms poll while an inspection is armed (see
 | `inputSnapshotChanged` | | `inputSnapshot` moved. |
 | `stickTestChanged` | | `stickTest` moved. |
 | `benchChanged` | | A bench run started, stepped, ended or was answered, or the microphone test's level moved. Re-pull `benchState()`. |
+| `moonlightHostsChanged` | | The Moonlight host list moved (discovery, pairing, or a phase transition). Re-pull `moonlightHosts()`. |
+| `moonlightPairingFinished` | `string id, bool ok` | The terminal edge of a Moonlight pairing for host `id`. |
+| `moonlightAppsChanged` | `string id` | A fresh app list landed for host `id`; `moonlightApps()` now answers for it. |
+| `updateChanged` | | Any auto-updater property moved. |
+| `updatePrefsChanged` | | `updateChecksEnabled` or `updateAutoDownload` moved. |
+| `updateNotice` | `string token, string version` | A toast-worthy update moment: `ready` / `available` / `unsupported` / `updated`, once per version per session. A failed periodic check never fires it; it lives in Settings. |
 
 ## `App` methods
 
@@ -429,6 +458,58 @@ On success, pop to Home and toast. On failure, **stay**: the draft is intact,
 the reason goes in a toast, and the primary action is live again. The wire
 renders as `transmitting`, never `live`, until success, because showing a
 connection that never existed is worse than showing none.
+
+### Moonlight hosts
+
+The sibling of the satellite surface, for Sunshine, Apollo and Wolf hosts. Every
+state is a token QML localizes and colours; nothing here is a sentence.
+
+| Method | Returns / effect |
+|---|---|
+| `moonlightHosts()` | Rows `{ id, name, ip, paired, discovered, phase }`; `phase` is `idle` / `pairing` / `paired` / `connecting` / `streaming` / `faltering` / `failed`. Re-pull on `moonlightHostsChanged`. |
+| `moonlightScanning()` | Whether a Moonlight discovery is running. |
+| `startMoonlightDiscovery()` | Browse for hosts. |
+| `addMoonlightHost(ip, name)` | Add a host by address. |
+| `pairMoonlightHost(id, pin)` | Start pairing with the PIN the person types on the host; `moonlightPairingFinished` reports the end. |
+| `cancelMoonlightPairing(id)` | Back out of a pairing, which otherwise parks on the host until someone types the PIN. |
+| `moonlightPairingPin()` | A fresh four-digit code, generated in C++ because a PIN is security-relevant. |
+| `connectMoonlightHost(id, appId)`, `disconnectMoonlightHost(id)`, `forgetMoonlightHost(id)` | Start a session running `appId`, end it, or forget the host. |
+| `refreshMoonlightApps(id)`, `moonlightApps()`, `setMoonlightApp(id, appId, appName)` | Ask the host for its apps (rows `{ id, title }` arrive on `moonlightAppsChanged`), read them, and remember the pick for the next launch. |
+| `moonlightDeviceType(id)`, `setMoonlightDeviceType(id, type)` | The per-host default emulated device a fresh binding starts from: `0xFF` Auto, `1` Xbox, `2` PlayStation, `3` Nintendo. |
+| `moonlightTypeOptions()` | The four type cards in order, `{ type, token }` with `token` `auto` / `xbox` / `playstation` / `nintendo`. |
+| `moonlightResolvedAutoType(slotId)` | What Auto resolves to for this pad: PlayStation when it reports motion, Xbox otherwise. |
+| `moonlightBindingType(slotId)` | The type the binding carries, Auto when none is stored. |
+| `bindMoonlightSlot(slotId, hostId, type)` | Route the pad to the host. `""` when it was routed, else `hostGone` / `identityFailed` / `hostFull`. |
+| `unbindMoonlightSlot(slotId)`, `moonlightBoundHostFor(slotId)` | Undo the route, or name the host the pad is routed to. |
+| `isMoonlightHost(connectionId)` | Whether a destination id names a Moonlight host; the one place the two host kinds are told apart. |
+| `probeMoonlightHost(id)` | Re-verify remembered trust (pair status and identity). Never polled: called on entering a screen and before a session starts. |
+| `moonlightSessionState(id, slotId)` | The session section's one state: `checking` / `notPaired` / `pairingPin` / `pairingRefused` / `unreachable` / `remembered` / `trustLost` / `hostReplaced` / `appsLoading` / `newSession` / `noApps` / `appsFailed` / `joining` / `hostFull` / `busyOther` / `resumeFailed` / `refused` / `setupFailed` / `live` / `dropped` / `endedByHost`. |
+| `moonlightSessionBlocksApply(id, slotId)`, `moonlightSessionIsProblem(id, slotId)` | Whether that state stops an apply, and whether it is drawn as a problem. |
+| `moonlightTrust(id)` | The host row's trust word: `paired` / `remembered` / `notPaired`. |
+| `moonlightBoundSlotCount(id)`, `moonlightMaxControllers()` | How many controllers the host carries, and the protocol's ceiling. |
+| `moonlightRunningAppName(id)` | The app the host is running for us. |
+| `moonlightRefusalMessage(id)` | The host's own words for its last refusal. |
+| `quitMoonlightApp(id)` | Close what the host is running, then re-probe. |
+
+### Controller audio
+
+| Method | Returns / effect |
+|---|---|
+| `micEnabledFor(slotId)`, `setMicEnabled(slotId, on)` | The per-slot microphone switch. Off by default: capture is opt-in per binding. |
+| `speakerEnabledFor(slotId)`, `setSpeakerEnabled(slotId, on)` | The per-slot speaker switch. On by default. |
+
+### Updates and settings setters
+
+| Method | Effect |
+|---|---|
+| `checkForUpdatesNow()` | One update check now. |
+| `downloadUpdateNow()` | Download the offered update. |
+| `restartToApplyUpdate()` | Arms the restart and asks the window to close normally, so every close guard runs first; the staged installer is spawned from the quit hook. |
+| `skipUpdate()` | Skip the offered version. |
+| `openReleaseNotes()` | Open `updateNotesUrl`, or the releases page when the manifest carried none (the portable copy's "Open download page"). |
+| `acknowledgeUpdated()` | Clear `updatedFromVersion`. |
+| `setUpdateChecksEnabled(on)`, `setUpdateAutoDownload(on)` | Also available as the property writes. |
+| `setRunInBackground(on)`, `setKeepAwakeMode(mode)`, `setKeepAwakeTimeoutMinutes(minutes)`, `setKeepDisplayAwake(on)`, `setControllerDbChecksEnabled(on)` | Also available as the property writes. |
 
 ### Bluetooth, licenses, onboarding, links
 

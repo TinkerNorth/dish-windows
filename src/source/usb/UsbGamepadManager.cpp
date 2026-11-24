@@ -3,6 +3,7 @@
 
 #include "source/usb/UsbGamepadManager.h"
 
+#include "core/Bits.h"
 #include "source/store/UsbPathPreferenceStore.h"
 
 #include "Input/TouchGate.h"
@@ -125,9 +126,10 @@ class ClaimedPadPublisher {
         mirrorMicMute(r);
         mirrorBattery(r);
         if (processor_ == nullptr || !index_.has_value()) { return; }
-        publishInput(r);
-        publishMotion(r);
-        publishTouchpad(r);
+        const input::GamepadInputProcessor::DeviceIndex index = *index_;
+        publishInput(r, index);
+        publishMotion(r, index);
+        publishTouchpad(r, index);
     }
 
     // A departing controller's last input must not stay latched, and its battery reading leaves
@@ -152,7 +154,8 @@ class ClaimedPadPublisher {
     // the host battery on the wire, and a level in tenths moves minutes apart.
     void mirrorBattery(const UsbReport& r) const {
         if (!r.batteryValid) { return; }
-        const auto packed = static_cast<std::uint16_t>((r.batteryLevel << 8) | r.batteryStatus);
+        const std::uint16_t packed =
+            bits::low16((bits::u32(r.batteryLevel) << 8U) | bits::u32(r.batteryStatus));
         if (packed == lastBattery_->load(std::memory_order_relaxed)) { return; }
         lastBattery_->store(packed, std::memory_order_relaxed);
         if (observer_ != nullptr) {
@@ -160,7 +163,7 @@ class ClaimedPadPublisher {
         }
     }
 
-    void publishInput(const UsbReport& r) const {
+    void publishInput(const UsbReport& r, input::GamepadInputProcessor::DeviceIndex index) const {
         input::GamepadInputProcessor::DeviceState st;
         st.wButtons = r.wButtons;
         st.extButtons = r.extButtons;
@@ -170,11 +173,11 @@ class ClaimedPadPublisher {
         st.ly = r.ly;
         st.rx = r.rx;
         st.ry = r.ry;
-        processor_->publish(*index_, st);
+        processor_->publish(index, st);
     }
 
     // Rate-limited to <=250 Hz inside the processor.
-    void publishMotion(const UsbReport& r) const {
+    void publishMotion(const UsbReport& r, input::GamepadInputProcessor::DeviceIndex index) const {
         if (!r.motionValid) { return; }
         input::GamepadInputProcessor::MotionSample m;
         m.gyroX = r.gyroX;
@@ -183,11 +186,12 @@ class ClaimedPadPublisher {
         m.accelX = r.accelX;
         m.accelY = r.accelY;
         m.accelZ = r.accelZ;
-        processor_->publishMotion(*index_, m);
+        processor_->publishMotion(index, m);
     }
 
     // DS4 and DualSense only; every other decoder leaves touchpadValid false.
-    void publishTouchpad(const UsbReport& r) const {
+    void publishTouchpad(const UsbReport& r,
+                         input::GamepadInputProcessor::DeviceIndex index) const {
         if (!r.touchpadValid) { return; }
         input::GamepadInputProcessor::TouchpadSample t;
         t.finger0Active = r.finger0Active;
@@ -204,7 +208,7 @@ class ClaimedPadPublisher {
         const input::TouchpadVerdict verdict = touchGate_->decide(t, processor_->nanoTime());
         if (verdict.send == input::TouchpadSend::Skip) { return; }
         t.eventTimeMs = verdict.eventTimeMs;
-        processor_->publishTouchpad(*index_, t);
+        processor_->publishTouchpad(index, t);
     }
 
     input::GamepadInputProcessor* processor_ = nullptr;

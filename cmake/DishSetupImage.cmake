@@ -181,6 +181,12 @@ configure_file("${SRC_DIR}/COPYING.GPL3" "${IMAGE_DIR}/licenses/LICENSE.GPL-3.0.
 configure_file("${SRC_DIR}/THIRD_PARTY.md" "${IMAGE_DIR}/licenses/THIRD_PARTY.md"     COPYONLY)
 configure_file("${SRC_DIR}/packaging/fonts/Inter-LICENSE.txt"
                "${IMAGE_DIR}/licenses/Inter-LICENSE.txt" COPYONLY)
+# Each linked library's own licence text, the set scripts/stage-bundle.ps1 stages too.
+file(GLOB _library_licences "${SRC_DIR}/packaging/licenses/*.txt")
+if(NOT _library_licences)
+    message(FATAL_ERROR "No library licence texts under ${SRC_DIR}/packaging/licenses")
+endif()
+file(COPY ${_library_licences} DESTINATION "${IMAGE_DIR}/licenses")
 
 # --- 7. What must not ship ---------------------------------------------------
 # libssl is not part of Dish: TLS rides Qt's Schannel backend and the Moonlight

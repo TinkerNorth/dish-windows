@@ -3,6 +3,8 @@
 
 #include "Network/MoonlightControlChannel.h"
 
+#include "core/Bits.h"
+
 #include <enet/enet.h>
 
 #include <chrono>
@@ -259,7 +261,7 @@ bool MoonlightControlChannel::serviceDue(ENetSocket socket) const {
     thread::blockingRegion("enet.wait");
     enet_uint32 condition = ENET_SOCKET_WAIT_RECEIVE;
     if (enet_socket_wait(socket, &condition, kServicePollMs) != 0) { return true; }
-    return (condition & ENET_SOCKET_WAIT_RECEIVE) != 0 ||
+    return bits::anySet(condition, static_cast<std::uint32_t>(ENET_SOCKET_WAIT_RECEIVE)) ||
            awaitingAck_.load(std::memory_order_relaxed);
 }
 

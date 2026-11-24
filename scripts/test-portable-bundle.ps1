@@ -43,6 +43,18 @@
 .PARAMETER KeepWorkDir
     Leave the scratch copy behind for inspection.
 
+.PARAMETER InPlace
+    Launch dish.exe where it is instead of from a scratch copy: the installer
+    round-trip uses it on the installed directory, so the app under test is
+    the installed one, uninstaller beside it.
+
+.PARAMETER RequireOnlineCheck
+    Also require the app to reach dish.tinkernorth.com over HTTPS: the
+    controller database check (ten seconds after launch) must log a result of
+    upToDate or updated. That is the TLS stack the bundle ships (Qt's Schannel
+    backend and the Windows root store) doing a real handshake; "offline" fails
+    it. Raises the settle time to 30 s.
+
 .EXAMPLE
     ./scripts/test-portable-bundle.ps1 -Bundle dish-windows
 #>
@@ -51,7 +63,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Bundle,
     [string]$WorkRoot = '',
     [int]$SettleSeconds = 6,
-    [switch]$KeepWorkDir
+    [switch]$KeepWorkDir,
+    [switch]$InPlace,
+    [switch]$RequireOnlineCheck
 )
 
 Set-StrictMode -Version Latest
@@ -61,7 +75,7 @@ $script:Checks = 0
 
 function Ok([string]$text) {
     $script:Checks++
-    Write-Host "   ok  $text"
+    Write-Output "   ok  $text"
 }
 
 function Fail([string]$text) {
@@ -79,7 +93,7 @@ function Assert-True([bool]$condition, [string]$text) {
 
 if (-not (Test-Path -LiteralPath $Bundle)) { Fail "no bundle directory at $Bundle" }
 $bundleRoot = (Resolve-Path -LiteralPath $Bundle).Path
-Write-Host "== Portable bundle: $bundleRoot" -ForegroundColor Cyan
+Write-Output "== Portable bundle: $bundleRoot"
 
 Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot 'dish.exe')) 'dish.exe is in the bundle'
 
@@ -108,16 +122,36 @@ foreach ($dll in 'libsodium.dll', 'SDL2.dll', 'opus.dll',
     Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot $dll)) "$dll is in the bundle"
 }
 
+# Every HTTPS request the app makes (the controller database, the update check, Sentry, the
+# satellite and Moonlight control planes, Moonlight's client certificate included) runs on Qt's
+# Schannel TLS backend, a plugin windeployqt stages. Without it QSslSocket has no backend and every
+# TLS connection fails, while the app still starts. No OpenSSL TLS backend ships: libssl is not in
+# the bundle (cmake/DishSetupImage.cmake section 7), so Qt could not load one.
+Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot 'tls/qschannelbackend.dll')) 'tls/qschannelbackend.dll is in the bundle'
+
+# Every library licence text the bundle owes (packaging/licenses/, staged by both paths), so a
+# staging change cannot ship a linked library without its notice.
+foreach ($licence in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '../packaging/licenses') -Filter '*.txt') {
+    Assert-True (Test-Path -LiteralPath (Join-Path $bundleRoot "licenses/$($licence.Name)")) "licenses/$($licence.Name) is in the bundle"
+}
+
 # --- 2. Copy it out of the build tree ---------------------------------------
 
-if (-not $WorkRoot) {
-    $WorkRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+if ($RequireOnlineCheck -and $SettleSeconds -lt 30) { $SettleSeconds = 30 }
+if ($InPlace) {
+    $workDir = $null
+    $runDir = $bundleRoot
+    Ok "launching in place: $runDir"
+} else {
+    if (-not $WorkRoot) {
+        $WorkRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+    }
+    $workDir = Join-Path $WorkRoot ("dish portable smoke " + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    $runDir = Join-Path $workDir 'bundle'
+    New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+    Copy-Item -Path (Join-Path $bundleRoot '*') -Destination $runDir -Recurse -Force
+    Ok "copied to a path outside the build tree, with a space in it: $runDir"
 }
-$workDir = Join-Path $WorkRoot ("dish portable smoke " + [Guid]::NewGuid().ToString('N').Substring(0, 8))
-$runDir = Join-Path $workDir 'bundle'
-New-Item -ItemType Directory -Force -Path $runDir | Out-Null
-Copy-Item -Path (Join-Path $bundleRoot '*') -Destination $runDir -Recurse -Force
-Ok "copied to a path outside the build tree, with a space in it: $runDir"
 
 $exe = Join-Path $runDir 'dish.exe'
 
@@ -126,7 +160,7 @@ $exe = Join-Path $runDir 'dish.exe'
 # System.Diagnostics.Process rather than Start-Process, for the exit code:
 # Windows PowerShell 5.1's `Start-Process -PassThru` hands back a Process
 # object whose ExitCode is always $null, and 0xc0000135 (a runtime DLL missing
-# from the bundle) produces no output at all — the exit code is the whole
+# from the bundle) produces no output at all; the exit code is the whole
 # diagnosis. Reading both streams with ReadToEndAsync also means a chatty
 # startup cannot fill a pipe buffer and deadlock the app we are timing.
 $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -160,9 +194,9 @@ $stdoutRead.Result | Out-Null
 if ($null -eq $stderrText) { $stderrText = '' }
 
 if ($stderrText.Trim()) {
-    Write-Host '   --- dish.exe stderr ---'
-    $stderrText.TrimEnd() -split "`r?`n" | ForEach-Object { Write-Host "   | $_" }
-    Write-Host '   -----------------------'
+    Write-Output '   --- dish.exe stderr ---'
+    $stderrText.TrimEnd() -split "`r?`n" | ForEach-Object { Write-Output "   | $_" }
+    Write-Output '   -----------------------'
 }
 
 if ($exitedEarly) {
@@ -195,9 +229,19 @@ if ($stderrText -notmatch 'controller database: bundled dbVersion [1-9][0-9]* wi
 }
 Ok 'the bundled controller database loaded'
 
-if (-not $KeepWorkDir) {
+# TLS in the shipped app: the controller database check is HTTPS to dish.tinkernorth.com through
+# Qt's TLS backend in the bundle, so a result other than offline is a handshake that worked
+# (ControllerDbStore::recordCheck, pinned by test_controller_db_fetch.cpp).
+if ($RequireOnlineCheck) {
+    if ($stderrText -notmatch 'controller database: check (upToDate|updated); in force dbVersion [1-9][0-9]*') {
+        Fail 'dish.exe did not complete a controller database check over HTTPS within the settle time'
+    }
+    Ok 'the controller database check reached dish.tinkernorth.com over HTTPS'
+}
+
+if ($workDir -and -not $KeepWorkDir) {
     Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host ''
-Write-Host "PORTABLE BUNDLE OK - $script:Checks checks passed" -ForegroundColor Green
+Write-Output ''
+Write-Output "PORTABLE BUNDLE OK - $script:Checks checks passed"

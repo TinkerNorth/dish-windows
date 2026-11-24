@@ -22,6 +22,7 @@
 #include "source/usb/OutputWorker.h"
 #include "source/usb/UsbDeviceGateway.h"
 
+#include "core/Bits.h"
 #include "core/controllerdb/PadModel.h"
 #include "core/diagnostics/ReportCapture.h"
 #include "core/diagnostics/WriteVerdict.h"
@@ -251,7 +252,7 @@ class UsbGamepadManager {
 
   private:
     static int vpKey(int vendorId, int productId) {
-        return (vendorId << 16) | (productId & 0xFFFF);
+        return bits::packHigh16Low16(vendorId, productId);
     }
 
     // One pad a claim reads: a model's own pad, or one slot of a receiver. `lead` is the

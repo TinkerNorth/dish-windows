@@ -13,32 +13,41 @@
 > does not.
 >
 > Legend: ✅ works · ⚠️ shipped, not yet verified on real hardware · ❌ not
-> available · – not applicable. Verified against the code on 2026-09-29.
+> available · – not applicable. The Windows column was verified against the
+> code on 2026-09-29; sections 5a and 5b were written with their features in
+> 2026-11.
 
 ## 1. What works, per client
 
-| Feature | Android | Windows (this) | Linux |
-|---|---|---|---|
-| Satellite host, protocol 4 | ✅ | ✅ | ✅ |
-| Moonlight host (Sunshine / Apollo / Wolf) | ✅ | ✅ | ✅ |
-| Mouse mode on the host | ✅ | ❌ (deferred: `reducer::kClientRoutesTouchpadAsMouse`) | ❌ |
-| Steam Controller trackpad pick (stick / pad / mouse / off) | ⚠️ | ⚠️ (mouse behind the deferral above) | ⚠️ (mouse behind the deferral above) |
-| Controller audio (mic + speaker) | ✅ | ✅ | ✅ |
-| DualSense HD haptics | ⚠️ | ⚠️ | ⚠️ |
-| Adaptive triggers, player LEDs, mic lamp | ✅ | ✅ | ✅ |
-| Lightbar, motion, touchpad, battery | ✅ | ✅ | ✅ |
-| Crash reports (opt-out) | ✅ Crashlytics | ✅ Sentry | ✅ Sentry |
-| Update notice | – Play (the store updates it) · ✅ GitHub build | ✅ | ✅ |
-| Runs in the background / window closed | ⚠️ Moonlight sessions stay up (foreground service) · satellite streaming stops when the app leaves the screen, by design: the phone is the pad | ✅ tray | ✅ tray |
-| Survives PC sleep and resume | – | ✅ Satellite · ❌ Moonlight | ✅ Satellite · ❌ Moonlight |
-| Keep-awake is user-configurable | ❌ (always on while streaming) | ✅ | ✅ |
-| Diagnostics screen | ✅ | ✅ (every item its paths carry, see §5b) | ✅ (every item its paths carry, dish-linux#122) |
-| Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ (on the section header) | ✅ | ✅ |
-| Protocol chip ("Satellite update recommended / required", "Dish update required") | ✅ | ✅ | ✅ |
-| App-wide microphone chip with mute-all | ✅ | ✅ | ✅ |
-| Capability verdict word "Supported" | ✅ | ✅ | ✅ |
-| Pairing secrets stored encrypted | ✅ Moonlight key (Keystore) · ❌ Satellite key (app-private prefs) | ✅ DPAPI | ✅ Satellite key (Secret Service, else a 0600 file) · ❌ Moonlight key (0600 file) |
-| Six languages (en, bs, de, es, fr, pt-BR) | ✅ | ✅ | ✅ |
+| Feature | Android | Windows (this) | Linux | macOS | iOS |
+|---|---|---|---|---|---|
+| Satellite host, protocol 4 | ✅ | ✅ | ✅ | ✅ | built |
+| Moonlight host (Sunshine / Apollo / Wolf) | ✅ | ✅ | ✅ | ⚠️ | built |
+| Mouse mode on the host | ✅ | ❌ (deferred: `reducer::kClientRoutesTouchpadAsMouse`) | ❌ | ✅ | not yet (the per-pad touchpad pick is not ported) |
+| Steam Controller trackpad pick (stick / pad / mouse / off) | ⚠️ | ⚠️ (mouse behind the deferral above) | ⚠️ (mouse behind the deferral above) | ⚠️ | built: stick, touchpad, off; no mouse |
+| Controller audio (mic + speaker) | ✅ | ✅ | ✅ | ⚠️ | not possible (iOS gives an app no pad audio) |
+| DualSense HD haptics | ⚠️ | ⚠️ | ⚠️ | ⚠️ | not possible (the same) |
+| Adaptive triggers, player LEDs, mic lamp | ✅ | ✅ | ✅ | ⚠️ | built · mic lamp not possible |
+| Lightbar, motion, touchpad, battery | ✅ | ✅ | ✅ | ✅ | built |
+| Crash reports (opt-out) | ✅ Crashlytics | ✅ Sentry | ✅ Sentry | ✅ | n/a (no crash reporting) |
+| Update notice | – Play (the store updates it) · ✅ GitHub build | ✅ | ✅ | ✅ | n/a (the App Store updates it) |
+| Runs in the background / window closed | ⚠️ Moonlight sessions stay up (foreground service) · satellite streaming stops when the app leaves the screen, by design: the phone is the pad | ✅ tray | ✅ tray | ✅ | n/a (a backgrounded Dish closes its sessions) |
+| Survives PC sleep and resume | – | ✅ Satellite · ❌ Moonlight | ✅ Satellite · ❌ Moonlight | ✅ | n/a |
+| Keep-awake is user-configurable | ❌ (always on while streaming) | ✅ | ✅ | ✅ | built (Keep screen on) |
+| Diagnostics screen | ✅ | ✅ (every item its paths carry, see §5b) | ✅ (every item its paths carry, dish-linux#122) | ✅ | built |
+| Link-tier cue on host rows (Fastest / Fast / Basic) | ✅ (on the section header) | ✅ | ✅ | ✅ | not in its ledger |
+| Protocol chip ("Satellite update recommended / required", "Dish update required") | ✅ | ✅ | ✅ | ✅ | not in its ledger |
+| App-wide microphone chip with mute-all | ✅ | ✅ | ✅ | ✅ | n/a (no pad microphone) |
+| Capability verdict word "Supported" | ✅ | ✅ | ✅ | ✅ | not in its ledger |
+| Pairing secrets stored encrypted | ✅ Moonlight key (Keystore) · ❌ Satellite key (app-private prefs) | ✅ DPAPI | ✅ Satellite key (Secret Service, else a 0600 file) · ❌ Moonlight key (0600 file) | ✅ | built (Keychain) |
+| Six languages (en, bs, de, es, fr, pt-BR) | ✅ | ✅ | ✅ | ✅ | built |
+
+The macOS column is the mark dish-mac's own ledger (`Tests/PARITY.md`) gives
+each row on 2026-11-23; its cells there say what each mark covers. Dish for
+iOS keeps its ledger in another shape (`Tests/PARITY.md` in dish-ios, one row
+per feature with its build status), so its column uses that ledger's words
+(built, not yet, not possible, n/a) as it reads on dish-ios `main` d44fdf9;
+"not in its ledger" means that ledger has no row for it.
 
 ## 2. Input, pad → host, by path (cell = USB Direct · USB Standard · Bluetooth)
 
@@ -415,30 +424,14 @@ this client does not do what the contracts say, the row says so and why.
 | `device.thermal`, `device.wifi` | ❌ `null`: Windows names no thermal state to an app, and this client does not link the WLAN API (`wlanapi`), so band and RSSI are not read |
 | Satellite's `/api/controllers/v1` mirror | – clients do not read it in schema 1 |
 
-## 6. Android PRs since the diary stopped (2026-08-18 → 2026-09-20)
+## 6. Suppressions, and why each is still here
 
-| Android PR | Counterpart here | Disposition |
+Inventory of 2026-11-23 (`NOLINT`, `#pragma warning(disable)`, `/wd`, `-Wno-*`,
+checks switched off in `.clang-tidy`, qmllint disables, `continue-on-error`).
+There is no `NOLINT`, no `#pragma warning(disable)`, no `-Wno-*` and no qmllint
+disable anywhere in the tree.
+
+| Where | What | Status |
 |---|---|---|
-| #162 Guide bit in XInput360 decode | – | N/A (no XInput Direct) |
-| #163 offer the wired path when a Bluetooth pad is plugged in | #52 | ported |
-| #164, #165, #169 Play notes, donation flavour, APK name | – | N/A |
-| #170 Moonlight | #60 | ported |
-| #173 link-tier cues | this wave | ported |
-| #174 per-type skins (+ protocol chip) | this wave (chip) | skins N/A, chip ported |
-| #175 protocol 2 | #61 | ported |
-| #176 lightbar wash | – | N/A |
-| #177 input-path-honest capabilities | this wave ("Supported") | ported; this client's capability solver has no Unknown state |
-| #178 controller audio (+ app-wide mic chip) | #66 + this wave | ported |
-| #182, #183, #186, #190, #197 changelog / notes | – | N/A |
-| #184 privacy policy | #73 | ported |
-| #185 Diagnostics | this wave | ported; what the desktop leaves out is in §5 |
-| #187 to #206 Play billing, products, screenshots, promote | – | N/A |
-| #191 cutout theme | – | N/A |
-| #198, #199 test / CI only | – | N/A |
-| #210 haptics, framework lightbar/touchpad, Direct battery | #81 | ported (⚠️ until a hardware pass) |
-| #213 fake satellite applied state | – | test infra |
-| #214 to #218 Crashlytics-driven fixes | checked: not needed here | Android-only |
-
-Desktop PRs with no Android counterpart and no action needed: keep-awake modes
-(#53), release hardening (#54, #77), the shared build story (#67), tray and
-suspend survival (#86), DPAPI-encrypted secrets (#87).
+| `CMakeLists.txt`, the qmlcachegen units | `/wd4702` on Qt's generated AOT units, for C4702 inside Qt's own `qjsengine.h` / `qvariant.h` templates under Qt 6.7.3 | Kept, third-party generated code: removing it under Qt 6.12.1 failed the debug and release builds with C4702 in Qt's `qjsengine.h`, `qvariant.h` and `qmetatype.h`, instantiated only by qmlcachegen's units (Windows CI run 45254834969). Scoped to those units; every first-party unit keeps C4702 live. Report upstream to Qt |
+| `.clang-tidy` | `-bugprone-easily-swappable-parameters`, `-bugprone-narrowing-conversions`, `-cert-err58-cpp`, `-performance-no-int-to-ptr` | A fleet choice: the file is the canonical one, byte-identical to dish-linux's and the same check list as satellite's and dish-android's (only the first comment line's punctuation differs). Changing it is a fleet decision, made in satellite first |

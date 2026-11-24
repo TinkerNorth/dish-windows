@@ -119,5 +119,8 @@ Copy-Item LICENSE            (Join-Path $OutDir 'licenses/LICENSE.LGPL-3.0.txt')
 Copy-Item COPYING.GPL3       (Join-Path $OutDir 'licenses/LICENSE.GPL-3.0.txt')
 Copy-Item THIRD_PARTY.md     (Join-Path $OutDir 'licenses/')
 Copy-Item packaging/fonts/Inter-LICENSE.txt (Join-Path $OutDir 'licenses/')
+# Each linked library's own licence text (packaging/licenses/<artifact>.txt, one per
+# assets/licenses/licenses.json entry that ships; scripts/check-versions.ps1 keeps the set whole).
+Copy-Item packaging/licenses/*.txt (Join-Path $OutDir 'licenses/')
 
 Write-Output "Staged bundle at $OutDir ($(@(Get-ChildItem $OutDir -Recurse -File).Count) files)"

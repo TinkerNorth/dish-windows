@@ -19,17 +19,25 @@ what gets written where is in [`PRIVACY.md`](../PRIVACY.md).
 
 | Asset | What it is |
 |---|---|
-| `dish-setup.exe` | Inno Setup installer. One file, no prerequisites, per-user by default. |
+| `dish-setup.exe` | Inno Setup installer. One file, no prerequisites, per-user by default. Authenticode-signed when the release has a certificate (none is configured yet; section 6). |
 | `dish-windows.zip` | The portable bundle. Unzip and run; never self-updates. |
 | `latest.json` | The update manifest every installed copy polls. Immutable asset name. |
-| `SHA256SUMS` | Checksums of the four assets above, as a release asset in its own right. |
-| `dish-windows.spdx.json` | SPDX SBOM of the portable bundle. |
+| `dish-windows-components.spdx.json` | The bill of materials of what the bundle ships, written from the build (`scripts/write-sbom.ps1`); from the release after 2.8.0. |
+| `SHA256SUMS` | Checksums of every asset above and the SBOMs, as a release asset in its own right. |
+| `dish-windows.sbom.spdx.json`, `dish-windows.sbom.cdx.json` | The SPDX and CycloneDX SBOMs Syft writes over the release directory. |
+| `<asset>.sigstore.json` | A cosign keyless signature for each asset above, as one Sigstore bundle (releases up to 2.8.0: `<asset>.sig` and `<asset>.crt`). |
+| `dish-windows.intoto.jsonl` | SLSA build provenance. |
+| `measurements-<version>.json`, `.md` | The release's input-path measurements, attached after the checksums and signatures. |
 
 The installer and the zip carry the same install image: `dish.exe`, the Qt
-runtime and QML modules from `windeployqt`, `libsodium.dll` and `SDL2.dll`,
-the five app-local Visual C++ runtime DLLs, the app's `Dish/Chrome/qmldir`
-module entry, and the four licence texts under `licenses\`. That is what lets
-either one run on a machine where nothing has ever been installed.
+runtime and QML modules from `windeployqt` (with the Windows SDK's
+`dxcompiler.dll` and `dxil.dll`), the vcpkg runtimes `libsodium.dll`,
+`SDL2.dll`, `opus.dll` and `libcrypto-3-x64.dll`, `sentry.dll` and
+`crashpad_handler.exe` when the build has the Sentry SDK (every CI and release
+build does), the five app-local Visual C++ runtime DLLs, the app's
+`Dish/Chrome/qmldir` module entry, and the four licence files under
+`licenses\`. That is what lets either one run on a machine where nothing has
+ever been installed.
 
 ---
 
@@ -164,7 +172,7 @@ Uninstall silently with the same switch set:
 
 `unins000.exe` beside `dish.exe` (also reachable from Windows Settings,
 Installed apps) removes the installed files, the shortcuts, the ARP entry, and
-`%LOCALAPPDATA%\Dish\updates\` — the updater's download cache is not user
+`%LOCALAPPDATA%\Dish\updates\`: the updater's download cache is not user
 data.
 
 Kept deliberately: `HKCU\Software\Dish\Dish`, `HKCU\Software\TinkerNorth\Dish`
@@ -175,7 +183,7 @@ those by hand.
 The uninstaller's presence is also a signal the app reads: a `dish.exe` with
 no `unins*.exe` sibling knows it is the portable bundle
 ([`src/update/UpdateCoordinator.cpp`](../src/update/UpdateCoordinator.cpp)),
-checks for updates, and only notifies — there is nothing installed to apply
+checks for updates, and only notifies: there is nothing installed to apply
 an update to.
 
 ---
@@ -323,7 +331,7 @@ The producing half is `UpdateHandoff::applyArguments()`, pinned by
   A per-user apply raises no UAC; a machine-scope apply self-elevates exactly
   once, and a declined prompt fails the install rather than looping.
 - **Waiting.** `/OTA` makes `[Code]` poll the app's `Running` mutex for up to
-  60 seconds before any file is touched — the spawning `dish.exe` is mid-exit,
+  60 seconds before any file is touched, because the spawning `dish.exe` is mid-exit,
   and its mutex dies with the process. Restart Manager remains the second
   line for anything else holding a file.
 - **Relaunch duties.** The spawning app is dead by design, so `/OTA` owns
@@ -363,26 +371,19 @@ wording with a link to the releases page.
 
 ## 6. SmartScreen, and verifying a download
 
-`dish-setup.exe` is **not** Authenticode-signed. Microsoft Defender SmartScreen
-will show "Windows protected your PC" on first run of a fresh download from a
-new release, because the file has no reputation and no signature. The way
-through is **More info**, then **Run anyway**. That warning is expected, and it
-will keep appearing until release signing lands (it is on the roadmap in
-[`CONTRIBUTING.md`](../CONTRIBUTING.md)).
+`release.yml` signs `dish-setup.exe` with Authenticode after compiling it,
+whenever the `WIN_SIGN_CERT_BASE64` and `WIN_SIGN_PASSWORD` secrets exist. None
+is configured yet, so the installers released so far are unsigned (2.8.0's has
+an empty certificate table), and Microsoft Defender SmartScreen shows "Windows
+protected your PC" on first run of a fresh download from a new release. The way
+through is **More info**, then **Run anyway**. The warning stops once a
+certificate is configured.
 
-If you would rather check the bytes than trust the dialog, the release carries
-`SHA256SUMS` as its own asset:
-
-```powershell
-$expected = (Get-Content .\SHA256SUMS |
-    Where-Object { $_ -match 'dish-setup\.exe' }).Split()[0]
-$actual = (Get-FileHash .\dish-setup.exe -Algorithm SHA256).Hash.ToLower()
-if ($expected -ne $actual) { throw 'checksum mismatch' } else { 'ok' }
-```
-
-Read [`SECURITY.md`](../SECURITY.md) for what that check is and is not worth:
-`SHA256SUMS` is unsigned, so it proves the download is intact, not that it came
-from this project.
+The bytes can be checked instead of the dialog: the release's assets are
+cosign-signed by the release workflow, and [`SECURITY.md`](../SECURITY.md),
+"Verifying a release artifact", has the recipe (`SHA256SUMS`, then
+`cosign verify-blob` against the workflow's identity) and what each step is
+worth.
 
 The automatic update path is not interposed by SmartScreen: files an app writes
 itself carry no mark of the web, so the staged installer runs without a
@@ -425,7 +426,7 @@ these two steps; release.yml passes the tag's version instead.
 
 The same script both workflows run: a fresh `/VERYSILENT` install into a path
 with a space, the ARP entry's values, a repair re-run (the shape of every OTA
-apply), and a silent uninstall polled to completion — files, directory and
+apply), and a silent uninstall polled to completion: files, directory and
 registry key all gone. Everything happens under a scratch directory and HKCU;
 no elevation, no prompts.
 

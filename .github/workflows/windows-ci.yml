@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Read-only. Nothing here writes to the repo; the artifact upload goes through
 # the Actions API, not the contents scope. Declared explicitly so the token
@@ -23,19 +23,8 @@ jobs:
     timeout-minutes: 60
 
     env:
-      # vcpkg 2026.07.29. Pinned so dependency versions are reproducible;
-      # must match builtin-baseline in vcpkg.json. Keep this pin young: msys2
-      # purges superseded packages from its mirrors, so a stale pin's
-      # from-source libsodium build starts 404ing once the binary cache
-      # evicts (that took the 2025.01.13 pin down in Aug 2026).
-      VCPKG_COMMITID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
       # Qt ships dynamic on Windows; match it or the ABI diverges.
       VCPKG_DEFAULT_TRIPLET: x64-windows
-      QT_VERSION: "6.7.3"
-      # The translation check's lupdate. 6.7.3 loses a class's namespace after an enum with a
-      # base type that a struct follows (Network/WifiConnectionManager.h) and re-files its tr()
-      # strings under a bare name; 6.9 reads it right, so Linguist comes from there.
-      LINGUIST_QT_VERSION: "6.9.3"
       # Job-level so lukka/run-vcpkg sees it already defined and leaves it
       # alone: its default (clear;x-gha,readwrite) has never restored a
       # package here, so both configures rebuilt OpenSSL from source (~7 min
@@ -47,14 +36,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         with:
-          arch: x64
+          persist-credentials: false
 
-      - name: Install Ninja
-        run: choco install ninja --no-progress --yes
+      # The MSVC environment (vswhere + vcvars64, the import scripts/build.ps1
+      # does locally) and the pins every later step reads: QT_VERSION, QT_ARCH,
+      # AQT_SOURCE and CLANG_FORMAT_VERSION from scripts/tools.ps1,
+      # VCPKG_COMMITID from vcpkg.json, IMAGE_VERSION for the cache key. The
+      # vcpkg pin is kept young on purpose: msys2 purges superseded packages
+      # from its mirrors, so a stale pin's from-source libsodium build starts
+      # 404ing once the binary cache evicts (that took the 2025.01.13 pin down
+      # in Aug 2026).
+      - name: Toolchain environment and pins
+        shell: pwsh
+        run: ./scripts/ci-env.ps1
 
       - name: Install Qt
         uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
@@ -62,36 +57,15 @@ jobs:
           version: ${{ env.QT_VERSION }}
           host: windows
           target: desktop
-          arch: win64_msvc2019_64
+          arch: ${{ env.QT_ARCH }}
           modules: ""
-          cache: true
-
-      # Only what Linguist needs, beside the build Qt and never on its PATH (set-env: false), so the
-      # build keeps linking 6.7.3 while the catalogues are read by a parser that copes. lupdate links
-      # Qt6Core and Qt6Qml, so qtbase and qtdeclarative come with qttools.
-      - name: Install Linguist ${{ env.LINGUIST_QT_VERSION }}
-        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
-        with:
-          version: ${{ env.LINGUIST_QT_VERSION }}
-          host: windows
-          target: desktop
-          arch: win64_msvc2022_64
-          archives: qtbase qtdeclarative qttools
-          dir: ${{ runner.temp }}/qt-linguist
-          set-env: false
+          aqtsource: ${{ env.AQT_SOURCE }}
           cache: true
 
       # ImageVersion is in the cache key because a runner-image update can
       # carry a new MSVC, which changes vcpkg's ABI hashes: under a fixed key
       # the cache would go permanently stale — restored but never hit, rebuilt
       # but never saved, since actions/cache does not update an existing key.
-      # The directory must exist before vcpkg first writes into it.
-      - name: Prepare vcpkg binary cache
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force vcpkg-bincache | Out-Null
-          Add-Content $env:GITHUB_ENV "IMAGE_VERSION=$env:ImageVersion"
-
       - name: Restore vcpkg binary cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -113,10 +87,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Version-pinned from PyPI, not the runner image: clang-format 18 and
-      # 22.x disagree on braced-init lists, so an unpinned check flaps.
-      - name: Install clang-format (pinned 22.1.4)
-        run: pipx install clang-format==22.1.4
+      # Version-pinned from PyPI (scripts/tools.ps1), not the runner image or
+      # Visual Studio's bundled LLVM: versions disagree on formatting and on
+      # the checks, so an unpinned gate flaps. check-format.ps1 and
+      # check-tidy.ps1 pick the pinned binaries and refuse any other version.
+      - name: Install clang-format and clang-tidy (pinned)
+        shell: pwsh
+        run: |
+          pipx install "clang-format==$env:CLANG_FORMAT_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'pipx install clang-format failed' }
+          pipx install "clang-tidy==$env:CLANG_TIDY_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'pipx install clang-tidy failed' }
 
       # The gate itself lives in scripts/check-format.ps1 so this workflow and
       # scripts/ci-local.ps1 cannot drift on the file set or the invocation.
@@ -164,10 +145,12 @@ jobs:
         run: ./scripts/qml-lint-literals.ps1 -Mode error
 
       # A stale .ts is not a compile error, so nothing else catches a string
-      # added without a catalogue entry.
+      # added without a catalogue entry. The build Qt's own lupdate: since
+      # 6.12 there is no second Qt for Linguist (6.7.3's mis-filed a class's
+      # strings, see check-translations.ps1).
       - name: Translation catalogues in sync
         shell: pwsh
-        run: ./scripts/check-translations.ps1 -LinguistBin "${{ runner.temp }}/qt-linguist/Qt/${{ env.LINGUIST_QT_VERSION }}/msvc2022_64/bin"
+        run: ./scripts/check-translations.ps1 -LinguistBin "$env:QT_ROOT_DIR/bin"
 
       # Must run after Build: reuses that tree's compile_commands.json and
       # needs the generated mocs to exist. File set, flags, and the four-wide
@@ -213,14 +196,13 @@ jobs:
         run: ./scripts/test-portable-bundle.ps1 -Bundle build-release/setup-image
 
       # Compiling the .iss on every PR is what catches a broken installer
-      # before a release does. Same recipe as release.yml and satellite.
-      # Version-pinned like clang-format above: 6.7.3 renames a per-user
-      # install's ARP entry ("Dish (Current user)"), so an unpinned engine
-      # flips the round-trip's assertions the day choco's package moves.
-      # 6.7.1 is the newest the choco feed carries (2026-08); bump on purpose,
-      # not by surprise.
-      - name: Install Inno Setup
-        run: choco install innosetup --version=6.7.1 --no-progress --yes
+      # before a release does. The engine is the one scripts/tools.ps1 pins,
+      # fetched from upstream and checked against its SHA-256: the round-trip's
+      # assertions follow the engine (6.7.3 renamed a per-user install's ARP
+      # entry), so it moves on purpose, never by surprise.
+      - name: Install Inno Setup (pinned)
+        shell: pwsh
+        run: ./scripts/install-inno-setup.ps1
 
       # scripts/build-installer.ps1 reads the version from the same
       # project(Dish VERSION ...) line release.yml asserts the tag against,
@@ -237,6 +219,29 @@ jobs:
         shell: pwsh
         run: ./scripts/test-installer-roundtrip.ps1 -Setup dist/dish-setup.exe
 
+      # The release's assets, made the way release.yml makes them: the zip
+      # through scripts/package-bundle.ps1, the components SBOM through
+      # scripts/write-sbom.ps1 and checked against the licenses manifest, and
+      # the installer the round trip just passed. Uploaded as windows-bundle,
+      # the name release.yml uses, for the hardening dry run below. latest.json
+      # needs a stable tag, so only release.yml writes it.
+      - name: Package the release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/release | Out-Null
+          ./scripts/package-bundle.ps1 -Bundle artifact -Zip dist/release/dish-windows.zip
+          ./scripts/write-sbom.ps1 -BuildDir build-release -Bundle artifact -Out dist/release/dish-windows-components.spdx.json
+          ./scripts/check-sbom.ps1 -Sbom dist/release/dish-windows-components.spdx.json
+          Copy-Item dist/dish-setup.exe dist/release/
+
+      - name: Upload the release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-bundle
+          path: dist/release
+          retention-days: 7
+          if-no-files-found: error
+
       # After the round-trip, so a failed installer never reaches the artifact.
       # Copied INTO artifact/ rather than listed as a second upload path: a
       # second path would make upload-artifact preserve both directory names
@@ -252,3 +257,20 @@ jobs:
           name: dish-windows-x86_64
           path: artifact
           retention-days: 14
+
+  # The tag-time hardening on this pull request's own release assets (windows-bundle above):
+  # the shared _release_harden.yml in dry-run mode scans them with Grype, writes the SBOMs and
+  # SHA256SUMS, and signs every file with a throwaway key, so nothing leaves the runner. What it
+  # cannot exercise is keyless signing (no id-token on a pull request), the SARIF upload to code
+  # scanning and the SLSA generator, which run only on a tag.
+  release-dry-run:
+    name: Release hardening (dry run)
+    if: ${{ github.event_name == 'pull_request' }}
+    needs: [ci]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_release_harden.yml
+    with:
+      artifact-pattern: windows-*
+      product: dish-windows
+      dry-run: true

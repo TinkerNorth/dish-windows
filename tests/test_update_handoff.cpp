@@ -524,7 +524,7 @@ TEST_CASE("update handoff: a spawn that cannot start leaves startup alone", "[up
 TEST_CASE("update handoff: the spawn arguments are exactly the documented Inno switches",
           "[update][handoff]") {
     // The consuming half is Inno Setup itself, so what this pins is the
-    // PRODUCED shape against docs/INSTALLER.md: the full silent switch set,
+    // PRODUCED shape against docs/PACKAGING.md: the full silent switch set,
     // /OTA (installer.iss [Code] waits on the app's mutex and owns the
     // relaunch duty), and /LOG aimed INTO the stage directory so the log
     // lands where PRIVACY.md says it does. Order matters only for the
