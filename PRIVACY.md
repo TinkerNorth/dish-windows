@@ -22,8 +22,9 @@ read one as describing the other.
 - Dish for Windows turns a Windows PC into a wireless gamepad for a
   `satellite` server, or for a Moonlight host (Sunshine, Apollo, Wolf).
   Controller input goes from your PC, over your own network, to the host you
-  paired with. It does not stream to any TinkerNorth-operated server.
-  TinkerNorth does not operate a server for Dish at all.
+  paired with. It does not stream to any TinkerNorth-operated server. The
+  one server TinkerNorth runs for Dish is `dish.tinkernorth.com`, which only
+  serves the controller list described in section 2.5.
 - **Three things can leave your PC on their own**, and you can turn each one
   off: an update check against GitHub, described in section 2.4; a check for
   a newer list of the controllers Dish recognises, against
@@ -257,9 +258,10 @@ receive on your local network. Granting it affects your LAN only.
 
 ### 2.3 Sent to TinkerNorth or a third party
 
-There is no TinkerNorth server for this app to talk to. The one thing that
-reaches us is a crash report, through Sentry, and only if you leave *Share
-crash reports* on.
+The only TinkerNorth server the app talks to is `dish.tinkernorth.com`, and
+only to fetch the controller list (section 2.5). Beyond that request, the one
+thing that reaches us is a crash report, through Sentry, and only if you leave
+*Share crash reports* on.
 
 Three things leave your network by default, and you can turn each one off.
 The update check described in **section 2.4** goes to GitHub: a plain HTTPS

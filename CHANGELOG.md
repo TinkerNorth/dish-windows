@@ -95,6 +95,9 @@ share a version number.
   `docs/ARCHITECTURE.md`. `scripts/check-versions.ps1` now holds its links,
   the release and tool versions it names, and the blocks every Dish README
   shares (against `tests/fixtures/readme-family/`) to the tree.
+- `PRIVACY.md` no longer says TinkerNorth runs no server for Dish: its short
+  version and section 2.3 now name `dish.tinkernorth.com`, which serves the
+  controller list section 2.5 describes. Nothing the app does changed.
 
 ## [2.8.0] - 2026-11-23
 
