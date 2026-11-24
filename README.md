@@ -6,7 +6,7 @@ Dish is made of two parts. The Dish apps run on the device that holds your contr
 
 ## Download
 
-Dish for Windows 2.8.0 is the current release. Every link below always points at the newest one.
+Dish for Windows 2.9.0 is the current release. Every link below always points at the newest one.
 
 Windows 10 version 1809 or later, or Windows 11, on x64: download **[dish-setup.exe](https://github.com/TinkerNorth/dish-windows/releases/latest/download/dish-setup.exe)** and run it. It installs Dish for you alone, with no administrator prompt, and carries everything Dish needs, the Visual C++ runtime included. Once installed, Dish keeps itself up to date: it reads `latest.json` from this repository's newest release about 15 seconds after it starts and every four hours while it runs, downloads the new `dish-setup.exe` in the background, checks it against the SHA-256 that `latest.json` gives, and installs it the next time you start Dish, or straight away when you press Restart to update.
 

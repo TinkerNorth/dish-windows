@@ -76,10 +76,9 @@ Out of scope:
 | Dish for macOS | latest minor; previous minor for 90 days | macOS 13 |
 | Dish for Linux | latest minor; previous minor for 90 days | see its `SECURITY.md` |
 
-For Dish for Windows: the latest minor is 2.8, so 2.8.x is supported and 2.7.x
-receives high and critical fixes for 90 days after 2.8.0 (released
-2026-11-23). Patch releases (`X.Y.Z+1`) are issued on demand for the latest
-minor.
+For Dish for Windows: the latest minor is 2.9, so 2.9.x is supported and 2.8.x
+receives high and critical fixes for 90 days after 2.9.0 is released. Patch
+releases (`X.Y.Z+1`) are issued on demand for the latest minor.
 
 ## Threat model
 
@@ -252,8 +251,8 @@ The identity is exact, not a regular expression, and names
 `_release_harden.yml` because the certificate's identity is the workflow that
 ran the signing step. To verify one file on its own, run the same
 `cosign verify-blob` with `--bundle <file>.sigstore.json` and `<file>`. This
-form applies from the first release cut with it and has not been run yet: 2.8.0
-is the latest release.
+form applies from 2.9.0, the first release cut with it. It had not been run when
+2.9.0 was prepared, because only the release workflow writes the bundles.
 
 ### 3) Releases up to 2.8.0: `.sig` and `.crt`
 
